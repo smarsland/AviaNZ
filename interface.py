@@ -22,6 +22,8 @@ from matplotlib.backend_bases import key_press_handler
 # Add the denoising -> make pywt work!
 # Get suggestions from the others
 # Use the clicks on the first page to let people select other regions where there are calls
+
+# Other version -> manual segmentation
 # ===============
 
 def spectrogram(t):
@@ -53,6 +55,12 @@ class Interface(QMainWindow):
 
         self.root = root
 
+        # This is a flag to say if the next thing that they click on should be a start or a stop for segmentation
+        # Second variables hold a start point for the amplitude and spectrogram respectively
+        self.start_stop = 0
+        self.start_a = 0
+        self.start_s = 0
+
         QMainWindow.__init__(self, root)
         self.setWindowTitle('AviaNZ')
 
@@ -61,7 +69,8 @@ class Interface(QMainWindow):
 
         # Make life easier for now: preload a birdsong
         fp, self.t = wavfile.read('../Birdsong/more1.wav')
-        #fp, self.t = wavfile.read('tril1.wav')
+        #fp, self.t = wavfile.read('kiwi.wav')
+        #self.t = self.t[:,0]
         #fp, self.t = wavfile.read('/Users/srmarsla/Students/Nirosha/bittern/ST0026.wav')
 
         self.sg = spectrogram(self.t)
@@ -92,6 +101,8 @@ class Interface(QMainWindow):
         self.canvas.setParent(self.frame)
 
         self.canvas.mpl_connect('button_press_event', self.onClick)
+        self.canvas.mpl_connect('pick_event', self.onPick)
+
         self.mpl_toolbar = NavigationToolbar(self.canvas, self.frame)
 
         self.classifyButton = QPushButton("&Classify")
@@ -115,10 +126,48 @@ class Interface(QMainWindow):
         self.setCentralWidget(self.frame)
 
     def onClick(self, event):
+
+        # This is for segmentation
+        a1 = str(self.a1)
+        a2 = str(self.a2)
+        a1ind = float(a1[a1.index(',') + 1:a1.index(';') - 1])
+        a2ind = float(a2[a2.index(',') + 1:a2.index(';') - 1])
+        incr = 128
+
         if event.inaxes is not None:
-            print event.xdata, event.ydata
+            # Work out which axes you are in
+            # Then make it appear in both
+            s = event.xdata
+            a = str(event.inaxes)
+            aind = float(a[a.index(',') + 1:a.index(';') - 1])
+            if aind == a1ind:
+                s2 = np.round(s / incr)
+            else:
+                s2 = s
+                s = np.round(s*incr)
+            width1 = 100
+            width2 = 2
+            if self.start_stop==0:
+                self.a1.add_patch(pl.Rectangle((s, np.min(self.t)), width1, np.abs(np.min(self.t)) + np.max(self.t), facecolor='g', edgecolor='None',alpha=0.8, picker=1))
+                self.a2.add_patch(pl.Rectangle((s2, np.min(self.t)), width2, np.abs(np.min(self.t)) + np.max(self.t), facecolor='g', edgecolor='None',alpha=0.8, picker=1))
+                self.start_a = s
+                self.start_s = s2
+            else:
+                self.a1.add_patch(pl.Rectangle((s, np.min(self.t)), width1, np.abs(np.min(self.t)) + np.max(self.t), facecolor='r', edgecolor='None',alpha=0.8,picker=1))
+                self.a2.add_patch(pl.Rectangle((s2, np.min(self.t)), width2, np.abs(np.min(self.t)) + np.max(self.t), facecolor='r', edgecolor='None',alpha=0.8,picker=1))
+                self.a1.add_patch(pl.Rectangle((self.start_a, np.min(self.t)), s - self.start_a, np.abs(np.min(self.t)) + np.max(self.t),facecolor='r', alpha=0.5))
+                self.a2.add_patch(pl.Rectangle((self.start_s, np.min(self.t)), s2 - self.start_s, np.abs(np.min(self.t)) + np.max(self.t),facecolor='r', alpha=0.5))
+            self.canvas.draw()
+            self.start_stop = 1 - self.start_stop
+            #print event.xdata, event.ydata, event.inaxes
         else:
             print 'Clicked ouside axes bounds but inside plot window'
+
+    def onPick(self,event):
+        # Two things: use this to let the user move a set start
+        # And stop it being a click as well!
+        box_points = event.artist.get_bbox().get_points()
+        print box_points
 
     def openFile(self):
         Formats = "Wav file (*.wav)"
@@ -133,16 +182,15 @@ class Interface(QMainWindow):
         end = 12000
         incr = 128
 
-        a1 = self.fig.add_subplot(211)
-        a1.clear()
-        a1.plot(self.t)
-        a1.add_patch(pl.Rectangle((10000,np.min(self.t)),end-start,np.abs(np.min(self.t))+np.max(self.t),facecolor='r',alpha=0.5))
-        a1.axis('off')
-        a2 = self.fig.add_subplot(212)
-        a2.clear()
-        a2.imshow(self.sg,cmap='gray',aspect='auto')
-        a2.axis('off')
-        a2.add_patch(pl.Rectangle((np.round(start/incr),0),np.round((end-start)/incr),np.shape(self.sg)[1],facecolor='r',alpha=0.2))
+        self.a1 = self.fig.add_subplot(211)
+        print self.a1
+        self.a1.clear()
+        self.a1.plot(self.t)
+        self.a1.axis('off')
+        self.a2 = self.fig.add_subplot(212)
+        self.a2.clear()
+        self.a2.imshow(self.sg,cmap='gray',aspect='auto')
+        self.a2.axis('off')
 
         self.canvas.draw()
 
