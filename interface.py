@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, glob
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 from scipy.io import wavfile
@@ -13,17 +13,23 @@ from matplotlib.figure import Figure
 # implement the default mpl key bindings
 from matplotlib.backend_bases import key_press_handler
 
+import Denoise
 # ==============
 # TODO
+# Debug the denoiser! Check other sample rates for the bandpass filter
 # Store the values selected in the second window -> design some form of data storage
-# Turn the second window into a QDialog
-# Put the calls to the second window in a loop
-# Do the segmentation so that the red boxes make sense
-# Add the denoising -> make pywt work!
+# Finish manual segmentation
+# Allow click to move segmentation ends, and correct labels, and stop segments inside other segments
+# Tidy the code
+# List of files in the box on the left -> directories, .., etc.
+# Full interface -> see drawing
+# Print text above parts that have been recognised
+# Play and pause buttons, plus a marker for where up to in playback
+# Automatic segmentation -> power, wavelets, ...
+# Put the calls to the labeller in a loop
+# Start to consider some learning interfaces
+# Can I process spectrogram directly?
 # Get suggestions from the others
-# Use the clicks on the first page to let people select other regions where there are calls
-
-# Other version -> manual segmentation
 # ===============
 
 def spectrogram(t):
@@ -61,6 +67,16 @@ class Interface(QMainWindow):
         self.start_a = 0
         self.start_s = 0
 
+        # Params for amount to plot in window
+        self.windowSize = 22050 #44100
+        self.windowStart = 0
+
+        # Params for spectrogram
+        self.window_width = 256
+        self.incr = 128
+
+        self.dirpath = '.'
+
         QMainWindow.__init__(self, root)
         self.setWindowTitle('AviaNZ')
 
@@ -68,12 +84,19 @@ class Interface(QMainWindow):
         self.createFrame()
 
         # Make life easier for now: preload a birdsong
-        fp, self.t = wavfile.read('../Birdsong/more1.wav')
-        #fp, self.t = wavfile.read('kiwi.wav')
-        #self.t = self.t[:,0]
-        #fp, self.t = wavfile.read('/Users/srmarsla/Students/Nirosha/bittern/ST0026.wav')
+        self.sampleRate, self.audiodata = wavfile.read('../Birdsong/more1.wav')
+        # The constant is for normalisation (2^15, as 16 bit numbers)
+        self.audiodata = self.audiodata.astype('float') / 32768.0
+        # For now, just take 1st channel of 2 channel data
+        if np.shape(np.shape(self.audiodata))[0]>1:
+            self.audiodata = self.audiodata[:,0]
+        self.datamax = np.shape(self.audiodata)[0]
 
-        self.sg = spectrogram(self.t)
+        #self.sampleRate, self.audiodata = wavfile.read('kiwi.wav')
+        #self.audiodata = self.audiodata[:,0]
+        #self.sampleRate, self.audiodata = wavfile.read('/Users/srmarsla/Students/Nirosha/bittern/ST0026.wav')
+
+        self.sg = spectrogram(self.audiodata)
         self.drawSpec()
 
     def createMenu(self):
@@ -93,6 +116,7 @@ class Interface(QMainWindow):
         self.fileMenu.addAction(quitAction)
 
     def createFrame(self):
+
         self.frame = QWidget()
         self.dpi = 100
 
@@ -105,25 +129,58 @@ class Interface(QMainWindow):
 
         self.mpl_toolbar = NavigationToolbar(self.canvas, self.frame)
 
+        # Needs a bit of sorting -> subdirectories, etc.
+        self.listFiles = QListWidget(self)
+        listOfFiles = []
+        #listOfFiles.extend('..')
+        for extension in ['wav','WAV']:
+            pattern = os.path.join(self.dirpath,'*.%s' % extension)
+            listOfFiles.extend(glob.glob(pattern))
+        for file in listOfFiles:
+            item = QListWidgetItem(self.listFiles)
+            item.setText(file)
+        self.listFiles.connect(self.listFiles, SIGNAL('itemClicked(QListWidgetItem*)'), self.loadFile)
+
         self.classifyButton = QPushButton("&Classify")
         self.connect(self.classifyButton, SIGNAL('clicked()'), self.classify)
         self.playButton  = QPushButton("&Play")
         self.connect(self.playButton, SIGNAL('clicked()'), self.play)
         self.quitButton = QPushButton("&Quit")
         self.connect(self.quitButton, SIGNAL('clicked()'), self.quit)
+        self.denoiseButton = QPushButton("&Denoise")
+        self.connect(self.denoiseButton, SIGNAL('clicked()'), self.denoise)
 
-        hbox = QHBoxLayout()
-        for w in [self.classifyButton,self.playButton,self.quitButton]:
-            hbox.addWidget(w)
-            hbox.setAlignment(w, Qt.AlignVCenter)
+        self.sld = QSlider(Qt.Horizontal, self)
+        self.sld.setFocusPolicy(Qt.NoFocus)
+        self.sld.valueChanged[int].connect(self.sliderMoved)
 
-        vbox = QVBoxLayout()
-        vbox.addWidget(self.canvas)
-        vbox.addWidget(self.mpl_toolbar)
-        vbox.addLayout(hbox)
+        vbox1 = QVBoxLayout()
+        vbox1.addWidget(self.canvas)
+        vbox1.addWidget(self.sld)
+        vbox1.addWidget(self.mpl_toolbar)
 
-        self.frame.setLayout(vbox)
+        hbox1 = QHBoxLayout()
+        hbox1.addWidget(self.listFiles)
+        hbox1.addLayout(vbox1)
+
+        hbox2 = QHBoxLayout()
+        for w in [self.classifyButton,self.playButton,self.denoiseButton,self.quitButton]:
+            hbox2.addWidget(w)
+            hbox2.setAlignment(w, Qt.AlignVCenter)
+
+        vbox2 = QVBoxLayout()
+        vbox2.addLayout(hbox1)
+        vbox2.addLayout(hbox2)
+
+        self.frame.setLayout(vbox2)
         self.setCentralWidget(self.frame)
+
+    def sliderMoved(self,value):
+        # Get the scaling sorted for the slider
+        totalRange = self.datamax - self.windowSize
+        self.a1.set_xlim(totalRange/100.*value, totalRange/100.*value+self.windowSize)
+        self.a2.set_xlim(totalRange/100.*value/self.incr, totalRange/100.*value/self.incr + self.windowSize/self.incr)
+        self.canvas.draw()
 
     def onClick(self, event):
 
@@ -132,7 +189,6 @@ class Interface(QMainWindow):
         a2 = str(self.a2)
         a1ind = float(a1[a1.index(',') + 1:a1.index(';') - 1])
         a2ind = float(a2[a2.index(',') + 1:a2.index(';') - 1])
-        incr = 128
 
         if event.inaxes is not None:
             # Work out which axes you are in
@@ -141,27 +197,34 @@ class Interface(QMainWindow):
             a = str(event.inaxes)
             aind = float(a[a.index(',') + 1:a.index(';') - 1])
             if aind == a1ind:
-                s2 = np.round(s / incr)
+                s2 = np.round(s / self.incr)
             else:
                 s2 = s
-                s = np.round(s*incr)
+                s = np.round(s*self.incr)
             width1 = 100
             width2 = 2
             if self.start_stop==0:
-                self.a1.add_patch(pl.Rectangle((s, np.min(self.t)), width1, np.abs(np.min(self.t)) + np.max(self.t), facecolor='g', edgecolor='None',alpha=0.8, picker=1))
-                self.a2.add_patch(pl.Rectangle((s2, np.min(self.t)), width2, np.abs(np.min(self.t)) + np.max(self.t), facecolor='g', edgecolor='None',alpha=0.8, picker=1))
+                self.a1.add_patch(pl.Rectangle((s, np.min(self.audiodata)), width1, np.abs(np.min(self.audiodata)) + np.max(self.audiodata), facecolor='g', edgecolor='None',alpha=0.8, picker=1))
+                self.a2.add_patch(pl.Rectangle((s2, np.min(self.audiodata)), width2, np.abs(np.min(self.audiodata)) + np.max(self.audiodata), facecolor='g', edgecolor='None',alpha=0.8, picker=1))
                 self.start_a = s
                 self.start_s = s2
             else:
-                self.a1.add_patch(pl.Rectangle((s, np.min(self.t)), width1, np.abs(np.min(self.t)) + np.max(self.t), facecolor='r', edgecolor='None',alpha=0.8,picker=1))
-                self.a2.add_patch(pl.Rectangle((s2, np.min(self.t)), width2, np.abs(np.min(self.t)) + np.max(self.t), facecolor='r', edgecolor='None',alpha=0.8,picker=1))
-                self.a1.add_patch(pl.Rectangle((self.start_a, np.min(self.t)), s - self.start_a, np.abs(np.min(self.t)) + np.max(self.t),facecolor='r', alpha=0.5))
-                self.a2.add_patch(pl.Rectangle((self.start_s, np.min(self.t)), s2 - self.start_s, np.abs(np.min(self.t)) + np.max(self.t),facecolor='r', alpha=0.5))
+                self.a1.add_patch(pl.Rectangle((s, np.min(self.audiodata)), width1, np.abs(np.min(self.audiodata)) + np.max(self.audiodata), facecolor='r', edgecolor='None',alpha=0.8,picker=1))
+                self.a2.add_patch(pl.Rectangle((s2, np.min(self.audiodata)), width2, np.abs(np.min(self.audiodata)) + np.max(self.audiodata), facecolor='r', edgecolor='None',alpha=0.8,picker=1))
+                self.a1.add_patch(pl.Rectangle((self.start_a, np.min(self.audiodata)), s - self.start_a, np.abs(np.min(self.audiodata)) + np.max(self.audiodata),facecolor='r', alpha=0.5))
+                self.a2.add_patch(pl.Rectangle((self.start_s, np.min(self.audiodata)), s2 - self.start_s, np.abs(np.min(self.audiodata)) + np.max(self.audiodata),facecolor='r', alpha=0.5))
             self.canvas.draw()
             self.start_stop = 1 - self.start_stop
             #print event.xdata, event.ydata, event.inaxes
         else:
             print 'Clicked ouside axes bounds but inside plot window'
+
+    def denoise(self):
+        den = Denoise.Denoise(self.audiodata,self.sampleRate)
+        #print den.ShannonEntropy(self.audiodata)
+        self.audiodata = den.denoise()
+        self.sg = spectrogram(self.audiodata)
+        self.drawSpec()
 
     def onPick(self,event):
         # Two things: use this to let the user move a set start
@@ -169,28 +232,44 @@ class Interface(QMainWindow):
         box_points = event.artist.get_bbox().get_points()
         print box_points
 
+    def loadFile(self,name):
+        self.sampleRate, self.audiodata = wavfile.read(name.text())
+        self.audiodata.astype('float') / 32768.0
+        if np.shape(np.shape(self.audiodata))[0]>1:
+            self.audiodata = self.audiodata[:,0]
+        self.datamax = np.shape(self.audiodata)
+
+        self.sg = spectrogram(self.audiodata)
+        self.drawSpec()
+
     def openFile(self):
         Formats = "Wav file (*.wav)"
         filename = QFileDialog.getOpenFileName(self, 'Open File', '/Users/srmarsla/Projects/AviaNZ', Formats)
         if filename != None:
-            fp, self.t = wavfile.read(filename)
+            self.sampleRate, self.audiodata = wavfile.read(filename)
+            # The constant is for normalisation (2^15, as 16 bit numbers)
+            self.audiodata.astype('float') / 32768.0
+        if np.shape(np.shape(self.audiodata))>1:
+            self.audiodata = self.audiodata[:,0]
+            self.audiodata = self.audiodata[:,0]
+        self.datamax = np.shape(self.audiodata)
+
         self.sg = self.sp().spectrogram()
         self.drawSpec()
 
     def drawSpec(self):
-        start = 10000
-        end = 12000
-        incr = 128
-
+        # Draws the two charts
         self.a1 = self.fig.add_subplot(211)
-        print self.a1
         self.a1.clear()
-        self.a1.plot(self.t)
+        self.a1.set_xlim(self.windowStart,self.windowSize)
+        #self.a1.set_ylim([np.min(self.audiodata),np.max(self.audiodata)])
+        self.a1.plot(self.audiodata)
         self.a1.axis('off')
         self.a2 = self.fig.add_subplot(212)
         self.a2.clear()
-        self.a2.imshow(self.sg,cmap='gray',aspect='auto')
+        self.a2.imshow(self.sg,cmap='gray_r',aspect='auto')
         self.a2.axis('off')
+        self.a2.set_xlim(self.windowStart/self.incr,self.windowSize/self.incr)
 
         self.canvas.draw()
 
@@ -199,25 +278,25 @@ class Interface(QMainWindow):
 
     def play(self):
         import sounddevice as sd
-        sd.play(self.t)
+        sd.play(self.audiodata)
 
     def classify(self):
-        self.childWindow = Classify(self.t[10000:12000])
+        self.childWindow = Classify(self.audiodata[10000:12000])
         # Which is the right thing: pass the signal or the fft, or both?
         # This is just the signal, and then recomputes the spectrogram -> wasteful
-        #self.classify = Classify(self.t[10000:12000])
+        #self.classify = Classify(self.audiodata[10000:12000])
 
     def quit(self):
         QApplication.quit()
 
 class Classify(QMainWindow):
     # TO DO: Sort out inheritance and get this properly structured
-    def __init__(self,t):
+    def __init__(self,audiodata):
 
         QMainWindow.__init__(self)
         self.setWindowTitle('Classify')
 
-        self.t = t
+        self.audiodata = audiodata
 
         self.createFrame()
         self.show()
@@ -277,7 +356,7 @@ class Classify(QMainWindow):
         self.frame.setLayout(self.vbox)
         self.setCentralWidget(self.frame)
 
-        self.sg = spectrogram(self.t)
+        self.sg = spectrogram(self.audiodata)
         self.drawSpec()
 
 
@@ -301,10 +380,10 @@ class Classify(QMainWindow):
 
     def drawSpec(self):
         a = self.fig.add_subplot(211)
-        a.plot(self.t)
+        a.plot(self.audiodata)
         a.axis('off')
         a = self.fig.add_subplot(212)
-        a.imshow(self.sg, cmap='gray',aspect='auto')
+        a.imshow(self.sg, cmap='gray_r',aspect='auto')
         a.axis('off')
         self.canvas.draw()
 
@@ -321,7 +400,7 @@ class Classify(QMainWindow):
 
     def play(self):
         import sounddevice as sd
-        sd.play(self.t)
+        sd.play(self.audiodata)
 
 
 
