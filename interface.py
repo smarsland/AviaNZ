@@ -24,7 +24,7 @@ import Denoise
 # ==============
 # TODO
 # Still some debugging in the clicking on boxes bit -> last box doesn't go green
-# Get the listWidget to select
+# Save additions to the Listwidget
 # Debug the denoiser! Check other sample rates for the bandpass filter
 # Finish manual segmentation
 # In Zoom window, fix spectrogram and allow click to move segmentation ends
@@ -76,7 +76,7 @@ class Interface(QMainWindow):
         self.start_s = 0
 
         # Params for amount to plot in window
-        self.windowSize = 22050 #44100
+        self.windowSize = 44100 #22050 #44100
         self.windowStart = 0
 
         # Params for spectrogram
@@ -102,7 +102,9 @@ class Interface(QMainWindow):
         self.createFrame()
 
         # Make life easier for now: preload a birdsong
-        self.loadFile('../Birdsong/more1.wav')
+        #self.loadFile('../Birdsong/more1.wav')
+        self.loadFile('male1.wav')
+        #self.loadFile('/Users/srmarsla/Students/Nirosha/bittern/ST0026.wav')
 
         #self.sampleRate, self.audiodata = wavfile.read('kiwi.wav')
         #self.sampleRate, self.audiodata = wavfile.read('/Users/srmarsla/Students/Nirosha/bittern/ST0026.wav')
@@ -266,7 +268,6 @@ class Interface(QMainWindow):
 
 
             # Activate the radio buttons for labelling
-            # TODO: Would be nice to set the correct radiobox/listbox item
             found = False
             for i in range(len(self.birds1)):
                 self.birds1[i].setEnabled(True)
@@ -275,9 +276,10 @@ class Interface(QMainWindow):
                     found = True
 
             if not found:
-                item = self.birdList.findItems(str(self.a1text[boxid].get_text()), Qt.MatchExactly)
-                print item
-                if item:
+                self.birds1[i].setChecked(True)
+                self.birdList.setEnabled(True)
+                items = self.birdList.findItems(str(self.a1text[boxid].get_text()), Qt.MatchExactly)
+                for item in items:
                     self.birdList.setCurrentItem(item)
         else:
             print "still segmenting"
@@ -313,9 +315,9 @@ class Interface(QMainWindow):
                     a2R = self.a2.add_patch(pl.Rectangle((self.start_s, np.min(self.audiodata)), s2 - self.start_s, np.abs(np.min(self.audiodata)) + np.max(self.audiodata),facecolor='r', alpha=0.5,picker=1))
                     self.listRectanglesa1.append(a1R)
                     self.listRectanglesa2.append(a2R)
-                    print "New Rectangle. Current list of Rectangles"
-                    print self.listRectanglesa1
-                    print len(self.listRectanglesa1)
+                    #print "New Rectangle. Current list of Rectangles"
+                    #print self.listRectanglesa1
+                    #print len(self.listRectanglesa1)
                     self.segments.append([min(self.start_a,s),max(self.start_a,s),'None'])
                     a1t = self.a1.text(self.start_a, np.min(self.audiodata), 'None')
                     self.a1text.append(a1t)
@@ -384,7 +386,6 @@ class Interface(QMainWindow):
         self.a2.set_xlim(self.windowStart/self.incr,self.windowSize/self.incr)
 
         # If there were segments already made, show them
-        print len(self.segments)
         for count in range(len(self.segments)):
             self.a1.add_patch(pl.Rectangle((self.segments[count][0], np.min(self.audiodata)), self.linewidtha1,np.abs(np.min(self.audiodata)) + np.max(self.audiodata), facecolor='g',edgecolor='None', alpha=0.8))
             self.a2.add_patch(pl.Rectangle((self.segments[count][0]/self.incr, np.min(self.audiodata)), self.linewidtha2,np.abs(np.min(self.audiodata)) + np.max(self.audiodata), facecolor='g', edgecolor='None', alpha=0.8))
@@ -400,9 +401,9 @@ class Interface(QMainWindow):
                                            alpha=0.5))
             self.listRectanglesa1.append(a1R)
             self.listRectanglesa2.append(a2R)
-            print "Loading Rectangle. Current list of Rectangles"
-            print self.listRectanglesa1
-            print len(self.listRectanglesa1)
+            #print "Loading Rectangle. Current list of Rectangles"
+            #print self.listRectanglesa1
+            #print len(self.listRectanglesa1)
             a1t = self.a1.text(self.segments[count][0]+500, np.min(self.audiodata),self.segments[count][2])
             self.a1text.append(a1t)
 
@@ -507,7 +508,21 @@ class Interface(QMainWindow):
         self.saveSegments()
         QApplication.quit()
 
-
+    def splitFile5mins(self, name):
+        # Nirosha wants to split files that are long (15 mins) into 5 min segments
+        # Could be used when loading long files :)
+        self.sampleRate, self.audiodata = wavfile.read(name)
+        nsamples = np.shape(self.audiodata)[0]
+        lengthwanted = self.sampleRate * 60 * 5
+        count = 0
+        while (count + 1) * lengthwanted < nsamples:
+            data = self.audiodata[count * lengthwanted:(count + 1) * lengthwanted]
+            filename = name[:-4] + '_' +str(count) + name[-4:]
+            wavfile.write(filename, self.sampleRate, data)
+            count += 1
+        data = self.audiodata[(count) * lengthwanted:]
+        filename = name[:-4] + '_' + str((count)) + name[-4:]
+        wavfile.write(filename, self.sampleRate, data)
 
 app = QApplication(sys.argv)
 form = Interface()

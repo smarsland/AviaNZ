@@ -6,8 +6,6 @@ import pylab as pl
 
 # TODO:
 # Check on more data
-# Put into class and link to interface
-# Write out audio
 
 class Denoise:
 
@@ -19,7 +17,8 @@ class Denoise:
             self.sampleRate = sampleRate
 
     def loadData(self):
-        self.sampleRate, self.data = wavfile.read('../Birdsong/more1.wav')
+        #self.sampleRate, self.data = wavfile.read('../Birdsong/more1.wav')
+        self.sampleRate, self.data = wavfile.read('male1.wav')
         # The constant is for normalisation (2^15, as 16 bit numbers)
         self.data = self.data.astype('float')/32768.0
 
@@ -149,10 +148,32 @@ class Denoise:
         ax2.specgram(self.fwData, NFFT=64, noverlap=32, cmap=cmap)
         pl.show()
 
+    def writefile(self):
+        wavfile.write('male1d.wav',self.sampleRate, self.fwData)
     # Write audio
 
-# a = Denoise()
+    def splitFile5mins(self, name):
+        # Nirosha wants to split files that are long (15 mins) into 5 min segments
+        self.sampleRate, self.audiodata = wavfile.read(name)
+        nsamples = np.shape(self.audiodata)[0]
+        lengthwanted = self.sampleRate * 60 * 5
+        count = 0
+        while (count + 1) * lengthwanted < nsamples:
+            data = self.audiodata[count * lengthwanted:(count + 1) * lengthwanted]
+            filename = name[:-4] + '_' +str(count) + name[-4:]
+            print filename
+            wavfile.write(filename, self.sampleRate, data)
+            count += 1
+        data = self.audiodata[(count) * lengthwanted:]
+        filename = name[:-4] + '_' + str((count)) + name[-4:]
+        print filename
+        wavfile.write(filename, self.sampleRate, data)
+
+#a = Denoise()
+#a.splitFile5mins('ST0026.wav')
+
 # a.loadData()
-# a.testTree()
+# # a.testTree()
 # a.denoise()
 # a.plot()
+# a.writefile()
