@@ -3,177 +3,176 @@ import numpy as np
 import pywt
 from scipy.io import wavfile
 import pylab as pl
-
-# TODO:
-# Check on more data
+import matplotlib
 
 class Denoise:
 
     def __init__(self,data=[],sampleRate=0):
-        self.maxsearch=10
-        self.maxlevel = 4
+        self.maxsearch=20
         if data != []:
             self.data = data
             self.sampleRate = sampleRate
 
     def loadData(self):
         #self.sampleRate, self.data = wavfile.read('../Birdsong/more1.wav')
-        self.sampleRate, self.data = wavfile.read('male1.wav')
+        #self.sampleRate, self.data = wavfile.read('../Birdsong/Denoise/Primary dataset/kiwi/female/female1.wav')
+        self.sampleRate, self.data = wavfile.read('ruru.wav')
+        #self.sampleRate, self.data = wavfile.read('male1.wav')
         # The constant is for normalisation (2^15, as 16 bit numbers)
         self.data = self.data.astype('float')/32768.0
-
-    # Need to store the tree this way
-    class node():
-        pass
 
     def ShannonEntropy(self,s):
         e = -s[np.nonzero(s)]**2 * np.log(s[np.nonzero(s)]**2)
         #e = np.where(s==0,0,-s**2*np.log(s**2))
         return np.sum(e)
 
-    # Recurse down the tree until either maxsearch levels or sections are too short, or Entropy rule broken
-    # Two versions -- with wavelets, or wavelet packets.
-    def makeTree(self,data,level):
-        newNode = Denoise.node()
-        newNode.level=level
-        newNode.Entropy = self.ShannonEntropy(data)
-        newNode.A, newNode.D = pywt.dwt(data, 'dmey')
-        #print np.shape(data)[0], self.ShannonEntropy(newNode.A) + self.ShannonEntropy(newNode.D), newNode.Entropy, level
-        sA = self.ShannonEntropy(newNode.A)
-        sD = self.ShannonEntropy(newNode.D)
-        # Should this next line be max or sum?
-        if (np.shape(newNode.A)[0]==1 or (sA + sD >= newNode.Entropy) or (level>self.maxsearch)):
-            maxLevelL = level
-            maxLevelR = level
-        else:
-            if sA > 0:
-                newNode.left,maxLevelL = self.makeTree(newNode.A,level+1)
-            else:
-                newNode.left = None
-                maxLevelL = level
-            if sD > 0:
-                newNode.right, maxLevelR = self.makeTree(newNode.D, level+1)
-            else:
-                newNode.right = None
-                maxLevelR = level
-        return newNode, max(maxLevelL,maxLevelR)
+    def BestLevel(self):
+        previouslevelmaxE = self.ShannonEntropy(self.data)
+        self.wp = pywt.WaveletPacket(data=self.data, wavelet='dmey', mode='symmetric', maxlevel=self.maxsearch)
+        level = 1
+        currentlevelmaxE = np.max([self.ShannonEntropy(n.data) for n in self.wp.get_level(level, "freq")])
+        while currentlevelmaxE < previouslevelmaxE and level<self.maxsearch:
+            #print currentlevelmaxE, previouslevelmaxE
+            previouslevelmaxE = currentlevelmaxE
+            level += 1
+            currentlevelmaxE = np.max([self.ShannonEntropy(n.data) for n in self.wp.get_level(level, "freq")])
 
-
-    def makeTree_wpt(self,data,level):
-        newNode = Denoise.node()
-        newNode.level=level
-        newNode.Entropy = self.ShannonEntropy(data)
-        wpt = pywt.WaveletPacket(data=self.data, wavelet='dmey', mode='symmetric',maxlevel=self.maxlevel)
-        newNode.A = wpt['a'].data
-        newNode.D = wpt['d'].data
-        #print np.shape(data)[0], self.ShannonEntropy(newNode.A), self.ShannonEntropy(newNode.D), newNode.Entropy
-        sA = self.ShannonEntropy(newNode.A)
-        sD = self.ShannonEntropy(newNode.D)
-        # Should this next line be max or sum?
-        if np.shape(newNode.A)[0]==1 or (sA + sD >= newNode.Entropy) or level>self.maxsearch:
-            stopFlag = True
-            maxLevelL = level
-            maxLevelR = level
-        else:
-            if sA > 0:
-                newNode.left,maxLevelL = self.makeTree_wpt(newNode.A,level+1)
-            else:
-                newNode.left = None
-                maxLevelL = level
-            if sD > 0:
-                newNode.right, maxLevelR = self.makeTree_wpt(newNode.D, level+1)
-            else:
-                newNode.right = None
-                maxLevelR = level
-        return newNode, max(maxLevelL,maxLevelR)
-
-    def testTree(self):
-        #maxsearch=14
-        level = 0
-        #maxLevel = 0
-        root, maxLevel = self.makeTree(self.data,level)
-        print(maxLevel)
-
-        print "====="
-        level = 0
-        maxLevel = 0
-        root, maxLevel = self.makeTree_wpt(self.data,level)
-        print(maxLevel)
-        print "====="
+        return level-1
 
     def denoise(self):
         level = 0
-        root, self.maxlevel = self.makeTree_wpt(self.data,level)
-        # CHEAT!!!!
-        self.maxlevel = max(self.maxlevel,4)
+        self.maxlevel = self.BestLevel()
+        print self.maxlevel
 
-        # Use maxLevel (rather wasteful this!) to make a new wavelet packet decomposition
-        wp = pywt.WaveletPacket(data=self.data, wavelet='dmey', mode='symmetric',maxlevel=self.maxlevel)
-        out = wp.reconstruct(update=False)
+        # TODO: reuse previous tree instead of making new one!
+        self.wp = pywt.WaveletPacket(data=self.data, wavelet='dmey', mode='symmetric',maxlevel=self.maxlevel)
 
-        det1 = wp['d'].data
+        # nlevels = self.maxsearch
+        # while nlevels > self.maxlevel:
+        #     for n in self.wp.get_leaf_nodes():
+        #         del self.wp[n.path]
+        #     nlevels -= 1
+
+        det1 = self.wp['d'].data
         # Note magic conversion number
         sigma = np.median(np.abs(det1)) / 0.6745
-        threshold = 4.5*sigma
+        threshold = 3.5*sigma
         for level in range(self.maxlevel):
-            for n in wp.get_level(level, 'natural'):
+            for n in self.wp.get_level(level, 'natural'):
                 # Hard thresholding
                 #n.data = np.where(np.abs(n.data)<threshold,0.0,n.data)
                 # Soft thresholding
                 n.data = np.sign(n.data)*np.maximum((np.abs(n.data)-threshold),0.0)
 
-        wData = wp.reconstruct()
-        #pl.plot(wp.reconstruct())
-        #pl.show()
+        self.wData = self.wp.reconstruct(update=False)
 
+        # Commented out as I don't see the benefit. And don't know how to pick width
         # Bandpass filter
-        import scipy.signal as signal
-        ripple_db = 80.0
-        width = 0.11
-        ntaps, beta = signal.kaiserord(ripple_db, width)
-        taps = signal.firwin(ntaps,cutoff = [500,8000], window=('kaiser', beta),pass_zero=False,nyq=self.sampleRate/2.0)
-        self.fwData = signal.lfilter(taps, 1.0, wData)
-        return self.fwData
-        #pl.plot(self.data)
-        #pl.plot(self.fwData)
+        # import scipy.signal as signal
+        # nyquist = self.sampleRate/2.0
+        # ripple_db = 80.0
+        # width = 1.0/nyquist
+        # ntaps, beta = signal.kaiserord(ripple_db, width)
+        # taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
+        # self.fwData = signal.lfilter(taps, 1.0, self.wData)
 
+        return self.wData
 
     def plot(self):
         # Spectrogram plot
-        fig2 = pl.figure()
-        cmap = pl.cm.gray
-        ax1 = fig2.add_subplot(211)
-        ax1.specgram(self.data, NFFT=64, noverlap=32, cmap=cmap)
-        ax2 = fig2.add_subplot(212)
-        ax2.specgram(self.fwData, NFFT=64, noverlap=32, cmap=cmap)
+        cmap = self.cmap_grey
+        print np.shape(self.data)
+        fig = pl.figure()
+        ax1 = fig.add_subplot(221)
+
+        print len(self.data)/128
+        sp1 = np.zeros((128,1875)) #len(self.data)/128))
+        for i in range(1,6): #np.int(len(self.data)/48000)):
+            sp1[:,(i-1)*375:i*375] = spectrogram(self.data[(i-1)*48000:i*48000])
+
+
+        sp2 = np.zeros((128,1875)) #len(self.data)/128))
+        for i in range(1,6): #np.int(len(self.data)/48000)):
+            sp2[:,(i-1)*375:i*375] = spectrogram(self.wData[(i-1)*48000:i*48000])
+
+        ax1.imshow(sp1,cmap=cmap,aspect='auto')
+        ax2 = fig.add_subplot(222)
+        #sp2 = spectrogram(self.wData)
+        ax2.imshow(sp2,cmap=cmap,aspect='auto')
+        #ax3 = fig.add_subplot(233)
+        #sp3 = spectrogram(self.fwData)
+        #ax3.imshow(sp3,cmap=cmap)
+        ax4 = fig.add_subplot(234)
+        pl.plot(self.data)
+        ax5 = fig.add_subplot(235)
+        pl.plot(self.wData)
+        #ax6 = fig.add_subplot(236)
+        #pl.plot(self.wData)
         pl.show()
 
-    def writefile(self):
-        wavfile.write('male1d.wav',self.sampleRate, self.fwData)
-    # Write audio
+    def writefile(self,name):
+        # Need them to be 16 bit
+        self.wData *= 32768.0
+        self.wData = self.wData.astype('int16')
+        wavfile.write(name,self.sampleRate, self.wData)
 
-    def splitFile5mins(self, name):
-        # Nirosha wants to split files that are long (15 mins) into 5 min segments
-        self.sampleRate, self.audiodata = wavfile.read(name)
-        nsamples = np.shape(self.audiodata)[0]
-        lengthwanted = self.sampleRate * 60 * 5
-        count = 0
-        while (count + 1) * lengthwanted < nsamples:
-            data = self.audiodata[count * lengthwanted:(count + 1) * lengthwanted]
-            filename = name[:-4] + '_' +str(count) + name[-4:]
-            print filename
-            wavfile.write(filename, self.sampleRate, data)
-            count += 1
-        data = self.audiodata[(count) * lengthwanted:]
-        filename = name[:-4] + '_' + str((count)) + name[-4:]
-        print filename
-        wavfile.write(filename, self.sampleRate, data)
+    def play(self):
+        import sounddevice as sd
+        #sd.play(self.Data)
+        sd.play(self.wData)
 
-#a = Denoise()
-#a.splitFile5mins('ST0026.wav')
 
-# a.loadData()
-# # a.testTree()
-# a.denoise()
-# a.plot()
-# a.writefile()
+    def defineColourmap(self):
+        # We want a colormap that goes from white to black in greys, but has limited contrast
+        # First is sorted by keeping all 3 colours the same, second by squeezing the range
+        cdict = {
+            'blue': ((0, 1, 1), (self.colourStart, 1, 1), (self.colourEnd, 0, 0), (1, 0, 0)),
+            'green': ((0, 1, 1), (self.colourStart, 1, 1), (self.colourEnd, 0, 0), (1, 0, 0)),
+            'red': ((0, 1, 1), (self.colourStart, 1, 1), (self.colourEnd, 0, 0), (1, 0, 0))
+        }
+        self.cmap_grey = matplotlib.colors.LinearSegmentedColormap('cmap_grey', cdict, 256)
+
+def spectrogram(t):
+    from scipy.fftpack import fft
+
+    if t is None:
+        print ("Error")
+
+    window_width = 256
+    incr = 128
+    # This is the Hanning window
+    hanning = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width + 1)))
+
+    sg = np.zeros((window_width / 2, np.ceil(len(t) / incr)))
+    counter = 1
+
+    for start in range(0, len(t) - window_width, incr):
+        window = hanning * t[start:start + window_width]
+        ft = fft(window)
+        ft = ft * np.conj(ft)
+        sg[:, counter] = np.real(ft[window_width / 2:])
+        counter += 1
+    # Note that the last little bit (up to window_width) is lost. Can't just add it in since there are fewer points
+
+    sg = 10.0 * np.log10(sg)
+    return sg
+
+def test():
+
+    #pl.ion()
+    a = Denoise()
+    a.colourStart = 0.6
+    a.colourEnd = 1.0
+    a.defineColourmap()
+    #a.splitFile5mins('ST0026.wav')
+
+    a.loadData()
+    #a.play()
+    #a.testTree()
+    a.denoise()
+    a.plot()
+    #a.play()
+    #a.writefile('out.wav')
+    pl.show()
+#test()
+#pl.show()
