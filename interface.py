@@ -2,7 +2,7 @@
 #
 # This is currently the base class for the AviaNZ interface
 # It's fairly simplistic, but hopefully works
-# Version 0.4 28/5/16
+# Version 0.4 30/5/16
 # Author: Stephen Marsland
 
 import sys, os, glob, json
@@ -22,25 +22,24 @@ import SignalProc
 # ==============
 # TODO
 
-# Finish manual segmentation
-# Make a version for Kim -> list of 10 files and that's all in the list box (code is there)
+# Needs decent testing
+
+# Make a 'final' version for Kim -> list of 10 files and that's all in the list box
 #   -> it should make a new folder with understandable name, copy them in, start, record times as well
 # Time is datetime.datetime.now().time()
-# How much should padding be, and how much should the move_amount be? -> needs work, relating to windowWidth
-# As well as slider, have forward and backward buttons?
-# List of files in the box on the left -> directories, .., etc.
-# Look at QDir and QFileSystemModel
+# How to deploy it for her?
 
-# Denoise the tril1 call??
+# For second plot, how wide should padding be, and how much should the move_amount be? -> needs work, relating to windowWidth
+# As well as slider, have forward and backward buttons?
+
+# Need to have another looking at denoising and work out what is happening, e.g., the tril1 call??
 
 # Given files > 5 mins, split them into 5 mins versions anyway (code is there, make it part of workflow)
 
 # Clear interface to plug in segmenters, labellers, etc.
 
-# Add other windowing functions
-
 # Changes to interface?
-# Put text for recognised species inbetween the two graphs
+# Put text for recognised species inbetween the two graphs?
 # Does it need play and pause buttons? Plus a marker for where up to in playback -> needs another player
 # Related: should you be able to select place to play from in fig1?
 # Automatic segmentation -> power, wavelets, ...
@@ -87,23 +86,11 @@ class Interface(QMainWindow):
             }
             self.configfile = 'AviaNZconfig.txt'
 
-        # This is a flag to say if the next thing that they click on should be a start or a stop for segmentation
-        self.start_stop = 0
-        self.start_stop2 = 0
+        self.resetStorageArrays()
 
-        # Keep track of start points and selected buttons
-        self.start_a = 0
-        self.windowStart = 0
-        self.box1id = None
-        self.buttonID = None
-
-        # These variables hold the data to be saved and/or plotted
-        self.segments = []
-        self.listRectanglesa1 = []
-        self.listRectanglesa2 = []
-        self.listRectanglesb1 = []
-        self.listRectanglesb2 = []
-        self.a1text = []
+        self.firstFile = 'ruru.wav'
+        self.dirName = self.config['dirpath']
+        self.previousFile = None
 
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
@@ -115,7 +102,7 @@ class Interface(QMainWindow):
         #self.loadFile('../Birdsong/more1.wav')
         #self.loadFile('male1.wav')
         #self.loadFile('ST0026_1.wav')
-        self.loadFile('ruru.wav')
+        self.loadFile(self.firstFile)
 
     # def createMenu(self):
     #     # Create the menu entries at the top of the screen. Not really needed, and hence commented out currently
@@ -136,7 +123,6 @@ class Interface(QMainWindow):
 
     def createFrame(self):
         # This creates the actual interface. A bit of a mess of Qt widgets, and the connector calls
-        # TODO: tidy this up, make it easy to add the list of files or not
         self.defineColourmap()
         self.frame = QWidget()
 
@@ -150,17 +136,10 @@ class Interface(QMainWindow):
         # Holds the list of files. It could do with some annotation so that you can see files you have done,
         # and it should only show a file >5 mins if it hasn't already made the 5 min subfiles
         # Also, need to work out how to make it include .. and subdirectories
-        # TODO Needs a bit of sorting -> subdirectories, etc.
-        listFiles = QListWidget(self)
-        listOfFiles = []
-        #listOfFiles.extend('..')
-        for extension in ['wav','WAV']:
-            pattern = os.path.join(self.config['dirpath'],'*.%s' % extension)
-            listOfFiles.extend(glob.glob(pattern))
-        for file in listOfFiles:
-            item = QListWidgetItem(listFiles)
-            item.setText(file)
-        listFiles.connect(listFiles, SIGNAL('itemClicked(QListWidgetItem*)'), self.listLoadFile)
+        # TODO Needs to deal with the directories being selected
+        self.listFiles = QListWidget(self)
+        self.fillList()
+        self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
 
         # The buttons on the right hand side, and also the spinbox for the window width
         # TODO: what else should be there?
@@ -240,8 +219,9 @@ class Interface(QMainWindow):
         # {birds1layout birds2layout | birdListLayout | vbox3} -> selectorLayout
 
         vbox0 = QVBoxLayout()
-        vbox0.addWidget(QLabel('Select another file to work on here'))
-        vbox0.addWidget(listFiles)
+        vbox0.addWidget(QLabel('Double click to select another file '))
+        vbox0.addWidget(QLabel('Red names already have segments saved '))
+        vbox0.addWidget(self.listFiles)
 
         vbox1 = QVBoxLayout()
         vbox1.addWidget(self.canvas)
@@ -300,21 +280,89 @@ class Interface(QMainWindow):
         self.frame.setLayout(vbox2)
         self.setCentralWidget(self.frame)
 
-    def listLoadFile(self,name):
+    def fillList(self):
+        # Generates the list of files for the listbox on top left
+        # Most of the work is to deal with directories in that list
+        self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
+        listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
+        listOfLongFiles = QDir(self.dirName).entryList(['*_1.wav'])
+        for file in self.listOfFiles:
+            if file.fileName()[:-4]+'_1.wav' in listOfLongFiles:
+                # Ignore this entry
+                pass
+            else:
+                item = QListWidgetItem(self.listFiles)
+                item.setText(file.fileName())
+                if file.fileName()+'.data' in listOfDataFiles:
+                    item.setTextColor(Qt.red)
+        index = self.listFiles.findItems(self.firstFile,Qt.MatchExactly)
+        if len(index)>0:
+            self.listFiles.setCurrentItem(index[0])
+        else:
+            index = self.listFiles.findItems(self.listOfFiles[0].fileName(),Qt.MatchExactly)
+            self.listFiles.setCurrentItem(index[0])
+
+    def resetStorageArrays(self):
+        # These variables hold the data to be saved and/or plotted
+        self.segments=[]
+        self.listRectanglesa1 = []
+        self.listRectanglesa2 = []
+        self.listRectanglesb1 = []
+        self.listRectanglesb2 = []
+        self.a1text = []
+
+        # This is a flag to say if the next thing that they click on should be a start or a stop for segmentation
+        self.start_stop = 0
+        self.start_stop2 = 0
+
+        # Keep track of start points and selected buttons
+        self.start_a = 0
+        self.windowStart = 0
+        self.box1id = None
+        self.buttonID = None
+
+    def listLoadFile(self,current):
         # Listener for when the user clicks on a filename
-        self.loadFile(name.text())
+        self.a1.clear()
+        self.a2.clear()
+        if self.previousFile is not None:
+            if self.segments != []:
+                self.saveSegments()
+                self.previousFile.setTextColor(Qt.red)
+        self.previousFile = current
+        self.resetStorageArrays()
+
+        i=0
+        while self.listOfFiles[i].fileName() != current.text():
+            i+=1
+        # Slightly dangerous, but the file REALLY should exist
+        if self.listOfFiles[i].isDir():
+            dir = QDir(self.dirName)
+            dir.cd(self.listOfFiles[i].fileName())
+            # Now repopulate the listbox
+            #print "Now in "+self.listOfFiles[i].fileName()
+            self.dirName=dir.absolutePath()
+            self.listFiles.clearSelection()
+            self.listFiles.clearFocus()
+            self.listFiles.clear()
+            self.previousFile = None
+            self.fillList()
+        else:
+            self.loadFile(current)
 
     def loadFile(self,name):
         # This does the work of loading a file
         # One magic constant, which normalises the data
         # TODO: currently just takes the first channel of 2
-        if len(self.segments)>0:
-            self.saveSegments()
-        self.segments = []
+        #if len(self.segments)>0:
+        #    self.saveSegments()
+        #self.segments = []
 
-        self.sampleRate, self.audiodata = wavfile.read(name)
-        self.filename = name
-
+        if isinstance(name,str):
+            self.filename = name
+        else:
+            self.filename = self.dirName+'/'+str(name.text())
+        self.sampleRate, self.audiodata = wavfile.read(self.filename)
         if self.audiodata.dtype is not 'float':
             self.audiodata = self.audiodata.astype('float') / 32768.0
         if np.shape(np.shape(self.audiodata))[0]>1:
@@ -322,15 +370,15 @@ class Interface(QMainWindow):
         self.datamax = np.shape(self.audiodata)[0]
 
         # Create an instance of the Signal Processing class
-        if not hasattr(self,'den'):
+        if not hasattr(self,'sp'):
             self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate,self.config['window_width'],self.config['incr'])
 
         # Get the data for the spectrogram
         self.sg = self.sp.spectrogram(self.audiodata)
 
         # Load any previous segments stored
-        if os.path.isfile(name+'.data'):
-            file = open(name+'.data', 'r')
+        if os.path.isfile(self.filename+'.data'):
+            file = open(self.filename+'.data', 'r')
             self.segments = json.load(file)
             file.close()
 
@@ -905,7 +953,11 @@ class Interface(QMainWindow):
 
     def saveSegments(self):
         # This saves the segmentation data as a json file
-        file = open(self.filename + '.data', 'w')
+        print "Saving segments to "+self.filename
+        if isinstance(self.filename, str):
+            file = open(self.filename + '.data', 'w')
+        else:
+            file = open(str(self.filename) + '.data', 'w')
         json.dump(self.segments,file)
 
     def writefile(self):
