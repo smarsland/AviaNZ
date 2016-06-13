@@ -30,9 +30,9 @@ import Learning
     # Use new forms for denoise/segment to allow parameter selection
 # Can current overlap segments -> stop this?
 # Font size to match segment size
-# Units of the spectrogram?
 
 # Make threshold only update when press go
+# Size of zoom window?
 
 # Make a 'final' version for Kim -> list of 10 files and that's all in the list box
 #   -> it should make a new folder with understandable name, copy them in, start, record times as well
@@ -314,8 +314,8 @@ class Interface(QMainWindow):
 
         vbox3 = QVBoxLayout()
         vbox3.addWidget(self.canvas2)
-        #vbox3.addWidget(QLabel('Click on a start/end to select, click again to move'))
-        #vbox3.addWidget(QLabel('Or use arrow keys. Press Backspace to delete'))
+        vbox3.addWidget(QLabel('Click on a start/end to select, click again to move'))
+        vbox3.addWidget(QLabel('Or use arrow keys. Press Backspace to delete'))
         vbox3.addLayout(hbox4)
 
         selectorLayout = QHBoxLayout()
@@ -471,7 +471,12 @@ class Interface(QMainWindow):
         self.a2.clear()
         self.a2.imshow(self.sg, cmap=self.cmap_grey, aspect='auto')
         #start,stop = self.a2.get_ylim()
-        #self.a2.set_yticks(start,stop)
+        l = [str(0),str(self.sampleRate/2)]
+        for i in range(len(self.a2.axes.get_yticklabels())-4):
+            l.append('')
+        l.append(str(0))
+        self.a2.axes.set_yticklabels(l)
+        #self.a2.axes.set_yticklabels([str(0),str(self.sampleRate/2),'','','','','',str(0)]) #np.linspace(0,self.sampleRate/2,num=len(self.a2.get_ticklabels)))
         #self.a2.axis('off')
         self.a2.set_xlim(self.windowStart*self.sampleRate / self.config['incr'], self.windowSize*self.sampleRate / self.config['incr'])
 
@@ -500,7 +505,7 @@ class Interface(QMainWindow):
             # But they are relative coordinates, so would be fiddly and have to move with the slider -> annoying!
             # self.a1.annotate()
             # self.fig.text(0.3,0.5,'xxx')
-        self.fig.subplots_adjust(0.03,0.01,0.99,0.98)
+        self.fig.subplots_adjust(0.05,0.02,0.99,0.98)
         self.canvas.draw()
 
         self.topfig = self.fig3.add_axes((0.03, 0.01, 0.99, 0.98))

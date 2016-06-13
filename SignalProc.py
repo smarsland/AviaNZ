@@ -66,9 +66,8 @@ class SignalProc:
         else:
             print "unknown window, using Hanning"
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)))
-
-        sg = np.zeros((self.window_width / 2, np.ceil(len(t) / self.incr)))
-        counter = 1
+        sg = np.zeros((self.window_width / 2, int(np.ceil(len(t) / self.incr))))
+        counter = 0
 
         for start in range(0, len(t) - self.window_width, self.incr):
             # Multiply data with window function, take Fourier transform and plot log10 version
@@ -78,7 +77,6 @@ class SignalProc:
             sg[:, counter] = np.real(ft[self.window_width / 2:])
             counter += 1
         # Note that the last little bit (up to window_width) is lost. Can't just add it in since there are fewer points
-
         sg = 10.0 * np.log10(sg)
         return sg
 
