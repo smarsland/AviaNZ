@@ -10,15 +10,18 @@ import matplotlib
 # TODO:
 # Denoising needs work
 # Add in bandpass filtering
+# Also downsampling (use librosa)
 # Some tidying needed
+# Test the different windows, play with threshold multiplier -> how to set? Look up log amplitude scaling
 # What else should be added into here?
 
 class SignalProc:
     # This class implements various signal processing algorithms for the AviaNZ interface
-    def __init__(self,data=[],sampleRate=0,window_width=256,incr=128,maxSearchDepth=20):
+    def __init__(self,data=[],sampleRate=0,window_width=256,incr=128,maxSearchDepth=20,thresholdMultiplier=4.5):
         self.window_width=window_width
         self.incr=incr
         self.maxsearch=maxSearchDepth
+        self.thresholdMultiplier = thresholdMultiplier
         if data != []:
             self.data = data
             self.sampleRate = sampleRate
@@ -99,13 +102,11 @@ class SignalProc:
 
         return level-1
 
-    def denoise(self,threshold='soft'):
+    def denoise(self,thresholdType='soft'):
         # Perform wavelet denoising. Can use soft or hard thresholding
-        level = 0
         self.maxlevel = self.BestLevel()
         print self.maxlevel
 
-        # TODO: reuse previous tree instead of making new one!
         self.wp = pywt.WaveletPacket(data=self.data, wavelet='dmey', mode='symmetric',maxlevel=self.maxlevel)
 
         # nlevels = self.maxsearch
@@ -117,10 +118,10 @@ class SignalProc:
         det1 = self.wp['d'].data
         # Note magic conversion number
         sigma = np.median(np.abs(det1)) / 0.6745
-        threshold = 4.5*sigma
+        threshold = self.thresholdMultiplier*sigma
         for level in range(self.maxlevel):
             for n in self.wp.get_level(level, 'natural'):
-                if threshold = 'hard':
+                if thresholdType == 'hard':
                     # Hard thresholding
                     n.data = np.where(np.abs(n.data)<threshold,0.0,n.data)
                 else:
@@ -142,22 +143,29 @@ class SignalProc:
 
         return self.wData
 
-    def writefile(self,name):
+    def writeFile(self,name):
         # Save a sound file for after denoising
         # Need them to be 16 bit integers
         self.wData *= 32768.0
         self.wData = self.wData.astype('int16')
         wavfile.write(name,self.sampleRate, self.wData)
 
-    def loadData(self):
+    def loadData(self,fileName):
         # Load a sound file and normalise it
+        self.sampleRate, self.data = wavfile.read(fileName)
         # self.sampleRate, self.data = wavfile.read('../Birdsong/more1.wav')
         # self.sampleRate, self.data = wavfile.read('../Birdsong/Denoise/Primary dataset/kiwi/female/female1.wav')
         #self.sampleRate, self.data = wavfile.read('ruru.wav')
-        self.sampleRate, self.data = wavfile.read('tril1.wav')
+        #self.sampleRate, self.data = wavfile.read('tril1.wav')
         # self.sampleRate, self.data = wavfile.read('male1.wav')
         # The constant is for normalisation (2^15, as 16 bit numbers)
         self.data = self.data.astype('float') / 32768.0
+
+def denoiseFile(fileName,thresholdMultiplier):
+    sp = SignalProc(thresholdMultiplier=thresholdMultiplier)
+    sp.loadData(fileName)
+    sp.denoise()
+    sp.writeFile(fileName[:-4]+'denoised'+str(sp.thresholdMultiplier)+fileName[-4:])
 
 def test():
     #pl.ion()
@@ -180,7 +188,28 @@ def test():
     #a.play()
     a.writefile('out.wav')
     pl.show()
+
+def show():
+    #pl.ion()
+    a = SignalProc()
+    a.loadData('Sound Files/male1.wav')
+    sg = a.spectrogram(a.data)
+    pl.figure()
+    pl.plot(a.data)
+    pl.figure()
+    pl.imshow(sg,cmap='gray_r')
+    pl.show()
+
+#show()
+#pl.show()
 #test()
 #pl.show()
 
 #pl.ion()
+
+#denoiseFile('tril1.wav',1.5)
+#denoiseFile('tril1.wav',2.5)
+#denoiseFile('tril1.wav',3.5)
+#denoiseFile('tril1.wav',4.0)
+#denoiseFile('tril1.wav',4.5)
+#denoiseFile('tril1.wav',5.0)

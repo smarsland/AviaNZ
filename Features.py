@@ -10,9 +10,24 @@ import librosa
 
 # TODO:
 # Put some more stuff in here and use it!
+# So what are good features? MFCC is a start, what else? Wavelets?
+# Add chroma features and Tonnetz
+# Prosodic features (pitch, duration, intensity)
+# Spectral statistics
+# Frequency modulation
+# Linear Predictive Coding? -> from scikits.talkbox import lpc (see also audiolazy)
+# Frechet distance for DTW?
+# Pick things from spectrogram
+
+# Add something that plots some of these to help playing, so that I can understand the librosa things, etc.
+
+# And assemble a decent dataset of birdcalls to play with.
+# Or in fact, two: kiwi, ruru, bittern, and then a much bigger one
 
 class Features:
     # This class implements various feature extraction algorithms for the AviaNZ interface
+    # In essence, it will be given a segment as a region of audiodata (between start and stop points)
+    # Classifiers will then be called on the features
     # Currently it's just MFCC. Has DTW in too.
     # TODO: test what there is so far!
 
@@ -54,8 +69,8 @@ class Features:
         return xpath, ypath
 
     def get_mfcc(self):
-        # Use a library to get the MFCC coefficients
-        mfcc = librosa.feature.mfcc(data, sampleRate)
+        # Use librosa to get the MFCC coefficients
+        mfcc = librosa.feature.mfcc(self.data, self.sampleRate)
         librosa.display.specshow(mfcc)
 
         # Normalise
@@ -63,6 +78,40 @@ class Features:
         mfcc /= np.max(np.abs(mfcc),axis=0)
 
         return mfcc
+
+    def get_chroma(self):
+        # Use librosa to get the Chroma coefficients
+        cstft = librosa.feature.chroma_stft(self.data,self.sampleRate)
+        ccqt = librosa.feature.chroma_cqt(self.data,self.sampleRate)
+
+    def get_tonnetz(self):
+        tonnetz = librosa.feature.tonnetz(self.data,self.sampleRate)
+
+    def get_spectral_features(self):
+        s1 = librosa.feature.spectral_bandwidth(self.data,self.sampleRate)
+        s2 = librosa.feature.spectral_centroid(self.data,self.sampleRate)
+        s3 = librosa.feature.spectral_contrast(self.data,self.sampleRate)
+        s4 = librosa.feature.spectral_rolloff(self.data,self.sampleRate)
+
+        zcr = librosa.feature.zero_crossing_rate(self.data,self.sampleRate)
+
+    def other_features(self):
+        librosa.fft_frequencies(self.sampleRate)
+        librosa.cqt_frequencies()
+        librosa.audio.get_duration()
+
+        # Estimate dominant frequency of STFT bins by parabolic interpolation
+        librosa.piptrack()
+
+        # Adaptive noise floor -> read up
+        librosa.feature.logamplitude()
+
+        librosa.onset.onset_detect()
+        librosa.onset.onset_strength()
+
+    def get_lpc(self):
+        from scikits.talkbox import lpc
+        lpc(data,order)
 
     def testDTW(self):
         x = [0, 0, 1, 1, 2, 4, 2, 1, 2, 0]
@@ -75,4 +124,4 @@ def test():
     a = Features()
     a.testDTW()
     pl.show()
-test()
+#test()
