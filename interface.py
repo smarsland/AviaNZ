@@ -28,23 +28,25 @@ import Learning
 
 # Needs decent testing -> suggestions from Nirosha
     # Use new forms for denoise/segment to allow parameter selection
-# Can current overlap segments -> stop this?
+# For overlapping bird calls, need two spectrograms
 # Font size to match segment size
 
 # Make threshold only update when press go
 # Size of zoom window?
 
 # Make a 'final' version for Kim -> list of 10 files and that's all in the list box
-#   -> it should make a new folder with understandable name, copy them in, start, record times as well
+#   -> it should make a new folder with understandable name, copy them in, start, record times as well, remove .. as option
 # Time is datetime.datetime.now().time()
 # How to deploy it for her?
+# 1 page user manual
 
 # For second plot, how wide should padding be, and how much should the move_amount be? -> needs work, relating to windowWidth
-# As well as slider, have forward and backward buttons?
 
 # Look at raven and praat -> what else is actually useful? Other annotations on graphs?
 
 # Need to have another looking at denoising and work out what is happening, e.g., the tril1 call??
+# For segmenter, work out how to delete the old threshold lines m
+# Make it plot the segments
 
 # Given files > 5 mins, split them into 5 mins versions anyway (code is there, make it part of workflow)
 # Don't really want to load the whole thing, just 5 mins, and then move through with arrows -> how?
@@ -54,7 +56,7 @@ import Learning
 # As well as this version with pictures, will need to be able to call various bits to work offline
 # denoising, segmentation, etc. that will then just show some pictures
 
-# Add option somewhere to change windowing for spectogram, and any other params -> easier for me to play!
+# Add option somewhere to change windowing for spectrogram, and any other params -> easier for me to play!
 
 # Turn stereo sound into mono using librosa, consider always resampling to 22050Hz?
 
@@ -79,7 +81,7 @@ class Interface(QMainWindow):
             'dirpath':'.',
 
             # Params for the width of the lines to draw for segmentation in the two plots
-            'linewidtha1':100,
+            'linewidtha1':1,
             'minbar_thickness':200,
             'a2barthickness':0.02,
 
@@ -202,14 +204,11 @@ class Interface(QMainWindow):
                   QRadioButton("Bittern"), QRadioButton("Petrel"), QRadioButton("Robin"), QRadioButton("Tomtit"), QRadioButton("Cuckoo"),QRadioButton("Kereru")]
         self.birds2 = [QRadioButton("Tui"), QRadioButton("Bellbird"), QRadioButton("Fantail"), QRadioButton("Saddleback"), QRadioButton("Silvereye"), QRadioButton("Rifleman"), QRadioButton("Warbler"),
                   QRadioButton("Not Bird"), QRadioButton("Don't Know"), QRadioButton("Other")]
-        #birdButtonGroup = QButtonGroup()
 
         for i in xrange(len(self.birds1)):
-            #birdButtonGroup.addButton(self.birds1[i], i)
             self.birds1[i].setEnabled(False)
             self.connect(self.birds1[i], SIGNAL("clicked()"), self.radioBirdsClicked)
         for i in xrange(len(self.birds2)):
-            #birdButtonGroup.addButton(self.birds1[i], i)
             self.birds2[i].setEnabled(False)
             self.connect(self.birds2[i], SIGNAL("clicked()"), self.radioBirdsClicked)
 
@@ -225,7 +224,7 @@ class Interface(QMainWindow):
         self.connect(self.birdList, SIGNAL("itemClicked(QListWidgetItem*)"), self.listBirdsClicked)
         self.birdList.setEnabled(False)
 
-        # And this is the text box for missing birds
+        # This is the text box for missing birds
         self.tbox = QLineEdit(self)
         self.tbox.setMaximumWidth(150)
         self.connect(self.tbox, SIGNAL('editingFinished()'), self.birdTextEntered)
@@ -274,8 +273,6 @@ class Interface(QMainWindow):
         vbox1.addWidget(self.canvas3)
         vbox1.addWidget(self.canvas)
         vbox1.addLayout(hbox2)
-        #vbox1.addWidget(QLabel('Slide to move through recording, click to start and end a segment, click on segment to edit or label'))
-        #vbox1.addWidget(sld)
         #vbox1.addWidget(self.mpl_toolbar)
 
         vboxbuttons = QVBoxLayout()
@@ -285,13 +282,9 @@ class Interface(QMainWindow):
 
         vboxbuttons.addWidget(QLabel('Amplitude threshold'))
         vboxbuttons.addWidget(self.ampThr)
-        #vboxbuttons.addWidget(QLabel('Visible window width (seconds)'))
-        #vboxbuttons.addWidget(widthWindow)
 
         hbox1 = QHBoxLayout()
-        #hbox1.addLayout(vbox0)
         hbox1.addLayout(vbox1)
-        #hbox1.addLayout(vboxbuttons)
 
         birds1Layout = QVBoxLayout()
         for i in xrange(len(self.birds1)):
@@ -457,27 +450,21 @@ class Interface(QMainWindow):
     def drawFig1(self):
         self.linewidtha1 = float(self.config['linewidtha1'])/self.windowSize
         # This draws figure 1, amplitude and spectrogram plots
-        # Also the topmost figure
+        # Also the topmost figure to show where you are up to in the file
         self.a1 = self.fig.add_subplot(211)
         self.a1.clear()
         self.a1.set_xlim(self.windowStart, self.windowSize)
-        #self.a1.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(.0))
         self.a1.plot(np.linspace(0.0,float(self.datamax)/self.sampleRate,num=self.datamax,endpoint=True),self.audiodata)
-        #start,stop = self.a1.get_ylim()
-        #self.a1.set_yticks([start,0,stop])#np.arange(start, stop+0.1, (np.abs(start) + stop) / 2.0))
         #self.a1.axis('off')
 
         self.a2 = self.fig.add_subplot(212)
         self.a2.clear()
         self.a2.imshow(self.sg, cmap=self.cmap_grey, aspect='auto')
-        #start,stop = self.a2.get_ylim()
         l = [str(0),str(self.sampleRate/2)]
         for i in range(len(self.a2.axes.get_yticklabels())-4):
             l.append('')
         l.append(str(0))
         self.a2.axes.set_yticklabels(l)
-        #self.a2.axes.set_yticklabels([str(0),str(self.sampleRate/2),'','','','','',str(0)]) #np.linspace(0,self.sampleRate/2,num=len(self.a2.get_ticklabels)))
-        #self.a2.axis('off')
         self.a2.set_xlim(self.windowStart*self.sampleRate / self.config['incr'], self.windowSize*self.sampleRate / self.config['incr'])
 
         # If there are segments, show them
