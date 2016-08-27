@@ -1,0 +1,31 @@
+
+1. Interface for Kim.
+    -> user manual
+    -> thorough testing
+
+2. Finish median clipping segmentation (and also thresholded power and amplitude).
+
+3. Finish the Raven feature selection.
+
+4. Finish the wavelet segmentation.
+
+5. 100% confidence on existence and non-existence of (e.g.,) kiwi. Show those not sure about.
+
+-----
+
+5. Testing of the interface, finishing the denoising, segmentation.
+
+6. Cross correlation and related.
+
+7. Some learning.
+
+8. Some code in C?
+
+9. What needs tidying in the code?
+
+Some ideas about things that would be nice:
+    User picks a segment, algorithm to find similar ones and show just those (or copy label)
+    Would it be good to have a 'confirmed' button so that algorithm knows it is correct? Or just assume?
+        So after processing a file, you either run through it, or you get shown each one in it's own window (or a column of them)
+        Could then click on those that are wrong
+    Some database storage stuff and meta information about the sound files?

@@ -11,6 +11,22 @@ import librosa
 # TODO:
 # Put some more stuff in here and use it!
 # So what are good features? MFCC is a start, what else? Wavelets?
+# **FINISH!!*** List from Raven:
+    #1st Quartile Frequency Max Power
+    #1st Quartile Time Max Time
+    #3rd Quartile Frequency Min Amplitude
+    #3rd Quartile Time Min Time
+    #Average Power Peak Amplitude
+    #Center Frequency Peak Correlation
+    #Center Time Peak Frequency
+    #Energy Peak Lag
+    #filtered RMS Amplitude Peak Power
+    #Frequency 5% Peak Time
+    #Frequency 95% RMS Amplitude
+    #Max Amplitude Time 5%
+    #Max Bearing Time 95%
+    #Max Frequency
+
 # Add chroma features and Tonnetz
 # Prosodic features (pitch, duration, intensity)
 # Spectral statistics
@@ -34,6 +50,11 @@ class Features:
     def __init__(self,data=[],sampleRate=0):
         self.data = data
         self.sampleRate = sampleRate
+
+    def setNewData(self,data,sg,fs):
+        self.data = data
+        self.sg = sg
+        self.fs = fs
 
     def dtw(self,x,y,wantDistMatrix=False):
         # Compute the dynamic time warp between two 1D arrays
@@ -83,9 +104,11 @@ class Features:
         # Use librosa to get the Chroma coefficients
         cstft = librosa.feature.chroma_stft(self.data,self.sampleRate)
         ccqt = librosa.feature.chroma_cqt(self.data,self.sampleRate)
+        return[cstsft,ccqt]
 
     def get_tonnetz(self):
         tonnetz = librosa.feature.tonnetz(self.data,self.sampleRate)
+        return tonnetz
 
     def get_spectral_features(self):
         s1 = librosa.feature.spectral_bandwidth(self.data,self.sampleRate)
@@ -94,6 +117,7 @@ class Features:
         s4 = librosa.feature.spectral_rolloff(self.data,self.sampleRate)
 
         zcr = librosa.feature.zero_crossing_rate(self.data,self.sampleRate)
+        return [s1,s2,s3,s4,zcr]
 
     def other_features(self):
         librosa.fft_frequencies(self.sampleRate)
@@ -112,6 +136,56 @@ class Features:
     def get_lpc(self):
         from scikits.talkbox import lpc
         lpc(data,order)
+
+    def entropy(self,s):
+        e = -s[np.nonzero(s)] ** 2 * np.log(s[np.nonzero(s)] ** 2)
+        return np.sum(e)
+
+    def get_spectrogram_measurements(self,t1,t2,f1,f2):
+        #nbins = ??
+        avgPower = np.sum(sg[t1:t2,f1:f2])/nbins
+        deltaPower = np.sum(sg[t2,:]) - np.sum)sg[t1,:])
+        energy = np.sum(10.0**(sg[t1:t2,f1:f2]/10.0))*(self.sampleRate/self.config['window_width'])
+        #bin =
+        #sel =
+        eb = entropy(bin)
+        es = entropy(sel)
+        aggEntropy = np.sum(eb/es*np.log2(eb/es))
+        #nframes =
+        avgEntropy = np.sum(entropy(frame))/nframes
+        #maxFreq = np.max(sg[t1:t2,f1:f2])
+        maxPower = np.max(sg[t1:t2,f1:f2])
+
+        # Cumulative sums to get the quartile points for freq and time
+        csf = np.cumsum(sg[f1:f2,t1:t2],axis=0)
+        cst = np.cumsum(sg[f1:f2, t1:t2], axis=1)
+
+        # List of the frequency points (5%, 25%, 50%, 75%, 95%)
+        list = [.05,.25,.5,.75,.95]
+        freqindices = []
+        index = 0
+        i = 0
+        while i < (len(csf)) and index<len(list):
+            if csf[i]>list[index]*csf[-1]:
+                freqindices.extend(str(i))
+                index+=1
+            i+=1
+
+        timeindices = []
+        index = 0
+        i = 0
+        while i < (len(cst)) and index < len(list):
+            if cst[i] > list[index] * cst[-1]:
+                timeindices.extend(str(i))
+                index += 1
+            i += 1
+
+
+    def get_frequency_measurements(self):
+        pass
+
+    def get_robust_measurements(self):
+        pass
 
     def testDTW(self):
         x = [0, 0, 1, 1, 2, 4, 2, 1, 2, 0]

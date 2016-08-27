@@ -1,79 +1,50 @@
-# Interface.py
+# Manual Segmentation.py
 #
-# This is currently the base class for the AviaNZ interface
-# It's fairly simple, but hopefully works
-# Version 0.6 27/8/16
+# This is a modification of the AviaNZ interface to perform segmentation
+# as simply as possible and collect data about usage.
+# Originally written for Kim's experiment
+
+# Version 0.2 27/8/16
 # Author: Stephen Marsland
 
-import sys, os, glob, json
+# Description
+# A folder is specified. The program randomly selects 5 of these that this user will process
+# It makes a new folder to store the data, which will be the segments made by this user, together with
+# various meta-data
+
+# Installation
+# Install anaconda (Python 2.7)  (http://continuum.io/downloads)
+# Install Qt (conda install -c anaconda pyqt=4.11.4 from a command line)
+# Install sounddevice (pip install sounddevice --user)
+# at command line: python manualsegmentation.py
+# Hopefully that's it!
+
+import sys, os, json, time
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 from scipy.io import wavfile
 import numpy as np
 import pylab as pl
 
+import datetime
+#import pyaudio
+import sounddevice as sd
+#from pysoundcard import Stream, continue_flag
+
 import matplotlib
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 #from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 
-import sounddevice as sd
-
 import SignalProc
-import Segment
-#import Features
-#import Learning
+
 # ==============
 # TODO
+# Put all the questions for the surveys in
+# 1 page user manual
+# ** Testing
+# How to deploy it for her? Docker?
 
-# Finish choosing parameters for median clipping segmentation
-# Finish the raven features
-# Sort out the wavelet segmentation
-
-# Some bug in denoising?
-# How to set bandpass params? -> is there a useful plot to help?
-# More features, more segmentations
-# Other parameters for dialogs?
-# Needs decent testing
-# Some learning algs
-
-# Size of zoom window?
-
-# Pitch tracking, fundamental frequency
-
-# Minor:
-# Turn stereo sound into mono using librosa, consider always resampling to 22050Hz?
-# Font size to match segment size -> currently make it smaller, could also move it up or down as appropriate
-
-# Things to consider:
-    # Second spectrogram (currently use right button for interleaving)? My current choice is no as it takes up space
-    # Put the labelling (and loading) in a dialog to free up space? -> bigger plots
-    # Useful to have a go to start button?
-    # Use to show a moving point through the file as it plays? Sound has been a pain in the arse to date!
-
-# Look at raven and praat and luscinia -> what else is actually useful? Other annotations on graphs?
-
-# Need to have another looking at wavelet denoising and work out what is happening, e.g., the tril1 call??
-
-# Given files > 5 mins, split them into 5 mins versions anyway (code is there, make it part of workflow)
-# Don't really want to load the whole thing, just 5 mins, and then move through with arrows -> how?
-# This is sometimes called paging, I think.
-
-# As well as this version with pictures, will need to be able to call various bits to work offline
-# denoising, segmentation, etc. that will then just show some pictures
-
-# What can be speeded up? Spectrogram in C? Denoising!
-# Look into cython
-
-# Get suggestions from the others
-
-# Things to remember
-# When adding new classes, make sure to pass new data to them in undoing and loading
-
-# This version has the selection of birds using a context menu and then has removed the radio buttons
-# Code is still there, though, just commented out. Add as an option?
-
-# ===============
 
 class Interface(QMainWindow):
 
@@ -96,13 +67,15 @@ class Interface(QMainWindow):
         self.resetStorageArrays()
         #self.secondSpectrogram = False
 
-        self.firstFile = 'male1.wav' # 'kiwi.wav'#'
-        self.dirName = self.config['dirpath']
+
+        #self.firstFile = 'male1.wav' # 'kiwi.wav'#'
+        #self.dirName = self.config['dirpath']
         self.previousFile = None
         self.focusRegion = None
 
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
+
         self.setWindowTitle('AviaNZ')
         #self.createMenu()
         self.createFrame()
@@ -111,24 +84,29 @@ class Interface(QMainWindow):
         #self.loadFile('../Birdsong/more1.wav')
         #self.loadFile('male1.wav')
         #self.loadFile('ST0026_1.wav')
-        self.loadFile(self.firstFile)
 
-    # def createMenu(self):
-    #     # Create the menu entries at the top of the screen. Not really needed, and hence commented out currently
-    #     self.fileMenu = self.menuBar().addMenu("&File")
-    #
-    #     openFileAction = QAction("&Open wave file", self)
-    #     self.connect(openFileAction,SIGNAL("triggered()"),self.openFile)
-    #     self.fileMenu.addAction(openFileAction)
-    #
-    #     # This seems to only work if it is there twice ?!
-    #     quitAction = QAction("&Quit", self)
-    #     self.connect(quitAction,SIGNAL("triggered()"),self.quit)
-    #     self.fileMenu.addAction(quitAction)
-    #
-    #     quitAction = QAction("&Quit", self)
-    #     self.connect(quitAction, SIGNAL("triggered()"), self.quit)
-    #     self.fileMenu.addAction(quitAction)
+        self.startQnDialog()
+        self.timestamps=[]
+        self.genData()
+
+    def genData(self):
+        now = datetime.datetime.now()
+        self.dirName = str("{:0>2d}".format(now.day))+str("{:0>2d}".format(now.month))+str("{:0>2d}".format(now.hour))+str("{:0>2d}".format(now.minute))
+        if os.path.isdir(self.dirName):
+            self.dirName = self.dirName+'a'
+        os.mkdir(self.dirName)
+
+        self.dir = 'Sound Files'
+        dirlist = QDir('Sound Files/')
+        # 2s are because . and .. are there
+        order = np.random.permutation(len(dirlist)-2)+2
+        self.filelist = []
+        for i in range(5):
+            self.filelist.append(str(dirlist[order[i]]))
+        print self.filelist
+        self.inFile = 0
+        self.loadFile(self.filelist[self.inFile])
+        self.timestamps.append(["Loading ",self.filelist[self.inFile],[now.hour,now.minute,now.second,now.microsecond]])
 
     def genConfigFile(self):
         print("Generating new config file")
@@ -178,7 +156,7 @@ class Interface(QMainWindow):
         self.canvas3 = FigureCanvas(self.fig3)
         self.canvas3.setParent(self.frame)
         self.canvas3.mpl_connect('button_press_event', self.fig3Click)
-        self.canvas3.mpl_connect('motion_notify_event', self.fig3Drag)
+        #self.canvas3.mpl_connect('motion_notify_event', self.fig3Drag)
 
         # This is the top figure
         self.fig = Figure(dpi=self.config['dpi'])
@@ -190,19 +168,12 @@ class Interface(QMainWindow):
 
         self.canvas.setFocusPolicy(Qt.ClickFocus)
         self.canvas.setFocus()
-        #self.mpl_toolbar = NavigationToolbar(self.canvas, self.frame)
-
-        # Holds the list of files
-        self.listFiles = QListWidget(self)
-        self.listFiles.setFixedWidth(150)
-        self.fillList()
-        self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
 
         # Whether or not user is drawing boxes around song in the spectrogram
-        self.dragRectangles = QCheckBox('Drag boxes in spectrogram')
-        self.dragRectangles.stateChanged[int].connect(self.dragRectanglesCheck)
-        # The buttons on the right hand side, and also the spinbox for the window width
+        #self.dragRectangles = QCheckBox('Drag boxes in spectrogram')
+        #self.dragRectangles.stateChanged[int].connect(self.dragRectanglesCheck)
 
+        # The buttons on the right hand side, and also the spinbox for the window width
         self.leftBtn = QToolButton()
         self.leftBtn.setArrowType(Qt.LeftArrow)
         self.connect(self.leftBtn,SIGNAL('clicked()'),self.moveLeft)
@@ -212,20 +183,18 @@ class Interface(QMainWindow):
         # TODO: what else should be there?
         playButton1 = QPushButton("&Play Window")
         self.connect(playButton1, SIGNAL('clicked()'), self.playSegment)
-        quitButton = QPushButton("&Quit")
+        quitButton = QPushButton("&Finished")
         self.connect(quitButton, SIGNAL('clicked()'), self.quit)
-        spectrogramButton = QPushButton("Spectrogram &Params")
-        self.connect(spectrogramButton, SIGNAL('clicked()'), self.spectrogramDialog)
-        segmentButton = QPushButton("&Segment")
-        self.connect(segmentButton, SIGNAL('clicked()'), self.segmentationDialog)
-        denoiseButton = QPushButton("&Denoise")
-        self.connect(denoiseButton, SIGNAL('clicked()'), self.denoiseDialog)
-        recogniseButton = QPushButton("&Recognise")
-        self.connect(recogniseButton, SIGNAL('clicked()'), self.recognise)
         deleteButton = QPushButton("&Delete Current Segment")
         self.connect(deleteButton, SIGNAL('clicked()'), self.deleteSegment)
         deleteAllButton = QPushButton("&Delete All Segments")
         self.connect(deleteAllButton, SIGNAL('clicked()'), self.deleteAll)
+        self.nextButton = QPushButton("Next File")
+        self.connect(self.nextButton, SIGNAL('clicked()'), self.next)
+        self.previousButton = QPushButton("&Previous File")
+        self.connect(self.previousButton, SIGNAL('clicked()'), self.previous)
+        self.previousButton.setEnabled(False)
+
         self.widthWindow = QDoubleSpinBox()
         self.widthWindow.setRange(0.5,900.0)
         self.widthWindow.setSingleStep(1.0)
@@ -233,10 +202,51 @@ class Interface(QMainWindow):
         self.widthWindow.setValue(self.config['windowWidth'])
         self.widthWindow.valueChanged[float].connect(self.changeWidth)
 
-        # This was a slider to run through a file
-        #sld = QSlider(Qt.Horizontal, self)
-        #sld.setFocusPolicy(Qt.NoFocus)
-        #sld.valueChanged[int].connect(self.sliderMoved)
+        # Do we actually want labels?
+        self.birds1 = []
+        for item in self.config['BirdButtons1']:
+            self.birds1.append(QRadioButton(item))
+        self.birds2 = []
+        for item in self.config['BirdButtons2']:
+            self.birds2.append(QRadioButton(item))
+
+        for i in xrange(len(self.birds1)):
+            self.birds1[i].setEnabled(False)
+            self.connect(self.birds1[i], SIGNAL("clicked()"), self.radioBirdsClicked)
+        for i in xrange(len(self.birds2)):
+            self.birds2[i].setEnabled(False)
+            self.connect(self.birds2[i], SIGNAL("clicked()"), self.radioBirdsClicked)
+
+        # This is the list of less common birds
+        self.birdList = QListWidget(self)
+        self.birdList.setMaximumWidth(150)
+        for item in self.config['ListBirdsEntries']:
+            self.birdList.addItem(item)
+        self.birdList.sortItems()
+        # Explicitly add "Other" option in
+        self.birdList.insertItem(0,'Other')
+
+        self.connect(self.birdList, SIGNAL("itemClicked(QListWidgetItem*)"), self.listBirdsClicked)
+        self.birdList.setEnabled(False)
+
+        # This is the text box for missing birds
+        self.tbox = QLineEdit(self)
+        self.tbox.setMaximumWidth(150)
+        self.connect(self.tbox, SIGNAL('editingFinished()'), self.birdTextEntered)
+        self.tbox.setEnabled(False)
+
+        # This is the lower figure for the zoomed-in version
+        self.fig2 = Figure((6.0, 4.0), dpi=self.config['dpi'])
+        self.canvas2 = FigureCanvas(self.fig2)
+        self.canvas2.setParent(self.frame)
+        self.canvas2.setFocusPolicy(Qt.ClickFocus)
+        self.canvas2.setFocus()
+
+        # The buttons that go below that figure
+        playButton2 = QPushButton("&Play")
+        self.connect(playButton2, SIGNAL('clicked()'), self.play)
+        self.addButton = QPushButton("&Add segment")
+        self.connect(self.addButton, SIGNAL('clicked()'), self.addSegmentClick)
 
         # A context menu to select birds
         self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -255,63 +265,13 @@ class Interface(QMainWindow):
             self.connect(bird, SIGNAL("triggered()"), receiver)
             self.menuBird2.addAction(bird)
 
-        # This was an array of radio buttons and a list and a text entry box
-        # Removed for now, replaced by the right button menu
-        # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
-        # self.birds1 = []
-        # for item in self.config['BirdButtons1']:
-        #     self.birds1.append(QRadioButton(item))
-        # self.birds2 = []
-        # for item in self.config['BirdButtons2']:
-        #     self.birds2.append(QRadioButton(item))
-        #
-        # for i in xrange(len(self.birds1)):
-        #     self.birds1[i].setEnabled(False)
-        #     self.connect(self.birds1[i], SIGNAL("clicked()"), self.radioBirdsClicked)
-        # for i in xrange(len(self.birds2)):
-        #     self.birds2[i].setEnabled(False)
-        #     self.connect(self.birds2[i], SIGNAL("clicked()"), self.radioBirdsClicked)
-
-        # This is the list of less common birds
-        # self.birdList = QListWidget(self)
-        # self.birdList.setMaximumWidth(150)
-        # for item in self.config['ListBirdsEntries']:
-        #     self.birdList.addItem(item)
-        # self.birdList.sortItems()
-        # # Explicitly add "Other" option in
-        # self.birdList.insertItem(0,'Other')
-
-        # self.connect(self.birdList, SIGNAL("itemClicked(QListWidgetItem*)"), self.listBirdsClicked)
-        # self.birdList.setEnabled(False)
-
-        # This is the text box for missing birds
-        # self.tbox = QLineEdit(self)
-        # self.tbox.setMaximumWidth(150)
-        # self.connect(self.tbox, SIGNAL('editingFinished()'), self.birdTextEntered)
-        # self.tbox.setEnabled(False)
-
-        # This is the lower figure for the zoomed-in version
-        self.fig2 = Figure((6.0, 4.0), dpi=self.config['dpi'])
-        self.canvas2 = FigureCanvas(self.fig2)
-        self.canvas2.setParent(self.frame)
-        self.canvas2.setFocusPolicy(Qt.ClickFocus)
-        self.canvas2.setFocus()
-
-        # The buttons that go below that figure
-        playButton2 = QPushButton("&Play")
-        self.connect(playButton2, SIGNAL('clicked()'), self.play)
-        self.addButton = QPushButton("&Add segment")
-        self.connect(self.addButton, SIGNAL('clicked()'), self.addSegmentClick)
+        #b = self.menuBirdList.addAction('b')
+        #self.connect(b, SIGNAL("triggered()"),self.birdSelected)
 
         # This is the set of layout instructions. It's a bit of a mess, but basically looks like this:
         # { vbox1 }  -> hbox1
         #
         # {vbox0 | birds1layout birds2layout | birdListLayout | vbox3 | vboxbuttons} -> selectorLayout
-
-        vbox0 = QVBoxLayout()
-        vbox0.addWidget(self.listFiles)
-        vbox0.addWidget(QLabel('Double click to select'))
-        vbox0.addWidget(QLabel('Red names have segments'))
 
         vbox4a = QVBoxLayout()
         vbox4a.addWidget(QLabel('Visible window width (seconds)'))
@@ -320,12 +280,10 @@ class Interface(QMainWindow):
         hbox4a = QHBoxLayout()
         hbox4a.addWidget(QLabel('Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'))
         hbox4a.addWidget(playButton1)
-        hbox4a.addWidget(self.dragRectangles)
+        #hbox4a.addWidget(self.dragRectangles)
 
         vbox4b = QVBoxLayout()
         vbox4b.addLayout(hbox4a)
-
-        #vbox4b.addWidget(sld)
 
         hbox2 = QHBoxLayout()
         hbox2.addLayout(vbox4b)
@@ -340,29 +298,28 @@ class Interface(QMainWindow):
         vbox1.addLayout(hbox00)
         vbox1.addWidget(self.canvas)
         vbox1.addLayout(hbox2)
-        #vbox1.addWidget(self.mpl_toolbar)
 
         vboxbuttons = QVBoxLayout()
-        for w in [deleteButton,deleteAllButton,spectrogramButton,denoiseButton, segmentButton, quitButton]:
+        for w in [deleteButton,deleteAllButton,quitButton,self.previousButton, self.nextButton]:
             vboxbuttons.addWidget(w)
             #vboxbuttons.setAlignment(w, Qt.AlignHCenter)
 
         hbox1 = QHBoxLayout()
         hbox1.addLayout(vbox1)
 
-        # birds1Layout = QVBoxLayout()
-        # for i in xrange(len(self.birds1)):
-        #     birds1Layout.addWidget(self.birds1[i])
-        #
-        # birds2Layout = QVBoxLayout()
-        # for i in xrange(len(self.birds2)):
-        #     birds2Layout.addWidget(self.birds2[i])
-        #
-        # birdListLayout = QVBoxLayout()
-        # birdListLayout.addWidget(self.birdList)
-        # birdListLayout.addWidget(QLabel("If bird isn't in list, select Other"))
-        # birdListLayout.addWidget(QLabel("Type below, Return at end"))
-        # birdListLayout.addWidget(self.tbox)
+        birds1Layout = QVBoxLayout()
+        for i in xrange(len(self.birds1)):
+            birds1Layout.addWidget(self.birds1[i])
+
+        birds2Layout = QVBoxLayout()
+        for i in xrange(len(self.birds2)):
+            birds2Layout.addWidget(self.birds2[i])
+
+        birdListLayout = QVBoxLayout()
+        birdListLayout.addWidget(self.birdList)
+        birdListLayout.addWidget(QLabel("If bird isn't in list, select Other"))
+        birdListLayout.addWidget(QLabel("Type below, Return at end"))
+        birdListLayout.addWidget(self.tbox)
 
         hbox4 = QHBoxLayout()
         for w in [playButton2,self.addButton]:
@@ -376,10 +333,9 @@ class Interface(QMainWindow):
         vbox3.addLayout(hbox4)
 
         selectorLayout = QHBoxLayout()
-        selectorLayout.addLayout(vbox0)
-        #selectorLayout.addLayout(birds1Layout)
-        #selectorLayout.addLayout(birds2Layout)
-        #selectorLayout.addLayout(birdListLayout)
+        selectorLayout.addLayout(birds1Layout)
+        selectorLayout.addLayout(birds2Layout)
+        selectorLayout.addLayout(birdListLayout)
         selectorLayout.addLayout(vbox3)
         selectorLayout.addLayout(vboxbuttons)
 
@@ -391,27 +347,26 @@ class Interface(QMainWindow):
         self.frame.setLayout(vbox2)
         self.setCentralWidget(self.frame)
 
-    def fillList(self):
-        # Generates the list of files for the listbox on top left
-        # Most of the work is to deal with directories in that list
-        self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
-        listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
-        listOfLongFiles = QDir(self.dirName).entryList(['*_1.wav'])
-        for file in self.listOfFiles:
-            if file.fileName()[:-4]+'_1.wav' in listOfLongFiles:
-                # Ignore this entry
-                pass
-            else:
-                item = QListWidgetItem(self.listFiles)
-                item.setText(file.fileName())
-                if file.fileName()+'.data' in listOfDataFiles:
-                    item.setTextColor(Qt.red)
-        index = self.listFiles.findItems(self.firstFile,Qt.MatchExactly)
-        if len(index)>0:
-            self.listFiles.setCurrentItem(index[0])
-        else:
-            index = self.listFiles.findItems(self.listOfFiles[0].fileName(),Qt.MatchExactly)
-            self.listFiles.setCurrentItem(index[0])
+    def previous(self):
+        self.inFile -= 1
+        self.nextButton.setEnabled(True)
+        if self.inFile == 0:
+            self.previousButton.setEnabled(False)
+        print self.filelist[self.inFile]
+        self.loadFile(self.filelist[self.inFile])
+        now = datetime.datetime.now()
+        self.timestamps.append(["Loading ",self.filelist[self.inFile],[now.hour,now.minute,now.second,now.microsecond]])
+
+
+    def next(self):
+        self.inFile += 1
+        self.previousButton.setEnabled(True)
+        if self.inFile == 4:
+            self.nextButton.setEnabled(False)
+        print self.filelist[self.inFile]
+        self.loadFile(self.filelist[self.inFile])
+        now = datetime.datetime.now()
+        self.timestamps.append(["Loading ",self.filelist[self.inFile],[now.hour,now.minute,now.second,now.microsecond]])
 
     def resetStorageArrays(self):
         # These variables hold the data to be saved and/or plotted
@@ -444,35 +399,6 @@ class Interface(QMainWindow):
         self.fig1Segment2 = None
         self.fig1Segmenting = False
 
-    def listLoadFile(self,current):
-        # Listener for when the user clicks on a filename
-        self.a1.clear()
-        self.a2.clear()
-        if self.previousFile is not None:
-            if self.segments != []:
-                self.saveSegments()
-                self.previousFile.setTextColor(Qt.red)
-        self.previousFile = current
-        self.resetStorageArrays()
-
-        i=0
-        while self.listOfFiles[i].fileName() != current.text():
-            i+=1
-        # Slightly dangerous, but the file REALLY should exist
-        if self.listOfFiles[i].isDir():
-            dir = QDir(self.dirName)
-            dir.cd(self.listOfFiles[i].fileName())
-            # Now repopulate the listbox
-            #print "Now in "+self.listOfFiles[i].fileName()
-            self.dirName=dir.absolutePath()
-            self.listFiles.clearSelection()
-            self.listFiles.clearFocus()
-            self.listFiles.clear()
-            self.previousFile = None
-            self.fillList()
-        else:
-            self.loadFile(current)
-
     def loadFile(self,name):
         # This does the work of loading a file
         # One magic constant, which normalises the data
@@ -480,12 +406,32 @@ class Interface(QMainWindow):
         #if len(self.segments)>0:
         #    self.saveSegments()
         #self.segments = []
+        if self.previousFile is not None:
+            if self.segments != []:
+                self.saveSegments()
+        self.resetStorageArrays()
 
         if isinstance(name,str):
-            self.filename = self.dirName+'/'+name
+            self.filename = name
         else:
-            self.filename = self.dirName+'/'+str(name.text())
-        self.sampleRate, self.audiodata = wavfile.read(self.filename)
+            self.filename = str(name)
+        self.previousFile = self.filename
+
+        self.sampleRate, self.audiodata = wavfile.read(self.dir+'/'+self.filename)
+
+        #self.wf = wave.open(self.dir+'/'+self.filename, 'rb')
+        #self.sampleRate = self.wf.getframerate()
+
+        # read data
+        #self.audiodata = np.zeros(self.wf.getnframes())
+        #fmt = '<' + 'h' * self.wf.getnchannels()
+
+        #for i in range(self.wf.getnframes()):
+        #    frame = self.wf.readframes(1)
+        #    self.audiodata[i] = struct.unpack(fmt, frame)[0]
+
+        #self.audiodata = self.audiodata.astype('float')/32768.8
+
         if self.audiodata.dtype is not 'float':
             self.audiodata = self.audiodata.astype('float') / 32768.0
         if np.shape(np.shape(self.audiodata))[0]>1:
@@ -496,13 +442,18 @@ class Interface(QMainWindow):
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
             self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate,self.config['window_width'],self.config['incr'])
-
+        # Create an instance of the pyaudio player
+        #if not hasattr(self,'player'):
+        #    # instantiate PyAudio
+        #    self.player = pyaudio.PyAudio()
+        # open stream 
+        #self.stream = self.player.open(format=self.player.get_format_from_width(self.wf.getsampwidth()), channels=self.wf.getnchannels(), rate=self.wf.getframerate(), output=True)
         # Get the data for the spectrogram
         self.sg = self.sp.spectrogram(self.audiodata)
 
         # Load any previous segments stored
-        if os.path.isfile(self.filename+'.data'):
-            file = open(self.filename+'.data', 'r')
+        if os.path.isfile(self.dirName+'/'+self.filename+'.data'):
+            file = open(self.dirName+'/'+self.filename+'.data', 'r')
             self.segments = json.load(file)
             file.close()
 
@@ -536,23 +487,17 @@ class Interface(QMainWindow):
         self.plotheight = np.abs(np.min(self.audiodata)) + np.max(self.audiodata)
         self.drawFig1()
 
-    def openFile(self):
-        # If have an open file option this will deal with it via a file dialog
-        Formats = "Wav file (*.wav)"
-        filename = QFileDialog.getOpenFileName(self, 'Open File', '/Users/srmarsla/Projects/AviaNZ', Formats)
-        if filename != None:
-            self.loadFile(filename)
 
-    def dragRectanglesCheck(self,check):
+    #def dragRectanglesCheck(self,check):
         # The checkbox that says if the user is dragging rectangles or clicking on the spectrogram has changed state
-        if self.dragRectangles.isChecked():
+        #if self.dragRectangles.isChecked():
             #print "Listeners for drag Enabled"
-            self.fig1motion = self.canvas.mpl_connect('motion_notify_event', self.fig1Drag)
-            self.fig1endmotion = self.canvas.mpl_connect('button_release_event', self.fig1DragEnd)
-        else:
+            #self.fig1motion = self.canvas.mpl_connect('motion_notify_event', self.fig1Drag)
+            #self.fig1endmotion = self.canvas.mpl_connect('button_release_event', self.fig1DragEnd)
+        #else:
             #print "Listeners for drag Disabled"
-            self.canvas.mpl_disconnect(self.fig1motion)
-            self.canvas.mpl_disconnect(self.fig1endmotion)
+            #self.canvas.mpl_disconnect(self.fig1motion)
+            #self.canvas.mpl_disconnect(self.fig1endmotion)
 
     def drawFig1(self):
         # This draws figure 1, amplitude and spectrogram plots
@@ -626,67 +571,6 @@ class Interface(QMainWindow):
         self.canvas3.draw()
         self.canvas.mpl_connect('key_press_event', self.fig1Keypress)
 
-    def fig1DragEnd(self,event):
-        if event.inaxes is None:
-            return
-        if self.recta2 is None:
-            return
-        a1 = str(self.a1)
-        a1ind = float(a1[a1.index(',') + 1:a1.index(';')])
-        a = str(event.inaxes)
-        aind = float(a[a.index(',') + 1:a.index(';')])
-        if aind == a1ind:
-            return
-
-        ampl_x0 = self.recta2.get_x()*self.config['incr']/self.sampleRate
-        ampl_x1 = self.recta2.get_x()*self.config['incr']/self.sampleRate+self.recta2.get_width()*self.config['incr']/self.sampleRate
-
-        a1R = self.a1.add_patch(pl.Rectangle((min(ampl_x0,ampl_x1),self.a1.get_ylim()[0]), self.recta2.get_width()*self.config['incr']/self.sampleRate, self.plotheight, alpha=0.5, facecolor='g'))
-        a2R = self.a2.add_patch(pl.Rectangle(self.recta2.get_xy(), self.recta2.get_width(), self.recta2.get_height(), alpha=0.5, facecolor='g'))
-
-        self.listRectanglesa1.append(a1R)
-        self.listRectanglesa2.append(a2R)
-
-        self.segments.append([min(ampl_x0,ampl_x1), max(ampl_x0,ampl_x1), self.recta2.get_y(), self.recta2.get_height(),'None'])
-        a1t = self.a1.text(min(ampl_x0,ampl_x1), np.min(self.audiodata), 'None')
-        # The font size is a pain because the window is in pixels, so have to transform it
-        # Force a redraw to make bounding box available
-        self.canvas.draw()
-        # fs = a1t.get_fontsize()
-        width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
-        if width > self.segments[-1][1] - self.segments[-1][0]:
-            a1t.set_fontsize(8)
-
-        self.a1text.append(a1t)
-        self.topBoxCol = 'r'
-        # Show it in the zoom window
-        self.zoomstart = a1R.get_x()
-        self.zoomend = a1R.get_x() + a1R.get_width()
-        self.box1id = len(self.segments) - 1
-        self.drawFig2()
-        # Activate the radio buttons for labelling, selecting one from label if necessary
-        self.activateRadioButtons()
-        self.recta2.remove()
-        self.recta2 = None
-        self.canvas.draw()
-
-    def fig1Drag(self,event):
-        if self.recta2 is None:
-            return
-        if event.inaxes is None:
-            return
-        x0,y0 = self.recta2.get_xy()
-        a1 = str(self.a1)
-        a1ind = float(a1[a1.index(',') + 1:a1.index(';')])
-        a = str(event.inaxes)
-        aind = float(a[a.index(',') + 1:a.index(';')])
-        if aind == a1ind:
-            return
-
-        self.recta2.set_width(event.xdata - x0)
-        self.recta2.set_height(event.ydata - y0)
-        self.canvas.draw()
-
     def birdSelected(self,birdname):
         if birdname is not 'Other':
             self.updateText(birdname)
@@ -712,26 +596,26 @@ class Interface(QMainWindow):
                     self.connect(bird, SIGNAL("triggered()"), receiver)
                     self.menuBird2.addAction(bird)
 
-    # def activateRadioButtons(self):
-    #     found = False
-    #     for i in range(len(self.birds1)):
-    #         self.birds1[i].setEnabled(True)
-    #         if str(self.a1text[self.box1id].get_text()) == self.birds1[i].text():
-    #             self.birds1[i].setChecked(True)
-    #             found = True
-    #     for i in range(len(self.birds2)):
-    #         self.birds2[i].setEnabled(True)
-    #         if str(self.a1text[self.box1id].get_text()) == self.birds2[i].text():
-    #             self.birds2[i].setChecked(True)
-    #             found = True
-    #
-    #     if not found:
-    #         # Select 'Other' in radio buttons (last item) and activate the listwidget
-    #         self.birds2[-1].setChecked(True)
-    #         self.birdList.setEnabled(True)
-    #         items = self.birdList.findItems(str(self.a1text[self.box1id].get_text()), Qt.MatchExactly)
-    #         for item in items:
-    #             self.birdList.setCurrentItem(item)
+    def activateRadioButtons(self):
+        found = False
+        for i in range(len(self.birds1)):
+            self.birds1[i].setEnabled(True)
+            if str(self.a1text[self.box1id].get_text()) == self.birds1[i].text():
+                self.birds1[i].setChecked(True)
+                found = True
+        for i in range(len(self.birds2)):
+            self.birds2[i].setEnabled(True)
+            if str(self.a1text[self.box1id].get_text()) == self.birds2[i].text():
+                self.birds2[i].setChecked(True)
+                found = True
+
+        if not found:
+            # Select 'Other' in radio buttons (last item) and activate the listwidget
+            self.birds2[-1].setChecked(True)
+            self.birdList.setEnabled(True)
+            items = self.birdList.findItems(str(self.a1text[self.box1id].get_text()), Qt.MatchExactly)
+            for item in items:
+                self.birdList.setCurrentItem(item)
 
     def fig1Click(self, event):
         # When user clicks in Fig 1 there are several options:
@@ -746,14 +630,14 @@ class Interface(QMainWindow):
             self.listRectanglesa2[self.box1id].set_facecolor(self.topBoxCol)
 
         # Deactivate the radio buttons and listbox
-        # for i in xrange(len(self.birds1)):
-        #     self.birds1[i].setChecked(False)
-        #     self.birds1[i].setEnabled(False)
-        # for i in xrange(len(self.birds2)):
-        #     self.birds2[i].setChecked(False)
-        #     self.birds2[i].setEnabled(False)
-        # self.birdList.setEnabled(False)
-        # self.tbox.setEnabled(False)
+        for i in xrange(len(self.birds1)):
+            self.birds1[i].setChecked(False)
+            self.birds1[i].setEnabled(False)
+        for i in xrange(len(self.birds2)):
+            self.birds2[i].setChecked(False)
+            self.birds2[i].setEnabled(False)
+        self.birdList.setEnabled(False)
+        self.tbox.setEnabled(False)
 
         # Check if the user has clicked in a box
         box1id = -1
@@ -776,11 +660,10 @@ class Interface(QMainWindow):
 
             # Put the context menu at the right point. The event.x and y are in pixels relative to the bottom left-hand corner of canvas (self.fig)
             # Need to be converted into pixels relative to top left-hand corner of the window!
-            self.menuBirdList.popup(QPoint(event.x + event.canvas.x() + self.frame.x() + self.x(),
-                                           event.canvas.height() - event.y + event.canvas.y() + self.frame.y() + self.y()))
-
+            self.menuBirdList.popup(QPoint(event.x + event.canvas.x() + self.frame.x() + self.x(), event.canvas.height() - event.y + event.canvas.y() + self.frame.y() + self.y()))
             # Activate the radio buttons for labelling, selecting one from label if necessary
-            # self.activateRadioButtons()
+            self.activateRadioButtons()
+
         else:
             # User is doing segmentation. Check if the checkbox for dragging on spectrogram is checked.
             # Work out which axes they have clicked in. s holds the point they have clicked on
@@ -794,72 +677,74 @@ class Interface(QMainWindow):
             a = str(event.inaxes)
             aind = float(a[a.index(',') + 1:a.index(';')])
 
-            if aind != a1ind and self.dragRectangles.isChecked():
+            #if aind != a1ind: #and self.dragRectangles.isChecked():
                 # Use is selecting a region **on the spectrogram only**
                 # The region is drawn as full size on the amplitude plot
-                if event.xdata > 0 and event.xdata < float(self.datalength) / self.config['incr']:
-                    self.recta2 = self.a2.add_patch(pl.Rectangle((event.xdata, event.ydata), 0.0, 0.0, alpha=1, facecolor='none'))
-            else:
-                s = event.xdata
-                if aind != a1ind:
-                    s = s*self.config['incr']/self.sampleRate
-                if s>0 and s<float(self.datalength)/self.sampleRate:
-                    if not self.start_stop:
-                        # This is the start of a segment, draw a green line
-                        self.markstarta1 = self.a1.add_patch(pl.Rectangle((s, np.min(self.audiodata)), self.linewidtha1, self.plotheight, facecolor='g', edgecolor='None',alpha=0.8))
-                        self.markstarta2 = self.a2.add_patch(pl.Rectangle((s*self.sampleRate / self.config['incr'] , 0), self.linewidtha1/self.config['incr']*self.sampleRate, self.config['window_width']/2, facecolor='g', edgecolor='None',alpha=0.8))
-                        self.start_a = s
-                        self.segmenting = self.canvas.mpl_connect('motion_notify_event', self.fig1Selecting)
-                        self.fig1Segment1 = self.a1.add_patch(pl.Rectangle((s+self.linewidtha1, np.min(self.audiodata)), 0, self.plotheight, facecolor='r', edgecolor='None',alpha=0.4))
-                        self.fig1Segment2 = self.a2.add_patch(pl.Rectangle(((s+self.linewidtha1)*self.sampleRate / self.config['incr'], 0), 0, self.config['window_width']/2, facecolor='r', edgecolor='None', alpha=0.4))
+                #if event.xdata > 0 and event.xdata < float(self.datalength) / self.config['incr']:
+                #    self.recta2 = self.a2.add_patch(pl.Rectangle((event.xdata, event.ydata), 0.0, 0.0, alpha=1, facecolor='none'))
+            #else:
+            s = event.xdata
+            if aind != a1ind:
+                s = s*self.config['incr']/self.sampleRate
+            if s>0 and s<float(self.datalength)/self.sampleRate:
+                if not self.start_stop:
+                    # This is the start of a segment, draw a green line
+                    self.markstarta1 = self.a1.add_patch(pl.Rectangle((s, np.min(self.audiodata)), self.linewidtha1, self.plotheight, facecolor='g', edgecolor='None',alpha=0.8))
+                    self.markstarta2 = self.a2.add_patch(pl.Rectangle((s*self.sampleRate / self.config['incr'] , 0), self.linewidtha1/self.config['incr']*self.sampleRate, self.config['window_width']/2, facecolor='g', edgecolor='None',alpha=0.8))
+                    self.start_a = s
+                    now = datetime.datetime.now()
+                    self.then = [now.hour,now.minute,now.second,now.microsecond]
+                    self.segmenting = self.canvas.mpl_connect('motion_notify_event', self.fig1Selecting)
+                    self.fig1Segment1 = self.a1.add_patch(pl.Rectangle((s+self.linewidtha1, np.min(self.audiodata)), 0, self.plotheight, facecolor='r', edgecolor='None',alpha=0.4))
+                    self.fig1Segment2 = self.a2.add_patch(pl.Rectangle(((s+self.linewidtha1)*self.sampleRate / self.config['incr'], 0), 0, self.config['window_width']/2, facecolor='r', edgecolor='None', alpha=0.4))
+                else:
+                    # This is the end, draw the box, save the data, update the text, make radio buttons available
+                    # And show it in the zoom window
+                    self.markstarta1.remove()
+                    self.markstarta2.remove()
+
+                    # Check if the ends have been drawn backwards
+                    if self.start_a > s:
+                        start = s
+                        width = self.start_a - s
                     else:
-                        # This is the end, draw the box, save the data, update the text, make radio buttons available
-                        # And show it in the zoom window
-                        self.markstarta1.remove()
-                        self.markstarta2.remove()
+                        start = self.start_a
+                        width = s - self.start_a
 
-                        # Check if the ends have been drawn backwards
-                        if self.start_a > s:
-                            start = s
-                            width = self.start_a - s
-                        else:
-                            start = self.start_a
-                            width = s - self.start_a
+                    a1R = self.a1.add_patch(pl.Rectangle((start, np.min(self.audiodata)), width, self.plotheight,facecolor='g', alpha=0.5))
+                    a2R = self.a2.add_patch(pl.Rectangle((start*self.sampleRate / self.config['incr'], 0), width*self.sampleRate / self.config['incr'], self.config['window_width']/2,facecolor='g', alpha=0.5))
+                    self.listRectanglesa1.append(a1R)
+                    self.listRectanglesa2.append(a2R)
+                    now = datetime.datetime.now()
+                    self.segments.append([start,max(self.start_a,s),0.0,self.sampleRate/2.,'None',self.then,[now.hour,now.minute,now.second,now.microsecond]])
+                    a1t = self.a1.text(start, np.min(self.audiodata), 'None')
+                    self.a1text.append(a1t)
 
-                        a1R = self.a1.add_patch(pl.Rectangle((start, np.min(self.audiodata)), width, self.plotheight,facecolor='g', alpha=0.5))
-                        a2R = self.a2.add_patch(pl.Rectangle((start*self.sampleRate / self.config['incr'], 0), width*self.sampleRate / self.config['incr'], self.config['window_width']/2,facecolor='g', alpha=0.5))
-                        self.listRectanglesa1.append(a1R)
-                        self.listRectanglesa2.append(a2R)
-                        self.segments.append([start,max(self.start_a,s),0.0,self.sampleRate/2.,'None'])
-                        a1t = self.a1.text(start, np.min(self.audiodata), 'None')
-                        self.a1text.append(a1t)
+                    # The font size is a pain because the window is in pixels, so have to transform it
+                    # Force a redraw to make bounding box available
+                    self.canvas.draw()
+                    #fs = a1t.get_fontsize()
+                    win_width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
+                    #print width, win_width
+                    if win_width > width:
+                        a1t.set_fontsize(8)
 
-                        # The font size is a pain because the window is in pixels, so have to transform it
-                        # Force a redraw to make bounding box available
-                        self.canvas.draw()
-                        #fs = a1t.get_fontsize()
-                        win_width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
-                        #print width, win_width
-                        if win_width > width:
-                            a1t.set_fontsize(8)
+                    # Delete the box and listener for the shading
+                    self.canvas.mpl_disconnect(self.segmenting)
+                    self.fig1Segment1.remove()
+                    self.fig1Segment2.remove()
 
-                        # Delete the box and listener for the shading
-                        self.canvas.mpl_disconnect(self.segmenting)
-                        self.fig1Segment1.remove()
-                        self.fig1Segment2.remove()
-
-                        # Show it in the zoom window
-                        self.zoomstart = a1R.xy[0]
-                        self.zoomend = a1R.xy[0] + a1R.get_width()
-                        self.box1id = len(self.segments)-1
-                        self.drawFig2()
-                        self.topBoxCol = 'r'
-                        self.menuBirdList.popup(QPoint(event.x + event.canvas.x() + self.frame.x() + self.x(),
-                                                       event.canvas.height() - event.y + event.canvas.y() + self.frame.y() + self.y()))
-                        # Activate the radio buttons for labelling, selecting one from label if necessary
-                        #self.activateRadioButtons()
-                    # Switch to know if start or end or segment
-                    self.start_stop = not self.start_stop
+                    # Show it in the zoom window
+                    self.zoomstart = a1R.xy[0]
+                    self.zoomend = a1R.xy[0] + a1R.get_width()
+                    self.box1id = len(self.segments)-1
+                    self.drawFig2()
+                    self.topBoxCol = 'r'
+                    self.menuBirdList.popup(QPoint(event.x + event.canvas.x() + self.frame.x() + self.x(), event.canvas.height() - event.y + event.canvas.y() + self.frame.y() + self.y()))
+                    # Activate the radio buttons for labelling, selecting one from label if necessary
+                    self.activateRadioButtons()
+                # Switch to know if start or end or segment
+                self.start_stop = not self.start_stop
 
         self.canvas.draw()
 
@@ -889,6 +774,9 @@ class Interface(QMainWindow):
         # Listener for any key presses when focus is on Fig1
         if event.key == 'backspace':
             self.deleteSegment()
+
+    def showMenu(self,pos):
+        self.menuBirdList.popup(self.mapToGlobal(pos))
 
     def fig3Click(self,event):
         # Move the top box by first clicking on it, and then clicking again at the start of where you want it
@@ -940,46 +828,6 @@ class Interface(QMainWindow):
         self.windowStart = min(float(self.datalength)/self.sampleRate-self.windowSize,self.windowStart+self.windowSize*0.9)
         self.updateWindow()
 
-    #def sliderMoved(self,value):
-    #    # When the slider is moved, update the top figures to reflect the new position in the file
-    #    self.windowStart = (float(self.datalength)/self.sampleRate - self.windowSize)/100.0*value
-    #    self.updateWindow()
-
-    def showSegments(self):
-        # This plots the segments that are returned from any of the segmenters.
-        # It currently also deletes the previous ones. TODO: is that the best option?
-        # TODO: also need to save the segments at some point
-
-        # Delete the old segmentation
-        for i in range(len(self.segsRectsa1)):
-            self.segsRectsa1[i].remove()
-            self.segsRectsa2[i].remove()
-            self.segtext[i].remove()
-        self.segtext = []
-        self.segsRectsa1 = []
-        self.segsRectsa2 = []
-        for i in range(len(self.segs)):
-            a1R = self.a1.add_patch(pl.Rectangle((self.segs[i][0], np.min(self.audiodata)),
-                                                 self.segs[i][1] - self.segs[i][0],
-                                                 self.plotheight,
-                                           facecolor='r',alpha=0.5))
-            a2R = self.a2.add_patch(pl.Rectangle((self.segs[i][0]* self.sampleRate / self.config['incr'], 0),
-                                                 (self.segs[i][1] - self.segs[i][0])* self.sampleRate / self.config['incr'],
-                                                 self.config['window_width'] / 2,
-                                                 facecolor='r', alpha=0.5))
-            self.segsRectsa1.append(a1R)
-            self.segsRectsa2.append(a2R)
-            a1t = self.a1.text(self.segs[i][0], np.min(self.audiodata), self.segs[i][2])
-            # The font size is a pain because the window is in pixels, so have to transform it
-            # Force a redraw to make bounding box available
-            self.canvas.draw()
-            # fs = a1t.get_fontsize()
-            width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
-            if width > self.segs[i][1] - self.segs[i][0]:
-                a1t.set_fontsize(8)
-            self.segtext.append(a1t)
-        self.canvas.draw()
-
     def changeWidth(self, value):
         # This is the listener for the spinbox that decides the width of the main window. It updates the top figure plots as the window width is changed.
         # Slightly annoyingly, it gets called when the value gets reset, hence the first line
@@ -1000,160 +848,6 @@ class Interface(QMainWindow):
                                                               alpha=0.5))
         self.canvas.draw()
         self.canvas3.draw()
-
-    def spectrogramDialog(self):
-        self.spectrogramDialog = Spectrogram()
-        self.spectrogramDialog.show()
-        self.spectrogramDialog.activateWindow()
-        self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
-
-    def spectrogram(self):
-        [alg, colourStart, colourEnd, window_width, incr] = self.spectrogramDialog.getValues()
-        self.sp.set_width(int(str(window_width)), int(str(incr)))
-        self.sg = self.sp.spectrogram(self.audiodata,str(alg))
-        self.config['colourStart'] = float(str(colourStart))
-        self.config['colourEnd'] = float(str(colourEnd))
-        self.defineColourmap()
-        self.drawFig1()
-
-    def denoiseDialog(self):
-        self.denoiseDialog = Denoise()
-        self.denoiseDialog.show()
-        self.denoiseDialog.activateWindow()
-        self.denoiseDialog.activate.clicked.connect(self.denoise)
-        self.denoiseDialog.undo.clicked.connect(self.denoise_undo)
-        self.denoiseDialog.save.clicked.connect(self.denoise_save)
-
-    def denoise(self):
-        # This calls the denoiser and then plots the updated data
-        # TODO: should it be saved automatically, or a button added?
-        [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width] = self.denoiseDialog.getValues()
-        # TODO: deal with these!
-        # TODO: Undo needs testing
-
-        if str(alg) == "Wavelets":
-            if thrType is True:
-                type = 'Soft'
-            else:
-                type = 'Hard'
-            if depthchoice:
-                depth = None
-            else:
-                depth = int(str(depth))
-            if hasattr(self,'audiodata_backup'):
-                if self.audiodata_backup is not None:
-                    audiodata_backup_new = np.empty((np.shape(self.audiodata_backup)[0],np.shape(self.audiodata_backup)[1]+1))
-                    audiodata_backup_new[:,:-1] = np.copy(self.audiodata_backup)
-                    audiodata_backup_new[:,-1] = np.copy(self.audiodata)
-                    self.audiodata_backup = audiodata_backup_new
-                else:
-                    self.audiodata_backup = np.empty((np.shape(self.audiodata)[0], 1))
-                    self.audiodata_backup[:, 0] = np.copy(self.audiodata)
-            else:
-                self.audiodata_backup = np.empty((np.shape(self.audiodata)[0],1))
-                self.audiodata_backup[:,0] = np.copy(self.audiodata)
-            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))
-        elif str(alg) == "Wavelets + Bandpass":
-            if thrType is True:
-                type = 'soft'
-            else:
-                type = 'hard'
-            if depthchoice:
-                depth = None
-            else:
-                depth = int(str(depth))
-            self.audiodata = self.sp.waveletDenoise(self.audiodata,float(str(thr)),int(str(depth)),str(wavelet))
-            self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
-        elif str(alg) == "Bandpass":
-            self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
-        else:
-            #"Median Filter"
-            self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
-
-        #print "Denoising"
-        #self.audiodata = self.sp.waveletDenoise()
-        #print "Done"
-        self.sg = self.sp.spectrogram(self.audiodata)
-        self.drawFig1()
-
-    def denoise_undo(self):
-        # TODO: Can I actually delete something from an object?
-        print("Undoing",np.shape(self.audiodata_backup))
-        if hasattr(self,'audiodata_backup'):
-            if self.audiodata_backup is not None:
-                if np.shape(self.audiodata_backup)[1]>0:
-                    self.audiodata = np.copy(self.audiodata_backup[:,-1])
-                    self.audiodata_backup = self.audiodata_backup[:,:-1]
-                    self.sp.setNewData(self.audiodata,self.sampleRate)
-                    self.sg = self.sp.spectrogram(self.audiodata)
-                    if hasattr(self,'seg'):
-                        self.seg.setNewData(self.audiodata,self.sg,self.sampleRate)
-                    self.drawFig1()
-
-    def denoise_save(self):
-        # Save denoised data
-        # Other players need them to be 16 bit, which is this magic number
-        self.audiodata *= 32768.0
-        self.audiodata = self.audiodata.astype('int16')
-        filename = self.filename[:-4] + '_d' + self.filename[-4:]
-        wavfile.write(filename, self.sampleRate, self.audiodata)
-
-    def segmentationDialog(self):
-        self.segmentDialog = Segmentation(np.max(self.audiodata))
-        self.segmentDialog.show()
-        self.segmentDialog.activateWindow()
-        self.segmentDialog.activate.clicked.connect(self.segment)
-        self.segmentDialog.save.clicked.connect(self.segments_save)
-
-    def segment(self):
-        [alg, ampThr, medThr,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
-        if not hasattr(self,'seg'):
-            self.seg = Segment.Segment(self.audiodata,self.sg,self.sp,self.sampleRate)
-        if str(alg) == "Amplitude":
-            self.segs = self.seg.segmentByAmplitude(float(str(ampThr)))
-            if hasattr(self, 'line'):
-                if self.line is not None:
-                    self.line.remove()
-            self.line = self.a1.add_patch(pl.Rectangle((0,float(str(ampThr))),len(self.audiodata),0,facecolor='r'))
-        elif str(alg) == "Median Clipping":
-            self.clip,blobs = self.seg.medianClip(float(str(medThr)))
-            print np.shape(self.clip), np.shape(blobs)
-            #print "here", np.shape(self.segs)
-            self.a2.imshow(self.clip, cmap=self.cmap_grey, aspect='auto')
-            indices = np.where(blobs[:, 2] > 3)
-
-            # Seems to be offset by 1 for some reason
-            for i in range(len(blobs)):
-                self.a2.add_patch(pl.Rectangle((blobs[i].bbox[1]-1, blobs[i].bbox[0]-1),blobs[i].bbox[3]-blobs[i].bbox[1],blobs[i].bbox[2]-blobs[i].bbox[0],facecolor='g',alpha=0.3))
-
-            self.canvas.draw()
-        else:
-            #"Wavelets"
-            # TODO!!
-            if thrType is True:
-                type = 'soft'
-            else:
-                type = 'hard'
-            if bandchoice:
-                start = None
-                end = None
-            else:
-                start = int(str(start))
-                end = int(str(end))
-            # TODO: needs learning and samplerate
-            self.segs = self.seg.segmentByWavelet(thrType,float(str(thr)), int(str(depth)), wavelet,sampleRate,bandchoice,start,end,learning,)
-        #self.showSegments()
-
-        #sender().text()
-
-    def segments_save(self):
-        # This just appends those in the segslist to the segments list
-        # TODO: Check for matching segments and remove duplicates
-        # TODO: Then delete? Note that have to be saved before being annotated
-        self.segments.extend(self.segments,self.segs)
-
-    def recognise(self):
-        pass
 
     def drawFig2(self):
         # This produces the plots for the zoomed-in window
@@ -1381,12 +1075,12 @@ class Interface(QMainWindow):
     def addSegmentClick(self):
         # When the user clicks the button to add a segment in Fig2, this deals with it
         # Turn the labelling off to avoid confusion
-        # for i in xrange(len(self.birds1)):
-        #     self.birds1[i].setEnabled(False)
-        # for i in xrange(len(self.birds2)):
-        #     self.birds2[i].setEnabled(False)
-        # self.birdList.setEnabled(False)
-        # self.tbox.setEnabled(False)
+        for i in xrange(len(self.birds1)):
+            self.birds1[i].setEnabled(False)
+        for i in xrange(len(self.birds2)):
+            self.birds2[i].setEnabled(False)
+        self.birdList.setEnabled(False)
+        self.tbox.setEnabled(False)
 
         # Should check for and stop the listener for the moving of segment ends
         if hasattr(self,'keypress'):
@@ -1458,8 +1152,9 @@ class Interface(QMainWindow):
                 # Update the segments; remove first to keep the indexing consistent
                 old = self.segments[self.box1id]
                 self.segments.remove(self.segments[self.box1id])
-                self.segments.append([old[0],(self.end_a2 + self.offset_fig1)/self.sampleRate,old[2],old[3],old[4]])
-                self.segments.append([(s + self.offset_fig1)/self.sampleRate, old[1], old[2],old[3],old[4]])
+                now = datetime.datetime.now()
+                self.segments.append([old[0],(self.end_a2 + self.offset_fig1)/self.sampleRate,old[2],old[3],old[4],old[5],[now.hour,now.minute,now.second,now.microsecond]])
+                self.segments.append([(s + self.offset_fig1)/self.sampleRate, old[1], old[2],old[3],old[4],[now.hour,now.minute,now.second,now.microsecond],old[6]])
                 # Delete the old rectangles and text
                 self.a1text[self.box1id].remove()
                 self.a1text.remove(self.a1text[self.box1id])
@@ -1518,20 +1213,42 @@ class Interface(QMainWindow):
     def playSegment(self):
         # This is the listener for the play button. A very simple wave file player
         sd.play(self.audiodata[int(self.windowStart*self.sampleRate):int(self.windowStart*self.sampleRate+self.windowSize*self.sampleRate)],self.sampleRate)
-        # blocksize = 16
-        # s = Stream(samplerate=self.sampleRate, blocksize=blocksize)
-        # s.start()
-        # s.write(self.audiodata[int(self.windowStart*self.sampleRate):int(self.windowStart*self.sampleRate+self.windowSize*self.sampleRate)])
-        # s.stop()
+        #sd.play(self.audiodata[self.windowStart:self.windowStart+self.windowSize],self.sampleRate)
+        #def callback(in_data, out_data, time_info, status):
+            #out_data[:] = in_data
+            #return continue_flag
+
+        #blocksize = 16
+        #s = Stream(samplerate=self.sampleRate, blocksize=blocksize, callback=callback)
+        #s = Stream(samplerate=self.sampleRate, blocksize=blocksize)
+        #s.start()
+        #time.sleep(5)
+        #s.write(self.audiodata[int(self.windowStart*self.sampleRate):int(self.windowStart*self.sampleRate+self.windowSize*self.sampleRate)])
+        #s.stop()
 
     def play(self):
-        # This is the listener for the play button. A very simple wave file player
-        sd.play(self.audiodata[int(self.zoomstart*self.sampleRate):int(self.zoomend*self.sampleRate)],self.sampleRate)
-        # blocksize = 16
-        # s = Stream(samplerate=self.sampleRate, blocksize=blocksize)
-        # s.start()
-        # s.write(self.audiodata[int(self.zoomstart*self.sampleRate):int(self.zoomend*self.sampleRate)])
-        # s.stop()
+        # This is the listener for the play button. 
+
+       sd.play(self.audiodata[int(self.zoomstart*self.sampleRate):int(self.zoomend*self.sampleRate)],self.sampleRate)
+# play stream
+
+
+        #print self.windowStart, self.windowSize
+        #self.wf.setpos(int(self.windowStart*self.sampleRate))
+        #data = self.wf.readframes(int(self.windowSize*self.sampleRate))
+        #for i in range(int(self.windowSize*self.sampleRate)):
+        #self.stream.write(data)
+        #    data = self.wf.readframes(1024)
+
+        # stop stream
+        #self.stream.stop_stream()
+
+        #sd.play(self.audiodata[self.zoomstart:self.zoomend],self.sampleRate)
+        #blocksize = 16
+        #s = Stream(samplerate=self.sampleRate, blocksize=blocksize)
+        #s.start()
+        #s.write(self.audiodata[int(self.zoomstart*self.sampleRate):int(self.zoomend*self.sampleRate)])
+        #s.stop()
 
     def updateText(self,text):
         self.segments[self.box1id][4] = text
@@ -1613,7 +1330,6 @@ class Interface(QMainWindow):
         self.saveConfig=True
         #self.tbox.setEnabled(False)
 
-
     def deleteSegment(self):
         # Delete segment if one is selected
         if self.box1id>-1:
@@ -1664,12 +1380,13 @@ class Interface(QMainWindow):
     def saveSegments(self):
         # This saves the segmentation data as a json file
         if len(self.segments)>0:
-            print("Saving segments to "+self.filename)
+            self.filename = str(self.filename)
+            print("Saving segments for "+self.filename)
             if isinstance(self.filename, str):
-                file = open(self.filename + '.data', 'w')
+                file1 = open(self.dirName+'/'+self.filename + '.data', 'w')
             else:
-                file = open(str(self.filename) + '.data', 'w')
-            json.dump(self.segments,file)
+                file1 = open(self.dirName+'/'+str(self.filename) + '.data', 'w')
+            json.dump(self.segments, file1)
 
     def closeEvent(self, event):
         # This is to catch the user closing the window by clicking the Close button instead of quitting
@@ -1678,30 +1395,23 @@ class Interface(QMainWindow):
     def quit(self):
         # Listener for the quit button
         print("Quitting")
+        now = datetime.datetime.now()
+        self.timestamps.append(["Quitting ","",[now.hour,now.minute,now.second,now.microsecond]])
+
+        # close PyAudio 
+        #self.stream.close()
+        #self.player.terminate()
+        #self.wf.close()
+
+        self.endQnDialog()
+
         self.saveSegments()
         if self.saveConfig == True:
             print "Saving config file"
             json.dump(self.config, open(self.configfile, 'wb'))
+        file2 = open(self.dirName + '/meta.txt', 'w')
+        json.dump([self.filelist, self.timestamps, self.ansS, self.ansE], file2)
         QApplication.quit()
-
-    def splitFile5mins(self, name):
-        # Nirosha wants to split files that are long (15 mins) into 5 min segments
-        # Could be used when loading long files :)
-        try:
-            self.sampleRate, self.audiodata = wavfile.read(name)
-        except:
-            print("Error: try another file")
-        nsamples = np.shape(self.audiodata)[0]
-        lengthwanted = self.sampleRate * 60 * 5
-        count = 0
-        while (count + 1) * lengthwanted < nsamples:
-            data = self.audiodata[count * lengthwanted:(count + 1) * lengthwanted]
-            filename = name[:-4] + '_' +str(count) + name[-4:]
-            wavfile.write(filename, self.sampleRate, data)
-            count += 1
-        data = self.audiodata[(count) * lengthwanted:]
-        filename = name[:-4] + '_' + str((count)) + name[-4:]
-        wavfile.write(filename, self.sampleRate, data)
 
     def defineColourmap(self):
         # This makes the spectrograms look better. It defines a colourmap that hides a lot of the black
@@ -1715,412 +1425,192 @@ class Interface(QMainWindow):
         self.cmap_grey = matplotlib.colors.LinearSegmentedColormap('cmap_grey', cdict, 256)
 
 
-class Spectrogram(QDialog):
+    def startQnDialog(self):
+        print "here"
+        ans = startQuestions.startQns()
+        print ans
+
+    def startQnDialog(self):
+        self.ansS = startQuestions.startQs()
+        #self.startDialog = startQuestions()
+        #self.startDialog.setModal(True)
+        #self.startDialog.show()
+        #self.startDialog.activate.clicked.connect(self.getAnswersStart)
+
+    def getAnswersStart(self):
+        self.ansS = self.startDialog.getAnswers()
+        print "s",self.ansS
+        self.startDialog.destroy()
+
+    def endQnDialog(self):
+        self.ansE = endQuestions.endQs()
+        #self.endDialog = endQuestions()
+        #self.endDialog.setModal(True)
+        #self.endDialog.show()
+        #self.endDialog.activate.clicked.connect(self.getAnswersEnd)
+
+    def getAnswersEnd(self):
+        self.ansE = self.endDialog.getAnswers()
+        print "e",self.ansE
+        self.endDialog.destroy()
+
+class startQuestions(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
-        self.setWindowTitle('Signal Processing Options')
+        self.setWindowTitle('Initial Survey')
+        layout = QVBoxLayout(self)
+        layout0 = QHBoxLayout(self)
 
-        self.algs = QComboBox()
-        self.algs.addItems(['Hanning','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
+        layout1 = QVBoxLayout(self)
+        layout1.addWidget(QLabel('How much knowledge do you have about birds?'))
+        self.Q1 = QButtonGroup()
+        self.Q1.setExclusive(True)
+        self.Q1a = QRadioButton('None')
+        self.Q1b = QRadioButton('Some')
+        self.Q1c = QRadioButton('Moderate')
+        self.Q1d = QRadioButton('A lot')
+        layout1.addWidget(self.Q1a)
+        layout1.addWidget(self.Q1b)
+        layout1.addWidget(self.Q1c)
+        layout1.addWidget(self.Q1d)
+        self.Q1.addButton(self.Q1a)
+        self.Q1.addButton(self.Q1b)
+        self.Q1.addButton(self.Q1c)
+        self.Q1.addButton(self.Q1d)
 
-        self.activate = QPushButton("Update Spectrogram")
+        layout1.addWidget(QLabel('How much experience do you have in using audio software?'))
+        self.Q2 = QButtonGroup()
+        self.Q2.setExclusive(True)
+        self.Q2a = QRadioButton('None')
+        self.Q2b = QRadioButton('Some')
+        self.Q2c = QRadioButton('Moderate')
+        self.Q2d = QRadioButton('A lot')
+        layout1.addWidget(self.Q2a)
+        layout1.addWidget(self.Q2b)
+        layout1.addWidget(self.Q2c)
+        layout1.addWidget(self.Q2d)
+        self.Q2.addButton(self.Q2a)
+        self.Q2.addButton(self.Q2b)
+        self.Q2.addButton(self.Q2c)
+        self.Q2.addButton(self.Q2d)
 
-        self.colourStart = QLineEdit(self)
-        self.colourStart.setText('0.4')
-        self.colourEnd = QLineEdit(self)
-        self.colourEnd.setText('1.0')
-        self.window_width = QLineEdit(self)
-        self.window_width.setText('256')
-        self.incr = QLineEdit(self)
-        self.incr.setText('128')
+        layout1.addWidget(QLabel('Which programs have you used?'))
+        self.Q3 = QLineEdit(self)
+        layout1.addWidget(self.Q3)
 
-        #self.tbox.setMaximumWidth(150)
+        layout1.addWidget(QLabel('Have you ever used audio software for bird song?')) 
+        self.Q4 = QButtonGroup()
+        self.Q4.setExclusive(True)
+        self.Q4a = QRadioButton('Yes')
+        self.Q4b = QRadioButton('No')
+        layout1.addWidget(self.Q4a)
+        layout1.addWidget(self.Q4b)
+        self.Q4.addButton(self.Q4a)
+        self.Q4.addButton(self.Q4a)
 
-        Box = QVBoxLayout()
-        Box.addWidget(self.algs)
-        Box.addWidget(QLabel('Colour Start'))
-        Box.addWidget(self.colourStart)
-        Box.addWidget(QLabel('Colour End'))
-        Box.addWidget(self.colourEnd)
-        Box.addWidget(QLabel('Window Width'))
-        Box.addWidget(self.window_width)
-        Box.addWidget(QLabel('Hop'))
-        Box.addWidget(self.incr)
-        #Box.addWidget(self.ampThr)
-        Box.addWidget(self.activate)
+        layout1.addWidget(QLabel('If yes, which programs have you used?'))
+        self.Q5 = QLineEdit(self)
+        layout1.addWidget(self.Q5)
 
-        # Now put everything into the frame
-        self.setLayout(Box)
+        layout2 = QVBoxLayout(self)
+        layout2.addWidget(QLabel('How old are you?'))
+        self.Q6 = QButtonGroup()
+        self.Q6.setExclusive(True)
+        self.Q6a = QRadioButton('Under 25')
+        self.Q6b = QRadioButton('25--50')
+        self.Q6c = QRadioButton('Over 50')
+        layout2.addWidget(self.Q6a)
+        layout2.addWidget(self.Q6b)
+        layout2.addWidget(self.Q6c)
+        self.Q6.addButton(self.Q6a)
+        self.Q6.addButton(self.Q6b)
+        self.Q6.addButton(self.Q6c)
 
-    def getValues(self):
-        return [self.algs.currentText(),self.colourStart.text(),self.colourEnd.text(),self.window_width.text(),self.incr.text()]
+        layout2.addWidget(QLabel('Do you have any hearing impediments?'))
+        self.Q7 = QButtonGroup()
+        self.Q7.setExclusive(True)
+        self.Q7a = QRadioButton('No')
+        self.Q7b = QRadioButton('Yes')
+        layout2.addWidget(self.Q7a)
+        layout2.addWidget(self.Q7b)
+        self.Q7.addButton(self.Q7a)
+        self.Q7.addButton(self.Q7b)
 
-class Segmentation(QDialog):
-    # TODO: add the wavelet params
-    # TODO: work out how to return varying size of params, also process them
-    # TODO: test and play
-    def __init__(self, maxv, parent=None):
-        QDialog.__init__(self, parent)
-        self.setWindowTitle('Segmentation Options')
+        layout2.addWidget(QLabel('What is your gender?'))
+        self.Q8 = QButtonGroup()
+        self.Q8.setExclusive(True)
+        self.Q8a = QRadioButton('Male')
+        self.Q8b = QRadioButton('Female')
+        self.Q8c = QRadioButton('Not prepared to say')
+        layout2.addWidget(self.Q8a)
+        layout2.addWidget(self.Q8b)
+        layout2.addWidget(self.Q8c)
+        self.Q8.addButton(self.Q8a)
+        self.Q8.addButton(self.Q8b)
+        self.Q8.addButton(self.Q8c)
 
-        self.algs = QComboBox()
-        self.algs.addItems(["Amplitude","Median Clipping","Wavelets"])
-        self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
-        self.prevAlg = "Amplitude"
-        self.activate = QPushButton("Segment")
-        self.save = QPushButton("Save segments")
+        button = QDialogButtonBox(
+            QDialogButtonBox.Ok,
+            Qt.Horizontal, self)
+        button.accepted.connect(self.accept)
 
-        # Define the whole set of possible options for the dialog box here, just to have them together.
-        # Then hide and show them as required as the algorithm chosen changes.
+        layout0.addLayout(layout1)
+        layout0.addLayout(layout2)
+        layout.addLayout(layout0)
+        layout.addWidget(button)
 
-        # Spin box for amplitude threshold
-        self.ampThr = QDoubleSpinBox()
-        self.ampThr.setRange(0.001,maxv+0.001)
-        self.ampThr.setSingleStep(0.002)
-        self.ampThr.setDecimals(4)
-        self.ampThr.setValue(maxv+0.001)
+    def getAnswers(self):
+        return [self.Q1a.isChecked(),self.Q1b.isChecked(),self.Q1c.isChecked(),self.Q1d.isChecked(),self.Q2a.isChecked(),self.Q2b.isChecked(),self.Q2c.isChecked(),self.Q2d.isChecked(),str(self.Q3.text()),self.Q4a.isChecked(),self.Q4b.isChecked(),str(self.Q5.text()),self.Q6a.isChecked(),self.Q6b.isChecked(),self.Q6c.isChecked(),self.Q7a.isChecked(),self.Q7b.isChecked(),self.Q8a.isChecked(),self.Q8b.isChecked(),self.Q8c.isChecked(),]
 
-        self.medThr = QDoubleSpinBox()
-        self.medThr.setRange(0.2,6)
-        self.medThr.setSingleStep(1)
-        self.medThr.setDecimals(1)
-        self.medThr.setValue(3)
+    # static method to create the dialog and return the data
+    @staticmethod
+    def startQs(parent=None):
+        dialog = startQuestions()
+        dialog.exec_()
+        return (dialog.getAnswers())
 
-        Box = QVBoxLayout()
-        Box.addWidget(self.algs)
-        # Labels
-        self.amplabel = QLabel("Set threshold amplitude")
-        Box.addWidget(self.amplabel)
-        self.medlabel = QLabel("Set median threshold")
-        Box.addWidget(self.medlabel)
-        self.medlabel.hide()
-
-        self.wavlabel = QLabel("Wavelets")
-        self.depthlabel = QLabel("Depth of wavelet packet decomposition")
-        #self.depthchoice = QCheckBox()
-        #self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
-        self.depth = QSpinBox()
-        self.depth.setRange(1,10)
-        self.depth.setSingleStep(1)
-        self.depth.setValue(5)
-
-        self.thrtypelabel = QLabel("Type of thresholding")
-        self.thrtype = [QRadioButton("Soft"), QRadioButton("Hard")]
-        self.thrtype[0].setChecked(True)
-
-        self.thrlabel = QLabel("Multiplier of std dev for threshold")
-        self.thr = QSpinBox()
-        self.thr.setRange(1,10)
-        self.thr.setSingleStep(1)
-        self.thr.setValue(5)
-
-        self.waveletlabel = QLabel("Type of wavelet")
-        self.wavelet = QComboBox()
-        self.wavelet.addItems(["dmey","db2","db5","haar"])
-        self.wavelet.setCurrentIndex(0)
-
-        self.blabel = QLabel("Start and end points of the band for bandpass filter")
-        self.start = QLineEdit(self)
-        self.start.setText('400')
-        self.end = QLineEdit(self)
-        self.end.setText('1000')
-        self.blabel2 = QLabel("Check if not using bandpass")
-        self.bandchoice = QCheckBox()
-        self.connect(self.bandchoice, SIGNAL('clicked()'), self.bandclicked)
-
-
-        Box.addWidget(self.wavlabel)
-        self.wavlabel.hide()
-        Box.addWidget(self.depthlabel)
-        self.depthlabel.hide()
-        #Box.addWidget(self.depthchoice)
-        #self.depthchoice.hide()
-        Box.addWidget(self.depth)
-        self.depth.hide()
-
-        Box.addWidget(self.thrtypelabel)
-        self.thrtypelabel.hide()
-        Box.addWidget(self.thrtype[0])
-        self.thrtype[0].hide()
-        Box.addWidget(self.thrtype[1])
-        self.thrtype[1].hide()
-
-        Box.addWidget(self.thrlabel)
-        self.thrlabel.hide()
-        Box.addWidget(self.thr)
-        self.thr.hide()
-
-        Box.addWidget(self.waveletlabel)
-        self.waveletlabel.hide()
-        Box.addWidget(self.wavelet)
-        self.wavelet.hide()
-
-        Box.addWidget(self.blabel)
-        self.blabel.hide()
-        Box.addWidget(self.start)
-        self.start.hide()
-        Box.addWidget(self.end)
-        self.end.hide()
-        Box.addWidget(self.blabel2)
-        self.blabel2.hide()
-        Box.addWidget(self.bandchoice)
-        self.bandchoice.hide()
-
-        Box.addWidget(self.ampThr)
-        Box.addWidget(self.medThr)
-        self.medThr.hide()
-
-        Box.addWidget(self.activate)
-        Box.addWidget(self.save)
-
-        # Now put everything into the frame
-        self.setLayout(Box)
-
-    def changeBoxes(self,alg):
-        # This does the hiding and showing of the options as the algorithm changes
-        if self.prevAlg == "Amplitude":
-            self.amplabel.hide()
-            self.ampThr.hide()
-        elif self.prevAlg == "Median Clipping":
-            self.medlabel.hide()
-            self.medThr.hide()
-        else:
-            self.wavlabel.hide()
-            self.depthlabel.hide()
-            self.depth.hide()
-            #self.depthchoice.hide()
-            self.thrtypelabel.hide()
-            self.thrtype[0].hide()
-            self.thrtype[1].hide()
-            self.thrlabel.hide()
-            self.thr.hide()
-            self.waveletlabel.hide()
-            self.wavelet.hide()
-            self.blabel.hide()
-            self.start.hide()
-            self.end.hide()
-            self.blabel2.hide()
-            self.bandchoice.hide()
-        self.prevAlg = str(alg)
-        if str(alg) == "Amplitude":
-            self.amplabel.show()
-            self.ampThr.show()
-        elif str(alg) == "Median Clipping":
-            self.medlabel.show()
-            self.medThr.show()
-        else:
-            #"Wavelets"
-            self.wavlabel.show()
-            self.depthlabel.show()
-            #self.depthchoice.show()
-            self.depth.show()
-            self.thrtypelabel.show()
-            self.thrtype[0].show()
-            self.thrtype[1].show()
-            self.thrlabel.show()
-            self.thr.show()
-            self.waveletlabel.show()
-            self.wavelet.show()
-            self.blabel.show()
-            self.start.show()
-            self.end.show()
-            self.blabel2.show()
-            self.bandchoice.show()
-
-    def bandclicked(self):
-        # TODO: Can they be grayed out?
-        self.start.setEnabled(not self.start.isEnabled())
-        self.end.setEnabled(not self.end.isEnabled())
-
-    def getValues(self):
-        return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
-
-class Denoise(QDialog):
+class endQuestions(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
-        self.setWindowTitle('Denoising Options')
+        self.setWindowTitle('Final Survey')
+        layout = QVBoxLayout(self)
 
-        self.algs = QComboBox()
-        self.algs.addItems(["Wavelets","Wavelets + Bandpass","Bandpass","Median Filter"])
-        self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
-        self.prevAlg = "Wavelets"
+        layout.addWidget(QLabel('How difficult was this to do?'))
+        self.aQ1a = QRadioButton('Easy')
+        self.aQ1b = QRadioButton('Medium')
+        self.aQ1c = QRadioButton('Hard')
+        layout.addWidget(self.aQ1a)
+        layout.addWidget(self.aQ1b)
+        layout.addWidget(self.aQ1c)
 
-        # Wavelet: Depth of tree, threshold type, threshold multiplier, wavelet
-        self.wavlabel = QLabel("Wavelets")
-        self.depthlabel = QLabel("Depth of wavelet packet decomposition (or tick box to use best)")
-        self.depthchoice = QCheckBox()
-        self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
-        self.depth = QSpinBox()
-        self.depth.setRange(1,10)
-        self.depth.setSingleStep(1)
-        self.depth.setValue(5)
+        layout.addWidget(QLabel('What did you find easy?'))
+        self.aQ2 = QTextEdit(self)
+        layout.addWidget(self.aQ2)
 
-        self.thrtypelabel = QLabel("Type of thresholding")
-        self.thrtype = [QRadioButton("Soft"), QRadioButton("Hard")]
-        self.thrtype[0].setChecked(True)
+        layout.addWidget(QLabel('What did you find difficult?'))
+        self.aQ3 = QTextEdit(self)
+        layout.addWidget(self.aQ3)
 
-        self.thrlabel = QLabel("Multiplier of std dev for threshold")
-        self.thr = QSpinBox()
-        self.thr.setRange(1,10)
-        self.thr.setSingleStep(1)
-        self.thr.setValue(5)
+        layout.addWidget(QLabel('Do you have any suggestions for improvements?'))
+        self.aQ4 = QTextEdit(self)
+        layout.addWidget(self.aQ4)
 
-        self.waveletlabel = QLabel("Type of wavelet")
-        self.wavelet = QComboBox()
-        self.wavelet.addItems(["dmey","db2","db5","haar"])
-        self.wavelet.setCurrentIndex(0)
+        button = QDialogButtonBox(
+            QDialogButtonBox.Ok,
+            Qt.Horizontal, self)
+        button.accepted.connect(self.accept)
 
-        # Median: width of filter
-        self.medlabel = QLabel("Median Filter")
-        self.widthlabel = QLabel("Half width of median filter")
-        self.width = QSpinBox()
-        self.width.setRange(1,101)
-        self.width.setSingleStep(1)
-        self.width.setValue(11)
+        layout.addWidget(button)
 
-        # Bandpass: start and end
-        self.bandlabel = QLabel("Bandpass Filter")
-        self.wblabel = QLabel("Wavelets and Bandpass Filter")
-        self.blabel = QLabel("Start and end points of the band")
-        self.start = QLineEdit(self)
-        self.start.setText('400')
-        self.end = QLineEdit(self)
-        self.end.setText('1000')
+    def getAnswers(self):
+        return [self.aQ1a.isChecked(), self.aQ1b.isChecked(), self.aQ1c.isChecked(),str(self.aQ2.toPlainText()),str(self.aQ3.toPlainText()),str(self.aQ4.toPlainText())]
 
-        # Want combinations of these too!
-
-        self.activate = QPushButton("Denoise")
-        self.undo = QPushButton("Undo")
-        self.save = QPushButton("Save Denoised Sound")
-        #self.connect(self.undo, SIGNAL('clicked()'), self.undo)
-        Box = QVBoxLayout()
-        Box.addWidget(self.algs)
-
-        Box.addWidget(self.wavlabel)
-        Box.addWidget(self.depthlabel)
-        Box.addWidget(self.depthchoice)
-        Box.addWidget(self.depth)
-
-        Box.addWidget(self.thrtypelabel)
-        Box.addWidget(self.thrtype[0])
-        Box.addWidget(self.thrtype[1])
-
-        Box.addWidget(self.thrlabel)
-        Box.addWidget(self.thr)
-
-        Box.addWidget(self.waveletlabel)
-        Box.addWidget(self.wavelet)
-
-        # Median: width of filter
-        Box.addWidget(self.medlabel)
-        self.medlabel.hide()
-        Box.addWidget(self.widthlabel)
-        self.widthlabel.hide()
-        Box.addWidget(self.width)
-        self.width.hide()
-
-        # Bandpass: start and end
-        Box.addWidget(self.bandlabel)
-        self.bandlabel.hide()
-        Box.addWidget(self.wblabel)
-        self.wblabel.hide()
-        Box.addWidget(self.blabel)
-        self.blabel.hide()
-        Box.addWidget(self.start)
-        self.start.hide()
-        Box.addWidget(self.end)
-        self.end.hide()
-
-        Box.addWidget(self.activate)
-        Box.addWidget(self.undo)
-        Box.addWidget(self.save)
-
-        # Now put everything into the frame
-        self.setLayout(Box)
-
-    def changeBoxes(self,alg):
-        # This does the hiding and showing of the options as the algorithm changes
-        if self.prevAlg == "Wavelets":
-            self.wavlabel.hide()
-            self.depthlabel.hide()
-            self.depth.hide()
-            self.depthchoice.hide()
-            self.thrtypelabel.hide()
-            self.thrtype[0].hide()
-            self.thrtype[1].hide()
-            self.thrlabel.hide()
-            self.thr.hide()
-            self.waveletlabel.hide()
-            self.wavelet.hide()
-        elif self.prevAlg == "Wavelets + Bandpass":
-            self.wblabel.hide()
-            self.depthlabel.hide()
-            self.depth.hide()
-            self.depthchoice.hide()
-            self.thrtypelabel.hide()
-            self.thrtype[0].hide()
-            self.thrtype[1].hide()
-            self.thrlabel.hide()
-            self.thr.hide()
-            self.waveletlabel.hide()
-            self.wavelet.hide()
-            self.blabel.hide()
-            self.start.hide()
-            self.end.hide()
-        elif self.prevAlg == "Bandpass":
-            self.bandlabel.hide()
-            self.blabel.hide()
-            self.start.hide()
-            self.end.hide()
-        else:
-            # Median filter
-            self.medlabel.hide()
-            self.widthlabel.hide()
-            self.width.hide()
-
-        self.prevAlg = str(alg)
-        if str(alg) == "Wavelets":
-            self.wavlabel.show()
-            self.depthlabel.show()
-            self.depthchoice.show()
-            self.depth.show()
-            self.thrtypelabel.show()
-            self.thrtype[0].show()
-            self.thrtype[1].show()
-            self.thrlabel.show()
-            self.thr.show()
-            self.waveletlabel.show()
-            self.wavelet.show()
-        elif str(alg) == "Wavelets + Bandpass":
-            self.wblabel.show()
-            self.depthlabel.show()
-            self.depthchoice.show()
-            self.depth.show()
-            self.thrtypelabel.show()
-            self.thrtype[0].show()
-            self.thrtype[1].show()
-            self.thrlabel.show()
-            self.thr.show()
-            self.waveletlabel.show()
-            self.wavelet.show()
-            self.blabel.show()
-            self.start.show()
-            self.end.show()
-        elif str(alg) == "Bandpass":
-            self.bandlabel.show()
-            self.start.show()
-            self.end.show()
-        else:
-            #"Median filter"
-            self.medlabel.show()
-            self.widthlabel.show()
-            self.width.show()
-
-    def depthclicked(self):
-        self.depth.setEnabled(not self.depth.isEnabled())
-
-    def getValues(self):
-        return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.start.text(),self.end.text(),self.width.text()]
+    # static method to create the dialog and return the data
+    @staticmethod
+    def endQs(parent=None):
+        dialog = endQuestions()
+        dialog.exec_()
+        return (dialog.getAnswers())
 
 # Start the application
 app = QApplication(sys.argv)

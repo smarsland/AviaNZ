@@ -1,4 +1,4 @@
-# Version 0.2 30/5/16
+# Version 0.3 20/7/16
 # Author: Stephen Marsland
 
 import numpy as np
@@ -25,6 +25,14 @@ class SignalProc:
         if data != []:
             self.data = data
             self.sampleRate = sampleRate
+
+    def setNewData(self,data,fs):
+        self.data = data
+        self.sampleRate = fs
+
+    def set_width(self,window_width,incr):
+        self.window_width = window_width
+        self.incr = incr
 
     def spectrogram(self,t,window='Hanning'):
         # Compute the spectrogram from amplitude data
@@ -69,7 +77,7 @@ class SignalProc:
         sg = np.zeros((self.window_width / 2, int(np.ceil(len(t) / self.incr))))
         counter = 0
 
-        for start in range(0, len(t) - self.window_width, self.incr):
+        for start in range(0, len(t) - self.window_width+1, self.incr):
             # Multiply data with window function, take Fourier transform and plot log10 version
             windowedfn = window * t[start:start + self.window_width]
             ft = fft(windowedfn)
@@ -77,12 +85,12 @@ class SignalProc:
             sg[:, counter] = np.real(ft[self.window_width / 2:])
             counter += 1
         # Note that the last little bit (up to window_width) is lost. Can't just add it in since there are fewer points
-        sg = 10.0 * np.log10(sg)
+        # Returns the fft. For plotting purposes, want it in decibels (10*np.log10(sg))
+        #sg = 10.0 * np.log10(sg)
         return sg
 
     def ShannonEntropy(self,s):
         # Compute the Shannon entropy of data
-        # TODO: Work out why this sometimes has a log(0) error
         e = -s[np.nonzero(s)]**2 * np.log(s[np.nonzero(s)]**2)
         #e = np.where(s==0,0,-s**2*np.log(s**2))
         return np.sum(e)
@@ -100,12 +108,19 @@ class SignalProc:
 
         return level-1
 
-    def denoise(self,thresholdType='soft'):
+    def waveletDenoise(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
         # Perform wavelet denoising. Can use soft or hard thresholding
-        self.maxlevel = self.BestLevel()
+        if data is None:
+            data = self.data
+        if maxlevel is None:
+            self.maxlevel = self.BestLevel()
+        else:
+            self.maxlevel = maxlevel
         print self.maxlevel
+        if threshold is not None:
+            self.thresholdMultiplier = threshold
 
-        self.wp = pywt.WaveletPacket(data=self.data, wavelet='dmey', mode='symmetric',maxlevel=self.maxlevel)
+        wp = pywt.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric',maxlevel=self.maxlevel)
 
         # nlevels = self.maxsearch
         # while nlevels > self.maxlevel:
@@ -113,12 +128,12 @@ class SignalProc:
         #         del self.wp[n.path]
         #     nlevels -= 1
 
-        det1 = self.wp['d'].data
+        det1 = wp['d'].data
         # Note magic conversion number
         sigma = np.median(np.abs(det1)) / 0.6745
         threshold = self.thresholdMultiplier*sigma
         for level in range(self.maxlevel):
-            for n in self.wp.get_level(level, 'natural'):
+            for n in wp.get_level(level, 'natural'):
                 if thresholdType == 'hard':
                     # Hard thresholding
                     n.data = np.where(np.abs(n.data)<threshold,0.0,n.data)
@@ -126,20 +141,41 @@ class SignalProc:
                     # Soft thresholding
                     n.data = np.sign(n.data)*np.maximum((np.abs(n.data)-threshold),0.0)
 
-        self.wData = self.wp.data
+        self.wData = wp.data
         #self.wp.reconstruct(update=False)
 
-        # Commented out as I don't see the benefit. And don't know how to pick width
-        # Bandpass filter
-        # import scipy.signal as signal
-        # nyquist = self.sampleRate/2.0
-        # ripple_db = 80.0
-        # width = 1.0/nyquist
-        # ntaps, beta = signal.kaiserord(ripple_db, width)
-        # taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
-        # self.fwData = signal.lfilter(taps, 1.0, self.wData)
-
         return self.wData
+
+    def bandpassFilter(self,data=None,start=500,end=8000):
+        # Bandpass filter
+        import scipy.signal as signal
+        if data is None:
+            data = self.data
+        nyquist = self.sampleRate/2.0
+        #ripple_db = 80.0
+        #width = 1.0/nyquist
+        #ntaps, beta = signal.kaiserord(ripple_db, width)
+        ntaps = 128
+        #taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
+        taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
+        fData = signal.lfilter(taps, 1.0, data)
+
+        return fData
+
+    def medianFilter(self,data=None,width=11):
+        # Median Filtering
+        # Uses smaller width windows at edges to remove edge effects
+        # TODO: Use abs rather than pure median?
+        if data is None:
+            data = self.data
+        mData = np.zeros(len(data))
+        for i in range(width,len(data)-width):
+            mData[i] = np.median(data[i-width:i+width])
+        for i in range(len(data)):
+            wid = min(i,len(data)-i,width)
+            mData[i] = np.median(data[i - wid:i + wid])
+
+        return mData
 
     def writeFile(self,name):
         # Save a sound file for after denoising
@@ -162,8 +198,19 @@ class SignalProc:
 def denoiseFile(fileName,thresholdMultiplier):
     sp = SignalProc(thresholdMultiplier=thresholdMultiplier)
     sp.loadData(fileName)
-    sp.denoise()
+    sp.waveletDenoise()
     sp.writeFile(fileName[:-4]+'denoised'+str(sp.thresholdMultiplier)+fileName[-4:])
+
+def medianClip(sg):
+    rowmedians = np.median(sg, axis=1)
+    colmedians = np.median(sg, axis=0)
+    #print np.shape(rowmedians), np.shape(colmedians), np.shape(sg)
+    clipped = np.zeros(np.shape(sg))
+    for i in range(np.shape(sg)[0]):
+        for j in range(np.shape(sg)[1]):
+            if (sg[i, j] > 3 * rowmedians[i] and sg[i, j] > 3 * colmedians[j]):
+                clipped[i, j] = 1.0
+    return clipped
 
 def test():
     #pl.ion()
@@ -175,11 +222,11 @@ def test():
     #a.testTree()
     sg = a.spectrogram(a.data)
     pl.figure()
-    pl.imshow(sg,cmap='gray')
-    a.denoise()
+    pl.imshow(10.0*np.log10(sg),cmap='gray')
+    a.waveletDenoise()
     sgn = a.spectrogram(a.wData)
     pl.figure()
-    pl.imshow(sgn,cmap='gray')
+    pl.imshow(10.0*np.log10(sgn),cmap='gray')
     pl.figure()
     pl.plot(a.wData)
     #a.plot()
@@ -187,15 +234,20 @@ def test():
     a.writefile('out.wav')
     pl.show()
 
+
 def show():
     #pl.ion()
     a = SignalProc()
-    a.loadData('Sound Files/male1.wav')
+    #a.loadData('Sound Files/male1d.wav')
+    a.loadData('Sound Files/kiwi.wav')
+    a.data = a.data[:60000,0]
     sg = a.spectrogram(a.data)
     pl.figure()
     pl.plot(a.data)
     pl.figure()
-    pl.imshow(sg,cmap='gray_r')
+    pl.imshow(10.0*np.log10(sg),cmap='gray_r')
+    pl.figure()
+    pl.imshow(10.0*np.log10(medianClip(sg)),cmap='gray')
     pl.show()
 
 #show()
