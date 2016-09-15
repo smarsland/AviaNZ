@@ -1,11 +1,11 @@
 # Interface.py
 #
-# This is currently the base class for the AviaNZ interface
-# It's fairly simple, but hopefully works
+# This is the main class for the AviaNZ interface
+# It's fairly simple, but seems to work OK
 # Version 0.6 27/8/16
 # Author: Stephen Marsland
 
-import sys, os, glob, json
+import sys, os, glob, json, datetime
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 from scipy.io import wavfile
@@ -37,6 +37,7 @@ import Segment
 # Needs decent testing
 # Some learning algs
 
+# Pyqtgraph?
 # Size of zoom window?
 
 # Pitch tracking, fundamental frequency
@@ -159,13 +160,13 @@ class Interface(QMainWindow):
             'colourEnd': 1.0,
 
             'dpi': 100,
-            'BirdButtons1': ["Female Kiwi", "Male Kiwi", "Ruru", "Hihi", "Bittern", "Petrel", "Robin", "Tomtit", "Cuckoo",
-                             "Kereru"],
-            'BirdButtons2': ["Tui", "Bellbird", "Fantail", "Saddleback", "Silvereye", "Rifleman", "Warbler", "Not Bird",
+            'BirdButtons1': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)",
+                             "Petrel"],
+            'BirdButtons2': ["Rifleman", "Ruru", "Saddleback", "Silvereye", "Tomtit", "Tui", "Warbler", "Not Bird",
                              "Don't Know", "Other"],
             'ListBirdsEntries': ['Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit',
                                  'Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover',
-                                 'Pukeko', 'Rook', 'Thrush', 'Warbler', 'Whio'],
+                                 'Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
         }
 
     def createFrame(self):
@@ -498,7 +499,7 @@ class Interface(QMainWindow):
             self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate,self.config['window_width'],self.config['incr'])
 
         # Get the data for the spectrogram
-        self.sg = self.sp.spectrogram(self.audiodata)
+        self.sg = self.sp.spectrogram(self.audiodata,multitaper=True)
 
         # Load any previous segments stored
         if os.path.isfile(self.filename+'.data'):
@@ -903,6 +904,10 @@ class Interface(QMainWindow):
                 self.canvas3.draw()
         else:
             self.windowStart = (event.xdata-self.focusRegionPoint)/self.sampleRate*self.config['incr']
+            if self.windowStart < 0:
+                self.windowStart = 0
+            elif self.windowStart + self.windowSize  > float(self.datalength) / self.sampleRate:
+                self.windowStart = float(self.datalength) / self.sampleRate - self.windowSize
             self.focusRegionSelected = False
             self.focusRegion.set_facecolor('r')
             self.updateWindow()
@@ -1517,7 +1522,33 @@ class Interface(QMainWindow):
 
     def playSegment(self):
         # This is the listener for the play button. A very simple wave file player
+
+        #print(self.windowStart, self.sampleRate, self.windowSize)
+        # Move a marker through in real time?!
+        # self.playbar = self.a1.add_patch(
+        #     pl.Rectangle((self.windowStart+0.1, np.min(self.audiodata)), self.linewidtha1, self.plotheight, facecolor='k',
+        #                  edgecolor='None', alpha=0.8))
+        # self.canvas.draw()
+
         sd.play(self.audiodata[int(self.windowStart*self.sampleRate):int(self.windowStart*self.sampleRate+self.windowSize*self.sampleRate)],self.sampleRate)
+
+        # end_time = self.windowStart + self.windowSize
+        # start_time = datetime.datetime.now()
+        # current_time = start_time
+        # step = 0
+        # while (current_time - start_time).total_seconds() < end_time:
+        #     now = datetime.datetime.now()
+        #     timedelta = (now - current_time).total_seconds()
+        #     step += timedelta
+        #     #self.playbar.set_x(self.playbar.get_x() + 0.05)
+        #     self.a1.add_patch(
+        #         pl.Rectangle((step, np.min(self.audiodata)), self.linewidtha1, self.plotheight,
+        #                      facecolor='k',
+        #                      edgecolor='None', alpha=0.8))
+        #     #print self.playbar.get_x()
+        #     current_time = now
+        #     self.canvas.draw()
+
         # blocksize = 16
         # s = Stream(samplerate=self.sampleRate, blocksize=blocksize)
         # s.start()

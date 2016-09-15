@@ -15,8 +15,9 @@ import sklearn
 # GMM from lots of people
 # Plus whatever scikit-learn has :)
 # Some deep learning stuff?
+#xgboost
 
-# Also, consider HMMs -> syllable ordering, etc.
+# Also, consider another module for HMMs and related -> syllable ordering, etc.
 
 class Learning:
     # This class implements various learning algorithms for the AviaNZ interface

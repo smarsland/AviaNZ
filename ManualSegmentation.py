@@ -137,13 +137,13 @@ class Interface(QMainWindow):
             'colourEnd': 1.0,
 
             'dpi': 100,
-            'BirdButtons1': ["Female Kiwi", "Male Kiwi", "Ruru", "Hihi", "Bittern", "Petrel", "Robin", "Tomtit", "Cuckoo",
-                             "Kereru"],
-            'BirdButtons2': ["Tui", "Bellbird", "Fantail", "Saddleback", "Silvereye", "Rifleman", "Warbler", "Not Bird",
+            'BirdButtons1': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)",
+                             "Petrel"],
+            'BirdButtons2': ["Rifleman", "Ruru", "Saddleback", "Silvereye", "Tomtit", "Tui", "Warbler", "Not Bird",
                              "Don't Know", "Other"],
             'ListBirdsEntries': ['Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit',
                                  'Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover',
-                                 'Pukeko', 'Rook', 'Thrush', 'Warbler', 'Whio'],
+                                 'Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
         }
 
     def createFrame(self):
@@ -791,6 +791,10 @@ class Interface(QMainWindow):
                 self.canvas3.draw()
         else:
             self.windowStart = (event.xdata-self.focusRegionPoint)/self.sampleRate*self.config['incr']
+            if self.windowStart < 0:
+                self.windowStart = 0
+            elif self.windowStart + self.windowSize  > float(self.datalength) / self.sampleRate:
+                self.windowStart = float(self.datalength) / self.sampleRate - self.windowSize
             self.focusRegionSelected = False
             self.focusRegion.set_facecolor('r')
             self.updateWindow()
@@ -1213,6 +1217,7 @@ class Interface(QMainWindow):
     def playSegment(self):
         # This is the listener for the play button. A very simple wave file player
         sd.play(self.audiodata[int(self.windowStart*self.sampleRate):int(self.windowStart*self.sampleRate+self.windowSize*self.sampleRate)],self.sampleRate)
+
         #sd.play(self.audiodata[self.windowStart:self.windowStart+self.windowSize],self.sampleRate)
         #def callback(in_data, out_data, time_info, status):
             #out_data[:] = in_data

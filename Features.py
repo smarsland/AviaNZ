@@ -28,12 +28,14 @@ import librosa
     #Max Frequency
 
 # Add chroma features and Tonnetz
+# Vibrato
 # Prosodic features (pitch, duration, intensity)
 # Spectral statistics
 # Frequency modulation
 # Linear Predictive Coding? -> from scikits.talkbox import lpc (see also audiolazy)
 # Frechet distance for DTW?
 # Pick things from spectrogram
+# Correlation
 
 # Add something that plots some of these to help playing, so that I can understand the librosa things, etc.
 
@@ -138,38 +140,60 @@ class Features:
         lpc(data,order)
 
     def entropy(self,s):
-        e = -s[np.nonzero(s)] ** 2 * np.log(s[np.nonzero(s)] ** 2)
+        e = -s[np.nonzero(s)]**2 * np.log(s[np.nonzero(s)]**2)
         return np.sum(e)
 
-    def get_spectrogram_measurements(self,t1,t2,f1,f2):
-        #nbins = ??
-        avgPower = np.sum(sg[t1:t2,f1:f2])/nbins
-        deltaPower = np.sum(sg[t2,:]) - np.sum)sg[t1,:])
-        energy = np.sum(10.0**(sg[t1:t2,f1:f2]/10.0))*(self.sampleRate/self.config['window_width'])
-        #bin =
-        #sel =
-        eb = entropy(bin)
-        es = entropy(sel)
-        aggEntropy = np.sum(eb/es*np.log2(eb/es))
-        #nframes =
-        avgEntropy = np.sum(entropy(frame))/nframes
-        #maxFreq = np.max(sg[t1:t2,f1:f2])
-        maxPower = np.max(sg[t1:t2,f1:f2])
+    def energy(self,sg):
+        return np.sum(10.0**(sg/10.0))*(self.sampleRate/self.config['window_width'])
 
+    def wiener_entropy(self):
+        return np.exp(1.0/len(self.data) * np.sum(np.log(self.data))) / (1.0/len(self.data) * np.sum(self.data))
+
+    def get_spectrogram_measurements(self,t1,t2,f1,f2):
+        # The first set of Raven features:
+        # average power, delta power, energy, aggregate+average entropy, max+peak freq, max+peak power
+        # These mostly assume that you have clipped the call in time and frequency
+        #nbins = number of pixels = width*height
+        avgPower = np.sum(sg[t1:t2,f1:f2])/nbins
+        deltaPower = np.sum(sg[:,f2]) - np.sum(sg[:,f1])
+        # For the energy, should this be log(sg)?
+        energy = self.energy(sg[t1:t2,f1:f2])
+        Ebin = self.energy(sg[t1:t2,f])
+        aggEntropy = 0
+        for f in range(f1,f2):
+            aggEntropy += self.energy(sg[t1:t2,f]/Ebin)
+        #nframes =
+        avgEntropy = 0
+        for t in range(t1,t2):
+            avgEntropy += self.entropy(sg[t,f1:f2])
+        avgEntropy /= nframes
+
+        maxPower = np.max(sg[t1:t2,f1:f2])
+        peakPower = np.max(np.abs(sg[t1:t2,f1:f2]))
+        maxFreq = np.argmax(sg[t1:t2,f1:f2])[1]
+        peakFreq = np.argmax(np.abs(sg[t1:t2,f1:f2]))[1]
+
+        return (avgPower, deltaPower, energy, avgEntropy, maxPower, peakPower, maxFreq, peakFreq)
+
+    def get_robust_measurements(self,t1,t2,f1,f2):
+        # The second set of Raven features
+        # 1st, 2nd, 3rd quartile, 5%, 95% frequency, inter-quartile range, bandwidth 90%
+        # Ditto for time
         # Cumulative sums to get the quartile points for freq and time
-        csf = np.cumsum(sg[f1:f2,t1:t2],axis=0)
+        csf = np.cumsum(sg[f1:f2, t1:t2], axis=0)
         cst = np.cumsum(sg[f1:f2, t1:t2], axis=1)
 
         # List of the frequency points (5%, 25%, 50%, 75%, 95%)
-        list = [.05,.25,.5,.75,.95]
+        list = [.05, .25, .5, .75, .95]
+
         freqindices = []
         index = 0
         i = 0
-        while i < (len(csf)) and index<len(list):
-            if csf[i]>list[index]*csf[-1]:
+        while i < (len(csf)) and index < len(list):
+            if csf[i] > list[index] * csf[-1]:
                 freqindices.extend(str(i))
-                index+=1
-            i+=1
+                index += 1
+            i += 1
 
         timeindices = []
         index = 0
@@ -180,12 +204,25 @@ class Features:
                 index += 1
             i += 1
 
+        return (freqindices, freqindices[3] - freqindices[1], freqindices[4] - freqindices[0], timeindices, timeindices[3] - timeindices[1], timeindices[4] - timeindices[0])
 
-    def get_frequency_measurements(self):
-        pass
+    def get_waveform_measurements(self,t1,t2,f1,f2):
+        # The third set of Raven features
+        # Min, max, peak, RMS, filtered RMS amplitude (and times for the first 3), high, low, delta frequency, length of time
+        mina = np.min(self.data[t1:t2])
+        mint = np.argmin(self.data[t1,t2])
+        maxa = np.max(self.data[t1:t2])
+        maxt = np.argmax(self.data[t1:t2])
+        peaka = np.max(np.abs(self.data[t1:t2]))
+        peakt = np.argmax(np.abs(self.data[t1:t2]))
+        npoints = t2-t1/self.config[]
+        rmsa = np.sqrt(np.sum(self.data[t1:t2]**2)/npoints)
+        # rmsfa = np.sqrt(np.sum(self.data[t1:t2] ** 2) / npoints)
+        # Also? max bearing, peak correlation, peak lag
+        return (mina, mint, maxa, maxt, peaka, peakt,rmsa)
 
-    def get_robust_measurements(self):
-        pass
+    def computeCorrelation(self):
+        scipy.signal.fftconvolve(a, b, mode='same')
 
     def testDTW(self):
         x = [0, 0, 1, 1, 2, 4, 2, 1, 2, 0]

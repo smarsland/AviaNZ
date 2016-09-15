@@ -13,6 +13,7 @@ import matplotlib
 # Also downsampling (use librosa)
 # Some tidying needed
 # Test the different windows, play with threshold multiplier -> how to set? Look up log amplitude scaling
+# Compute the spectral derivatives??
 # What else should be added into here?
 
 class SignalProc:
@@ -34,12 +35,15 @@ class SignalProc:
         self.window_width = window_width
         self.incr = incr
 
-    def spectrogram(self,t,window='Hanning'):
+    def spectrogram(self,t,window='Hanning',multitaper=False):
         # Compute the spectrogram from amplitude data
         from scipy.fftpack import fft
 
         if t is None:
             print ("Error")
+
+        if multitaper:
+            from spectrum import dpss, pmtm
 
         # Set of window options
         if window=='Hanning':
@@ -77,12 +81,17 @@ class SignalProc:
         sg = np.zeros((self.window_width / 2, int(np.ceil(len(t) / self.incr))))
         counter = 0
 
+
         for start in range(0, len(t) - self.window_width+1, self.incr):
-            # Multiply data with window function, take Fourier transform and plot log10 version
-            windowedfn = window * t[start:start + self.window_width]
-            ft = fft(windowedfn)
-            ft = ft * np.conj(ft)
-            sg[:, counter] = np.real(ft[self.window_width / 2:])
+            # Multiply data with window function, take Fourier transform, multiply by complex conjugate, take real part
+            if multitaper:
+                S = pmtm(t[start:start+self.window_width], NW=2.5, k=4, show=False)
+                sg[:, counter:counter+1] = S[self.window_width / 2:]
+            else:
+                windowedfn = window * t[start:start + self.window_width]
+                ft = fft(windowedfn)
+                ft = ft * np.conj(ft)
+                sg[:, counter] = np.real(ft[self.window_width / 2:])
             counter += 1
         # Note that the last little bit (up to window_width) is lost. Can't just add it in since there are fewer points
         # Returns the fft. For plotting purposes, want it in decibels (10*np.log10(sg))
@@ -242,8 +251,8 @@ def show():
     a.loadData('Sound Files/kiwi.wav')
     a.data = a.data[:60000,0]
     sg = a.spectrogram(a.data)
-    pl.figure()
-    pl.plot(a.data)
+    #pl.figure()
+    #pl.plot(a.data)
     pl.figure()
     pl.imshow(10.0*np.log10(sg),cmap='gray_r')
     pl.figure()
