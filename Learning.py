@@ -15,7 +15,7 @@ import sklearn
 # GMM from lots of people
 # Plus whatever scikit-learn has :)
 # Some deep learning stuff?
-#xgboost
+# xgboost
 
 # Also, consider another module for HMMs and related -> syllable ordering, etc.
 

@@ -2,22 +2,23 @@
 # Author: Stephen Marsland
 
 import numpy as np
-import pywt
+#import pywt
 from scipy.io import wavfile
 import pylab as pl
 import matplotlib
 
 # TODO:
 # Denoising needs work
-# Add in bandpass filtering
-# Also downsampling (use librosa)
+# Bandpass filtering needs work
+# Add downsampling (use librosa)
 # Some tidying needed
-# Test the different windows, play with threshold multiplier -> how to set? Look up log amplitude scaling
-# Compute the spectral derivatives??
+# For spectrogram: Test the different windows, play with threshold multiplier -> how to set? Look up log amplitude scaling
 # What else should be added into here?
 
 class SignalProc:
     # This class implements various signal processing algorithms for the AviaNZ interface
+    # Most important features are computing the spectrogram denoising with wavelets, and computing cross-correlation (findMatches)
+
     def __init__(self,data=[],sampleRate=0,window_width=256,incr=128,maxSearchDepth=20,thresholdMultiplier=4.5):
         self.window_width=window_width
         self.incr=incr
@@ -27,27 +28,33 @@ class SignalProc:
             self.data = data
             self.sampleRate = sampleRate
 
-    def setNewData(self,data,fs):
+    def setNewData(self,data,sampleRate):
+        # To be called when a new sound file is loaded
         self.data = data
-        self.sampleRate = fs
+        self.sampleRate = sampleRate
 
     def set_width(self,window_width,incr):
         self.window_width = window_width
         self.incr = incr
 
-    def spectrogram(self,t,window='Hanning',multitaper=False):
-        # Compute the spectrogram from amplitude data
-        from scipy.fftpack import fft
+    def SnNR(self,startSignal,startNoise):
+        pS = np.sum(self.data[startSignal:startSignal+self.length]**2)/self.length
+        pN = np.sum(self.data[startNoise:startNoise+self.length]**2)/self.length
+        return 10.*np.log10(pS/pN)
 
-        if t is None:
+    def spectrogram(self,data,sampleRate,window='Hann',multitaper=False):
+        # Compute the spectrogram from amplitude data
+        # Note that this returns the power spectrum (not the density) and without the log10.
+        # Also, it's the absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discimination
+        # Can compute the multitaper version, but it's sadly very slow
+        # Essential for median clipping, though
+        # This version is faster than the default versions in pylab and scipy.signal
+        if data is None:
             print ("Error")
 
-        if multitaper:
-            from spectrum import dpss, pmtm
-
         # Set of window options
-        if window=='Hanning':
-            # This is the Hanning window
+        if window=='Hann':
+            # This is the Hann window
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)))
         elif window=='Parzen':
             # Parzen (self.window_width even)
@@ -76,28 +83,30 @@ class SignalProc:
             a3 = 0.01168
             window = a0 - a1*np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)) + a2*np.cos(4 * np.pi * np.arange(self.window_width) / (self.window_width - 1)) - a3*np.cos(6 * np.pi * np.arange(self.window_width) / (self.window_width - 1))
         else:
-            print "unknown window, using Hanning"
+            print "unknown window, using Hann"
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)))
-        sg = np.zeros((self.window_width / 2, int(np.ceil(len(t) / self.incr))))
-        counter = 0
 
+        sg = np.zeros((self.window_width / 2, int(np.ceil(float(len(data)) / self.incr))))
 
-        for start in range(0, len(t) - self.window_width+1, self.incr):
-            # Multiply data with window function, take Fourier transform, multiply by complex conjugate, take real part
-            if multitaper:
-                S = pmtm(t[start:start+self.window_width], NW=2.5, k=4, show=False)
-                sg[:, counter:counter+1] = S[self.window_width / 2:]
-            else:
-                windowedfn = window * t[start:start + self.window_width]
-                ft = fft(windowedfn)
-                ft = ft * np.conj(ft)
-                sg[:, counter] = np.real(ft[self.window_width / 2:])
+        if multitaper:
+            from spectrum import dpss, pmtm
+            [tapers, eigen] = dpss(self.window_width, 2.5, 4)
+            counter = 0
+            for start in range(0, len(data) - self.window_width, self.incr):
+                S = pmtm(data[start:start + self.window_width], e=tapers, v=eigen, show=False)
+                sg[:, counter:counter + 1] = S[self.window_width / 2:]
             counter += 1
-        # Note that the last little bit (up to window_width) is lost. Can't just add it in since there are fewer points
-        # Returns the fft. For plotting purposes, want it in decibels (10*np.log10(sg))
-        #sg = 10.0 * np.log10(sg)
+        else:
+            starts = range(0, len(data) - self.window_width, self.incr)
+            ft = np.zeros((len(starts), self.window_width))
+            for i in starts:
+                ft[i / self.incr, :] = window * data[i:i + self.window_width]
+            ft = np.fft.fft(ft)
+            sg = np.absolute(ft[:, self.window_width / 2:]).T
+
         return sg
 
+    # Functions for denoising (wavelet and bandpass filtering)
     def ShannonEntropy(self,s):
         # Compute the Shannon entropy of data
         e = -s[np.nonzero(s)]**2 * np.log(s[np.nonzero(s)]**2)
@@ -186,8 +195,9 @@ class SignalProc:
 
         return mData
 
+    # Functions for loading and saving files -- largely unnecessary
     def writeFile(self,name):
-        # Save a sound file for after denoising
+        # Save a sound file (after denoising)
         # Need them to be 16 bit integers
         self.wData *= 32768.0
         self.wData = self.wData.astype('int16')
@@ -210,17 +220,6 @@ def denoiseFile(fileName,thresholdMultiplier):
     sp.waveletDenoise()
     sp.writeFile(fileName[:-4]+'denoised'+str(sp.thresholdMultiplier)+fileName[-4:])
 
-def medianClip(sg):
-    rowmedians = np.median(sg, axis=1)
-    colmedians = np.median(sg, axis=0)
-    #print np.shape(rowmedians), np.shape(colmedians), np.shape(sg)
-    clipped = np.zeros(np.shape(sg))
-    for i in range(np.shape(sg)[0]):
-        for j in range(np.shape(sg)[1]):
-            if (sg[i, j] > 3 * rowmedians[i] and sg[i, j] > 3 * colmedians[j]):
-                clipped[i, j] = 1.0
-    return clipped
-
 def test():
     #pl.ion()
     a = SignalProc()
@@ -242,6 +241,33 @@ def test():
     #a.play()
     a.writefile('out.wav')
     pl.show()
+
+def testCorr():
+    # This is an outmoded (as slower) version of cross-correlation
+    sp = SignalProc()
+    sp.loadData('Sound Files/tril1.wav')
+    sg = sp.spectrogram(sp.data,multitaper=True)
+    seg = sg[:,79:193]
+    indices = sp.findMatches(seg,sg,0.4)
+    #pl.figure()
+    #pl.plot(matches)
+    #for i in indices:
+    #    pl.plot(i,0.6,'x')
+    print indices
+
+    #print corr
+    fig = pl.figure()
+    ax = fig.add_subplot(111)
+    ax.imshow(sg)
+    for i in indices:
+        ax.add_patch(pl.Rectangle((i,0),114,128,alpha=0.3))
+    #pl.subplot(212), pl.imshow(corr)
+
+    #c1 = np.max(corr, axis=0)
+    #import heapq
+    #heapq.nlargest(20, range(len(c1)), c1.take)
+    # Peaks are at 990, 588, 135
+    return indices
 
 
 def show():

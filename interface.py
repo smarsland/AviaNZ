@@ -2,15 +2,32 @@
 #
 # This is the main class for the AviaNZ interface
 # It's fairly simple, but seems to work OK
-# Version 0.6 27/8/16
+# Version 0.7 5/01/17
 # Author: Stephen Marsland
+
+#     <one line to give the program's name and a brief idea of what it does.>
+#    Copyright (C) <year>  <name of author>
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys, os, glob, json, datetime
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
-from scipy.io import wavfile
+import librosa as lr
 import numpy as np
 import pylab as pl
+from threading import Thread
 
 import matplotlib
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
@@ -21,40 +38,62 @@ import sounddevice as sd
 
 import SignalProc
 import Segment
-#import Features
+import Features
 #import Learning
 # ==============
 # TODO
 
-# Finish choosing parameters for median clipping segmentation
+# Finish implementation for button to show individual segments to user and ask for feedback
+# Ditto lots of segments at once
+# Finish sorting out parameters for median clipping segmentation, energy segmentation
 # Finish the raven features
-# Sort out the wavelet segmentation
+# ** Sort out the wavelet segmentation
+# Finish cross-correlation to pick out similar bits of spectrogram
+# Implement something for the Classify button:
+    # Take the segments that have been given and try to classify them in lots of ways:
+    # Cross-correlation, DTW, shape metric, features and learning
 
-# Some bug in denoising?
+# Testing data
+# Documentation
+# Licensing
+
+# Some things need a mini method, e.g. text resizing
+
+# Decide on a colour code for segmentation -> add text somewhere!
+# Use intensity of colour to encode certainty?
+
+# Some bug in denoising? -> tril1
 # How to set bandpass params? -> is there a useful plot to help?
-# More features, more segmentations
+# More features, add learning!
+# Pitch tracking, fundamental frequency
 # Other parameters for dialogs?
-# Needs decent testing
-# Some learning algs
+#      multitaper for spectrogram
 
-# Pyqtgraph?
 # Size of zoom window?
 
-# Pitch tracking, fundamental frequency
+# Needs decent testing
+
+# Option to turn button menu on/off
+
+# Playback of sound is a mess and I don't know how to fix it. First, sounddevice isn't great,
+# and second it really should have a moving bar so you can see progress, and I can't make it go: too slow, too crap.
+
+# Speed is an issue, unfortunately
+    # I think that is largely matplotlib
+    # Would Pyqtgraph help? What can be actually done in it?
+    # What can be speeded up? Spectrogram in C? It probably is. Denoising!
 
 # Minor:
-# Turn stereo sound into mono using librosa, consider always resampling to 22050Hz?
+# Turn stereo sound into mono using librosa, consider always resampling to 22050Hz (except when it's less in file :) )
 # Font size to match segment size -> currently make it smaller, could also move it up or down as appropriate
 
 # Things to consider:
     # Second spectrogram (currently use right button for interleaving)? My current choice is no as it takes up space
     # Put the labelling (and loading) in a dialog to free up space? -> bigger plots
-    # Useful to have a go to start button?
-    # Use to show a moving point through the file as it plays? Sound has been a pain in the arse to date!
+    # Useful to have a go to start button as well as forward and backward?
+    # How to show a moving point through the file as it plays? Sound has been a pain in the arse to date!
 
 # Look at raven and praat and luscinia -> what else is actually useful? Other annotations on graphs?
-
-# Need to have another looking at wavelet denoising and work out what is happening, e.g., the tril1 call??
 
 # Given files > 5 mins, split them into 5 mins versions anyway (code is there, make it part of workflow)
 # Don't really want to load the whole thing, just 5 mins, and then move through with arrows -> how?
@@ -62,9 +101,6 @@ import Segment
 
 # As well as this version with pictures, will need to be able to call various bits to work offline
 # denoising, segmentation, etc. that will then just show some pictures
-
-# What can be speeded up? Spectrogram in C? Denoising!
-# Look into cython
 
 # Get suggestions from the others
 
@@ -77,8 +113,13 @@ import Segment
 # ===============
 
 class Interface(QMainWindow):
+    # Main class for the interface, which contains most of the user interface and plotting code
+    # All plotting is done in Matplotlib inside a PyQt window
 
     def __init__(self,root=None,configfile=None):
+        # Main part of the initialisation is loading a configuration file, or creating a new one if it doesn't
+        # exist. Also loads an initial file (specified explicitly) and sets up the window.
+        # TODO: better way to choose initial file (or don't choose one at all)
         self.root = root
         if configfile is not None:
             try:
@@ -97,7 +138,6 @@ class Interface(QMainWindow):
         self.resetStorageArrays()
         #self.secondSpectrogram = False
 
-        self.firstFile = 'male1.wav' # 'kiwi.wav'#'
         self.dirName = self.config['dirpath']
         self.previousFile = None
         self.focusRegion = None
@@ -105,13 +145,13 @@ class Interface(QMainWindow):
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
         self.setWindowTitle('AviaNZ')
+
+        # Make life easier for now: preload a birdsong
+        self.firstFile = 'tril1.wav' #'male1.wav' # 'kiwi.wav'#'
+
         #self.createMenu()
         self.createFrame()
 
-        # Make life easier for now: preload a birdsong
-        #self.loadFile('../Birdsong/more1.wav')
-        #self.loadFile('male1.wav')
-        #self.loadFile('ST0026_1.wav')
         self.loadFile(self.firstFile)
 
     # def createMenu(self):
@@ -132,6 +172,9 @@ class Interface(QMainWindow):
     #     self.fileMenu.addAction(quitAction)
 
     def genConfigFile(self):
+        # Generates a configuration file with default values for parameters
+        # These are quite hard to change currently (edit text file, or delete the file and make another)
+        # TODO: enable parameter changing
         print("Generating new config file")
         self.config = {
             # Params for spectrogram
@@ -159,6 +202,9 @@ class Interface(QMainWindow):
             'colourStart': 0.4,
             'colourEnd': 1.0,
 
+            # Params for cross-correlation and related
+            'corrThr': 0.4,
+
             'dpi': 100,
             'BirdButtons1': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)",
                              "Petrel"],
@@ -170,49 +216,134 @@ class Interface(QMainWindow):
         }
 
     def createFrame(self):
-        # This creates the actual interface. A bit of a mess of Qt widgets, and the connector calls
+        # This creates the actual interface. A bit of a mess of Qt widgets, the connector calls, and layouts.
+
+        # Overview                  < >
+        # Main plot
+        # Instructions, Buttons     Width
+        # Files     Zoom            Buttons
+        
         self.defineColourmap()
         self.frame = QWidget()
 
-        # This is the brief picture of the whole input figure for the zoomed-in version
-        self.fig3 = Figure((22.0, 2.0), dpi=self.config['dpi'])
-        self.canvas3 = FigureCanvas(self.fig3)
-        self.canvas3.setParent(self.frame)
-        self.canvas3.mpl_connect('button_press_event', self.fig3Click)
-        self.canvas3.mpl_connect('motion_notify_event', self.fig3Drag)
+        # This is the overview picture of the whole input, enabling the user to move around it
+        self.figOverview = Figure((22.0, 2.0), dpi=self.config['dpi'])
+        self.canvasOverview = FigureCanvas(self.figOverview)
+        self.canvasOverview.setParent(self.frame)
+        self.canvasOverview.mpl_connect('button_press_event', self.figOverviewClick)
+        self.canvasOverview.mpl_connect('motion_notify_event', self.figOverviewDrag)
 
-        # This is the top figure
-        self.fig = Figure(dpi=self.config['dpi'])
-        self.fig.set_size_inches(22.0, 4.0, forward=True)
-        self.canvas = FigureCanvas(self.fig)
-        self.canvas.setParent(self.frame)
-        # This is for the click for start and end bars and other interactions on fig1
-        self.canvas.mpl_connect('button_press_event', self.fig1Click)
+        # The buttons to move through the overview
+        self.leftBtn = QToolButton()
+        self.leftBtn.setArrowType(Qt.LeftArrow)
+        self.connect(self.leftBtn, SIGNAL('clicked()'), self.moveLeft)
+        self.rightBtn = QToolButton()
+        self.rightBtn.setArrowType(Qt.RightArrow)
+        self.connect(self.rightBtn, SIGNAL('clicked()'), self.moveRight)
 
-        self.canvas.setFocusPolicy(Qt.ClickFocus)
-        self.canvas.setFocus()
+        # The layout for the overview
+        hboxOverview = QHBoxLayout()
+        hboxOverview.addWidget(self.canvasOverview)
+        hboxOverview.addWidget(self.leftBtn)
+        hboxOverview.addWidget(self.rightBtn)
+
+        # This is the main figure, where the user selects things
+        self.figMain = Figure(dpi=self.config['dpi'])
+        self.figMain.set_size_inches(22.0, 4.0, forward=True)
+        self.canvasMain = FigureCanvas(self.figMain)
+        self.canvasMain.setParent(self.frame)
+
+        # Connectors for the click for start and end bars and other interactions on figMain
+        self.canvasMain.mpl_connect('button_press_event', self.figMainClick)
+        self.canvasMain.setFocusPolicy(Qt.ClickFocus)
+        self.canvasMain.setFocus()
         #self.mpl_toolbar = NavigationToolbar(self.canvas, self.frame)
 
-        # Holds the list of files
+        # The instructions and buttons below figMain
+        # playButton1 = QPushButton(QIcon(":/Resources/play.svg"),"&Play Window")
+        playButton1 = QPushButton("&Play/Pause")
+        self.connect(playButton1, SIGNAL('clicked()'), self.playSegment)
+        resetButton1 = QPushButton("&Reset")
+        self.connect(resetButton1, SIGNAL('clicked()'), self.resetSegment)
+
+        # Checkbox for whether or not user is drawing boxes around song in the spectrogram (defaults to clicks not drags)
+        self.dragRectangles = QCheckBox('Drag boxes in spectrogram')
+        self.dragRectangles.stateChanged[int].connect(self.dragRectanglesCheck)
+
+        # Deprectated: This was a slider to run through a file
+        # sld = QSlider(Qt.Horizontal, self)
+        # sld.setFocusPolicy(Qt.NoFocus)
+        # sld.valueChanged[int].connect(self.sliderMoved)
+
+        hboxButtons1 = QHBoxLayout()
+        hboxButtons1.addWidget(QLabel(
+            'Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'))
+        hboxButtons1.addWidget(playButton1)
+        hboxButtons1.addWidget(resetButton1)
+        hboxButtons1.addWidget(self.dragRectangles)
+
+        # The spinbox for changing the width shown in figMain
+        self.widthWindow = QDoubleSpinBox()
+        self.widthWindow.setRange(0.5, 900.0)
+        self.widthWindow.setSingleStep(1.0)
+        self.widthWindow.setDecimals(2)
+        self.widthWindow.setValue(self.config['windowWidth'])
+        self.widthWindow.valueChanged[float].connect(self.changeWidth)
+
+        vboxWidthWindow = QVBoxLayout()
+        vboxWidthWindow.addWidget(QLabel('Visible window width (seconds)'))
+        vboxWidthWindow.addWidget(self.widthWindow)
+
+        # The layouts for the top half of the screen
+        hboxBelowMain = QHBoxLayout()
+        hboxBelowMain.addLayout(hboxButtons1)
+        hboxBelowMain.addLayout(vboxWidthWindow)
+
+        vboxTopHalf = QVBoxLayout()
+        vboxTopHalf.addLayout(hboxOverview)
+        vboxTopHalf.addWidget(self.canvasMain)
+        vboxTopHalf.addLayout(hboxBelowMain)
+        #vboxTopHalf.addWidget(self.mpl_toolbar)
+
+        # Next is the bottom part of the screen
+
+        # List to hold the list of files
         self.listFiles = QListWidget(self)
         self.listFiles.setFixedWidth(150)
         self.fillList()
         self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
 
-        # Whether or not user is drawing boxes around song in the spectrogram
-        self.dragRectangles = QCheckBox('Drag boxes in spectrogram')
-        self.dragRectangles.stateChanged[int].connect(self.dragRectanglesCheck)
-        # The buttons on the right hand side, and also the spinbox for the window width
+        vboxListFiles = QVBoxLayout()
+        vboxListFiles.addWidget(self.listFiles)
+        vboxListFiles.addWidget(QLabel('Double click to select'))
+        vboxListFiles.addWidget(QLabel('Red names have segments'))
 
-        self.leftBtn = QToolButton()
-        self.leftBtn.setArrowType(Qt.LeftArrow)
-        self.connect(self.leftBtn,SIGNAL('clicked()'),self.moveLeft)
-        self.rightBtn = QToolButton()
-        self.rightBtn.setArrowType(Qt.RightArrow)
-        self.connect(self.rightBtn, SIGNAL('clicked()'), self.moveRight)
-        # TODO: what else should be there?
-        playButton1 = QPushButton("&Play Window")
-        self.connect(playButton1, SIGNAL('clicked()'), self.playSegment)
+        # This is the zoomed-in figure
+        self.figZoom = Figure((6.0, 4.0), dpi=self.config['dpi'])
+        self.canvasZoom = FigureCanvas(self.figZoom)
+        self.canvasZoom.setParent(self.frame)
+        self.canvasZoom.setFocusPolicy(Qt.ClickFocus)
+        self.canvasZoom.setFocus()
+
+        # The buttons that go below figZoom
+        playButton2 = QPushButton("&Play")
+        self.connect(playButton2, SIGNAL('clicked()'), self.play)
+        self.addButton = QPushButton("&Add segment")
+        self.connect(self.addButton, SIGNAL('clicked()'), self.addSegmentClick)
+
+        hboxButtons3 = QHBoxLayout()
+        for w in [playButton2,self.addButton]:
+            hboxButtons3.addWidget(w)
+            hboxButtons3.setAlignment(w, Qt.AlignVCenter)
+
+        # Layout for FigZoom
+        vboxFigZoom = QVBoxLayout()
+        vboxFigZoom.addWidget(self.canvasZoom)
+        vboxFigZoom.addWidget(QLabel('Click on a start/end to select, click again to move'))
+        vboxFigZoom.addWidget(QLabel('Or use arrow keys. Press Backspace to delete'))
+        vboxFigZoom.addLayout(hboxButtons3)
+
+        # These are the main buttons, on the bottom right
         quitButton = QPushButton("&Quit")
         self.connect(quitButton, SIGNAL('clicked()'), self.quit)
         spectrogramButton = QPushButton("Spectrogram &Params")
@@ -227,22 +358,19 @@ class Interface(QMainWindow):
         self.connect(deleteButton, SIGNAL('clicked()'), self.deleteSegment)
         deleteAllButton = QPushButton("&Delete All Segments")
         self.connect(deleteAllButton, SIGNAL('clicked()'), self.deleteAll)
-        self.widthWindow = QDoubleSpinBox()
-        self.widthWindow.setRange(0.5,900.0)
-        self.widthWindow.setSingleStep(1.0)
-        self.widthWindow.setDecimals(2)
-        self.widthWindow.setValue(self.config['windowWidth'])
-        self.widthWindow.valueChanged[float].connect(self.changeWidth)
+        findMatchButton = QPushButton("&Find Matches")
+        self.connect(findMatchButton, SIGNAL('clicked()'), self.findMatches)
+        checkButton = QPushButton("&Check Segments")
+        self.connect(checkButton, SIGNAL('clicked()'), self.humanClassifyDialog)
 
-        # This was a slider to run through a file
-        #sld = QSlider(Qt.Horizontal, self)
-        #sld.setFocusPolicy(Qt.NoFocus)
-        #sld.valueChanged[int].connect(self.sliderMoved)
+        vboxButtons2 = QVBoxLayout()
+        for w in [deleteButton,deleteAllButton,spectrogramButton,denoiseButton, segmentButton, findMatchButton, quitButton, checkButton]:
+            vboxButtons2.addWidget(w)
+            #vboxButtons2.setAlignment(w, Qt.AlignHCenter)
 
-        # A context menu to select birds
+        # The context menu (drops down on mouse click) to select birds
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.menuBirdList = QMenu()
-
         # Need the lambda function to connect all menu events to same trigger and know which was selected
         for item in self.config['BirdButtons1'] + self.config['BirdButtons2'][:-1]:
             bird = self.menuBirdList.addAction(item)
@@ -256,8 +384,7 @@ class Interface(QMainWindow):
             self.connect(bird, SIGNAL("triggered()"), receiver)
             self.menuBird2.addAction(bird)
 
-        # This was an array of radio buttons and a list and a text entry box
-        # Removed for now, replaced by the right button menu
+        # An array of radio buttons and a list and a text entry box
         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
         # self.birds1 = []
         # for item in self.config['BirdButtons1']:
@@ -273,7 +400,7 @@ class Interface(QMainWindow):
         #     self.birds2[i].setEnabled(False)
         #     self.connect(self.birds2[i], SIGNAL("clicked()"), self.radioBirdsClicked)
 
-        # This is the list of less common birds
+        # The list of less common birds
         # self.birdList = QListWidget(self)
         # self.birdList.setMaximumWidth(150)
         # for item in self.config['ListBirdsEntries']:
@@ -291,66 +418,6 @@ class Interface(QMainWindow):
         # self.connect(self.tbox, SIGNAL('editingFinished()'), self.birdTextEntered)
         # self.tbox.setEnabled(False)
 
-        # This is the lower figure for the zoomed-in version
-        self.fig2 = Figure((6.0, 4.0), dpi=self.config['dpi'])
-        self.canvas2 = FigureCanvas(self.fig2)
-        self.canvas2.setParent(self.frame)
-        self.canvas2.setFocusPolicy(Qt.ClickFocus)
-        self.canvas2.setFocus()
-
-        # The buttons that go below that figure
-        playButton2 = QPushButton("&Play")
-        self.connect(playButton2, SIGNAL('clicked()'), self.play)
-        self.addButton = QPushButton("&Add segment")
-        self.connect(self.addButton, SIGNAL('clicked()'), self.addSegmentClick)
-
-        # This is the set of layout instructions. It's a bit of a mess, but basically looks like this:
-        # { vbox1 }  -> hbox1
-        #
-        # {vbox0 | birds1layout birds2layout | birdListLayout | vbox3 | vboxbuttons} -> selectorLayout
-
-        vbox0 = QVBoxLayout()
-        vbox0.addWidget(self.listFiles)
-        vbox0.addWidget(QLabel('Double click to select'))
-        vbox0.addWidget(QLabel('Red names have segments'))
-
-        vbox4a = QVBoxLayout()
-        vbox4a.addWidget(QLabel('Visible window width (seconds)'))
-        vbox4a.addWidget(self.widthWindow)
-
-        hbox4a = QHBoxLayout()
-        hbox4a.addWidget(QLabel('Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'))
-        hbox4a.addWidget(playButton1)
-        hbox4a.addWidget(self.dragRectangles)
-
-        vbox4b = QVBoxLayout()
-        vbox4b.addLayout(hbox4a)
-
-        #vbox4b.addWidget(sld)
-
-        hbox2 = QHBoxLayout()
-        hbox2.addLayout(vbox4b)
-        hbox2.addLayout(vbox4a)
-
-        hbox00 = QHBoxLayout()
-        hbox00.addWidget(self.canvas3)
-        hbox00.addWidget(self.leftBtn)
-        hbox00.addWidget(self.rightBtn)
-
-        vbox1 = QVBoxLayout()
-        vbox1.addLayout(hbox00)
-        vbox1.addWidget(self.canvas)
-        vbox1.addLayout(hbox2)
-        #vbox1.addWidget(self.mpl_toolbar)
-
-        vboxbuttons = QVBoxLayout()
-        for w in [deleteButton,deleteAllButton,spectrogramButton,denoiseButton, segmentButton, quitButton]:
-            vboxbuttons.addWidget(w)
-            #vboxbuttons.setAlignment(w, Qt.AlignHCenter)
-
-        hbox1 = QHBoxLayout()
-        hbox1.addLayout(vbox1)
-
         # birds1Layout = QVBoxLayout()
         # for i in xrange(len(self.birds1)):
         #     birds1Layout.addWidget(self.birds1[i])
@@ -365,35 +432,25 @@ class Interface(QMainWindow):
         # birdListLayout.addWidget(QLabel("Type below, Return at end"))
         # birdListLayout.addWidget(self.tbox)
 
-        hbox4 = QHBoxLayout()
-        for w in [playButton2,self.addButton]:
-            hbox4.addWidget(w)
-            hbox4.setAlignment(w, Qt.AlignVCenter)
+        hboxBottomHalf = QHBoxLayout()
+        hboxBottomHalf.addLayout(vboxListFiles)
+        #hboxBottomHalf.addLayout(birds1Layout)
+        #hboxBottomHalf.addLayout(birds2Layout)
+        #hboxBottomHalf.addLayout(birdListLayout)
+        hboxBottomHalf.addLayout(vboxFigZoom)
+        hboxBottomHalf.addLayout(vboxButtons2)
 
-        vbox3 = QVBoxLayout()
-        vbox3.addWidget(self.canvas2)
-        vbox3.addWidget(QLabel('Click on a start/end to select, click again to move'))
-        vbox3.addWidget(QLabel('Or use arrow keys. Press Backspace to delete'))
-        vbox3.addLayout(hbox4)
-
-        selectorLayout = QHBoxLayout()
-        selectorLayout.addLayout(vbox0)
-        #selectorLayout.addLayout(birds1Layout)
-        #selectorLayout.addLayout(birds2Layout)
-        #selectorLayout.addLayout(birdListLayout)
-        selectorLayout.addLayout(vbox3)
-        selectorLayout.addLayout(vboxbuttons)
-
-        vbox2 = QVBoxLayout()
-        vbox2.addLayout(hbox1)
-        vbox2.addLayout(selectorLayout)
+        # And the layout for the whole thing
+        vboxFull = QVBoxLayout()
+        vboxFull.addLayout(vboxTopHalf)
+        vboxFull.addLayout(hboxBottomHalf)
 
         # Now put everything into the frame
-        self.frame.setLayout(vbox2)
+        self.frame.setLayout(vboxFull)
         self.setCentralWidget(self.frame)
 
     def fillList(self):
-        # Generates the list of files for the listbox on top left
+        # Generates the list of files for the listbox on lower left
         # Most of the work is to deal with directories in that list
         self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
         listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
@@ -403,6 +460,7 @@ class Interface(QMainWindow):
                 # Ignore this entry
                 pass
             else:
+                # If there is a .data version, colour the name red to show it has been labelled
                 item = QListWidgetItem(self.listFiles)
                 item.setText(file.fileName())
                 if file.fileName()+'.data' in listOfDataFiles:
@@ -416,6 +474,7 @@ class Interface(QMainWindow):
 
     def resetStorageArrays(self):
         # These variables hold the data to be saved and/or plotted
+        # Used when new files are loaded
         self.segments=[]
         self.listRectanglesa1 = []
         self.listRectanglesa2 = []
@@ -430,23 +489,25 @@ class Interface(QMainWindow):
         # Keep track of start points and selected buttons
         self.start_a = 0
         self.windowStart = 0
+        self.playPosition = self.windowStart
         self.box1id = None
         self.buttonID = None
 
         self.line = None
-        self.segsRectsa1 = []
-        self.segsRectsa2 = []
-        self.segtext = []
 
         self.recta1 = None
         self.recta2 = None
         self.focusRegionSelected = False
-        self.fig1Segment1 = None
-        self.fig1Segment2 = None
-        self.fig1Segmenting = False
+        self.figMainSegment1 = None
+        self.figMainSegment2 = None
+        self.figMainSegmenting = False
+
+        self.playbar1 = None
+        self.isPlaying = False
 
     def listLoadFile(self,current):
         # Listener for when the user clicks on a filename
+        # Saves segments of current file, resets flags and calls loader
         self.a1.clear()
         self.a2.clear()
         if self.previousFile is not None:
@@ -477,7 +538,7 @@ class Interface(QMainWindow):
     def loadFile(self,name):
         # This does the work of loading a file
         # One magic constant, which normalises the data
-        # TODO: currently just takes the first channel of 2 -> what to do with the other?
+        # TODO: moved to librosa instead of wavfile. Put both in and see if it is slower!
         #if len(self.segments)>0:
         #    self.saveSegments()
         #self.segments = []
@@ -486,11 +547,13 @@ class Interface(QMainWindow):
             self.filename = self.dirName+'/'+name
         else:
             self.filename = self.dirName+'/'+str(name.text())
-        self.sampleRate, self.audiodata = wavfile.read(self.filename)
-        if self.audiodata.dtype is not 'float':
-            self.audiodata = self.audiodata.astype('float') / 32768.0
-        if np.shape(np.shape(self.audiodata))[0]>1:
-            self.audiodata = self.audiodata[:,0]
+        self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
+        #self.sampleRate, self.audiodata = wavfile.read(self.filename)
+        # None of the following should be necessary for librosa
+        #if self.audiodata.dtype is not 'float':
+        #    self.audiodata = self.audiodata.astype('float') / 32768.0
+        #if np.shape(np.shape(self.audiodata))[0]>1:
+        #    self.audiodata = self.audiodata[:,0]
         self.datalength = np.shape(self.audiodata)[0]
         print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate)
 
@@ -499,7 +562,8 @@ class Interface(QMainWindow):
             self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate,self.config['window_width'],self.config['incr'])
 
         # Get the data for the spectrogram
-        self.sg = self.sp.spectrogram(self.audiodata,multitaper=True)
+        # TODO: put a button for multitapering somewhere
+        self.sg = self.sp.spectrogram(self.audiodata,self.sampleRate,multitaper=False)
 
         # Load any previous segments stored
         if os.path.isfile(self.filename+'.data'):
@@ -508,6 +572,7 @@ class Interface(QMainWindow):
             file.close()
 
         # Update the data that is seen by the other classes
+        # TODO: keep an eye on this to add other classes as required
         if hasattr(self,'seg'):
             self.seg.setNewData(self.audiodata,self.sg,self.sampleRate)
         self.sp.setNewData(self.audiodata,self.sampleRate)
@@ -522,9 +587,10 @@ class Interface(QMainWindow):
         # self.ampThr.setDecimals(4)
         # self.ampThr.setValue(np.max(self.audiodata)+0.001)
 
+        # Set the window size
         self.windowSize = self.config['windowWidth']
 
-        # Reset this if the file is shorter than the window
+        # Reset it if the file is shorter than the window
         if float(len(self.audiodata))/self.sampleRate < self.windowSize:
             self.windowSize = float(len(self.audiodata))/self.sampleRate
         self.widthWindow.setValue(self.windowSize)
@@ -535,40 +601,42 @@ class Interface(QMainWindow):
 
         # Get the height of the amplitude for plotting the box
         self.plotheight = np.abs(np.min(self.audiodata)) + np.max(self.audiodata)
-        self.drawFig1()
+        self.drawfigMain()
 
-    def openFile(self):
-        # If have an open file option this will deal with it via a file dialog
-        Formats = "Wav file (*.wav)"
-        filename = QFileDialog.getOpenFileName(self, 'Open File', '/Users/srmarsla/Projects/AviaNZ', Formats)
-        if filename != None:
-            self.loadFile(filename)
+    # def openFile(self):
+    #     # If have an open file option this will deal with it via a file dialog
+    #     # Currently unused
+    #     Formats = "Wav file (*.wav)"
+    #     filename = QFileDialog.getOpenFileName(self, 'Open File', '/Users/srmarsla/Projects/AviaNZ', Formats)
+    #     if filename != None:
+    #         self.loadFile(filename)
 
     def dragRectanglesCheck(self,check):
         # The checkbox that says if the user is dragging rectangles or clicking on the spectrogram has changed state
         if self.dragRectangles.isChecked():
-            #print "Listeners for drag Enabled"
-            self.fig1motion = self.canvas.mpl_connect('motion_notify_event', self.fig1Drag)
-            self.fig1endmotion = self.canvas.mpl_connect('button_release_event', self.fig1DragEnd)
+            self.figMainmotion = self.canvasMain.mpl_connect('motion_notify_event', self.figMainDrag)
+            self.figMainendmotion = self.canvasMain.mpl_connect('button_release_event', self.figMainDragEnd)
         else:
-            #print "Listeners for drag Disabled"
-            self.canvas.mpl_disconnect(self.fig1motion)
-            self.canvas.mpl_disconnect(self.fig1endmotion)
+            self.canvasMain.mpl_disconnect(self.figMainmotion)
+            self.canvasMain.mpl_disconnect(self.figMainendmotion)
 
-    def drawFig1(self):
-        # This draws figure 1, amplitude and spectrogram plots
-        # Also the topmost figure to show where you are up to in the file
+# ==============
+# Code for drawing and using the main figure
+    def drawfigMain(self):
+        # This draws the main figure, amplitude and spectrogram plots
+        # Also the overview figure to show where you are up to in the file
 
-        self.a1 = self.fig.add_subplot(211)
+        self.a1 = self.figMain.add_subplot(211)
         self.a1.clear()
         self.a1.set_xlim(self.windowStart, self.windowSize)
         self.a1.plot(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
         #self.a1.axis('off')
 
-        self.a2 = self.fig.add_subplot(212)
+        self.a2 = self.figMain.add_subplot(212)
         self.a2.clear()
         self.a2.imshow(10.0*np.log10(self.sg), cmap=self.cmap_grey, aspect='auto')
 
+        # Sort out the check marks for the x axis
         l = [str(0),str(self.sampleRate)]
         for i in range(len(self.a2.axes.get_yticklabels())-4):
             l.append('')
@@ -592,13 +660,14 @@ class Interface(QMainWindow):
                                                      0]*self.sampleRate / self.config['incr'],
                                                  self.segments[count][3], facecolor=facecolour,
                                                  alpha=0.5))
-
+            # These store the ids for the rectangles
             self.listRectanglesa1.append(a1R)
             self.listRectanglesa2.append(a2R)
             a1t = self.a1.text(self.segments[count][0], np.min(self.audiodata), self.segments[count][4])
+
             # The font size is a pain because the window is in pixels, so have to transform it
             # Force a redraw to make bounding box available
-            self.canvas.draw()
+            self.canvasMain.draw()
             # fs = a1t.get_fontsize()
             width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
             #print width, self.segments[count][1] - self.segments[count][0]
@@ -610,11 +679,12 @@ class Interface(QMainWindow):
             # These are alternative ways to print the annotations that would enable putting it not inside the axes
             # But they are relative coordinates, so would be fiddly and have to move with the slider -> annoying!
             # self.a1.annotate()
-            # self.fig.text(0.3,0.5,'xxx')
-        self.fig.subplots_adjust(0.05,0.02,0.99,0.98)
-        self.canvas.draw()
+            # self.figMain.text(0.3,0.5,'xxx')
+        self.figMain.subplots_adjust(0.05,0.02,0.99,0.98)
+        self.canvasMain.draw()
 
-        self.topfig = self.fig3.add_axes((0.03, 0.01, 0.99, 0.98))
+        # Draw the top (overview) figure
+        self.topfig = self.figOverview.add_axes((0.03, 0.01, 0.99, 0.98))
         self.topfig.imshow(10.0*np.log10(self.sg), cmap=self.cmap_grey,aspect='auto')
         self.topfig.axis('off')
         if self.focusRegion is not None:
@@ -624,10 +694,31 @@ class Interface(QMainWindow):
                                              self.config['window_width'] / 2,
                                              facecolor='r',
                                              alpha=0.5))
-        self.canvas3.draw()
-        self.canvas.mpl_connect('key_press_event', self.fig1Keypress)
+        self.canvasOverview.draw()
+        self.canvasMain.mpl_connect('key_press_event', self.figMainKeypress)
 
-    def fig1DragEnd(self,event):
+    def figMainDrag(self,event):
+        # This is the start listener for the user dragging boxes on the spectrogram
+        # Just gets coordinates and draws a box outline as the mouse moves
+        if self.recta2 is None:
+            return
+        if event.inaxes is None:
+            return
+        x0,y0 = self.recta2.get_xy()
+        a1 = str(self.a1)
+        a1ind = float(a1[a1.index(',') + 1:a1.index(';')])
+        a = str(event.inaxes)
+        aind = float(a[a.index(',') + 1:a.index(';')])
+        if aind == a1ind:
+            return
+
+        self.recta2.set_width(event.xdata - x0)
+        self.recta2.set_height(event.ydata - y0)
+        self.canvasMain.draw()
+
+    def figMainDragEnd(self,event):
+        # This is the end listener for the user dragging boxes on the spectrogram
+        # Deletes the outline box and replaces it with a Rectangle patch, adds the segment
         if event.inaxes is None:
             return
         if self.recta2 is None:
@@ -652,7 +743,7 @@ class Interface(QMainWindow):
         a1t = self.a1.text(min(ampl_x0,ampl_x1), np.min(self.audiodata), 'None')
         # The font size is a pain because the window is in pixels, so have to transform it
         # Force a redraw to make bounding box available
-        self.canvas.draw()
+        self.canvasMain.draw()
         # fs = a1t.get_fontsize()
         width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
         if width > self.segments[-1][1] - self.segments[-1][0]:
@@ -664,38 +755,21 @@ class Interface(QMainWindow):
         self.zoomstart = a1R.get_x()
         self.zoomend = a1R.get_x() + a1R.get_width()
         self.box1id = len(self.segments) - 1
-        self.drawFig2()
+        self.drawfigZoom()
         # Activate the radio buttons for labelling, selecting one from label if necessary
-        self.activateRadioButtons()
+        #self.activateRadioButtons()
         self.recta2.remove()
         self.recta2 = None
-        self.canvas.draw()
-
-    def fig1Drag(self,event):
-        if self.recta2 is None:
-            return
-        if event.inaxes is None:
-            return
-        x0,y0 = self.recta2.get_xy()
-        a1 = str(self.a1)
-        a1ind = float(a1[a1.index(',') + 1:a1.index(';')])
-        a = str(event.inaxes)
-        aind = float(a[a.index(',') + 1:a.index(';')])
-        if aind == a1ind:
-            return
-
-        self.recta2.set_width(event.xdata - x0)
-        self.recta2.set_height(event.ydata - y0)
-        self.canvas.draw()
+        self.canvasMain.draw()
 
     def birdSelected(self,birdname):
+        # This collects the label for a bird from the context menu and processes it
         if birdname is not 'Other':
             self.updateText(birdname)
         else:
             text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
             if ok:
                 text = str(text).title()
-
                 self.updateText(text)
 
                 if text in self.config['ListBirdsEntries']:
@@ -714,6 +788,7 @@ class Interface(QMainWindow):
                     self.menuBird2.addAction(bird)
 
     # def activateRadioButtons(self):
+        # Make the radio buttons selectable
     #     found = False
     #     for i in range(len(self.birds1)):
     #         self.birds1[i].setEnabled(True)
@@ -734,8 +809,8 @@ class Interface(QMainWindow):
     #         for item in items:
     #             self.birdList.setCurrentItem(item)
 
-    def fig1Click(self, event):
-        # When user clicks in Fig 1 there are several options:
+    def figMainClick(self, event):
+        # When user clicks in figMain there are several options:
         # Right click always defines a new box (first marking the start, then the end (add box, save segment)
         # Otherwise, if click in a box that is already made, select it, show zoom-in version, prepare to label
         # There is a checkbox to allow dragging of a box on the spectrogram
@@ -773,9 +848,9 @@ class Interface(QMainWindow):
             self.listRectanglesa2[box1id].set_facecolor('green')
             self.zoomstart = self.listRectanglesa1[box1id].get_x()
             self.zoomend = self.listRectanglesa1[box1id].get_x()+self.listRectanglesa1[box1id].get_width()
-            self.drawFig2()
+            self.drawfigZoom()
 
-            # Put the context menu at the right point. The event.x and y are in pixels relative to the bottom left-hand corner of canvas (self.fig)
+            # Put the context menu at the right point. The event.x and y are in pixels relative to the bottom left-hand corner of canvasMain (self.figMain)
             # Need to be converted into pixels relative to top left-hand corner of the window!
             self.menuBirdList.popup(QPoint(event.x + event.canvas.x() + self.frame.x() + self.x(),
                                            event.canvas.height() - event.y + event.canvas.y() + self.frame.y() + self.y()))
@@ -796,7 +871,7 @@ class Interface(QMainWindow):
             aind = float(a[a.index(',') + 1:a.index(';')])
 
             if aind != a1ind and self.dragRectangles.isChecked():
-                # Use is selecting a region **on the spectrogram only**
+                # User is selecting a region **on the spectrogram only**
                 # The region is drawn as full size on the amplitude plot
                 if event.xdata > 0 and event.xdata < float(self.datalength) / self.config['incr']:
                     self.recta2 = self.a2.add_patch(pl.Rectangle((event.xdata, event.ydata), 0.0, 0.0, alpha=1, facecolor='none'))
@@ -810,9 +885,9 @@ class Interface(QMainWindow):
                         self.markstarta1 = self.a1.add_patch(pl.Rectangle((s, np.min(self.audiodata)), self.linewidtha1, self.plotheight, facecolor='g', edgecolor='None',alpha=0.8))
                         self.markstarta2 = self.a2.add_patch(pl.Rectangle((s*self.sampleRate / self.config['incr'] , 0), self.linewidtha1/self.config['incr']*self.sampleRate, self.config['window_width']/2, facecolor='g', edgecolor='None',alpha=0.8))
                         self.start_a = s
-                        self.segmenting = self.canvas.mpl_connect('motion_notify_event', self.fig1Selecting)
-                        self.fig1Segment1 = self.a1.add_patch(pl.Rectangle((s+self.linewidtha1, np.min(self.audiodata)), 0, self.plotheight, facecolor='r', edgecolor='None',alpha=0.4))
-                        self.fig1Segment2 = self.a2.add_patch(pl.Rectangle(((s+self.linewidtha1)*self.sampleRate / self.config['incr'], 0), 0, self.config['window_width']/2, facecolor='r', edgecolor='None', alpha=0.4))
+                        self.segmenting = self.canvasMain.mpl_connect('motion_notify_event', self.figMainSelecting)
+                        self.figMainSegment1 = self.a1.add_patch(pl.Rectangle((s+self.linewidtha1, np.min(self.audiodata)), 0, self.plotheight, facecolor='r', edgecolor='None',alpha=0.4))
+                        self.figMainSegment2 = self.a2.add_patch(pl.Rectangle(((s+self.linewidtha1)*self.sampleRate / self.config['incr'], 0), 0, self.config['window_width']/2, facecolor='r', edgecolor='None', alpha=0.4))
                     else:
                         # This is the end, draw the box, save the data, update the text, make radio buttons available
                         # And show it in the zoom window
@@ -827,6 +902,7 @@ class Interface(QMainWindow):
                             start = self.start_a
                             width = s - self.start_a
 
+                        # Draw the segments, add them to the list
                         a1R = self.a1.add_patch(pl.Rectangle((start, np.min(self.audiodata)), width, self.plotheight,facecolor='g', alpha=0.5))
                         a2R = self.a2.add_patch(pl.Rectangle((start*self.sampleRate / self.config['incr'], 0), width*self.sampleRate / self.config['incr'], self.config['window_width']/2,facecolor='g', alpha=0.5))
                         self.listRectanglesa1.append(a1R)
@@ -837,7 +913,7 @@ class Interface(QMainWindow):
 
                         # The font size is a pain because the window is in pixels, so have to transform it
                         # Force a redraw to make bounding box available
-                        self.canvas.draw()
+                        self.canvasMain.draw()
                         #fs = a1t.get_fontsize()
                         win_width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
                         #print width, win_width
@@ -845,15 +921,15 @@ class Interface(QMainWindow):
                             a1t.set_fontsize(8)
 
                         # Delete the box and listener for the shading
-                        self.canvas.mpl_disconnect(self.segmenting)
-                        self.fig1Segment1.remove()
-                        self.fig1Segment2.remove()
+                        self.canvasMain.mpl_disconnect(self.segmenting)
+                        self.figMainSegment1.remove()
+                        self.figMainSegment2.remove()
 
                         # Show it in the zoom window
                         self.zoomstart = a1R.xy[0]
                         self.zoomend = a1R.xy[0] + a1R.get_width()
                         self.box1id = len(self.segments)-1
-                        self.drawFig2()
+                        self.drawfigZoom()
                         self.topBoxCol = 'r'
                         self.menuBirdList.popup(QPoint(event.x + event.canvas.x() + self.frame.x() + self.x(),
                                                        event.canvas.height() - event.y + event.canvas.y() + self.frame.y() + self.y()))
@@ -862,10 +938,10 @@ class Interface(QMainWindow):
                     # Switch to know if start or end or segment
                     self.start_stop = not self.start_stop
 
-        self.canvas.draw()
+        self.canvasMain.draw()
 
-    def fig1Selecting(self,event):
-        # Update the red box showing the highlighted section
+    def figMainSelecting(self,event):
+        # When the user is drawing a box in the main plot, this makes the red box they are drawing move as they move the mouse
         if not self.start_stop:
             return
         if event.inaxes is None:
@@ -878,20 +954,23 @@ class Interface(QMainWindow):
         aind = float(a[a.index(',') + 1:a.index(';')])
 
         if aind == a1ind:
-            width = event.xdata - self.fig1Segment1.get_x()
+            width = event.xdata - self.figMainSegment1.get_x()
         else:
-            width = (event.xdata - self.fig1Segment2.get_x()) / self.sampleRate * self.config['incr']
+            width = (event.xdata - self.figMainSegment2.get_x()) / self.sampleRate * self.config['incr']
 
-        self.fig1Segment1.set_width(width)
-        self.fig1Segment2.set_width(width * self.sampleRate / self.config['incr'])
-        self.canvas.draw()
+        self.figMainSegment1.set_width(width)
+        self.figMainSegment2.set_width(width * self.sampleRate / self.config['incr'])
+        self.canvasMain.draw()
 
-    def fig1Keypress(self,event):
-        # Listener for any key presses when focus is on Fig1
+    def figMainKeypress(self,event):
+        # Listener for any key presses when focus is on figMain
+        # Currently just allows deleting
+        # TODO: anything else?
         if event.key == 'backspace':
             self.deleteSegment()
 
-    def fig3Click(self,event):
+    def figOverviewClick(self,event):
+        # Listener 1 for the overview figure
         # Move the top box by first clicking on it, and then clicking again at the start of where you want it
         # Ignores other clicks
         if event.inaxes is None:
@@ -901,26 +980,31 @@ class Interface(QMainWindow):
                 self.focusRegionSelected = True
                 self.focusRegionPoint = event.xdata-self.focusRegion.get_x()
                 self.focusRegion.set_facecolor('b')
-                self.canvas3.draw()
+                self.canvasOverview.draw()
         else:
             self.windowStart = (event.xdata-self.focusRegionPoint)/self.sampleRate*self.config['incr']
             if self.windowStart < 0:
                 self.windowStart = 0
             elif self.windowStart + self.windowSize  > float(self.datalength) / self.sampleRate:
                 self.windowStart = float(self.datalength) / self.sampleRate - self.windowSize
+            self.playPosition = self.windowStart
             self.focusRegionSelected = False
             self.focusRegion.set_facecolor('r')
-            self.updateWindow()
+            self.updateMainWindow()
 
-    def fig3Drag(self,event):
+    def figOverviewDrag(self,event):
+        # Listener 2 for the overview figure
+        # Lets you drag the highlight box
         if event.inaxes is None:
             return
         if event.button!=1:
             return
         self.windowStart = event.xdata/self.sampleRate*self.config['incr']
-        self.updateWindow()
+        self.playPosition = self.windowStart
+        self.updateMainWindow()
 
-    def updateWindow(self):
+    def updateMainWindow(self):
+        # Updates the main figure when the overview highlight box is moved
         self.a1.set_xlim(self.windowStart, self.windowStart+self.windowSize)
         self.a2.set_xlim(self.windowStart*self.sampleRate/self.config['incr'], (self.windowStart + self.windowSize)*self.sampleRate/self.config['incr'])
 
@@ -932,61 +1016,152 @@ class Interface(QMainWindow):
         #                                                      self.config['window_width'] / 2,
         #                                                      facecolor='r',
         #                                                      alpha=0.5))
-        self.canvas.draw()
-        self.canvas3.draw()
+        self.canvasMain.draw()
+        self.canvasOverview.draw()
 
+    def updateText(self, text, boxid=None):
+        if boxid is None:
+            boxid = self.box1id
+        # When the user changes the name in a segment, update the text
+        self.segments[boxid][4] = text
+        self.a1text[boxid].set_text(text)
+        # The font size is a pain because the window is in pixels, so have to transform it
+        # Force a redraw to make bounding box available
+        self.canvasMain.draw()
+        # fs = self.a1text[boxid].get_fontsize()
+        width = self.a1text[boxid].get_window_extent().inverse_transformed(self.a1.transData).width
+        if width > self.segments[boxid][1] - self.segments[boxid][0]:
+            self.a1text[boxid].set_fontsize(8)
+        if self.segments[boxid][4] != "Don't Know":
+            facecolour = 'b'
+        else:
+            facecolour = 'r'
+        self.listRectanglesa1[boxid].set_facecolor(facecolour)
+        self.listRectanglesa2[boxid].set_facecolor(facecolour)
+        self.topBoxCol = self.listRectanglesa1[boxid].get_facecolor()
+        self.canvasMain.draw()
+
+    def radioBirdsClicked(self):
+        # Listener for when the user selects a radio button
+        # Update the text and store the data
+        for button in self.birds1 + self.birds2:
+            if button.isChecked():
+                if button.text() == "Other":
+                    self.birdList.setEnabled(True)
+                else:
+                    self.birdList.setEnabled(False)
+                    self.updateText(str(button.text()))
+
+    def listBirdsClicked(self, item):
+        # Listener for clicks in the listbox of birds
+        if (item.text() == "Other"):
+            self.tbox.setEnabled(True)
+        else:
+            # Save the entry
+            self.updateText(str(item.text()))
+            # self.segments[self.box1id][4] = str(item.text())
+            # self.a1text[self.box1id].set_text(str(item.text()))
+            # # The font size is a pain because the window is in pixels, so have to transform it
+            # # Force a redraw to make bounding box available
+            # self.canvasMain.draw()
+            # # fs = a1t.get_fontsize()
+            # width = self.a1text[self.box1id].get_window_extent().inverse_transformed(self.a1.transData).width
+            # if width > self.segments[self.box1id][1] - self.segments[self.box1id][0]:
+            #     self.a1text[self.box1id].set_fontsize(8)
+            #
+            # self.listRectanglesa1[self.box1id].set_facecolor('b')
+            # self.listRectanglesa2[self.box1id].set_facecolor('b')
+            # self.topBoxCol = self.listRectanglesa1[self.box1id].get_facecolor()
+            # self.canvasMain.draw()
+
+    def birdTextEntered(self):
+        # Listener for the text entry in the bird list
+        # Check text isn't already in the listbox, and add if not
+        # Doesn't sort the list, but will when program is closed
+        item = self.birdList.findItems(self.tbox.text(), Qt.MatchExactly)
+        if item:
+            pass
+        else:
+            self.birdList.addItem(self.tbox.text())
+            self.config['ListBirdsEntries'].append(str(self.tbox.text()))
+        self.updateText(str(self.tbox.text()))
+        # self.segments[self.box1id][4] = str(self.tbox.text())
+        # self.a1text[self.box1id].set_text(str(self.tbox.text()))
+        # # The font size is a pain because the window is in pixels, so have to transform it
+        # # Force a redraw to make bounding box available
+        # self.canvasMain.draw()
+        # # fs = self.a1text[self.box1id].get_fontsize()
+        # width = self.a1text[self.box1id].get_window_extent().inverse_transformed(self.a1.transData).width
+        # if width > self.segments[self.box1id][1] - self.segments[self.box1id][0]:
+        #     self.a1text[self.box1id].set_fontsize(8)
+        #
+        # self.listRectanglesa1[self.box1id].set_facecolor('b')
+        # self.listRectanglesa2[self.box1id].set_facecolor('b')
+        # self.topBoxCol = self.listRectanglesa1[self.box1id].get_facecolor()
+        # self.canvasMain.draw()
+        self.saveConfig = True
+        # self.tbox.setEnabled(False)
+
+# ===========
+# Code for things at the top of the screen (overview figure and left/right buttons)
     def moveLeft(self):
-        # When the left button is pressed (on the top right of the screen, move everything along
+        # When the left button is pressed (next to the overview plot), move everything along
+        # Note the parameter to all a 10% overlap
         self.windowStart = max(0,self.windowStart-self.windowSize*0.9)
-        self.updateWindow()
+        self.playPosition = self.windowStart
+        self.updateMainWindow()
 
     def moveRight(self):
-        # When the right button is pressed (on the top right of the screen, move everything along
+        # When the right button is pressed (next to the overview plot), move everything along
+        # Note the parameter to all a 10% overlap
         self.windowStart = min(float(self.datalength)/self.sampleRate-self.windowSize,self.windowStart+self.windowSize*0.9)
-        self.updateWindow()
+        self.playPosition = self.windowStart
+        self.updateMainWindow()
 
     #def sliderMoved(self,value):
     #    # When the slider is moved, update the top figures to reflect the new position in the file
     #    self.windowStart = (float(self.datalength)/self.sampleRate - self.windowSize)/100.0*value
-    #    self.updateWindow()
+    #    self.updateMainWindow()
 
-    def showSegments(self):
-        # This plots the segments that are returned from any of the segmenters.
-        # It currently also deletes the previous ones. TODO: is that the best option?
-        # TODO: also need to save the segments at some point
+    def showSegments(self,seglen=0):
+        # This plots the segments that are returned from any of the segmenters and adds them to the set of segments
 
-        # Delete the old segmentation
-        for i in range(len(self.segsRectsa1)):
-            self.segsRectsa1[i].remove()
-            self.segsRectsa2[i].remove()
-            self.segtext[i].remove()
-        self.segtext = []
-        self.segsRectsa1 = []
-        self.segsRectsa2 = []
-        for i in range(len(self.segs)):
-            a1R = self.a1.add_patch(pl.Rectangle((self.segs[i][0], np.min(self.audiodata)),
-                                                 self.segs[i][1] - self.segs[i][0],
+        # If there are segments, show them
+        for count in range(seglen,len(self.segments)):
+            if self.segments[count][4] == 'None' or self.segments[count][4] == "Don't Know":
+                facecolour = 'r'
+            else:
+                facecolour = 'b'
+            a1R = self.a1.add_patch(pl.Rectangle((self.segments[count][0], np.min(self.audiodata)),
+                                                 self.segments[count][1] - self.segments[count][0],
                                                  self.plotheight,
-                                           facecolor='r',alpha=0.5))
-            a2R = self.a2.add_patch(pl.Rectangle((self.segs[i][0]* self.sampleRate / self.config['incr'], 0),
-                                                 (self.segs[i][1] - self.segs[i][0])* self.sampleRate / self.config['incr'],
-                                                 self.config['window_width'] / 2,
-                                                 facecolor='r', alpha=0.5))
-            self.segsRectsa1.append(a1R)
-            self.segsRectsa2.append(a2R)
-            a1t = self.a1.text(self.segs[i][0], np.min(self.audiodata), self.segs[i][2])
+                                                 facecolor=facecolour,
+                                                 alpha=0.5))
+            a2R = self.a2.add_patch(pl.Rectangle((self.segments[count][0]*self.sampleRate / self.config['incr'], self.segments[count][2]),
+                                                 self.segments[count][1]*self.sampleRate / self.config['incr'] - self.segments[count][
+                                                     0]*self.sampleRate / self.config['incr'],
+                                                 self.segments[count][3], facecolor=facecolour,
+                                                 alpha=0.5))
+
+            self.listRectanglesa1.append(a1R)
+            self.listRectanglesa2.append(a2R)
+            a1t = self.a1.text(self.segments[count][0], np.min(self.audiodata), self.segments[count][4])
             # The font size is a pain because the window is in pixels, so have to transform it
             # Force a redraw to make bounding box available
-            self.canvas.draw()
+            self.canvasMain.draw()
             # fs = a1t.get_fontsize()
             width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
-            if width > self.segs[i][1] - self.segs[i][0]:
+            #print width, self.segments[count][1] - self.segments[count][0]
+            if width > self.segments[count][1] - self.segments[count][0]:
                 a1t.set_fontsize(8)
-            self.segtext.append(a1t)
-        self.canvas.draw()
+
+            self.a1text.append(a1t)
+
+        self.canvasMain.draw()
 
     def changeWidth(self, value):
-        # This is the listener for the spinbox that decides the width of the main window. It updates the top figure plots as the window width is changed.
+        # This is the listener for the spinbox that decides the width of the main window.
+        # It updates the top figure plots as the window width is changed.
         # Slightly annoyingly, it gets called when the value gets reset, hence the first line
         if not hasattr(self,'a1'):
             return
@@ -997,31 +1172,77 @@ class Interface(QMainWindow):
         # Reset the width of the segment marker
         self.linewidtha1 = float(self.config['linewidtha1'])*self.windowSize
 
+        # Redraw the highlight in the overview figure appropriately
         self.focusRegion.remove()
         self.focusRegion = self.topfig.add_patch(pl.Rectangle((self.windowStart*self.sampleRate / self.config['incr'], 0),
                                                               self.windowSize*self.sampleRate / self.config['incr'],
                                                               self.config['window_width'] / 2,
                                                               facecolor='r',
                                                               alpha=0.5))
-        self.canvas.draw()
-        self.canvas3.draw()
+        self.canvasMain.draw()
+        self.canvasOverview.draw()
+
+# ===============
+# Generate the various dialogs that match the buttons
+
+    def humanClassifyDialog(self):
+        # Create the dialog that shows calls to the user for verification
+        # Currently assumes that there is a selected box (later, use the first!)
+        self.currentSegment = 0
+        self.humanClassifyDialog = HumanClassify1(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.segments[self.currentSegment][4],self.cmap_grey,self.cmap_grey_r)
+        self.humanClassifyDialog.show()
+        self.humanClassifyDialog.activateWindow()
+        self.humanClassifyDialog.close.clicked.connect(self.humanClassifyClose)
+        self.humanClassifyDialog.correct.clicked.connect(self.humanClassifyCorrect)
+        self.humanClassifyDialog.wrong.clicked.connect(self.humanClassifyWrong)
+
+    def humanClassifyClose(self):
+        # Listener for the human verification dialog.
+        self.humanClassifyDialog.done(1)
+
+    def humanClassifyNextImage(self):
+        # Get the next image
+        # TODO: Ends rather suddenly
+        if self.currentSegment != len(self.listRectanglesa2)-1:
+            self.currentSegment += 1
+            self.humanClassifyDialog.setImage(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.segments[self.currentSegment][4])
+        else:
+            print "Last image"
+            self.humanClassifyClose()
+
+    def humanClassifyCorrect(self):
+        self.humanClassifyNextImage()
+
+    def humanClassifyWrong(self):
+        # First get the correct classification (by producing a new modal dialog) and update the text, then show the next image
+        # TODO: Test, particularly that new birds are added
+        self.correctClassifyDialog = CorrectHumanClassify(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.cmap_grey,self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
+        label, self.saveConfig = self.correctClassifyDialog.getValues(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.cmap_grey,self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
+        self.updateText(label,self.currentSegment)
+        if self.saveConfig:
+            self.config['ListBirdsEntries'].append(label)
+        self.humanClassifyNextImage()
 
     def spectrogramDialog(self):
+        # Create the spectrogram dialog when the relevant button is pressed
         self.spectrogramDialog = Spectrogram()
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
 
     def spectrogram(self):
+        # Listener for the spectrogram dialog.
         [alg, colourStart, colourEnd, window_width, incr] = self.spectrogramDialog.getValues()
         self.sp.set_width(int(str(window_width)), int(str(incr)))
         self.sg = self.sp.spectrogram(self.audiodata,str(alg))
         self.config['colourStart'] = float(str(colourStart))
         self.config['colourEnd'] = float(str(colourEnd))
         self.defineColourmap()
-        self.drawFig1()
+        self.drawfigMain()
 
     def denoiseDialog(self):
+        # Create the denoising dialog when the relevant button is pressed
+        # And add listeners for the undo and save buttons
         self.denoiseDialog = Denoise()
         self.denoiseDialog.show()
         self.denoiseDialog.activateWindow()
@@ -1030,7 +1251,8 @@ class Interface(QMainWindow):
         self.denoiseDialog.save.clicked.connect(self.denoise_save)
 
     def denoise(self):
-        # This calls the denoiser and then plots the updated data
+        # Listener for the denoising dialog.
+        # Calls the denoiser and then plots the updated data
         # TODO: should it be saved automatically, or a button added?
         [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width] = self.denoiseDialog.getValues()
         # TODO: deal with these!
@@ -1078,10 +1300,11 @@ class Interface(QMainWindow):
         #print "Denoising"
         #self.audiodata = self.sp.waveletDenoise()
         #print "Done"
-        self.sg = self.sp.spectrogram(self.audiodata)
-        self.drawFig1()
+        self.sg = self.sp.spectrogram(self.audiodata,self.sampleRate)
+        self.drawfigMain()
 
     def denoise_undo(self):
+        # Listener for undo button in denoising dialog
         # TODO: Can I actually delete something from an object?
         print("Undoing",np.shape(self.audiodata_backup))
         if hasattr(self,'audiodata_backup'):
@@ -1090,48 +1313,47 @@ class Interface(QMainWindow):
                     self.audiodata = np.copy(self.audiodata_backup[:,-1])
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     self.sp.setNewData(self.audiodata,self.sampleRate)
-                    self.sg = self.sp.spectrogram(self.audiodata)
+                    self.sg = self.sp.spectrogram(self.audiodata,self.sampleRate)
                     if hasattr(self,'seg'):
                         self.seg.setNewData(self.audiodata,self.sg,self.sampleRate)
-                    self.drawFig1()
+                    self.drawfigMain()
 
     def denoise_save(self):
+        # Listener for save button in denoising dialog
         # Save denoised data
         # Other players need them to be 16 bit, which is this magic number
-        self.audiodata *= 32768.0
-        self.audiodata = self.audiodata.astype('int16')
+        # TODO: with librosa, probably don't need magic number, but check
+        #self.audiodata *= 32768.0
+        #self.audiodata = self.audiodata.astype('int16')
         filename = self.filename[:-4] + '_d' + self.filename[-4:]
-        wavfile.write(filename, self.sampleRate, self.audiodata)
+        lr.output.write_wav(filename,self.audiodata,self.sampleRate)
 
     def segmentationDialog(self):
+        # Create the segmentation dialog when the relevant button is pressed
         self.segmentDialog = Segmentation(np.max(self.audiodata))
         self.segmentDialog.show()
         self.segmentDialog.activateWindow()
         self.segmentDialog.activate.clicked.connect(self.segment)
-        self.segmentDialog.save.clicked.connect(self.segments_save)
+        #self.segmentDialog.save.clicked.connect(self.segments_save)
 
     def segment(self):
+        # Listener for the segmentation dialog
+        # TODO: Currently just gives them all the label 'None'
+        # TODO: Add in the wavelet one
+        # TODO: More testing of the algorithms, parameters, etc.
+        seglen = len(self.segments)
         [alg, ampThr, medThr,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
         if not hasattr(self,'seg'):
             self.seg = Segment.Segment(self.audiodata,self.sg,self.sp,self.sampleRate)
         if str(alg) == "Amplitude":
-            self.segs = self.seg.segmentByAmplitude(float(str(ampThr)))
+            newSegments = self.seg.segmentByAmplitude(float(str(ampThr)))
             if hasattr(self, 'line'):
                 if self.line is not None:
                     self.line.remove()
             self.line = self.a1.add_patch(pl.Rectangle((0,float(str(ampThr))),len(self.audiodata),0,facecolor='r'))
         elif str(alg) == "Median Clipping":
-            self.clip,blobs = self.seg.medianClip(float(str(medThr)))
-            print np.shape(self.clip), np.shape(blobs)
-            #print "here", np.shape(self.segs)
-            self.a2.imshow(self.clip, cmap=self.cmap_grey, aspect='auto')
-            indices = np.where(blobs[:, 2] > 3)
-
-            # Seems to be offset by 1 for some reason
-            for i in range(len(blobs)):
-                self.a2.add_patch(pl.Rectangle((blobs[i].bbox[1]-1, blobs[i].bbox[0]-1),blobs[i].bbox[3]-blobs[i].bbox[1],blobs[i].bbox[2]-blobs[i].bbox[0],facecolor='g',alpha=0.3))
-
-            self.canvas.draw()
+            newSegments = self.seg.medianClip(float(str(medThr)))
+            print newSegments
         else:
             #"Wavelets"
             # TODO!!
@@ -1146,34 +1368,63 @@ class Interface(QMainWindow):
                 start = int(str(start))
                 end = int(str(end))
             # TODO: needs learning and samplerate
-            self.segs = self.seg.segmentByWavelet(thrType,float(str(thr)), int(str(depth)), wavelet,sampleRate,bandchoice,start,end,learning,)
-        #self.showSegments()
+                newSegments = self.seg.segmentByWavelet(thrType,float(str(thr)), int(str(depth)), wavelet,sampleRate,bandchoice,start,end,learning,)
+        for seg in newSegments:
+            self.segments.append([seg[0],seg[1],0.0, self.sampleRate / 2., 'None'])
 
-        #sender().text()
+        self.showSegments(seglen)
 
-    def segments_save(self):
-        # This just appends those in the segslist to the segments list
-        # TODO: Check for matching segments and remove duplicates
-        # TODO: Then delete? Note that have to be saved before being annotated
-        self.segments.extend(self.segments,self.segs)
+    def findMatches(self):
+        # Calls the cross-correlation function to find matches like the currently highlighted box
+        # TODO: Other methods apart from c-c?
+        # TODO: Should give them the same label as the currently highlighted box
+        # So there needs to be a currently highlighted box
+        #print self.box1id
+        if not hasattr(self,'seg'):
+            self.seg = Segment.Segment(self.audiodata,self.sg,self.sp,self.sampleRate)
+
+        if self.box1id is None or self.box1id == -1:
+            return
+        else:
+            #[alg, thr] = self.matchDialog.getValues()
+            # Only want to draw new segments, so find out how many there are now
+            seglen = len(self.segments)
+            # Get the segment
+            #print self.listRectanglesa2[self.box1id].get_x()
+            segment = self.sg[:,self.listRectanglesa2[self.box1id].get_x():self.listRectanglesa2[self.box1id].get_x()+self.listRectanglesa2[self.box1id].get_width()]
+            len_seg = float(self.listRectanglesa2[self.box1id].get_width()) *self.config['incr'] / self.sampleRate
+            indices = self.seg.findCCMatches(segment,self.sg,self.config['corrThr'])
+            # indices are in spectrogram pixels, need to turn into times
+            for i in indices:
+                # Miss out the one selected: note the hack parameter
+                if np.abs(i-self.listRectanglesa2[self.box1id].get_x()) > 5:
+                    time = float(i)*self.config['incr'] / self.sampleRate
+                    self.segments.append([time, time+len_seg, 0.0, self.sampleRate / 2., 'None'])
+            self.showSegments(seglen)
 
     def recognise(self):
+        # This will eventually call methods to do automatic recognition
+        # Actually, will produce a dialog to ask which species, etc.
+        # TODO
         pass
 
-    def drawFig2(self):
+# ===============
+# Code for the zoom figure
+    def drawfigZoom(self):
         # This produces the plots for the zoomed-in window
-        self.fig2.subplots_adjust(0.0, 0.0, 1.0,1.0)
+        # Has to process the start and end times and process them, which is a pain
+        self.figZoom.subplots_adjust(0.0, 0.0, 1.0,1.0)
         start = int(np.round(self.zoomstart*self.sampleRate))
         end = int(np.round(self.zoomend*self.sampleRate))
         self.listRectanglesb1 = []
         self.listRectanglesb2 = []
+
         # Make the start and end bands be big and draggable
         # Subtract off the thickness of the bars
         # When they are moved, update the plotting
-
         padding = int(np.round(self.config['padding']*(end-start)))
         # Draw the two charts
-        self.a3 = self.fig2.add_subplot(211)
+        self.a3 = self.figZoom.add_subplot(211)
         self.a3.clear()
         xstart = max(start - padding, 0)
         if xstart != 0:
@@ -1185,14 +1436,14 @@ class Interface(QMainWindow):
         self.a3.plot(self.audiodata[xstart:xend])
         self.a3.axis('off')
 
-        self.a4 = self.fig2.add_subplot(212)
+        self.a4 = self.figZoom.add_subplot(212)
         self.a4.clear()
-        newsg = self.sp.spectrogram(self.audiodata[xstart:xend])
+        newsg = self.sp.spectrogram(self.audiodata[xstart:xend],self.sampleRate)
         self.a4.imshow(10.0*np.log10(newsg), cmap=self.cmap_grey, aspect='auto')
         self.a4.axis('off')
 
-        self.fig2width = xend - xstart
-        self.bar_thickness = self.config['linewidtha2'] * self.fig2width
+        self.figZoomwidth = xend - xstart
+        self.bar_thickness = self.config['linewidtha2'] * self.figZoomwidth
         self.bar_thickness = max(self.bar_thickness, self.config['minbar_thickness'])
 
         self.End1 = self.a3.add_patch(pl.Rectangle((start - self.bar_thickness, np.min(self.audiodata)), self.bar_thickness,
@@ -1222,19 +1473,20 @@ class Interface(QMainWindow):
         self.listRectanglesb2.append(self.End2)
         self.listRectanglesb1.append(self.End3)
         self.listRectanglesb2.append(self.End4)
-        # Keep track of where you are in Fig1
-        self.offset_fig1 = self.zoomstart*self.sampleRate - start
+        # Keep track of where you are in figMain
+        self.offset_figMain = self.zoomstart*self.sampleRate - start
 
         self.addButton.setEnabled(True)
         # Start the listener for picking the bars
-        self.picker = self.canvas2.mpl_connect('pick_event', self.segmentFig2Picked)
-        self.canvas2.draw()
+        self.picker = self.canvasZoom.mpl_connect('pick_event', self.segmentfigZoomPicked)
+        self.canvasZoom.draw()
 
-    def segmentFig2Picked(self,event):
-        # This is when the user clicks on one of the segment ends in figure 2
+    def segmentfigZoomPicked(self,event):
+        # Listener for when the user clicks on one of the segment ends in figure 2
+        # Turn off the listeners
         if self.buttonID is not None:
-            self.canvas2.mpl_disconnect(self.buttonID)
-            self.canvas2.mpl_disconnect(self.keypress)
+            self.canvasZoom.mpl_disconnect(self.buttonID)
+            self.canvasZoom.mpl_disconnect(self.keypress)
             self.buttonID = None
             self.keypress = None
         # Put the colours back for any other segment
@@ -1263,13 +1515,13 @@ class Interface(QMainWindow):
                     self.Box1 = self.listRectanglesb1[self.box2id]
                     self.axes = 4
 
-        # Set the bar to black and start the listeners
+        # Set the bar to black and restart the listeners
         self.Boxcol = self.Box1.get_facecolor()
         self.Box1.set_facecolor('black')
         self.Box2.set_facecolor('black')
-        self.buttonID = self.canvas2.mpl_connect('button_press_event', self.moveSegmentEnd)
-        self.keypress = self.canvas2.mpl_connect('key_press_event', self.keypressEnd)
-        self.canvas2.draw()
+        self.buttonID = self.canvasZoom.mpl_connect('button_press_event', self.moveSegmentEnd)
+        self.keypress = self.canvasZoom.mpl_connect('key_press_event', self.keypressEnd)
+        self.canvasZoom.draw()
 
     def moveSegmentEnd(self,event):
         # After selecting a segment end in Figure 2, this is what happens when the user clicks again
@@ -1316,17 +1568,17 @@ class Interface(QMainWindow):
         self.Box2.set_facecolor(self.Boxcol)
         self.Box1 = None
         self.Box2 = None
-        self.canvas2.mpl_disconnect(self.buttonID)
-        self.canvas2.mpl_disconnect(self.keypress)
+        self.canvasZoom.mpl_disconnect(self.buttonID)
+        self.canvasZoom.mpl_disconnect(self.keypress)
         self.buttonID = None
         self.keypress = None
-        self.canvas2.draw()
-        self.canvas.draw()
+        self.canvasZoom.draw()
+        self.canvasMain.draw()
 
     def keypressEnd(self,event):
-        # If the user has selected a segment in Fig2 and then presses a key, this deals with it
+        # If the user has selected a segment in figZoom and then presses a key, this deals with it
         if self.Box1 is None: return
-        move_amount = self.config['move_amount']*self.fig2width
+        move_amount = self.config['move_amount']*self.figZoomwidth
         # TODO: how to remove the listener callback?
         if event.key == 'left':
             self.Box1.set_x(self.Box1.get_x() - move_amount)
@@ -1380,11 +1632,11 @@ class Interface(QMainWindow):
             self.box1id = -1
 
         # TODO: When to stop and turn them back to right colour? -> mouse moves out of window?
-        self.canvas2.draw()
-        self.canvas.draw()
+        self.canvasZoom.draw()
+        self.canvasMain.draw()
 
     def addSegmentClick(self):
-        # When the user clicks the button to add a segment in Fig2, this deals with it
+        # When the user clicks the button to add a segment in figZoom, this deals with it
         # Turn the labelling off to avoid confusion
         # for i in xrange(len(self.birds1)):
         #     self.birds1[i].setEnabled(False)
@@ -1400,16 +1652,16 @@ class Interface(QMainWindow):
                 self.Box2.set_facecolor(self.Boxcol)
                 self.Box1 = None
                 self.Box2 = None
-                self.canvas2.mpl_disconnect(self.buttonID)
-                self.canvas2.mpl_disconnect(self.keypress)
+                self.canvasZoom.mpl_disconnect(self.buttonID)
+                self.canvasZoom.mpl_disconnect(self.keypress)
                 self.keypress = None
                 self.buttonID = None
-                self.canvas2.draw()
+                self.canvasZoom.draw()
 
         # Make a new listener to check for the button clicks
-        self.buttonAdd = self.canvas2.mpl_connect('button_press_event', self.addSegmentFig2)
+        self.buttonAdd = self.canvasZoom.mpl_connect('button_press_event', self.addSegmentfigZoom)
 
-    def addSegmentFig2(self,event):
+    def addSegmentfigZoom(self,event):
         # This deals with the mouse events after choosing to add a new segment
         # First click should be the END of the first segment, second should be START of second
         # This should work logically providing person moves left to right
@@ -1437,16 +1689,16 @@ class Interface(QMainWindow):
                 markstarta4 = self.a4.add_patch(pl.Rectangle((s2, 0), self.bar_thickness/self.config['incr'],
                                                                   self.config['window_width']/2, facecolor='r', edgecolor='None',
                                                                   alpha=0.8)) #,picker=10))
-                self.markstarta1 = self.a1.add_patch(pl.Rectangle(((s + self.offset_fig1)/self.sampleRate, np.min(self.audiodata)), self.linewidtha1 ,
+                self.markstarta1 = self.a1.add_patch(pl.Rectangle(((s + self.offset_figMain)/self.sampleRate, np.min(self.audiodata)), self.linewidtha1 ,
                                                                   self.plotheight, facecolor='r', edgecolor='None',
                                                                   alpha=0.8))
-                self.markstarta2 = self.a2.add_patch(pl.Rectangle((s2 + self.offset_fig1/self.config['incr'], 0), self.linewidtha1 /self.config['incr']*self.sampleRate, self.config['window_width'], facecolor='r', edgecolor='None',alpha=0.8))
+                self.markstarta2 = self.a2.add_patch(pl.Rectangle((s2 + self.offset_figMain/self.config['incr'], 0), self.linewidtha1 /self.config['incr']*self.sampleRate, self.config['window_width'], facecolor='r', edgecolor='None',alpha=0.8))
                 self.listRectanglesb1.append(markstarta3)
                 self.listRectanglesb2.append(markstarta4)
                 self.end_a2 = s
                 self.end_s2 = s2
             else:
-                # This is the start of the second segment, draw green lines on fig2, then redraw the boxes on the top figure and save
+                # This is the start of the second segment, draw green lines on figZoom, then redraw the boxes on the top figure and save
                 b1e = self.a3.add_patch(pl.Rectangle((s, np.min(self.audiodata)), self.bar_thickness, self.plotheight, facecolor='g', edgecolor='None',alpha=0.8,picker=10))
                 b2e = self.a4.add_patch(pl.Rectangle((s2, 0), self.bar_thickness/self.config['incr'], self.config['window_width']/2, facecolor='g', edgecolor='None',alpha=0.8,picker=10))
                 self.markstarta1.remove()
@@ -1463,8 +1715,8 @@ class Interface(QMainWindow):
                 # Update the segments; remove first to keep the indexing consistent
                 old = self.segments[self.box1id]
                 self.segments.remove(self.segments[self.box1id])
-                self.segments.append([old[0],(self.end_a2 + self.offset_fig1)/self.sampleRate,old[2],old[3],old[4]])
-                self.segments.append([(s + self.offset_fig1)/self.sampleRate, old[1], old[2],old[3],old[4]])
+                self.segments.append([old[0],(self.end_a2 + self.offset_figMain)/self.sampleRate,old[2],old[3],old[4]])
+                self.segments.append([(s + self.offset_figMain)/self.sampleRate, old[1], old[2],old[3],old[4]])
                 # Delete the old rectangles and text
                 self.a1text[self.box1id].remove()
                 self.a1text.remove(self.a1text[self.box1id])
@@ -1481,7 +1733,7 @@ class Interface(QMainWindow):
                 a1t = self.a1.text(self.segments[-2][0], np.min(self.audiodata), self.segments[-2][4])
                 # The font size is a pain because the window is in pixels, so have to transform it
                 # Force a redraw to make bounding box available
-                self.canvas.draw()
+                self.canvasMain.draw()
                 # fs = a1t.get_fontsize()
                 width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
                 #print width, self.segments[-2][1] - self.segments[-2][0]
@@ -1501,7 +1753,7 @@ class Interface(QMainWindow):
                 self.a1text.append(a2t)
                 # The font size is a pain because the window is in pixels, so have to transform it
                 # Force a redraw to make bounding box available
-                self.canvas.draw()
+                self.canvasMain.draw()
                 # fs = a1t.get_fontsize()
                 width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
                 #print width, self.segments[-1][1] - self.segments[-1][0]
@@ -1509,144 +1761,96 @@ class Interface(QMainWindow):
                     a1t.set_fontsize(8)
 
                 # Stop the listener
-                self.canvas2.mpl_disconnect(self.buttonAdd)
+                self.canvasZoom.mpl_disconnect(self.buttonAdd)
 
                 # Make the addSegments button unselectable
                 self.addButton.setEnabled(False)
                 self.box1id = None
-        self.canvas2.draw()
+        self.canvasZoom.draw()
         self.canvas.draw()
         self.start_stop2 = not self.start_stop2
-        # For now at least, stop the canvas2 listener
-        self.canvas2.mpl_disconnect(self.picker)
+        # For now at least, stop the canvasZoom listener
+        self.canvasZoom.mpl_disconnect(self.picker)
+
+# ===============
+# Code for playing sounds
+    # What follows is the sound playing things. It's all a mess.
+    # There were attempts to make it a separate thread so that I could make a bar move, etc. None of it is nice.
+    def runthread(self,start,end,sampleRate):
+        sd.play(self.audiodata[start:end],sampleRate)
+
+    def runthread2(self,start_time,end_time):
+        if self.playbar1 is not None:
+            self.playbar1.remove() 
+            self.playbar2.remove() 
+            self.playbar1 = None
+        self.playbar1 = self.a1.add_patch(
+             pl.Rectangle((self.playPosition, np.min(self.audiodata)), self.linewidtha1, self.plotheight, facecolor='k',
+                          edgecolor='None', alpha=0.8))
+        self.playbar2 = self.a2.add_patch(
+             pl.Rectangle((self.playPosition*self.sampleRate/self.config['incr'], 0), self.linewidtha1/self.config['incr']*self.sampleRate, self.config['window_width'], facecolor='k', edgecolor='None', alpha=0.8))
+        
+        dummy = self.a1.add_patch(
+             pl.Rectangle((self.playPosition, np.min(self.audiodata)), self.linewidtha1, self.plotheight, facecolor='k',
+                          edgecolor='None', alpha=0.8))
+        self.canvasMain.draw()
+        current_time = start_time
+        step = 0
+        while (current_time - start_time).total_seconds() < end_time and not self.stopRequest:
+             now = datetime.datetime.now()
+             timedelta = (now - current_time).total_seconds()
+             step += timedelta
+             self.playbar1.set_x(self.playbar1.get_x() + timedelta)
+             self.playbar2.set_x(self.playbar2.get_x() + timedelta/self.config['incr']*self.sampleRate)
+             # For reasons unknown, the next one is needed to stop the plot vanishing
+             dummy.remove()
+             dummy = self.a1.add_patch( pl.Rectangle((step, np.min(self.audiodata)), self.linewidtha1, self.plotheight, facecolor='w', edgecolor='None', alpha=0.0))
+             self.canvasMain.draw()
+             current_time = now
+
+    def resetSegment(self):
+        self.playPosition = self.windowStart
+        if self.playbar1 is not None:
+            self.playbar1.remove() 
+            self.playbar2.remove() 
+            self.playbar1 = None
+            self.canvasMain.draw()
 
     def playSegment(self):
         # This is the listener for the play button. A very simple wave file player
-
-        #print(self.windowStart, self.sampleRate, self.windowSize)
         # Move a marker through in real time?!
-        # self.playbar = self.a1.add_patch(
-        #     pl.Rectangle((self.windowStart+0.1, np.min(self.audiodata)), self.linewidtha1, self.plotheight, facecolor='k',
-        #                  edgecolor='None', alpha=0.8))
-        # self.canvas.draw()
 
-        sd.play(self.audiodata[int(self.windowStart*self.sampleRate):int(self.windowStart*self.sampleRate+self.windowSize*self.sampleRate)],self.sampleRate)
+        if not self.isPlaying:
+            self.isPlaying = True
+            print int(self.playPosition*self.sampleRate),int(self.playPosition*self.sampleRate+self.windowSize*self.sampleRate)
+            #sd.play(self.audiodata[int(self.playPosition*self.sampleRate):int(self.playPosition*self.sampleRate+self.windowSize*self.sampleRate)], self.sampleRate)
+            #t = Thread(target=self.runthread, args=(int(self.playPosition*self.sampleRate),int(self.playPosition*self.sampleRate+self.windowSize*self.sampleRate),self.sampleRate))
+            #t.start()
 
-        # end_time = self.windowStart + self.windowSize
-        # start_time = datetime.datetime.now()
-        # current_time = start_time
-        # step = 0
-        # while (current_time - start_time).total_seconds() < end_time:
-        #     now = datetime.datetime.now()
-        #     timedelta = (now - current_time).total_seconds()
-        #     step += timedelta
-        #     #self.playbar.set_x(self.playbar.get_x() + 0.05)
-        #     self.a1.add_patch(
-        #         pl.Rectangle((step, np.min(self.audiodata)), self.linewidtha1, self.plotheight,
-        #                      facecolor='k',
-        #                      edgecolor='None', alpha=0.8))
-        #     #print self.playbar.get_x()
-        #     current_time = now
-        #     self.canvas.draw()
-
-        # blocksize = 16
-        # s = Stream(samplerate=self.sampleRate, blocksize=blocksize)
-        # s.start()
-        # s.write(self.audiodata[int(self.windowStart*self.sampleRate):int(self.windowStart*self.sampleRate+self.windowSize*self.sampleRate)])
-        # s.stop()
+            end_time = self.windowStart + self.windowSize
+            start_time = datetime.datetime.now()
+            print "Start: ",start_time, end_time
+            self.stopRequest = False
+            #t2 = Thread(target=self.runthread2, args=(start_time,end_time))
+            #t2.start()
+        else:
+            #print self.playbar1.get_x()
+            #self.playPosition = self.playbar1.get_x()
+            self.stopRequest = True
+            sd.stop()
+            self.isPlaying = False
 
     def play(self):
-        # This is the listener for the play button. A very simple wave file player
-        sd.play(self.audiodata[int(self.zoomstart*self.sampleRate):int(self.zoomend*self.sampleRate)],self.sampleRate)
-        # blocksize = 16
-        # s = Stream(samplerate=self.sampleRate, blocksize=blocksize)
-        # s.start()
-        # s.write(self.audiodata[int(self.zoomstart*self.sampleRate):int(self.zoomend*self.sampleRate)])
-        # s.stop()
+        # This is the listener for the play button. 
+        #playThread().start()
+        t = Thread(target=run, args=(self.zoomstart,self.zoomend))
+        t.start()
 
-    def updateText(self,text):
-        self.segments[self.box1id][4] = text
-        self.a1text[self.box1id].set_text(text)
-        # The font size is a pain because the window is in pixels, so have to transform it
-        # Force a redraw to make bounding box available
-        self.canvas.draw()
-        # fs = self.a1text[self.box1id].get_fontsize()
-        width = self.a1text[self.box1id].get_window_extent().inverse_transformed(self.a1.transData).width
-        if width > self.segments[self.box1id][1] - self.segments[self.box1id][0]:
-            self.a1text[self.box1id].set_fontsize(8)
-        if self.segments[self.box1id][4] != "Don't Know":
-            facecolour = 'b'
-        else:
-            facecolour = 'r'
-        self.listRectanglesa1[self.box1id].set_facecolor(facecolour)
-        self.listRectanglesa2[self.box1id].set_facecolor(facecolour)
-        self.topBoxCol = self.listRectanglesa1[self.box1id].get_facecolor()
-        self.canvas.draw()
-
-    def radioBirdsClicked(self):
-        # Listener for when the user selects a radio button
-        # Update the text and store the data
-        for button in self.birds1+self.birds2:
-            if button.isChecked():
-                if button.text()=="Other":
-                    self.birdList.setEnabled(True)
-                else:
-                    self.birdList.setEnabled(False)
-                    self.updateText(str(button.text()))
-
-    def listBirdsClicked(self, item):
-        # Listener for the listbox of birds
-        if (item.text() == "Other"):
-            self.tbox.setEnabled(True)
-        else:
-            # Save the entry
-            self.updateText(str(item.text()))
-            # self.segments[self.box1id][4] = str(item.text())
-            # self.a1text[self.box1id].set_text(str(item.text()))
-            # # The font size is a pain because the window is in pixels, so have to transform it
-            # # Force a redraw to make bounding box available
-            # self.canvas.draw()
-            # # fs = a1t.get_fontsize()
-            # width = self.a1text[self.box1id].get_window_extent().inverse_transformed(self.a1.transData).width
-            # if width > self.segments[self.box1id][1] - self.segments[self.box1id][0]:
-            #     self.a1text[self.box1id].set_fontsize(8)
-            #
-            # self.listRectanglesa1[self.box1id].set_facecolor('b')
-            # self.listRectanglesa2[self.box1id].set_facecolor('b')
-            # self.topBoxCol = self.listRectanglesa1[self.box1id].get_facecolor()
-            # self.canvas.draw()
-
-    def birdTextEntered(self):
-        # Listener for the text entry
-        # Check text isn't already in the listbox, and add if not
-        # Doesn't sort the list, but will when program is closed
-        item = self.birdList.findItems(self.tbox.text(),Qt.MatchExactly)
-        if item:
-            pass
-        else:
-            self.birdList.addItem(self.tbox.text())
-            self.config['ListBirdsEntries'].append(str(self.tbox.text()))
-        self.updateText(str(self.tbox.text()))
-        # self.segments[self.box1id][4] = str(self.tbox.text())
-        # self.a1text[self.box1id].set_text(str(self.tbox.text()))
-        # # The font size is a pain because the window is in pixels, so have to transform it
-        # # Force a redraw to make bounding box available
-        # self.canvas.draw()
-        # # fs = self.a1text[self.box1id].get_fontsize()
-        # width = self.a1text[self.box1id].get_window_extent().inverse_transformed(self.a1.transData).width
-        # if width > self.segments[self.box1id][1] - self.segments[self.box1id][0]:
-        #     self.a1text[self.box1id].set_fontsize(8)
-        #
-        # self.listRectanglesa1[self.box1id].set_facecolor('b')
-        # self.listRectanglesa2[self.box1id].set_facecolor('b')
-        # self.topBoxCol = self.listRectanglesa1[self.box1id].get_facecolor()
-        # self.canvas.draw()
-        self.saveConfig=True
-        #self.tbox.setEnabled(False)
-
-
+# ============
+# Code for the buttons
     def deleteSegment(self):
-        # Delete segment if one is selected
+        # Listener for delete segment button, or backspace key
+        # Deletes segment if one is selected, otherwise does nothing
         if self.box1id>-1:
             self.listRectanglesa1[self.box1id].remove()
             self.listRectanglesa2[self.box1id].remove()
@@ -1662,14 +1866,15 @@ class Interface(QMainWindow):
             self.a1text.remove(self.a1text[self.box1id])
             self.segments.remove(self.segments[self.box1id])
             self.box1id = -1
-            self.canvas.draw()
-            # Make canvas2 blank
+            self.canvasMain.draw()
+            # Make canvasZoom blank
             self.a3.clear()
             self.a3.axis('off')
             self.a4.clear()
-            self.canvas2.draw()
+            self.canvasZoom.draw()
 
     def deleteAll(self):
+        # Listener for delete all button
         self.segments=[]
         for r in self.a1text:
             r.remove()
@@ -1688,9 +1893,9 @@ class Interface(QMainWindow):
         self.a1text = []
         self.box1id = -1
 
-        self.canvas.draw()
-        self.canvas2.draw()
-        self.canvas3.draw()
+        self.canvasMain.draw()
+        self.canvasZoom.draw()
+        self.canvasOverview.draw()
 
     def saveSegments(self):
         # This saves the segmentation data as a json file
@@ -1703,7 +1908,7 @@ class Interface(QMainWindow):
             json.dump(self.segments,file)
 
     def closeEvent(self, event):
-        # This is to catch the user closing the window by clicking the Close button instead of quitting
+        # Catch the user closing the window by clicking the Close button instead of quitting
         self.quit()
 
     def quit(self):
@@ -1715,11 +1920,15 @@ class Interface(QMainWindow):
             json.dump(self.config, open(self.configfile, 'wb'))
         QApplication.quit()
 
+# =============
+# Helper functions
+
     def splitFile5mins(self, name):
         # Nirosha wants to split files that are long (15 mins) into 5 min segments
         # Could be used when loading long files :)
+        # TODO: put paging in here, possible in librosa
         try:
-            self.sampleRate, self.audiodata = wavfile.read(name)
+            self.audiodata, self.sampleRate = lr.load(name,sr=None)
         except:
             print("Error: try another file")
         nsamples = np.shape(self.audiodata)[0]
@@ -1728,11 +1937,11 @@ class Interface(QMainWindow):
         while (count + 1) * lengthwanted < nsamples:
             data = self.audiodata[count * lengthwanted:(count + 1) * lengthwanted]
             filename = name[:-4] + '_' +str(count) + name[-4:]
-            wavfile.write(filename, self.sampleRate, data)
+            lr.output.write_wav(filename, data, self.sampleRate)
             count += 1
         data = self.audiodata[(count) * lengthwanted:]
         filename = name[:-4] + '_' + str((count)) + name[-4:]
-        wavfile.write(filename, self.sampleRate, data)
+        lr.output.write_wav(filename,data,self.sampleRate)
 
     def defineColourmap(self):
         # This makes the spectrograms look better. It defines a colourmap that hides a lot of the black
@@ -1745,14 +1954,24 @@ class Interface(QMainWindow):
         }
         self.cmap_grey = matplotlib.colors.LinearSegmentedColormap('cmap_grey', cdict, 256)
 
+        # Reverse each colour
+        cdict = {
+            'blue': ((0, 0, 0), (self.config['colourStart'], 0, 0), (self.config['colourEnd'], 1, 1), (1, 1, 1)),
+            'green': ((0, 0, 0), (self.config['colourStart'], 0, 0), (self.config['colourEnd'], 1, 1), (1, 1, 1)),
+            'red': ((0, 0, 0), (self.config['colourStart'], 0, 0), (self.config['colourEnd'], 1, 1), (1, 1, 1))
+        }
+        self.cmap_grey_r = matplotlib.colors.LinearSegmentedColormap('cmap_grey_r', cdict, 256)
 
+# ===============
+# Classes for the dialog boxes. Since most of them just get user selections, they are mostly just a mess of UI things
 class Spectrogram(QDialog):
+    # Class for the spectrogram dialog box
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Signal Processing Options')
 
         self.algs = QComboBox()
-        self.algs.addItems(['Hanning','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
+        self.algs.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
 
         self.activate = QPushButton("Update Spectrogram")
 
@@ -1787,6 +2006,7 @@ class Spectrogram(QDialog):
         return [self.algs.currentText(),self.colourStart.text(),self.colourEnd.text(),self.window_width.text(),self.incr.text()]
 
 class Segmentation(QDialog):
+    # Class for the segmentation dialog box
     # TODO: add the wavelet params
     # TODO: work out how to return varying size of params, also process them
     # TODO: test and play
@@ -1795,7 +2015,7 @@ class Segmentation(QDialog):
         self.setWindowTitle('Segmentation Options')
 
         self.algs = QComboBox()
-        self.algs.addItems(["Amplitude","Median Clipping","Wavelets"])
+        self.algs.addItems(["Amplitude","Energy Curve","Median Clipping","Wavelets"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Amplitude"
         self.activate = QPushButton("Segment")
@@ -1817,14 +2037,26 @@ class Segmentation(QDialog):
         self.medThr.setDecimals(1)
         self.medThr.setValue(3)
 
+        self.ecThr = QDoubleSpinBox()
+        self.ecThr.setRange(0.001,6)
+        self.ecThr.setSingleStep(1)
+        self.ecThr.setDecimals(3)
+        self.ecThr.setValue(1)
+
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
         # Labels
         self.amplabel = QLabel("Set threshold amplitude")
         Box.addWidget(self.amplabel)
+
         self.medlabel = QLabel("Set median threshold")
         Box.addWidget(self.medlabel)
         self.medlabel.hide()
+
+        self.eclabel = QLabel("Set energy curve threshold")
+        Box.addWidget(self.eclabel)
+        self.eclabel.hide()
+        self.ecthrtype = [QRadioButton("N standard deviations"), QRadioButton("Threshold")]
 
         self.wavlabel = QLabel("Wavelets")
         self.depthlabel = QLabel("Depth of wavelet packet decomposition")
@@ -1899,7 +2131,13 @@ class Segmentation(QDialog):
 
         Box.addWidget(self.ampThr)
         Box.addWidget(self.medThr)
+        for i in range(len(self.ecthrtype)):
+            Box.addWidget(self.ecthrtype[i])
+            self.ecthrtype[i].hide()
+        Box.addWidget(self.ecThr)
         self.medThr.hide()
+        #self.ecthrtype.hide()
+        self.ecThr.hide()
 
         Box.addWidget(self.activate)
         Box.addWidget(self.save)
@@ -1912,6 +2150,12 @@ class Segmentation(QDialog):
         if self.prevAlg == "Amplitude":
             self.amplabel.hide()
             self.ampThr.hide()
+        elif self.prevAlg == "Energy Curve":
+            self.eclabel.hide()
+            self.ecThr.hide()
+            for i in range(len(self.ecthrtype)):
+                self.ecthrtype[i].hide()
+            #self.ecThr.hide()
         elif self.prevAlg == "Median Clipping":
             self.medlabel.hide()
             self.medThr.hide()
@@ -1936,6 +2180,12 @@ class Segmentation(QDialog):
         if str(alg) == "Amplitude":
             self.amplabel.show()
             self.ampThr.show()
+        elif str(alg) == "Energy Curve":
+            self.eclabel.show()
+            self.ecThr.show()
+            for i in range(len(self.ecthrtype)):
+                self.ecthrtype[i].show()
+            self.ecThr.show()
         elif str(alg) == "Median Clipping":
             self.medlabel.show()
             self.medThr.show()
@@ -1967,6 +2217,7 @@ class Segmentation(QDialog):
         return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
 
 class Denoise(QDialog):
+    # Class for the denoising dialog box
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Denoising Options')
@@ -2152,6 +2403,280 @@ class Denoise(QDialog):
 
     def getValues(self):
         return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.start.text(),self.end.text(),self.width.text()]
+
+class HumanClassify1(QDialog):
+    # This dialog is different to the others. The aim is to check (or ask for) classifications for segments.
+    # This version shows a single segment at a time, working through all the segments.
+    # So it needs to show a segment, and its current label
+    # Has tick and cross, and the tick loads the next one, cross asks for new one
+    # TODO: Could have the label options in here and preselect it, then have the tick or change it.
+    # Better for things that aren't labelled already?
+
+    def __init__(self, seg, label, cmap_grey, cmap_grey_r, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Check Classifications')
+        self.frame = QWidget()
+        self.cmap_grey = cmap_grey
+
+        # Set up the plot windows, then the right and wrong buttons, and a close button
+        self.plot = Figure()
+        self.plot.set_size_inches(10.0, 2.0, forward=True)
+        self.canvasPlot = FigureCanvas(self.plot)
+        self.canvasPlot.setParent(self.frame)
+
+        self.species = QLabel(label)
+
+        # The buttons to move through the overview
+        # Pics are in twice since I'm reusing the PicButton class lazily
+        self.correct = PicButton(0,QPixmap("Resources/tick.png"),QPixmap("Resources/tick.png"))
+        self.wrong = PicButton(0,QPixmap("Resources/cross.png"),QPixmap("Resources/cross.png"))
+
+        self.close = QPushButton("Close")
+
+        # The layouts
+        hboxButtons = QHBoxLayout()
+        hboxButtons.addWidget(self.correct)
+        hboxButtons.addWidget(self.wrong)
+        hboxButtons.addWidget(self.close)
+
+        vboxFull = QVBoxLayout()
+        vboxFull.addWidget(self.canvasPlot)
+        vboxFull.addWidget(self.species)
+        vboxFull.addLayout(hboxButtons)
+
+        self.setLayout(vboxFull)
+        self.makefig(seg)
+
+    def makefig(self,seg):
+        self.a = self.plot.add_subplot(111)
+        self.a.imshow(10.0*np.log10(seg), cmap=self.cmap_grey, aspect='auto')
+        self.a.axis('off')
+
+    def getValues(self):
+        # TODO
+        return True
+
+    def setImage(self,seg,label):
+        self.a.imshow(10.0 * np.log10(seg), cmap=self.cmap_grey, aspect='auto')
+        self.species.setText(label)
+        self.canvasPlot.draw()
+
+class CorrectHumanClassify(QDialog):
+    # This is to correct the classification of those that the program got wrong
+    def __init__(self, seg, cmap_grey, bb1, bb2, bb3, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Correct Classification')
+        self.frame = QWidget()
+        self.cmap_grey = cmap_grey
+
+        self.saveConfig = False
+
+        # Set up the plot windows, then the forward and backward buttons
+        self.plot = Figure()
+        self.plot.set_size_inches(10.0, 2.0, forward=True)
+        self.canvasPlot = FigureCanvas(self.plot)
+        self.canvasPlot.setParent(self.frame)
+
+        # An array of radio buttons and a list and a text entry box
+        # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
+        self.birds1 = []
+        for item in bb1:
+            self.birds1.append(QRadioButton(item))
+        self.birds2 = []
+        for item in bb2:
+            self.birds2.append(QRadioButton(item))
+
+        for i in xrange(len(self.birds1)):
+            self.birds1[i].setEnabled(True)
+            self.connect(self.birds1[i], SIGNAL("clicked()"), self.radioBirdsClicked)
+        for i in xrange(len(self.birds2)):
+            self.birds2[i].setEnabled(True)
+            self.connect(self.birds2[i], SIGNAL("clicked()"), self.radioBirdsClicked)
+
+        # The list of less common birds
+        self.birdList = QListWidget(self)
+        self.birdList.setMaximumWidth(150)
+        for item in bb3:
+            self.birdList.addItem(item)
+        self.birdList.sortItems()
+        # Explicitly add "Other" option in
+        self.birdList.insertItem(0,'Other')
+
+        self.connect(self.birdList, SIGNAL("itemClicked(QListWidgetItem*)"), self.listBirdsClicked)
+        self.birdList.setEnabled(False)
+
+        # This is the text box for missing birds
+        self.tbox = QLineEdit(self)
+        self.tbox.setMaximumWidth(150)
+        self.connect(self.tbox, SIGNAL('editingFinished()'), self.birdTextEntered)
+        self.tbox.setEnabled(False)
+
+        self.close = QPushButton("Done")
+        self.connect(self.close, SIGNAL("clicked()"), self.accept)
+
+        # The layouts
+        birds1Layout = QVBoxLayout()
+        for i in xrange(len(self.birds1)):
+            birds1Layout.addWidget(self.birds1[i])
+
+        birds2Layout = QVBoxLayout()
+        for i in xrange(len(self.birds2)):
+            birds2Layout.addWidget(self.birds2[i])
+
+        birdListLayout = QVBoxLayout()
+        birdListLayout.addWidget(self.birdList)
+        birdListLayout.addWidget(QLabel("If bird isn't in list, select Other"))
+        birdListLayout.addWidget(QLabel("Type below, Return at end"))
+        birdListLayout.addWidget(self.tbox)
+
+        hbox = QHBoxLayout()
+        hbox.addLayout(birds1Layout)
+        hbox.addLayout(birds2Layout)
+        hbox.addLayout(birdListLayout)
+
+        vboxFull = QVBoxLayout()
+        vboxFull.addWidget(self.canvasPlot)
+        vboxFull.addLayout(hbox)
+        vboxFull.addWidget(self.close)
+
+        self.setLayout(vboxFull)
+        self.makefig(seg)
+
+    def makefig(self,seg):
+        self.a = self.plot.add_subplot(111)
+        self.a.imshow(10.0*np.log10(seg), cmap=self.cmap_grey, aspect='auto')
+        self.a.axis('off')
+
+    def radioBirdsClicked(self):
+        # Listener for when the user selects a radio button
+        # Update the text and store the data
+        for button in self.birds1+self.birds2:
+            if button.isChecked():
+                if button.text()=="Other":
+                    self.birdList.setEnabled(True)
+                else:
+                    self.birdList.setEnabled(False)
+                    self.label = str(button.text())
+
+    def listBirdsClicked(self, item):
+        # Listener for clicks in the listbox of birds
+        if (item.text() == "Other"):
+            self.tbox.setEnabled(True)
+        else:
+            # Save the entry
+            self.label = str(item.text())
+
+    def birdTextEntered(self):
+        # Listener for the text entry in the bird list
+        # Check text isn't already in the listbox, and add if not
+        # Doesn't sort the list, but will when program is closed
+        item = self.birdList.findItems(self.tbox.text(),Qt.MatchExactly)
+        if item:
+            pass
+        else:
+            self.birdList.addItem(self.tbox.text())
+        self.label = str(self.tbox.text())
+        self.saveConfig=True
+        self.tbox.setEnabled(False)
+
+    # static method to create the dialog and return the correct label
+    @staticmethod
+    def getValues(seg, cmap_grey, bb1, bb2, bb3,parent=None):
+        dialog = CorrectHumanClassify(seg, cmap_grey, bb1, bb2, bb3,parent)
+        result = dialog.exec_()
+        return dialog.label, dialog.saveConfig
+
+    def setImage(self,seg,label):
+        self.a.imshow(10.0 * np.log10(seg), cmap=self.cmap_grey, aspect='auto')
+        self.species.setText(label)
+        self.canvasPlot.draw()
+
+class PicButton(QAbstractButton):
+    # Class for HumanClassify2 to put spectrograms on buttons
+    def __init__(self, index, pixmap1, pixmap2, parent=None):
+        super(PicButton, self).__init__(parent)
+        self.index = index
+        self.pixmap1 = pixmap1
+        self.pixmap2 = pixmap2
+        self.buttonClicked = False
+        self.clicked.connect(self.update)
+
+    def paintEvent(self, event):
+        pix = self.pixmap2 if self.buttonClicked else self.pixmap1
+
+        if type(event) is not bool:
+            painter = QPainter(self)
+            painter.drawPixmap(event.rect(), pix)
+
+    def sizeHint(self):
+        return self.pixmap1.size()
+
+    def update(self,event):
+        print "Button " + str(self.index) + " clicked"
+        self.buttonClicked = not(self.buttonClicked)
+        self.paintEvent(event)
+
+class HumanClassify2(QDialog):
+    # This dialog is different to the others. The aim is to check (or ask for) classifications for segments.
+    # This version gets *12* at a time, and put them all out together on buttons, and their labels.
+    # It could be all the same species, or the ones that it is unsure about, or whatever.
+
+    def __init__(self, seg, label, cmap_grey, cmap_grey_r, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Check Classifications')
+        self.frame = QWidget()
+        self.cmap_grey = cmap_grey
+        self.cmap_grey_r = cmap_grey_r
+
+        # TODO: Add a label with instructions
+        # TODO: Add button to finish and/or get more
+        # TODO: Add a label with the species
+
+        # TODO: Decide on these sizes
+        width = 3
+        height = 4
+        grid = QGridLayout(self.frame)
+        self.setLayout(grid)
+
+        # TODO: Next line needs to go!
+        segs = [1,2,3,4,5,6,7]
+        images = []
+        # TODO: Turn this into different images
+        if len(segs) < width*height:
+            for i in range(len(segs)):
+                images.append(self.setImage(seg))
+            for i in range(len(segs),width*height):
+                images.append([None,None])
+        else:
+            for i in range(width*height):
+                images.append(self.setImage(seg))
+
+        positions = [(i, j) for i in range(height) for j in range(width)]
+
+        for position, image in zip(positions, images):
+            if image[0] is not None:
+                button = PicButton(position[0]*width + position[1],QPixmap(QImage(image[0].buffer_rgba(), image[0].size().width(), image[0].size().height(), QImage.Format_ARGB32)),
+                                QPixmap(QImage(image[1].buffer_rgba(), image[1].size().width(), image[1].size().height(), QImage.Format_ARGB32)))
+                grid.addWidget(button, *position)
+
+
+        self.setLayout(grid)
+
+    def setImage(self,seg):
+        fig = Figure((2.5, 1.2))
+        canvas = FigureCanvas(fig)
+        ax = fig.add_subplot(111)
+        ax.imshow(10.*np.log10(seg), cmap = self.cmap_grey, aspect='auto')
+        ax.set_axis_off()
+        canvas.draw()
+
+        canvas2 = FigureCanvas(fig)
+        ax.imshow(10.*np.log10(seg), cmap = self.cmap_grey_r, aspect='auto')
+        canvas2.draw()
+        return [canvas, canvas2]
+
+    def activate(self):
+        return True
 
 # Start the application
 app = QApplication(sys.argv)

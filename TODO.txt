@@ -1,7 +1,10 @@
 
+0. Pyqtgraph? 
+   How to get a moving pointer working?!
+ 
 1. Interface for Kim.
     -> user manual
-    -> thorough testing
+    -> extra points she wanted
 
 2. Finish median clipping segmentation (and also thresholded power and amplitude).
 
@@ -29,3 +32,27 @@ Some ideas about things that would be nice:
         So after processing a file, you either run through it, or you get shown each one in it's own window (or a column of them)
         Could then click on those that are wrong
     Some database storage stuff and meta information about the sound files?
+
+
+------
+Button for multitapering on/off
+Tidy up the naming for the interface elements
+Mini method for text resizing
+Make choice of context menu or list of birds
+
+GNU License:
+    <one line to give the program's name and a brief idea of what it does.>
+    Copyright (C) <year>  <name of author>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.

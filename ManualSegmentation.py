@@ -25,6 +25,7 @@ from PyQt4.QtGui import *
 from scipy.io import wavfile
 import numpy as np
 import pylab as pl
+from threading import Thread
 
 import datetime
 #import pyaudio
@@ -144,6 +145,8 @@ class Interface(QMainWindow):
             'ListBirdsEntries': ['Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit',
                                  'Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover',
                                  'Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
+
+            'UseConfigMenu': False,
         }
 
     def createFrame(self):
@@ -181,10 +184,13 @@ class Interface(QMainWindow):
         self.rightBtn.setArrowType(Qt.RightArrow)
         self.connect(self.rightBtn, SIGNAL('clicked()'), self.moveRight)
         # TODO: what else should be there?
-        playButton1 = QPushButton("&Play Window")
+        #playButton1 = QPushButton(QIcon(":/Resources/play.svg"),"&Play Window")
+        playButton1 = QPushButton("&Play/Pause")
         self.connect(playButton1, SIGNAL('clicked()'), self.playSegment)
-        quitButton = QPushButton("&Finished")
-        self.connect(quitButton, SIGNAL('clicked()'), self.quit)
+        resetButton1 = QPushButton("&Reset")
+        self.connect(resetButton1, SIGNAL('clicked()'), self.resetSegment)
+        self.quitButton = QPushButton("&Quit")
+        self.connect(self.quitButton, SIGNAL('clicked()'), self.quit)
         deleteButton = QPushButton("&Delete Current Segment")
         self.connect(deleteButton, SIGNAL('clicked()'), self.deleteSegment)
         deleteAllButton = QPushButton("&Delete All Segments")
@@ -249,21 +255,22 @@ class Interface(QMainWindow):
         self.connect(self.addButton, SIGNAL('clicked()'), self.addSegmentClick)
 
         # A context menu to select birds
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.menuBirdList = QMenu()
+        if self.config['UseConfigMenu']:
+            self.setContextMenuPolicy(Qt.CustomContextMenu)
+            self.menuBirdList = QMenu()
 
-        # Need the lambda function to connect all menu events to same trigger and know which was selected
-        for item in self.config['BirdButtons1'] + self.config['BirdButtons2'][:-1]:
-            bird = self.menuBirdList.addAction(item)
-            receiver = lambda birdname=item: self.birdSelected(birdname)
-            self.connect(bird, SIGNAL("triggered()"), receiver)
-            self.menuBirdList.addAction(bird)
-        self.menuBird2 = self.menuBirdList.addMenu('Other')
-        for item in self.config['ListBirdsEntries']+['Other']:
-            bird = self.menuBird2.addAction(item)
-            receiver = lambda birdname=item: self.birdSelected(birdname)
-            self.connect(bird, SIGNAL("triggered()"), receiver)
-            self.menuBird2.addAction(bird)
+            # Need the lambda function to connect all menu events to same trigger and know which was selected
+            for item in self.config['BirdButtons1'] + self.config['BirdButtons2'][:-1]:
+                bird = self.menuBirdList.addAction(item)
+                receiver = lambda birdname=item: self.birdSelected(birdname)
+                self.connect(bird, SIGNAL("triggered()"), receiver)
+                self.menuBirdList.addAction(bird)
+            self.menuBird2 = self.menuBirdList.addMenu('Other')
+            for item in self.config['ListBirdsEntries']+['Other']:
+                bird = self.menuBird2.addAction(item)
+                receiver = lambda birdname=item: self.birdSelected(birdname)
+                self.connect(bird, SIGNAL("triggered()"), receiver)
+                self.menuBird2.addAction(bird)
 
         #b = self.menuBirdList.addAction('b')
         #self.connect(b, SIGNAL("triggered()"),self.birdSelected)
@@ -280,6 +287,7 @@ class Interface(QMainWindow):
         hbox4a = QHBoxLayout()
         hbox4a.addWidget(QLabel('Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'))
         hbox4a.addWidget(playButton1)
+        hbox4a.addWidget(resetButton1)
         #hbox4a.addWidget(self.dragRectangles)
 
         vbox4b = QVBoxLayout()
@@ -300,9 +308,11 @@ class Interface(QMainWindow):
         vbox1.addLayout(hbox2)
 
         vboxbuttons = QVBoxLayout()
-        for w in [deleteButton,deleteAllButton,quitButton,self.previousButton, self.nextButton]:
+        for w in [deleteButton,deleteAllButton,self.quitButton,self.previousButton, self.nextButton]:
+        #for w in [deleteButton, deleteAllButton, self.previousButton, self.nextButton]:
             vboxbuttons.addWidget(w)
             #vboxbuttons.setAlignment(w, Qt.AlignHCenter)
+        self.quitButton.setEnabled(False)
 
         hbox1 = QHBoxLayout()
         hbox1.addLayout(vbox1)
@@ -363,6 +373,7 @@ class Interface(QMainWindow):
         self.previousButton.setEnabled(True)
         if self.inFile == 4:
             self.nextButton.setEnabled(False)
+            self.quitButton.setEnabled(True)
         print self.filelist[self.inFile]
         self.loadFile(self.filelist[self.inFile])
         now = datetime.datetime.now()
@@ -384,6 +395,7 @@ class Interface(QMainWindow):
         # Keep track of start points and selected buttons
         self.start_a = 0
         self.windowStart = 0
+        self.playPosition = self.windowStart
         self.box1id = None
         self.buttonID = None
 
@@ -398,6 +410,9 @@ class Interface(QMainWindow):
         self.fig1Segment1 = None
         self.fig1Segment2 = None
         self.fig1Segmenting = False
+
+        self.playbar1 = None
+        self.isPlaying = False
 
     def loadFile(self,name):
         # This does the work of loading a file
@@ -591,10 +606,11 @@ class Interface(QMainWindow):
                     self.config['ListBirdsEntries'].insert(count-1,text)
                     self.saveConfig = True
 
-                    bird = self.menuBird2.addAction(text)
-                    receiver = lambda birdname=text: self.birdSelected(birdname)
-                    self.connect(bird, SIGNAL("triggered()"), receiver)
-                    self.menuBird2.addAction(bird)
+                    if self.config['UseConfigMenu']:
+                        bird = self.menuBird2.addAction(text)
+                        receiver = lambda birdname=text: self.birdSelected(birdname)
+                        self.connect(bird, SIGNAL("triggered()"), receiver)
+                        self.menuBird2.addAction(bird)
 
     def activateRadioButtons(self):
         found = False
@@ -658,9 +674,10 @@ class Interface(QMainWindow):
             self.zoomend = self.listRectanglesa1[box1id].get_x()+self.listRectanglesa1[box1id].get_width()
             self.drawFig2()
 
-            # Put the context menu at the right point. The event.x and y are in pixels relative to the bottom left-hand corner of canvas (self.fig)
-            # Need to be converted into pixels relative to top left-hand corner of the window!
-            self.menuBirdList.popup(QPoint(event.x + event.canvas.x() + self.frame.x() + self.x(), event.canvas.height() - event.y + event.canvas.y() + self.frame.y() + self.y()))
+            if self.config['UseConfigMenu']:
+                # Put the context menu at the right point. The event.x and y are in pixels relative to the bottom left-hand corner of canvas (self.fig)
+                # Need to be converted into pixels relative to top left-hand corner of the window!
+                self.menuBirdList.popup(QPoint(event.x + event.canvas.x() + self.frame.x() + self.x(), event.canvas.height() - event.y + event.canvas.y() + self.frame.y() + self.y()))
             # Activate the radio buttons for labelling, selecting one from label if necessary
             self.activateRadioButtons()
 
@@ -740,7 +757,8 @@ class Interface(QMainWindow):
                     self.box1id = len(self.segments)-1
                     self.drawFig2()
                     self.topBoxCol = 'r'
-                    self.menuBirdList.popup(QPoint(event.x + event.canvas.x() + self.frame.x() + self.x(), event.canvas.height() - event.y + event.canvas.y() + self.frame.y() + self.y()))
+                    if self.config['UseConfigMenu']:
+                        self.menuBirdList.popup(QPoint(event.x + event.canvas.x() + self.frame.x() + self.x(), event.canvas.height() - event.y + event.canvas.y() + self.frame.y() + self.y()))
                     # Activate the radio buttons for labelling, selecting one from label if necessary
                     self.activateRadioButtons()
                 # Switch to know if start or end or segment
@@ -795,6 +813,7 @@ class Interface(QMainWindow):
                 self.windowStart = 0
             elif self.windowStart + self.windowSize  > float(self.datalength) / self.sampleRate:
                 self.windowStart = float(self.datalength) / self.sampleRate - self.windowSize
+            self.playPosition = self.windowStart
             self.focusRegionSelected = False
             self.focusRegion.set_facecolor('r')
             self.updateWindow()
@@ -805,6 +824,7 @@ class Interface(QMainWindow):
         if event.button!=1:
             return
         self.windowStart = event.xdata/self.sampleRate*self.config['incr']
+        self.playPosition = self.windowStart
         self.updateWindow()
 
     def updateWindow(self):
@@ -825,11 +845,13 @@ class Interface(QMainWindow):
     def moveLeft(self):
         # When the left button is pressed (on the top right of the screen, move everything along
         self.windowStart = max(0,self.windowStart-self.windowSize*0.9)
+        self.playPosition = self.windowStart
         self.updateWindow()
 
     def moveRight(self):
         # When the right button is pressed (on the top right of the screen, move everything along
         self.windowStart = min(float(self.datalength)/self.sampleRate-self.windowSize,self.windowStart+self.windowSize*0.9)
+        self.playPosition = self.windowStart
         self.updateWindow()
 
     def changeWidth(self, value):
@@ -1214,46 +1236,77 @@ class Interface(QMainWindow):
         # For now at least, stop the canvas2 listener
         self.canvas2.mpl_disconnect(self.picker)
 
+    def runthread(self,start,end,sampleRate):
+        sd.read(self.audiodata[start:end],sampleRate)
+
+    def runthread2(self,start_time,end_time):
+        if self.playbar1 is not None:
+            self.playbar1.remove() 
+            self.playbar2.remove() 
+            self.playbar1 = None
+        self.playbar1 = self.a1.add_patch(
+             pl.Rectangle((self.playPosition, np.min(self.audiodata)), self.linewidtha1, self.plotheight, facecolor='k',
+                          edgecolor='None', alpha=0.8))
+        self.playbar2 = self.a2.add_patch(
+             pl.Rectangle((self.playPosition*self.sampleRate/self.config['incr'], 0), self.linewidtha1/self.config['incr']*self.sampleRate, self.config['window_width'], facecolor='k', edgecolor='None', alpha=0.8))
+        
+        dummy = self.a1.add_patch(
+             pl.Rectangle((self.playPosition, np.min(self.audiodata)), self.linewidtha1, self.plotheight, facecolor='k',
+                          edgecolor='None', alpha=0.8))
+        self.canvas.draw()
+        current_time = start_time
+        step = 0
+        while (current_time - start_time).total_seconds() < end_time and not self.stopRequest:
+             now = datetime.datetime.now()
+             timedelta = (now - current_time).total_seconds()
+             step += timedelta
+             self.playbar1.set_x(self.playbar1.get_x() + timedelta)
+             self.playbar2.set_x(self.playbar2.get_x() + timedelta/self.config['incr']*self.sampleRate)
+             # For reasons unknown, the next one is needed to stop the plot vanishing
+             dummy.remove()
+             dummy = self.a1.add_patch( pl.Rectangle((step, np.min(self.audiodata)), self.linewidtha1, self.plotheight, facecolor='w', edgecolor='None', alpha=0.0))
+             self.canvas.draw()
+             current_time = now
+
+    def resetSegment(self):
+        self.playPosition = self.windowStart
+        if self.playbar1 is not None:
+            self.playbar1.remove() 
+            self.playbar2.remove() 
+            self.playbar1 = None
+            self.canvas.draw()
+
     def playSegment(self):
         # This is the listener for the play button. A very simple wave file player
-        sd.play(self.audiodata[int(self.windowStart*self.sampleRate):int(self.windowStart*self.sampleRate+self.windowSize*self.sampleRate)],self.sampleRate)
-
-        #sd.play(self.audiodata[self.windowStart:self.windowStart+self.windowSize],self.sampleRate)
-        #def callback(in_data, out_data, time_info, status):
-            #out_data[:] = in_data
-            #return continue_flag
-
-        #blocksize = 16
-        #s = Stream(samplerate=self.sampleRate, blocksize=blocksize, callback=callback)
-        #s = Stream(samplerate=self.sampleRate, blocksize=blocksize)
-        #s.start()
-        #time.sleep(5)
-        #s.write(self.audiodata[int(self.windowStart*self.sampleRate):int(self.windowStart*self.sampleRate+self.windowSize*self.sampleRate)])
-        #s.stop()
+        # Move a marker through in real time?!
+        sd.play(self.audiodata[int(self.windowStart*self.sampleRate):int((self.windowStart+self.windowSize)*self.sampleRate)], self.sampleRate,blocking=True)
+        # if not self.isPlaying:
+        #     self.isPlaying = True
+        #
+        #     #t = Thread(target=self.runthread, args=(int(self.playPosition*self.sampleRate),int(self.playPosition*self.sampleRate+self.windowSize*self.sampleRate),self.sampleRate))
+        #     #t.start()
+        #
+        #     end_time = self.windowStart + self.windowSize
+        #     start_time = datetime.datetime.now()
+        #     print "Start: ",start_time
+        #     self.stopRequest = False
+        #     #t2 = Thread(target=self.runthread2, args=(start_time,end_time))
+        #     #t2.start()
+        # else:
+        #     print self.playbar1.get_x()
+        #     self.playPosition = self.playbar1.get_x()
+        #     self.stopRequest = True
+        #     sd.stop()
+        #     self.isPlaying = False
 
     def play(self):
         # This is the listener for the play button. 
+        #playThread().start()
+        sd.play(self.audiodata[self.zoomstart:self.zoomend], self.sampleRate,blocking=True)
 
-       sd.play(self.audiodata[int(self.zoomstart*self.sampleRate):int(self.zoomend*self.sampleRate)],self.sampleRate)
-# play stream
+        #t = Thread(target=run, args=(self.zoomstart,self.zoomend))
+        #t.start()
 
-
-        #print self.windowStart, self.windowSize
-        #self.wf.setpos(int(self.windowStart*self.sampleRate))
-        #data = self.wf.readframes(int(self.windowSize*self.sampleRate))
-        #for i in range(int(self.windowSize*self.sampleRate)):
-        #self.stream.write(data)
-        #    data = self.wf.readframes(1024)
-
-        # stop stream
-        #self.stream.stop_stream()
-
-        #sd.play(self.audiodata[self.zoomstart:self.zoomend],self.sampleRate)
-        #blocksize = 16
-        #s = Stream(samplerate=self.sampleRate, blocksize=blocksize)
-        #s.start()
-        #s.write(self.audiodata[int(self.zoomstart*self.sampleRate):int(self.zoomend*self.sampleRate)])
-        #s.stop()
 
     def updateText(self,text):
         self.segments[self.box1id][4] = text
@@ -1463,6 +1516,9 @@ class startQuestions(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Initial Survey')
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.resize(800,700)
+        #self.setMinimumSize()
         layout = QVBoxLayout(self)
         layout0 = QHBoxLayout(self)
 
@@ -1578,6 +1634,8 @@ class endQuestions(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Final Survey')
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.resize(800,700)
         layout = QVBoxLayout(self)
 
         layout.addWidget(QLabel('How difficult was this to do?'))

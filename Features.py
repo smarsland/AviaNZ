@@ -2,15 +2,15 @@
 # Author: Stephen Marsland
 
 import numpy as np
-import pywt
-from scipy.io import wavfile
+#import pywt
+#from scipy.io import wavfile
 import pylab as pl
-import matplotlib
+#import matplotlib
 import librosa
 
 # TODO:
-# Put some more stuff in here and use it!
-# So what are good features? MFCC is a start, what else? Wavelets?
+# (1) Raven features, (2) MFCC, (3) LPC, (4) Random stuff from sounds, (5) Anything else
+# Geometric distance and other metrics should go somewhere
 # **FINISH!!*** List from Raven:
     #1st Quartile Frequency Max Power
     #1st Quartile Time Max Time
@@ -32,10 +32,8 @@ import librosa
 # Prosodic features (pitch, duration, intensity)
 # Spectral statistics
 # Frequency modulation
-# Linear Predictive Coding? -> from scikits.talkbox import lpc (see also audiolazy)
-# Frechet distance for DTW?
-# Pick things from spectrogram
-# Correlation
+# Linear Predictive Coding -> from scikits.talkbox import lpc (see also audiolazy) Librosa?
+# Compute the spectral derivatives??
 
 # Add something that plots some of these to help playing, so that I can understand the librosa things, etc.
 
@@ -44,9 +42,9 @@ import librosa
 
 class Features:
     # This class implements various feature extraction algorithms for the AviaNZ interface
-    # In essence, it will be given a segment as a region of audiodata (between start and stop points)
+    # Given a segment as a region of audiodata (between start and stop points)
     # Classifiers will then be called on the features
-    # Currently it's just MFCC. Has DTW in too.
+    # Currently it's just MFCC, Raven, some playing.
     # TODO: test what there is so far!
 
     def __init__(self,data=[],sampleRate=0):
@@ -54,42 +52,10 @@ class Features:
         self.sampleRate = sampleRate
 
     def setNewData(self,data,sg,fs):
+        # To be called when a new sound file is loaded
         self.data = data
         self.sg = sg
         self.fs = fs
-
-    def dtw(self,x,y,wantDistMatrix=False):
-        # Compute the dynamic time warp between two 1D arrays
-        # I've taught it to second years, should be easy!
-        dist = np.zeros((len(x)+1,len(y)+1))
-        dist[1:,:] = np.inf
-        dist[:,1:] = np.inf
-        for i in range(len(x)):
-            for j in range(len(y)):
-                dist[i+1,j+1] = np.abs(x[i]-y[j]) + min(dist[i,j+1],dist[i+1,j],dist[i,j])
-        if wantDistMatrix:
-            return dist
-        else:
-            return dist[-1,-1]
-
-    def dtw_path(self,d):
-        # Shortest path through DTW matrix
-        i = np.shape(d)[0]-2
-        j = np.shape(d)[1]-2
-        xpath = [i]
-        ypath = [j]
-        while i>0 or j>0:
-                next = np.argmin((d[i,j],d[i+1,j],d[i,j+1]))
-                if next == 0:
-                    i -= 1
-                    j -= 1
-                elif next == 1:
-                    j -= 1
-                else:
-                    i -= 1
-                xpath.insert(0,i)
-                ypath.insert(0,j)
-        return xpath, ypath
 
     def get_mfcc(self):
         # Use librosa to get the MFCC coefficients
@@ -103,12 +69,16 @@ class Features:
         return mfcc
 
     def get_chroma(self):
-        # Use librosa to get the Chroma coefficients
+        # Use librosa to get the chroma coefficients
+        # Short-time energy in the 12 pitch classes
+        # CQT is constant-Q
         cstft = librosa.feature.chroma_stft(self.data,self.sampleRate)
         ccqt = librosa.feature.chroma_cqt(self.data,self.sampleRate)
         return[cstsft,ccqt]
 
     def get_tonnetz(self):
+        # Use librosa to get the tonnetz coefficients
+        # This are an alternative pitch representation to chroma
         tonnetz = librosa.feature.tonnetz(self.data,self.sampleRate)
         return tonnetz
 
@@ -135,104 +105,177 @@ class Features:
         librosa.onset.onset_detect()
         librosa.onset.onset_strength()
 
-    def get_lpc(self):
+    def get_lpc(self,data,order=44):
+        # Use talkbox to get the linear predictive coding
         from scikits.talkbox import lpc
-        lpc(data,order)
+        return lpc(data,order)
 
     def entropy(self,s):
-        e = -s[np.nonzero(s)]**2 * np.log(s[np.nonzero(s)]**2)
+        # Compute the Shannon entropy
+        e = -s[np.nonzero(s)] * np.log2(s[np.nonzero(s)])
         return np.sum(e)
 
-    def energy(self,sg):
-        return np.sum(10.0**(sg/10.0))*(self.sampleRate/self.config['window_width'])
-
     def wiener_entropy(self):
+        # Also known as spectral flatness, geometric mean divided by arithmetic mean of power
         return np.exp(1.0/len(self.data) * np.sum(np.log(self.data))) / (1.0/len(self.data) * np.sum(self.data))
 
-    def get_spectrogram_measurements(self,t1,t2,f1,f2):
+    def morgan(self,sg):
+        # Pitch (= fundamental frequency)
+        s = source(f, sampleRate, 128)
+        ff = pitch("yin", 256, 128, sampleRate)
+        total_frames = 0
+        pitches = []
+        while True:
+            samples, read = s()
+            thispitch = ff(samples)[0]
+            # print("%f %f %f" % (total_frames / float(samplerate), pitch, confidence))
+            pitches += [thispitch]
+            total_frames += read
+            if read < 128: break
+        features[6, whichfile] = np.mean(pitches)
+
+        # Power in decibels
+        sgd = 10.0 * np.log10(sg)
+        sgd[np.isinf(sgd)] = 0
+        features[7, whichfile] = np.sum(sgd) / (np.shape(sgd)[0] * np.shape(sgd)[1])
+        features[8, whichfile] = np.max(sgd)
+        index = np.argmax(sgd)
+
+        # Energy
+        features[9, whichfile] = np.sum(sg)
+
+        # Frequency (I'm going to use freq at which max power occurs)
+        features[10, whichfile] = sg.flatten()[index]
+
+    # The Raven Features (27 of them)
+    # Frequency: 5%, 25%, centre, 75%, 95%, peak, max
+    # And their times, min time
+    # Amplitude: min, peak, max, rms, filtered rms
+    # Power: average, peak, max
+    # Other: peak lag, max bearing, energy, peak correlation
+
+    def get_spectrogram_measurements(self,sg,fs,window_width,f1,f2,t1,t2):
         # The first set of Raven features:
         # average power, delta power, energy, aggregate+average entropy, max+peak freq, max+peak power
-        # These mostly assume that you have clipped the call in time and frequency
-        #nbins = number of pixels = width*height
-        avgPower = np.sum(sg[t1:t2,f1:f2])/nbins
-        deltaPower = np.sum(sg[:,f2]) - np.sum(sg[:,f1])
-        # For the energy, should this be log(sg)?
-        energy = self.energy(sg[t1:t2,f1:f2])
-        Ebin = self.energy(sg[t1:t2,f])
-        aggEntropy = 0
-        for f in range(f1,f2):
-            aggEntropy += self.energy(sg[t1:t2,f]/Ebin)
-        #nframes =
-        avgEntropy = 0
-        for t in range(t1,t2):
-            avgEntropy += self.entropy(sg[t,f1:f2])
-        avgEntropy /= nframes
+        # These mostly assume that you have clipped the call in time and **frequency
+        # Raven takes Fourier transform of signal and squares each coefficient to get power spectral density
+        # Except this doesn't seem to be quite true, since many of them are in decibels!
 
-        maxPower = np.max(sg[t1:t2,f1:f2])
-        peakPower = np.max(np.abs(sg[t1:t2,f1:f2]))
-        maxFreq = np.argmax(sg[t1:t2,f1:f2])[1]
-        peakFreq = np.argmax(np.abs(sg[t1:t2,f1:f2]))[1]
+        # t1, t2, f1, f2 are in pixels
 
-        return (avgPower, deltaPower, energy, avgEntropy, maxPower, peakPower, maxFreq, peakFreq)
+        # Compute the energy before changing into decibels
+        energy = 10.*np.log10(np.sum(sg[f1:f2,t1:t2])*fs/window_width)
+        Ebin = np.sum(sg[f1:f2,t1:t2],axis=1)
+        # Energy in each frequency bin over whole time
+        Ebin /= np.sum(Ebin)
+        # Entropy for each time slice
+        # TODO: Unconvinced about this next one
+        Fbin = 0
+        for t in range(t2-t1):
+            Fbin += self.entropy(sg[f1:f2,t+t1])
+        aggEntropy = np.sum(self.entropy(Ebin))
+        avgEntropy = Fbin/(t2-t1)
 
-    def get_robust_measurements(self,t1,t2,f1,f2):
+        # Convert spectrogram into decibels
+        sg = -10.0*np.log10(sg)
+        sg[np.isinf(sg)] = 0
+
+        avgPower = np.sum(sg[f1:f2,t1:t2])/((f2-f1)*(t2-t1))
+        # Should this have the sums in?
+        deltaPower = (np.sum(sg[f2-1,:]) - np.sum(sg[f1,:]))/np.shape(sg)[1]
+
+        maxPower = np.max(sg[f1:f2,t1:t2])
+        maxFreq = (np.argmax(sg[f1:f2,t1:t2])+f1) * float(fs)/np.shape(sg)[0]
+
+        return (avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq)
+
+    def get_robust_measurements(self,sg,length,fs,f1,f2,t1,t2):
         # The second set of Raven features
-        # 1st, 2nd, 3rd quartile, 5%, 95% frequency, inter-quartile range, bandwidth 90%
+        # 1st, 2nd (centre), 3rd quartile, 5%, 95% frequency, inter-quartile range, bandwidth 90%
         # Ditto for time
         # Cumulative sums to get the quartile points for freq and time
-        csf = np.cumsum(sg[f1:f2, t1:t2], axis=0)
-        cst = np.cumsum(sg[f1:f2, t1:t2], axis=1)
+
+        # t1, t2, f1, f2 are in pixels
+        sg = -10.0*np.log10(sg)
+        sg[np.isinf(sg)] = 0
+
+        sgt = np.sum(sg[f1:f2,t1:t2], axis=0)
+        cst = np.cumsum(sgt)
+
+        sgf = np.sum(sg[f1:f2,t1:t2], axis=1)
+        csf = np.cumsum(sgf)
 
         # List of the frequency points (5%, 25%, 50%, 75%, 95%)
         list = [.05, .25, .5, .75, .95]
 
-        freqindices = []
+        freqindices = np.zeros(5)
         index = 0
         i = 0
-        while i < (len(csf)) and index < len(list):
+        while i < len(csf) and index < len(list):
             if csf[i] > list[index] * csf[-1]:
-                freqindices.extend(str(i))
+                freqindices[index] = i+1
                 index += 1
             i += 1
 
-        timeindices = []
+        timeindices = np.zeros(5)
         index = 0
         i = 0
-        while i < (len(cst)) and index < len(list):
+        while i < len(cst) and index < len(list):
             if cst[i] > list[index] * cst[-1]:
-                timeindices.extend(str(i))
+                timeindices[index] = i+1
                 index += 1
             i += 1
 
+        # Check that the centre time/freq are in the middle (look good)
+        print np.sum(sg[f1:f2,t1:timeindices[2]]), np.sum(sg[f1:f2,timeindices[2]:t2])
+        print np.sum(sg[f1:freqindices[2], t1:t2]), np.sum(sg[freqindices[2]:f2, t1:t2])
+
+        freqindices = (freqindices+f1) * float(fs)/np.shape(sg)[0]
+        timeindices = (timeindices+t1)/np.shape(sg)[1] * length
         return (freqindices, freqindices[3] - freqindices[1], freqindices[4] - freqindices[0], timeindices, timeindices[3] - timeindices[1], timeindices[4] - timeindices[0])
 
-    def get_waveform_measurements(self,t1,t2,f1,f2):
+    def get_waveform_measurements(self,data,fs,t1,t2):
         # The third set of Raven features
         # Min, max, peak, RMS, filtered RMS amplitude (and times for the first 3), high, low, delta frequency, length of time
-        mina = np.min(self.data[t1:t2])
-        mint = np.argmin(self.data[t1,t2])
-        maxa = np.max(self.data[t1:t2])
-        maxt = np.argmax(self.data[t1:t2])
-        peaka = np.max(np.abs(self.data[t1:t2]))
-        peakt = np.argmax(np.abs(self.data[t1:t2]))
-        npoints = t2-t1/self.config[]
-        rmsa = np.sqrt(np.sum(self.data[t1:t2]**2)/npoints)
-        # rmsfa = np.sqrt(np.sum(self.data[t1:t2] ** 2) / npoints)
+
+        # First, convert t1 and t2 into points in the amplitude plot
+        t1 = float(t1) / np.shape(sg)[1] * len(data)
+        t2 = float(t2) / np.shape(sg)[1] * len(data)
+
+        mina = np.min(data[t1:t2])
+        mint = float(np.argmin(data[t1:t2])+t1) / fs
+        maxa = np.max(data[t1:t2])
+        maxt = float(np.argmax(data[t1:t2])+t1) / fs
+        peaka = np.max(np.abs(data[t1:t2]))
+        peakt = float(np.argmax(np.abs(data[t1:t2]))+t1) / fs
+        # TODO: check
+        rmsa = np.sqrt(np.sum(data[t1:t2]**2)/len(data[t1:t2]))
+        # Filtered rmsa (bandpass filtered first)
         # Also? max bearing, peak correlation, peak lag
         return (mina, mint, maxa, maxt, peaka, peakt,rmsa)
 
     def computeCorrelation(self):
         scipy.signal.fftconvolve(a, b, mode='same')
 
-    def testDTW(self):
-        x = [0, 0, 1, 1, 2, 4, 2, 1, 2, 0]
-        y = [1, 1, 1, 2, 2, 2, 2, 3, 2, 0]
 
-        d = self.dtw(x,y,wantDistMatrix=True)
-        print self.dtw_path(d)
 
 def test():
     a = Features()
     a.testDTW()
     pl.show()
+
+def raven():
+    #data, fs = librosa.load('Sound Files/tril1.wav',sr=None)
+    #data, fs = librosa.load('Sound Files/kiwi.wav',sr=None)
+    data, sampleRate = librosa.load('Sound Files/male1.wav',sr=None)
+
+    import SignalProc
+    sp = SignalProc.SignalProc()
+    sg = sp.spectrogram(data,fs,multitaper=False)
+    print np.shape(sg)
+    f = Features()
+    a = f.get_spectrogram_measurements(sg,fs,256,0,np.shape(sg)[0],0,np.shape(sg)[1])
+    b = f.get_robust_measurements(sg,len(data)/fs,fs,0,np.shape(sg)[0],0,np.shape(sg)[1])
+    c = f.get_waveform_measurements(data,fs,0,len(data))
+    return a, b, c
 #test()
