@@ -39,6 +39,8 @@ pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.dockarea import *
+import pyqtgraph.functions as fn
+
 
 #import sounddevice as sd
 
@@ -50,17 +52,20 @@ import SignalProc
 # TODO
 
 # Redesign interface to use pyqtgraph
+# Some problem with the text moving
 #   Finish scaling of the two figures using the spinbox
-#   Add the shaded red box (how?) to replace the mysterious line/arrow for drawing new segments
-#   Get the segments working (work out the offset error, draw, add text, save segments)
-#   And colour change?
+#   Sort out the axes
+#   Segment offset error
+#   Check the colour code of boxes by label (add info somewhere)
 #   Check the overview box
-#   Context menu for labelling, and/or a dock for it?
+#   Sort out position of context menu for labelling, deal with clicks in it -- and/or a dock for it?
 #   Colormap needs work
-#   Right button for interleaving
+#   Include the drag box on the spectrogram?
+# Close window isn't caught to be a quit -> no saving
 #
+#   The remote plotting should speed things up
 #   Look into ParameterTree
-# Better loading of files
+# Better loading of files -> paging, not computing whole spectrogram
 # Add the bandpass filtering
 
 # Test the init part about if file or directory doesn't exist
@@ -127,6 +132,15 @@ import SignalProc
 # Code is still there, though, just commented out. Add as an option?
 
 # ===============
+
+#class OpeningLinearRegionItem(pg.LinearRegionItem):
+    # This might be useful for picking out when a box is clicked, but it isn't perfect since there will be multiple signals sent
+#    sigMouseMoved = QtCore.Signal(object)
+#    def __init__(self):
+#        pg.LinearRegionItem.__init__(self)
+
+#    def mouseMovedEvent(self, ev):
+#        print "it works!"
 
 class Interface(QMainWindow):
     # Main class for the interface, which contains most of the user interface and plotting code
@@ -211,14 +225,14 @@ class Interface(QMainWindow):
             'dirpath': './Sound Files',
 
             # Params for the width of the lines to draw for segmentation in the two plots
-            'linewidtha1': 0.005,
-            'minbar_thickness': 200,
-            'linewidtha2': 0.03,
+            #'linewidtha1': 0.005,
+            #'minbar_thickness': 200,
+            #linewidtha2': 0.03,
 
             # Params for the extra padding in the second figure, and how much keys move bars by
             # All as percentage of width
-            'padding': 0.15,
-            'move_amount': 0.01,
+            #'padding': 0.15,
+            #'move_amount': 0.01,
 
             # Param for width in seconds of the main representation
             'windowWidth': 10.0,  #
@@ -392,23 +406,22 @@ class Interface(QMainWindow):
         for w in [deleteButton,deleteAllButton,spectrogramButton,denoiseButton, segmentButton, findMatchButton, quitButton, checkButton]:
             self.w_buttons.addWidget(w)
 
-        # TODO: Decide if this might be useful
-        # # The context menu (drops down on mouse click) to select birds
-        # self.setContextMenuPolicy(Qt.CustomContextMenu)
-        # self.menuBirdList = QMenu()
-        # # Need the lambda function to connect all menu events to same trigger and know which was selected
-        # for item in self.config['BirdButtons1'] + self.config['BirdButtons2'][:-1]:
-        #     bird = self.menuBirdList.addAction(item)
-        #     receiver = lambda birdname=item: self.birdSelected(birdname)
-        #     self.connect(bird, SIGNAL("triggered()"), receiver)
-        #     self.menuBirdList.addAction(bird)
-        # self.menuBird2 = self.menuBirdList.addMenu('Other')
-        # for item in self.config['ListBirdsEntries']+['Other']:
-        #     bird = self.menuBird2.addAction(item)
-        #     receiver = lambda birdname=item: self.birdSelected(birdname)
-        #     self.connect(bird, SIGNAL("triggered()"), receiver)
-        #     self.menuBird2.addAction(bird)
-        #
+        # The context menu (drops down on mouse click) to select birds
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.menuBirdList = QMenu()
+        # Need the lambda function to connect all menu events to same trigger and know which was selected
+        for item in self.config['BirdButtons1'] + self.config['BirdButtons2'][:-1]:
+            bird = self.menuBirdList.addAction(item)
+            receiver = lambda birdname=item: self.birdSelected(birdname)
+            self.connect(bird, SIGNAL("triggered()"), receiver)
+            self.menuBirdList.addAction(bird)
+        self.menuBird2 = self.menuBirdList.addMenu('Other')
+        for item in self.config['ListBirdsEntries']+['Other']:
+            bird = self.menuBird2.addAction(item)
+            receiver = lambda birdname=item: self.birdSelected(birdname)
+            self.connect(bird, SIGNAL("triggered()"), receiver)
+            self.menuBird2.addAction(bird)
+
         # # An array of radio buttons and a list and a text entry box
         # # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
         # # self.birds1 = []
@@ -517,13 +530,11 @@ class Interface(QMainWindow):
         self.segments=[]
         self.listRectanglesa1 = []
         self.listRectanglesa2 = []
-        self.listRectanglesb1 = []
-        self.listRectanglesb2 = []
-        self.a1text = []
+        self.listLabels = []
 
         # This is a flag to say if the next thing that they click on should be a start or a stop for segmentation
-        self.start_a = True
-        self.start_s = True
+        self.started_a = False
+        self.started_s = False
 
         # Keep track of start points and selected buttons
         #self.start_a = 0
@@ -635,7 +646,7 @@ class Interface(QMainWindow):
 
         # Set the width of the segment marker
         # This is the config width as a percentage of the window width, which is in seconds
-        self.linewidtha1 = float(self.config['linewidtha1'])*self.windowSize
+        #self.linewidtha1 = float(self.config['linewidtha1'])*self.windowSize
 
         # Load the file for playback as well, and connect up the listeners for it
         self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
@@ -644,7 +655,8 @@ class Interface(QMainWindow):
         self.setSliderLimits(0,self.media_obj.totalTime())
 
         # Get the height of the amplitude for plotting the box
-        self.plotheight = np.abs(np.min(self.audiodata)) + np.max(self.audiodata)
+        self.minampl = np.min(self.audiodata)
+        self.plotheight = np.abs(self.minampl) + np.max(self.audiodata)
         self.drawOverview()
         self.drawfigMain()
 
@@ -693,20 +705,14 @@ class Interface(QMainWindow):
 
     def drawfigMain(self):
         # This draws the main amplitude and spectrogram plots
-
         # TODO: Background colour, sort out the setLevels
-        # TODO: Draw saved segments
-        # TODO: But most important, sort out the mouse clicks
-        # TODO: Add the text (pg.TextItem), sort out axes (look at Plot Customisation eg)
-        # TODO: ViewBox demo might be useful, ditto ROI
+        # TODO: Sort out axes (look at Plot Customisation eg)
         # TODO: RemoteGraphicsView: parallel
         # TODO: Axis labels
         # TODO: Useful commands: showAxis('bottom',False), setLabel('left', "Y Axis", units='A') setData(data[ptr%10]) enableAutoRange('xy', False)
 
         self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
         #self.w_ampl.setXRange(1.1, 6.0, padding=0)
-
-        #self.a1.axis('off')
 
         # To draw different amounts, specify the bit of self.sg you want (sg[:,xmin,xmax]).
         # This should be fast, since it's good at redrawing
@@ -716,26 +722,48 @@ class Interface(QMainWindow):
         #self.p_spec.setRange(QtCore.QRectF(0,0,10,10))
 
         # First attempt at adding a box to the image
-        #region = pg.LinearRegionItem()
+        # TODO: Is this z-value about making sure everything is reachable? Look into it.
         #region.setZValue(10)
 
-        # Add the LinearRegionItem to the ViewBox, but tell the ViewBox to exclude this
-        # item when doing auto-range calculations.
-        #self.p_spec.addItem(region, ignoreBounds=True)
-        #region.setRegion([10,100])
+        # If there are segments, show them
+        for count in range(len(self.segments)):
+            #if self.segments[count][4] == 'None' or self.segments[count][4] == "Don't Know":
+            #    facecolour = 'r'
+            #else:
+            #    facecolour = 'b'
+            self.addSegment(self.segments[count][0], self.segments[count][1],self.segments[count][4],False)
 
-        #def update():
-            # TODO: This isn't what is wanted really, but shows the idea!
-            # Actually want to move the two boxes together
-        #    minX, maxX = region.getRegion()
-            #self.a1.setXRange(minX, maxX, padding=0)
+    def updateRegion_spec(self):
+        # This is the listener for when a segment box is changed
+        # It updates the position of the matching box, and also the text within it
+        print "Region Changed", self.sender().getRegion()
+        sender = self.sender()
+        i = 0
+        while self.listRectanglesa2[i] != sender and i<len(self.listRectanglesa2):
+            i = i+1
+        if i>len(self.listRectanglesa2):
+            print "segment not found!"
+        else:
+            self.listRectanglesa1[i].setRegion([self.convertSpectoAmpl(sender.getRegion()[0]),self.convertSpectoAmpl(sender.getRegion()[1])])
+            self.listLabels[i].setPos(self.convertSpectoAmpl(sender.getRegion()[0]),self.minampl)
+            self.segments[i][0] = self.convertSpectoAmpl(sender.getRegion()[0])
+            self.segments[i][1] = self.convertSpectoAmpl(sender.getRegion()[1])
 
-        #region.sigRegionChanged.connect(update)
-
-
-        #proxy = pg.SignalProxy(self.a1.scene().sigMouseClicked, rateLimit=60, slot=mouseClicked)
-
-        #self.a1.scene().sigMouseMoved.connect(mouseMoved)
+    def updateRegion_ampl(self):
+        # This is the listener for when a segment box is changed
+        # It updates the position of the matching box, and also the text within it
+        print "Region Changed", self.sender().getRegion()
+        sender = self.sender()
+        i = 0
+        while self.listRectanglesa1[i] != sender and i<len(self.listRectanglesa1):
+            i = i+1
+        if i>len(self.listRectanglesa1):
+            print "segment not found!"
+        else:
+            self.listRectanglesa2[i].setRegion([self.convertAmpltoSpec(sender.getRegion()[0]),self.convertAmpltoSpec(sender.getRegion()[1])])
+            self.listLabels[i].setPos(sender.getRegion()[0],self.minampl)
+            self.segments[i][0] = sender.getRegion()[0]
+            self.segments[i][1] = sender.getRegion()[1]
 
     def mouseClicked_overview(self,evt):
         pos = evt.pos()
@@ -745,61 +773,186 @@ class Interface(QMainWindow):
             mousePoint = self.p_overview.mapSceneToView(pos)
             print mousePoint.x(), mousePoint.y(), self.convertSpectoAmpl(mousePoint.x())
 
+    def addSegment(self,startpoint,endpoint,name=None,saveSeg=True):
+        # Create a new segment and all the associated stuff
+        # x, y in amplitude coordinates
+
+        # Make the two regions and connect up the listener for changes to them
+        if name is None:
+            name = 'None'
+        if name is not 'None':
+            brush = QtGui.QBrush(QtGui.QColor(225, 0, 0, 50))
+        else:
+            brush = QtGui.QBrush(QtGui.QColor(0, 0, 225, 50))
+
+        p_ampl_r = pg.LinearRegionItem(brush=brush)
+        self.p_ampl.addItem(p_ampl_r, ignoreBounds=True)
+        p_ampl_r.setRegion([startpoint, endpoint])
+        p_ampl_r.sigRegionChangeFinished.connect(self.updateRegion_ampl)
+        p_spec_r = pg.LinearRegionItem(brush = brush)
+        self.p_spec.addItem(p_spec_r, ignoreBounds=True)
+        p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
+        p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
+
+        # Put the text into the box
+        label = pg.TextItem(text=name, color='k')
+        self.p_ampl.addItem(label)
+        label.setPos(min(startpoint, endpoint),self.minampl)
+
+        # Add the region to the list
+        self.listRectanglesa1.append(p_ampl_r)
+        self.listRectanglesa2.append(p_spec_r)
+        self.listLabels.append(label)
+
+        if saveSeg:
+            # Add the segment to the list
+            self.segments.append([min(startpoint, endpoint), max(startpoint, endpoint), 0, 0, name])
+
     def mouseClicked_ampl(self,evt):
         # TODO: These points seem to have an offset
-        # TODO: Draw a box/line at the start location
-        print "amplitude"
+        # TODO: Add the context menu
+        #print "amplitude"
         pos = evt.pos()
-        print pos, self.p_ampl.sceneBoundingRect(), self.p_ampl.sceneBoundingRect().contains(pos), evt.button()
+        #print pos, self.p_ampl.sceneBoundingRect(), self.p_ampl.sceneBoundingRect().contains(pos), evt.button()
+
+        if self.box1id>-1:
+            self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
+            self.listRectanglesa1[self.box1id].update()
+            self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+            self.listRectanglesa2[self.box1id].update()
 
         if self.p_ampl.sceneBoundingRect().contains(pos):
             mousePoint = self.p_ampl.mapSceneToView(pos)
-            #print mousePoint.x(), mousePoint.y(), self.convertAmpltoSpec(mousePoint.x())
-            # Note that need to click in the same plot both times
-            if self.start_a:
-                self.start_location_a = mousePoint.x()
-                # TODO Work out what the location and length of this actually refers to
-                self.startbar = pg.ArrowItem(angle=90, tipAngle=60, headLen=0, tailLen=100, tailWidth=5,
-                                  pen={'color': 'r', 'width': 3})
-                # TODO: avoid the computation below
-                self.startbar.setPos(self.start_location_a,np.max(self.audiodata))
-                self.p_ampl.addItem(self.startbar)
-                #pg.plot([self.start_location,-0.04],[self.start_location,0.04],'r', width=3)
+
+            if self.started_a:
+                # This is the second click, so should pay attention and close the segment
+                # Stop the mouse motion connection, remove the drawing boxes
+                self.p_ampl.scene().sigMouseMoved.disconnect()
+                self.p_ampl.removeItem(self.vLine_a)
+                self.p_ampl.removeItem(self.drawingBox_ampl)
+                self.p_spec.removeItem(self.drawingBox_spec)
+                self.addSegment(self.start_location_a,mousePoint.x())
+
+                # TODO: This needs an offset of some kind!
+                #self.menuBirdList.popup(QPoint(pos.x(), pos.y()))
+
+                self.started_a = not(self.started_a)
             else:
-                # TODO Need to reintroduce the stuff to store the segments
-                self.p_ampl.removeItem(self.startbar)
-                r_a = pg.LinearRegionItem()
-                self.p_ampl.addItem(r_a, ignoreBounds=True)
-                r_a.setRegion([self.start_location_a,mousePoint.x()])
-                r_s = pg.LinearRegionItem()
-                self.p_spec.addItem(r_s, ignoreBounds=True)
-                r_s.setRegion([self.convertAmpltoSpec(self.start_location_a),self.convertAmpltoSpec(mousePoint.x())])
-            self.start_a = not(self.start_a)
+                # Check if the user has clicked in a box
+                # Note: Returns the first one it finds
+                box1id = -1
+                for count in range(len(self.listRectanglesa1)):
+                    print self.listRectanglesa1[count].getRegion()
+                    x1, x2 = self.listRectanglesa1[count].getRegion()
+                    if x1 <= mousePoint.x() and x2 >= mousePoint.x():
+                        box1id = count
+
+                if box1id > -1 and not evt.button() == QtCore.Qt.RightButton:
+                    # User clicked in a box (with the left button)
+                    print "Selected box ",box1id
+                    self.box1id = box1id
+                    self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
+                    self.listRectanglesa1[box1id].setBrush(fn.mkBrush(QtGui.QBrush(QtGui.QColor(0, 225, 0, 50))))
+                    self.listRectanglesa1[box1id].update()
+                    self.listRectanglesa2[box1id].setBrush(fn.mkBrush(QtGui.QBrush(QtGui.QColor(0, 225, 0, 50))))
+                    self.listRectanglesa2[box1id].update()
+
+                else:
+                    # User hasn't clicked in a box (or used the right button), so start a new segment
+                    # Note that need to click in the same plot both times.
+                    self.start_location_a = mousePoint.x()
+                    self.vLine_a = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
+                    self.p_ampl.addItem(self.vLine_a, ignoreBounds=True)
+                    self.vLine_a.setPos(self.start_location_a)
+
+                    brush = QtGui.QBrush(QtGui.QColor(225, 0, 0, 50))
+                    self.drawingBox_ampl = pg.LinearRegionItem(brush=brush)
+                    self.p_ampl.addItem(self.drawingBox_ampl, ignoreBounds=True)
+                    self.drawingBox_ampl.setRegion([self.start_location_a, self.start_location_a])
+                    self.drawingBox_spec = pg.LinearRegionItem(brush=brush)
+                    self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
+                    self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_location_a), self.convertAmpltoSpec(self.start_location_a)])
+                    self.p_ampl.scene().sigMouseMoved.connect(self.GrowBox_ampl)
+
+                    self.started_a = not (self.started_a)
 
     def mouseClicked_spec(self,evt):
-        print "spectrogram"
+        #print "spectrogram"
         pos = evt.pos()
-        print pos, self.p_spec.sceneBoundingRect(), self.p_spec.sceneBoundingRect().contains(pos), evt.button()
+
+        if self.box1id>-1:
+            self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
+            self.listRectanglesa1[self.box1id].update()
+            self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+            self.listRectanglesa2[self.box1id].update()
+
         if self.p_spec.sceneBoundingRect().contains(pos):
             mousePoint = self.p_spec.mapSceneToView(pos)
-            print mousePoint.x(), mousePoint.y(), self.convertSpectoAmpl(mousePoint.x())
-            if self.start_s:
-                self.start_location_s = mousePoint.x()
-                # TODO Work out what the location and length of this actually refers to
-                self.startbar = pg.ArrowItem(angle=90, tipAngle=60, headLen=0, tailLen=100, tailWidth=5,
-                                  pen={'color': 'r', 'width': 3})
-                # TODO: avoid the computation below
-                self.startbar.setPos(self.start_location_s,np.min(self.audiodata))
-                self.p_spec.addItem(self.startbar)
+
+            if self.started_s:
+                # This is the second click, so should pay attention and close the segment
+                # Stop the mouse motion connection, remove the drawing boxes
+                self.p_spec.scene().sigMouseMoved.disconnect()
+
+                self.p_spec.removeItem(self.vLine_s)
+                self.p_ampl.removeItem(self.drawingBox_ampl)
+                self.p_spec.removeItem(self.drawingBox_spec)
+                self.addSegment(self.convertSpectoAmpl(self.start_location_s),self.convertSpectoAmpl(mousePoint.x()))
+
+                # TODO: This needs an offset of some kind!
+                #self.menuBirdList.popup(QPoint(pos.x(), pos.y()))
+
+                self.started_s = not(self.started_s)
             else:
-                # Need to reintroduce the stuff to store the segments
-                r_a = pg.LinearRegionItem()
-                self.p_ampl.addItem(r_a, ignoreBounds=True)
-                r_a.setRegion([self.convertSpectoAmpl(self.start_location_s),self.convertSpectoAmpl(mousePoint.x())])
-                r_s = pg.LinearRegionItem()
-                self.p_spec.addItem(r_s, ignoreBounds=True)
-                r_s.setRegion([self.start_location_s,mousePoint.x()])
-            self.start_s = not(self.start_s)
+                # Check if the user has clicked in a box
+                # Note: Returns the first one it finds
+                box1id = -1
+                for count in range(len(self.listRectanglesa2)):
+                    x1, x2 = self.listRectanglesa2[count].getRegion()
+                    if x1 <= mousePoint.x() and x2 >= mousePoint.x():
+                        box1id = count
+
+                if box1id > -1 and not evt.button() == QtCore.Qt.RightButton:
+                    # User clicked in a box (with the left button)
+                    print box1id
+                    self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
+                    self.listRectanglesa1[box1id].setBrush(fn.mkBrush(QtGui.QBrush(QtGui.QColor(0, 225, 0, 50))))
+                    self.listRectanglesa1[box1id].update()
+                    self.listRectanglesa2[box1id].setBrush(fn.mkBrush(QtGui.QBrush(QtGui.QColor(0, 225, 0, 50))))
+                    self.listRectanglesa2[box1id].update()
+                else:
+                    # User hasn't clicked in a box (or used the right button), so start a new segment
+                    # Note that need to click in the same plot both times.
+                    self.start_location_s = mousePoint.x()
+                    self.vLine_s = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
+                    self.p_spec.addItem(self.vLine_s, ignoreBounds=True)
+                    self.vLine_s.setPos(self.start_location_s)
+
+                    brush = QtGui.QBrush(QtGui.QColor(225, 0, 0, 50))
+                    self.drawingBox_ampl = pg.LinearRegionItem(brush=brush)
+                    self.p_ampl.addItem(self.drawingBox_ampl, ignoreBounds=True)
+                    self.drawingBox_ampl.setRegion([self.convertSpectoAmpl(self.start_location_s), self.convertSpectoAmpl(self.start_location_s)])
+                    self.drawingBox_spec = pg.LinearRegionItem(brush=brush)
+                    self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
+                    self.drawingBox_spec.setRegion([self.start_location_s, self.start_location_s])
+                    self.p_spec.scene().sigMouseMoved.connect(self.GrowBox_spec)
+
+                    # The drawing should be possible with a borrow from LinearRegionItem
+                    self.started_s = not (self.started_s)
+
+    def GrowBox_ampl(self,evt):
+        pos = evt
+        if self.p_ampl.sceneBoundingRect().contains(pos):
+            mousePoint = self.p_ampl.mapSceneToView(pos)
+            self.drawingBox_ampl.setRegion([self.start_location_a, mousePoint.x()])
+            self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_location_a), self.convertAmpltoSpec(mousePoint.x())])
+
+    def GrowBox_spec(self, evt):
+        pos = evt
+        if self.p_spec.sceneBoundingRect().contains(pos):
+            mousePoint = self.p_spec.mapSceneToView(pos)
+            self.drawingBox_ampl.setRegion([self.convertSpectoAmpl(self.start_location_s), self.convertSpectoAmpl(mousePoint.x())])
+            self.drawingBox_spec.setRegion([self.start_location_s, mousePoint.x()])
 
     def figMainDrag(self,event):
         # This is the start listener for the user dragging boxes on the spectrogram
@@ -1045,7 +1198,6 @@ class Interface(QMainWindow):
         self.canvasMain.draw()
 
     def figMainSelecting(self,event):
-        # TODO: I like this! Find out how to do again
         # When the user is drawing a box in the main plot, this makes the red box they are drawing move as they move the mouse
         if not self.start_stop:
             return
@@ -1221,7 +1373,7 @@ class Interface(QMainWindow):
         if not hasattr(self,'overviewImageRegion'):
             return
         self.windowSize = value
-        # TODO: Next lines
+        # TODO: ****Next lines
 
         #self.a1.set_xlim(self.windowStart, self.windowStart+self.windowSize)
         #self.a2.set_xlim(self.windowStart*self.sampleRate / self.config['incr'], (self.windowStart + self.windowSize)*self.sampleRate/self.config['incr'])
@@ -1540,51 +1692,33 @@ class Interface(QMainWindow):
     def deleteSegment(self):
         # Listener for delete segment button, or backspace key
         # Deletes segment if one is selected, otherwise does nothing
+        # TODO: Check this (needs the boxid sorted)
+        print self.box1id
         if self.box1id>-1:
-            self.listRectanglesa1[self.box1id].remove()
-            self.listRectanglesa2[self.box1id].remove()
-            self.listRectanglesa1.remove(self.listRectanglesa1[self.box1id])
-            self.listRectanglesa2.remove(self.listRectanglesa2[self.box1id])
-            for r in self.listRectanglesb1:
-                r.remove()
-            for r in self.listRectanglesb2:
-                r.remove()
-            self.listRectanglesb1 = []
-            self.listRectanglesb2 = []
-            self.a1text[self.box1id].remove()
-            self.a1text.remove(self.a1text[self.box1id])
+            self.p_ampl.removeItem(self.listRectanglesa1[self.box1id])
+            print "deleted", self.box1id
+            self.p_spec.removeItem(self.listRectanglesa2[self.box1id])
+            #self.listRectanglesa1.remove(self.listRectanglesa1[self.box1id])
+            #self.listRectanglesa2.remove(self.listRectanglesa2[self.box1id])
+            self.p_ampl.removeItem(self.listLabels[self.box1id])
+            #self.a1text.remove(self.a1text[self.box1id])
             self.segments.remove(self.segments[self.box1id])
             self.box1id = -1
-            self.canvasMain.draw()
-            # Make canvasZoom blank
-            self.a3.clear()
-            self.a3.axis('off')
-            self.a4.clear()
-            self.canvasZoom.draw()
 
     def deleteAll(self):
         # Listener for delete all button
+        # TODO: Sort this out
         self.segments=[]
-        for r in self.a1text:
-            r.remove()
+        for r in self.listLabels:
+            self.p_ampl.removeItem(r)
         for r in self.listRectanglesa1:
-            r.remove()
+            self.p_ampl.removeItem(r)
         for r in self.listRectanglesa2:
-            r.remove()
-        for r in self.listRectanglesb1:
-            r.remove()
-        for r in self.listRectanglesb2:
-            r.remove()
+            self.p_spec.removeItem(r)
         self.listRectanglesa1 = []
         self.listRectanglesa2 = []
-        self.listRectanglesb1 = []
-        self.listRectanglesb2 = []
         self.a1text = []
         self.box1id = -1
-
-        self.canvasMain.draw()
-        self.canvasZoom.draw()
-        self.canvasOverview.draw()
 
     def saveSegments(self):
         # This saves the segmentation data as a json file
