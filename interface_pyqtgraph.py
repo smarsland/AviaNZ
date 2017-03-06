@@ -45,7 +45,7 @@ import pyqtgraph.functions as fn
 #import sounddevice as sd
 
 import SignalProc
-#import Segment
+import Segment
 #import Features
 #import Learning
 # ==============
@@ -246,6 +246,7 @@ class Interface(QMainWindow):
         self.area = DockArea()
         self.setCentralWidget(self.area)
         self.resize(1200,950)
+        self.move(100,50)
 
         # Make the docks
         self.d_overview = Dock("Overview",size = (1200,100))
@@ -587,8 +588,8 @@ class Interface(QMainWindow):
 
         # Get the data for the spectrogram
         # TODO: put a button for multitapering somewhere
-        self.sg = self.sp.spectrogram(self.audiodata,self.sampleRate,multitaper=False)
-        self.sg = np.where(self.sg==0,0.0,10.0 * np.log10(self.sg))
+        self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,multitaper=False)
+        self.sg = np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw))
 
         # Colour scaling for the spectrograms
         #print np.shape(self.sg), np.max(self.sg), np.min(self.sg)
@@ -1207,7 +1208,10 @@ class Interface(QMainWindow):
         # Create the dialog that shows calls to the user for verification
         # Currently assumes that there is a selected box (later, use the first!)
         self.currentSegment = 0
-        self.humanClassifyDialog = HumanClassify2(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.segments[self.currentSegment][4],self.cmap_grey,self.cmap_grey_r)
+        x1,x2 = self.listRectanglesa2[self.currentSegment].getRegion()
+        x1 = int(x1)
+        x2 = int(x2)
+        self.humanClassifyDialog = HumanClassify2(self.sg[:,x1:x2],self.segments[self.currentSegment][4],self.config['colourStart'],self.config['colourEnd'])
         self.humanClassifyDialog.show()
         self.humanClassifyDialog.activateWindow()
         self.humanClassifyDialog.close.clicked.connect(self.humanClassifyClose)
@@ -1363,9 +1367,10 @@ class Interface(QMainWindow):
         seglen = len(self.segments)
         [alg, ampThr, medThr,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
         if not hasattr(self,'seg'):
-            self.seg = Segment.Segment(self.audiodata,self.sg,self.sp,self.sampleRate)
+            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
         if str(alg) == "Amplitude":
             newSegments = self.seg.segmentByAmplitude(float(str(ampThr)))
+            # TODO: *** Next few lines need updating
             if hasattr(self, 'line'):
                 if self.line is not None:
                     self.line.remove()
@@ -1389,14 +1394,15 @@ class Interface(QMainWindow):
             # TODO: needs learning and samplerate
                 newSegments = self.seg.segmentByWavelet(thrType,float(str(thr)), int(str(depth)), wavelet,sampleRate,bandchoice,start,end,learning,)
         for seg in newSegments:
-            self.segments.append([seg[0],seg[1],0.0, self.sampleRate / 2., 'None'])
+            self.addSegment(seg[0],seg[1],'None',True)
 
-        self.showSegments(seglen)
+
 
     def findMatches(self):
         # Calls the cross-correlation function to find matches like the currently highlighted box
         # TODO: Other methods apart from c-c?
         # TODO: Should give them the same label as the currently highlighted box
+        # TODO: *** turn into pyqtgraph
         # So there needs to be a currently highlighted box
         #print self.box1id
         if not hasattr(self,'seg'):
@@ -1531,25 +1537,6 @@ class Interface(QMainWindow):
         data = self.audiodata[(count) * lengthwanted:]
         filename = name[:-4] + '_' + str((count)) + name[-4:]
         lr.output.write_wav(filename,data,self.sampleRate)
-
-    def defineColourmap(self):
-        # This makes the spectrograms look better. It defines a colourmap that hides a lot of the black
-        # We want a colourmap that goes from white to black in greys, but has limited contrast
-        # First is sorted by keeping all 3 colours the same, second by squeezing the range
-        cdict = {
-            'blue': ((0, 1, 1), (self.config['colourStart'], 1, 1), (self.config['colourEnd'], 0, 0), (1, 0, 0)),
-            'green': ((0, 1, 1), (self.config['colourStart'], 1, 1), (self.config['colourEnd'], 0, 0), (1, 0, 0)),
-            'red': ((0, 1, 1), (self.config['colourStart'], 1, 1), (self.config['colourEnd'], 0, 0), (1, 0, 0))
-        }
-        self.cmap_grey = matplotlib.colors.LinearSegmentedColormap('cmap_grey', cdict, 256)
-
-        # Reverse each colour
-        cdict = {
-            'blue': ((0, 0, 0), (self.config['colourStart'], 0, 0), (self.config['colourEnd'], 1, 1), (1, 1, 1)),
-            'green': ((0, 0, 0), (self.config['colourStart'], 0, 0), (self.config['colourEnd'], 1, 1), (1, 1, 1)),
-            'red': ((0, 0, 0), (self.config['colourStart'], 0, 0), (self.config['colourEnd'], 1, 1), (1, 1, 1))
-        }
-        self.cmap_grey_r = matplotlib.colors.LinearSegmentedColormap('cmap_grey_r', cdict, 256)
 
 # ===============
 # Classes for the dialog boxes. Since most of them just get user selections, they are mostly just a mess of UI things
@@ -2001,18 +1988,18 @@ class HumanClassify1(QDialog):
     # TODO: Could have the label options in here and preselect it, then have the tick or change it.
     # Better for things that aren't labelled already?
 
-    def __init__(self, seg, label, cmap_grey, cmap_grey_r, parent=None):
+    def __init__(self, seg, label, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.frame = QWidget()
-        self.cmap_grey = cmap_grey
+        #self.cmap_grey = cmap_grey
 
         # Set up the plot windows, then the right and wrong buttons, and a close button
-        # TODO: Replace with pyqtgraph
-        self.plot = Figure()
-        self.plot.set_size_inches(10.0, 2.0, forward=True)
-        self.canvasPlot = FigureCanvas(self.plot)
-        self.canvasPlot.setParent(self.frame)
+
+        self.wPlot = pg.GraphicsLayoutWidget()
+        self.pPlot = self.wPlot.addViewBox(enableMouse=False,row=0,col=1)
+        self.plot = pg.ImageItem()
+        self.pPlot.addItem(self.plot)
 
         self.species = QLabel(label)
 
@@ -2030,7 +2017,7 @@ class HumanClassify1(QDialog):
         hboxButtons.addWidget(self.close)
 
         vboxFull = QVBoxLayout()
-        vboxFull.addWidget(self.canvasPlot)
+        vboxFull.addWidget(self.wPlot)
         vboxFull.addWidget(self.species)
         vboxFull.addLayout(hboxButtons)
 
@@ -2038,16 +2025,14 @@ class HumanClassify1(QDialog):
         self.makefig(seg)
 
     def makefig(self,seg):
-        self.a = self.plot.add_subplot(111)
-        self.a.imshow(10.0*np.log10(seg), cmap=self.cmap_grey, aspect='auto')
-        self.a.axis('off')
+        self.plot.setImage(np.fliplr(seg.T))
 
     def getValues(self):
         # TODO
         return True
 
     def setImage(self,seg,label):
-        self.a.imshow(10.0 * np.log10(seg), cmap=self.cmap_grey, aspect='auto')
+        self.plot.setImage(np.fliplr(seg.T))
         self.species.setText(label)
         self.canvasPlot.draw()
 
@@ -2063,10 +2048,15 @@ class CorrectHumanClassify(QDialog):
 
         # Set up the plot windows, then the forward and backward buttons
         # TODO: Replace with pyqtgraph
-        self.plot = Figure()
-        self.plot.set_size_inches(10.0, 2.0, forward=True)
-        self.canvasPlot = FigureCanvas(self.plot)
-        self.canvasPlot.setParent(self.frame)
+        #self.plot = Figure()
+        #self.plot.set_size_inches(10.0, 2.0, forward=True)
+        #self.canvasPlot = FigureCanvas(self.plot)
+        #self.canvasPlot.setParent(self.frame)
+
+        self.wPlot = pg.GraphicsLayoutWidget()
+        self.pPlot = self.wPlot.addViewBox(enableMouse=False,row=0,col=1)
+        self.plot = pg.ImageItem()
+        self.pPlot.addItem(self.plot)
 
         # An array of radio buttons and a list and a text entry box
         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
@@ -2126,7 +2116,7 @@ class CorrectHumanClassify(QDialog):
         hbox.addLayout(birdListLayout)
 
         vboxFull = QVBoxLayout()
-        vboxFull.addWidget(self.canvasPlot)
+        vboxFull.addWidget(self.plot)
         vboxFull.addLayout(hbox)
         vboxFull.addWidget(self.close)
 
@@ -2134,9 +2124,7 @@ class CorrectHumanClassify(QDialog):
         self.makefig(seg)
 
     def makefig(self,seg):
-        self.a = self.plot.add_subplot(111)
-        self.a.imshow(10.0*np.log10(seg), cmap=self.cmap_grey, aspect='auto')
-        self.a.axis('off')
+        self.plot.setImage(np.fliplr(seg.T))
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
@@ -2178,9 +2166,7 @@ class CorrectHumanClassify(QDialog):
         return dialog.label, dialog.saveConfig
 
     def setImage(self,seg,label):
-        self.a.imshow(10.0 * np.log10(seg), cmap=self.cmap_grey, aspect='auto')
-        self.species.setText(label)
-        self.canvasPlot.draw()
+        self.plot.setImage(np.fliplr(seg.T))
 
 class PicButton(QAbstractButton):
     # Class for HumanClassify2 to put spectrograms on buttons
@@ -2212,12 +2198,13 @@ class HumanClassify2(QDialog):
     # This version gets *12* at a time, and put them all out together on buttons, and their labels.
     # It could be all the same species, or the ones that it is unsure about, or whatever.
 
-    def __init__(self, seg, label, cmap_grey, cmap_grey_r, parent=None):
+    def __init__(self, seg, label, colourStart, colourEnd, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.frame = QWidget()
-        self.cmap_grey = cmap_grey
-        self.cmap_grey_r = cmap_grey_r
+        self.colourStart = colourStart
+        self.colourEnd = colourEnd
+        [self.cmap_grey,self.cmap_grey_r] = self.defineColourmap()
 
         # TODO: Add a label with instructions
         # TODO: Add button to finish and/or get more
@@ -2250,22 +2237,57 @@ class HumanClassify2(QDialog):
                                 QPixmap(QImage(image[1].buffer_rgba(), image[1].size().width(), image[1].size().height(), QImage.Format_ARGB32)))
                 grid.addWidget(button, *position)
 
-
         self.setLayout(grid)
 
     def setImage(self,seg):
-        # TODO: Replace with pyqtgraph
+        # TODO: Replace with pyqtgraph -- basic way doesn't work (commented out) -> objects are deleted too fast
+        # wPlot = pg.GraphicsLayoutWidget()
+        # pPlot = wPlot.addViewBox(enableMouse=False,row=0,col=1)
+        # plotButton = pg.ImageItem()
+        # pPlot.addItem(plotButton)
+        # plotButton.setImage(np.fliplr(seg.T))
+        #
+        # wPlot2 = pg.GraphicsLayoutWidget()
+        # pPlot2 = wPlot2.addViewBox(enableMouse=False,row=0,col=1)
+        # plotButton2 = pg.ImageItem()
+        # pPlot2.addItem(plotButton2)
+        # plotButton2.setImage(np.fliplr(seg.T))
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+        import matplotlib
+
         fig = Figure((2.5, 1.2))
         canvas = FigureCanvas(fig)
         ax = fig.add_subplot(111)
-        ax.imshow(10.*np.log10(seg), cmap = self.cmap_grey, aspect='auto')
+        ax.imshow(seg, cmap = self.cmap_grey, aspect='auto')
         ax.set_axis_off()
         canvas.draw()
 
         canvas2 = FigureCanvas(fig)
-        ax.imshow(10.*np.log10(seg), cmap = self.cmap_grey_r, aspect='auto')
+        ax.imshow(seg, cmap = self.cmap_grey_r, aspect='auto')
         canvas2.draw()
-        return [canvas, canvas2]
+        return [canvas,canvas2]
+
+    def defineColourmap(self):
+        import matplotlib
+        # This makes the spectrograms look better. It defines a colourmap that hides a lot of the black
+        # We want a colourmap that goes from white to black in greys, but has limited contrast
+        # First is sorted by keeping all 3 colours the same, second by squeezing the range
+        cdict = {
+            'blue': ((0, 1, 1), (self.colourStart, 1, 1), (self.colourEnd, 0, 0), (1, 0, 0)),
+            'green': ((0, 1, 1), (self.colourStart, 1, 1), (self.colourEnd, 0, 0), (1, 0, 0)),
+            'red': ((0, 1, 1), (self.colourStart, 1, 1), (self.colourEnd, 0, 0), (1, 0, 0))
+        }
+        cmap_grey = matplotlib.colors.LinearSegmentedColormap('cmap_grey', cdict, 256)
+
+        # Reverse each colour
+        cdict = {
+            'blue': ((0, 0, 0), (self.colourStart, 0, 0), (self.colourEnd, 1, 1), (1, 1, 1)),
+            'green': ((0, 0, 0), (self.colourStart, 0, 0), (self.colourEnd, 1, 1), (1, 1, 1)),
+            'red': ((0, 0, 0), (self.colourStart, 0, 0), (self.colourEnd, 1, 1), (1, 1, 1))
+        }
+        cmap_grey_r = matplotlib.colors.LinearSegmentedColormap('cmap_grey_r', cdict, 256)
+        return [cmap_grey,cmap_grey_r]
 
     def activate(self):
         return True
