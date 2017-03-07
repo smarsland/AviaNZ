@@ -42,8 +42,6 @@ from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.dockarea import *
 import pyqtgraph.functions as fn
 
-#import sounddevice as sd
-
 import SignalProc
 import Segment
 #import Features
@@ -306,6 +304,7 @@ class Interface(QMainWindow):
         #self.p_overview.scene().sigMouseClicked.connect(self.mouseClicked_overview)
         self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
         self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
+
 
         self.w_controls = pg.LayoutWidget()
         self.d_controls.addWidget(self.w_controls)
@@ -1211,7 +1210,7 @@ class Interface(QMainWindow):
         x1,x2 = self.listRectanglesa2[self.currentSegment].getRegion()
         x1 = int(x1)
         x2 = int(x2)
-        self.humanClassifyDialog = HumanClassify2(self.sg[:,x1:x2],self.segments[self.currentSegment][4],self.config['colourStart'],self.config['colourEnd'])
+        self.humanClassifyDialog = HumanClassify2(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
         self.humanClassifyDialog.show()
         self.humanClassifyDialog.activateWindow()
         self.humanClassifyDialog.close.clicked.connect(self.humanClassifyClose)
@@ -2198,96 +2197,55 @@ class HumanClassify2(QDialog):
     # This version gets *12* at a time, and put them all out together on buttons, and their labels.
     # It could be all the same species, or the ones that it is unsure about, or whatever.
 
-    def __init__(self, seg, label, colourStart, colourEnd, parent=None):
+    def __init__(self, seg, label, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.frame = QWidget()
-        self.colourStart = colourStart
-        self.colourEnd = colourEnd
-        [self.cmap_grey,self.cmap_grey_r] = self.defineColourmap()
 
         # TODO: Add a label with instructions
         # TODO: Add button to finish and/or get more
         # TODO: Add a label with the species
 
         # TODO: Decide on these sizes
-        width = 3
-        height = 4
+        self.width = 3
+        self.height = 4
         grid = QGridLayout(self.frame)
         self.setLayout(grid)
+
+        positions = [(i, j) for i in range(self.height) for j in range(self.width)]
 
         # TODO: Next line needs to go!
         segs = [1,2,3,4,5,6,7]
         images = []
         # TODO: Turn this into different images
-        if len(segs) < width*height:
+        if len(segs) < self.width*self.height:
             for i in range(len(segs)):
                 images.append(self.setImage(seg))
-            for i in range(len(segs),width*height):
+            for i in range(len(segs),self.width*self.height):
                 images.append([None,None])
         else:
-            for i in range(width*height):
+            for i in range(self.width*self.height):
                 images.append(self.setImage(seg))
 
-        positions = [(i, j) for i in range(height) for j in range(width)]
 
-        for position, image in zip(positions, images):
-            if image[0] is not None:
-                button = PicButton(position[0]*width + position[1],QPixmap(QImage(image[0].buffer_rgba(), image[0].size().width(), image[0].size().height(), QImage.Format_ARGB32)),
-                                QPixmap(QImage(image[1].buffer_rgba(), image[1].size().width(), image[1].size().height(), QImage.Format_ARGB32)))
+        for position, im in zip(positions, images):
+            if im is not None:
+                button = PicButton(position[0] * self.width + position[1], im[0], im[1])
                 grid.addWidget(button, *position)
 
         self.setLayout(grid)
 
     def setImage(self,seg):
-        # TODO: Replace with pyqtgraph -- basic way doesn't work (commented out) -> objects are deleted too fast
-        # wPlot = pg.GraphicsLayoutWidget()
-        # pPlot = wPlot.addViewBox(enableMouse=False,row=0,col=1)
-        # plotButton = pg.ImageItem()
-        # pPlot.addItem(plotButton)
-        # plotButton.setImage(np.fliplr(seg.T))
-        #
-        # wPlot2 = pg.GraphicsLayoutWidget()
-        # pPlot2 = wPlot2.addViewBox(enableMouse=False,row=0,col=1)
-        # plotButton2 = pg.ImageItem()
-        # pPlot2.addItem(plotButton2)
-        # plotButton2.setImage(np.fliplr(seg.T))
-        from matplotlib.figure import Figure
-        from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-        import matplotlib
+        # TODO: interesting bug in making one of the images sometimes!
 
-        fig = Figure((2.5, 1.2))
-        canvas = FigureCanvas(fig)
-        ax = fig.add_subplot(111)
-        ax.imshow(seg, cmap = self.cmap_grey, aspect='auto')
-        ax.set_axis_off()
-        canvas.draw()
+        self.image = pg.ImageItem()
+        self.image.setImage(np.fliplr(seg.T))
+        im1 = self.image.getPixmap()
 
-        canvas2 = FigureCanvas(fig)
-        ax.imshow(seg, cmap = self.cmap_grey_r, aspect='auto')
-        canvas2.draw()
-        return [canvas,canvas2]
+        self.image.setImage(np.fliplr(-seg.T))
+        im2 = self.image.getPixmap()
 
-    def defineColourmap(self):
-        import matplotlib
-        # This makes the spectrograms look better. It defines a colourmap that hides a lot of the black
-        # We want a colourmap that goes from white to black in greys, but has limited contrast
-        # First is sorted by keeping all 3 colours the same, second by squeezing the range
-        cdict = {
-            'blue': ((0, 1, 1), (self.colourStart, 1, 1), (self.colourEnd, 0, 0), (1, 0, 0)),
-            'green': ((0, 1, 1), (self.colourStart, 1, 1), (self.colourEnd, 0, 0), (1, 0, 0)),
-            'red': ((0, 1, 1), (self.colourStart, 1, 1), (self.colourEnd, 0, 0), (1, 0, 0))
-        }
-        cmap_grey = matplotlib.colors.LinearSegmentedColormap('cmap_grey', cdict, 256)
-
-        # Reverse each colour
-        cdict = {
-            'blue': ((0, 0, 0), (self.colourStart, 0, 0), (self.colourEnd, 1, 1), (1, 1, 1)),
-            'green': ((0, 0, 0), (self.colourStart, 0, 0), (self.colourEnd, 1, 1), (1, 1, 1)),
-            'red': ((0, 0, 0), (self.colourStart, 0, 0), (self.colourEnd, 1, 1), (1, 1, 1))
-        }
-        cmap_grey_r = matplotlib.colors.LinearSegmentedColormap('cmap_grey_r', cdict, 256)
-        return [cmap_grey,cmap_grey_r]
+        return [im1, im2]
 
     def activate(self):
         return True
