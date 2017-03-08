@@ -28,6 +28,7 @@ from PyQt4.QtGui import *
 import PyQt4.phonon as phonon
 
 import librosa as lr
+from scipy.io import wavfile
 import numpy as np
 import pylab as pl
 
@@ -49,32 +50,33 @@ import Segment
 # ==============
 # TODO
 
-# Redesign interface to use pyqtgraph
+# ** Sort out the wavelet segmentation
+# Finish sorting out parameters for median clipping segmentation, energy segmentation
+# Finish the raven features
+# Finish cross-correlation to pick out similar bits of spectrogram -> and what else?
+# Denoising finished
+
 # Some problem with the text moving
 #   Weird bug with updateOverview
 #   Colour code of boxes by label (add info somewhere)
-# The dialog showing spectrograms of possible calls needs changing to be pyqtgraph
-#   Include the drag box on the spectrogram? --> look at plot customization eg
+#   Finish implementing the drag box on the spectrogram --> look at plot customization eg
 #   Are axes sufficient?
 #  If don't select something in context menu get error -> not critical
 
 #   The remote plotting should speed things up
 #   Look into ParameterTree
 # Better loading of files -> paging, not computing whole spectrogram (how to deal with overview? -> coarser spec?)
-# Add the bandpass filtering
-# How to set bandpass params? -> is there a useful plot to help?
+    # Maybe: check length of file. If > 5 mins, load first 5 only (? how to move to next 5?)
+# How to set bandpass params? -> is there a useful plot to help? -> function of sampleRate
 
 # Sound playback:
     # make it only play back the visible section
     # replace slider?, finish
 
+# Overall layout -> buttons on the left in a column, or with tabs?
 # Test the init part about if file or directory doesn't exist
-# Finish implementation for button to show individual segments to user and ask for feedback
+# Finish implementation for button to show individual segments to user and ask for feedback and the other feedback dialogs
 # Ditto lots of segments at once
-# Finish sorting out parameters for median clipping segmentation, energy segmentation
-# Finish the raven features
-# ** Sort out the wavelet segmentation
-# Finish cross-correlation to pick out similar bits of spectrogram
 
 # Implement something for the Classify button:
     # Take the segments that have been given and try to classify them in lots of ways:
@@ -334,7 +336,7 @@ class Interface(QMainWindow):
 
         # Checkbox for whether or not user is drawing boxes around song in the spectrogram (defaults to clicks not drags)
         self.dragRectangles = QCheckBox('Drag boxes in spectrogram')
-        # self.dragRectangles.stateChanged[int].connect(self.dragRectanglesCheck)
+        self.dragRectangles.stateChanged[int].connect(self.dragRectanglesCheck)
 
         # A slider to show playback position
         # TODO: Experiment with other options -- bar in the window
@@ -463,6 +465,8 @@ class Interface(QMainWindow):
         self.media_obj.setTickInterval(20)
         self.media_obj.tick.connect(self.movePlaySlider)
         self.media_obj.finished.connect(self.playFinished)
+        # TODO: Check the next line out!
+        #self.media_obj.totalTimeChanged.connect(self.setSliderLimits)
 
         # Make the colours
         self.ColourSelected = QtGui.QBrush(QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], self.config['ColourSelected'][3]))
@@ -563,6 +567,7 @@ class Interface(QMainWindow):
         # This does the work of loading a file
         # One magic constant, which normalises the data
         # TODO: moved to librosa instead of wavfile. Put both in and see if it is slower!
+        # TODO: Note that librosa normalised things, which buggers up the spectrogram for e.g., Harma
         #if len(self.segments)>0:
         #    self.saveSegments()
         #self.segments = []
@@ -571,8 +576,8 @@ class Interface(QMainWindow):
             self.filename = self.dirName+'/'+name
         else:
             self.filename = self.dirName+'/'+str(name.text())
-        self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
-        #self.sampleRate, self.audiodata = wavfile.read(self.filename)
+        #self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
+        self.sampleRate, self.audiodata = wavfile.read(self.filename)
         # None of the following should be necessary for librosa
         #if self.audiodata.dtype is not 'float':
         #    self.audiodata = self.audiodata.astype('float') / 32768.0
@@ -588,6 +593,7 @@ class Interface(QMainWindow):
         # Get the data for the spectrogram
         # TODO: put a button for multitapering somewhere
         self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,multitaper=False)
+        print np.min(self.sgRaw), np.max(self.sgRaw)
         self.sg = np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw))
 
         # Colour scaling for the spectrograms
@@ -607,7 +613,7 @@ class Interface(QMainWindow):
         # Update the data that is seen by the other classes
         # TODO: keep an eye on this to add other classes as required
         if hasattr(self,'seg'):
-            self.seg.setNewData(self.audiodata,self.sg,self.sampleRate)
+            self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate)
         self.sp.setNewData(self.audiodata,self.sampleRate)
 
         # Delete any denoising backups from the previous one
@@ -633,7 +639,7 @@ class Interface(QMainWindow):
         self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
 
         # Decide on the length of the playback bit for the slider
-        self.setSliderLimits(0,self.media_obj.totalTime())
+        #self.setSliderLimits(0,self.media_obj.totalTime())
 
         # Get the height of the amplitude for plotting the box
         self.minampl = np.min(self.audiodata)+0.1*(np.max(self.audiodata)+np.abs(np.min(self.audiodata)))
@@ -652,11 +658,16 @@ class Interface(QMainWindow):
     def dragRectanglesCheck(self,check):
         # The checkbox that says if the user is dragging rectangles or clicking on the spectrogram has changed state
         if self.dragRectangles.isChecked():
-            self.figMainmotion = self.canvasMain.mpl_connect('motion_notify_event', self.figMainDrag)
-            self.figMainendmotion = self.canvasMain.mpl_connect('button_release_event', self.figMainDragEnd)
+            self.p_spec.setMouseMode(pg.ViewBox.RectMode)
+            # TODO: Should subclass the view box for this one and catch the drag as in Plot Customisation
+            # Then get the coordinates and add the segment
+            #self.figMainmotion = self.canvasMain.mpl_connect('motion_notify_event', self.figMainDrag)
+            #self.figMainendmotion = self.canvasMain.mpl_connect('button_release_event', self.figMainDragEnd)
         else:
-            self.canvasMain.mpl_disconnect(self.figMainmotion)
-            self.canvasMain.mpl_disconnect(self.figMainendmotion)
+            self.p_spec.setMouseMode(pg.ViewBox.PanMode)
+
+            #self.canvasMain.mpl_disconnect(self.figMainmotion)
+            #self.canvasMain.mpl_disconnect(self.figMainendmotion)
 
 # ==============
 # Code for drawing and using the main figure
@@ -924,71 +935,6 @@ class Interface(QMainWindow):
             self.drawingBox_ampl.setRegion([self.convertSpectoAmpl(self.start_location_s), self.convertSpectoAmpl(mousePoint.x())])
             self.drawingBox_spec.setRegion([self.start_location_s, mousePoint.x()])
 
-    def figMainDrag(self,event):
-        # This is the start listener for the user dragging boxes on the spectrogram
-        # Just gets coordinates and draws a box outline as the mouse moves
-        if self.recta2 is None:
-            return
-        if event.inaxes is None:
-            return
-        x0,y0 = self.recta2.get_xy()
-        a1 = str(self.a1)
-        a1ind = float(a1[a1.index(',') + 1:a1.index(';')])
-        a = str(event.inaxes)
-        aind = float(a[a.index(',') + 1:a.index(';')])
-        if aind == a1ind:
-            return
-
-        self.recta2.set_width(event.xdata - x0)
-        self.recta2.set_height(event.ydata - y0)
-        self.canvasMain.draw()
-
-    def figMainDragEnd(self,event):
-        # This is the end listener for the user dragging boxes on the spectrogram
-        # Deletes the outline box and replaces it with a Rectangle patch, adds the segment
-        if event.inaxes is None:
-            return
-        if self.recta2 is None:
-            return
-        a1 = str(self.a1)
-        a1ind = float(a1[a1.index(',') + 1:a1.index(';')])
-        a = str(event.inaxes)
-        aind = float(a[a.index(',') + 1:a.index(';')])
-        if aind == a1ind:
-            return
-
-        ampl_x0 = self.recta2.get_x()*self.config['incr']/self.sampleRate
-        ampl_x1 = self.recta2.get_x()*self.config['incr']/self.sampleRate+self.recta2.get_width()*self.config['incr']/self.sampleRate
-
-        a1R = self.a1.add_patch(pl.Rectangle((min(ampl_x0,ampl_x1),self.a1.get_ylim()[0]), self.recta2.get_width()*self.config['incr']/self.sampleRate, self.plotheight, alpha=0.5, facecolor='g'))
-        a2R = self.a2.add_patch(pl.Rectangle(self.recta2.get_xy(), self.recta2.get_width(), self.recta2.get_height(), alpha=0.5, facecolor='g'))
-
-        self.listRectanglesa1.append(a1R)
-        self.listRectanglesa2.append(a2R)
-
-        self.segments.append([min(ampl_x0,ampl_x1), max(ampl_x0,ampl_x1), self.recta2.get_y(), self.recta2.get_height(),'None'])
-        a1t = self.a1.text(min(ampl_x0,ampl_x1), np.min(self.audiodata), 'None')
-        # The font size is a pain because the window is in pixels, so have to transform it
-        # Force a redraw to make bounding box available
-        self.canvasMain.draw()
-        # fs = a1t.get_fontsize()
-        width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
-        if width > self.segments[-1][1] - self.segments[-1][0]:
-            a1t.set_fontsize(8)
-
-        self.a1text.append(a1t)
-        self.topBoxCol = 'r'
-        # Show it in the zoom window
-        self.zoomstart = a1R.get_x()
-        self.zoomend = a1R.get_x() + a1R.get_width()
-        self.box1id = len(self.segments) - 1
-        self.drawfigZoom()
-        # Activate the radio buttons for labelling, selecting one from label if necessary
-        #self.activateRadioButtons()
-        self.recta2.remove()
-        self.recta2 = None
-        self.canvasMain.draw()
-
     def birdSelected(self,birdname):
         # This collects the label for a bird from the context menu and processes it
         print "bird name here"
@@ -1210,7 +1156,7 @@ class Interface(QMainWindow):
         x1,x2 = self.listRectanglesa2[self.currentSegment].getRegion()
         x1 = int(x1)
         x2 = int(x2)
-        self.humanClassifyDialog = HumanClassify2(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
+        self.humanClassifyDialog = HumanClassify1(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
         self.humanClassifyDialog.show()
         self.humanClassifyDialog.activateWindow()
         self.humanClassifyDialog.close.clicked.connect(self.humanClassifyClose)
@@ -1237,6 +1183,7 @@ class Interface(QMainWindow):
     def humanClassifyWrong(self):
         # First get the correct classification (by producing a new modal dialog) and update the text, then show the next image
         # TODO: Test, particularly that new birds are added
+        # TODO: update the listRects
         self.correctClassifyDialog = CorrectHumanClassify(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.cmap_grey,self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
         label, self.saveConfig = self.correctClassifyDialog.getValues(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.cmap_grey,self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
         self.updateText(label,self.currentSegment)
@@ -1255,7 +1202,7 @@ class Interface(QMainWindow):
         # Listener for the spectrogram dialog.
         [alg, colourStart, colourEnd, window_width, incr] = self.spectrogramDialog.getValues()
         self.sp.set_width(int(str(window_width)), int(str(incr)))
-        self.sg = self.sp.spectrogram(self.audiodata,str(alg))
+        self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg))
         self.config['ColourStart'] = float(str(colourStart))
         self.config['ColourEnd'] = float(str(colourEnd))
         self.defineColourmap()
@@ -1321,7 +1268,8 @@ class Interface(QMainWindow):
         #print "Denoising"
         #self.audiodata = self.sp.waveletDenoise()
         #print "Done"
-        self.sg = self.sp.spectrogram(self.audiodata,self.sampleRate)
+        self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate)
+        # TODO: Convert sg to db?
         #self.drawfigMain()
 
     def denoise_undo(self):
@@ -1334,9 +1282,10 @@ class Interface(QMainWindow):
                     self.audiodata = np.copy(self.audiodata_backup[:,-1])
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     self.sp.setNewData(self.audiodata,self.sampleRate)
-                    self.sg = self.sp.spectrogram(self.audiodata,self.sampleRate)
+                    self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate)
+                    # TODO: Convert sg to db?
                     if hasattr(self,'seg'):
-                        self.seg.setNewData(self.audiodata,self.sg,self.sampleRate)
+                        self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate)
                     #self.drawfigMain()
 
     def denoise_save(self):
@@ -1364,7 +1313,7 @@ class Interface(QMainWindow):
         # TODO: Add in the wavelet one
         # TODO: More testing of the algorithms, parameters, etc.
         seglen = len(self.segments)
-        [alg, ampThr, medThr,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
+        [alg, ampThr, medThr,HarmaThr1,HarmaThr2,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
         if not hasattr(self,'seg'):
             self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
         if str(alg) == "Amplitude":
@@ -1377,6 +1326,9 @@ class Interface(QMainWindow):
         elif str(alg) == "Median Clipping":
             newSegments = self.seg.medianClip(float(str(medThr)))
             print newSegments
+        elif str(alg) == "Harma":
+            print "here"
+            newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)))
         else:
             #"Wavelets"
             # TODO!!
@@ -1391,11 +1343,9 @@ class Interface(QMainWindow):
                 start = int(str(start))
                 end = int(str(end))
             # TODO: needs learning and samplerate
-                newSegments = self.seg.segmentByWavelet(thrType,float(str(thr)), int(str(depth)), wavelet,sampleRate,bandchoice,start,end,learning,)
+                #newSegments = self.seg.segmentByWavelet(thrType,float(str(thr)), int(str(depth)), wavelet,sampleRate,bandchoice,start,end,learning,)
         for seg in newSegments:
             self.addSegment(seg[0],seg[1],'None',True)
-
-
 
     def findMatches(self):
         # Calls the cross-correlation function to find matches like the currently highlighted box
@@ -1405,7 +1355,7 @@ class Interface(QMainWindow):
         # So there needs to be a currently highlighted box
         #print self.box1id
         if not hasattr(self,'seg'):
-            self.seg = Segment.Segment(self.audiodata,self.sg,self.sp,self.sampleRate)
+            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
 
         if self.box1id is None or self.box1id == -1:
             return
@@ -1415,6 +1365,7 @@ class Interface(QMainWindow):
             seglen = len(self.segments)
             # Get the segment
             #print self.listRectanglesa2[self.box1id].get_x()
+            # TODO: Fix the next ones!!!
             segment = self.sg[:,self.listRectanglesa2[self.box1id].get_x():self.listRectanglesa2[self.box1id].get_x()+self.listRectanglesa2[self.box1id].get_width()]
             len_seg = float(self.listRectanglesa2[self.box1id].get_width()) *self.config['incr'] / self.sampleRate
             indices = self.seg.findCCMatches(segment,self.sg,self.config['corrThr'])
@@ -1590,7 +1541,7 @@ class Segmentation(QDialog):
         self.setWindowTitle('Segmentation Options')
 
         self.algs = QComboBox()
-        self.algs.addItems(["Amplitude","Energy Curve","Median Clipping","Wavelets"])
+        self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Amplitude"
         self.activate = QPushButton("Segment")
@@ -1605,6 +1556,16 @@ class Segmentation(QDialog):
         self.ampThr.setSingleStep(0.002)
         self.ampThr.setDecimals(4)
         self.ampThr.setValue(maxv+0.001)
+
+        self.HarmaThr1 = QSpinBox()
+        self.HarmaThr1.setRange(10,50)
+        self.HarmaThr1.setSingleStep(1)
+        self.HarmaThr1.setValue(30)
+        self.HarmaThr2 = QDoubleSpinBox()
+        self.HarmaThr2.setRange(0.1,0.95)
+        self.HarmaThr2.setSingleStep(0.05)
+        self.HarmaThr2.setDecimals(2)
+        self.HarmaThr2.setValue(0.9)
 
         self.medThr = QDoubleSpinBox()
         self.medThr.setRange(0.2,6)
@@ -1623,6 +1584,10 @@ class Segmentation(QDialog):
         # Labels
         self.amplabel = QLabel("Set threshold amplitude")
         Box.addWidget(self.amplabel)
+
+        self.Harmalabel = QLabel("Set decibal threshold")
+        Box.addWidget(self.Harmalabel)
+        self.Harmalabel.hide()
 
         self.medlabel = QLabel("Set median threshold")
         Box.addWidget(self.medlabel)
@@ -1705,13 +1670,16 @@ class Segmentation(QDialog):
         self.bandchoice.hide()
 
         Box.addWidget(self.ampThr)
+        Box.addWidget(self.HarmaThr1)
+        Box.addWidget(self.HarmaThr2)
+        self.HarmaThr1.hide()
+        self.HarmaThr2.hide()
         Box.addWidget(self.medThr)
+        self.medThr.hide()
         for i in range(len(self.ecthrtype)):
             Box.addWidget(self.ecthrtype[i])
             self.ecthrtype[i].hide()
         Box.addWidget(self.ecThr)
-        self.medThr.hide()
-        #self.ecthrtype.hide()
         self.ecThr.hide()
 
         Box.addWidget(self.activate)
@@ -1731,6 +1699,10 @@ class Segmentation(QDialog):
             for i in range(len(self.ecthrtype)):
                 self.ecthrtype[i].hide()
             #self.ecThr.hide()
+        elif self.prevAlg == "Harma":
+            self.Harmalabel.hide()
+            self.HarmaThr1.hide()
+            self.HarmaThr2.hide()
         elif self.prevAlg == "Median Clipping":
             self.medlabel.hide()
             self.medThr.hide()
@@ -1761,6 +1733,10 @@ class Segmentation(QDialog):
             for i in range(len(self.ecthrtype)):
                 self.ecthrtype[i].show()
             self.ecThr.show()
+        elif str(alg) == "Harma":
+            self.Harmalabel.show()
+            self.HarmaThr1.show()
+            self.HarmaThr2.show()
         elif str(alg) == "Median Clipping":
             self.medlabel.show()
             self.medThr.show()
@@ -1789,7 +1765,7 @@ class Segmentation(QDialog):
         self.end.setEnabled(not self.end.isEnabled())
 
     def getValues(self):
-        return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
+        return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
 
 class Denoise(QDialog):
     # Class for the denoising dialog box
@@ -2237,7 +2213,6 @@ class HumanClassify2(QDialog):
 
     def setImage(self,seg):
         # TODO: interesting bug in making one of the images sometimes!
-
         self.image = pg.ImageItem()
         self.image.setImage(np.fliplr(seg.T))
         im1 = self.image.getPixmap()
