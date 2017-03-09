@@ -2,10 +2,10 @@
 # Author: Stephen Marsland
 
 import numpy as np
-#import pywt
+import pywt
 from scipy.io import wavfile
+import scipy.signal as signal
 import pylab as pl
-import matplotlib
 
 # TODO:
 # Denoising needs work
@@ -42,13 +42,14 @@ class SignalProc:
         pN = np.sum(self.data[startNoise:startNoise+self.length]**2)/self.length
         return 10.*np.log10(pS/pN)
 
-    def spectrogram(self,data,sampleRate,window='Hann',multitaper=False):
+    def spectrogram(self,data,sampleRate=0,window='Hann',multitaper=False):
         # Compute the spectrogram from amplitude data
         # Note that this returns the power spectrum (not the density) and without the log10.
         # Also, it's the absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discimination
         # Can compute the multitaper version, but it's sadly very slow
         # Essential for median clipping, though
         # This version is faster than the default versions in pylab and scipy.signal
+        # TODO: Note that using librosa to load files changes the values in the spectrogram, and this matters since they are normalised, so log makes things negative
         if data is None:
             print ("Error")
 
@@ -164,9 +165,8 @@ class SignalProc:
 
         return self.wData
 
-    def bandpassFilter(self,data=None,start=500,end=8000):
+    def bandpassFilter(self,data=None,start=1000,end=10000):
         # Bandpass filter
-        import scipy.signal as signal
         if data is None:
             data = self.data
         nyquist = self.sampleRate/2.0
@@ -176,9 +176,20 @@ class SignalProc:
         ntaps = 128
         #taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
         taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
-        fData = signal.lfilter(taps, 1.0, data)
+        return signal.lfilter(taps, 1.0, data)
 
-        return fData
+    def ButterworthBandpass(self,data,sampleRate,order=10,low=1000,high=5000):
+        if data is None:
+            data = self.data
+            sampleRate = self.sampleRate
+        nyquist = self.sampleRate/2.0
+
+        low = float(low)/nyquist
+        high = float(high)/nyquist
+        print nyquist, low, high
+        b, a = signal.butter(order, [low, high], btype='band')
+        # apply filter
+        return signal.filtfilt(b, a, data)
 
     def medianFilter(self,data=None,width=11):
         # Median Filtering
@@ -273,16 +284,20 @@ def testCorr():
 def show():
     #pl.ion()
     a = SignalProc()
-    #a.loadData('Sound Files/male1d.wav')
-    a.loadData('Sound Files/kiwi.wav')
-    a.data = a.data[:60000,0]
+    #a.loadData('Sound Files/male1.wav')
+    a.loadData('Sound Files/tril1.wav')
+    #a.data = a.data[:60000,0]
     sg = a.spectrogram(a.data)
     #pl.figure()
     #pl.plot(a.data)
     pl.figure()
     pl.imshow(10.0*np.log10(sg),cmap='gray_r')
     pl.figure()
-    pl.imshow(10.0*np.log10(medianClip(sg)),cmap='gray')
+    b = a.ButterworthBandpass(a.data,a.sampleRate)
+    print np.shape(a.data), np.shape(b)
+    pl.imshow(10.0*np.log10(a.spectrogram(a.ButterworthBandpass(a.data,a.sampleRate))),cmap='gray')
+    #pl.figure()
+    #pl.imshow(10.0*np.log10(a.spectrogram(a.bandpassFilter(a.data,a.sampleRate))),cmap='gray')
     pl.show()
 
 #show()

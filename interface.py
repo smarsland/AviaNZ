@@ -24,6 +24,8 @@
 import sys, os, glob, json, datetime
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
+import PyQt4.phonon as phonon
+
 import librosa as lr
 import numpy as np
 import pylab as pl
@@ -43,12 +45,16 @@ import Features
 # ==============
 # TODO
 
+# Test the init part about if file or directory doesn't exist
 # Finish implementation for button to show individual segments to user and ask for feedback
 # Ditto lots of segments at once
 # Finish sorting out parameters for median clipping segmentation, energy segmentation
 # Finish the raven features
 # ** Sort out the wavelet segmentation
 # Finish cross-correlation to pick out similar bits of spectrogram
+# Sound playback:
+    # make it only play back the visible section
+    # replace slider?, finish
 # Implement something for the Classify button:
     # Take the segments that have been given and try to classify them in lots of ways:
     # Cross-correlation, DTW, shape metric, features and learning
@@ -75,9 +81,6 @@ import Features
 
 # Option to turn button menu on/off
 
-# Playback of sound is a mess and I don't know how to fix it. First, sounddevice isn't great,
-# and second it really should have a moving bar so you can see progress, and I can't make it go: too slow, too crap.
-
 # Speed is an issue, unfortunately
     # I think that is largely matplotlib
     # Would Pyqtgraph help? What can be actually done in it?
@@ -97,7 +100,7 @@ import Features
 
 # Given files > 5 mins, split them into 5 mins versions anyway (code is there, make it part of workflow)
 # Don't really want to load the whole thing, just 5 mins, and then move through with arrows -> how?
-# This is sometimes called paging, I think.
+# This is sometimes called paging, I think. (y, sr = librosa.load(filename, offset=15.0, duration=5.0) might help. Doesn't do much for the overview through)
 
 # As well as this version with pictures, will need to be able to call various bits to work offline
 # denoising, segmentation, etc. that will then just show some pictures
@@ -148,10 +151,20 @@ class Interface(QMainWindow):
 
         # Make life easier for now: preload a birdsong
         self.firstFile = 'tril1.wav' #'male1.wav' # 'kiwi.wav'#'
+        #self.firstFile = 'kiwi.wav'
 
         #self.createMenu()
         self.createFrame()
 
+        # Some safety checking for paths and files
+        if not os.path.isdir(self.dirName):
+            print("Directory doesn't exist: making it")
+            os.makedirs(self.dirName)
+        if not os.path.isfile(self.dirName+'/'+self.firstFile):
+            fileName = QtGui.QFileDialog.getOpenFileName(self, 'Chose File', self.dirName,
+                                                         selectedFilter='*.wav')
+            if fileName:
+                self.firstFile = fileName
         self.loadFile(self.firstFile)
 
     # def createMenu(self):
@@ -261,8 +274,8 @@ class Interface(QMainWindow):
 
         # The instructions and buttons below figMain
         # playButton1 = QPushButton(QIcon(":/Resources/play.svg"),"&Play Window")
-        playButton1 = QPushButton("&Play/Pause")
-        self.connect(playButton1, SIGNAL('clicked()'), self.playSegment)
+        self.playButton1 = QPushButton("&Play")
+        self.connect(self.playButton1, SIGNAL('clicked()'), self.playSegment)
         resetButton1 = QPushButton("&Reset")
         self.connect(resetButton1, SIGNAL('clicked()'), self.resetSegment)
 
@@ -270,15 +283,15 @@ class Interface(QMainWindow):
         self.dragRectangles = QCheckBox('Drag boxes in spectrogram')
         self.dragRectangles.stateChanged[int].connect(self.dragRectanglesCheck)
 
-        # Deprectated: This was a slider to run through a file
-        # sld = QSlider(Qt.Horizontal, self)
-        # sld.setFocusPolicy(Qt.NoFocus)
-        # sld.valueChanged[int].connect(self.sliderMoved)
+        # A slider to show playback position
+        # TODO: Experiment with other options -- bar in the window
+        self.playSlider = QSlider(Qt.Horizontal, self)
+        self.connect(self.playSlider,SIGNAL('sliderReleased()'),self.sliderMoved)
 
         hboxButtons1 = QHBoxLayout()
         hboxButtons1.addWidget(QLabel(
             'Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'))
-        hboxButtons1.addWidget(playButton1)
+        hboxButtons1.addWidget(self.playButton1)
         hboxButtons1.addWidget(resetButton1)
         hboxButtons1.addWidget(self.dragRectangles)
 
@@ -303,6 +316,8 @@ class Interface(QMainWindow):
         vboxTopHalf.addLayout(hboxOverview)
         vboxTopHalf.addWidget(self.canvasMain)
         vboxTopHalf.addLayout(hboxBelowMain)
+        vboxTopHalf.addWidget(self.playSlider)
+
         #vboxTopHalf.addWidget(self.mpl_toolbar)
 
         # Next is the bottom part of the screen
@@ -449,9 +464,20 @@ class Interface(QMainWindow):
         self.frame.setLayout(vboxFull)
         self.setCentralWidget(self.frame)
 
+        # Instantiate a Qt media object and prepare it
+        self.media_obj = phonon.Phonon.MediaObject(self)
+        self.audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
+        phonon.Phonon.createPath(self.media_obj, self.audio_output)
+        self.media_obj.setTickInterval(20)
+        self.media_obj.tick.connect(self.movePlaySlider)
+        self.media_obj.finished.connect(self.playFinished)
+
     def fillList(self):
         # Generates the list of files for the listbox on lower left
         # Most of the work is to deal with directories in that list
+        if not os.path.isdir(self.dirName):
+            print("Directory doesn't exist: making it")
+            os.makedirs(self.dirName)
         self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
         listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
         listOfLongFiles = QDir(self.dirName).entryList(['*_1.wav'])
@@ -598,6 +624,12 @@ class Interface(QMainWindow):
         # Set the width of the segment marker
         # This is the config width as a percentage of the window width, which is in seconds
         self.linewidtha1 = float(self.config['linewidtha1'])*self.windowSize
+
+        # Load the file for playback as well, and connect up the listeners for it
+        self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
+
+        # Decide on the length of the playback bit for the slider
+        self.setSliderLimits(0,self.media_obj.totalTime())
 
         # Get the height of the amplitude for plotting the box
         self.plotheight = np.abs(np.min(self.audiodata)) + np.max(self.audiodata)
@@ -1118,11 +1150,6 @@ class Interface(QMainWindow):
         self.playPosition = self.windowStart
         self.updateMainWindow()
 
-    #def sliderMoved(self,value):
-    #    # When the slider is moved, update the top figures to reflect the new position in the file
-    #    self.windowStart = (float(self.datalength)/self.sampleRate - self.windowSize)/100.0*value
-    #    self.updateMainWindow()
-
     def showSegments(self,seglen=0):
         # This plots the segments that are returned from any of the segmenters and adds them to the set of segments
 
@@ -1189,7 +1216,7 @@ class Interface(QMainWindow):
         # Create the dialog that shows calls to the user for verification
         # Currently assumes that there is a selected box (later, use the first!)
         self.currentSegment = 0
-        self.humanClassifyDialog = HumanClassify1(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.segments[self.currentSegment][4],self.cmap_grey,self.cmap_grey_r)
+        self.humanClassifyDialog = HumanClassify2(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.segments[self.currentSegment][4],self.cmap_grey,self.cmap_grey_r)
         self.humanClassifyDialog.show()
         self.humanClassifyDialog.activateWindow()
         self.humanClassifyDialog.close.clicked.connect(self.humanClassifyClose)
@@ -1325,8 +1352,9 @@ class Interface(QMainWindow):
         # TODO: with librosa, probably don't need magic number, but check
         #self.audiodata *= 32768.0
         #self.audiodata = self.audiodata.astype('int16')
+        import soundfile as sf
         filename = self.filename[:-4] + '_d' + self.filename[-4:]
-        lr.output.write_wav(filename,self.audiodata,self.sampleRate)
+        sf.write(filename,self.audiodata,self.sampleRate,subtype='PCM_16')
 
     def segmentationDialog(self):
         # Create the segmentation dialog when the relevant button is pressed
@@ -1816,7 +1844,36 @@ class Interface(QMainWindow):
             self.playbar1 = None
             self.canvasMain.draw()
 
+    # These functions are the phonon playing code
+    # Note that if want to play e.g. denoised one, will have to save it and then reload it
     def playSegment(self):
+        if self.media_obj.state() == phonon.Phonon.PlayingState:
+            self.media_obj.pause()
+            self.playButton1.setText("Play")
+        elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
+            self.media_obj.play()
+            self.playButton1.setText("Pause")
+
+    def playFinished(self):
+        self.playButton1.setText("Play")
+
+    def sliderMoved(self):
+        # When the slider is moved, change the position of playback
+        print self.playSlider.value()
+        self.media_obj.seek(self.playSlider.value())
+
+    def movePlaySlider(self, time):
+        #print time
+        #print self.media_obj.state()
+        if not self.playSlider.isSliderDown():
+            self.playSlider.setValue(time)
+
+    def setSliderLimits(self, start,end):
+        self.playSlider.setRange(start, end)
+        self.playSlider.setValue(start)
+        self.media_obj.seek(start)
+
+    def playSegment_old(self):
         # This is the listener for the play button. A very simple wave file player
         # Move a marker through in real time?!
 

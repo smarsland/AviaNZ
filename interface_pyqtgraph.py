@@ -221,6 +221,8 @@ class Interface(QMainWindow):
 
             # Params for cross-correlation and related
             'corrThr': 0.4,
+            # Amount of overlap for 2 segments to be counted as the same
+            'overlap_allowed': 5,
 
             'BirdButtons1': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)",
                              "Petrel"],
@@ -268,10 +270,10 @@ class Interface(QMainWindow):
         self.d_overview.addWidget(self.w_overview)
         self.w_overview1 = pg.GraphicsLayoutWidget()
         self.w_overview.addWidget(self.w_overview1)
-        self.p_overview = self.w_overview1.addViewBox(enableMouse=False,row=1,col=0)
+        self.p_overview = self.w_overview1.addViewBox(enableMouse=False,enableMenu=False,row=1,col=0)
 
         self.w_ampl = pg.GraphicsLayoutWidget()
-        self.p_ampl = self.w_ampl.addViewBox(enableMouse=False)
+        self.p_ampl = self.w_ampl.addViewBox(enableMouse=False,enableMenu=False)
         self.w_ampl.addItem(self.p_ampl,row=0,col=1)
         self.d_ampl.addWidget(self.w_ampl)
 
@@ -285,7 +287,7 @@ class Interface(QMainWindow):
         self.ampaxis.linkToView(self.p_ampl)
 
         self.w_spec = pg.GraphicsLayoutWidget()
-        self.p_spec = self.w_spec.addViewBox(enableMouse=False,row=0,col=1)
+        self.p_spec = self.w_spec.addViewBox(enableMouse=False,enableMenu=False,row=0,col=1)
         self.d_spec.addWidget(self.w_spec)
 
         self.specaxis = pg.AxisItem(orientation='left')
@@ -329,8 +331,12 @@ class Interface(QMainWindow):
 
         # The instructions and buttons below figMain
         # playButton = QPushButton(QIcon(":/Resources/play.svg"),"&Play Window")
-        self.playButton = QPushButton("&Play")
+
+        self.playButton = QtGui.QToolButton()
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        #self.playButton = QPushButton("&Play")
         self.connect(self.playButton, SIGNAL('clicked()'), self.playSegment)
+        self.timePlayed = QLabel()
         #self.resetButton = QPushButton("&Reset")
         #self.connect(self.resetButton, SIGNAL('clicked()'), self.resetSegment)
 
@@ -346,6 +352,7 @@ class Interface(QMainWindow):
         self.w_controls.addWidget(QLabel('Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'),row=0,col=0,colspan=4)
         self.w_controls.addWidget(self.playSlider,row=1,col=0,colspan=4)
         self.w_controls.addWidget(self.playButton,row=2,col=0)
+        self.w_controls.addWidget(self.timePlayed,row=2,col=1)
         #self.w_controls.addWidget(self.resetButton,row=2,col=1)
         self.w_controls.addWidget(self.dragRectangles,row=2,col=2)
 
@@ -640,6 +647,7 @@ class Interface(QMainWindow):
 
         # Decide on the length of the playback bit for the slider
         #self.setSliderLimits(0,self.media_obj.totalTime())
+        self.totalTime = self.convertMillisecs(self.media_obj.totalTime())
 
         # Get the height of the amplitude for plotting the box
         self.minampl = np.min(self.audiodata)+0.1*(np.max(self.audiodata)+np.abs(np.min(self.audiodata)))
@@ -678,6 +686,11 @@ class Interface(QMainWindow):
 
     def convertSpectoAmpl(self,x):
         return x*self.config['incr']/self.sampleRate
+
+    def convertMillisecs(self,millisecs):
+        seconds = (millisecs / 1000) % 60
+        minutes = (millisecs / (1000 * 60)) % 60
+        return "%02d" % minutes+":"+"%02d" % seconds
 
     def drawOverview(self):
         # On loading a new file, update the overview figure to show where you are up to in the file
@@ -1366,16 +1379,17 @@ class Interface(QMainWindow):
             # Get the segment
             #print self.listRectanglesa2[self.box1id].get_x()
             # TODO: Fix the next ones!!!
-            segment = self.sg[:,self.listRectanglesa2[self.box1id].get_x():self.listRectanglesa2[self.box1id].get_x()+self.listRectanglesa2[self.box1id].get_width()]
-            len_seg = float(self.listRectanglesa2[self.box1id].get_width()) *self.config['incr'] / self.sampleRate
-            indices = self.seg.findCCMatches(segment,self.sg,self.config['corrThr'])
+            x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
+            print x1, x2
+            segment = self.sgRaw[:,int(x1):int(x2)]
+            len_seg = (x2-x1) * self.config['incr'] / self.sampleRate
+            indices = self.seg.findCCMatches(segment,self.sgRaw,self.config['corrThr'])
             # indices are in spectrogram pixels, need to turn into times
             for i in indices:
                 # Miss out the one selected: note the hack parameter
-                if np.abs(i-self.listRectanglesa2[self.box1id].get_x()) > 5:
+                if np.abs(i-x1) > self.config['overlap_allowed']:
                     time = float(i)*self.config['incr'] / self.sampleRate
-                    self.segments.append([time, time+len_seg, 0.0, self.sampleRate / 2., 'None'])
-            self.showSegments(seglen)
+                    self.addSegment(time, time+len_seg,self.segments[self.box1id][4])
 
     def recognise(self):
         # This will eventually call methods to do automatic recognition
@@ -1390,13 +1404,16 @@ class Interface(QMainWindow):
     def playSegment(self):
         if self.media_obj.state() == phonon.Phonon.PlayingState:
             self.media_obj.pause()
-            self.playButton.setText("Play")
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+            #self.playButton.setText("Play")
         elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
             self.media_obj.play()
-            self.playButton.setText("Pause")
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
+            #self.playButton.setText("Pause")
 
     def playFinished(self):
-        self.playButton.setText("Play")
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        #self.playButton.setText("Play")
 
     def sliderMoved(self):
         # When the slider is moved, change the position of playback
@@ -1406,6 +1423,7 @@ class Interface(QMainWindow):
     def movePlaySlider(self, time):
         if not self.playSlider.isSliderDown():
             self.playSlider.setValue(time)
+        self.timePlayed.setText(self.convertMillisecs(time)+"/"+self.totalTime)
 
     def setSliderLimits(self, start,end):
         self.playSlider.setRange(start, end)

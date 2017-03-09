@@ -257,13 +257,6 @@ class Features:
     def computeCorrelation(self):
         scipy.signal.fftconvolve(a, b, mode='same')
 
-
-
-def test():
-    a = Features()
-    a.testDTW()
-    pl.show()
-
 def raven():
     #data, fs = librosa.load('Sound Files/tril1.wav',sr=None)
     #data, fs = librosa.load('Sound Files/kiwi.wav',sr=None)
@@ -279,3 +272,47 @@ def raven():
     c = f.get_waveform_measurements(data,fs,0,len(data))
     return a, b, c
 #test()
+
+def mfcc():
+    # Convert the data to mfcc:
+    mfcc1 = librosa.feature.mfcc(y1, sr1)
+    mfcc2 = librosa.feature.mfcc(y2, sr2)
+    mfcc3 = librosa.feature.mfcc(y3, sr3)
+    mfccTest = librosa.feature.mfcc(yTest, srTest)
+
+    # Remove mean and normalize each column of MFCC
+    import copy
+    def preprocess_mfcc(mfcc):
+        mfcc_cp = copy.deepcopy(mfcc)
+        for i in xrange(mfcc.shape[1]):
+            mfcc_cp[:, i] = mfcc[:, i] - np.mean(mfcc[:, i])
+            mfcc_cp[:, i] = mfcc_cp[:, i] / np.max(np.abs(mfcc_cp[:, i]))
+        return mfcc_cp
+
+    mfcc1 = preprocess_mfcc(mfcc1)
+    mfcc2 = preprocess_mfcc(mfcc2)
+    mfcc3 = preprocess_mfcc(mfcc3)
+    mfccTest = preprocess_mfcc(mfccTest)
+
+    window_size = mfcc1.shape[1]
+    dists = np.zeros(mfccTest.shape[1] - window_size)
+
+    for i in range(len(dists)):
+        mfcci = mfccTest[:, i:i + window_size]
+        dist1i = dtw(mfcc1.T, mfcci.T, dist=lambda x, y: np.exp(np.linalg.norm(x - y, ord=1)))[0]
+        dist2i = dtw(mfcc2.T, mfcci.T, dist=lambda x, y: np.exp(np.linalg.norm(x - y, ord=1)))[0]
+        dist3i = dtw(mfcc3.T, mfcci.T, dist=lambda x, y: np.exp(np.linalg.norm(x - y, ord=1)))[0]
+        dists[i] = (dist1i + dist2i + dist3i) / 3
+    plt.plot(dists)
+
+    # select minimum distance window
+    word_match_idx = dists.argmin()
+    # convert MFCC to time domain
+    word_match_idx_bnds = np.array([word_match_idx, np.ceil(word_match_idx + window_size)])
+    samples_per_mfcc = 512
+    word_samp_bounds = (2 / 2) + (word_match_idx_bnds * samples_per_mfcc)
+
+    word = yTest[word_samp_bounds[0]:word_samp_bounds[1]]
+
+    # Command to embed audio in IPython notebook :)
+    #IPython.display.Audio(data=word, rate=sr1)

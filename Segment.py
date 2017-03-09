@@ -120,6 +120,40 @@ class Segment:
         # TODO: And then compute the geometric distance to templates
         return Emm, maxpoints
 
+    def Harma(self,thr=10.,stop_thr=0.8):
+        # Harma's method, but with a different stopping criterion
+        # Note that this will go wrong with librosa's load because the elements of the spectrogram lie in [0,1] and hence interesting things with the log
+        #print np.shape(self.sg), np.min(self.sg), np.max(self.sg)
+        maxFreqs = 20. * np.log10(np.max(self.sg, 0))
+        #print np.shape(maxFreqs)
+        #maxFreqInds = np.argmax(self.sg, 0)
+        biggest = np.max(maxFreqs)
+        segs = []
+        print biggest
+
+        while np.max(maxFreqs)>stop_thr*biggest:
+            t0 = np.argmax(maxFreqs)
+            a_n = maxFreqs[t0]
+
+            # Go backwards looking for where the syllable stops
+            t = t0
+            while maxFreqs[t] > a_n - thr and t>0:
+                t -= 1
+            t_start = t
+
+            # And forwards
+            t = t0
+            while maxFreqs[t] > a_n - thr and t<len(maxFreqs)-1:
+                t += 1
+            t_end = t+1
+
+            # Set the syllable just found to 0
+            maxFreqs[t_start:t_end] = 0
+            segs.append([float(t_start)* self.incr / self.fs,float(t_end)* self.incr / self.fs])
+
+            print t_start, t_end, stop_thr*biggest, np.max(maxFreqs)
+        return segs
+
     def medianClip(self,thr=3.0,medfiltersize=5,minsize=80,minaxislength=5):
         # Median clipping for segmentation
         # Based on Lasseck's method (but with multi-tapered spectrogram)
@@ -127,6 +161,7 @@ class Segment:
         # And it opens up the segments to be maximal (so assumes no overlap)
         # TODO: Parameters!!
         # Use the multitaper spectrogram, it helps a lot
+        print np.max(self.sg)
         sg = self.sg/np.max(self.sg)
 
         # This next line gives an exact match to Lasseck, but screws up bitterns!
@@ -138,7 +173,7 @@ class Segment:
         clipped = np.zeros(np.shape(sg),dtype=int)
         for i in range(np.shape(sg)[0]):
             for j in range(np.shape(sg)[1]):
-                if (sg[i, j] > thr * rowmedians[i] and sg[i, j] > thr * colmedians[j]):
+                if (sg[i, j] > thr * rowmedians[i]) and (sg[i, j] > thr * colmedians[j]):
                     clipped[i, j] = 1
 
         # This is the stencil for the closing and dilation. It's a 5x5 diamond. Can also use a 3x3 diamond
@@ -224,6 +259,7 @@ class Segment:
 
     def findDTWMatches(self,seg,data,thr):
         # TODO: This is slow and crap. Note all the same length, for a start, and the fact that it takes forever!
+        # Use MFCC first?
         d = np.zeros(len(data))
         for i in range(len(data)):
             d[i] = self.dtw(seg,data[i:i+len(seg)])
@@ -284,9 +320,9 @@ def testsegEnergy():
 
 def testsegMC():
     #data, fs = librosa.load('Sound Files/male1.wav')
-    data, fs = librosa.load('Sound Files/tril1.wav',sr=None)
-    #from scipy.io import wavfile
-    #fs, data = wavfile.read('Sound Files/tril1.wav')
+    #data, fs = librosa.load('Sound Files/tril1.wav',sr=None)
+    from scipy.io import wavfile
+    fs, data = wavfile.read('Sound Files/tril1.wav')
     import SignalProc
     sp = SignalProc.SignalProc(data,fs,256,128)
     # sg = sp.spectrogram(data)
@@ -299,7 +335,7 @@ def testsegMC():
     #         pl.Rectangle((i.bbox[1], i.bbox[0]), i.bbox[3] - i.bbox[1], i.bbox[2] - i.bbox[0], facecolor='w',
     #                      alpha=0.5))
     sg = sp.spectrogram(data,multitaper=True)
-    s = Segment(data,sg,sp,fs)
+    s = Segment.Segment(data,sg,sp,fs)
     #segments, clipped, blobs = s.medianClip()
     segments = s.medianClip()
     print segments
@@ -309,6 +345,17 @@ def testsegMC():
     #     pl.gca().add_patch(
     #         pl.Rectangle((i.bbox[1], i.bbox[0]), i.bbox[3] - i.bbox[1], i.bbox[2] - i.bbox[0], facecolor='w',
     #                      alpha=0.5))
+
+def testsegHarma():
+    from scipy.io import wavfile
+    fs, data = wavfile.read('Sound Files/tril1.wav')
+    import SignalProc
+    sp = SignalProc.SignalProc(data,fs,256,128)
+    sg = sp.spectrogram(data,multitaper=True)
+    s = Segment.Segment(data, sg, sp, fs)
+    #segments, clipped, blobs = s.medianClip()
+    segments = s.Harma()
+    print segments
 
 #testseg()
 
