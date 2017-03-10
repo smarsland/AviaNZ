@@ -118,7 +118,7 @@ def compute_r(annotation,waveletCoefs,nNodes=20):
 
     r = np.zeros(62)
     for count in range(62):
-        r[count] = (np.mean(waveletCoefs[count,w0]) - np.mean(waveletCoefs[count,w1]))/np.std(waveletCoefs[count,:]) * np.sqrt(len(w0)*len(w1))/len(annotation)
+        r[count] = (np.mean(waveletCoefs[count,w1]) - np.mean(waveletCoefs[count,w0]))/np.std(waveletCoefs[count,:]) * np.sqrt(len(w0)*len(w1))/len(annotation)
 
     order = np.argsort(r)
     print r[order]
@@ -232,6 +232,7 @@ def findCalls_train():
 
     # Compute wavelet packet decomposition
     waveletCoefs = wpd(fwData, sampleRate)
+    return waveletCoefs
 
     # TODO: thresholds can be on the coefficients
     thresholds = np.mean(waveletCoefs,1) + np.std(waveletCoefs,1)
