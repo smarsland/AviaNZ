@@ -8,18 +8,19 @@ import librosa
 # Nirosha's approach of simultaneous segmentation and recognition using wavelets
 
 # Nirosha's version:
-    # (0) Bandpass filter with hacks
+    # (0) Bandpass filter with different parameters for each species
     # (1) 5 level wavelet packet decomposition
     # (2) Sort nodes of (1) into order by point-biserial correlation with training labels
+        # This is based on energy
     # (3) Retain top nodes (up to 20)
     # (4) Re-sort to favour child nodes
     # (5) Reduce number using F_2 score
+        # This is based on thresholded reconstruction
     # (6) Classify as call if OR of (5) is true
 # Stephen: Think about (4), fix (0), (5), (6) -> learning!
 
 def denoise(data,thresholdType='soft', maxlevel=5):
     # Perform wavelet denoising. Can use soft or hard thresholding
-    # TODO: Reconstruction didn't work too well. Why not?
     wp = pywt.WaveletPacket(data=data, wavelet='dmey', mode='symmetric', maxlevel=maxlevel)
 
     det1 = wp['d'].data
@@ -64,9 +65,15 @@ def ShannonEntropy(s):
     # e = np.where(s==0,0,-s**2*np.log(s**2))
     return np.sum(e)
 
-def load():
+def loadData(train=True):
     # Load data
-    filename = 'Wavelet Segmentation/bittern/train/train1.wav'
+    if train:
+        filename = 'Wavelet Segmentation/kiwi/train/train1.wav'
+        filenameAnnotation = 'Wavelet Segmentation/kiwi/train/train1-sec.xlsx'
+    else:
+        filename = 'Wavelet Segmentation/kiwi/test/kiwi-test1.wav'
+        filenameAnnotation = 'Wavelet Segmentation/kiwi/test/kiwi-test1-sec.xlsx'
+
     sampleRate, audiodata = wavfile.read(filename)
     if audiodata.dtype is not 'float':
         audiodata = audiodata.astype('float') / 32768.0
@@ -77,7 +84,7 @@ def load():
     annotation = np.zeros(300)
     count = 0
     import openpyxl as op
-    wb = op.load_workbook(filename = 'Wavelet Segmentation/bittern/train/train1-sec.xlsx')
+    wb = op.load_workbook(filename = filenameAnnotation)
     ws = wb.active
     for row in ws.iter_rows('B2:B301'):
         annotation[count] = row[0].value
@@ -85,7 +92,7 @@ def load():
 
     return audiodata, sampleRate, annotation
 
-def wpd(fwData,sampleRate):
+def computeWaveletEnergy(fwData,sampleRate):
     # Get the energy of the nodes in the wavelet packet decomposition
     # There are 62 coefficients up to level 5 of the wavelet tree (without root), and 300 seconds in 5 mins
     # The energy is the sum of the squares of the data in each node divided by the total in the tree
@@ -107,10 +114,10 @@ def fBetaScore(annotation, predicted,beta=2):
     P = np.sum(predicted)
     recall = float(TP)/T #TruePositive/#True
     precision = float(T)/P #TruePositive/#Positive
+    print TP, T, P, recall, precision
     return ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
 
 def compute_r(annotation,waveletCoefs,nNodes=20):
-    # TODO: Compare with Nirosha's matlab code
     # Find the correlations (point-biserial)
     # r = (M_p - M_q) / S * sqrt(p*q), M_p = mean for those that are 0, S = std dev overall, p = proportion that are 0.
     w0 = np.where(annotation==0)[0]
@@ -121,8 +128,6 @@ def compute_r(annotation,waveletCoefs,nNodes=20):
         r[count] = (np.mean(waveletCoefs[count,w1]) - np.mean(waveletCoefs[count,w0]))/np.std(waveletCoefs[count,:]) * np.sqrt(len(w0)*len(w1))/len(annotation)
 
     order = np.argsort(r)
-    print r[order]
-    print order
     order = order[-1:-nNodes-1:-1]
 
     return order
@@ -145,7 +150,6 @@ def sortListByChild(order):
     starts = [0, 2, 6, 14,30,62]
     while len(order)>0:
         if order[0]<30:
-            #print order[0]
             # It could have children lower down the list
 
             # Build a list of the children of the first element of order
@@ -196,101 +200,122 @@ def ButterworthBandpass(data,sampleRate,order=10,low=1000,high=10000):
     # apply filter
     return signal.filtfilt(b, a, data)
 
-def detectCalls(waveletCoefs, listnodes,thresholds):
-    # TODO: thresholds can be on the coefficients or on the reconstructed sound
 
+def detectCalls(wp,listnodes,sampleRate):
     # Reconstruct signal from each node separately (or just the list)
     # Choose nodes to keep (listnodes)
     # wp.reconstruct(update=False)
     # Generate the energy curve
     # Threshold
 
-    # Raw wavelets
-    predicted = np.zeros(np.shape(waveletCoefs)[1])
+    import string
+    # Reconstruct wavelet tree
+    # TODO: Is there a better way to copy the whole thing?
+    new_wp = pywt.WaveletPacket(data=None, wavelet='dmey', mode='symmetric')
+    for level in range(5):
+        for node in wp.get_level(level, "natural"):
+            new_wp[node] = wp[node]
+    new_wp.reconstruct(update=True)
 
-    for node in listnodes:
-        times = np.squeeze(np.where(waveletCoefs[node,:] > thresholds[node]))
-        # OR of the individual node outputs
-        if np.shape(times) > 0:
-            predicted[times] = 1
-    return predicted
+    for index in listnodes:
+        # First, turn the index into a leaf name. Note that there is no root, so have to add 1 to the indices
+        level = np.floor(np.log2(index+1))
+        first = 2**level-1
+        bin = np.binary_repr(index+1-first,width=int(level))
+        bin = string.replace(bin,'0','a',maxreplace=-1)
+        bin = string.replace(bin,'1','d',maxreplace=-1)
+        print index+1, bin
+
+    # Get the coefficients
+    C = np.abs(new_wp[bin].data)
+    N = len(C)
+
+    # Compute the number of samples in a window -- species specific
+    M = int(0.8*sampleRate/2.0)
+    print M
+
+    # Compute the energy curve (a la Jinnai et al. 2012)
+    E = np.zeros(N-M)
+    E[M] = np.sum(C[:2 * M+1])
+    for i in range(M + 1, N - M):
+        E[i] = E[i - 1] - C[i - M - 1] + C[i + M]
+    E = E / (2. * M)
+
+    threshold = np.mean(C) + np.std(C)
+    # bittern
+    # TODO: test
+    #thresholds[np.where(waveletCoefs<=32)] = 0
+    #thresholds[np.where(waveletCoefs>32)] = 0.3936 + 0.1829*np.log2(np.where(waveletCoefs>32))
+
+    # If there is a call anywhere in the window, report it as a call
+    # TODO: Needs work
+    print threshold, E
+    E = np.where(E<threshold, 0, 1)
+    detected = np.zeros(np.floor(N/sampleRate))
+    j = 0
+    for i in range(0,N-sampleRate,sampleRate):
+        detected[j] = np.max(E[i:i+sampleRate])
+        j+=1
+
+    return detected
 
 def findCalls_train():
     # Nirosha's ugly version
+
     # Load data and annotation
-    data, sampleRate_o, annotation = load()
+    data, sampleRate_o, annotation = loadData(train)
 
     # Resample the data
-    sampleRate = 1000
-    data = librosa.core.audio.resample(data,sampleRate_o,sampleRate)
+    # TOOD: Species specific
+    # bittern
+    #sampleRate = 1000
+    # rest
+    #sampleRate = 16000
+    #data = librosa.core.audio.resample(data,sampleRate_o,sampleRate)
+
+    # Get the five level wavelet decomposition
     wData = denoise(data, thresholdType='soft', maxlevel=5)
 
     # Bandpass filter
     #fwData = bandpass(wData,sampleRate)
     # TODO: Params in here!
-    fwData = ButterworthBandpass(wData,sampleRate,low=100,high=400)
+    # bittern
+    #fwData = ButterworthBandpass(wData,sampleRate,low=100,high=400)
+    # kiwi
+    #fwData = ButterworthBandpass(wData, sampleRate, low=1000, high=8000)
 
-    # Compute wavelet packet decomposition
-    waveletCoefs = wpd(fwData, sampleRate)
-    return waveletCoefs
-
-    # TODO: thresholds can be on the coefficients
-    thresholds = np.mean(waveletCoefs,1) + np.std(waveletCoefs,1)
-    # TODO: or on the reconstructed sound
-    # Generate the reconstructed signal based on each individual node
-    # Then threshold is mean + sd of the reconstruction
+    fwData = data
+    waveletCoefs = computeWaveletEnergy(fwData, sampleRate)
 
     # Compute point-biserial correlations and sort wrt it, return top nNodes
     nodes = compute_r(annotation,waveletCoefs)
-    print nodes
 
     # Now for Nirosha's weird sorting
     # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
     nodes = sortListByChild(np.ndarray.tolist(nodes))
-    print nodes
+
+    # Generate a full 5 level wavelet packet decomposition
+    wpFull = pywt.WaveletPacket(data=fwData, wavelet='dmey', mode='symmetric', maxlevel=5)
 
     # Now check the F2 values and add node if it improves F2
     listnodes = []
     bestBetaScore = 0
     for c in nodes:
-        print "testing ",c
         testlist = listnodes[:]
         testlist.append(c)
-        # Make prediction **** What exactly does this do?
-        predicted = detectCalls(waveletCoefs, testlist, thresholds)
+        # TODO: Get the thresholds here (the real work!)
+        predicted = detectCalls(wpFull,testlist,sampleRate)
         fB = fBetaScore(annotation, predicted)
         if fB > bestBetaScore:
             bestBetaScore = fB
             listnodes.append(c)
-            print "adding ", c
     return listnodes
 
-def findCalls_test(listnodes):
-    data,  sampleRate, annotation = load()
-    waveletCoefs = wpd(fwData, sampleRate)
-    predicted = predicted or findCalls(data, listnodes)
+def findCalls_test(listnodes, thresholds):
+    # TODO: Hack!
+    sampleRate = 16000
+    waveletCoefs, wp, annotation = getWaveletCoefs(train=False)
+    predicted = detectCalls(wp,listnodes,sampleRate)
+    print fBetaScore(annotation,predicted)
 
-
-
-
-
-
-
-def test_filters(sampleRate):
-    pl.figure()
-    pl.subplot(611),pl.plot(data)
-    pl.subplot(612),pl.specgram(audiodata, NFFT=256, sampleRate=sampleRate, noverlap=128,cmap=pl.cm.gray_r)
-
-    wData = denoise(data, thresholdType='soft', maxlevel=5)
-    pl.subplot(613),pl.plot(wData)
-    pl.subplot(614),pl.specgram(wData, NFFT=256, sampleRate=sampleRate, noverlap=128,cmap=pl.cm.gray_r)
-
-    fwData = bandpass(wData,sampleRate)
-    pl.subplot(615),pl.plot(fwData)
-    pl.subplot(616),pl.specgram(fwData, NFFT=256, sampleRate=sampleRate, noverlap=128,cmap=pl.cm.gray_r)
-
-    pl.show()
-
-#data, sampleRate, annotation = WaveletSegment.load()
-#r, coefsampleRate = WaveletSegment.compute_r(annotation,fwData,sampleRate)
-#WaveletSegment.findCalls(coefsampleRate,data)
+#D = np.array([0.4364,-0.5044,  0.1021,  1.1963,   0.1203,  -1.0368,  -0.8571,  -0.1699,  -0.1917, -0.8658,  0.1807,   1.2665,  -0.2512,  -0.2046, -2.2015, -0.7745, -1.3933, -0.3862, 0.5256,  1.5233,  1.7985, -0.1169,  -0.3202,   0.8175,  0.4902,  0.7653,  0.7783,  -1.4803, 0.5404, -0.0915])

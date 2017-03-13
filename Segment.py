@@ -76,7 +76,7 @@ class Segment:
         # They then return the max-width:max+width segments for each max
         data = np.abs(self.data)
         E = np.zeros(len(data))
-        E[width] = np.sum(data[:2*width])
+        E[width] = np.sum(data[:2*width+1])
         for i in range(width+1,len(data)-width):
             E[i] = E[i-1] - data[i-width-1] + data[i+width]
         E = E/(2*width)

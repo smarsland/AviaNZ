@@ -54,13 +54,11 @@ import Segment
 # Finish sorting out parameters for median clipping segmentation, energy segmentation
 # Finish the raven features
 # Finish cross-correlation to pick out similar bits of spectrogram -> and what else?
-# Denoising finished
+# Finish denoising
 
 # Some problem with the text moving
-#   Weird bug with updateOverview
 #   Colour code of boxes by label (add info somewhere)
 #   Finish implementing the drag box on the spectrogram --> look at plot customization eg
-#   Are axes sufficient?
 #  If don't select something in context menu get error -> not critical
 
 #   The remote plotting should speed things up
@@ -106,6 +104,7 @@ import Segment
 # Librosa isn't in windows!
 # Turn stereo sound into mono using librosa, consider always resampling to 22050Hz (except when it's less in file :) )
 # Font size to match segment size -> currently make it smaller, could also move it up or down as appropriate
+# Would be nice to put the axis label on the right
 
 # Things to consider:
     # Second spectrogram (currently use right button for interleaving)? My current choice is no as it takes up space
@@ -129,6 +128,13 @@ import Segment
 # This version has the selection of birds using a context menu and then has removed the radio buttons
 # Code is still there, though, just commented out. Add as an option?
 
+# Diane:
+    #be able to put the docks back into order again --     state = area.saveState(), area.restoreState(state)
+    # menu
+    # for matching, show matched segment, and extended 'guess' (with some overlap)
+    # Something to show nesting of segments, such as a number of segments in the top bit
+    # Find similar segments in other files -- other birds
+    # Group files by call type
 # ===============
 
 class Interface(QMainWindow):
@@ -152,6 +158,11 @@ class Interface(QMainWindow):
             self.genConfigFile()
             self.saveConfig=True
             self.configfile = 'AviaNZconfig.txt'
+
+        # The data structures for the segments
+        self.listLabels = []
+        self.listRectanglesa1 = []
+        self.listRectanglesa2 = []
 
         self.resetStorageArrays()
 
@@ -241,9 +252,6 @@ class Interface(QMainWindow):
     def createFrame(self):
         # This creates the actual interface. Some Qt, some PyQtGraph
 
-        # TODO: Replace this!
-        #self.defineColourmap()
-
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
@@ -281,6 +289,7 @@ class Interface(QMainWindow):
         self.timeaxis = pg.AxisItem(orientation='bottom')
         self.w_ampl.addItem(self.timeaxis,row=1,col=1)
         self.timeaxis.linkToView(self.p_ampl)
+        self.timeaxis.setLabel('Time',units='s')
 
         self.ampaxis = pg.AxisItem(orientation='left')
         self.w_ampl.addItem(self.ampaxis,row=0,col=0)
@@ -299,6 +308,7 @@ class Interface(QMainWindow):
 
         #self.amplPlot = pg.PlotItem()
         self.amplPlot = pg.PlotDataItem()
+
         self.p_ampl.addItem(self.amplPlot)
 
         self.specPlot = pg.ImageItem()
@@ -308,7 +318,6 @@ class Interface(QMainWindow):
         #self.p_overview.scene().sigMouseClicked.connect(self.mouseClicked_overview)
         self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
         self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
-
 
         self.w_controls = pg.LayoutWidget()
         self.d_controls.addWidget(self.w_controls)
@@ -512,10 +521,9 @@ class Interface(QMainWindow):
     def resetStorageArrays(self):
         # These variables hold the data to be saved and/or plotted
         # Used when new files are loaded
-        self.segments=[]
-        self.listRectanglesa1 = []
-        self.listRectanglesa2 = []
-        self.listLabels = []
+
+        # Remove the segments
+        self.deleteAll()
         if hasattr(self, 'overviewImageRegion'):
             self.p_overview.removeItem(self.overviewImageRegion)
 
@@ -527,7 +535,6 @@ class Interface(QMainWindow):
         #self.start_a = 0
         self.windowStart = 0
         self.playPosition = self.windowStart
-        self.box1id = None
 
         #self.line = None
 
@@ -575,9 +582,6 @@ class Interface(QMainWindow):
         # One magic constant, which normalises the data
         # TODO: moved to librosa instead of wavfile. Put both in and see if it is slower!
         # TODO: Note that librosa normalised things, which buggers up the spectrogram for e.g., Harma
-        #if len(self.segments)>0:
-        #    self.saveSegments()
-        #self.segments = []
 
         if isinstance(name,str):
             self.filename = self.dirName+'/'+name
@@ -586,10 +590,10 @@ class Interface(QMainWindow):
         #self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
         self.sampleRate, self.audiodata = wavfile.read(self.filename)
         # None of the following should be necessary for librosa
-        #if self.audiodata.dtype is not 'float':
-        #    self.audiodata = self.audiodata.astype('float') / 32768.0
-        #if np.shape(np.shape(self.audiodata))[0]>1:
-        #    self.audiodata = self.audiodata[:,0]
+        if self.audiodata.dtype is not 'float':
+            self.audiodata = self.audiodata.astype('float') / 32768.0
+        if np.shape(np.shape(self.audiodata))[0]>1:
+            self.audiodata = self.audiodata[:,0]
         self.datalength = np.shape(self.audiodata)[0]
         print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate)
 
@@ -1169,7 +1173,7 @@ class Interface(QMainWindow):
         x1,x2 = self.listRectanglesa2[self.currentSegment].getRegion()
         x1 = int(x1)
         x2 = int(x2)
-        self.humanClassifyDialog = HumanClassify1(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
+        self.humanClassifyDialog = HumanClassify2(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
         self.humanClassifyDialog.show()
         self.humanClassifyDialog.activateWindow()
         self.humanClassifyDialog.close.clicked.connect(self.humanClassifyClose)
