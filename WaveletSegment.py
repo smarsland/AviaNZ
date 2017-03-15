@@ -20,7 +20,7 @@ import librosa
 # Stephen: Think about (4), fix (0), (5), (6) -> learning!
 
 # TODO: more testing, proper code to run experiment, work out desired output, work on parameters for each species
-
+# TODO: object version, add in to code
 
 # a few gotchas:
     # make sure bandpass max is BELOW nyquist freq
