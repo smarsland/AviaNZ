@@ -19,6 +19,15 @@ import librosa
     # (6) Classify as call if OR of (5) is true
 # Stephen: Think about (4), fix (0), (5), (6) -> learning!
 
+# TODO: more testing, proper code to run experiment, work out desired output, work on parameters for each species
+
+
+# a few gotchas:
+    # make sure bandpass max is BELOW nyquist freq
+    # this is like the Matlab code, one wavelet packet at a time, unfortunately
+    # resampling is in librosa
+
+
 def denoise(data,thresholdType='soft', maxlevel=5):
     # Perform wavelet denoising. Can use soft or hard thresholding
     wp = pywt.WaveletPacket(data=data, wavelet='dmey', mode='symmetric', maxlevel=maxlevel)
@@ -36,34 +45,7 @@ def denoise(data,thresholdType='soft', maxlevel=5):
                 # Soft thresholding
                 n.data = np.sign(n.data) * np.maximum((np.abs(n.data) - threshold), 0.0)
 
-    wData = wp.data # self.wp.reconstruct(update=False)
-
-    return wData
-
-def bandpass(wData,sampleRate):
-    # Bandpass filter
-    # There are some ugly parameters in here
-    # TODO: need to work on this more
-    import scipy.signal as signal
-    nyquist = sampleRate/2.0
-    ntaps = 128
-    #taps = signal.firwin(ntaps,cutoff = [1100/nyquist,7500/nyquist], window=('hamming'),pass_zero=False)
-    taps = signal.firwin(ntaps,cutoff = [50/nyquist,400/nyquist], window=('hamming'),pass_zero=False)
-    fwData = signal.lfilter(taps, 1.0, wData)
-
-    # width = 1.6
-    # atten = signal.kaiser_atten(ntaps, width / nyquist)
-    # beta = signal.kaiser_beta(atten)
-    # taps = signal.firwin(ntaps,cutoff = [1100/nyquist,7500/nyquist], window=('kaiser',beta),pass_zero=False)
-    # fwData = signal.lfilter(taps, 1.0, wData)
-
-    return fwData
-
-def ShannonEntropy(s):
-    # Compute the Shannon entropy of data
-    e = -s[np.nonzero(s)] ** 2 * np.log(s[np.nonzero(s)] ** 2)
-    # e = np.where(s==0,0,-s**2*np.log(s**2))
-    return np.sum(e)
+    return wp.data
 
 def loadData(train=True):
     # Load data
@@ -113,8 +95,8 @@ def fBetaScore(annotation, predicted,beta=2):
     T = np.sum(annotation)
     P = np.sum(predicted)
     recall = float(TP)/T #TruePositive/#True
-    precision = float(T)/P #TruePositive/#Positive
-    print TP, T, P, recall, precision
+    precision = float(TP)/P #TruePositive/#Positive
+    print TP, int(T), int(P), recall, precision, ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
     return ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
 
 def compute_r(annotation,waveletCoefs,nNodes=20):
@@ -135,18 +117,12 @@ def compute_r(annotation,waveletCoefs,nNodes=20):
 def sortListByChild(order):
     # Have a list sorted into order of correlation
     # Want to resort so that any children of the current node that are in the list go first
-    # Assumes that there are five levels in the tree
-
-    #order = [3, 9, 43, 45, 21, 20, 40, 19, 8, 44]
-    #output = [43, 45, 40, 44, 21, 20, 19, 9, 8, 3]
-
-    #order = [42, 34, 20, 2, 16, 8, 7, 40, 19, 1]
-    #output = [42, 34, 40, 20, 16, 7, 2, 19, 8, 1]
-    #output = [42, 34, 20, 16, 7, 2, 40, 19, 8, 1]
+    # Assumes that there are five levels in the tree (easy to extend, though)
 
     newlist = []
     currentIndex = 0
     # Need to keep track of where each level of the tree starts
+    # Note that there is no root to the tree, hence the 0 then 2
     starts = [0, 2, 6, 14,30,62]
     while len(order)>0:
         if order[0]<30:
@@ -189,7 +165,7 @@ def sortListByChild(order):
 
     return newlist
 
-def ButterworthBandpass(data,sampleRate,order=10,low=1000,high=10000):
+def ButterworthBandpass(data,sampleRate,order=10,low=1000,high=7000):
     import scipy.signal as signal
     nyquist = sampleRate/2.0
 
@@ -200,42 +176,82 @@ def ButterworthBandpass(data,sampleRate,order=10,low=1000,high=10000):
     # apply filter
     return signal.filtfilt(b, a, data)
 
-
 def detectCalls(wp,listnodes,sampleRate):
-    # Reconstruct signal from each node separately (or just the list)
-    # Choose nodes to keep (listnodes)
-    # wp.reconstruct(update=False)
-    # Generate the energy curve
-    # Threshold
-
     import string
-    # Reconstruct wavelet tree
-    # TODO: Is there a better way to copy the whole thing?
-    new_wp = pywt.WaveletPacket(data=None, wavelet='dmey', mode='symmetric')
-    for level in range(5):
-        for node in wp.get_level(level, "natural"):
-            new_wp[node] = wp[node]
-    new_wp.reconstruct(update=True)
-
+    # Add relevant nodes to the wavelet packet tree and then reconstruct the data
+    detected = np.zeros((300,len(listnodes)))
+    count = 0
     for index in listnodes:
-        # First, turn the index into a leaf name. Note that there is no root, so have to add 1 to the indices
-        level = np.floor(np.log2(index+1))
+        new_wp = pywt.WaveletPacket(data=None, wavelet='dmey', mode='symmetric')
+        # First, turn the index into a leaf name.
+        level = np.floor(np.log2(index))
         first = 2**level-1
-        bin = np.binary_repr(index+1-first,width=int(level))
+        bin = np.binary_repr(index-first,width=int(level))
         bin = string.replace(bin,'0','a',maxreplace=-1)
         bin = string.replace(bin,'1','d',maxreplace=-1)
-        print index+1, bin
+        #print index+1, bin
+        new_wp[bin] = wp[bin].data
+
+        # Get the coefficients
+        C = np.abs(new_wp.reconstruct(update=True))
+        N = len(C)
+
+        # Compute the number of samples in a window -- species specific
+        M = int(0.8*sampleRate/2.0)
+        #print M
+
+        # Compute the energy curve (a la Jinnai et al. 2012)
+        E = np.zeros(N)
+        E[M] = np.sum(C[:2 * M+1])
+        for i in range(M + 1, N - M):
+            E[i] = E[i - 1] - C[i - M - 1] + C[i + M]
+        E = E / (2. * M)
+
+        threshold = np.mean(C) + np.std(C)
+        # bittern
+        # TODO: test
+        #thresholds[np.where(waveletCoefs<=32)] = 0
+        #thresholds[np.where(waveletCoefs>32)] = 0.3936 + 0.1829*np.log2(np.where(waveletCoefs>32))
+
+        # If there is a call anywhere in the window, report it as a call
+        E = np.where(E<threshold, 0, 1)
+        j = 0
+        for i in range(0,N-sampleRate,sampleRate):
+            detected[j,count] = np.max(E[i:i+sampleRate])
+            j+=1
+        count += 1
+
+    return np.max(detected,axis=1)
+
+def detectCalls1(wp,listnodes,sampleRate):
+    # This way should be the best -- reconstruct from setting all of the relevant nodes. But it gives an error message
+    # about different size coefficient arrays most of the time.
+    import string
+    # Add relevant nodes to the wavelet packet tree and then reconstruct the data
+    new_wp = pywt.WaveletPacket(data=None, wavelet='dmey', mode='symmetric')
+
+
+    for index in listnodes:
+        # First, turn the index into a leaf name.
+        # TODO: This needs checking -- are they the right nodes?
+        level = np.floor(np.log2(index))
+        first = 2**level-1
+        bin = np.binary_repr(index-first,width=int(level))
+        bin = string.replace(bin,'0','a',maxreplace=-1)
+        bin = string.replace(bin,'1','d',maxreplace=-1)
+        #print index+1, bin
+        new_wp[bin] = wp[bin].data
 
     # Get the coefficients
-    C = np.abs(new_wp[bin].data)
+    C = np.abs(new_wp.reconstruct(update=True))
     N = len(C)
 
     # Compute the number of samples in a window -- species specific
     M = int(0.8*sampleRate/2.0)
-    print M
+    #print M
 
     # Compute the energy curve (a la Jinnai et al. 2012)
-    E = np.zeros(N-M)
+    E = np.zeros(N)
     E[M] = np.sum(C[:2 * M+1])
     for i in range(M + 1, N - M):
         E[i] = E[i - 1] - C[i - M - 1] + C[i + M]
@@ -248,10 +264,8 @@ def detectCalls(wp,listnodes,sampleRate):
     #thresholds[np.where(waveletCoefs>32)] = 0.3936 + 0.1829*np.log2(np.where(waveletCoefs>32))
 
     # If there is a call anywhere in the window, report it as a call
-    # TODO: Needs work
-    print threshold, E
     E = np.where(E<threshold, 0, 1)
-    detected = np.zeros(np.floor(N/sampleRate))
+    detected = np.zeros(300)
     j = 0
     for i in range(0,N-sampleRate,sampleRate):
         detected[j] = np.max(E[i:i+sampleRate])
@@ -263,18 +277,17 @@ def findCalls_train():
     # Nirosha's ugly version
 
     # Load data and annotation
-    data, sampleRate_o, annotation = loadData(train)
-
+    data, sampleRate_o, annotation = loadData(True)
     # Resample the data
     # TOOD: Species specific
     # bittern
     #sampleRate = 1000
     # rest
-    #sampleRate = 16000
-    #data = librosa.core.audio.resample(data,sampleRate_o,sampleRate)
+    sampleRate = 16000
+    sdata = librosa.core.audio.resample(data,sampleRate_o,sampleRate)
 
     # Get the five level wavelet decomposition
-    wData = denoise(data, thresholdType='soft', maxlevel=5)
+    wData = denoise(sdata, thresholdType='soft', maxlevel=5)
 
     # Bandpass filter
     #fwData = bandpass(wData,sampleRate)
@@ -282,40 +295,55 @@ def findCalls_train():
     # bittern
     #fwData = ButterworthBandpass(wData,sampleRate,low=100,high=400)
     # kiwi
-    #fwData = ButterworthBandpass(wData, sampleRate, low=1000, high=8000)
+    fwData = ButterworthBandpass(wData,sampleRate,low=1000,high=7000)
+    print fwData
 
-    fwData = data
+    #fwData = data
     waveletCoefs = computeWaveletEnergy(fwData, sampleRate)
 
     # Compute point-biserial correlations and sort wrt it, return top nNodes
     nodes = compute_r(annotation,waveletCoefs)
+    print nodes
 
     # Now for Nirosha's weird sorting
     # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
     nodes = sortListByChild(np.ndarray.tolist(nodes))
 
+    # These nodes refer to the unrooted tree, so add 1 to get the real indices
+    nodes = [n + 1 for n in nodes]
+    print nodes
+
     # Generate a full 5 level wavelet packet decomposition
     wpFull = pywt.WaveletPacket(data=fwData, wavelet='dmey', mode='symmetric', maxlevel=5)
 
     # Now check the F2 values and add node if it improves F2
+    #nodes = nodes[]
     listnodes = []
     bestBetaScore = 0
     for c in nodes:
         testlist = listnodes[:]
         testlist.append(c)
-        # TODO: Get the thresholds here (the real work!)
-        predicted = detectCalls(wpFull,testlist,sampleRate)
-        fB = fBetaScore(annotation, predicted)
+        print testlist
+        detected = detectCalls(wpFull,testlist,sampleRate)
+        fB = fBetaScore(annotation, detected)
         if fB > bestBetaScore:
             bestBetaScore = fB
             listnodes.append(c)
     return listnodes
 
-def findCalls_test(listnodes, thresholds):
-    # TODO: Hack!
+def findCalls_test(listnodes):
+
+    data, sampleRate_o, annotation = loadData(train=False)
     sampleRate = 16000
-    waveletCoefs, wp, annotation = getWaveletCoefs(train=False)
-    predicted = detectCalls(wp,listnodes,sampleRate)
-    print fBetaScore(annotation,predicted)
+    sdata = librosa.core.audio.resample(data,sampleRate_o,sampleRate)
+    wData = denoise(sdata, thresholdType='soft', maxlevel=5)
+    fwData = ButterworthBandpass(wData,sampleRate,low=1000,high=7000)
+    wpFull = pywt.WaveletPacket(data=fwData, wavelet='dmey', mode='symmetric', maxlevel=5)
+
+    detected = detectCalls(wpFull, listnodes, sampleRate)
+    print fBetaScore(annotation,detected)
+    #print annotation
+    #print detected
+
 
 #D = np.array([0.4364,-0.5044,  0.1021,  1.1963,   0.1203,  -1.0368,  -0.8571,  -0.1699,  -0.1917, -0.8658,  0.1807,   1.2665,  -0.2512,  -0.2046, -2.2015, -0.7745, -1.3933, -0.3862, 0.5256,  1.5233,  1.7985, -0.1169,  -0.3202,   0.8175,  0.4902,  0.7653,  0.7783,  -1.4803, 0.5404, -0.0915])
