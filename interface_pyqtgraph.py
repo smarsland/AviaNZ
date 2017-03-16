@@ -27,7 +27,7 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 import PyQt4.phonon as phonon
 
-import librosa as lr
+#import librosa as lr
 from scipy.io import wavfile
 import numpy as np
 import pylab as pl
@@ -362,7 +362,8 @@ class Interface(QMainWindow):
         self.connect(self.playSlider,SIGNAL('sliderReleased()'),self.sliderMoved)
 
         self.w_controls.addWidget(QLabel('Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'),row=0,col=0,colspan=4)
-        self.w_controls.addWidget(self.playSlider,row=1,col=0,colspan=4)
+        #self.w_controls.addWidget(self.playSlider,row=1,col=0,colspan=4)
+        self.d_spec.addWidget(self.playSlider)
         self.w_controls.addWidget(self.playButton,row=2,col=0)
         self.w_controls.addWidget(self.timePlayed,row=2,col=1)
         #self.w_controls.addWidget(self.resetButton,row=2,col=1)
@@ -406,13 +407,15 @@ class Interface(QMainWindow):
         self.connect(deleteAllButton, SIGNAL('clicked()'), self.deleteAll)
         findMatchButton = QPushButton("&Find Matches")
         self.connect(findMatchButton, SIGNAL('clicked()'), self.findMatches)
-        checkButton = QPushButton("&Check Segments")
-        self.connect(checkButton, SIGNAL('clicked()'), self.humanClassifyDialog)
+        checkButton1 = QPushButton("&Check Segments 1")
+        self.connect(checkButton1, SIGNAL('clicked()'), self.humanClassifyDialog1)
+        checkButton2 = QPushButton("&Check Segments 2")
+        self.connect(checkButton2, SIGNAL('clicked()'), self.humanClassifyDialog2)
         dockButton = QPushButton("&Put Docks Back")
         self.connect(dockButton, SIGNAL('clicked()'), self.dockReplace)
 
         # vboxButtons2 = QVBoxLayout()
-        for w in [deleteButton,deleteAllButton,spectrogramButton,denoiseButton, segmentButton, findMatchButton, quitButton, checkButton, dockButton]:
+        for w in [deleteButton,deleteAllButton,spectrogramButton,segmentButton, findMatchButton, checkButton1, checkButton2, dockButton, quitButton]:
             self.w_buttons.addWidget(w)
 
         # The context menu (drops down on mouse click) to select birds
@@ -484,7 +487,7 @@ class Interface(QMainWindow):
         self.audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
         phonon.Phonon.createPath(self.media_obj, self.audio_output)
         self.media_obj.setTickInterval(20)
-        self.media_obj.tick.connect(self.movePlaySlider)
+        #self.media_obj.tick.connect(self.movePlaySlider)
         self.media_obj.finished.connect(self.playFinished)
         # TODO: Check the next line out!
         #self.media_obj.totalTimeChanged.connect(self.setSliderLimits)
@@ -597,6 +600,8 @@ class Interface(QMainWindow):
 
         if isinstance(name,str):
             self.filename = self.dirName+'/'+name
+        elif isinstance(name,QString):
+            self.filename = name
         else:
             self.filename = self.dirName+'/'+str(name.text())
         #self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
@@ -660,10 +665,8 @@ class Interface(QMainWindow):
 
         # Load the file for playback as well, and connect up the listeners for it
         self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
-
-        # Decide on the length of the playback bit for the slider
-        self.setSliderLimits(0,self.media_obj.totalTime())
         self.totalTime = self.convertMillisecs(self.media_obj.totalTime())
+        self.media_obj.tick.connect(self.movePlaySlider)
 
         # Get the height of the amplitude for plotting the box
         self.minampl = np.min(self.audiodata)+0.1*(np.max(self.audiodata)+np.abs(np.min(self.audiodata)))
@@ -682,12 +685,10 @@ class Interface(QMainWindow):
     def dragRectanglesCheck(self,check):
         # The checkbox that says if the user is dragging rectangles or clicking on the spectrogram has changed state
         if self.dragRectangles.isChecked():
-            print self.p_spec.state['mouseMode'], self.p_ampl.state['mouseMode']
-            print "Checked"
+            #print "Checked"
             self.p_spec.setMouseMode(pg.ViewBox.RectMode)
-            print self.p_spec.state['mouseMode'], self.p_ampl.state['mouseMode']
         else:
-            print "Unchecked"
+            #print "Unchecked"
             self.p_spec.setMouseMode(pg.ViewBox.PanMode)
 
 # ==============
@@ -724,6 +725,9 @@ class Interface(QMainWindow):
         self.p_spec.setXRange(minX, maxX, padding=0)
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.p_spec.setXRange(minX, maxX, padding=0)
+        #print "Slider:", self.convertSpectoAmpl(minX),self.convertSpectoAmpl(maxX)
+        self.setSliderLimits(1000*self.convertSpectoAmpl(minX),1000*self.convertSpectoAmpl(maxX))
+
 
     def drawfigMain(self):
         # This draws the main amplitude and spectrogram plots
@@ -741,9 +745,9 @@ class Interface(QMainWindow):
             self.addSegment(self.segments[count][0], self.segments[count][1],self.segments[count][2],self.segments[count][3],self.segments[count][4],False)
 
         # Another go at a moving bar
-        self.bar = pg.InfiniteLine(angle=90, movable=False, pen={'color': 'r', 'width': 3})
-        self.p_ampl.addItem(self.bar, ignoreBounds=True)
-        self.bar.setValue(0.0)
+        #self.bar = pg.InfiniteLine(angle=90, movable=False, pen={'color': 'r', 'width': 3})
+        #self.p_ampl.addItem(self.bar, ignoreBounds=True)
+        #self.bar.setValue(0.0)
 
     def updateRegion_spec(self):
         # This is the listener for when a segment box is changed
@@ -1204,6 +1208,9 @@ class Interface(QMainWindow):
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
         self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
+        #print "Slider:", self.convertSpectoAmpl(newminX),self.convertSpectoAmpl(maxX)
+        self.setSliderLimits(1000*self.convertSpectoAmpl(newminX),1000*self.convertSpectoAmpl(maxX))
+
 
     def moveRight(self):
         # When the right button is pressed (next to the overview plot), move everything along
@@ -1214,6 +1221,9 @@ class Interface(QMainWindow):
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
         self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
+        #print "Slider:", self.convertSpectoAmpl(newminX),self.convertSpectoAmpl(maxX)
+        self.setSliderLimits(1000*self.convertSpectoAmpl(newminX),1000*self.convertSpectoAmpl(maxX))
+
 
     # def showSegments(self,seglen=0):
     #     # This plots the segments that are returned from any of the segmenters and adds them to the set of segments
@@ -1265,52 +1275,67 @@ class Interface(QMainWindow):
         minX, maxX = self.overviewImageRegion.getRegion()
         newmaxX = self.convertAmpltoSpec(value)+minX
         self.overviewImageRegion.setRegion([minX, newmaxX])
+        #print "Slider:", self.convertSpectoAmpl(minX),self.convertSpectoAmpl(maxX)
+        self.setSliderLimits(1000*self.convertSpectoAmpl(minX),1000*self.convertSpectoAmpl(maxX))
         self.updateOverview()
 
 # ===============
 # Generate the various dialogs that match the buttons
 
-    def humanClassifyDialog(self):
+    def humanClassifyDialog1(self):
         # Create the dialog that shows calls to the user for verification
         # Currently assumes that there is a selected box (later, use the first!)
         self.currentSegment = 0
         x1,x2 = self.listRectanglesa2[self.currentSegment].getRegion()
         x1 = int(x1)
         x2 = int(x2)
-        self.humanClassifyDialog = HumanClassify2(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
-        self.humanClassifyDialog.show()
-        self.humanClassifyDialog.activateWindow()
-        self.humanClassifyDialog.close.clicked.connect(self.humanClassifyClose)
-        self.humanClassifyDialog.correct.clicked.connect(self.humanClassifyCorrect)
-        self.humanClassifyDialog.wrong.clicked.connect(self.humanClassifyWrong)
+        self.humanClassifyDialog1 = HumanClassify1(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
+        self.humanClassifyDialog1.show()
+        self.humanClassifyDialog1.activateWindow()
+        self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
+        self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
+        self.humanClassifyDialog1.wrong.clicked.connect(self.humanClassifyWrong1)
 
-    def humanClassifyClose(self):
+    def humanClassifyClose1(self):
         # Listener for the human verification dialog.
-        self.humanClassifyDialog.done(1)
+        self.humanClassifyDialog1.done(1)
 
-    def humanClassifyNextImage(self):
+    def humanClassifyNextImage1(self):
         # Get the next image
         # TODO: Ends rather suddenly
         if self.currentSegment != len(self.listRectanglesa2)-1:
             self.currentSegment += 1
-            self.humanClassifyDialog.setImage(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.segments[self.currentSegment][4])
+            x1, x2 = self.listRectanglesa2[self.currentSegment].getRegion()
+            self.humanClassifyDialog1.setImage(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
         else:
             print "Last image"
-            self.humanClassifyClose()
+            self.humanClassifyClose1()
 
-    def humanClassifyCorrect(self):
-        self.humanClassifyNextImage()
+    def humanClassifyCorrect1(self):
+        self.humanClassifyNextImage1()
 
-    def humanClassifyWrong(self):
+    def humanClassifyWrong1(self):
         # First get the correct classification (by producing a new modal dialog) and update the text, then show the next image
         # TODO: Test, particularly that new birds are added
         # TODO: update the listRects
-        self.correctClassifyDialog = CorrectHumanClassify(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.cmap_grey,self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
-        label, self.saveConfig = self.correctClassifyDialog.getValues(self.sg[:,int(self.listRectanglesa2[self.currentSegment].get_x()):int(self.listRectanglesa2[self.currentSegment].get_x()+self.listRectanglesa2[self.currentSegment].get_width())],self.cmap_grey,self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
+        x1, x2 = self.listRectanglesa2[self.currentSegment].getRegion()
+        self.correctClassifyDialog1 = CorrectHumanClassify1(self.sg[:,x1:x2],self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
+        label, self.saveConfig = self.correctClassifyDialog1.getValues(self.sg[:,x1:x2],self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
         self.updateText(label,self.currentSegment)
         if self.saveConfig:
             self.config['ListBirdsEntries'].append(label)
-        self.humanClassifyNextImage()
+        self.humanClassifyNextImage1()
+
+    def humanClassifyDialog2(self):
+        # Create the dialog that shows calls to the user for verification
+        # Currently assumes that there is a selected box (later, use the first!)
+        self.currentSegment = 0
+        x1,x2 = self.listRectanglesa2[self.currentSegment].getRegion()
+        x1 = int(x1)
+        x2 = int(x2)
+        self.humanClassifyDialog2 = HumanClassify2(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
+        self.humanClassifyDialog2.show()
+        self.humanClassifyDialog2.activateWindow()
 
     def spectrogramDialog(self):
         # Create the spectrogram dialog when the relevant button is pressed
@@ -1325,7 +1350,7 @@ class Interface(QMainWindow):
         self.sp.set_width(int(str(window_width)), int(str(incr)))
         self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg))
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
-        print np.min(self.sg), np.max(self.sg)
+        #print np.min(self.sg), np.max(self.sg)
         self.overviewImage.setImage(np.fliplr(self.sg.T))
         self.specPlot.setImage(np.fliplr(self.sg.T))
         # Colour scaling for the spectrograms
@@ -1448,15 +1473,14 @@ class Interface(QMainWindow):
         if str(alg) == "Amplitude":
             newSegments = self.seg.segmentByAmplitude(float(str(ampThr)))
             # TODO: *** Next few lines need updating
-            if hasattr(self, 'line'):
-                if self.line is not None:
-                    self.line.remove()
-            self.line = self.a1.add_patch(pl.Rectangle((0,float(str(ampThr))),len(self.audiodata),0,facecolor='r'))
+            #if hasattr(self, 'line'):
+            #    if self.line is not None:
+            #        self.line.remove()
+            #self.line = self.a1.add_patch(pl.Rectangle((0,float(str(ampThr))),len(self.audiodata),0,facecolor='r'))
         elif str(alg) == "Median Clipping":
             newSegments = self.seg.medianClip(float(str(medThr)))
             print newSegments
         elif str(alg) == "Harma":
-            print "here"
             newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)))
         else:
             #"Wavelets"
@@ -1486,6 +1510,13 @@ class Interface(QMainWindow):
             self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
 
         if self.box1id is None or self.box1id == -1:
+            print "No box selected"
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText("No segment selected to match")
+            msg.setWindowTitle("Error")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
             return
         else:
             #[alg, thr] = self.matchDialog.getValues()
@@ -1535,15 +1566,18 @@ class Interface(QMainWindow):
 
     def sliderMoved(self):
         # When the slider is moved, change the position of playback
-        print self.playSlider.value()
         self.media_obj.seek(self.playSlider.value())
 
     def movePlaySlider(self, time):
         if not self.playSlider.isSliderDown():
             self.playSlider.setValue(time)
         self.timePlayed.setText(self.convertMillisecs(time)+"/"+self.totalTime)
-        val = 60.*(time / (1000 * 60)) % 60 + (time / 1000) % 60 + time/1000.
-        self.bar.setValue(val)
+        if time > self.playSlider.maximum():
+            self.media_obj.stop()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+            self.media_obj.seek(self.playSlider.minimum())
+            #val = 60.*(time / (1000 * 60)) % 60 + (time / 1000) % 60 + time/1000.
+        #self.bar.setValue(val)
 
     def setSliderLimits(self, start,end):
         self.playSlider.setRange(start, end)
@@ -1680,7 +1714,8 @@ class Segmentation(QDialog):
         self.setWindowTitle('Segmentation Options')
 
         self.algs = QComboBox()
-        self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
+        #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
+        self.algs.addItems(["Amplitude","Harma","Median Clipping"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Amplitude"
         self.activate = QPushButton("Segment")
@@ -2152,11 +2187,10 @@ class HumanClassify1(QDialog):
 
 class CorrectHumanClassify(QDialog):
     # This is to correct the classification of those that the program got wrong
-    def __init__(self, seg, cmap_grey, bb1, bb2, bb3, parent=None):
+    def __init__(self, seg, bb1, bb2, bb3, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Correct Classification')
         self.frame = QWidget()
-        self.cmap_grey = cmap_grey
 
         self.saveConfig = False
 
