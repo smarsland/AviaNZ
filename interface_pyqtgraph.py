@@ -22,7 +22,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys, os, json, datetime  #glob
+import sys, os, json  #glob
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 import PyQt4.phonon as phonon
@@ -30,11 +30,7 @@ import PyQt4.phonon as phonon
 #import librosa as lr
 from scipy.io import wavfile
 import numpy as np
-#import pylab as pl
 
-#import matplotlib
-#from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-#from matplotlib.figure import Figure
 import pyqtgraph as pg
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
@@ -50,15 +46,18 @@ import Segment
 # ==============
 # TODO
 
+# Colour for the plot of the fundamental freq from yin on the spectrogram
+# And try yaapt or whatever
+
 # Is there something weird with spectrogram and denoising? Why are there spikes?
 # Check wavelet denoising bestLevel calculation
+
 # Add in the wavelet segmentation
 
-# Add menu back in
-
-# Time axis in minutes -> finish this!
-# Access to external hard disk (just use OpenFile button?)
+# Check access to external hard disk (just use OpenFile button?)
     # Add a button to choose a folder
+
+# Add menu back in -> decide what to put in it!
 
 # Finish sorting out parameters for median clipping segmentation, energy segmentation
 # Finish the raven features
@@ -66,16 +65,15 @@ import Segment
 
 # How to set bandpass params? -> is there a useful plot to help? -> function of sampleRate
 # Make the colour/contrast of the spectrogram non-linear?
+# Isabel was talking about smoothing of the spectrogram -> is this just the window width?
 
 # Finish implementing the drag box on the spectrogram --> how to shade it? Then finish the 'add me' bits
-# Make the other things in the Spectrogram dialog dynamic
 
 # Finish implementation for button to show individual segments to user and ask for feedback and the other feedback dialogs
 # Ditto lots of segments at once
 
 # Other parameters for dialogs?
 
-# Play segment button
 # Is play all useful? Would need to move the plots as appropriate
 
 # If don't select something in context menu get error -> not critical
@@ -106,7 +104,6 @@ import Segment
 # Turn stereo sound into mono using librosa, consider always resampling to 22050Hz (except when it's less in file :) )
 # Font size to match segment size -> make it smaller, could also move it up or down as appropriate
 # Use intensity of colour to encode certainty?
-# Play a segment if you click on it?
 
 # Things to consider:
     # Second spectrogram (currently use right button for interleaving)? My current choice is no as it takes up space
@@ -125,7 +122,7 @@ import Segment
 # Get suggestions from the others
 
 # Things to remember
-# When adding new classes, make sure to pass new data to them in undoing and loading
+    # When adding new classes, make sure to pass new data to them in undoing and loading
 
 # This version has the selection of birds using a context menu and then has removed the radio buttons
 # Code is still there, though, just commented out. Add as an option?
@@ -138,7 +135,12 @@ import Segment
     # Group files by call type
 # ===============
 
-class SpectrogramInterface(QMainWindow):
+class TimeAxis(pg.AxisItem):
+    def tickStrings(self, values, scale, spacing):
+        # Overwrite the axis tick code
+        return [QTime().addSecs(value).toString('mm:ss') for value in values]
+
+class AviaNZInterface(QMainWindow):
     # Main class for the interface, which contains most of the user interface and plotting code
 
     def __init__(self,root=None,configfile=None):
@@ -187,8 +189,7 @@ class SpectrogramInterface(QMainWindow):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
         if not os.path.isfile(self.dirName+'/'+self.firstFile):
-            fileName = QtGui.QFileDialog.getOpenFileName(self, 'Chose File', self.dirName,
-                                                         selectedFilter='*.wav')
+            fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
             if fileName:
                 self.firstFile = fileName
         self.loadFile(self.firstFile)
@@ -230,6 +231,9 @@ class SpectrogramInterface(QMainWindow):
             # These are the contrast parameters for the spectrogram
             'colourStart': 0.4,
             'colourEnd': 1.0,
+
+            # Whether or not colours are inverted
+            'coloursInverted': False,
 
             # Params for cross-correlation and related
             'corrThr': 0.4,
@@ -287,10 +291,10 @@ class SpectrogramInterface(QMainWindow):
         self.d_ampl.addWidget(self.w_ampl)
 
         # The axes
-        self.timeaxis = pg.AxisItem(orientation='bottom')
+        self.timeaxis = TimeAxis(orientation='bottom')
         #self.w_ampl.addItem(self.timeaxis,row=1,col=1)
         #self.timeaxis.linkToView(self.p_ampl)
-        self.timeaxis.setLabel('Time',units='s')
+        self.timeaxis.setLabel('Time',units='mm:ss')
 
         self.ampaxis = pg.AxisItem(orientation='left')
         self.w_ampl.addItem(self.ampaxis,row=0,col=0)
@@ -360,6 +364,9 @@ class SpectrogramInterface(QMainWindow):
         self.useAmplitudeTick = QCheckBox('Show amplitude plot')
         self.useAmplitudeTick.stateChanged[int].connect(self.useAmplitudeCheck)
         self.useAmplitudeTick.setChecked(True)
+        self.showFundamental = QCheckBox('Show fundamental frequency')
+        self.showFundamental.stateChanged[int].connect(self.showFundamentalFreq)
+        self.showFundamental.setChecked(False)
 
         # A slider to show playback position
         # TODO: Experiment with other options -- bar in the window
@@ -375,6 +382,7 @@ class SpectrogramInterface(QMainWindow):
         #self.w_controls.addWidget(self.resetButton,row=2,col=1)
         self.w_controls.addWidget(self.dragRectangles,row=2,col=2)
         self.w_controls.addWidget(self.useAmplitudeTick,row=2,col=3)
+        self.w_controls.addWidget(self.showFundamental,row=2,col=4)
 
         # The spinbox for changing the width shown in figMain
         self.widthWindow = QDoubleSpinBox()
@@ -418,6 +426,10 @@ class SpectrogramInterface(QMainWindow):
         self.connect(checkButton2, SIGNAL('clicked()'), self.humanClassifyDialog2)
         dockButton = QPushButton("&Put Docks Back")
         self.connect(dockButton, SIGNAL('clicked()'), self.dockReplace)
+        loadButton = QPushButton("&Load File")
+        self.connect(loadButton, SIGNAL('clicked()'), self.openFile)
+        playSegButton = QPushButton("&Play Segment")
+        self.connect(playSegButton, SIGNAL('clicked()'), self.playSelectedSegment)
 
         # vboxButtons2 = QVBoxLayout()
         for w in [deleteButton,deleteAllButton,denoiseButton, spectrogramButton,segmentButton, findMatchButton, checkButton1, checkButton2, dockButton, quitButton]:
@@ -569,6 +581,16 @@ class SpectrogramInterface(QMainWindow):
         #self.playbar1 = None
         #self.isPlaying = False
 
+    def openFile(self):
+        fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
+
+        if self.previousFile is not None:
+            if self.segments != [] or self.hasSegments:
+                self.saveSegments()
+        self.previousFile = fileName
+        self.resetStorageArrays()
+        self.loadFile(fileName)
+
     def listLoadFile(self,current):
         # Listener for when the user clicks on a filename
         # Saves segments of current file, resets flags and calls loader
@@ -612,14 +634,12 @@ class SpectrogramInterface(QMainWindow):
             self.filename = self.dirName+'/'+str(name.text())
         #self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
         self.sampleRate, self.audiodata = wavfile.read(self.filename)
-        print self.audiodata[:20]
         # None of the following should be necessary for librosa
         if self.audiodata.dtype is not 'float':
             self.audiodata = self.audiodata.astype('float') #/ 32768.0
         if np.shape(np.shape(self.audiodata))[0]>1:
             self.audiodata = self.audiodata[:,0]
         self.datalength = np.shape(self.audiodata)[0]
-        print self.audiodata[:20]
         print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate)
 
         # Create an instance of the Signal Processing class
@@ -633,9 +653,15 @@ class SpectrogramInterface(QMainWindow):
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
 
         # Colour scaling for the spectrograms
-        #print np.shape(self.sg), np.max(self.sg), np.min(self.sg)
-        self.overviewImage.setLevels([self.config['colourStart']*np.max(self.sg), self.config['colourEnd']*np.max(self.sg)])
-        self.specPlot.setLevels([self.config['colourStart']*np.max(self.sg), self.config['colourEnd']*np.max(self.sg)])
+        # Initialise to be 50% brightness and contrast
+        # TODO: Should recompute these when spectrogram modified
+        # TODO: They currently ignore the params in the init file
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        self.config['colourStart'] = 0.25 * (maxsg-minsg)
+        self.config['colourEnd'] = 0.75 * (maxsg-minsg)
+        self.overviewImage.setLevels([self.config['colourStart'], self.config['colourEnd']])
+        self.specPlot.setLevels([self.config['colourStart'], self.config['colourEnd']])
 
         # Load any previous segments stored
         if os.path.isfile(self.filename+'.data'):
@@ -701,12 +727,12 @@ class SpectrogramInterface(QMainWindow):
 
     def useAmplitudeCheck(self,check):
         # Note that this doesn't remove the dock, just hide it. So it's all still live and easy to replace :)
-        # Also move all the labels and the time axis
+        # Also move all the labels
         if self.useAmplitudeTick.isChecked():
-            if hasattr(self,'useAmplitude'):
-                self.w_spec.removeItem(self.timeaxis)
+            #if hasattr(self,'useAmplitude'):
+            #    self.w_spec.removeItem(self.timeaxis)
             self.useAmplitude = True
-            self.w_ampl.addItem(self.timeaxis, row=1, col=1)
+            self.w_spec.addItem(self.timeaxis, row=1, col=1)
             self.timeaxis.linkToView(self.p_ampl)
             for r in self.listLabels:
                 self.p_spec.removeItem(r)
@@ -715,17 +741,36 @@ class SpectrogramInterface(QMainWindow):
             self.d_ampl.show()
         else:
             self.useAmplitude = False
-            self.w_ampl.removeItem(self.timeaxis)
-            self.w_spec.addItem(self.timeaxis, row=1, col=1)
+            #self.w_ampl.removeItem(self.timeaxis)
+            #self.w_spec.addItem(self.timeaxis, row=1, col=1)
             for r in self.listLabels:
                 self.p_ampl.removeItem(r)
                 self.p_spec.addItem(r)
                 r.setPos(self.convertAmpltoSpec(r.x()),0.1)
             self.d_ampl.hide()
 
+    def showFundamentalFreq(self):
+        # Draw the fundamental frequency
+        # TODO: plot them in colour?
+        # TODO: better to plot a line graph? Need to work out how
+        if self.useAmplitudeTick.isChecked():
+            self.oldsg = self.sg
+            if not hasattr(self,'seg'):
+                self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
+            pitch, y, minfreq, W = self.seg.yin()
+            ind = np.squeeze(np.where(pitch>minfreq))
+            pitch = pitch[ind]
+            ind = ind*W/self.config['window_width']
+            x = np.shape(self.sg)[0] - (pitch*2./self.sampleRate*np.shape(self.sg)[0]).astype('int')
+            self.sg[x,ind] = 1
+        else:
+            self.sg = self.oldsg
+        self.specPlot.setImage(np.fliplr(self.sg.T))
+
+
+
     # ==============
 # Code for drawing and using the main figure
-
 
     def convertAmpltoSpec(self,x):
         return x*self.sampleRate/self.config['incr']
@@ -760,16 +805,15 @@ class SpectrogramInterface(QMainWindow):
         #print "Slider:", self.convertSpectoAmpl(minX),self.convertSpectoAmpl(maxX)
         self.setSliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
 
-
     def drawfigMain(self):
         # This draws the main amplitude and spectrogram plots
 
         self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
         self.specPlot.setImage(np.fliplr(self.sg.T))
-        # TODO: Fix me! Nirosha broke me :( (Check if it is fixed!)
+        # The constants here are divide by 1000 to get kHz, and then remember the top is sampleRate/2
         self.specaxis.setTicks([[(0,0),(np.shape(self.sg)[0]/4,self.sampleRate/8000),(np.shape(self.sg)[0]/2,self.sampleRate/4000),(3*np.shape(self.sg)[0]/4,3*self.sampleRate/8000),(np.shape(self.sg)[0],self.sampleRate/2000)]])
-        #self.specaxis.setLabel('kHz')
+        self.specaxis.setLabel('kHz')
         #self.specaxis.tickSpacing(0,self.sampleRate/2,self.sampleRate/8)
         self.updateOverview()
 
@@ -1393,26 +1437,45 @@ class SpectrogramInterface(QMainWindow):
         self.humanClassifyDialog2.activateWindow()
 
     def spectrogramDialog(self):
-        # Create the spectrogram dialog when the relevant button is pressed
-        self.spectrogramDialog = Spectrogram(self.config['colourStart'],self.config['colourEnd'],self.specPlot,np.max(self.sg))
+        # Create the spectrogram dialog when the button is pressed
+        self.spectrogramDialog = Spectrogram(self.config['colourStart'],self.config['colourEnd'],self.config['coloursInverted'],self.specPlot,np.min(self.sg),np.max(self.sg))
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
 
     def spectrogram(self):
         # Listener for the spectrogram dialog.
-        [alg, multitaper, colourStart, colourEnd, window_width, incr] = self.spectrogramDialog.getValues()
+        [alg, multitaper, colourBlack, colourWhite, window_width, incr] = self.spectrogramDialog.getValues()
+        self.config['colourStart'] = colourBlack
+        self.config['colourEnd'] = colourWhite
         self.sp.set_width(int(str(window_width)), int(str(incr)))
         self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg),multitaper=multitaper)
-        print self.sgRaw.min(), self.sgRaw.max()
+        #print self.sgRaw.min(), self.sgRaw.max()
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
-        print np.min(self.sg), np.max(self.sg)
+        #print np.min(self.sg), np.max(self.sg)
         self.overviewImage.setImage(np.fliplr(self.sg.T))
         self.specPlot.setImage(np.fliplr(self.sg.T))
+
         # Colour scaling for the spectrograms
-        self.overviewImage.setLevels([colourStart/100.0*np.max(self.sg), colourEnd/100.0*np.max(self.sg)])
-        self.specPlot.setLevels([colourStart/100.0*np.max(self.sg), colourEnd/100.0*np.max(self.sg)])
-        #self.drawfigMain()
+        # TODO: ***Fix these
+        self.overviewImage.setLevels([colourBlack/100.0*np.max(self.sg), colourWhite/100.0*np.max(self.sg)])
+        self.specPlot.setLevels([colourBlack/100.0*np.max(self.sg), colourWhite/100.0*np.max(self.sg)])
+        if int(str(incr)) != self.config['incr']:
+            self.config['incr'] = int(str(incr))
+            self.changeWidth(self.widthWindow.value())
+            # Update the positions of the segments
+            for s in range(len(self.listRectanglesa2)):
+                x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
+                x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
+                self.listRectanglesa2[s].setRegion([x1, x2])
+        if int(str(window_width)) != self.config['window_width']:
+            self.config['window_width'] = int(str(window_width))
+            # Update the axis
+            self.specaxis.setTicks([[(0, 0), (np.shape(self.sg)[0] / 4, self.sampleRate / 8000),
+                                     (np.shape(self.sg)[0] / 2, self.sampleRate / 4000),
+                                     (3 * np.shape(self.sg)[0] / 4, 3 * self.sampleRate / 8000),
+                                     (np.shape(self.sg)[0], self.sampleRate / 2000)]])
+
 
     def denoiseDialog(self):
         # Create the denoising dialog when the relevant button is pressed
@@ -1480,7 +1543,7 @@ class SpectrogramInterface(QMainWindow):
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
         self.overviewImage.setImage(np.fliplr(self.sg.T))
         self.specPlot.setImage(np.fliplr(self.sg.T))
-        self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
+        self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate*1000.0,num=self.datalength,endpoint=True),self.audiodata)
 
     def denoise_undo(self):
         # Listener for undo button in denoising dialog
@@ -1528,7 +1591,7 @@ class SpectrogramInterface(QMainWindow):
         # TODO: Add in the wavelet one
         # TODO: More testing of the algorithms, parameters, etc.
         seglen = len(self.segments)
-        [alg, ampThr, medThr,HarmaThr1,HarmaThr2,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
+        [alg, ampThr, medThr,HarmaThr1,HarmaThr2,minfreq,minperiods,Yinthr,window,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
         if not hasattr(self,'seg'):
             self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
         if str(alg) == "Amplitude":
@@ -1545,6 +1608,9 @@ class SpectrogramInterface(QMainWindow):
             newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)))
         elif str(alg) == "Onsets":
             newSegments = self.seg.onsets()
+            print newSegments
+        elif str(alg) == "Fundamental Frequency":
+            newSegments, pitch, times = self.seg.yin(int(str(minfreq)),int(str(minperiods)),float(str(Yinthr)),int(str(window)),returnSegs=True)
             print newSegments
         else:
             #"Wavelets"
@@ -1615,6 +1681,7 @@ class SpectrogramInterface(QMainWindow):
     # These functions are the phonon playing code
     # Note that if want to play e.g. denoised one, will have to save it and then reload it
     def playSegment(self):
+        self.segmentStop = self.playSlider.maximum()
         if self.media_obj.state() == phonon.Phonon.PlayingState:
             self.media_obj.pause()
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
@@ -1643,7 +1710,7 @@ class SpectrogramInterface(QMainWindow):
         if not self.playSlider.isSliderDown():
             self.playSlider.setValue(time)
         self.timePlayed.setText(self.convertMillisecs(time)+"/"+self.totalTime)
-        if time > self.playSlider.maximum():
+        if time > min(self.playSlider.maximum(),self.segmentStop):
             self.media_obj.stop()
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
             self.media_obj.seek(self.playSlider.minimum())
@@ -1653,8 +1720,17 @@ class SpectrogramInterface(QMainWindow):
     def setSliderLimits(self, start,end):
         self.playSlider.setRange(start, end)
         self.playSlider.setValue(start)
+        self.segmentStop = self.playSlider.maximum()
         self.media_obj.seek(start)
 
+    def playSelectedSegment(self):
+        # Get selected segment start and end (or return if no segment selected)
+        if self.box1id > -1:
+            start = self.listRectanglesa1[self.box1id].getRegion()[0]*1000
+            self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1]*1000
+            self.media_obj.seek(start)
+            self.media_obj.play()
+            #self.segmentStop = self.playSlider.maximum()
 # ============
 # Code for the buttons
     def deleteSegment(self):
@@ -1663,7 +1739,11 @@ class SpectrogramInterface(QMainWindow):
         if self.box1id>-1:
             self.p_ampl.removeItem(self.listRectanglesa1[self.box1id])
             self.p_spec.removeItem(self.listRectanglesa2[self.box1id])
-            self.p_ampl.removeItem(self.listLabels[self.box1id])
+            if self.useAmplitude:
+                self.p_ampl.removeItem(self.listLabels[self.box1id])
+            else:
+                self.p_spec.removeItem(self.listLabels[self.box1id])
+            del self.listLabels[self.box1id]
             del self.segments[self.box1id]
             del self.listRectanglesa1[self.box1id]
             del self.listRectanglesa2[self.box1id]
@@ -1673,7 +1753,10 @@ class SpectrogramInterface(QMainWindow):
         # Listener for delete all button
         self.segments=[]
         for r in self.listLabels:
-            self.p_ampl.removeItem(r)
+            if self.useAmplitude:
+                self.p_ampl.removeItem(r)
+            else:
+                self.p_spec.removeItem(r)
         for r in self.listRectanglesa1:
             self.p_ampl.removeItem(r)
         for r in self.listRectanglesa2:
@@ -1733,35 +1816,45 @@ class SpectrogramInterface(QMainWindow):
 # Classes for the dialog boxes. Since most of them just get user selections, they are mostly just a mess of UI things
 class Spectrogram(QDialog):
     # Class for the spectrogram dialog box
-    # TODO: Catch if it is closed, check if want to use new values, add a reset button
-    # TODO: Make the other options dynamic?
-    def __init__(self, start, end, im, imMax, parent=None):
+    # TODO: Steal the graph from Raven (View/Configure Brightness)
+    def __init__(self, black, white, coloursInverted, im, imMin, imMax, parent=None):
         QDialog.__init__(self, parent)
-        self.start = start
-        self.end = end
+        self.black = black
+        self.white = white
+        self.coloursInverted = coloursInverted
         self.im = im
+        self.imMin = imMin
         self.imMax = imMax
+        # Turn into contrast and brightness
+        # Brightness is such that black and white are saturated at 0 and 100
+        # So black can run from imMin to imMax-(white-black)
+        self.brightness = float(black-imMin)/(imMax-imMin - (white-black))*100.0
+        # Contrast is the percentage of the colour range covered
+        self.contrast = int(float(white-black)/(imMax-imMin) * 100.0)
         self.setWindowTitle('Signal Processing Options')
 
         self.algs = QComboBox()
         self.algs.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
 
         self.multitaper = QCheckBox()
+        self.swapBW = QCheckBox()
+        self.swapBW.stateChanged.connect(self.swappedBW)
 
         self.activate = QPushButton("Update Spectrogram")
-        self.colourStart = QSlider(Qt.Horizontal)
-        self.colourStart.setMinimum(0)
-        self.colourStart.setMaximum(100)
-        self.colourStart.setValue(int(start*100))
-        self.colourStart.setTickInterval(1)
-        self.colourStart.valueChanged.connect(self.colourChangeS)
+        self.brightnessSlider = QSlider(Qt.Horizontal)
+        self.brightnessSlider.setMinimum(0)
+        self.brightnessSlider.setMaximum(100)
 
-        self.colourEnd = QSlider(Qt.Horizontal)
-        self.colourEnd.setMinimum(0)
-        self.colourEnd.setMaximum(100)
-        self.colourEnd.setValue(int(end*100))
-        self.colourEnd.setTickInterval(1)
-        self.colourEnd.valueChanged.connect(self.colourChangeE)
+        self.brightnessSlider.setValue(self.brightness)
+        self.brightnessSlider.setTickInterval(1)
+        self.brightnessSlider.valueChanged.connect(self.changeBrightness)
+
+        self.contrastSlider = QSlider(Qt.Horizontal)
+        self.contrastSlider.setMinimum(0)
+        self.contrastSlider.setMaximum(100)
+        self.contrastSlider.setValue(self.contrast)
+        self.contrastSlider.setTickInterval(1)
+        self.contrastSlider.valueChanged.connect(self.changeContrast)
 
         self.window_width = QLineEdit(self)
         self.window_width.setText('256')
@@ -1772,10 +1865,12 @@ class Spectrogram(QDialog):
         Box.addWidget(self.algs)
         Box.addWidget(QLabel('Multitapering'))
         Box.addWidget(self.multitaper)
-        Box.addWidget(QLabel('Colour Start'))
-        Box.addWidget(self.colourStart)
-        Box.addWidget(QLabel('Colour End'))
-        Box.addWidget(self.colourEnd)
+        Box.addWidget(QLabel('Brightness'))
+        Box.addWidget(self.brightnessSlider)
+        Box.addWidget(QLabel('Contrast'))
+        Box.addWidget(self.contrastSlider)
+        Box.addWidget(QLabel('Swap Black and White'))
+        Box.addWidget(self.swapBW)
         Box.addWidget(QLabel('Window Width'))
         Box.addWidget(self.window_width)
         Box.addWidget(QLabel('Hop'))
@@ -1787,41 +1882,55 @@ class Spectrogram(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        return [self.algs.currentText(),self.multitaper.checkState(),self.colourStart.value(),self.colourEnd.value(),self.window_width.text(),self.incr.text()]
+        return [self.algs.currentText(),self.multitaper.checkState(),self.brightness.value(),self.contrast.value(),self.window_width.text(),self.incr.text(),self.swapBW.checkState()]
 
-    def colourChangeS(self,start):
-        self.colourChange(start=start/100.0)
+    def changeBrightness(self,brightness):
+        self.colourChange(brightness=brightness)
 
-    def colourChangeE(self,end):
-        self.colourChange(end=end/100.0)
+    def changeContrast(self,contrast):
+        self.colourChange(contrast=contrast)
 
-    def colourChange(self,start=None,end=None):
-        if start is None:
-            start = self.start
-        if end is None:
-            end = self.end
-        self.start = start
-        self.end = end
-        print [start*self.imMax, end*self.imMax]
-        self.im.setLevels([start*self.imMax, end*self.imMax])
+    def swappedBW(self):
+        self.coloursInverted = self.swapBW.checkState()
+        self.colourChange()
 
-    def closeEvent(self, event):
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Question)
-        msg.setText("Do you want to keep the new values?")
-        msg.setWindowTitle("Closing Spectrogram Dialog")
-        msg.setStandardButtons(QMessageBox.Yes|QMessageBox.No)
-        msg.buttonClicked.connect(self.resetValues)
-        msg.exec_()
-        return
+    def colourChange(self,brightness=None,contrast=None):
+        # These are now brightness and contrast
+        # Changing brightness moves the blackpoint and whitepoint by the same amount
+        # Changing contrast widens the gap between blackpoint and whitepoint
+        if brightness is None:
+            brightness = self.brightness
+        if contrast is None:
+            contrast = self.contrast
+        self.brightness = brightness
+        self.contrast = contrast
 
-    def resetValues(self,button):
-        print button.text()
+        # Turn them into black and white levels
+        self.black = (brightness/100.0*contrast/100.0)*(self.imMax-self.imMin) + self.imMin
+        self.white = (self.imMax - self.imMin) * (1.0 - contrast/100.0) + self.black
+        if self.coloursInverted:
+            self.im.setLevels([self.white, self.black])
+        else:
+            self.im.setLevels([self.black, self.white])
+
+    # def closeEvent(self, event):
+    #     msg = QMessageBox()
+    #     msg.setIcon(QMessageBox.Question)
+    #     msg.setText("Do you want to keep the new values?")
+    #     msg.setWindowTitle("Closing Spectrogram Dialog")
+    #     msg.setStandardButtons(QMessageBox.Yes|QMessageBox.No)
+    #     msg.buttonClicked.connect(self.resetValues)
+    #     msg.exec_()
+    #     return
+
+    # def resetValues(self,button):
+    #     print button.text()
 
 class Segmentation(QDialog):
     # Class for the segmentation dialog box
     # TODO: add the wavelet params
     # TODO: work out how to return varying size of params, also process them
+    # TODO: params for yin
     # TODO: test and play
     def __init__(self, maxv, parent=None):
         QDialog.__init__(self, parent)
@@ -1829,7 +1938,7 @@ class Segmentation(QDialog):
 
         self.algs = QComboBox()
         #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
-        self.algs.addItems(["Amplitude","Harma","Median Clipping","Onsets"])
+        self.algs.addItems(["Amplitude","Harma","Median Clipping","Onsets","Fundamental Frequency"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Amplitude"
         self.activate = QPushButton("Segment")
@@ -1854,6 +1963,24 @@ class Segmentation(QDialog):
         self.HarmaThr2.setSingleStep(0.05)
         self.HarmaThr2.setDecimals(2)
         self.HarmaThr2.setValue(0.9)
+
+        self.Fundminfreqlabel = QLabel("Min Frequency")
+        self.Fundminfreq = QLineEdit()
+        self.Fundminfreq.setText('100')
+        self.Fundminperiodslabel = QLabel("Min Number of periods")
+        self.Fundminperiods = QSpinBox()
+        self.Fundminperiods.setRange(1,10)
+        self.Fundminperiods.setValue(3)
+        self.Fundthrlabel = QLabel("Threshold")
+        self.Fundthr = QDoubleSpinBox()
+        self.Fundthr.setRange(0.1,1.0)
+        self.Fundthr.setDecimals(1)
+        self.Fundthr.setValue(0.5)
+        self.Fundwindowlabel = QLabel("Window size (will be rounded up as appropriate)")
+        self.Fundwindow = QSpinBox()
+        self.Fundwindow.setRange(300,5000)
+        self.Fundwindow.setSingleStep(500)
+        self.Fundwindow.setValue(1000)
 
         self.medThr = QDoubleSpinBox()
         self.medThr.setRange(0.2,6)
@@ -1915,9 +2042,9 @@ class Segmentation(QDialog):
         self.wavelet.setCurrentIndex(0)
 
         self.blabel = QLabel("Start and end points of the band for bandpass filter")
-        self.start = QLineEdit(self)
+        self.start = QLineEdit()
         self.start.setText('1000')
-        self.end = QLineEdit(self)
+        self.end = QLineEdit()
         self.end.setText('7500')
         self.blabel2 = QLabel("Check if not using bandpass")
         self.bandchoice = QCheckBox()
@@ -1974,6 +2101,23 @@ class Segmentation(QDialog):
         Box.addWidget(self.ecThr)
         self.ecThr.hide()
 
+        Box.addWidget(self.Fundminfreqlabel)
+        self.Fundminfreqlabel.hide()
+        Box.addWidget(self.Fundminfreq)
+        self.Fundminfreq.hide()
+        Box.addWidget(self.Fundminperiodslabel)
+        self.Fundminperiodslabel.hide()
+        Box.addWidget(self.Fundminperiods)
+        self.Fundminperiods.hide()
+        Box.addWidget(self.Fundthrlabel)
+        self.Fundthrlabel.hide()
+        Box.addWidget(self.Fundthr)
+        self.Fundthr.hide()
+        Box.addWidget(self.Fundwindowlabel)
+        self.Fundwindowlabel.hide()
+        Box.addWidget(self.Fundwindow)
+        self.Fundwindow.hide()
+
         Box.addWidget(self.activate)
         #Box.addWidget(self.save)
 
@@ -1998,6 +2142,15 @@ class Segmentation(QDialog):
         elif self.prevAlg == "Median Clipping":
             self.medlabel.hide()
             self.medThr.hide()
+        elif self.prevAlg == "Fundamental Frequency":
+            self.Fundminfreq.hide()
+            self.Fundminperiods.hide()
+            self.Fundthr.hide()
+            self.Fundwindow.hide()
+            self.Fundminfreqlabel.hide()
+            self.Fundminperiodslabel.hide()
+            self.Fundthrlabel.hide()
+            self.Fundwindowlabel.hide()
         elif self.prevAlg == "Onsets":
             # Don't need to do anything
             self.Onsetslabel.hide()
@@ -2035,6 +2188,15 @@ class Segmentation(QDialog):
         elif str(alg) == "Median Clipping":
             self.medlabel.show()
             self.medThr.show()
+        elif str(alg) == "Fundamental Frequency":
+            self.Fundminfreq.show()
+            self.Fundminperiods.show()
+            self.Fundthr.show()
+            self.Fundwindow.show()
+            self.Fundminfreqlabel.show()
+            self.Fundminperiodslabel.show()
+            self.Fundthrlabel.show()
+            self.Fundwindowlabel.show()
         elif str(alg) == "Onsets":
             self.Onsetslabel.show()
         else:
@@ -2062,7 +2224,7 @@ class Segmentation(QDialog):
         self.end.setEnabled(not self.end.isEnabled())
 
     def getValues(self):
-        return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
+        return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
 
 class Denoise(QDialog):
     # Class for the denoising dialog box
@@ -2521,15 +2683,6 @@ class HumanClassify2(QDialog):
     def activate(self):
         return True
 
-# class OpeningLinearRegionItem(pg.LinearRegionItem):
-# This might be useful for picking out when a box is clicked, but it isn't perfect since there will be multiple signals sent
-#    sigMouseMoved = QtCore.Signal(object)
-#    def __init__(self):
-#        pg.LinearRegionItem.__init__(self)
-
-#    def mouseMovedEvent(self, ev):
-#        print "it works!"
-
 class CustomViewBox(pg.ViewBox):
     # Normal ViewBox, but with ability to drag the segments
     sigMouseDragged = QtCore.Signal(object,object,object)
@@ -2587,6 +2740,7 @@ class StartScreen(QDialog):
     def getValues(self):
         return self.task
 
+
 # Start the application
 app = QApplication(sys.argv)
 
@@ -2598,6 +2752,6 @@ app = QApplication(sys.argv)
 #task = first.getValues()
 
 #if task == 0:
-specInt = SpectrogramInterface(configfile='AviaNZconfig.txt')
-specInt.show()
+avianz = AviaNZInterface(configfile='AviaNZconfig.txt')
+avianz.show()
 app.exec_()
