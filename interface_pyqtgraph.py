@@ -27,7 +27,6 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 import PyQt4.phonon as phonon
 
-#import librosa as lr
 from scipy.io import wavfile
 import numpy as np
 
@@ -51,6 +50,7 @@ import Segment
 
 # Is there something weird with spectrogram and denoising? Why are there spikes?
 # Check wavelet denoising bestLevel calculation
+# Should load in the new sound file after denoising and play that!
 
 # Add in the wavelet segmentation
 
@@ -64,7 +64,6 @@ import Segment
 # Finish cross-correlation to pick out similar bits of spectrogram -> and what other methods?
 
 # How to set bandpass params? -> is there a useful plot to help? -> function of sampleRate
-# Make the colour/contrast of the spectrogram non-linear?
 # Isabel was talking about smoothing of the spectrogram -> is this just the window width?
 
 # Finish implementing the drag box on the spectrogram --> how to shade it? Then finish the 'add me' bits
@@ -358,6 +357,12 @@ class AviaNZInterface(QMainWindow):
         #self.resetButton = QPushButton("&Reset")
         #self.connect(self.resetButton, SIGNAL('clicked()'), self.resetSegment)
 
+        self.playSegButton = QtGui.QToolButton()
+        self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
+        self.playSegButton.setIconSize(QtCore.QSize(20, 20))
+        self.connect(self.playSegButton, SIGNAL('clicked()'), self.playSelectedSegment)
+        self.playSegButton.setEnabled(False)
+
         # Checkbox for whether or not user is drawing boxes around song in the spectrogram (defaults to clicks not drags)
         self.dragRectangles = QCheckBox('Drag boxes in spectrogram')
         self.dragRectangles.stateChanged[int].connect(self.dragRectanglesCheck)
@@ -369,7 +374,7 @@ class AviaNZInterface(QMainWindow):
         self.showFundamental.setChecked(False)
 
         # A slider to show playback position
-        # TODO: Experiment with other options -- bar in the window
+        # This is hidden, but controls the moving bar
         self.playSlider = QSlider(Qt.Horizontal, self)
         self.connect(self.playSlider,SIGNAL('sliderReleased()'),self.sliderMoved)
         self.playSlider.setVisible(False)
@@ -379,18 +384,19 @@ class AviaNZInterface(QMainWindow):
         self.d_spec.addWidget(self.playSlider)
         self.w_controls.addWidget(self.playButton,row=2,col=0)
         self.w_controls.addWidget(self.timePlayed,row=2,col=1)
+        self.w_controls.addWidget(self.playSegButton,row=2,col=2)
         #self.w_controls.addWidget(self.resetButton,row=2,col=1)
-        self.w_controls.addWidget(self.dragRectangles,row=2,col=2)
-        self.w_controls.addWidget(self.useAmplitudeTick,row=2,col=3)
-        self.w_controls.addWidget(self.showFundamental,row=2,col=4)
+        self.w_controls.addWidget(self.dragRectangles,row=2,col=3)
+        self.w_controls.addWidget(self.useAmplitudeTick,row=2,col=4)
+        self.w_controls.addWidget(self.showFundamental,row=2,col=5)
 
         # The spinbox for changing the width shown in figMain
         self.widthWindow = QDoubleSpinBox()
         self.widthWindow.setSingleStep(1.0)
         self.widthWindow.setDecimals(2)
         self.widthWindow.setValue(self.config['windowWidth'])
-        self.w_controls.addWidget(QLabel('Visible window width (seconds)'),row=3,col=2)
-        self.w_controls.addWidget(self.widthWindow,row=3,col=2,colspan=2)
+        self.w_controls.addWidget(QLabel('Visible window width (seconds)'),row=2,col=6)
+        self.w_controls.addWidget(self.widthWindow,row=2,col=7)#,colspan=2)
         self.widthWindow.valueChanged[float].connect(self.changeWidth)
 
         # List to hold the list of files
@@ -428,8 +434,8 @@ class AviaNZInterface(QMainWindow):
         self.connect(dockButton, SIGNAL('clicked()'), self.dockReplace)
         loadButton = QPushButton("&Load File")
         self.connect(loadButton, SIGNAL('clicked()'), self.openFile)
-        playSegButton = QPushButton("&Play Segment")
-        self.connect(playSegButton, SIGNAL('clicked()'), self.playSelectedSegment)
+        #playSegButton = QPushButton("&Play Segment")
+        #self.connect(playSegButton, SIGNAL('clicked()'), self.playSelectedSegment)
 
         # vboxButtons2 = QVBoxLayout()
         for w in [deleteButton,deleteAllButton,denoiseButton, spectrogramButton,segmentButton, findMatchButton, checkButton1, checkButton2, dockButton, quitButton]:
@@ -640,6 +646,7 @@ class AviaNZInterface(QMainWindow):
         if np.shape(np.shape(self.audiodata))[0]>1:
             self.audiodata = self.audiodata[:,0]
         self.datalength = np.shape(self.audiodata)[0]
+        self.setWindowTitle('AviaNZ - ' + self.filename)
         print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate)
 
         # Create an instance of the Signal Processing class
@@ -700,6 +707,7 @@ class AviaNZInterface(QMainWindow):
         # Load the file for playback as well, and connect up the listeners for it
         self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
         self.totalTime = self.convertMillisecs(self.media_obj.totalTime())
+        print self.media_obj.totalTime(), self.totalTime
         self.media_obj.tick.connect(self.movePlaySlider)
 
         # Get the height of the amplitude for plotting the box
@@ -962,6 +970,7 @@ class AviaNZInterface(QMainWindow):
                 self.p_ampl.removeItem(self.drawingBox_ampl)
                 self.p_spec.removeItem(self.drawingBox_spec)
                 self.addSegment(self.start_location,mousePoint.x())
+                self.playSegButton.setEnabled(True)
 
                 # Context menu
                 self.box1id = len(self.segments)-1
@@ -990,6 +999,7 @@ class AviaNZInterface(QMainWindow):
                     self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
                     self.listRectanglesa1[box1id].setBrush(fn.mkBrush(self.ColourSelected))
                     self.listRectanglesa1[box1id].update()
+                    self.playSegButton.setEnabled(True)
                     if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
                         print "add me!"
                         # TODO
@@ -1005,6 +1015,7 @@ class AviaNZInterface(QMainWindow):
                     self.p_ampl.addItem(self.vLine_a, ignoreBounds=True)
                     self.vLine_a.setPos(self.start_location)
 
+                    self.playSegButton.setEnabled(False)
                     brush = self.ColourNone
                     self.drawingBox_ampl = pg.LinearRegionItem(brush=brush)
                     self.p_ampl.addItem(self.drawingBox_ampl, ignoreBounds=True)
@@ -1049,6 +1060,7 @@ class AviaNZInterface(QMainWindow):
                     self.p_ampl.removeItem(self.drawingBox_ampl)
                     self.p_spec.removeItem(self.drawingBox_spec)
                     self.addSegment(self.start_location,self.convertSpectoAmpl(mousePoint.x()))
+                    self.playSegButton.setEnabled(True)
 
                     # Context menu
                     self.box1id = len(self.segments)-1
@@ -1083,6 +1095,7 @@ class AviaNZInterface(QMainWindow):
                         self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
                         self.listRectanglesa1[box1id].setBrush(fn.mkBrush(self.ColourSelected))
                         self.listRectanglesa1[box1id].update()
+                        self.playSegButton.setEnabled(True)
                         if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
                             print "add me"
                             # TODO!!
@@ -1098,6 +1111,7 @@ class AviaNZInterface(QMainWindow):
                         self.vLine_s = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
                         self.p_spec.addItem(self.vLine_s, ignoreBounds=True)
                         self.vLine_s.setPos(mousePoint.x())
+                        self.playSegButton.setEnabled(False)
 
                         brush = self.ColourNone
                         self.drawingBox_ampl = pg.LinearRegionItem(brush=brush)
@@ -1520,7 +1534,7 @@ class AviaNZInterface(QMainWindow):
             else:
                 depth = int(str(depth))
             self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))
-        elif str(alg) == "Wavelets + Bandpass":
+        elif str(alg) == "Bandpass --> Wavelets":
             if thrType is True:
                 type = 'soft'
             else:
@@ -1529,12 +1543,34 @@ class AviaNZInterface(QMainWindow):
                 depth = None
             else:
                 depth = int(str(depth))
-            self.audiodata = self.sp.waveletDenoise(self.audiodata,float(str(thr)),int(str(depth)),str(wavelet))
             self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
+            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))
+        elif str(alg) == "Wavelets --> Bandpass":
+            if thrType is True:
+                type = 'soft'
+            else:
+                type = 'hard'
+            if depthchoice:
+                depth = None
+            else:
+                depth = int(str(depth))
+            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))
+            self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
+        #elif str(alg) == "Wavelets + Bandpass":
+            #if thrType is True:
+                #type = 'soft'
+            #else:
+                #type = 'hard'
+            #if depthchoice:
+                #depth = None
+            #else:
+                #depth = int(str(depth))
+            #self.audiodata = self.sp.waveletDenoise(self.audiodata,float(str(thr)),int(str(depth)),str(wavelet))
+            #self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
         elif str(alg) == "Bandpass":
             self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
         elif str(alg) == "Butterworth Bandpass":
-            self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, int(str(start)), int(str(end)))
+            self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
         else:
             #"Median Filter"
             self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
@@ -1573,9 +1609,11 @@ class AviaNZInterface(QMainWindow):
         # TODO: with librosa, probably don't need magic number, but check
         #self.audiodata *= 32768.0
         #self.audiodata = self.audiodata.astype('int16')
-        import soundfile as sf
+        #import soundfile as sf
         filename = self.filename[:-4] + '_d' + self.filename[-4:]
-        sf.write(filename,self.audiodata,self.sampleRate,subtype='PCM_16')
+        self.audiodata = self.audiodata.astype('int16')
+        wavfile.write(filename,self.sampleRate, self.audiodata)
+        #sf.write(filename,self.audiodata,self.sampleRate,subtype='PCM_16')
 
     def segmentationDialog(self):
         # Create the segmentation dialog when the relevant button is pressed
@@ -2233,7 +2271,7 @@ class Denoise(QDialog):
         self.setWindowTitle('Denoising Options')
 
         self.algs = QComboBox()
-        self.algs.addItems(["Wavelets","Wavelets + Bandpass","Bandpass","Butterworth Bandpass","Median Filter"])
+        self.algs.addItems(["Wavelets","Bandpass", "Wavelets --> Bandpass","Bandpass --> Wavelets","Median Filter"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Wavelets"
 
@@ -2344,7 +2382,7 @@ class Denoise(QDialog):
             self.thr.hide()
             self.waveletlabel.hide()
             self.wavelet.hide()
-        elif self.prevAlg == "Wavelets + Bandpass":
+        elif self.prevAlg == "Bandpass --> Wavelets":
             self.wblabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
@@ -2359,6 +2397,27 @@ class Denoise(QDialog):
             self.blabel.hide()
             self.start.hide()
             self.end.hide()
+            self.medlabel.hide()
+            self.widthlabel.hide()
+            self.width.hide()
+        elif self.prevAlg == "Wavelets --> Bandpass":
+            self.wblabel.hide()
+            self.depthlabel.hide()
+            self.depth.hide()
+            self.depthchoice.hide()
+            self.thrtypelabel.hide()
+            self.thrtype[0].hide()
+            self.thrtype[1].hide()
+            self.thrlabel.hide()
+            self.thr.hide()
+            self.waveletlabel.hide()
+            self.wavelet.hide()
+            self.blabel.hide()
+            self.start.hide()
+            self.end.hide()
+            self.medlabel.hide()
+            self.widthlabel.hide()
+            self.width.hide()
         elif self.prevAlg == "Bandpass" or self.prevAlg == "Butterworth Bandpass":
             self.bandlabel.hide()
             self.blabel.hide()
@@ -2383,8 +2442,23 @@ class Denoise(QDialog):
             self.thr.show()
             self.waveletlabel.show()
             self.wavelet.show()
-        elif str(alg) == "Wavelets + Bandpass":
-            self.wblabel.show()
+        elif str(alg) == "Wavelets --> Bandpass":
+            # self.wblabel.show()
+            self.depthlabel.show()
+            self.depthchoice.show()
+            self.depth.show()
+            self.thrtypelabel.show()
+            self.thrtype[0].show()
+            self.thrtype[1].show()
+            self.thrlabel.show()
+            self.thr.show()
+            self.waveletlabel.show()
+            self.wavelet.show()
+            self.blabel.show()
+            self.start.show()
+            self.end.show()
+        elif str(alg) == "Bandpass --> Wavelets":
+            # self.wblabel.show()
             self.depthlabel.show()
             self.depthchoice.show()
             self.depth.show()

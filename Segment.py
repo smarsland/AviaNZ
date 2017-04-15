@@ -2,12 +2,8 @@
 # Author: Stephen Marsland
 
 import numpy as np
-#import pywt
 import scipy.ndimage as spi
-import pylab as pl
-#import matplotlib
 import librosa
-#import cv2
 
 # TODO:
 # Median clipping: play with the various parameters, get some that I'm happy with
@@ -15,8 +11,10 @@ import librosa
 #   -> think about how to remove duplicate segments
 # Amplitude: threshold parameter ?!
 # Pure energy threshold-> think about threshold, add automatic gain
-# Try onset_detect from librosa
+# onset_detect from librosa
+#   If we want to use it, it needs work -> remove overlaps, sort out length
 #   -> doesn't do offset :(
+# Finish yin
 # Frechet distance for DTW?
 
 class Segment:
@@ -233,11 +231,113 @@ class Segment:
 
         return segments
 
-    def onsets(self):
+    def onsets(self,thr=3.0):
+        # TODO: What about offsets, check threshold (and note it currently isn't passed in!)
         # This gets the onset times from librosa. But there are no offset times -- compute an energy drop?
-        onsets = librosa.onset.onset_detect(data)
-        onset_times = librosa.frames_to_time(onsets)
-        return onset_times
+        o_env = librosa.onset.onset_strength(self.data, sr=self.fs, aggregate=np.median)
+        cutoff = np.mean(o_env) + thr * np.std(o_env)
+        o_env = np.where(o_env > cutoff, o_env, 0)
+        onsets = librosa.onset.onset_detect(onset_envelope=o_env, sr=self.fs)
+        times = librosa.frames_to_time(np.arange(len(o_env)), sr=self.fs)
+
+        segments = []
+        for i in range(len(onsets)):
+            segments.append([times[onsets[i]],times[onsets[i]]+0.2])
+        return segments
+
+    def yin(self,minfreq=100, minperiods=3, thr=0.5, W=1000, returnSegs=False):
+        # Compute fundamental frequency using Yin algorithm of de Cheveigne and Kawahara (2002)
+
+        # fs, data = wavfile.read('../Sound Files/tril1.wav')
+        if self.data.dtype == 'int16':
+            data = self.data.astype(float)/32768.0
+        else:
+            data = self.data
+
+        # The threshold is necessarily higher than the 0.1 in the paper
+
+        # Window width W should be at least 3*period.
+        # A sample rate of 16000 and a min fundamental frequency of 100Hz would then therefore suggest reasonably short windows
+        minwin = float(self.fs) / minfreq * minperiods
+        if minwin > W:
+            print "Extending window width to ", minwin
+            W = minwin
+        # Make life easier, and make W be a function of the spectrogram window width
+        W = int(round(W/self.window_width)*self.window_width)
+        pitch = np.zeros((int((len(data) - 2 * W) * 2. / W) + 1))
+
+        # Compute squared diff between signal and shift
+        # sd = np.zeros(W)
+        # for tau in range(1,W):
+        #    sd[tau] = np.sum((data[:W] - data[tau:tau+W])**2)
+
+        ints = np.arange(1, W)
+        starts = range(0, len(data) - 2 * W, W / 2)
+
+        for i in starts:
+            # Compute squared diff between signal and shift
+            sd = np.zeros(W)
+            for tau in range(1, W):
+                sd[tau] = np.sum((data[i:i + W] - data[i + tau:i + tau + W]) ** 2)
+
+                # If not using window
+                # if i>0:
+                # for tau in range(1,W):
+                # sd[tau] -= np.sum((data[i-1] - data[i-1+tau])**2)
+                # sd[tau] += np.sum((data[i+W] - data[i+W+tau])**2)
+
+            # Compute cumulative mean of normalised diff
+            d = np.zeros(W)
+            d[0] = 1
+            d[1:] = sd[1:] * ints / np.cumsum(sd[1:])
+
+            tau = 1
+            notFound = True
+            while tau < W-1 and notFound:
+                tau += 1
+                if d[tau] < thr:
+                    notFound = False
+                    while tau+1 < W and d[tau+1] < d[tau]:
+                        tau = tau+1
+
+            if tau == W-1 or d[tau] >= thr:
+                #print "none found"
+                pitch[int(i*2./W)] = -1
+            else:
+                # Parabolic interpolation to improve the estimate
+                if tau==0:
+                    s0 = d[tau]
+                else:
+                    s0 = d[tau-1]
+                if tau==W-1:
+                    s2 = d[tau]
+                else:
+                    s2 = d[tau+1]
+                newtau = tau + (s2 - s0)/(2.0*(2.0*d[tau] - s0 - s2))
+
+                # Compute the pitch
+                pitch[int(i*2./W)] = float(self.fs)/newtau
+
+        if returnSegs:
+            segs = []
+            ind = np.squeeze(np.where(pitch > minfreq))
+            inseg = False
+            i = 0
+            while i < len(ind):
+                if not inseg:
+                    start = ind[i]
+                    inseg = True
+                elif ind[i] != ind[i - 1] + 1:
+                    # TODO: Consider allowing for a couple of points to be missed?
+                    inseg = False
+                    # TODO: Consider not including segments that are too short
+                    segs.append([float(starts[start]) / self.fs, float(starts[ind[i-1]]) / self.fs])
+                i += 1
+            # Add the last segment
+            segs.append([float(starts[start]) / self.fs, float(starts[ind[i - 1]]) / self.fs])
+            return segs, pitch, np.array(starts)
+        else:
+            return pitch, np.array(starts), minfreq, W
 
     # Function for cross-correlation to find segments that match the currently selected one.
     def findCCMatches(self,seg,sg,thr):
@@ -352,11 +452,12 @@ def testsegHarma():
     import SignalProc
     sp = SignalProc.SignalProc(data,fs,256,128)
     sg = sp.spectrogram(data,multitaper=True)
-    s = Segment.Segment(data, sg, sp, fs)
+    s = Segment(data, sg, sp, fs)
     #segments, clipped, blobs = s.medianClip()
     segments = s.Harma()
     print segments
-
+    onsets = s.onsets()
+    print onsets
 #testseg()
 
 def testsegDTW():
@@ -368,3 +469,19 @@ def testsegDTW():
     s = Segment(data,sg,sp,fs)
     d = s.findDTWMatches(segment,data, 0.7)
     pl.figure, pl.plot(d)
+
+def testYin():
+    data, fs = librosa.load('OpenE.wav',sr=None)
+    data = data[1000:2500]
+    data = data.astype('float') / 32768.0
+    import SignalProc
+    sp = SignalProc.SignalProc(data,fs,256,128)
+    sg = sp.spectrogram(data,fs,multitaper=False)
+    import yin
+    reload(yin)
+    pitches = yin.yin(data,fs)
+    print pitches
+    import pylab as pl
+    pl.ion()
+    pl.figure, pl.imshow(sg)
+    pl.show()

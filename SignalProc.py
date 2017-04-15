@@ -46,7 +46,7 @@ class SignalProc:
         # Compute the spectrogram from amplitude data
         # Note that this returns the power spectrum (not the density) and without the log10.
         # Also, it's the absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discimination
-        # Can compute the multitaper version, but it's sadly very slow
+        # Can compute the multitaper version, but it's slow
         # Essential for median clipping, though
         # This version is faster than the default versions in pylab and scipy.signal
         # TODO: Note that using librosa to load files changes the values in the spectrogram, and this matters since they are normalised, so log makes things negative
@@ -96,7 +96,7 @@ class SignalProc:
             for start in range(0, len(data) - self.window_width, self.incr):
                 S = pmtm(data[start:start + self.window_width], e=tapers, v=eigen, show=False)
                 sg[:, counter:counter + 1] = S[self.window_width / 2:]
-            counter += 1
+                counter += 1
         else:
             starts = range(0, len(data) - self.window_width, self.incr)
             ft = np.zeros((len(starts), self.window_width))
@@ -125,7 +125,7 @@ class SignalProc:
             level += 1
             currentlevelmaxE = np.max([self.ShannonEntropy(n.data) for n in self.wp.get_level(level, "freq")])
 
-        return level-1
+        return level
 
     def waveletDenoise(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
         # Perform wavelet denoising. Can use soft or hard thresholding
@@ -135,7 +135,7 @@ class SignalProc:
             self.maxlevel = self.BestLevel()
         else:
             self.maxlevel = maxlevel
-        print self.maxlevel
+        print "Best level is ",self.maxlevel
         if threshold is not None:
             self.thresholdMultiplier = threshold
 
@@ -147,6 +147,7 @@ class SignalProc:
         #         del self.wp[n.path]
         #     nlevels -= 1
 
+        print wp.maxlevel
         det1 = wp['d'].data
         # Note magic conversion number
         sigma = np.median(np.abs(det1)) / 0.6745
@@ -178,11 +179,11 @@ class SignalProc:
         taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
         return signal.lfilter(taps, 1.0, data)
 
-    def ButterworthBandpass(self,data,sampleRate,order=10,low=1000,high=5000):
+    def ButterworthBandpass(self,data,sampleRate,low=1000,high=5000,order=10):
         if data is None:
             data = self.data
             sampleRate = self.sampleRate
-        nyquist = self.sampleRate/2.0
+        nyquist = sampleRate/2.0
 
         low = float(low)/nyquist
         high = float(high)/nyquist
