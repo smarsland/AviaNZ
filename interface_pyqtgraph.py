@@ -45,7 +45,9 @@ import Segment
 # ==============
 # TODO
 
-# Colour for the plot of the fundamental freq from yin on the spectrogram
+# Play Segment doesn't work with both of dragged segments and  'opened' ones in the spectrogram
+# Why don't the plots and the time axis update quickly when the size is changed? -> how to force to update?
+
 # And try yaapt or whatever
 
 # Is there something weird with spectrogram and denoising? Why are there spikes?
@@ -301,9 +303,12 @@ class AviaNZInterface(QMainWindow):
 
         self.w_spec = pg.GraphicsLayoutWidget()
         self.p_spec = CustomViewBox(enableMouse=False,enableMenu=False)
-        #self.p_spec = pg.ViewBox(enableMouse=False,enableMenu=False)
         self.w_spec.addItem(self.p_spec,row=0,col=1)
-        #self.p_spec = self.w_spec.addViewBox(enableMouse=False,enableMenu=False,row=0,col=1)
+        #self.plot_spec = pg.PlotItem(enableMouse=False,enableMenu=False)
+        #self.w_spec.addItem(self.plot_spec,row=0,col=1)
+        #self.annot_spec = pg.ScatterPlotItem(size=10,pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 255),enableMouse=False,enableMenu=False)
+        #self.annot_spec.addPoints([0,0.1,20,30],[0,0.1,20,30])
+        #self.plot_spec.addItem(self.annot_spec)
         self.d_spec.addWidget(self.w_spec)
 
         self.specaxis = pg.AxisItem(orientation='left')
@@ -761,21 +766,24 @@ class AviaNZInterface(QMainWindow):
         # Draw the fundamental frequency
         # TODO: plot them in colour?
         # TODO: better to plot a line graph? Need to work out how
-        if self.useAmplitudeTick.isChecked():
-            self.oldsg = self.sg
+        if self.showFundamental.isChecked():
             if not hasattr(self,'seg'):
                 self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
             pitch, y, minfreq, W = self.seg.yin()
             ind = np.squeeze(np.where(pitch>minfreq))
             pitch = pitch[ind]
             ind = ind*W/self.config['window_width']
-            x = np.shape(self.sg)[0] - (pitch*2./self.sampleRate*np.shape(self.sg)[0]).astype('int')
-            self.sg[x,ind] = 1
+            x = (pitch*2./self.sampleRate*np.shape(self.sg)[0]).astype('int')
+            self.yinRois = []
+            for r in range(len(x)):
+                self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
+            for r in self.yinRois:
+                self.p_spec.addItem(r)
+            #self.sg[x,ind] = 1
         else:
-            self.sg = self.oldsg
-        self.specPlot.setImage(np.fliplr(self.sg.T))
-
-
+            for r in self.yinRois:
+                self.p_spec.removeItem(r)
+        #self.specPlot.setImage(np.fliplr(self.sg.T))
 
     # ==============
 # Code for drawing and using the main figure
@@ -803,6 +811,7 @@ class AviaNZInterface(QMainWindow):
     def updateOverview(self):
         # Listener for when the overview box is changed
         # Does the work of keeping all the plots in the right range
+        # TODO: Why does this update the other plots so slowly?
         minX, maxX = self.overviewImageRegion.getRegion()
         #print "updating overview", minX, maxX, self.convertSpectoAmpl(maxX)
         self.widthWindow.setValue(self.convertSpectoAmpl(maxX-minX))
@@ -812,6 +821,7 @@ class AviaNZInterface(QMainWindow):
         self.p_spec.setXRange(minX, maxX, padding=0)
         #print "Slider:", self.convertSpectoAmpl(minX),self.convertSpectoAmpl(maxX)
         self.setSliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
+        pg.QtGui.QApplication.processEvents()
 
     def drawfigMain(self):
         # This draws the main amplitude and spectrogram plots
@@ -1322,7 +1332,7 @@ class AviaNZInterface(QMainWindow):
         self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
         #print "Slider:", self.convertSpectoAmpl(newminX),self.convertSpectoAmpl(maxX)
-        self.setSliderLimits(1000*self.convertSpectoAmpl(newminX),1000*self.convertSpectoAmpl(maxX))
+        #self.setSliderLimits(1000*self.convertSpectoAmpl(newminX),1000*self.convertSpectoAmpl(maxX))
 
 
     def moveRight(self):
@@ -1335,7 +1345,7 @@ class AviaNZInterface(QMainWindow):
         self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
         #print "Slider:", self.convertSpectoAmpl(newminX),self.convertSpectoAmpl(maxX)
-        self.setSliderLimits(1000*self.convertSpectoAmpl(newminX),1000*self.convertSpectoAmpl(maxX))
+        #self.setSliderLimits(1000*self.convertSpectoAmpl(newminX),1000*self.convertSpectoAmpl(maxX))
 
 
     # def showSegments(self,seglen=0):
@@ -1389,7 +1399,7 @@ class AviaNZInterface(QMainWindow):
         newmaxX = self.convertAmpltoSpec(value)+minX
         self.overviewImageRegion.setRegion([minX, newmaxX])
         #print "Slider:", self.convertSpectoAmpl(minX),self.convertSpectoAmpl(maxX)
-        self.setSliderLimits(1000*self.convertSpectoAmpl(minX),1000*self.convertSpectoAmpl(maxX))
+        #self.setSliderLimits(1000*self.convertSpectoAmpl(minX),1000*self.convertSpectoAmpl(maxX))
         self.updateOverview()
 
 # ===============
