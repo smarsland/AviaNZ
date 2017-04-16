@@ -1486,14 +1486,15 @@ class AviaNZInterface(QMainWindow):
 
     def spectrogram(self):
         # Listener for the spectrogram dialog.
-        [alg, multitaper, colourBlack, colourWhite, window_width, incr] = self.spectrogramDialog.getValues()
+        [alg, multitaper, colourBlack, colourWhite, window_width, incr, swapBW] = self.spectrogramDialog.getValues()
+
         self.config['colourStart'] = colourBlack
         self.config['colourEnd'] = colourWhite
+        self.coloursInverted = swapBW
+        print colourBlack, colourWhite
         self.sp.set_width(int(str(window_width)), int(str(incr)))
         self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg),multitaper=multitaper)
-        #print self.sgRaw.min(), self.sgRaw.max()
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
-        #print np.min(self.sg), np.max(self.sg)
         self.overviewImage.setImage(np.fliplr(self.sg.T))
         self.specPlot.setImage(np.fliplr(self.sg.T))
 
@@ -1521,6 +1522,7 @@ class AviaNZInterface(QMainWindow):
                                      (np.shape(self.sg)[0] / 2, self.sampleRate / 4000),
                                      (3 * np.shape(self.sg)[0] / 4, 3 * self.sampleRate / 8000),
                                      (np.shape(self.sg)[0], self.sampleRate / 2000)]])
+
 
 
     def denoiseDialog(self):
@@ -1953,7 +1955,7 @@ class Spectrogram(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        return [self.algs.currentText(),self.multitaper.checkState(),self.brightness.value(),self.contrast.value(),self.window_width.text(),self.incr.text(),self.swapBW.checkState()]
+        return [self.algs.currentText(),self.multitaper.checkState(),self.black,self.white,self.window_width.text(),self.incr.text(),self.swapBW.checkState()]
 
     def changeBrightness(self,brightness):
         self.colourChange(brightness=brightness)
