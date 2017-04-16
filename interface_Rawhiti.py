@@ -66,8 +66,6 @@ import Segment
 # Make the colour/contrast of the spectrogram non-linear?
 # Isabel was talking about smoothing of the spectrogram -> is this just the window width?
 
-# Finish implementing the drag box on the spectrogram --> how to shade it? Then finish the 'add me' bits
-
 # Finish implementation for button to show individual segments to user and ask for feedback and the other feedback dialogs
 # Ditto lots of segments at once
 
@@ -138,6 +136,45 @@ class TimeAxis(pg.AxisItem):
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
         return [QTime().addSecs(value).toString('mm:ss') for value in values]
+
+
+class ShadedROI(pg.ROI):
+    def paint(self, p, opt, widget):
+        #brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))
+        if not hasattr(self, 'currentBrush'):
+            self.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 50)))
+
+        p.save()
+        r = self.boundingRect()
+        p.setRenderHint(QtGui.QPainter.Antialiasing)
+        p.setPen(fn.mkPen(None))
+        p.setBrush(self.currentBrush)
+        p.translate(r.left(), r.top())
+        p.scale(r.width(), r.height())
+        p.drawRect(0, 0, 1, 1)
+        p.restore()
+
+    def setBrush(self, *br, **kargs):
+        """Set the brush that fills the region. Can have any arguments that are valid
+        for :func:`mkBrush <pyqtgraph.mkBrush>`.
+        """
+        self.brush = fn.mkBrush(*br, **kargs)
+        self.currentBrush = self.brush
+
+class ShadedRectROI(ShadedROI):
+    def __init__(self, pos, size, centered=False, sideScalers=False, **args):
+        #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
+        pg.ROI.__init__(self, pos, size, **args)
+        if centered:
+            center = [0.5, 0.5]
+        else:
+            center = [0, 0]
+
+        #self.addTranslateHandle(center)
+        self.addScaleHandle([1, 1], center)
+        if sideScalers:
+            self.addScaleHandle([1, 0.5], [center[0], 0.5])
+            self.addScaleHandle([0.5, 1], [0.5, center[1]])
 
 class AviaNZInterface(QMainWindow):
     # Main class for the interface, which contains most of the user interface and plotting code
@@ -530,7 +567,7 @@ class AviaNZInterface(QMainWindow):
         self.ColourNone = QtGui.QBrush(QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3]))
 
         # Hack to get the type of an ROI
-        p_spec_r = pg.RectROI(0, 0)
+        p_spec_r = ShadedRectROI(0, 0)
         self.ROItype = type(p_spec_r)
 
         # Store the state of the docks
@@ -909,6 +946,15 @@ class AviaNZInterface(QMainWindow):
             brush = self.ColourNone
             self.prevBoxCol = brush
 
+        if startpoint > endpoint:
+            temp = startpoint
+            startpoint = endpoint
+            endpoint = temp
+        if y1 > y2:
+            temp = y1
+            y1 = y2
+            y2 = temp
+
         # Add the segments, connect up the listeners
         p_ampl_r = pg.LinearRegionItem(brush=brush)
 
@@ -918,25 +964,25 @@ class AviaNZInterface(QMainWindow):
 
         if y1==0 and y2==0:
             p_spec_r = pg.LinearRegionItem(brush = brush)
-            self.p_spec.addItem(p_spec_r, ignoreBounds=True)
+            #self.p_spec.addItem(p_spec_r, ignoreBounds=True)
             p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
         else:
             startpointS = QPointF(self.convertAmpltoSpec(startpoint),y1)
             endpointS = QPointF(self.convertAmpltoSpec(endpoint),y2)
-            p_spec_r = pg.RectROI(startpointS, endpointS - startpointS, pen='r')
-            self.p_spec.addItem(p_spec_r, ignoreBounds=True)
-            p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
-
+            p_spec_r = ShadedRectROI(startpointS, endpointS - startpointS, pen='r')
+            #self.p_spec.addItem(p_spec_r, ignoreBounds=True)
+            #p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
+        self.p_spec.addItem(p_spec_r, ignoreBounds=True)
         p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
 
         # Put the text into the box
         label = pg.TextItem(text=species, color='k')
         if self.useAmplitude:
             self.p_ampl.addItem(label)
-            label.setPos(min(startpoint, endpoint), self.minampl)
+            label.setPos(startpoint, self.minampl)
         else:
             self.p_spec.addItem(label)
-            label.setPos(min(self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)), 1)
+            label.setPos(self.convertAmpltoSpec(startpoint), 1)
 
         # Add the segments to the relevent lists
         self.listRectanglesa1.append(p_ampl_r)
@@ -945,7 +991,7 @@ class AviaNZInterface(QMainWindow):
 
         if saveSeg:
             # Add the segment to the data
-            self.segments.append([min(startpoint, endpoint), max(startpoint, endpoint), y1, y2, species])
+            self.segments.append([startpoint, endpoint, y1, y2, species])
 
     def mouseClicked_ampl(self,evt):
         pos = evt.scenePos()
@@ -954,12 +1000,8 @@ class AviaNZInterface(QMainWindow):
         if self.box1id>-1:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
-            if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                print "add me!"
-                # TODO:
-            else:
-                self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
-                self.listRectanglesa2[self.box1id].update()
+            self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+            self.listRectanglesa2[self.box1id].update()
 
         if self.p_ampl.sceneBoundingRect().contains(pos):
             mousePoint = self.p_ampl.mapSceneToView(pos)
@@ -999,7 +1041,7 @@ class AviaNZInterface(QMainWindow):
                     x1, x2 = self.listRectanglesa1[count].getRegion()
                     if x1 <= mousePoint.x() and x2 >= mousePoint.x():
                         box1id = count
-                    print box1id, len(self.listRectanglesa1)
+                    #print box1id, len(self.listRectanglesa1)
 
                 if box1id > -1 and not evt.button() == QtCore.Qt.RightButton:
                     # User clicked in a box (with the left button)
@@ -1009,12 +1051,8 @@ class AviaNZInterface(QMainWindow):
                     self.listRectanglesa1[box1id].setBrush(fn.mkBrush(self.ColourSelected))
                     self.listRectanglesa1[box1id].update()
                     self.playSegButton.setEnabled(True)
-                    if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                        print "add me!"
-                        # TODO
-                    else:
-                        self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
-                        self.listRectanglesa2[box1id].update()
+                    self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
+                    self.listRectanglesa2[box1id].update()
 
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
@@ -1038,28 +1076,25 @@ class AviaNZInterface(QMainWindow):
                     self.started = not (self.started)
 
     def mouseClicked_spec(self,evt):
-        if self.dragRectangles.isChecked():
-            return
-        else:
-            pos = evt.scenePos()
-            #print pos, self.p_spec.mapSceneToView(pos)
 
-            if self.box1id>-1:
-                self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
-                self.listRectanglesa1[self.box1id].update()
-                if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                    print "add me!"
-                    # TODO:
+        pos = evt.scenePos()
+        #print pos, self.p_spec.mapSceneToView(pos)
+
+        if self.box1id>-1:
+            self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
+            self.listRectanglesa1[self.box1id].update()
+            self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+            self.listRectanglesa2[self.box1id].update()
+
+        if self.p_spec.sceneBoundingRect().contains(pos):
+            mousePoint = self.p_spec.mapSceneToView(pos)
+
+            if self.started:
+                # This is the second click, so should pay attention and close the segment
+                # Stop the mouse motion connection, remove the drawing boxes
+                if self.dragRectangles.isChecked():
+                    return
                 else:
-                    self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
-                    self.listRectanglesa2[self.box1id].update()
-
-            if self.p_spec.sceneBoundingRect().contains(pos):
-                mousePoint = self.p_spec.mapSceneToView(pos)
-
-                if self.started:
-                    # This is the second click, so should pay attention and close the segment
-                    # Stop the mouse motion connection, remove the drawing boxes
                     if self.started_window == 's':
                         self.p_spec.scene().sigMouseMoved.disconnect()
                         self.p_spec.removeItem(self.vLine_s)
@@ -1081,41 +1116,40 @@ class AviaNZInterface(QMainWindow):
                     self.listRectanglesa2[self.box1id].update()
 
                     self.started = not(self.started)
-                else:
-                    # Check if the user has clicked in a box
-                    # Note: Returns the first one it finds
-                    box1id = -1
-                    for count in range(len(self.listRectanglesa2)):
-                        if type(self.listRectanglesa2[count]) == self.ROItype:
-                            x1 = self.listRectanglesa2[count].pos().x()
-                            y1 = self.listRectanglesa2[count].pos().y()
-                            x2 = x1 + self.listRectanglesa2[count].size().x()
-                            y2 = y1 + self.listRectanglesa2[count].size().y()
-                            if x1 <= mousePoint.x() and x2 >= mousePoint.x() and y1 <= mousePoint.y() and y2 >= mousePoint.y():
-                                box1id = count
-                        else:
-                            x1, x2 = self.listRectanglesa2[count].getRegion()
-                            if x1 <= mousePoint.x() and x2 >= mousePoint.x():
-                                box1id = count
-
-                    if box1id > -1 and not evt.button() == QtCore.Qt.RightButton:
-                        # User clicked in a box (with the left button)
-                        self.box1id = box1id
-                        self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
-                        self.listRectanglesa1[box1id].setBrush(fn.mkBrush(self.ColourSelected))
-                        self.listRectanglesa1[box1id].update()
-                        self.playSegButton.setEnabled(True)
-                        if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                            print "add me"
-                            # TODO!!
-                        else:
-                            self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
-                            self.listRectanglesa2[box1id].update()
-
-                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+            else:
+                # Check if the user has clicked in a box
+                # Note: Returns the first one it finds
+                box1id = -1
+                for count in range(len(self.listRectanglesa2)):
+                    if type(self.listRectanglesa2[count]) == self.ROItype:
+                        x1 = self.listRectanglesa2[count].pos().x()
+                        y1 = self.listRectanglesa2[count].pos().y()
+                        x2 = x1 + self.listRectanglesa2[count].size().x()
+                        y2 = y1 + self.listRectanglesa2[count].size().y()
+                        if x1 <= mousePoint.x() and x2 >= mousePoint.x() and y1 <= mousePoint.y() and y2 >= mousePoint.y():
+                            box1id = count
                     else:
-                        # User hasn't clicked in a box (or used the right button), so start a new segment
-                        # Note that need to click in the same plot both times.
+                        x1, x2 = self.listRectanglesa2[count].getRegion()
+                        if x1 <= mousePoint.x() and x2 >= mousePoint.x():
+                            box1id = count
+
+                if box1id > -1 and not evt.button() == QtCore.Qt.RightButton:
+                    # User clicked in a box (with the left button)
+                    self.box1id = box1id
+                    self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
+                    self.listRectanglesa1[box1id].setBrush(fn.mkBrush(self.ColourSelected))
+                    self.listRectanglesa1[box1id].update()
+                    self.playSegButton.setEnabled(True)
+                    self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
+                    self.listRectanglesa2[box1id].update()
+
+                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                else:
+                    # User hasn't clicked in a box (or used the right button), so start a new segment
+                    # Note that need to click in the same plot both times.
+                    if self.dragRectangles.isChecked():
+                        return
+                    else:
                         self.start_location = self.convertSpectoAmpl(mousePoint.x())
                         self.vLine_s = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
                         self.p_spec.addItem(self.vLine_s, ignoreBounds=True)
@@ -1134,43 +1168,28 @@ class AviaNZInterface(QMainWindow):
 
                         self.started = not (self.started)
 
-    def mouseDragged_spec(self, evt1, evt2,evt3):
-        # TODO: *** Finish this -- how to shade?
+    def mouseDragged_spec(self, evt1, evt2, evt3):
+        if self.box1id>-1:
+            self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
+            self.listRectanglesa1[self.box1id].update()
+            self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+            self.listRectanglesa2[self.box1id].update()
+
         if self.dragRectangles.isChecked():
             evt1 = self.p_spec.mapSceneToView(evt1)
             evt2 = self.p_spec.mapSceneToView(evt2)
-            p_spec_r = pg.RectROI(evt1, evt2 - evt1, pen='r')
-            self.p_spec.addItem(p_spec_r, ignoreBounds=True)
-            p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
 
-            # Add the segment to the amplitude graph, connect up the listener
-            startpoint = self.convertSpectoAmpl(evt1.x())
-            endpoint = self.convertSpectoAmpl(evt2.x())
-            p_ampl_r = pg.LinearRegionItem(brush=self.ColourNone)
-            self.p_ampl.addItem(p_ampl_r, ignoreBounds=True)
-            p_ampl_r.setRegion([startpoint,endpoint])
-            p_ampl_r.sigRegionChangeFinished.connect(self.updateRegion_ampl)
-
-            # Put the text into the box
-            label = pg.TextItem(text='None', color='k')
-            if self.useAmplitude:
-                self.p_ampl.addItem(label)
-                label.setPos(min(startpoint, endpoint), self.minampl)
-            else:
-                self.p_spec.addItem(label)
-                label.setPos(min(self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)), 1)
-
-            # Add the segments to the relevent lists
-            self.listRectanglesa1.append(p_ampl_r)
-            self.listRectanglesa2.append(p_spec_r)
-            self.listLabels.append(label)
-
-            # Add the segment to the data
-            self.segments.append([min(startpoint, endpoint), max(startpoint, endpoint), min(evt1.y(),evt2.y()), max(evt1.y(),evt2.y()),'None'])
+            self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y(), evt2.y())
+            self.playSegButton.setEnabled(True)
 
             # Context menu
             self.box1id = len(self.segments) - 1
             self.menuBirdList.popup(QPoint(evt3.x(),evt3.y()))
+
+            self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
+            self.listRectanglesa1[self.box1id].update()
+            self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
+            self.listRectanglesa2[self.box1id].update()
         else:
             return
 
@@ -1650,15 +1669,15 @@ class AviaNZInterface(QMainWindow):
             #self.line = self.a1.add_patch(pl.Rectangle((0,float(str(ampThr))),len(self.audiodata),0,facecolor='r'))
         elif str(alg) == "Median Clipping":
             newSegments = self.seg.medianClip(float(str(medThr)))
-            print newSegments
+            #print newSegments
         elif str(alg) == "Harma":
             newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)))
         elif str(alg) == "Onsets":
             newSegments = self.seg.onsets()
-            print newSegments
+            #print newSegments
         elif str(alg) == "Fundamental Frequency":
             newSegments, pitch, times = self.seg.yin(int(str(minfreq)),int(str(minperiods)),float(str(Yinthr)),int(str(window)),returnSegs=True)
-            print newSegments
+            #print newSegments
         else:
             #"Wavelets"
             # TODO!!
@@ -1706,7 +1725,7 @@ class AviaNZInterface(QMainWindow):
                 x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
             else:
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
-            print x1, x2
+            #print x1, x2
             segment = self.sgRaw[:,int(x1):int(x2)]
             len_seg = (x2-x1) * self.config['incr'] / self.sampleRate
             indices = self.seg.findCCMatches(segment,self.sgRaw,self.config['corrThr'])
