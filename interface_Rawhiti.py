@@ -379,12 +379,19 @@ class AviaNZInterface(QMainWindow):
         self.connect(self.playSlider,SIGNAL('sliderReleased()'),self.sliderMoved)
         self.playSlider.setVisible(False)
 
+        # #spectrogram parameters
+        # spec=self.spectrogram()
+        # self.swapBW = QCheckBox()
+        # self.swapBW.stateChanged.connect(spec.swappedBW)
+
         self.w_controls.addWidget(QLabel('Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'),row=0,col=0,colspan=4)
         #self.w_controls.addWidget(self.playSlider,row=1,col=0,colspan=4)
         self.d_spec.addWidget(self.playSlider)
         self.w_controls.addWidget(self.playButton,row=2,col=0)
         self.w_controls.addWidget(self.timePlayed,row=2,col=1)
         self.w_controls.addWidget(self.playSegButton,row=2,col=2)
+        # self.w_controls.addWidget(QLabel('Swap Black and White'),row=2,col=3)
+        # self.w_controls.addWidget(self.swapBW,row=2,col=4)
         #self.w_controls.addWidget(self.resetButton,row=2,col=1)
         self.w_controls.addWidget(self.dragRectangles,row=2,col=3)
         self.w_controls.addWidget(self.useAmplitudeTick,row=2,col=4)
@@ -648,6 +655,7 @@ class AviaNZInterface(QMainWindow):
         self.datalength = np.shape(self.audiodata)[0]
         self.setWindowTitle('AviaNZ - ' + self.filename)
         print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate)
+        self.totalTime=float(self.datalength)/self.sampleRate
 
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
@@ -707,6 +715,7 @@ class AviaNZInterface(QMainWindow):
         # Load the file for playback as well, and connect up the listeners for it
         self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
         self.totalTime = self.convertMillisecs(self.media_obj.totalTime())
+        # self.totalTime = self.convertMillisecs(self.totalTime)
         print self.media_obj.totalTime(), self.totalTime
         self.media_obj.tick.connect(self.movePlaySlider)
 
@@ -1732,6 +1741,7 @@ class AviaNZInterface(QMainWindow):
     def playFinished(self):
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.bar.setValue(0)
+        self.media_obj.stop()
         #self.playButton.setText("Play")
 
     def sliderMoved(self):
