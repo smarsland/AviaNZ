@@ -2,9 +2,8 @@
 #
 # This is the main class for the AviaNZ interface
 # It's fairly simple, but seems to work OK
-# Now with pyqtgraph for speed
-# Version 0.8 28/02/17
-# Author: Stephen Marsland
+# Version 0.9 16/04/17
+# Author: Stephen Marsland, with input from Nirosha Priyadarshani
 
 #     <one line to give the program's name and a brief idea of what it does.>
 #    Copyright (C) <year>  <name of author>
@@ -1499,9 +1498,14 @@ class AviaNZInterface(QMainWindow):
         self.specPlot.setImage(np.fliplr(self.sg.T))
 
         # Colour scaling for the spectrograms
-        # TODO: ***Fix these
-        self.overviewImage.setLevels([colourBlack/100.0*np.max(self.sg), colourWhite/100.0*np.max(self.sg)])
-        self.specPlot.setLevels([colourBlack/100.0*np.max(self.sg), colourWhite/100.0*np.max(self.sg)])
+        if self.coloursInverted:
+            self.overviewImage.setLevels([colourWhite, colourBlack])
+            self.specPlot.setLevels([colourWhite, colourBlack])
+        else:
+            self.overviewImage.setLevels([colourBlack,colourWhite])
+            self.specPlot.setLevels([colourBlack, colourWhite])
+
+        # If the size of the spectrogram has changed, need to update the positions of things
         if int(str(incr)) != self.config['incr']:
             self.config['incr'] = int(str(incr))
             self.changeWidth(self.widthWindow.value())

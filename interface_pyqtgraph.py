@@ -2,9 +2,8 @@
 #
 # This is the main class for the AviaNZ interface
 # It's fairly simple, but seems to work OK
-# Now with pyqtgraph for speed
-# Version 0.8 28/02/17
-# Author: Stephen Marsland
+# Version 0.9 16/04/17
+# Author: Stephen Marsland, with input from Nirosha Priyadarshani
 
 #     <one line to give the program's name and a brief idea of what it does.>
 #    Copyright (C) <year>  <name of author>
@@ -47,7 +46,7 @@ import Segment
 
 # Why don't the plots and the time axis update quickly when the size is changed? -> how to force to update?
 
-# And try yaapt or whatever
+# Try yaapt or bana
 
 # Is there something weird with spectrogram and denoising? Why are there spikes?
 # Check wavelet denoising bestLevel calculation
@@ -669,8 +668,7 @@ class AviaNZInterface(QMainWindow):
     def loadFile(self,name):
         # This does the work of loading a file
         # One magic constant, which normalises the data
-        # TODO: moved to librosa instead of wavfile. Put both in and see if it is slower!
-        # TODO: Note that librosa normalised things, which buggers up the spectrogram for e.g., Harma
+        # TODO: Note that if load normalised the data, this buggers up the spectrogram for e.g., Harma
 
         if isinstance(name,str):
             self.filename = self.dirName+'/'+name
@@ -694,9 +692,7 @@ class AviaNZInterface(QMainWindow):
             self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate,self.config['window_width'],self.config['incr'])
 
         # Get the data for the spectrogram
-        # TODO: Fix multitapering plotting
         self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,multitaper=False)
-        #print np.min(self.sgRaw), np.max(self.sgRaw)
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
 
         # Colour scaling for the spectrograms
@@ -799,8 +795,6 @@ class AviaNZInterface(QMainWindow):
 
     def showFundamentalFreq(self):
         # Draw the fundamental frequency
-        # TODO: plot them in colour?
-        # TODO: better to plot a line graph? Need to work out how
         if self.showFundamental.isChecked():
             if not hasattr(self,'seg'):
                 self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
@@ -814,6 +808,10 @@ class AviaNZInterface(QMainWindow):
                 self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
             for r in self.yinRois:
                 self.p_spec.addItem(r)
+
+            # TODO: Fit a spline and draw it
+            #from scipy.interpolate import interp1d
+            #f = interp1d(x, ind, kind='cubic')
             #self.sg[x,ind] = 1
         else:
             for r in self.yinRois:
@@ -1491,16 +1489,19 @@ class AviaNZInterface(QMainWindow):
         self.config['colourEnd'] = colourWhite
         self.sp.set_width(int(str(window_width)), int(str(incr)))
         self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg),multitaper=multitaper)
-        #print self.sgRaw.min(), self.sgRaw.max()
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
-        #print np.min(self.sg), np.max(self.sg)
         self.overviewImage.setImage(np.fliplr(self.sg.T))
         self.specPlot.setImage(np.fliplr(self.sg.T))
 
         # Colour scaling for the spectrograms
-        # TODO: ***Fix these
-        self.overviewImage.setLevels([colourBlack/100.0*np.max(self.sg), colourWhite/100.0*np.max(self.sg)])
-        self.specPlot.setLevels([colourBlack/100.0*np.max(self.sg), colourWhite/100.0*np.max(self.sg)])
+        if self.coloursInverted:
+            self.overviewImage.setLevels([colourWhite, colourBlack])
+            self.specPlot.setLevels([colourWhite, colourBlack])
+        else:
+            self.overviewImage.setLevels([colourBlack,colourWhite])
+            self.specPlot.setLevels([colourBlack, colourWhite])
+
+        # If the size of the spectrogram has changed, need to update the positions of things
         if int(str(incr)) != self.config['incr']:
             self.config['incr'] = int(str(incr))
             self.changeWidth(self.widthWindow.value())
@@ -1633,7 +1634,6 @@ class AviaNZInterface(QMainWindow):
         # Listener for save button in denoising dialog
         # Save denoised data
         # Other players need them to be 16 bit, which is this magic number
-        # TODO: with librosa, probably don't need magic number, but check
         #self.audiodata *= 32768.0
         #self.audiodata = self.audiodata.astype('int16')
         #import soundfile as sf
@@ -1699,7 +1699,7 @@ class AviaNZInterface(QMainWindow):
         # Calls the cross-correlation function to find matches like the currently highlighted box
         # TODO: Other methods apart from c-c?
         # So there needs to be a currently highlighted box
-        # TODO: Tell user if there isn't a box highlighted
+        # TODO: Tell user if there isn't a box highlighted, or grey out the button
         #print self.box1id
         if not hasattr(self,'seg'):
             self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
@@ -1995,7 +1995,6 @@ class Segmentation(QDialog):
     # Class for the segmentation dialog box
     # TODO: add the wavelet params
     # TODO: work out how to return varying size of params, also process them
-    # TODO: params for yin
     # TODO: test and play
     def __init__(self, maxv, parent=None):
         QDialog.__init__(self, parent)
