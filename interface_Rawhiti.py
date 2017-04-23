@@ -44,35 +44,41 @@ import Segment
 # ==============
 # TODO
 
-# Colour for the plot of the fundamental freq from yin on the spectrogram
-# And try yaapt or whatever
+# Why don't the plots and the time axis update quickly when the size is changed? -> how to force to update?
+# There is a weird playback bug (at least on windows) where after c. 1 minute it doesn't play properly anymore. Making the window longer or shorter fixes it temporarily!
+
+# Decide on license
+
+# Enable zooming of the spectrogram in the y-axis, and do automatically after bandpass filtering
+
+# Add a minimum length of time for a segment, debug the segmentation algorithms
+# Finish sorting out parameters for median clipping segmentation, energy segmentation
+# Add in the wavelet segmentation for kiwi
+# Finish cross-correlation to pick out similar bits of spectrogram -> and what other methods?
+
+# The ruru file is a good one to play with for now
+
+# Some way of allowing marking of 'possible' or 'maybe' or 'unsure' classifications
+
+# Show a mini picture of spectrogram images by the bird names in the file, or a cheat sheet or similar
+
+# Try yaapt or bana as well as yin for fundamental frequency
+# Get the line rather than the points, (with filtering?) and add shape metric
 
 # Is there something weird with spectrogram and denoising? Why are there spikes?
-# Check wavelet denoising bestLevel calculation
+# Should load in the new sound file after denoising and play that
 
-# Add in the wavelet segmentation
-
-# Check access to external hard disk (just use OpenFile button?)
-    # Add a button to choose a folder
+# Have a busy bar when computing
 
 # Add menu back in -> decide what to put in it!
 
-# Finish sorting out parameters for median clipping segmentation, energy segmentation
 # Finish the raven features
-# Finish cross-correlation to pick out similar bits of spectrogram -> and what other methods?
 
 # How to set bandpass params? -> is there a useful plot to help? -> function of sampleRate
-# Make the colour/contrast of the spectrogram non-linear?
 # Isabel was talking about smoothing of the spectrogram -> is this just the window width?
 
 # Finish implementation for button to show individual segments to user and ask for feedback and the other feedback dialogs
 # Ditto lots of segments at once
-
-# Other parameters for dialogs?
-
-# Is play all useful? Would need to move the plots as appropriate
-
-# If don't select something in context menu get error -> not critical
 
 # Look into ParameterTree for saving the config stuff in particular
 # Better loading of files -> paging, not computing whole spectrogram (how to deal with overview? -> coarser spec?)
@@ -90,7 +96,6 @@ import Segment
 
 # Some bug in denoising? -> tril1
 # More features, add learning!
-# Pitch tracking, fundamental frequency
 
 # Needs decent testing
 
@@ -100,6 +105,8 @@ import Segment
 # Turn stereo sound into mono using librosa, consider always resampling to 22050Hz (except when it's less in file :) )
 # Font size to match segment size -> make it smaller, could also move it up or down as appropriate
 # Use intensity of colour to encode certainty?
+# Is play all useful? Would need to move the plots as appropriate
+# If don't select something in context menu get error -> not critical
 
 # Things to consider:
     # Second spectrogram (currently use right button for interleaving)? My current choice is no as it takes up space
@@ -129,13 +136,21 @@ import Segment
     # Something to show nesting of segments, such as a number of segments in the top bit
     # Find similar segments in other files -- other birds
     # Group files by call type
+
+# Rebecca:
+    # colour spectrogram
+    # pull out any bird call (useful for if you don't know what a bird sounds like (Fiji petrel) or wind farm monitoring)
+    # do bats!
+    # Look up David Bryden (kokako data) looking at male, female, juvenile
+    # Add date, time, person, location, would be good to have weather info calculated automatically (wind, rain -> don't bother), broken sound recorder
+    # Get all calls of a species
+    # Look up freebird and raven and also BatSearch
 # ===============
 
 class TimeAxis(pg.AxisItem):
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
         return [QTime().addSecs(value).toString('mm:ss') for value in values]
-
 
 class ShadedROI(pg.ROI):
     def paint(self, p, opt, widget):
@@ -182,6 +197,7 @@ class AviaNZInterface(QMainWindow):
         # Main part of the initialisation is loading a configuration file, or creating a new one if it doesn't
         # exist. Also loads an initial file (specified explicitly) and sets up the window.
         # TODO: better way to choose initial file (or don't choose one at all)
+        super(AviaNZInterface, self).__init__()
         self.root = root
         if configfile is not None:
             try:
@@ -201,6 +217,7 @@ class AviaNZInterface(QMainWindow):
         self.listLabels = []
         self.listRectanglesa1 = []
         self.listRectanglesa2 = []
+        self.box1id = -1
 
         self.resetStorageArrays()
 
@@ -213,7 +230,7 @@ class AviaNZInterface(QMainWindow):
         self.setWindowTitle('AviaNZ')
 
         # Make life easier for now: preload a birdsong
-        #self.firstFile = 'tril1.wav' #'male1.wav' # 'kiwi.wav'#'
+        self.firstFile = 'tril1.wav' #'male1.wav' # 'kiwi.wav'#'
         #self.firstFile = 'kiwi.wav'
 
         #self.createMenu()
@@ -223,11 +240,16 @@ class AviaNZInterface(QMainWindow):
         if not os.path.isdir(self.dirName):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
-        #if not os.path.isfile(self.dirName+'/'+self.firstFile):
-        fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
-        if fileName:
-            self.firstFile = fileName
+        if not os.path.isfile(self.dirName+'/'+self.firstFile):
+            fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
+            if fileName:
+                self.firstFile = fileName
         self.loadFile(self.firstFile)
+
+        # Save the segments every minute
+        self.timer = QTimer()
+        QObject.connect(self.timer, SIGNAL("timeout()"), self.saveSegments)
+        self.timer.start(60000)
 
     # def createMenu(self):
     #     # Create the menu entries at the top of the screen. Not really needed, and hence commented out currently
@@ -258,6 +280,9 @@ class AviaNZInterface(QMainWindow):
 
             # Params for denoising
             'maxSearchDepth': 20,
+
+            # Params for segmentation
+            'minSegment': 50,
             'dirpath': './Sound Files',
 
             # Param for width in seconds of the main representation
@@ -300,17 +325,17 @@ class AviaNZInterface(QMainWindow):
 
         # Make the docks
         self.d_overview = Dock("Overview",size = (1200,100))
-        self.d_ampl = Dock("Amplitude",size=(1200,300))
-        self.d_spec = Dock("Spectrogram",size=(1200,300))
+        self.d_ampl = Dock("Amplitude",size=(1200,150))
+        self.d_spec = Dock("Spectrogram",size=(1200,400))
         self.d_controls = Dock("Controls",size=(800,150))
-        #self.d_files = Dock("Files",size=(400,250))
+        self.d_files = Dock("Files",size=(400,250))
         self.d_buttons = Dock("Buttons",size=(800,100))
 
         self.area.addDock(self.d_overview,'top')
         self.area.addDock(self.d_ampl,'bottom',self.d_overview)
         self.area.addDock(self.d_spec,'bottom',self.d_ampl)
         self.area.addDock(self.d_controls,'bottom',self.d_spec)
-        #self.area.addDock(self.d_files,'left',self.d_controls)
+        self.area.addDock(self.d_files,'left',self.d_controls)
         self.area.addDock(self.d_buttons,'bottom',self.d_controls)
 
         # Put content widgets in the docks
@@ -337,9 +362,12 @@ class AviaNZInterface(QMainWindow):
 
         self.w_spec = pg.GraphicsLayoutWidget()
         self.p_spec = CustomViewBox(enableMouse=False,enableMenu=False)
-        #self.p_spec = pg.ViewBox(enableMouse=False,enableMenu=False)
         self.w_spec.addItem(self.p_spec,row=0,col=1)
-        #self.p_spec = self.w_spec.addViewBox(enableMouse=False,enableMenu=False,row=0,col=1)
+        #self.plot_spec = pg.PlotItem(enableMouse=False,enableMenu=False)
+        #self.w_spec.addItem(self.plot_spec,row=0,col=1)
+        #self.annot_spec = pg.ScatterPlotItem(size=10,pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 255),enableMouse=False,enableMenu=False)
+        #self.annot_spec.addPoints([0,0.1,20,30],[0,0.1,20,30])
+        #self.plot_spec.addItem(self.annot_spec)
         self.d_spec.addWidget(self.w_spec)
 
         self.specaxis = pg.AxisItem(orientation='left')
@@ -366,8 +394,8 @@ class AviaNZInterface(QMainWindow):
         self.w_controls = pg.LayoutWidget()
         self.d_controls.addWidget(self.w_controls)
 
-        #self.w_files = pg.LayoutWidget()
-        #self.d_files.addWidget(self.w_files)
+        self.w_files = pg.LayoutWidget()
+        self.d_files.addWidget(self.w_files)
 
         self.w_buttons = pg.LayoutWidget()
         self.d_buttons.addWidget(self.w_buttons)
@@ -405,58 +433,74 @@ class AviaNZInterface(QMainWindow):
         self.useAmplitudeTick = QCheckBox('Show amplitude plot')
         self.useAmplitudeTick.stateChanged[int].connect(self.useAmplitudeCheck)
         self.useAmplitudeTick.setChecked(True)
-        #self.showFundamental = QCheckBox('Show fundamental frequency')
-        #self.showFundamental.stateChanged[int].connect(self.showFundamentalFreq)
-        #self.showFundamental.setChecked(False)
+        self.showFundamental = QCheckBox('Show fundamental frequency')
+        self.showFundamental.stateChanged[int].connect(self.showFundamentalFreq)
+        self.showFundamental.setChecked(False)
 
         # A slider to show playback position
         # This is hidden, but controls the moving bar
         self.playSlider = QSlider(Qt.Horizontal, self)
         self.connect(self.playSlider,SIGNAL('sliderReleased()'),self.sliderMoved)
         self.playSlider.setVisible(False)
-
-        # #spectrogram parameters
-        # spec=self.spectrogram()
-        # self.swapBW = QCheckBox()
-        # self.swapBW.stateChanged.connect(spec.swappedBW)
-
-        self.w_controls.addWidget(QLabel('Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'),row=0,col=0,colspan=4)
-        #self.w_controls.addWidget(self.playSlider,row=1,col=0,colspan=4)
         self.d_spec.addWidget(self.playSlider)
-        self.w_controls.addWidget(self.playButton,row=2,col=0)
-        self.w_controls.addWidget(self.timePlayed,row=2,col=1)
-        self.w_controls.addWidget(self.playSegButton,row=2,col=2)
-        # self.w_controls.addWidget(QLabel('Swap Black and White'),row=2,col=3)
-        # self.w_controls.addWidget(self.swapBW,row=2,col=4)
+        #self.w_controls.addWidget(self.playSlider,row=1,col=0,colspan=4)
+
+        self.w_controls.addWidget(QLabel('Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'),row=0,col=0,colspan=3)
+        self.w_controls.addWidget(self.playButton,row=1,col=0)
+        self.w_controls.addWidget(self.playSegButton,row=1,col=1)
+        self.w_controls.addWidget(self.timePlayed,row=1,col=2)
         #self.w_controls.addWidget(self.resetButton,row=2,col=1)
-        self.w_controls.addWidget(self.dragRectangles,row=2,col=3)
-        self.w_controls.addWidget(self.useAmplitudeTick,row=2,col=4)
-        #self.w_controls.addWidget(self.showFundamental,row=2,col=5)
+        self.w_controls.addWidget(self.dragRectangles,row=0,col=3)
+        self.w_controls.addWidget(self.useAmplitudeTick,row=1,col=3)
+        self.w_controls.addWidget(self.showFundamental,row=0,col=4)
 
         # The spinbox for changing the width shown in figMain
         self.widthWindow = QDoubleSpinBox()
         self.widthWindow.setSingleStep(1.0)
         self.widthWindow.setDecimals(2)
         self.widthWindow.setValue(self.config['windowWidth'])
-        self.w_controls.addWidget(QLabel('Visible window width (seconds)'),row=2,col=5)
-        self.w_controls.addWidget(self.widthWindow,row=2,col=6)#,colspan=2)
+        self.w_controls.addWidget(QLabel('Visible window width (seconds)'),row=2,col=3)
+        self.w_controls.addWidget(self.widthWindow,row=3,col=3)#,colspan=2)
         self.widthWindow.valueChanged[float].connect(self.changeWidth)
 
-        # List to hold the list of files
-        #self.listFiles = QListWidget(self)
-        #self.listFiles.setFixedWidth(150)
-        #self.fillList()
-        #self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
+        # Brightness, contrast and colour reverse options
+        self.brightnessSlider = QSlider(Qt.Horizontal)
+        self.brightnessSlider.setMinimum(0)
+        self.brightnessSlider.setMaximum(100)
+        self.brightnessSlider.setTickInterval(1)
+        self.brightnessSlider.valueChanged.connect(self.changeBrightness)
 
-        #self.w_files.addWidget(QLabel('Double click to select'),row=0,col=0)
-        #self.w_files.addWidget(QLabel('Red names have segments'),row=1,col=0)
-        #self.w_files.addWidget(self.listFiles,row=2,col=0)
+        self.contrastSlider = QSlider(Qt.Horizontal)
+        self.contrastSlider.setMinimum(0)
+        self.contrastSlider.setMaximum(100)
+        self.contrastSlider.setTickInterval(1)
+        self.contrastSlider.valueChanged.connect(self.changeContrast)
+
+        self.swapBW = QCheckBox()
+        self.swapBW.stateChanged.connect(self.swappedBW)
+
+        self.w_controls.addWidget(QLabel("Swap B/W"),row=2,col=0)
+        self.w_controls.addWidget(self.swapBW,row=3,col=0)
+        self.w_controls.addWidget(QLabel("Brightness"),row=2,col=1)
+        self.w_controls.addWidget(self.brightnessSlider,row=3,col=1)
+        self.w_controls.addWidget(QLabel("Contrast"),row=2,col=2)
+        self.w_controls.addWidget(self.contrastSlider,row=3,col=2)
+
+        # List to hold the list of files
+        self.listFiles = QListWidget(self)
+        self.listFiles.setFixedWidth(150)
+        self.fillList()
+        self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
+
+        self.w_files.addWidget(QLabel('Double click to select'),row=0,col=0)
+        self.w_files.addWidget(QLabel('Red names have segments'),row=1,col=0)
+        self.w_files.addWidget(self.listFiles,row=2,col=0)
 
         # These are the main buttons, on the bottom right
         quitButton = QPushButton("&Quit")
         self.connect(quitButton, SIGNAL('clicked()'), self.quit)
         spectrogramButton = QPushButton("Spectrogram &Params")
-        self.connect(spectrogramButton, SIGNAL('clicked()'), self.spectrogramDialog)
+        self.connect(spectrogramButton, SIGNAL('clicked()'), self.showSpectrogramDialog)
         segmentButton = QPushButton("&Segment")
         self.connect(segmentButton, SIGNAL('clicked()'), self.segmentationDialog)
         denoiseButton = QPushButton("&Denoise")
@@ -480,21 +524,33 @@ class AviaNZInterface(QMainWindow):
         #playSegButton = QPushButton("&Play Segment")
         #self.connect(playSegButton, SIGNAL('clicked()'), self.playSelectedSegment)
 
-        # vboxButtons2 = QVBoxLayout()
-        for w in [loadButton, deleteButton,deleteAllButton,denoiseButton, spectrogramButton,segmentButton, findMatchButton, dockButton, quitButton]:
+        self.w_buttons.addWidget(loadButton,row=0,col=0)
+        self.w_buttons.addWidget(deleteButton,row=0,col=1)
+        self.w_buttons.addWidget(denoiseButton,row=0,col=2)
+        self.w_buttons.addWidget(spectrogramButton,row=0,col=3)
+        self.w_buttons.addWidget(deleteAllButton,row=0,col=4)
+        #self.w_buttons.addWidget(checkButton1,row=0,col=4)
+        #self.w_buttons.addWidget(checkButton2,row=0,col=5)
+
+        self.w_buttons.addWidget(segmentButton,row=1,col=0)
+        self.w_buttons.addWidget(findMatchButton,row=1,col=1)
+        self.w_buttons.addWidget(dockButton,row=1,col=2)
+        self.w_buttons.addWidget(quitButton,row=1,col=3)
         #for w in [deleteButton, deleteAllButton, spectrogramButton, segmentButton, findMatchButton,
         #              checkButton1, checkButton2, dockButton, quitButton]:
-                self.w_buttons.addWidget(w)
 
         # The context menu (drops down on mouse click) to select birds
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.menuBirdList = QMenu()
         # Need the lambda function to connect all menu events to same trigger and know which was selected
+        # TODO: Work out how to make the menu item be selectable when it has 'Possible' with it
         for item in self.config['BirdButtons1'] + self.config['BirdButtons2'][:-1]:
             bird = self.menuBirdList.addAction(item)
+            #birdp = self.menuBirdList.addMenu(item)
             receiver = lambda birdname=item: self.birdSelected(birdname)
             self.connect(bird, SIGNAL("triggered()"), receiver)
             self.menuBirdList.addAction(bird)
+            #bird = self.menuBirdList.addAction('Possible '+item)
         self.menuBird2 = self.menuBirdList.addMenu('Other')
         for item in self.config['ListBirdsEntries']+['Other']:
             bird = self.menuBird2.addAction(item)
@@ -606,7 +662,7 @@ class AviaNZInterface(QMainWindow):
         # Used when new files are loaded
 
         # Remove the segments
-        self.deleteAll()
+        self.deleteAll(True)
         if hasattr(self, 'overviewImageRegion'):
             self.p_overview.removeItem(self.overviewImageRegion)
 
@@ -672,8 +728,7 @@ class AviaNZInterface(QMainWindow):
     def loadFile(self,name):
         # This does the work of loading a file
         # One magic constant, which normalises the data
-        # TODO: moved to librosa instead of wavfile. Put both in and see if it is slower!
-        # TODO: Note that librosa normalised things, which buggers up the spectrogram for e.g., Harma
+        # TODO: Note that if load normalised the data, this buggers up the spectrogram for e.g., Harma
 
         if isinstance(name,str):
             self.filename = self.dirName+'/'+name
@@ -691,28 +746,36 @@ class AviaNZInterface(QMainWindow):
         self.datalength = np.shape(self.audiodata)[0]
         self.setWindowTitle('AviaNZ - ' + self.filename)
         print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate)
-        self.totalTime=float(self.datalength)/self.sampleRate
 
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
             self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate,self.config['window_width'],self.config['incr'])
 
         # Get the data for the spectrogram
-        # TODO: Fix multitapering plotting
         self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,multitaper=False)
-        #print np.min(self.sgRaw), np.max(self.sgRaw)
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
 
         # Colour scaling for the spectrograms
         # Initialise to be 50% brightness and contrast
         # TODO: Should recompute these when spectrogram modified
         # TODO: They currently ignore the params in the init file
+        # TODO: Sort this so that doesn't necessarily reinitialise
         minsg = np.min(self.sg)
         maxsg = np.max(self.sg)
         self.config['colourStart'] = 0.25 * (maxsg-minsg)
         self.config['colourEnd'] = 0.75 * (maxsg-minsg)
         self.overviewImage.setLevels([self.config['colourStart'], self.config['colourEnd']])
         self.specPlot.setLevels([self.config['colourStart'], self.config['colourEnd']])
+
+        # Turn into contrast and brightness
+        # Brightness is such that black and white are saturated at 0 and 100
+        # So black can run from imMin to imMax-(white-black)
+        self.brightness = float(self.config['colourStart']-minsg)/(maxsg-minsg - (self.config['colourEnd']-self.config['colourStart']))*100.0
+        # Contrast is the percentage of the colour range covered
+        self.contrast = int(float(self.config['colourEnd']-self.config['colourStart'])/(maxsg-minsg) * 100.0)
+
+        self.brightnessSlider.setValue(self.brightness)
+        self.contrastSlider.setValue(self.contrast)
 
         # Load any previous segments stored
         if os.path.isfile(self.filename+'.data'):
@@ -751,7 +814,6 @@ class AviaNZInterface(QMainWindow):
         # Load the file for playback as well, and connect up the listeners for it
         self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
         self.totalTime = self.convertMillisecs(self.media_obj.totalTime())
-        # self.totalTime = self.convertMillisecs(self.totalTime)
         print self.media_obj.totalTime(), self.totalTime
         self.media_obj.tick.connect(self.movePlaySlider)
 
@@ -804,23 +866,28 @@ class AviaNZInterface(QMainWindow):
 
     def showFundamentalFreq(self):
         # Draw the fundamental frequency
-        # TODO: plot them in colour?
-        # TODO: better to plot a line graph? Need to work out how
-        if self.useAmplitudeTick.isChecked():
-            self.oldsg = self.sg
+        if self.showFundamental.isChecked():
             if not hasattr(self,'seg'):
-                self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
+                self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'])
             pitch, y, minfreq, W = self.seg.yin()
             ind = np.squeeze(np.where(pitch>minfreq))
             pitch = pitch[ind]
             ind = ind*W/self.config['window_width']
-            x = np.shape(self.sg)[0] - (pitch*2./self.sampleRate*np.shape(self.sg)[0]).astype('int')
-            self.sg[x,ind] = 1
+            x = (pitch*2./self.sampleRate*np.shape(self.sg)[0]).astype('int')
+            self.yinRois = []
+            for r in range(len(x)):
+                self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
+            for r in self.yinRois:
+                self.p_spec.addItem(r)
+
+            # TODO: Fit a spline and draw it
+            #from scipy.interpolate import interp1d
+            #f = interp1d(x, ind, kind='cubic')
+            #self.sg[x,ind] = 1
         else:
-            self.sg = self.oldsg
-        self.specPlot.setImage(np.fliplr(self.sg.T))
-
-
+            for r in self.yinRois:
+                self.p_spec.removeItem(r)
+        #self.specPlot.setImage(np.fliplr(self.sg.T))
 
     # ==============
 # Code for drawing and using the main figure
@@ -848,6 +915,7 @@ class AviaNZInterface(QMainWindow):
     def updateOverview(self):
         # Listener for when the overview box is changed
         # Does the work of keeping all the plots in the right range
+        # TODO: Why does this update the other plots so slowly?
         minX, maxX = self.overviewImageRegion.getRegion()
         #print "updating overview", minX, maxX, self.convertSpectoAmpl(maxX)
         self.widthWindow.setValue(self.convertSpectoAmpl(maxX-minX))
@@ -857,6 +925,7 @@ class AviaNZInterface(QMainWindow):
         self.p_spec.setXRange(minX, maxX, padding=0)
         #print "Slider:", self.convertSpectoAmpl(minX),self.convertSpectoAmpl(maxX)
         self.setSliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
+        pg.QtGui.QApplication.processEvents()
 
     def drawfigMain(self):
         # This draws the main amplitude and spectrogram plots
@@ -1349,7 +1418,7 @@ class AviaNZInterface(QMainWindow):
         self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
         #print "Slider:", self.convertSpectoAmpl(newminX),self.convertSpectoAmpl(maxX)
-        self.setSliderLimits(1000*self.convertSpectoAmpl(newminX),1000*self.convertSpectoAmpl(maxX))
+        #self.setSliderLimits(1000*self.convertSpectoAmpl(newminX),1000*self.convertSpectoAmpl(maxX))
 
 
     def moveRight(self):
@@ -1362,7 +1431,7 @@ class AviaNZInterface(QMainWindow):
         self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
         #print "Slider:", self.convertSpectoAmpl(newminX),self.convertSpectoAmpl(maxX)
-        self.setSliderLimits(1000*self.convertSpectoAmpl(newminX),1000*self.convertSpectoAmpl(maxX))
+        #self.setSliderLimits(1000*self.convertSpectoAmpl(newminX),1000*self.convertSpectoAmpl(maxX))
 
 
     # def showSegments(self,seglen=0):
@@ -1416,7 +1485,7 @@ class AviaNZInterface(QMainWindow):
         newmaxX = self.convertAmpltoSpec(value)+minX
         self.overviewImageRegion.setRegion([minX, newmaxX])
         #print "Slider:", self.convertSpectoAmpl(minX),self.convertSpectoAmpl(maxX)
-        self.setSliderLimits(1000*self.convertSpectoAmpl(minX),1000*self.convertSpectoAmpl(maxX))
+        #self.setSliderLimits(1000*self.convertSpectoAmpl(minX),1000*self.convertSpectoAmpl(maxX))
         self.updateOverview()
 
 # ===============
@@ -1477,21 +1546,25 @@ class AviaNZInterface(QMainWindow):
         self.humanClassifyDialog2.show()
         self.humanClassifyDialog2.activateWindow()
 
-    def spectrogramDialog(self):
+    def showSpectrogramDialog(self):
         # Create the spectrogram dialog when the button is pressed
-        self.spectrogramDialog = Spectrogram(self.config['colourStart'],self.config['colourEnd'],self.config['coloursInverted'],self.specPlot,np.min(self.sg),np.max(self.sg))
+        if not hasattr(self,'spectrogramDialog'):
+            self.spectrogramDialog = Spectrogram(self.config['colourStart'],self.config['colourEnd'],self.config['coloursInverted'],self.specPlot,np.min(self.sg),np.max(self.sg))
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
+        # TODO: next line
+        # self.connect(self.spectrogramDialog, SIGNAL("changed"), self.spectrogram)
 
     def spectrogram(self):
         # Listener for the spectrogram dialog.
+        # TODO: This needs to be called when the colours change, too, since at the moment they aren't really saved, even though it updates
         [alg, multitaper, colourBlack, colourWhite, window_width, incr, swapBW] = self.spectrogramDialog.getValues()
 
         self.config['colourStart'] = colourBlack
         self.config['colourEnd'] = colourWhite
-        self.coloursInverted = swapBW
-        print colourBlack, colourWhite
+        self.config['coloursInverted'] = swapBW
+        print "colours ",colourBlack, colourWhite, self.config['coloursInverted']
         self.sp.set_width(int(str(window_width)), int(str(incr)))
         self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg),multitaper=multitaper)
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
@@ -1499,12 +1572,12 @@ class AviaNZInterface(QMainWindow):
         self.specPlot.setImage(np.fliplr(self.sg.T))
 
         # Colour scaling for the spectrograms
-        if self.coloursInverted:
-            self.overviewImage.setLevels([colourWhite, colourBlack])
-            self.specPlot.setLevels([colourWhite, colourBlack])
+        if self.config['coloursInverted']:
+            self.overviewImage.setLevels([self.config['colourEnd'], self.config['colourStart']])
+            self.specPlot.setLevels([self.config['colourEnd'], self.config['colourStart']])
         else:
-            self.overviewImage.setLevels([colourBlack,colourWhite])
-            self.specPlot.setLevels([colourBlack, colourWhite])
+            self.overviewImage.setLevels([self.config['colourStart'],self.config['colourEnd']])
+            self.specPlot.setLevels([self.config['colourStart'], self.config['colourEnd']])
 
         # If the size of the spectrogram has changed, need to update the positions of things
         if int(str(incr)) != self.config['incr']:
@@ -1522,7 +1595,6 @@ class AviaNZInterface(QMainWindow):
                                      (np.shape(self.sg)[0] / 2, self.sampleRate / 4000),
                                      (3 * np.shape(self.sg)[0] / 4, 3 * self.sampleRate / 8000),
                                      (np.shape(self.sg)[0], self.sampleRate / 2000)]])
-
 
 
     def denoiseDialog(self):
@@ -1615,6 +1687,15 @@ class AviaNZInterface(QMainWindow):
         self.specPlot.setImage(np.fliplr(self.sg.T))
         self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate*1000.0,num=self.datalength,endpoint=True),self.audiodata)
 
+        # Colour scaling for the spectrograms
+        print self.config['colourStart'],self.config['colourEnd'], self.config['coloursInverted']
+        if self.config['coloursInverted']:
+            self.overviewImage.setLevels([self.config['colourEnd'], self.config['colourStart']])
+            self.specPlot.setLevels([self.config['colourEnd'], self.config['colourStart']])
+        else:
+            self.overviewImage.setLevels([self.config['colourStart'],self.config['colourEnd']])
+            self.specPlot.setLevels([self.config['colourStart'], self.config['colourEnd']])
+
     def denoise_undo(self):
         # Listener for undo button in denoising dialog
         # TODO: Can I actually delete something from an object?
@@ -1634,13 +1715,21 @@ class AviaNZInterface(QMainWindow):
                         self.audiodata)
                     if hasattr(self,'seg'):
                         self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate)
+
+                        # Colour scaling for the spectrograms
+                        if self.config['coloursInverted']:
+                            self.overviewImage.setLevels([self.config['colourEnd'], self.config['colourStart']])
+                            self.specPlot.setLevels([self.config['colourEnd'], self.config['colourStart']])
+                        else:
+                            self.overviewImage.setLevels([self.config['colourStart'], self.config['colourEnd']])
+                            self.specPlot.setLevels([self.config['colourStart'], self.config['colourEnd']])
+
                     #self.drawfigMain()
 
     def denoise_save(self):
         # Listener for save button in denoising dialog
         # Save denoised data
         # Other players need them to be 16 bit, which is this magic number
-        # TODO: with librosa, probably don't need magic number, but check
         #self.audiodata *= 32768.0
         #self.audiodata = self.audiodata.astype('int16')
         #import soundfile as sf
@@ -1665,7 +1754,7 @@ class AviaNZInterface(QMainWindow):
         seglen = len(self.segments)
         [alg, ampThr, medThr,HarmaThr1,HarmaThr2,minfreq,minperiods,Yinthr,window,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
         if not hasattr(self,'seg'):
-            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
+            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'])
         if str(alg) == "Amplitude":
             newSegments = self.seg.segmentByAmplitude(float(str(ampThr)))
             # TODO: *** Next few lines need updating
@@ -1706,10 +1795,10 @@ class AviaNZInterface(QMainWindow):
         # Calls the cross-correlation function to find matches like the currently highlighted box
         # TODO: Other methods apart from c-c?
         # So there needs to be a currently highlighted box
-        # TODO: Tell user if there isn't a box highlighted
+        # TODO: Tell user if there isn't a box highlighted, or grey out the button
         #print self.box1id
         if not hasattr(self,'seg'):
-            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate)
+            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'])
 
         if self.box1id is None or self.box1id == -1:
             print "No box selected"
@@ -1731,7 +1820,7 @@ class AviaNZInterface(QMainWindow):
                 x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
             else:
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
-            #print x1, x2
+            print x1, x2
             segment = self.sgRaw[:,int(x1):int(x2)]
             len_seg = (x2-x1) * self.config['incr'] / self.sampleRate
             indices = self.seg.findCCMatches(segment,self.sgRaw,self.config['corrThr'])
@@ -1766,7 +1855,6 @@ class AviaNZInterface(QMainWindow):
     def playFinished(self):
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.bar.setValue(0)
-        self.media_obj.stop()
         #self.playButton.setText("Play")
 
     def sliderMoved(self):
@@ -1804,7 +1892,43 @@ class AviaNZInterface(QMainWindow):
             self.media_obj.seek(start)
             self.media_obj.play()
             #self.segmentStop = self.playSlider.maximum()
-# ============
+
+    def changeBrightness(self, brightness):
+        self.colourChange(brightness=brightness)
+
+    def changeContrast(self, contrast):
+        self.colourChange(contrast=contrast)
+
+    def swappedBW(self):
+        self.config['coloursInverted'] = self.swapBW.checkState()
+        self.colourChange()
+
+    def colourChange(self, brightness=None, contrast=None):
+        # These are brightness and contrast
+        # Changing brightness moves the blackpoint and whitepoint by the same amount
+        # Changing contrast widens the gap between blackpoint and whitepoint
+        if brightness is None:
+            brightness = self.brightness
+        if contrast is None:
+            contrast = self.contrast
+        self.brightness = brightness
+        self.contrast = contrast
+
+        # Turn them into black and white levels
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        self.config['colourStart'] = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
+        self.config['colourEnd'] = (maxsg - minsg) * (1.0 - contrast / 100.0) + self.config['colourStart']
+        #print self.black, self.white
+        if self.config['coloursInverted']:
+            self.overviewImage.setLevels([self.config['colourEnd'], self.config['colourStart']])
+            self.specPlot.setLevels([self.config['colourEnd'], self.config['colourStart']])
+
+        else:
+            self.overviewImage.setLevels([self.config['colourStart'], self.config['colourEnd']])
+            self.specPlot.setLevels([self.config['colourStart'], self.config['colourEnd']])
+
+    # ============
 # Code for the buttons
     def deleteSegment(self):
         # Listener for delete segment button, or backspace key
@@ -1822,22 +1946,27 @@ class AviaNZInterface(QMainWindow):
             del self.listRectanglesa2[self.box1id]
             self.box1id = -1
 
-    def deleteAll(self):
+    def deleteAll(self,force=False):
         # Listener for delete all button
-        self.segments=[]
-        for r in self.listLabels:
-            if self.useAmplitude:
+        if not force:
+            reply = QMessageBox.question(self,"Delete All Segments","Are you sure you want to delete all segments?",    QMessageBox.Yes | QMessageBox.No)
+        else:
+            reply = QMessageBox.Yes
+        if reply==QMessageBox.Yes:
+            self.segments=[]
+            for r in self.listLabels:
+                if self.useAmplitude:
+                    self.p_ampl.removeItem(r)
+                else:
+                    self.p_spec.removeItem(r)
+            for r in self.listRectanglesa1:
                 self.p_ampl.removeItem(r)
-            else:
+            for r in self.listRectanglesa2:
                 self.p_spec.removeItem(r)
-        for r in self.listRectanglesa1:
-            self.p_ampl.removeItem(r)
-        for r in self.listRectanglesa2:
-            self.p_spec.removeItem(r)
-        self.listRectanglesa1 = []
-        self.listRectanglesa2 = []
-        self.listLabels = []
-        self.box1id = -1
+            self.listRectanglesa1 = []
+            self.listRectanglesa2 = []
+            self.listLabels = []
+            self.box1id = -1
 
     def saveSegments(self):
         # This saves the segmentation data as a json file
@@ -1981,8 +2110,10 @@ class Spectrogram(QDialog):
         # Turn them into black and white levels
         self.black = (brightness/100.0*contrast/100.0)*(self.imMax-self.imMin) + self.imMin
         self.white = (self.imMax - self.imMin) * (1.0 - contrast/100.0) + self.black
+        print self.black, self.white
+        # Colour scaling for the spectrograms
         if self.coloursInverted:
-            self.im.setLevels([self.white, self.black])
+            self.im.setLevels([self.white,self.black])
         else:
             self.im.setLevels([self.black, self.white])
 
@@ -2003,7 +2134,6 @@ class Segmentation(QDialog):
     # Class for the segmentation dialog box
     # TODO: add the wavelet params
     # TODO: work out how to return varying size of params, also process them
-    # TODO: params for yin
     # TODO: test and play
     def __init__(self, maxv, parent=None):
         QDialog.__init__(self, parent)

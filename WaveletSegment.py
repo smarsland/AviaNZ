@@ -1,9 +1,11 @@
+# Wavelet Segmentation.py
 
-import numpy as np
+# import numpy as np
 import pywt
 from scipy.io import wavfile
-import pylab as pl
 import librosa
+import os
+import glob
 
 # Nirosha's approach of simultaneous segmentation and recognition using wavelets
 
@@ -20,173 +22,169 @@ import librosa
 # Stephen: Think about (4), fix (0), (5), (6) -> learning!
 
 # TODO: more testing, proper code to run experiment, work out desired output, work on parameters for each species
-# TODO: object version, add in to code
 
 # a few gotchas:
-    # make sure bandpass max is BELOW nyquist freq
+    # make sure bandpass max is BELOW nyquist freq -Done
     # this is like the Matlab code, one wavelet packet at a time, unfortunately
-    # resampling is in librosa
+    # resampling is in librosa - Librosa is working on Windows
 
+class WaveletSeg:
+    # This class implements wavelet segmentation for the AviaNZ interface
 
-def denoise(data,thresholdType='soft', maxlevel=5):
-    # Perform wavelet denoising. Can use soft or hard thresholding
-    wp = pywt.WaveletPacket(data=data, wavelet='dmey', mode='symmetric', maxlevel=maxlevel)
+    def __init__(self,data=[],sampleRate=0,spp='kiwi',annotation=None):
+        self.spp=spp
+        self.annotation=annotation
+        if data != []:
+            self.data = data
+            self.sampleRate = sampleRate
 
-    det1 = wp['d'].data
-    # Note magic conversion number
-    sigma = np.median(np.abs(det1)) / 0.6745
-    threshold = 4.5 * sigma
-    for level in range(maxlevel):
-        for n in wp.get_level(level, 'natural'):
-            if thresholdType == 'hard':
-                # Hard thresholding
-                n.data = np.where(np.abs(n.data) < threshold, 0.0, n.data)
-            else:
-                # Soft thresholding
-                n.data = np.sign(n.data) * np.maximum((np.abs(n.data) - threshold), 0.0)
+    def denoise(self,data=None,thresholdType='soft', maxlevel=5):
+        # Perform wavelet denoising. Can use soft or hard thresholding
+        if data is None:
+            data = self.data
+        wp = pywt.WaveletPacket(data=data, wavelet='dmey', mode='symmetric', maxlevel=maxlevel)
 
-    return wp.data
+        det1 = wp['d'].data
+        # Note magic conversion number
+        sigma = np.median(np.abs(det1)) / 0.6745
+        threshold = 4.5 * sigma
+        for level in range(maxlevel):
+            for n in wp.get_level(level, 'natural'):
+                if thresholdType == 'hard':
+                    # Hard thresholding
+                    n.data = np.where(np.abs(n.data) < threshold, 0.0, n.data)
+                else:
+                    # Soft thresholding
+                    n.data = np.sign(n.data) * np.maximum((np.abs(n.data) - threshold), 0.0)
 
-def loadData(train=True):
-    # Load data
-    if train:
-        filename = 'Wavelet Segmentation/kiwi/train/train1.wav'
-        filenameAnnotation = 'Wavelet Segmentation/kiwi/train/train1-sec.xlsx'
-    else:
-        filename = 'Wavelet Segmentation/kiwi/test/kiwi-test1.wav'
-        filenameAnnotation = 'Wavelet Segmentation/kiwi/test/kiwi-test1-sec.xlsx'
+        return wp.data
 
-    sampleRate, audiodata = wavfile.read(filename)
-    if audiodata.dtype is not 'float':
-        audiodata = audiodata.astype('float') / 32768.0
-    if np.shape(np.shape(audiodata))[0]>1:
-        audiodata = audiodata[:,0]
+    def computeWaveletEnergy(self,fwData,sampleRate):
+        # Get the energy of the nodes in the wavelet packet decomposition
+        # There are 62 coefficients up to level 5 of the wavelet tree (without root), and 300 seconds in 5 mins
+        # The energy is the sum of the squares of the data in each node divided by the total in the tree
+        coefs = np.zeros((62, 300))
+        for t in range(300):
+            E = []
+            for level in range(1,6):
+                wp = pywt.WaveletPacket(data=fwData[t * sampleRate:(t + 1) * sampleRate], wavelet='dmey', mode='symmetric', maxlevel=level)
+                e = np.array([np.sum(n.data**2) for n in wp.get_level(level, "natural")])
+                if np.sum(e)>0:
+                    e = 100.0*e/np.sum(e)
+                E = np.concatenate((E, e),axis=0)
+            coefs[:, t] = E
+        return coefs
 
-    # Get the segmentation from the excel file
-    annotation = np.zeros(300)
-    count = 0
-    import openpyxl as op
-    wb = op.load_workbook(filename = filenameAnnotation)
-    ws = wb.active
-    for row in ws.iter_rows('B2:B301'):
-        annotation[count] = row[0].value
-        count += 1
+    def fBetaScore(self,annotation, predicted,beta=2):
+        TP = np.sum(np.where((annotation==1)&(predicted==1),1,0))
+        T = np.sum(annotation)
+        P = np.sum(predicted)
+        if T != 0:
+            recall = float(TP)/T #TruePositive/#True
+        else:
+            recall = None
+        if P!=0:
+            precision = float(TP)/P #TruePositive/#Positive
+        else:
+            precision = None
+        if recall != None and precision != None:
+            fB=((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
+        else:
+            fB=None
+        print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%0.2f" %(TP,P-TP,300-(P+T-TP),T-TP,recall,precision,fB)
+        #print TP, int(T), int(P), recall, precision, ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
+        return fB
 
-    return audiodata, sampleRate, annotation
+    def compute_r(self,annotation,waveletCoefs,nNodes=20):
+        # Find the correlations (point-biserial)
+        # r = (M_p - M_q) / S * sqrt(p*q), M_p = mean for those that are 0, S = std dev overall, p = proportion that are 0.
+        w0 = np.where(annotation==0)[0]
+        w1 = np.where(annotation==1)[0]
 
-def computeWaveletEnergy(fwData,sampleRate):
-    # Get the energy of the nodes in the wavelet packet decomposition
-    # There are 62 coefficients up to level 5 of the wavelet tree (without root), and 300 seconds in 5 mins
-    # The energy is the sum of the squares of the data in each node divided by the total in the tree
-    coefs = np.zeros((62, 300))
-    for t in range(300):
-        E = []
-        for level in range(1,6):
-            wp = pywt.WaveletPacket(data=fwData[t * sampleRate:(t + 1) * sampleRate], wavelet='dmey', mode='symmetric', maxlevel=level)
-            e = np.array([np.sum(n.data**2) for n in wp.get_level(level, "natural")])
-            if np.sum(e)>0:
-                e = 100.0*e/np.sum(e)
-            E = np.concatenate((E, e),axis=0)
-        coefs[:, t] = E
-    return coefs
+        r = np.zeros(62)
+        for count in range(62):
+            r[count] = (np.mean(waveletCoefs[count,w1]) - np.mean(waveletCoefs[count,w0]))/np.std(waveletCoefs[count,:]) * np.sqrt(len(w0)*len(w1))/len(annotation)
 
-def fBetaScore(annotation, predicted,beta=2):
-    TP = np.sum(np.where((annotation==1)&(predicted==1),1,0))
-    T = np.sum(annotation)
-    P = np.sum(predicted)
-    recall = float(TP)/T #TruePositive/#True
-    precision = float(TP)/P #TruePositive/#Positive
-    print TP, int(T), int(P), recall, precision, ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
-    return ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
+        order = np.argsort(r)
+        order = order[-1:-nNodes-1:-1]
 
-def compute_r(annotation,waveletCoefs,nNodes=20):
-    # Find the correlations (point-biserial)
-    # r = (M_p - M_q) / S * sqrt(p*q), M_p = mean for those that are 0, S = std dev overall, p = proportion that are 0.
-    w0 = np.where(annotation==0)[0]
-    w1 = np.where(annotation==1)[0]
+        return order
 
-    r = np.zeros(62)
-    for count in range(62):
-        r[count] = (np.mean(waveletCoefs[count,w1]) - np.mean(waveletCoefs[count,w0]))/np.std(waveletCoefs[count,:]) * np.sqrt(len(w0)*len(w1))/len(annotation)
+    def sortListByChild(self,order):
+        # Have a list sorted into order of correlation
+        # Want to resort so that any children of the current node that are in the list go first
+        # Assumes that there are five levels in the tree (easy to extend, though)
 
-    order = np.argsort(r)
-    order = order[-1:-nNodes-1:-1]
+        newlist = []
+        currentIndex = 0
+        # Need to keep track of where each level of the tree starts
+        # Note that there is no root to the tree, hence the 0 then 2
+        starts = [0, 2, 6, 14,30,62]
+        while len(order)>0:
+            if order[0]<30:
+                # It could have children lower down the list
+                # Build a list of the children of the first element of order
+                level = int(np.log2(order[0]+2))
+                nc = 2
+                first = order[0]
+                for l in range(level+1,6):
+                    children = []
+                    current = currentIndex
+                    for i in range(nc):
+                        children.append(starts[l] + 2*(first-starts[l-1])+i)
+                    nc*=2
+                    first = starts[l] + 2*(first-starts[l-1])
+                    # Have to do it this annoying way since Python seems to ignore the next element if you delete one while iterating over the list
+                    i=0
+                    order_sub = []
+                    while i < len(children):
+                        if children[i] not in order:
+                            del(children[i])
+                        else:
+                            order_sub.append(order.index(children[i]))
+                            i+=1
 
-    return order
+                    # Sort into order
+                    children = [x for (y, x) in sorted(zip(order_sub, children), key=lambda pair: pair[0])]
 
-def sortListByChild(order):
-    # Have a list sorted into order of correlation
-    # Want to resort so that any children of the current node that are in the list go first
-    # Assumes that there are five levels in the tree (easy to extend, though)
+                    for a in children:
+                        # If so, remove and insert at the current location in the new list
+                        newlist.insert(current,a)
+                        current += 1
+                        order.remove(a)
 
-    newlist = []
-    currentIndex = 0
-    # Need to keep track of where each level of the tree starts
-    # Note that there is no root to the tree, hence the 0 then 2
-    starts = [0, 2, 6, 14,30,62]
-    while len(order)>0:
-        if order[0]<30:
-            # It could have children lower down the list
+            # Finally, add the first element
+            newlist.append(order[0])
+            currentIndex = newlist.index(order[0])+1
+            del(order[0])
 
-            # Build a list of the children of the first element of order
-            level = int(np.log2(order[0]+2))
-            nc = 2
-            first = order[0]
-            for l in range(level+1,6):
-                children = []
-                current = currentIndex
-                for i in range(nc):
-                    children.append(starts[l] + 2*(first-starts[l-1])+i)
-                nc*=2
-                first = starts[l] + 2*(first-starts[l-1])
-                # Have to do it this annoying way since Python seems to ignore the next element if you delete one while iterating over the list
-                i=0
-                order_sub = []
-                while i < len(children):
-                    if children[i] not in order:
-                        del(children[i])
-                    else:
-                        order_sub.append(order.index(children[i]))
-                        i+=1
+        return newlist
 
-                # Sort into order
-                children = [x for (y, x) in sorted(zip(order_sub, children), key=lambda pair: pair[0])]
+    def ButterworthBandpass(self,data=None,sampleRate=0,order=10,low=1000,high=7000):
+        import scipy.signal as signal
+        if data==None:
+            data=self.data
+        if sampleRate==0:
+            sampleRate=self.sampleRate
+        nyquist = sampleRate/2.0
 
-                for a in children:
-                    # If so, remove and insert at the current location in the new list
-                    newlist.insert(current,a)
-                    current += 1
-                    order.remove(a)
+        low = float(low)/nyquist
+        high = float(high)/nyquist
+        #print nyquist, low, high
+        b, a = signal.butter(order, [low, high], btype='band')
+        # apply filter
+        return signal.filtfilt(b, a, data)
 
-        # Finally, add the first element
-        newlist.append(order[0])
-        currentIndex = newlist.index(order[0])+1
-        del(order[0])
-
-    return newlist
-
-def ButterworthBandpass(data,sampleRate,order=10,low=1000,high=7000):
-    import scipy.signal as signal
-    nyquist = sampleRate/2.0
-
-    low = float(low)/nyquist
-    high = float(high)/nyquist
-    #print nyquist, low, high
-    b, a = signal.butter(order, [low, high], btype='band')
-    # apply filter
-    return signal.filtfilt(b, a, data)
-
-def detectCalls(wp,listnodes,sampleRate):
-    import string
-    # Add relevant nodes to the wavelet packet tree and then reconstruct the data
-    detected = np.zeros((300,len(listnodes)))
-    count = 0
-    for index in listnodes:
+    def detectCalls(self,wp,node,sampleRate=0):
+        if sampleRate==0:
+            sampleRate=self.sampleRate
+        import string
+        # Add relevant nodes to the wavelet packet tree and then reconstruct the data
         new_wp = pywt.WaveletPacket(data=None, wavelet='dmey', mode='symmetric')
         # First, turn the index into a leaf name.
-        level = np.floor(np.log2(index))
+        level = np.floor(np.log2(node))
         first = 2**level-1
-        bin = np.binary_repr(index-first,width=int(level))
+        bin = np.binary_repr(node-first,width=int(level))
         bin = string.replace(bin,'0','a',maxreplace=-1)
         bin = string.replace(bin,'1','d',maxreplace=-1)
         #print index+1, bin
@@ -215,79 +213,173 @@ def detectCalls(wp,listnodes,sampleRate):
 
         # If there is a call anywhere in the window, report it as a call
         E = np.where(E<threshold, 0, 1)
+        detected = np.zeros(300)
         j = 0
         for i in range(0,N-sampleRate,sampleRate):
-            detected[j,count] = np.max(E[i:i+sampleRate])
+            detected[j] = np.max(E[i:i+sampleRate])
             j+=1
-        count += 1
 
-    return np.max(detected,axis=1)
+        return detected
 
-def detectCalls1(wp,listnodes,sampleRate):
-    # This way should be the best -- reconstruct from setting all of the relevant nodes. But it gives an error message
-    # about different size coefficient arrays most of the time.
-    import string
-    # Add relevant nodes to the wavelet packet tree and then reconstruct the data
-    new_wp = pywt.WaveletPacket(data=None, wavelet='dmey', mode='symmetric')
+    def detectCalls_test(self,wp,listnodes,sampleRate):
+        #for test recordings given the set of nodes
+        import string
+        # Add relevant nodes to the wavelet packet tree and then reconstruct the data
+        detected = np.zeros((300,len(listnodes)))
+        count = 0
+        for index in listnodes:
+            new_wp = pywt.WaveletPacket(data=None, wavelet='dmey', mode='symmetric')
+            # First, turn the index into a leaf name.
+            level = np.floor(np.log2(index))
+            first = 2**level-1
+            bin = np.binary_repr(index-first,width=int(level))
+            bin = string.replace(bin,'0','a',maxreplace=-1)
+            bin = string.replace(bin,'1','d',maxreplace=-1)
+            #print index+1, bin
+            new_wp[bin] = wp[bin].data
 
+            # Get the coefficients
+            C = np.abs(new_wp.reconstruct(update=True))
+            N = len(C)
 
-    for index in listnodes:
-        # First, turn the index into a leaf name.
-        # TODO: This needs checking -- are they the right nodes?
-        level = np.floor(np.log2(index))
-        first = 2**level-1
-        bin = np.binary_repr(index-first,width=int(level))
-        bin = string.replace(bin,'0','a',maxreplace=-1)
-        bin = string.replace(bin,'1','d',maxreplace=-1)
-        #print index+1, bin
-        new_wp[bin] = wp[bin].data
+            # Compute the number of samples in a window -- species specific
+            M = int(0.8*sampleRate/2.0)
+            #print M
 
-    # Get the coefficients
-    C = np.abs(new_wp.reconstruct(update=True))
-    N = len(C)
+            # Compute the energy curve (a la Jinnai et al. 2012)
+            E = np.zeros(N)
+            E[M] = np.sum(C[:2 * M+1])
+            for i in range(M + 1, N - M):
+                E[i] = E[i - 1] - C[i - M - 1] + C[i + M]
+            E = E / (2. * M)
 
-    # Compute the number of samples in a window -- species specific
-    M = int(0.8*sampleRate/2.0)
-    #print M
+            threshold = np.mean(C) + np.std(C)
+            # bittern
+            # TODO: test
+            #thresholds[np.where(waveletCoefs<=32)] = 0
+            #thresholds[np.where(waveletCoefs>32)] = 0.3936 + 0.1829*np.log2(np.where(waveletCoefs>32))
 
-    # Compute the energy curve (a la Jinnai et al. 2012)
-    E = np.zeros(N)
-    E[M] = np.sum(C[:2 * M+1])
-    for i in range(M + 1, N - M):
-        E[i] = E[i - 1] - C[i - M - 1] + C[i + M]
-    E = E / (2. * M)
+            # If there is a call anywhere in the window, report it as a call
+            E = np.where(E<threshold, 0, 1)
+            j = 0
+            for i in range(0,N-sampleRate,sampleRate):
+                detected[j,count] = np.max(E[i:i+sampleRate])
+                j+=1
+            count += 1
 
-    threshold = np.mean(C) + np.std(C)
-    # bittern
-    # TODO: test
-    #thresholds[np.where(waveletCoefs<=32)] = 0
-    #thresholds[np.where(waveletCoefs>32)] = 0.3936 + 0.1829*np.log2(np.where(waveletCoefs>32))
+        return np.max(detected,axis=1)
 
-    # If there is a call anywhere in the window, report it as a call
-    E = np.where(E<threshold, 0, 1)
-    detected = np.zeros(300)
-    j = 0
-    for i in range(0,N-sampleRate,sampleRate):
-        detected[j] = np.max(E[i:i+sampleRate])
-        j+=1
+    def detectCalls1(self,wp,listnodes,sampleRate):
+        # This way should be the best -- reconstruct from setting all of the relevant nodes. But it gives an error message
+        # about different size coefficient arrays most of the time.
+        import string
+        # Add relevant nodes to the wavelet packet tree and then reconstruct the data
+        new_wp = pywt.WaveletPacket(data=None, wavelet='dmey', mode='symmetric')
 
-    return detected
+        for index in listnodes:
+            # First, turn the index into a leaf name.
+            # TODO: This needs checking -- are they the right nodes?
+            level = np.floor(np.log2(index))
+            first = 2**level-1
+            bin = np.binary_repr(index-first,width=int(level))
+            bin = string.replace(bin,'0','a',maxreplace=-1)
+            bin = string.replace(bin,'1','d',maxreplace=-1)
+            #print index+1, bin
+            new_wp[bin] = wp[bin].data
 
-def findCalls_train():
-    # Nirosha's ugly version
+        # Get the coefficients
+        C = np.abs(new_wp.reconstruct(update=True))
+        N = len(C)
 
+        # Compute the number of samples in a window -- species specific
+        M = int(0.8*sampleRate/2.0)
+        #print M
+
+        # Compute the energy curve (a la Jinnai et al. 2012)
+        E = np.zeros(N)
+        E[M] = np.sum(C[:2 * M+1])
+        for i in range(M + 1, N - M):
+            E[i] = E[i - 1] - C[i - M - 1] + C[i + M]
+        E = E / (2. * M)
+
+        threshold = np.mean(C) + np.std(C)
+        # bittern
+        # TODO: test
+        #thresholds[np.where(waveletCoefs<=32)] = 0
+        #thresholds[np.where(waveletCoefs>32)] = 0.3936 + 0.1829*np.log2(np.where(waveletCoefs>32))
+
+        # If there is a call anywhere in the window, report it as a call
+        E = np.where(E<threshold, 0, 1)
+        detected = np.zeros(300)
+        j = 0
+        for i in range(0,N-sampleRate,sampleRate):
+            detected[j] = np.max(E[i:i+sampleRate])
+            j+=1
+
+        return detected
+
+    def loadData(self,fName,trainTest=True):
+        # Load data
+        filename = fName+'.wav' #'train/kiwi/train1.wav'
+        filenameAnnotation = fName+'-sec.xlsx'#'train/kiwi/train1-sec.xlsx'
+        self.sampleRate, self.data = wavfile.read(filename)
+        if self.data.dtype is not 'float':
+            self.data = self.data.astype('float') / 32768.0
+        if np.shape(np.shape(self.data))[0]>1:
+            self.data = self.data[:,0]
+
+        if trainTest==True:     #survey data don't have annotations
+            # Get the segmentation from the excel file
+            self.annotation = np.zeros(300)
+            count = 0
+            import xlrd
+            wb=xlrd.open_workbook(filename = filenameAnnotation)
+            ws=wb.sheet_by_index(0)
+            col=ws.col(1)
+            for row in range(1,301):
+                self.annotation[count]=col[row].value
+                count += 1
+        #return self.data, self.sampleRate, self.annotation
+
+    def splitAudio(self,folder_to_process='Sound Files/survey'):
+        #Split audio into 5-min to a subfolder '5min'
+        #Alternative: read the first, second, third 5 mins from 15 min recs - in this way we dont duplicate recs
+        os.makedirs(folder_to_process+'/5min/')
+        for filename in glob.glob(os.path.join(folder_to_process,'*.wav')):
+            fs,data=wavfile.read(filename) #faster than librosa #fs, data = librosa.load(filename)
+            if data.dtype is not 'float':
+                data = data.astype('float') / 32768.0
+            if np.shape(np.shape(data))[0]>1:
+                data = data[:,0]
+            if fs!=16000:
+                data = librosa.core.audio.resample(data,fs,16000)
+                fs=16000
+            file=str(filename).split('\\')[-1:][0]
+            i=1
+            for start in range(0,len(data),fs*60*5):
+                fName = folder_to_process+'/5min/'+file[:-4]+'_'+str(i) + '.wav'
+                x=data[start:start+fs*60*5]
+                x *= 32768.0
+                x = x.astype('int16')
+                wavfile.write(fName,fs, x)
+                #librosa.output.write_wav(fName, data[start:start+fs*60*5], fs)
+                i+=1
+
+def findCalls_train(self,fName,species='kiwi'):
     # Load data and annotation
-    data, sampleRate_o, annotation = loadData(True)
-    # Resample the data
-    # TOOD: Species specific
-    # bittern
-    #sampleRate = 1000
-    # rest
-    sampleRate = 16000
-    sdata = librosa.core.audio.resample(data,sampleRate_o,sampleRate)
+    ws=WaveletSeg()
+    ws.loadData(fName)
+    if species=='boom':
+        fs=1000
+    else:
+        fs = 16000
+    if ws.sampleRate != fs:
+        ws.data = librosa.core.audio.resample(ws.data,ws.sampleRate,fs)
+        ws.sampleRate=fs
 
     # Get the five level wavelet decomposition
-    wData = denoise(sdata, thresholdType='soft', maxlevel=5)
+    wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
+    #librosa.output.write_wav('train/kiwi/D/', wData, sampleRate, norm=False)
 
     # Bandpass filter
     #fwData = bandpass(wData,sampleRate)
@@ -295,19 +387,19 @@ def findCalls_train():
     # bittern
     #fwData = ButterworthBandpass(wData,sampleRate,low=100,high=400)
     # kiwi
-    fwData = ButterworthBandpass(wData,sampleRate,low=1000,high=7000)
+    fwData = ws.ButterworthBandpass(wData,ws.sampleRate,low=1100,high=7500)
     print fwData
 
     #fwData = data
-    waveletCoefs = computeWaveletEnergy(fwData, sampleRate)
+    waveletCoefs = ws.computeWaveletEnergy(fwData, ws.sampleRate)
 
     # Compute point-biserial correlations and sort wrt it, return top nNodes
-    nodes = compute_r(annotation,waveletCoefs)
+    nodes = ws.compute_r(ws.annotation,waveletCoefs)
     print nodes
 
-    # Now for Nirosha's weird sorting
+    # Now for Nirosha's sorting
     # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
-    nodes = sortListByChild(np.ndarray.tolist(nodes))
+    nodes = ws.sortListByChild(np.ndarray.tolist(nodes))
 
     # These nodes refer to the unrooted tree, so add 1 to get the real indices
     nodes = [n + 1 for n in nodes]
@@ -317,33 +409,94 @@ def findCalls_train():
     wpFull = pywt.WaveletPacket(data=fwData, wavelet='dmey', mode='symmetric', maxlevel=5)
 
     # Now check the F2 values and add node if it improves F2
-    #nodes = nodes[]
     listnodes = []
     bestBetaScore = 0
-    for c in nodes:
+    detected = np.zeros(300)
+
+    for node in nodes:
         testlist = listnodes[:]
-        testlist.append(c)
+        testlist.append(node)
         print testlist
-        detected = detectCalls(wpFull,testlist,sampleRate)
-        fB = fBetaScore(annotation, detected)
+        detected_c = ws.detectCalls(wpFull,node,ws.sampleRate)
+        #update the detections
+        det=np.maximum.reduce([detected,detected_c])
+        fB = ws.fBetaScore(ws.annotation, det)
         if fB > bestBetaScore:
             bestBetaScore = fB
-            listnodes.append(c)
+            #now apend the detections of node c to detected
+            detected=det
+            listnodes.append(node)
+        if bestBetaScore == 1:
+            break
     return listnodes
 
-def findCalls_test(listnodes):
-
-    data, sampleRate_o, annotation = loadData(train=False)
-    sampleRate = 16000
-    sdata = librosa.core.audio.resample(data,sampleRate_o,sampleRate)
-    wData = denoise(sdata, thresholdType='soft', maxlevel=5)
-    fwData = ButterworthBandpass(wData,sampleRate,low=1000,high=7000)
+def findCalls_test(listnodes,fName,species='kiwi'):
+    #data, sampleRate_o, annotation = loadData(fName)
+    ws=WaveletSeg()
+    ws.loadData(fName)
+    if species=='boom':
+        fs=1000
+    else:
+        fs = 16000
+    if ws.sampleRate != fs:
+        ws.data = librosa.core.audio.resample(ws.data,ws.sampleRate,fs)
+        ws.sampleRate=fs
+    wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
+    fwData = ws.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
     wpFull = pywt.WaveletPacket(data=fwData, wavelet='dmey', mode='symmetric', maxlevel=5)
+    detected = ws.detectCalls_test(wpFull, listnodes, ws.sampleRate) #detect based on a previously defined nodeset
+    print fName
+    ws.fBetaScore(ws.annotation, detected)
 
-    detected = detectCalls(wpFull, listnodes, sampleRate)
-    print fBetaScore(annotation,detected)
-    #print annotation
-    #print detected
+def processFolder(folder_to_process = 'Sound Files/survey/5min', species='kiwi'):
+    #process survey recordings
+    nfiles=len(glob.glob(os.path.join(folder_to_process,'*.wav')))
+    detected=np.zeros((nfiles,300))
+    i=0
+    for filename in glob.glob(os.path.join(folder_to_process,'*.wav')):
+        ws=WaveletSeg()
+        ws.loadData(filename[:-4],trainTest=False)
+        wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
+        fwData = ws.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
+        wpFull = pywt.WaveletPacket(data=fwData, wavelet='dmey', mode='symmetric', maxlevel=5)
+        detected[i,:] = ws.detectCalls_test(wpFull, nodelist_kiwi, ws.sampleRate) #detect based on a previously defined nodeset
+    return detected
 
+def genReport(folder_to_process,detected):
+    #generate the report from the detections (yes-no)
+    #ToDO: detailed report
+    fnames=["" for x in range(np.shape(detected)[0])]
+    presenceAbsence=["" for x in range(np.shape(detected)[0])]
+    i=0
+    for filename in glob.glob(os.path.join(folder_to_process,'*.wav')):
+        fnames[i]=str(filename).split('\\')[-1:][0]
+    for i in range(np.shape(detected)[0]):
+        if sum(detected[i,:])>0:
+            presenceAbsence[i]='Yes'
+        else:
+            presenceAbsence[i]='-'
 
-#D = np.array([0.4364,-0.5044,  0.1021,  1.1963,   0.1203,  -1.0368,  -0.8571,  -0.1699,  -0.1917, -0.8658,  0.1807,   1.2665,  -0.2512,  -0.2046, -2.2015, -0.7745, -1.3933, -0.3862, 0.5256,  1.5233,  1.7985, -0.1169,  -0.3202,   0.8175,  0.4902,  0.7653,  0.7783,  -1.4803, 0.5404, -0.0915])
+    col_format = "{:<10}" + "," + "{:<3}" + "\n"
+    with open(folder_to_process+"/presenceAbs.csv", 'w') as of:
+        for x in zip(fnames,presenceAbsence):
+            of.write(col_format.format(*x))
+
+#Test
+nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
+#nodelist_kiwi = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55] # matlab
+
+# def test(nodelist):
+#     for filename in glob.glob(os.path.join('Sound Files/test','*.wav')):
+#         findCalls_test(nodelist,filename[0:len(filename)-4])
+#
+# test(nodelist_kiwi)
+
+# #Survey data processing
+# #First split audio into 5-min to a subfolder '5min'
+# ws=WaveletSeg()
+# ws.splitAudio(folder_to_process='Sound Files/survey')
+# print "5-min splitting done"
+# Now to process survey data
+detected=processFolder(folder_to_process='Sound Files/survey/5min', species='kiwi')
+genReport(folder_to_process='Sound Files/survey/5min',detected=detected)
+print detected

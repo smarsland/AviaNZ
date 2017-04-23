@@ -35,6 +35,7 @@ import librosa
 # Linear Predictive Coding -> from scikits.talkbox import lpc (see also audiolazy) Librosa?
 # Compute the spectral derivatives??
 
+# Fundamental frequency -- yin? (de Cheveigne and Kawahara 2002)
 # Add something that plots some of these to help playing, so that I can understand the librosa things, etc.
 
 # And assemble a decent dataset of birdcalls to play with.

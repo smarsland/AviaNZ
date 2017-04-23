@@ -110,29 +110,65 @@ class SignalProc:
     # Functions for denoising (wavelet and bandpass filtering)
     def ShannonEntropy(self,s):
         # Compute the Shannon entropy of data
-        e = -s[np.nonzero(s)]**2 * np.log(s[np.nonzero(s)]**2)
+        e = s[np.nonzero(s)]**2 * np.log(s[np.nonzero(s)]**2)
         #e = np.where(s==0,0,-s**2*np.log(s**2))
         return np.sum(e)
 
-    def BestLevel(self):
+    def BestLevel(self,wavelet):
         # Compute the best level for the wavelet packet decomposition by using the Shannon entropy
         previouslevelmaxE = self.ShannonEntropy(self.data)
-        self.wp = pywt.WaveletPacket(data=self.data, wavelet='dmey', mode='symmetric', maxlevel=self.maxsearch)
+        print previouslevelmaxE
+        self.wp = pywt.WaveletPacket(data=self.data, wavelet=wavelet, mode='symmetric', maxlevel=self.maxsearch)
         level = 1
         currentlevelmaxE = np.max([self.ShannonEntropy(n.data) for n in self.wp.get_level(level, "freq")])
+        print currentlevelmaxE
         while currentlevelmaxE < previouslevelmaxE and level<self.maxsearch:
             previouslevelmaxE = currentlevelmaxE
             level += 1
             currentlevelmaxE = np.max([self.ShannonEntropy(n.data) for n in self.wp.get_level(level, "freq")])
-
+            print currentlevelmaxE
         return level
+
+    def waveletDenoise_all(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
+        # Perform wavelet denoising. Can use soft or hard thresholding
+        if data is None:
+            data = self.data
+        if maxlevel is None:
+            self.maxlevel = self.BestLevel(wavelet)
+        else:
+            self.maxlevel = maxlevel
+        print "Best level is ",self.maxlevel
+        if threshold is not None:
+            self.thresholdMultiplier = threshold
+
+        self.wData = np.zeros(len(data))
+        for i in range(0,len(data),self.sampleRate/2):
+            d = data[i:i+self.sampleRate/2]
+            wp = pywt.WaveletPacket(data=d, wavelet=wavelet, mode='symmetric',maxlevel=self.maxlevel)
+
+            det1 = wp['d'].data
+            # Note magic conversion number
+            sigma = np.median(np.abs(det1)) / 0.6745
+            threshold = self.thresholdMultiplier*sigma
+            for level in range(self.maxlevel):
+                for n in wp.get_level(level, 'natural'):
+                    if thresholdType == 'hard':
+                        # Hard thresholding
+                        n.data = np.where(np.abs(n.data)<threshold,0.0,n.data)
+                    else:
+                        # Soft thresholding
+                        n.data = np.sign(n.data)*np.maximum((np.abs(n.data)-threshold),0.0)
+            wp.reconstruct(update=True)
+            self.wData[i:i+self.sampleRate/2] = wp.data
+
+        return self.wData
 
     def waveletDenoise(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
         if maxlevel is None:
-            self.maxlevel = self.BestLevel()
+            self.maxlevel = self.BestLevel(wavelet)
         else:
             self.maxlevel = maxlevel
         print "Best level is ",self.maxlevel
@@ -161,10 +197,11 @@ class SignalProc:
                     # Soft thresholding
                     n.data = np.sign(n.data)*np.maximum((np.abs(n.data)-threshold),0.0)
 
+        wp.reconstruct(update=False)
         self.wData = wp.data
-        #self.wp.reconstruct(update=False)
 
         return self.wData
+
 
     def bandpassFilter(self,data=None,start=1000,end=10000):
         # Bandpass filter

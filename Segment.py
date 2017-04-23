@@ -3,23 +3,23 @@
 
 import numpy as np
 import scipy.ndimage as spi
-import librosa
+#import librosa
 
 # TODO:
+# Pure energy threshold-> think about threshold, add automatic gain
 # Median clipping: play with the various parameters, get some that I'm happy with
 #   -> size of diamond, med filter, min size of blob
 #   -> think about how to remove duplicate segments
 # Amplitude: threshold parameter ?!
-# Pure energy threshold-> think about threshold, add automatic gain
 # onset_detect from librosa
 #   If we want to use it, it needs work -> remove overlaps, sort out length
 #   -> doesn't do offset :(
-# Finish yin
+# Add yaapt or bana to yin for fundamental frequency
 # Frechet distance for DTW?
 
 class Segment:
-    # This class implements three forms of segmentation for the AviaNZ interface:
-    # Amplitude threshold, energy threshold, median clipping of spectrogram
+    # This class implements five forms of segmentation for the AviaNZ interface:
+    # Amplitude threshold, energy threshold, Harma, median clipping of spectrogram, yin
 
     # It also implements two forms of recognition:
     # Cross-correlation and DTW
@@ -27,7 +27,7 @@ class Segment:
     # Each returns start and stop times for each segment as a Python list of pairs
     # See also the species-specific segmentation in WaveletSegment
 
-    def __init__(self,data,sg,sp,fs,window_width=256,incr=128):
+    def __init__(self,data,sg,sp,fs,minSegment,window_width=256,incr=128):
         self.data = data
         self.fs = fs
         # This is the length of a window to average to get the power
@@ -36,6 +36,7 @@ class Segment:
         self.sg = sg
         # This is the reference to SignalProc
         self.sp = sp
+        self.minSegment = minSegment
         # These are the spectrogram params. Needed to compute times
         self.window_width = window_width
         self.incr = incr
@@ -147,7 +148,8 @@ class Segment:
 
             # Set the syllable just found to 0
             maxFreqs[t_start:t_end] = 0
-            segs.append([float(t_start)* self.incr / self.fs,float(t_end)* self.incr / self.fs])
+            if float(t_end - t_start)*self.incr/self.fs*1000.0 > self.minSegment:
+                segs.append([float(t_start)* self.incr / self.fs,float(t_end)* self.incr / self.fs])
 
             print t_start, t_end, stop_thr*biggest, np.max(maxFreqs)
         return segs
@@ -227,7 +229,10 @@ class Segment:
 
         segments = []
         for i in list:
-            segments.append([float(i[0]) * self.incr / self.fs, float(i[1]) * self.incr / self.fs])
+            if float(i[1] - i[0])*self.incr/self.fs*1000 > self.minSegment:
+                segments.append([float(i[0]) * self.incr / self.fs, float(i[1]) * self.incr / self.fs])
+            else:
+                print i[1], i[0], float(i[1] - i[0])*self.incr/self.fs
 
         return segments
 
@@ -331,10 +336,12 @@ class Segment:
                     # TODO: Consider allowing for a couple of points to be missed?
                     inseg = False
                     # TODO: Consider not including segments that are too short
-                    segs.append([float(starts[start]) / self.fs, float(starts[ind[i-1]]) / self.fs])
+                    if float(starts[ind[i-1]] - starts[start]) / self.fs * 1000.0 > self.minSegment:
+                        segs.append([float(starts[start]) / self.fs, float(starts[ind[i-1]]) / self.fs])
                 i += 1
             # Add the last segment
-            segs.append([float(starts[start]) / self.fs, float(starts[ind[i - 1]]) / self.fs])
+            if (starts[ind[i - 1]] - starts[start]) / self.fs  * 1000.0> self.minSegment:
+                segs.append([float(starts[start]) / self.fs, float(starts[ind[i - 1]]) / self.fs])
             return segs, pitch, np.array(starts)
         else:
             return pitch, np.array(starts), minfreq, W
