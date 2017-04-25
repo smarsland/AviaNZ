@@ -44,12 +44,16 @@ import Segment
 # ==============
 # TODO
 
+# Still need to work out what to do with segment overview bit when delete a segment
+    # Should check if there are other segments there, and get their labels
+    # Best thing might be to have a data structure that counts these things.
+
 # Need to make the window shrinkable and get the sizing right for the screen
 
 # Finish implementation for button to show individual segments to user and ask for feedback and the other feedback dialogs
 # Ditto lots of segments at once
 
-# Would it be good to smooth the image?
+# Would it be good to smooth the image? Actually, lots of ideas here! Might be nice way to denoise?
 
 # Modify the user manual to include shift-click, backspace key, etc.
 
@@ -57,13 +61,14 @@ import Segment
 
 # Some way of allowing marking of 'possible' or 'maybe' or 'unsure' classifications -> menu option?
 # Challenge here is, can you make a menu option that is selectable and has an arrow outwards?
+    # If done, should modify the colours in the overview segments
 
-# Colormaps
-    # Find some not-horrible ones!
+# Colourmaps
     # HistogramLUTItem
-# Pause on segment play (and also on bandpass limited play)
+    # **** Colours of the segments to be visible with different colourmaps?
+# Check pause on segment play (and also on bandpass limited play)
 
-# Mouse location printing -> Is it correct?
+# Mouse location printing -> Is it correct? Better place?
 
 # Dynamically updating context menu -> done, should it be an option?
 
@@ -86,8 +91,6 @@ import Segment
 # Think about nice ways to train them
 
 # The ruru file is a good one to play with for now
-
-
 
 # Show a mini picture of spectrogram images by the bird names in the file, or a cheat sheet or similar
 
@@ -161,7 +164,7 @@ import Segment
 
 # Rebecca:
     # x colour spectrogram
-    # add a marker on the overview to show where you have marked segments, with different colours for unknown, possible
+    # x add a marker on the overview to show where you have marked segments, with different colours for unknown, possible
     # x reorder the list dynamically by amount of use -> done, but maybe it should be an option?
     # Maybe include day or night differently in the context menu
     # x have a hot key to add the same bird repeatedly
@@ -245,10 +248,11 @@ class AviaNZInterface(QMainWindow):
         self.listLabels = []
         self.listRectanglesa1 = []
         self.listRectanglesa2 = []
+        self.SegmentRects = []
         self.box1id = -1
 
         self.colourList = ['Grey','Viridis', 'Inferno', 'Plasma', 'Autumn', 'Cool', 'Bone', 'Copper', 'Hot', 'Jet','Thermal','Flame','Yellowy','Bipolar','Spectrum']
-        self.lastSpecies = 'None'
+        self.lastSpecies = "Don't Know"
         self.resetStorageArrays()
 
         self.dirName = self.config['dirpath']
@@ -372,6 +376,9 @@ class AviaNZInterface(QMainWindow):
             # Param for width in seconds of the main representation
             'windowWidth': 10.0,
 
+            # Width of the segment markers in the overview plot
+            'widthOverviewSegment': 100.0,
+
             # These are the contrast parameters for the spectrogram
             #'colourStart': 0.25,
             #'colourEnd': 0.75,
@@ -430,6 +437,7 @@ class AviaNZInterface(QMainWindow):
         self.w_overview.addWidget(self.w_overview1)
         self.p_overview = self.w_overview1.addViewBox(enableMouse=False,enableMenu=False,row=0,col=0)
         self.p_overview2 = self.w_overview1.addViewBox(enableMouse=False, enableMenu=False, row=1, col=0)
+        self.p_overview2.setXLink(self.p_overview)
 
         self.w_ampl = pg.GraphicsLayoutWidget()
         self.p_ampl = self.w_ampl.addViewBox(enableMouse=False,enableMenu=False)
@@ -1042,11 +1050,29 @@ class AviaNZInterface(QMainWindow):
         self.overviewImageRegion.sigRegionChanged.connect(self.updateOverview)
         #self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
 
-        # Make the rectangle that summarises segments
-        self.rect1 = pg.QtGui.QGraphicsRectItem(0,0,np.shape(self.sg)[1],0.5)
-        self.rect1.setPen(pg.mkPen(None))
-        self.rect1.setBrush(pg.mkBrush('r'))
-        self.p_overview2.addItem(self.rect1)
+        # Make a rectangle that summarises the segments
+        width = int(np.shape(self.sg)[1]/self.config['widthOverviewSegment'])
+        #r = pg.QtGui.QGraphicsRectItem(0,0.5,np.shape(self.sg)[1], 1.5)
+        #r.setPen(pg.mkPen('r'))
+        #self.p_overview2.addItem(r)
+        for i in range(width+1):
+            r = pg.QtGui.QGraphicsRectItem(i*self.config['widthOverviewSegment'], 0, (i+1)*self.config['widthOverviewSegment'], 0.5)
+            #r.setPen(pg.mkPen('k'))
+            r.setPen(pg.mkPen(None))
+            r.setBrush(pg.mkBrush('w'))
+            self.SegmentRects.append(r)
+            self.p_overview2.addItem(r)
+        r = pg.QtGui.QGraphicsRectItem((width+1)*self.config['widthOverviewSegment'], 0, np.shape(self.sg)[1], 0.5)
+        #r.setPen(pg.mkPen('k'))
+        r.setPen(pg.mkPen(None))
+        r.setBrush(pg.mkBrush('w'))
+        self.SegmentRects.append(r)
+        self.p_overview2.addItem(r)
+            #r = pg.QtGui.QGraphicsRectItem(0,0,np.shape(self.sg)[1],0.5)
+        #r.setPen(pg.mkPen(None))
+        #r.setBrush(pg.mkBrush('r'))
+        #self.rects.append(r)
+
 
     def updateOverview(self):
         # Listener for when the overview box is changed
@@ -1143,16 +1169,25 @@ class AviaNZInterface(QMainWindow):
         # Create a new segment and all the associated stuff
         # x, y in amplitude coordinates
 
+        wasNone = False
         # Get the name and colour sorted
         if species is None:
-            species = 'None'
+            species = "Don't Know"
+            wasNone = True
 
-        if species != "None" and species != "Don't Know":
+        if species != "Don't Know":
             brush = self.ColourNamed
             self.prevBoxCol = brush
+            # Only change the colour of these overview segments if currently white
+            #print self.SegmentRects[int(self.convertAmpltoSpec(startpoint) / 100.)].brush().color().name()
+            if self.SegmentRects[int(self.convertAmpltoSpec(startpoint) / self.config['widthOverviewSegment'])].brush().color().name() == '#ffffff':
+                self.SegmentRects[int(self.convertAmpltoSpec(startpoint) / self.config['widthOverviewSegment'])].setBrush(brush)
         else:
             brush = self.ColourNone
             self.prevBoxCol = brush
+            if not wasNone:
+                # Turn the colour of these segments in the overview
+                self.SegmentRects[int(self.convertAmpltoSpec(startpoint) / self.config['widthOverviewSegment'])].setBrush(brush)
 
         if startpoint > endpoint:
             temp = startpoint
@@ -1184,6 +1219,7 @@ class AviaNZInterface(QMainWindow):
         p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
 
         # Put the text into the box
+        # TODO: Always put on top of spectrogram?
         label = pg.TextItem(text=species, color='k')
         if self.useAmplitude:
             self.p_ampl.addItem(label)
@@ -1196,6 +1232,8 @@ class AviaNZInterface(QMainWindow):
         self.listRectanglesa1.append(p_ampl_r)
         self.listRectanglesa2.append(p_spec_r)
         self.listLabels.append(label)
+
+        #print self.SegmentRects[int(self.convertAmpltoSpec(startpoint) / 100.)].brush().color(),self.ColourNamed,self.SegmentRects[int(self.convertAmpltoSpec(startpoint) / 100.)].brush()== self.ColourNamed
 
         if saveSeg:
             # Add the segment to the data
@@ -1233,10 +1271,8 @@ class AviaNZInterface(QMainWindow):
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
-                    print "here"
                     self.addSegment(self.start_location, mousePoint.x(),species=self.lastSpecies)
                 else:
-                    print "there"
                     self.addSegment(self.start_location,mousePoint.x())
                     # Context menu
                     self.box1id = len(self.segments) - 1
@@ -1330,10 +1366,8 @@ class AviaNZInterface(QMainWindow):
                     # If the user has pressed shift, copy the last species and don't use the context menu
                     modifiers = QtGui.QApplication.keyboardModifiers()
                     if modifiers == QtCore.Qt.ShiftModifier:
-                        print "here"
                         self.addSegment(self.start_location, self.convertSpectoAmpl(mousePoint.x()), species=self.lastSpecies)
                     else:
-                        print "there"
                         self.addSegment(self.start_location, self.convertSpectoAmpl(mousePoint.x()))
                         # Context menu
                         self.box1id = len(self.segments) - 1
@@ -1462,7 +1496,6 @@ class AviaNZInterface(QMainWindow):
             # Put the selected bird name at the top of the list
             self.config['BirdList'].remove(birdname)
             self.config['BirdList'].insert(0,birdname)
-
         else:
             text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
             if ok:
@@ -1484,6 +1517,12 @@ class AviaNZInterface(QMainWindow):
                     #receiver = lambda birdname=text: self.birdSelected(birdname)
                     #self.connect(bird, SIGNAL("triggered()"), receiver)
                     #self.menuBird2.addAction(bird)
+        # Now decide whether or not to update the colour of the segment under the overview
+        # If the label is "Don't Know", make it blue, otherwise red.
+        boxx = int(self.convertAmpltoSpec(self.segments[self.box1id][0])/self.config['widthOverviewSegment'])
+        self.SegmentRects[boxx].setBrush(self.ColourNamed)
+        if birdname == "Don't Know":
+            self.SegmentRects[boxx].setBrush(self.ColourNone)
 
     def mouseMoved(self,evt):
         # Print the time, frequency, power for mouse location in the spectrogram
@@ -2151,7 +2190,7 @@ class AviaNZInterface(QMainWindow):
 
     def segment(self):
         # Listener for the segmentation dialog
-        # TODO: Currently just gives them all the label 'None'
+        # TODO: Currently just gives them all the label "Don't Know"'
         # TODO: Add in the wavelet one
         # TODO: More testing of the algorithms, parameters, etc.
         seglen = len(self.segments)
@@ -2192,7 +2231,7 @@ class AviaNZInterface(QMainWindow):
             # TODO: needs learning and samplerate
                 #newSegments = self.seg.segmentByWavelet(thrType,float(str(thr)), int(str(depth)), wavelet,sampleRate,bandchoice,start,end,learning,)
         for seg in newSegments:
-            self.addSegment(seg[0],seg[1],0,0,'None',True)
+            self.addSegment(seg[0],seg[1],0,0,"Don't Know",True)
 
     def findMatches(self):
         # Calls the cross-correlation function to find matches like the currently highlighted box
@@ -2374,6 +2413,8 @@ class AviaNZInterface(QMainWindow):
             del self.listRectanglesa2[self.box1id]
             self.box1id = -1
 
+            # TODO: Decide whether or not to set the segment marker in the overview back to white
+
     def deleteAll(self,force=False):
         # Listener for delete all button
         if not force:
@@ -2391,6 +2432,8 @@ class AviaNZInterface(QMainWindow):
                 self.p_ampl.removeItem(r)
             for r in self.listRectanglesa2:
                 self.p_spec.removeItem(r)
+            for r in self.SegmentRects:
+                r.setBrush(pg.mkBrush('w'))
             self.listRectanglesa1 = []
             self.listRectanglesa2 = []
             self.listLabels = []
