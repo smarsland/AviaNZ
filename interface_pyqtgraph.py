@@ -44,42 +44,41 @@ import Segment
 # ==============
 # TODO
 
-# Still need to work out what to do with segment overview bit when delete a segment
-    # Should check if there are other segments there, and get their labels
-    # Best thing might be to have a data structure that counts these things.
+# Make the layout at the bottom pretty
+
+# The updating of the colour of the overview seg has some colour weirdness -- gets darker. Some sort of overlapping? Not a major problem.
 
 # Need to make the window shrinkable and get the sizing right for the screen
 
 # Finish implementation for button to show individual segments to user and ask for feedback and the other feedback dialogs
-# Ditto lots of segments at once
+# Ditto lots of segments at once -> some weirdness here
+
+# Make the scrollbar be the same size as the spectrogram -> hard!
 
 # Would it be good to smooth the image? Actually, lots of ideas here! Might be nice way to denoise?
+# How to plot things on the spectrogram? Currently use ROI -- ugly
 
-# Modify the user manual to include shift-click, backspace key, etc.
+# Modify the user manual to include shift-click, cmd-click, backspace key, scrollbar, etc., and segmented play
 
-# Scrollbar below the spectrogram to move through the file -> where are the buttons?
+# Make the segmented play work with the phonon player?
 
-# Some way of allowing marking of 'possible' or 'maybe' or 'unsure' classifications -> menu option?
-# Challenge here is, can you make a menu option that is selectable and has an arrow outwards?
-    # If done, should modify the colours in the overview segments
+# Some way of allowing marking of 'possible' or 'maybe' or 'unsure' classifications -> cmd-click
 
 # Colourmaps
     # HistogramLUTItem
-    # **** Colours of the segments to be visible with different colourmaps?
+    # Colours of the segments to be visible with different colourmaps? Not important!
+
 # Check pause on segment play (and also on bandpass limited play)
 
 # Mouse location printing -> Is it correct? Better place?
 
-# Dynamically updating context menu -> done, should it be an option?
+# Dynamically updating context menu -> done
+# Context menu different for day and night birds?
 
 # Keyboard input
     # Hot key to say 'same bird' -> done, use shift-click.
 
 # Allow non-integer thresholds for eg wavelets
-
-# Tiny segments can appear that are (virtually) impossible to delete -> work out how they are made, stop it
-
-# Enable zooming of the spectrogram in the y-axis, and do automatically after bandpass filtering
 
 # Decide on license
 
@@ -112,16 +111,11 @@ import Segment
 
 # Overall layout -> buttons on the left in a column, or with tabs? Add menu?
 
-# Implement something for the Classify button:
+# Implement something for the Classify function:
     # Take the segments that have been given and try to classify them in lots of ways:
     # Cross-correlation, DTW, shape metric, features and learning
 
-# Testing data
-# Documentation
-# Licensing
-
 # Some bug in denoising? -> tril1
-# More features, add learning!
 
 # Needs decent testing
 
@@ -376,8 +370,8 @@ class AviaNZInterface(QMainWindow):
             # Param for width in seconds of the main representation
             'windowWidth': 10.0,
 
-            # Width of the segment markers in the overview plot
-            'widthOverviewSegment': 100.0,
+            # Width of the segment markers in the overview plot (in seconds)
+            'widthOverviewSegment': 10.0,
 
             # These are the contrast parameters for the spectrogram
             #'colourStart': 0.25,
@@ -401,9 +395,10 @@ class AviaNZInterface(QMainWindow):
             'BirdList': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)","Petrel","Rifleman", "Ruru", "Saddleback", "Silvereye", "Tomtit", "Tui", "Warbler", "Not Bird", "Don't Know",'Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit','Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover','Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
 
             # The colours for the segment boxes
-            'ColourNone': (0, 0, 225, 50), # Blue
-            'ColourSelected': (0, 225, 0, 50), # Green
-            'ColourNamed': (225, 0, 0, 50) # Red
+            'ColourNone': (0, 0, 255, 100), # Blue
+            'ColourSelected': (0, 255, 0, 100), # Green
+            'ColourNamed': (255, 0, 0, 100), # Red
+            'ColourPossible': (255, 255, 0, 100)  # Yellow
         }
 
     def createFrame(self):
@@ -416,18 +411,20 @@ class AviaNZInterface(QMainWindow):
         self.move(100,50)
 
         # Make the docks
-        self.d_overview = Dock("Overview",size = (1200,120))
-        self.d_ampl = Dock("Amplitude",size=(1200,150))
-        self.d_spec = Dock("Spectrogram",size=(1200,400))
-        self.d_controls = Dock("Controls",size=(800,150))
-        self.d_files = Dock("Files",size=(400,250))
+        self.d_overview = Dock("Overview",size = (1500,120))
+        self.d_ampl = Dock("Amplitude",size=(1500,120))
+        self.d_spec = Dock("Spectrogram",size=(1500,300))
+        self.d_controls = Dock("Controls",size=(40,100))
+        self.d_files = Dock("Files",size=(40,200))
         #self.d_buttons = Dock("Buttons",size=(800,100))
 
-        self.area.addDock(self.d_overview,'top')
+        #self.area.addDock(self.d_files,'left',self.d_overview)
+        self.area.addDock(self.d_files,'left')
+        #self.area.addDock(self.d_overview,'top')
+        self.area.addDock(self.d_overview,'right',self.d_files)
         self.area.addDock(self.d_ampl,'bottom',self.d_overview)
         self.area.addDock(self.d_spec,'bottom',self.d_ampl)
-        self.area.addDock(self.d_controls,'bottom',self.d_spec)
-        self.area.addDock(self.d_files,'left',self.d_controls)
+        self.area.addDock(self.d_controls,'bottom',self.d_files)
         #self.area.addDock(self.d_buttons,'bottom',self.d_controls)
 
         # Put content widgets in the docks
@@ -553,15 +550,16 @@ class AviaNZInterface(QMainWindow):
 
         # A slider to move through the file easily
         # TODO: Why doesn't this have the forward/backward arrows?
+        # TODO: And can I line it up with the spectrogram?
         self.scrollSlider = QScrollBar(Qt.Horizontal)
+        #self.scrollSlider = QScrollBar()
         self.scrollSlider.valueChanged.connect(self.scroll)
         self.d_spec.addWidget(self.scrollSlider)
+        #self.w_spec.addItem(self.scrollSlider,row=2,col=1)
+        #self.w_spec.setHorizontalScrollBar(self.scrollSlider)
+        #self.w_spec.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
-        self.w_controls.addWidget(QLabel('Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'),row=0,col=0,colspan=3)
-        self.w_controls.addWidget(self.playButton,row=1,col=0)
-        #self.w_controls.addWidget(self.playSegButton,row=1,col=1)
-        self.w_controls.addWidget(self.playBandLimitedSegButton,row=1,col=1)
-        self.w_controls.addWidget(self.timePlayed,row=1,col=2)
+
         #self.w_controls.addWidget(self.resetButton,row=2,col=1)
         #self.w_controls.addWidget(self.dragRectangles,row=0,col=3)
         #self.w_controls.addWidget(self.useAmplitudeTick,row=1,col=3)
@@ -572,8 +570,6 @@ class AviaNZInterface(QMainWindow):
         self.widthWindow.setSingleStep(1.0)
         self.widthWindow.setDecimals(2)
         self.widthWindow.setValue(self.config['windowWidth'])
-        self.w_controls.addWidget(QLabel('Visible window width (seconds)'),row=2,col=3)
-        self.w_controls.addWidget(self.widthWindow,row=3,col=3)#,colspan=2)
         self.widthWindow.valueChanged[float].connect(self.changeWidth)
 
         # Brightness, contrast and colour reverse options
@@ -600,11 +596,18 @@ class AviaNZInterface(QMainWindow):
 
         #self.w_controls.addWidget(QLabel("Swap B/W"),row=2,col=0)
         #self.w_controls.addWidget(self.swapBW,row=3,col=0)
-        self.w_controls.addWidget(QLabel("Brightness"),row=2,col=0)
-        self.w_controls.addWidget(self.brightnessSlider,row=3,col=0)
-        self.w_controls.addWidget(QLabel("Contrast"),row=2,col=1)
-        self.w_controls.addWidget(self.contrastSlider,row=3,col=1)
-        self.w_controls.addWidget(deleteButton,row=4,col=1)
+        #self.w_controls.addWidget(QLabel('Slide top box to move through recording, click to start and end a segment, click on segment to edit or label. Right click to interleave.'),row=0,col=0,colspan=6)
+        self.w_controls.addWidget(self.playButton,row=0,col=0)
+        self.w_controls.addWidget(self.playSegButton,row=0,col=1)
+        self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=2)
+        self.w_controls.addWidget(self.timePlayed,row=1,col=0)
+        self.w_controls.addWidget(QLabel("Brightness"),row=2,col=0,colspan=3)
+        self.w_controls.addWidget(self.brightnessSlider,row=3,col=0,colspan=3)
+        self.w_controls.addWidget(QLabel("Contrast"),row=4,col=0,colspan=3)
+        self.w_controls.addWidget(self.contrastSlider,row=5,col=0,colspan=3)
+        self.w_controls.addWidget(deleteButton,row=6,col=0)
+        self.w_controls.addWidget(QLabel('Visible window width (seconds)'),row=7,col=0,colspan=2)
+        self.w_controls.addWidget(self.widthWindow,row=8,col=0,colspan=2)#,colspan=2)
 
 
         # List to hold the list of files
@@ -725,6 +728,7 @@ class AviaNZInterface(QMainWindow):
         self.ColourSelected = QtGui.QBrush(QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], self.config['ColourSelected'][3]))
         self.ColourNamed = QtGui.QBrush(QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], self.config['ColourNamed'][3]))
         self.ColourNone = QtGui.QBrush(QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3]))
+        self.ColourPossible = QtGui.QBrush(QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], self.config['ColourPossible'][3]))
 
         # Hack to get the type of an ROI
         p_spec_r = ShadedRectROI(0, 0)
@@ -742,12 +746,12 @@ class AviaNZInterface(QMainWindow):
         if ev.key() == Qt.Key_Backspace:
             self.deleteSegment()
 
-    def fillBirdList(self):
-        # Need the lambda function to connect all menu events to same trigger and know which was selected
-        # TODO: Work out how to make the menu item be selectable when it has 'Possible' with it
+    def fillBirdList(self,unsure=False):
         self.menuBirdList.clear()
         self.menuBird2.clear()
         for item in self.config['BirdList'][:20]:
+            if unsure and item != "Don't Know":
+                item = item+'?'
             bird = self.menuBirdList.addAction(item)
             #birdp = self.menuBirdList.addMenu(item)
             #birdp.addAction('Possible '+item)
@@ -756,6 +760,8 @@ class AviaNZInterface(QMainWindow):
             self.menuBirdList.addAction(bird)
         self.menuBird2 = self.menuBirdList.addMenu('Other')
         for item in self.config['BirdList'][20:]+['Other']:
+            if unsure and item != "Don't Know" and item != "Other":
+                item = item+'?'
             bird = self.menuBird2.addAction(item)
             receiver = lambda birdname=item: self.birdSelected(birdname)
             self.connect(bird, SIGNAL("triggered()"), receiver)
@@ -806,6 +812,10 @@ class AviaNZInterface(QMainWindow):
         self.prevBoxCol = self.config['ColourNone']
         #self.line = None
 
+        # Remove the overview segments
+        for r in self.SegmentRects:
+            self.p_overview2.removeItem(r)
+        self.SegmentRects = []
         #self.recta1 = None
         #self.recta2 = None
         #self.focusRegionSelected = False
@@ -883,6 +893,8 @@ class AviaNZInterface(QMainWindow):
             self.filename = self.dirName+'/'+str(name.text())
         #self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
         self.sampleRate, self.audiodata = wavfile.read(self.filename)
+        self.minFreq = 0
+        self.maxFreq = self.sampleRate/2000.
         # None of the following should be necessary for librosa
         if self.audiodata.dtype is not 'float':
             self.audiodata = self.audiodata.astype('float') #/ 32768.0
@@ -899,11 +911,10 @@ class AviaNZInterface(QMainWindow):
         # Get the data for the spectrogram
         self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,multitaper=False)
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
+        #maxsg = np.max(self.sgRaw)
+        #self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
 
-        # Colour scaling for the spectrograms
-        # TODO: Sort this so that doesn't necessarily reinitialise
-        #self.colourStart = self.config['colourStart'] * (maxsg-minsg)
-        #self.colourEnd = self.config['colourEnd'] * (maxsg-minsg)
+        #print np.max(self.sg)
 
         # Load any previous segments stored
         if os.path.isfile(self.filename+'.data'):
@@ -1050,28 +1061,20 @@ class AviaNZInterface(QMainWindow):
         self.overviewImageRegion.sigRegionChanged.connect(self.updateOverview)
         #self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
 
-        # Make a rectangle that summarises the segments
-        width = int(np.shape(self.sg)[1]/self.config['widthOverviewSegment'])
-        #r = pg.QtGui.QGraphicsRectItem(0,0.5,np.shape(self.sg)[1], 1.5)
-        #r.setPen(pg.mkPen('r'))
-        #self.p_overview2.addItem(r)
-        for i in range(width+1):
-            r = pg.QtGui.QGraphicsRectItem(i*self.config['widthOverviewSegment'], 0, (i+1)*self.config['widthOverviewSegment'], 0.5)
-            #r.setPen(pg.mkPen('k'))
-            r.setPen(pg.mkPen(None))
+        # TODO: Make a rectangle that summarises the segments and an array to hold the number of segments of each type in each box
+        # Three y values are No. not known, No. known, No. possible
+        # widthOverviewSegment is in seconds
+        #  TODO: something very weird with the last box
+        numSegments = int(np.ceil(np.shape(self.sg)[1]/self.convertAmpltoSpec(self.config['widthOverviewSegment'])))
+        self.widthOverviewSegment = int(np.shape(self.sg)[1]/numSegments)
+        self.overviewSegments = np.zeros((numSegments,3))
+        for i in range(numSegments):
+            r = pg.QtGui.QGraphicsRectItem(i*self.widthOverviewSegment, 0, (i+1)*self.widthOverviewSegment, 0.5)
+            r.setPen(pg.mkPen('k'))
+            #r.setPen(pg.mkPen(None))
             r.setBrush(pg.mkBrush('w'))
             self.SegmentRects.append(r)
             self.p_overview2.addItem(r)
-        r = pg.QtGui.QGraphicsRectItem((width+1)*self.config['widthOverviewSegment'], 0, np.shape(self.sg)[1], 0.5)
-        #r.setPen(pg.mkPen('k'))
-        r.setPen(pg.mkPen(None))
-        r.setBrush(pg.mkBrush('w'))
-        self.SegmentRects.append(r)
-        self.p_overview2.addItem(r)
-            #r = pg.QtGui.QGraphicsRectItem(0,0,np.shape(self.sg)[1],0.5)
-        #r.setPen(pg.mkPen(None))
-        #r.setBrush(pg.mkBrush('r'))
-        #self.rects.append(r)
 
 
     def updateOverview(self):
@@ -1097,10 +1100,11 @@ class AviaNZInterface(QMainWindow):
         self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
         self.specPlot.setImage(np.fliplr(self.sg.T))
-        # The constants here are divide by 1000 to get kHz, and then remember the top is sampleRate/2
-        self.specaxis.setTicks([[(0,0),(np.shape(self.sg)[0]/4,self.sampleRate/8000),(np.shape(self.sg)[0]/2,self.sampleRate/4000),(3*np.shape(self.sg)[0]/4,3*self.sampleRate/8000),(np.shape(self.sg)[0],self.sampleRate/2000)]])
+        # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
+        FreqRange = self.maxFreq-self.minFreq
+        height = self.sampleRate/2./np.shape(self.sg)[0]
+        self.specaxis.setTicks([[(0,self.minFreq/1000.),(np.shape(self.sg)[0]/4,self.minFreq/1000.+FreqRange/4.),(np.shape(self.sg)[0]/2,self.minFreq/1000.+FreqRange/2.),(3*np.shape(self.sg)[0]/4,self.minFreq/1000.+3*FreqRange/4.),(np.shape(self.sg)[0],self.minFreq/1000.+FreqRange)]])
         self.specaxis.setLabel('kHz')
-        #self.specaxis.tickSpacing(0,self.sampleRate/2,self.sampleRate/8)
         self.updateOverview()
 
         self.setColourLevels()
@@ -1176,18 +1180,45 @@ class AviaNZInterface(QMainWindow):
             wasNone = True
 
         if species != "Don't Know":
-            brush = self.ColourNamed
+            # Work out which overview segment this segment is in (could be more than one)
+            inds = int(float(self.convertAmpltoSpec(startpoint))/self.widthOverviewSegment)
+            inde = int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment)
+            if species[-1] == '?':
+                brush = self.ColourPossible
+                self.overviewSegments[inds:inde + 1, 2] += 1
+            else:
+                brush = self.ColourNamed
+                self.overviewSegments[inds:inde + 1, 1] += 1
+
             self.prevBoxCol = brush
-            # Only change the colour of these overview segments if currently white
-            #print self.SegmentRects[int(self.convertAmpltoSpec(startpoint) / 100.)].brush().color().name()
-            if self.SegmentRects[int(self.convertAmpltoSpec(startpoint) / self.config['widthOverviewSegment'])].brush().color().name() == '#ffffff':
-                self.SegmentRects[int(self.convertAmpltoSpec(startpoint) / self.config['widthOverviewSegment'])].setBrush(brush)
+
+            for box in range(inds, inde + 1):
+                if self.overviewSegments[box,0] > 0:
+                    #self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+                    self.SegmentRects[box].setBrush(self.ColourNone)
+                    #self.SegmentRects[box].update()
+                elif self.overviewSegments[box,2] > 0:
+                    self.SegmentRects[box].setBrush(self.ColourPossible)
+                elif self.overviewSegments[box,1] > 0:
+                    #self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+                    self.SegmentRects[box].setBrush(self.ColourNamed)
+                    #self.SegmentRects[box].update()
+                else:
+                    self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+                    #self.SegmentRects[box].update()
         else:
             brush = self.ColourNone
             self.prevBoxCol = brush
-            if not wasNone:
-                # Turn the colour of these segments in the overview
-                self.SegmentRects[int(self.convertAmpltoSpec(startpoint) / self.config['widthOverviewSegment'])].setBrush(brush)
+            #if not wasNone:
+            # Work out which overview segment this segment is in (could be more than one)
+            inds = int(float(self.convertAmpltoSpec(startpoint)) / self.widthOverviewSegment)
+            inde = int(float(self.convertAmpltoSpec(endpoint)) / self.widthOverviewSegment)
+            self.overviewSegments[inds:inde+1,0] += 1
+            # Turn the colour of these segments in the overview
+            for box in range(inds, inde + 1):
+                self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+                self.SegmentRects[box].setBrush(self.ColourNone)
+                self.SegmentRects[box].update()
 
         if startpoint > endpoint:
             temp = startpoint
@@ -1269,9 +1300,16 @@ class AviaNZInterface(QMainWindow):
                 self.p_ampl.removeItem(self.drawingBox_ampl)
                 self.p_spec.removeItem(self.drawingBox_spec)
                 # If the user has pressed shift, copy the last species and don't use the context menu
+                # If they pressed Control, add ? to the names
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
                     self.addSegment(self.start_location, mousePoint.x(),species=self.lastSpecies)
+                elif modifiers == QtCore.Qt.ControlModifier:
+                    self.addSegment(self.start_location,mousePoint.x())
+                    # Context menu
+                    self.box1id = len(self.segments) - 1
+                    self.fillBirdList(unsure=True)
+                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
                     self.addSegment(self.start_location,mousePoint.x())
                     # Context menu
@@ -1310,7 +1348,11 @@ class AviaNZInterface(QMainWindow):
                     self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
                     self.listRectanglesa2[box1id].update()
 
-                    self.fillBirdList()
+                    modifiers = QtGui.QApplication.keyboardModifiers()
+                    if modifiers == QtCore.Qt.ControlModifier:
+                        self.fillBirdList(unsure=True)
+                    else:
+                        self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
                     # User hasn't clicked in a box (or used the right button), so start a new segment
@@ -1367,6 +1409,12 @@ class AviaNZInterface(QMainWindow):
                     modifiers = QtGui.QApplication.keyboardModifiers()
                     if modifiers == QtCore.Qt.ShiftModifier:
                         self.addSegment(self.start_location, self.convertSpectoAmpl(mousePoint.x()), species=self.lastSpecies)
+                    elif modifiers == QtCore.Qt.ControlModifier:
+                        self.addSegment(self.start_location, self.convertSpectoAmpl(mousePoint.x()))
+                        # Context menu
+                        self.box1id = len(self.segments) - 1
+                        self.fillBirdList(unsure=True)
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                     else:
                         self.addSegment(self.start_location, self.convertSpectoAmpl(mousePoint.x()))
                         # Context menu
@@ -1414,8 +1462,11 @@ class AviaNZInterface(QMainWindow):
                     self.playBandLimitedSegButton.setEnabled(True)
                     self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
                     self.listRectanglesa2[box1id].update()
-
-                    self.fillBirdList()
+                    modifiers = QtGui.QApplication.keyboardModifiers()
+                    if modifiers == QtCore.Qt.ControlModifier:
+                        self.fillBirdList(unsure=True)
+                    else:
+                        self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
                     # User hasn't clicked in a box (or used the right button), so start a new segment
@@ -1457,6 +1508,12 @@ class AviaNZInterface(QMainWindow):
             modifiers = QtGui.QApplication.keyboardModifiers()
             if modifiers == QtCore.Qt.ShiftModifier:
                 self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y(), evt2.y(),self.lastSpecies)
+            elif modifiers == QtCore.Qt.ControlModifier:
+                self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y(), evt2.y())
+                # Context menu
+                self.box1id = len(self.segments) - 1
+                self.fillBirdList(unsure=True)
+                self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
             else:
                 self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y(), evt2.y())
                 # Context menu
@@ -1491,9 +1548,56 @@ class AviaNZInterface(QMainWindow):
     def birdSelected(self,birdname):
         # This collects the label for a bird from the context menu and processes it
         #print birdname, self.box1id
+
+        oldname = self.segments[self.box1id][4]
+
+        # Work out which overview segment this segment is in (could be more than one)
+        inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0])) / self.widthOverviewSegment)
+        inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1])) / self.widthOverviewSegment)
+        if oldname == "Don't Know":
+            if birdname != "Don't Know":
+                if birdname[-1] == '?':
+                    self.overviewSegments[inds:inde + 1, 0] -= 1
+                    self.overviewSegments[inds:inde + 1, 2] += 1
+                else:
+                    self.overviewSegments[inds:inde + 1, 0] -= 1
+                    self.overviewSegments[inds:inde + 1, 1] += 1
+        elif oldname[-1] == '?':
+            if birdname[-1] != '?':
+                if birdname == "Don't Know":
+                    self.overviewSegments[inds:inde + 1, 2] -= 1
+                    self.overviewSegments[inds:inde + 1, 0] += 1
+                else:
+                    self.overviewSegments[inds:inde + 1, 2] -= 1
+                    self.overviewSegments[inds:inde + 1, 1] += 1
+        else:
+            if birdname == "Don't Know":
+                self.overviewSegments[inds:inde + 1, 1] -= 1
+                self.overviewSegments[inds:inde + 1, 0] += 1
+            elif birdname[-1] == '?':
+                self.overviewSegments[inds:inde + 1, 1] -= 1
+                self.overviewSegments[inds:inde + 1, 2] += 1
+
+        for box in range(inds, inde + 1):
+            if self.overviewSegments[box, 0] > 0:
+                self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+                self.SegmentRects[box].setBrush(self.ColourNone)
+                self.SegmentRects[box].update()
+            elif self.overviewSegments[box, 2] > 0:
+                self.SegmentRects[box].setBrush(self.ColourPossible)
+            elif self.overviewSegments[box, 1] > 0:
+                self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+                self.SegmentRects[box].setBrush(self.ColourNamed)
+                self.SegmentRects[box].update()
+            else:
+                self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+
+        # Now update the text
         if birdname is not 'Other':
             self.updateText(birdname)
             # Put the selected bird name at the top of the list
+            if birdname[-1] == '?':
+                birdname = birdname[:-1]
             self.config['BirdList'].remove(birdname)
             self.config['BirdList'].insert(0,birdname)
         else:
@@ -1517,12 +1621,6 @@ class AviaNZInterface(QMainWindow):
                     #receiver = lambda birdname=text: self.birdSelected(birdname)
                     #self.connect(bird, SIGNAL("triggered()"), receiver)
                     #self.menuBird2.addAction(bird)
-        # Now decide whether or not to update the colour of the segment under the overview
-        # If the label is "Don't Know", make it blue, otherwise red.
-        boxx = int(self.convertAmpltoSpec(self.segments[self.box1id][0])/self.config['widthOverviewSegment'])
-        self.SegmentRects[boxx].setBrush(self.ColourNamed)
-        if birdname == "Don't Know":
-            self.SegmentRects[boxx].setBrush(self.ColourNone)
 
     def mouseMoved(self,evt):
         # Print the time, frequency, power for mouse location in the spectrogram
@@ -1532,8 +1630,9 @@ class AviaNZInterface(QMainWindow):
             mousePoint = self.p_spec.mapSceneToView(evt)
             indexx = int(mousePoint.x())
             indexy = int(mousePoint.y())
+            #print indexx, indexy, self.sg[indexy,indexx]
             if indexx > 0 and indexx < np.shape(self.sg)[1] and indexy > 0 and indexy < np.shape(self.sg)[0]:
-                self.pointData.setText('time=%0.1f (s), freq=%0.1f (Hz),power=%0.1f (dB)' % (self.convertSpectoAmpl(mousePoint.x()), mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[0], self.sg[int(mousePoint.y()), int(mousePoint.x())]))
+                self.pointData.setText('time=%0.2f (s), freq=%0.1f (Hz),power=%0.1f (dB)' % (self.convertSpectoAmpl(mousePoint.x()), mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[0], self.sg[indexy, indexx]))
 
     # def activateRadioButtons(self):
         # Make the radio buttons selectable
@@ -1567,7 +1666,10 @@ class AviaNZInterface(QMainWindow):
 
         # Update the colour
         if text != "Don't Know":
-            self.prevBoxCol = self.ColourNamed
+            if text[-1] == '?':
+                self.prevBoxCol = self.ColourPossible
+            else:
+                self.prevBoxCol = self.ColourNamed
         else:
             self.prevBoxCol = self.ColourNone
 
@@ -1894,7 +1996,7 @@ class AviaNZInterface(QMainWindow):
     def scroll(self):
         # When the slider is moved, change the position of the plot
         newminX = self.scrollSlider.value()
-        print newminX
+        #print newminX
         #print newminX, self.scrollSlider.minimum(), self.scrollSlider.maximum()
         minX, maxX = self.overviewImageRegion.getRegion()
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
@@ -1982,7 +2084,14 @@ class AviaNZInterface(QMainWindow):
         # TODO: Ends rather suddenly
         if self.currentSegment != len(self.listRectanglesa2)-1:
             self.currentSegment += 1
-            x1, x2 = self.listRectanglesa2[self.currentSegment].getRegion()
+            # Different calls for the two types of region
+            if type(self.listRectanglesa2[self.currentSegment]) == self.ROItype:
+                x1 = self.listRectanglesa2[self.currentSegment].pos()[0]
+                x2 = x1 + self.listRectanglesa2[self.currentSegment].size()[0]
+            else:
+                x1, x2 = self.listRectanglesa2[self.currentSegment].getRegion()
+            x1 = int(x1)
+            x2 = int(x2)
             self.humanClassifyDialog1.setImage(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
         else:
             print "Last image"
@@ -2007,6 +2116,12 @@ class AviaNZInterface(QMainWindow):
         # Create the dialog that shows calls to the user for verification
         # Currently assumes that there is a selected box (later, use the first!)
         self.currentSegment = 0
+        # Different calls for the two types of region
+        if type(self.listRectanglesa2[self.currentSegment]) == self.ROItype:
+            x1 = self.listRectanglesa2[self.currentSegment].pos()[0]
+            x2 = x1 + self.listRectanglesa2[self.currentSegment].size()[0]
+        else:
+            x1, x2 = self.listRectanglesa2[self.currentSegment].getRegion()
         x1,x2 = self.listRectanglesa2[self.currentSegment].getRegion()
         x1 = int(x1)
         x2 = int(x2)
@@ -2030,6 +2145,7 @@ class AviaNZInterface(QMainWindow):
 
         self.sp.set_width(int(str(window_width)), int(str(incr)))
         self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg),multitaper=multitaper)
+        maxsg = np.max(self.sgRaw)
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
         self.overviewImage.setImage(np.fliplr(self.sg.T))
         self.specPlot.setImage(np.fliplr(self.sg.T))
@@ -2046,11 +2162,13 @@ class AviaNZInterface(QMainWindow):
         if int(str(window_width)) != self.config['window_width']:
             self.config['window_width'] = int(str(window_width))
             # Update the axis
-            self.specaxis.setTicks([[(0, 0), (np.shape(self.sg)[0] / 4, self.sampleRate / 8000),
-                                     (np.shape(self.sg)[0] / 2, self.sampleRate / 4000),
-                                     (3 * np.shape(self.sg)[0] / 4, 3 * self.sampleRate / 8000),
-                                     (np.shape(self.sg)[0], self.sampleRate / 2000)]])
-
+            FreqRange = self.maxFreq - self.minFreq
+            height = self.sampleRate / 2. / np.shape(self.sg)[0]
+            self.specaxis.setTicks([[(0, self.minFreq / 1000.),
+                                     (np.shape(self.sg)[0] / 4, self.minFreq / 1000. + FreqRange / 4.),
+                                     (np.shape(self.sg)[0] / 2, self.minFreq / 1000. + FreqRange / 2.),
+                                     (3 * np.shape(self.sg)[0] / 4, self.minFreq / 1000. + 3 * FreqRange / 4.),
+                                     (np.shape(self.sg)[0], self.minFreq / 1000. + FreqRange)]])
 
     def denoiseDialog(self):
         # Create the denoising dialog when the relevant button is pressed
@@ -2138,9 +2256,24 @@ class AviaNZInterface(QMainWindow):
 
         self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate)
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
-        self.overviewImage.setImage(np.fliplr(self.sg.T))
-        self.specPlot.setImage(np.fliplr(self.sg.T))
+        # Calculation to turn the start and end of the bands into spectrogram y coordinates and then cut it down
+        # The - signs are because the spectrogram is upside-down
+        #print np.shape(self.sg), self.sampleRate
+        height = self.sampleRate/2./np.shape(self.sg)[0]
+        #print height, int(str(start)), float(str(start))/height, int(float(str(start))/height), float(str(end))/height
+        self.overviewImage.setImage(np.fliplr(self.sg[-int(float(str(end))/height)-1:-int(float(str(start))/height)].T))
+        self.specPlot.setImage(np.fliplr(self.sg[-int(float(str(end))/height)-1:-int(float(str(start))/height),:].T))
         self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate*1000.0,num=self.datalength,endpoint=True),self.audiodata)
+        #self.specaxis.setTicks([[(0,0),(np.shape(self.sg)[0]/4,self.sampleRate/8000),(np.shape(self.sg)[0]/2,self.sampleRate/4000),(3*np.shape(self.sg)[0]/4,3*self.sampleRate/8000),(np.shape(self.sg)[0],self.sampleRate/2000)]])
+        self.minFreq = int(str(start))
+        self.maxFreq = int(str(end))
+        FreqRange = self.maxFreq-self.minFreq
+        height = self.sampleRate/2./np.shape(self.sg)[0]
+        SpecRange = (int(str(end)) - int(str(start)))/height
+        #print self.minFreq, self.maxFreq, FreqRange, SpecRange, np.shape(self.sg[int(float(str(start))/height):int(float(str(end))/height)+1,:])
+
+        self.specaxis.setTicks([[(0,(self.minFreq/1000.)),(SpecRange/4,(self.minFreq/1000.+FreqRange/4000.)),(SpecRange/2,(self.minFreq/1000.+FreqRange/2000.)),(3*SpecRange/4,(self.minFreq/1000.+3*FreqRange/4000.)),(SpecRange,(self.minFreq/1000.+FreqRange/1000.))]])
+        #print ([[(0,self.minFreq/1000.),(SpecRange/4,self.minFreq/1000.+FreqRange/4000.),(SpecRange/2,self.minFreq/1000.+FreqRange/2000.),(3*SpecRange/4,self.minFreq/1000.+3*FreqRange/4000.),(SpecRange,self.minFreq/1000.+FreqRange/1000.)]])
 
         self.setColourLevels()
 
@@ -2287,11 +2420,11 @@ class AviaNZInterface(QMainWindow):
         self.segmentStop = self.playSlider.maximum()
         if self.media_obj.state() == phonon.Phonon.PlayingState:
             self.media_obj.pause()
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+            self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
             #self.playButton.setText("Play")
         elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
             self.media_obj.play()
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
+            self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
             #self.playButton.setText("Pause")
 
     def playFinished(self):
@@ -2328,7 +2461,7 @@ class AviaNZInterface(QMainWindow):
 
     def playSelectedSegment(self):
         # Get selected segment start and end (or return if no segment selected)
-        # TODO: check if has been made pauseable
+        # TODO: check if has been made pauseable. Actually, it isn't, since it goes back to the beginning. I think it's OK though?
         if self.box1id > -1:
             start = self.listRectanglesa1[self.box1id].getRegion()[0]*1000
             self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1]*1000
@@ -2337,25 +2470,28 @@ class AviaNZInterface(QMainWindow):
             #self.segmentStop = self.playSlider.maximum()
             if self.media_obj.state() == phonon.Phonon.PlayingState:
                 self.media_obj.pause()
-                self.playButton.setIcon(QtGui.QIcon('img/playsegment.png'))
+                self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
                 # self.playButton.setText("Play")
             elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
                 self.media_obj.play()
-                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
+                self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
 
     def playBandLimitedSegment(self):
         # Get the band limits of the segment, bandpass filter, then play that
-        # TODO: This version uses sounddevice to play it back because the phonon needed to save it and then still wouldn't actually
-        # play it. Does it matter? You can't see the bar moving.
-        import sounddevice as sd
+        # TODO: This version uses sounddevice to play it back because the phonon needed to save it and then still wouldn't actually play it. Does it matter? You can't see the bar moving.
         start = int(self.listRectanglesa1[self.box1id].getRegion()[0]*self.sampleRate)
         stop = int(self.listRectanglesa1[self.box1id].getRegion()[1]*self.sampleRate)
         bottom = int(self.segments[self.box1id][2]*self.sampleRate/2./np.shape(self.sg)[0])
         top = int(self.segments[self.box1id][3]*self.sampleRate/2./np.shape(self.sg)[0])
-        data = self.audiodata[start:stop]
-        data = self.sp.bandpassFilter(data, bottom, top)
+        if bottom > 0 and top>0:
+            import sounddevice as sd
 
-        sd.play(data,self.sampleRate)
+            data = self.audiodata[start:stop]
+            data = self.sp.bandpassFilter(data, bottom, top)
+
+            sd.play(data,self.sampleRate)
+        else:
+            self.playSelectedSegment()
         # TODO!! Why won't this actually play back? The file exists, and it will play if you load it
         # So there is something odd about the media_obj
         # Kludge: save the file, load, play, put it back
@@ -2401,6 +2537,31 @@ class AviaNZInterface(QMainWindow):
         # Listener for delete segment button, or backspace key
         # Deletes segment if one is selected, otherwise does nothing
         if self.box1id>-1:
+            # Work out which overview segment this segment is in (could be more than one) and update it
+            inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0]))/self.widthOverviewSegment)
+            inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]))/self.widthOverviewSegment)
+            #print np.shape(self.overviewSegments), inds, inde
+            #print self.box1id, self.segments[self.box1id][4]
+            if self.segments[self.box1id][4] == "Don't Know":
+                self.overviewSegments[inds:inde+1,0] -= 1
+            elif self.segments[self.box1id][4][-1] == '?':
+                self.overviewSegments[inds:inde + 1, 2] -= 1
+            else:
+                self.overviewSegments[inds:inde + 1, 1] -= 1
+            for box in range(inds, inde + 1):
+                if self.overviewSegments[box,0] > 0:
+                    #self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+                    self.SegmentRects[box].setBrush(self.ColourNone)
+                    #self.SegmentRects[box].update()
+                elif self.overviewSegments[box,2] > 0:
+                    self.SegmentRects[box].setBrush(self.ColourPossible)
+                elif self.overviewSegments[box,1] > 0:
+                    #self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+                    self.SegmentRects[box].setBrush(self.ColourNamed)
+                    #self.SegmentRects[box].update()
+                else:
+                    self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+
             self.p_ampl.removeItem(self.listRectanglesa1[self.box1id])
             self.p_spec.removeItem(self.listRectanglesa2[self.box1id])
             if self.useAmplitude:
@@ -2412,8 +2573,6 @@ class AviaNZInterface(QMainWindow):
             del self.listRectanglesa1[self.box1id]
             del self.listRectanglesa2[self.box1id]
             self.box1id = -1
-
-            # TODO: Decide whether or not to set the segment marker in the overview back to white
 
     def deleteAll(self,force=False):
         # Listener for delete all button
@@ -2434,6 +2593,8 @@ class AviaNZInterface(QMainWindow):
                 self.p_spec.removeItem(r)
             for r in self.SegmentRects:
                 r.setBrush(pg.mkBrush('w'))
+                r.update()
+
             self.listRectanglesa1 = []
             self.listRectanglesa2 = []
             self.listLabels = []
@@ -3112,7 +3273,7 @@ class HumanClassify1(QDialog):
     def setImage(self,seg,label):
         self.plot.setImage(np.fliplr(seg.T))
         self.species.setText(label)
-        self.canvasPlot.draw()
+        #self.canvasPlot.draw()
 
 class CorrectHumanClassify(QDialog):
     # This is to correct the classification of those that the program got wrong
