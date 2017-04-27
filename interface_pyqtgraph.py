@@ -2,7 +2,7 @@
 #
 # This is the main class for the AviaNZ interface
 # It's fairly simple, but seems to work OK
-# Version 0.9 16/04/17
+# Version 0.10 16/04/17
 # Author: Stephen Marsland, with input from Nirosha Priyadarshani
 
 #     <one line to give the program's name and a brief idea of what it does.>
@@ -44,11 +44,7 @@ import Segment
 # ==============
 # TODO
 
-# Make the layout at the bottom pretty
-
-# The updating of the colour of the overview seg has some colour weirdness -- gets darker. Some sort of overlapping? Not a major problem.
-
-# Need to make the window shrinkable and get the sizing right for the screen
+# Finalise layout, menu items
 
 # Finish implementation for button to show individual segments to user and ask for feedback and the other feedback dialogs
 # Ditto lots of segments at once -> some weirdness here
@@ -58,25 +54,20 @@ import Segment
 # Would it be good to smooth the image? Actually, lots of ideas here! Might be nice way to denoise?
 # How to plot things on the spectrogram? Currently use ROI -- ugly
 
+# Make the segmented play work with the phonon player? -> hard!
+
 # Modify the user manual to include shift-click, cmd-click, backspace key, scrollbar, etc., and segmented play
-
-# Make the segmented play work with the phonon player?
-
 # Some way of allowing marking of 'possible' or 'maybe' or 'unsure' classifications -> cmd-click
+# Dynamically updating context menu -> done
+# Keyboard input
+    # Hot key to say 'same bird' -> done, use shift-click.
 
 # Colourmaps
     # HistogramLUTItem
-    # Colours of the segments to be visible with different colourmaps? Not important!
-
-# Check pause on segment play (and also on bandpass limited play)
 
 # Mouse location printing -> Is it correct? Better place?
 
-# Dynamically updating context menu -> done
 # Context menu different for day and night birds?
-
-# Keyboard input
-    # Hot key to say 'same bird' -> done, use shift-click.
 
 # Allow non-integer thresholds for eg wavelets
 
@@ -103,13 +94,9 @@ import Segment
 
 # Finish the raven features
 
-# How to set bandpass params? -> is there a useful plot to help? -> function of sampleRate
-
 # Look into ParameterTree for saving the config stuff in particular
 # Better loading of files -> paging, not computing whole spectrogram (how to deal with overview? -> coarser spec?)
     # Maybe: check length of file. If > 5 mins, load first 5 only (? how to move to next 5?)
-
-# Overall layout -> buttons on the left in a column, or with tabs? Add menu?
 
 # Implement something for the Classify function:
     # Take the segments that have been given and try to classify them in lots of ways:
@@ -127,6 +114,8 @@ import Segment
 # Use intensity of colour to encode certainty?
 # Is play all useful? Would need to move the plots as appropriate
 # If don't select something in context menu get error -> not critical
+# Colours of the segments to be visible with different colourmaps? Not important!
+# The updating of the colour of the overview seg has some colour weirdness -- gets darker. Some sort of overlapping? Not a major problem.
 
 # Things to consider:
     # Second spectrogram (currently use right button for interleaving)? My current choice is no as it takes up space
@@ -284,8 +273,7 @@ class AviaNZInterface(QMainWindow):
 
         fileMenu = self.menuBar().addMenu("&File")
         fileMenu.addAction("&Open sound file", self.openFile, "Ctrl+O")
-        fileMenu.addSeparator()
-        fileMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
+        #fileMenu.addSeparator()
         fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
         fileMenu.addAction("&Quit",self.quit,"Ctrl+Q")
 
@@ -326,6 +314,7 @@ class AviaNZInterface(QMainWindow):
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
 
         actionMenu = self.menuBar().addMenu("&Actions")
+        actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
         actionMenu.addAction("Denoise",self.denoiseDialog)
         actionMenu.addAction("Segment",self.segmentationDialog)
         actionMenu.addAction("Find matches",self.findMatches)
@@ -337,6 +326,7 @@ class AviaNZInterface(QMainWindow):
         helpMenu = self.menuBar().addMenu("&Help")
         #aboutAction = QAction("About")
         helpMenu.addAction("About",self.showAbout)
+        helpMenu.addAction("About",self.showAbout)
         helpMenu.addAction("Help",self.showHelp)
 
         #quitAction = QAction("&Quit", self)
@@ -344,11 +334,23 @@ class AviaNZInterface(QMainWindow):
         #self.fileMenu.addAction(quitAction)
 
     def showAbout(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("The AviaNZ Program, v0.10 (April 2017)")
+        msg.setInformativeText("By Stephen Marsland, Massey University (2016--2017). With input from Nirosha Priyadarshani, Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann. s.r.marsland@massey.ac.nz")
+        msg.setWindowTitle("About")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
         return
 
     def showHelp(self):
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("Open the pdf file Docs/AvianzManual.pdf")
+        msg.setWindowTitle("Help")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
         return
-
     def genConfigFile(self):
         # Generates a configuration file with default values for parameters
         # These are quite hard to change currently (edit text file, or delete the file and make another)
@@ -369,6 +371,9 @@ class AviaNZInterface(QMainWindow):
 
             # Param for width in seconds of the main representation
             'windowWidth': 10.0,
+
+            # Text offset for labels
+            'textoffset': 9,
 
             # Width of the segment markers in the overview plot (in seconds)
             'widthOverviewSegment': 10.0,
@@ -407,13 +412,13 @@ class AviaNZInterface(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.resize(1200,950)
+        self.resize(1240,600)
         self.move(100,50)
 
         # Make the docks
-        self.d_overview = Dock("Overview",size = (1500,120))
-        self.d_ampl = Dock("Amplitude",size=(1500,120))
-        self.d_spec = Dock("Spectrogram",size=(1500,300))
+        self.d_overview = Dock("Overview",size = (1200,150))
+        self.d_ampl = Dock("Amplitude",size=(1200,150))
+        self.d_spec = Dock("Spectrogram",size=(1200,300))
         self.d_controls = Dock("Controls",size=(40,100))
         self.d_files = Dock("Files",size=(40,200))
         #self.d_buttons = Dock("Buttons",size=(800,100))
@@ -992,19 +997,19 @@ class AviaNZInterface(QMainWindow):
             self.useAmplitude = True
             #self.w_spec.addItem(self.timeaxis, row=1, col=1)
             #self.timeaxis.linkToView(self.p_ampl)
-            for r in self.listLabels:
-                self.p_spec.removeItem(r)
-                self.p_ampl.addItem(r)
-                r.setPos(self.convertSpectoAmpl(r.x()),self.minampl)
+            #for r in self.listLabels:
+                #self.p_spec.removeItem(r)
+                #self.p_ampl.addItem(r)
+                #r.setPos(self.convertSpectoAmpl(r.x()),self.minampl)
             self.d_ampl.show()
         else:
             self.useAmplitude = False
             #self.w_ampl.removeItem(self.timeaxis)
             #self.w_spec.addItem(self.timeaxis, row=1, col=1)
-            for r in self.listLabels:
-                self.p_ampl.removeItem(r)
-                self.p_spec.addItem(r)
-                r.setPos(self.convertAmpltoSpec(r.x()),0.1)
+            #for r in self.listLabels:
+                #self.p_ampl.removeItem(r)
+                #self.p_spec.addItem(r)
+                #r.setPos(self.textpos)
             self.d_ampl.hide()
 
     def useFilesCheck(self):
@@ -1108,6 +1113,7 @@ class AviaNZInterface(QMainWindow):
         self.updateOverview()
 
         self.setColourLevels()
+        self.textpos = np.shape(self.sg)[0] + self.config['textoffset']
 
         # If there are segments, show them
         for count in range(len(self.segments)):
@@ -1136,7 +1142,9 @@ class AviaNZInterface(QMainWindow):
                 x1 = self.convertSpectoAmpl(sender.getRegion()[0])
                 x2 = self.convertSpectoAmpl(sender.getRegion()[1])
             self.listRectanglesa1[i].setRegion([x1,x2])
-            self.listLabels[i].setPos(x1,self.minampl)
+            #self.listLabels[i].setPos(x1,self.minampl)
+            self.listLabels[i].setPos(sender.pos()[0],self.textpos)
+
             self.segments[i][0] = x1
             self.segments[i][1] = x2
 
@@ -1160,7 +1168,9 @@ class AviaNZInterface(QMainWindow):
                 self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2))
             else:
                 self.listRectanglesa2[i].setRegion([x1,x2])
-            self.listLabels[i].setPos(sender.getRegion()[0],self.minampl)
+            #self.listLabels[i].setPos(sender.getRegion()[0],self.minampl)
+            self.listLabels[i].setPos(sender.getRegion()[0],self.textpos)
+
             self.segments[i][0] = sender.getRegion()[0]
             self.segments[i][1] = sender.getRegion()[1]
 
@@ -1250,14 +1260,14 @@ class AviaNZInterface(QMainWindow):
         p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
 
         # Put the text into the box
-        # TODO: Always put on top of spectrogram?
         label = pg.TextItem(text=species, color='k')
-        if self.useAmplitude:
-            self.p_ampl.addItem(label)
-            label.setPos(startpoint, self.minampl)
-        else:
-            self.p_spec.addItem(label)
-            label.setPos(self.convertAmpltoSpec(startpoint), 1)
+        #if self.useAmplitude:
+        #    self.p_ampl.addItem(label)
+            #label.setPos(startpoint, self.minampl)
+        #else:
+        self.p_spec.addItem(label)
+            #label.setPos(self.convertAmpltoSpec(startpoint), 1)
+        label.setPos(self.convertAmpltoSpec(startpoint), self.textpos)
 
         # Add the segments to the relevent lists
         self.listRectanglesa1.append(p_ampl_r)
@@ -3451,6 +3461,8 @@ class HumanClassify2(QDialog):
         grid = QGridLayout(self.frame)
         self.setLayout(grid)
 
+        button = pg.ButtonItem(imageFile = '/Users/srmarsla/Temp/IMG_1940.jpg') #pg.pixmaps.getPixmap(
+
         positions = [(i, j) for i in range(self.height) for j in range(self.width)]
 
         # TODO: Next line needs to go!
@@ -3466,16 +3478,15 @@ class HumanClassify2(QDialog):
             for i in range(self.width*self.height):
                 images.append(self.setImage(seg))
 
-
-        for position, im in zip(positions, images):
-            if im is not None:
-                button = PicButton(position[0] * self.width + position[1], im[0], im[1])
-                grid.addWidget(button, *position)
+        #for position, im in zip(positions, images):
+        #    if im is not None:
+                #button = PicButton(position[0] * self.width + position[1], im[0], im[1])
+        #        grid.addItem(button, *position)
 
         self.setLayout(grid)
 
     def setImage(self,seg):
-        # TODO: interesting bug in making one of the images sometimes!
+        # TODO: interesting bug in making the images!
         self.image = pg.ImageItem()
         self.image.setImage(np.fliplr(seg.T))
         im1 = self.image.getPixmap()
