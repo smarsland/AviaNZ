@@ -46,15 +46,15 @@ import Segment
 
 # Finalise layout, menu items
 
-# Finish implementation for button to show individual segments to user and ask for feedback and the other feedback dialogs
+# Finish implementation to show individual segments to user and ask for feedback and the other feedback dialogs
 # Ditto lots of segments at once -> some weirdness here
 
 # Make the scrollbar be the same size as the spectrogram -> hard!
+# Make the segmented play work with the phonon player? -> hard!
 
 # Would it be good to smooth the image? Actually, lots of ideas here! Might be nice way to denoise?
-# How to plot things on the spectrogram? Currently use ROI -- ugly
 
-# Make the segmented play work with the phonon player? -> hard!
+# How to plot things on the spectrogram? Currently use ROI -- ugly
 
 # Modify the user manual to include shift-click, cmd-click, backspace key, scrollbar, etc., and segmented play
 # Some way of allowing marking of 'possible' or 'maybe' or 'unsure' classifications -> cmd-click
@@ -297,6 +297,10 @@ class AviaNZInterface(QMainWindow):
         self.showFundamental.setCheckable(True)
         self.showFundamental.setChecked(False)
 
+        self.showInvSpec = specMenu.addAction("Show inverted spectrogram", self.showInvertedSpectrogram)
+        self.showInvSpec.setCheckable(True)
+        self.showInvSpec.setChecked(False)
+
         colMenu = specMenu.addMenu("&Choose colour map")
         colGroup = QActionGroup(self)
         for colour in self.colourList:
@@ -318,10 +322,12 @@ class AviaNZInterface(QMainWindow):
         actionMenu.addAction("Denoise",self.denoiseDialog)
         actionMenu.addAction("Segment",self.segmentationDialog)
         actionMenu.addAction("Find matches",self.findMatches)
-        actionMenu.addAction("Put docks back",self.dockReplace)
+        actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
         actionMenu.addSeparator()
         actionMenu.addAction("Check segments 1",self.humanClassifyDialog1)
         actionMenu.addAction("Check segments 2",self.humanClassifyDialog2)
+        actionMenu.addSeparator()
+        actionMenu.addAction("Put docks back",self.dockReplace)
 
         helpMenu = self.menuBar().addMenu("&Help")
         #aboutAction = QAction("About")
@@ -351,6 +357,7 @@ class AviaNZInterface(QMainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
         return
+
     def genConfigFile(self):
         # Generates a configuration file with default values for parameters
         # These are quite hard to change currently (edit text file, or delete the file and make another)
@@ -821,6 +828,7 @@ class AviaNZInterface(QMainWindow):
         for r in self.SegmentRects:
             self.p_overview2.removeItem(r)
         self.SegmentRects = []
+
         #self.recta1 = None
         #self.recta2 = None
         #self.focusRegionSelected = False
@@ -844,6 +852,8 @@ class AviaNZInterface(QMainWindow):
                 self.saveSegments()
         self.previousFile = fileName
         self.resetStorageArrays()
+        self.showFundamental.setChecked(False)
+        self.showInvSpec.setChecked(False)
         self.loadFile(fileName)
 
     def listLoadFile(self,current):
@@ -914,7 +924,7 @@ class AviaNZInterface(QMainWindow):
             self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate,self.config['window_width'],self.config['incr'])
 
         # Get the data for the spectrogram
-        self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,multitaper=False)
+        self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
         #maxsg = np.max(self.sgRaw)
         #self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
@@ -962,7 +972,8 @@ class AviaNZInterface(QMainWindow):
         self.media_obj.tick.connect(self.movePlaySlider)
 
         # Set the length of the scrollbar
-        self.scrollSlider.setRange(0,np.shape(self.sg)[1]-self.convertAmpltoSpec(self.widthWindow.value()))
+        print np.shape(self.sg)
+        self.scrollSlider.setRange(0,np.shape(self.sg)[0]-self.convertAmpltoSpec(self.widthWindow.value()))
         self.scrollSlider.setValue(0)
 
         # Get the height of the amplitude for plotting the box
@@ -1027,7 +1038,7 @@ class AviaNZInterface(QMainWindow):
             ind = np.squeeze(np.where(pitch>minfreq))
             pitch = pitch[ind]
             ind = ind*W/self.config['window_width']
-            x = (pitch*2./self.sampleRate*np.shape(self.sg)[0]).astype('int')
+            x = (pitch*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
             self.yinRois = []
             for r in range(len(x)):
                 self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
@@ -1037,13 +1048,28 @@ class AviaNZInterface(QMainWindow):
             # TODO: Fit a spline and draw it
             #from scipy.interpolate import interp1d
             #f = interp1d(x, ind, kind='cubic')
-            #self.sg[x,ind] = 1
+            #self.sg[ind,x] = 1
         else:
             for r in self.yinRois:
                 self.p_spec.removeItem(r)
-        #self.specPlot.setImage(np.fliplr(self.sg.T))
+        #self.specPlot.setImage(self.sg)
 
-    # ==============
+    def showInvertedSpectrogram(self):
+        if self.showInvSpec.isChecked():
+            self.sgRaw = self.sp.show_invS()
+        else:
+            self.sgRaw = self.sp.spectrogram(self.audiodata, self.sampleRate, mean_normalise=True, onesided=True,
+                                         multitaper=False)
+        self.sg = np.abs(np.where(self.sgRaw == 0, 0.0, 10.0 * np.log10(self.sgRaw)))
+        self.overviewImage.setImage(self.sg)
+        self.specPlot.setImage(self.sg)
+
+    def medianFilterSpec(self):
+        from scipy.ndimage.filters import median_filter
+        median_filter(self.sg,size=(10,10))
+        self.specPlot.setImage(self.sg)
+
+# ==============
 # Code for drawing and using the main figure
 
     def convertAmpltoSpec(self,x):
@@ -1059,7 +1085,7 @@ class AviaNZInterface(QMainWindow):
 
     def drawOverview(self):
         # On loading a new file, update the overview figure to show where you are up to in the file
-        self.overviewImage.setImage(np.fliplr(self.sg.T))
+        self.overviewImage.setImage(self.sg)
         self.overviewImageRegion = pg.LinearRegionItem()
         self.p_overview.addItem(self.overviewImageRegion, ignoreBounds=True)
         self.overviewImageRegion.setRegion([0, self.convertAmpltoSpec(self.widthWindow.value())])
@@ -1070,8 +1096,8 @@ class AviaNZInterface(QMainWindow):
         # Three y values are No. not known, No. known, No. possible
         # widthOverviewSegment is in seconds
         #  TODO: something very weird with the last box
-        numSegments = int(np.ceil(np.shape(self.sg)[1]/self.convertAmpltoSpec(self.config['widthOverviewSegment'])))
-        self.widthOverviewSegment = int(np.shape(self.sg)[1]/numSegments)
+        numSegments = int(np.ceil(np.shape(self.sg)[0]/self.convertAmpltoSpec(self.config['widthOverviewSegment'])))
+        self.widthOverviewSegment = int(np.shape(self.sg)[0]/numSegments)
         self.overviewSegments = np.zeros((numSegments,3))
         for i in range(numSegments):
             r = pg.QtGui.QGraphicsRectItem(i*self.widthOverviewSegment, 0, (i+1)*self.widthOverviewSegment, 0.5)
@@ -1104,16 +1130,17 @@ class AviaNZInterface(QMainWindow):
 
         self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
-        self.specPlot.setImage(np.fliplr(self.sg.T))
+        #self.specPlot.setImage(np.fliplr(self.sg))
+        self.specPlot.setImage(self.sg)
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
         FreqRange = self.maxFreq-self.minFreq
-        height = self.sampleRate/2./np.shape(self.sg)[0]
-        self.specaxis.setTicks([[(0,self.minFreq/1000.),(np.shape(self.sg)[0]/4,self.minFreq/1000.+FreqRange/4.),(np.shape(self.sg)[0]/2,self.minFreq/1000.+FreqRange/2.),(3*np.shape(self.sg)[0]/4,self.minFreq/1000.+3*FreqRange/4.),(np.shape(self.sg)[0],self.minFreq/1000.+FreqRange)]])
+        height = self.sampleRate/2./np.shape(self.sg)[1]
+        self.specaxis.setTicks([[(0,self.minFreq/1000.),(np.shape(self.sg)[1]/4,self.minFreq/1000.+FreqRange/4.),(np.shape(self.sg)[1]/2,self.minFreq/1000.+FreqRange/2.),(3*np.shape(self.sg)[1]/4,self.minFreq/1000.+3*FreqRange/4.),(np.shape(self.sg)[1],self.minFreq/1000.+FreqRange)]])
         self.specaxis.setLabel('kHz')
         self.updateOverview()
 
         self.setColourLevels()
-        self.textpos = np.shape(self.sg)[0] + self.config['textoffset']
+        self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
 
         # If there are segments, show them
         for count in range(len(self.segments)):
@@ -1641,8 +1668,8 @@ class AviaNZInterface(QMainWindow):
             indexx = int(mousePoint.x())
             indexy = int(mousePoint.y())
             #print indexx, indexy, self.sg[indexy,indexx]
-            if indexx > 0 and indexx < np.shape(self.sg)[1] and indexy > 0 and indexy < np.shape(self.sg)[0]:
-                self.pointData.setText('time=%0.2f (s), freq=%0.1f (Hz),power=%0.1f (dB)' % (self.convertSpectoAmpl(mousePoint.x()), mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[0], self.sg[indexy, indexx]))
+            if indexx > 0 and indexx < np.shape(self.sg)[0] and indexy > 0 and indexy < np.shape(self.sg)[1]:
+                self.pointData.setText('time=%0.2f (s), freq=%0.1f (Hz),power=%0.1f (dB)' % (self.convertSpectoAmpl(mousePoint.x()), mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1], self.sg[indexx, indexy]))
 
     # def activateRadioButtons(self):
         # Make the radio buttons selectable
@@ -1996,7 +2023,7 @@ class AviaNZInterface(QMainWindow):
         # When the right button is pressed (next to the overview plot), move everything along
         # Note the parameter to allow a 10% overlap
         minX, maxX = self.overviewImageRegion.getRegion()
-        newminX = min(np.shape(self.sg)[1]-(maxX-minX),minX+(maxX-minX)*0.9)
+        newminX = min(np.shape(self.sg)[0]-(maxX-minX),minX+(maxX-minX)*0.9)
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
         self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
@@ -2063,7 +2090,7 @@ class AviaNZInterface(QMainWindow):
         minX, maxX = self.overviewImageRegion.getRegion()
         newmaxX = self.convertAmpltoSpec(value)+minX
         self.overviewImageRegion.setRegion([minX, newmaxX])
-        self.scrollSlider.setMaximum(np.shape(self.sg)[1]-self.convertAmpltoSpec(self.widthWindow.value()))
+        self.scrollSlider.setMaximum(np.shape(self.sg)[0]-self.convertAmpltoSpec(self.widthWindow.value()))
         #print "Slider:", self.convertSpectoAmpl(minX),self.convertSpectoAmpl(maxX)
         #self.setSliderLimits(1000*self.convertSpectoAmpl(minX),1000*self.convertSpectoAmpl(maxX))
         self.updateOverview()
@@ -2078,7 +2105,7 @@ class AviaNZInterface(QMainWindow):
         x1,x2 = self.listRectanglesa2[self.currentSegment].getRegion()
         x1 = int(x1)
         x2 = int(x2)
-        self.humanClassifyDialog1 = HumanClassify1(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
+        self.humanClassifyDialog1 = HumanClassify1(self.sg[x1:x2,:],self.segments[self.currentSegment][4])
         self.humanClassifyDialog1.show()
         self.humanClassifyDialog1.activateWindow()
         self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
@@ -2102,7 +2129,7 @@ class AviaNZInterface(QMainWindow):
                 x1, x2 = self.listRectanglesa2[self.currentSegment].getRegion()
             x1 = int(x1)
             x2 = int(x2)
-            self.humanClassifyDialog1.setImage(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
+            self.humanClassifyDialog1.setImage(self.sg[x1:x2,:],self.segments[self.currentSegment][4])
         else:
             print "Last image"
             self.humanClassifyClose1()
@@ -2115,8 +2142,8 @@ class AviaNZInterface(QMainWindow):
         # TODO: Test, particularly that new birds are added
         # TODO: update the listRects
         x1, x2 = self.listRectanglesa2[self.currentSegment].getRegion()
-        self.correctClassifyDialog1 = CorrectHumanClassify1(self.sg[:,x1:x2],self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
-        label, self.saveConfig = self.correctClassifyDialog1.getValues(self.sg[:,x1:x2],self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
+        self.correctClassifyDialog1 = CorrectHumanClassify1(self.sg[x1:x2,:],self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
+        label, self.saveConfig = self.correctClassifyDialog1.getValues(self.sg[x1:x2,:],self.config['BirdButtons1'],self.config['BirdButtons2'], self.config['ListBirdsEntries'])
         self.updateText(label,self.currentSegment)
         if self.saveConfig:
             self.config['ListBirdsEntries'].append(label)
@@ -2135,7 +2162,7 @@ class AviaNZInterface(QMainWindow):
         x1,x2 = self.listRectanglesa2[self.currentSegment].getRegion()
         x1 = int(x1)
         x2 = int(x2)
-        self.humanClassifyDialog2 = HumanClassify2(self.sg[:,x1:x2],self.segments[self.currentSegment][4])
+        self.humanClassifyDialog2 = HumanClassify2(self.sg[x1:x2,:],self.segments[self.currentSegment][4])
         self.humanClassifyDialog2.show()
         self.humanClassifyDialog2.activateWindow()
 
@@ -2151,14 +2178,14 @@ class AviaNZInterface(QMainWindow):
 
     def spectrogram(self):
         # Listener for the spectrogram dialog.
-        [alg, multitaper, window_width, incr] = self.spectrogramDialog.getValues()
+        [alg, mean_normalise, multitaper, window_width, incr] = self.spectrogramDialog.getValues()
 
         self.sp.set_width(int(str(window_width)), int(str(incr)))
-        self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg),multitaper=multitaper)
+        self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg),mean_normalise=mean_normalise,onesided=True,multitaper=multitaper)
         maxsg = np.max(self.sgRaw)
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
-        self.overviewImage.setImage(np.fliplr(self.sg.T))
-        self.specPlot.setImage(np.fliplr(self.sg.T))
+        self.overviewImage.setImage(self.sg)
+        self.specPlot.setImage(self.sg)
 
         # If the size of the spectrogram has changed, need to update the positions of things
         if int(str(incr)) != self.config['incr']:
@@ -2173,12 +2200,12 @@ class AviaNZInterface(QMainWindow):
             self.config['window_width'] = int(str(window_width))
             # Update the axis
             FreqRange = self.maxFreq - self.minFreq
-            height = self.sampleRate / 2. / np.shape(self.sg)[0]
+            height = self.sampleRate / 2. / np.shape(self.sg)[1]
             self.specaxis.setTicks([[(0, self.minFreq / 1000.),
-                                     (np.shape(self.sg)[0] / 4, self.minFreq / 1000. + FreqRange / 4.),
-                                     (np.shape(self.sg)[0] / 2, self.minFreq / 1000. + FreqRange / 2.),
-                                     (3 * np.shape(self.sg)[0] / 4, self.minFreq / 1000. + 3 * FreqRange / 4.),
-                                     (np.shape(self.sg)[0], self.minFreq / 1000. + FreqRange)]])
+                                     (np.shape(self.sg)[1] / 4, self.minFreq / 1000. + FreqRange / 4.),
+                                     (np.shape(self.sg)[1] / 2, self.minFreq / 1000. + FreqRange / 2.),
+                                     (3 * np.shape(self.sg)[1] / 4, self.minFreq / 1000. + 3 * FreqRange / 4.),
+                                     (np.shape(self.sg)[1], self.minFreq / 1000. + FreqRange)]])
 
     def denoiseDialog(self):
         # Create the denoising dialog when the relevant button is pressed
@@ -2264,23 +2291,23 @@ class AviaNZInterface(QMainWindow):
             #"Median Filter"
             self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
 
-        self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate)
+        self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
         # Calculation to turn the start and end of the bands into spectrogram y coordinates and then cut it down
         # The - signs are because the spectrogram is upside-down
         #print np.shape(self.sg), self.sampleRate
-        height = self.sampleRate/2./np.shape(self.sg)[0]
+        height = self.sampleRate/2./np.shape(self.sg)[1]
         #print height, int(str(start)), float(str(start))/height, int(float(str(start))/height), float(str(end))/height
-        self.overviewImage.setImage(np.fliplr(self.sg[-int(float(str(end))/height)-1:-int(float(str(start))/height)].T))
-        self.specPlot.setImage(np.fliplr(self.sg[-int(float(str(end))/height)-1:-int(float(str(start))/height),:].T))
+        self.overviewImage.setImage(self.sg[:,-int(float(str(end))/height)-1:-int(float(str(start))/height)])
+        self.specPlot.setImage(self.sg[:,-int(float(str(end))/height)-1:-int(float(str(start))/height)])
         self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate*1000.0,num=self.datalength,endpoint=True),self.audiodata)
-        #self.specaxis.setTicks([[(0,0),(np.shape(self.sg)[0]/4,self.sampleRate/8000),(np.shape(self.sg)[0]/2,self.sampleRate/4000),(3*np.shape(self.sg)[0]/4,3*self.sampleRate/8000),(np.shape(self.sg)[0],self.sampleRate/2000)]])
+        #self.specaxis.setTicks([[(0,0),(np.shape(self.sg)[1]/4,self.sampleRate/8000),(np.shape(self.sg)[1]/2,self.sampleRate/4000),(3*np.shape(self.sg)[1]/4,3*self.sampleRate/8000),(np.shape(self.sg)[1],self.sampleRate/2000)]])
         self.minFreq = int(str(start))
         self.maxFreq = int(str(end))
         FreqRange = self.maxFreq-self.minFreq
-        height = self.sampleRate/2./np.shape(self.sg)[0]
+        height = self.sampleRate/2./np.shape(self.sg)[1]
         SpecRange = (int(str(end)) - int(str(start)))/height
-        #print self.minFreq, self.maxFreq, FreqRange, SpecRange, np.shape(self.sg[int(float(str(start))/height):int(float(str(end))/height)+1,:])
+        #print self.minFreq, self.maxFreq, FreqRange, SpecRange, np.shape(self.sg[:,int(float(str(start))/height):int(float(str(end))/height)+1])
 
         self.specaxis.setTicks([[(0,(self.minFreq/1000.)),(SpecRange/4,(self.minFreq/1000.+FreqRange/4000.)),(SpecRange/2,(self.minFreq/1000.+FreqRange/2000.)),(3*SpecRange/4,(self.minFreq/1000.+3*FreqRange/4000.)),(SpecRange,(self.minFreq/1000.+FreqRange/1000.))]])
         #print ([[(0,self.minFreq/1000.),(SpecRange/4,self.minFreq/1000.+FreqRange/4000.),(SpecRange/2,self.minFreq/1000.+FreqRange/2000.),(3*SpecRange/4,self.minFreq/1000.+3*FreqRange/4000.),(SpecRange,self.minFreq/1000.+FreqRange/1000.)]])
@@ -2297,10 +2324,10 @@ class AviaNZInterface(QMainWindow):
                     self.audiodata = np.copy(self.audiodata_backup[:,-1])
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     self.sp.setNewData(self.audiodata,self.sampleRate)
-                    self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate)
+                    self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
                     self.sg = np.abs(np.where(self.sgRaw == 0, 0.0, 10.0 * np.log10(self.sgRaw)))
-                    self.overviewImage.setImage(np.fliplr(self.sg.T))
-                    self.specPlot.setImage(np.fliplr(self.sg.T))
+                    self.overviewImage.setImage(self.sg)
+                    self.specPlot.setImage(self.sg)
                     self.amplPlot.setData(
                         np.linspace(0.0, float(self.datalength) / self.sampleRate, num=self.datalength, endpoint=True),
                         self.audiodata)
@@ -2406,7 +2433,7 @@ class AviaNZInterface(QMainWindow):
             else:
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             print x1, x2
-            segment = self.sgRaw[:,int(x1):int(x2)]
+            segment = self.sgRaw[int(x1):int(x2),:]
             len_seg = (x2-x1) * self.config['incr'] / self.sampleRate
             indices = self.seg.findCCMatches(segment,self.sgRaw,self.config['corrThr'])
             # indices are in spectrogram pixels, need to turn into times
@@ -2471,7 +2498,7 @@ class AviaNZInterface(QMainWindow):
 
     def playSelectedSegment(self):
         # Get selected segment start and end (or return if no segment selected)
-        # TODO: check if has been made pauseable. Actually, it isn't, since it goes back to the beginning. I think it's OK though?
+        # TODO: This isn't pausable, since it goes back to the beginning. I think it's OK though?
         if self.box1id > -1:
             start = self.listRectanglesa1[self.box1id].getRegion()[0]*1000
             self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1]*1000
@@ -2484,15 +2511,15 @@ class AviaNZInterface(QMainWindow):
                 # self.playButton.setText("Play")
             elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
                 self.media_obj.play()
-                self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
+                #self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
 
     def playBandLimitedSegment(self):
         # Get the band limits of the segment, bandpass filter, then play that
         # TODO: This version uses sounddevice to play it back because the phonon needed to save it and then still wouldn't actually play it. Does it matter? You can't see the bar moving.
         start = int(self.listRectanglesa1[self.box1id].getRegion()[0]*self.sampleRate)
         stop = int(self.listRectanglesa1[self.box1id].getRegion()[1]*self.sampleRate)
-        bottom = int(self.segments[self.box1id][2]*self.sampleRate/2./np.shape(self.sg)[0])
-        top = int(self.segments[self.box1id][3]*self.sampleRate/2./np.shape(self.sg)[0])
+        bottom = int(self.segments[self.box1id][2]*self.sampleRate/2./np.shape(self.sg)[1])
+        top = int(self.segments[self.box1id][3]*self.sampleRate/2./np.shape(self.sg)[1])
         if bottom > 0 and top>0:
             import sounddevice as sd
 
@@ -2593,6 +2620,7 @@ class AviaNZInterface(QMainWindow):
         if reply==QMessageBox.Yes:
             self.segments=[]
             for r in self.listLabels:
+                self.p_spec.removeItem(r)
                 if self.useAmplitude:
                     self.p_ampl.removeItem(r)
                 else:
@@ -2668,6 +2696,7 @@ class Spectrogram(QDialog):
         self.algs = QComboBox()
         self.algs.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
 
+        self.mean_normalise = QCheckBox()
         self.multitaper = QCheckBox()
 
         self.activate = QPushButton("Update Spectrogram")
@@ -2679,6 +2708,8 @@ class Spectrogram(QDialog):
 
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
+        Box.addWidget(QLabel('Mean normalise'))
+        Box.addWidget(self.mean_normalise)
         Box.addWidget(QLabel('Multitapering'))
         Box.addWidget(self.multitaper)
         Box.addWidget(QLabel('Window Width'))
@@ -2691,7 +2722,7 @@ class Spectrogram(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        return [self.algs.currentText(),self.multitaper.checkState(),self.window_width.text(),self.incr.text()]
+        return [self.algs.currentText(),self.mean_normalise.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text()]
 
     # def closeEvent(self, event):
     #     msg = QMessageBox()
@@ -3274,14 +3305,14 @@ class HumanClassify1(QDialog):
         self.makefig(seg)
 
     def makefig(self,seg):
-        self.plot.setImage(np.fliplr(seg.T))
+        self.plot.setImage(seg)
 
     def getValues(self):
         # TODO
         return True
 
     def setImage(self,seg,label):
-        self.plot.setImage(np.fliplr(seg.T))
+        self.plot.setImage(seg)
         self.species.setText(label)
         #self.canvasPlot.draw()
 
@@ -3372,7 +3403,7 @@ class CorrectHumanClassify(QDialog):
         self.makefig(seg)
 
     def makefig(self,seg):
-        self.plot.setImage(np.fliplr(seg.T))
+        self.plot.setImage(seg)
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
@@ -3414,7 +3445,7 @@ class CorrectHumanClassify(QDialog):
         return dialog.label, dialog.saveConfig
 
     def setImage(self,seg,label):
-        self.plot.setImage(np.fliplr(seg.T))
+        self.plot.setImage(seg)
 
 class PicButton(QAbstractButton):
     # Class for HumanClassify2 to put spectrograms on buttons
@@ -3488,10 +3519,10 @@ class HumanClassify2(QDialog):
     def setImage(self,seg):
         # TODO: interesting bug in making the images!
         self.image = pg.ImageItem()
-        self.image.setImage(np.fliplr(seg.T))
+        self.image.setImage(seg)
         im1 = self.image.getPixmap()
 
-        self.image.setImage(np.fliplr(-seg.T))
+        self.image.setImage(-seg)
         im2 = self.image.getPixmap()
 
         return [im1, im2]

@@ -1,4 +1,4 @@
-# Version 0.3 20/7/16
+# Version 0.4 28/4/17
 # Author: Stephen Marsland
 
 import numpy as np
@@ -42,7 +42,7 @@ class SignalProc:
         pN = np.sum(self.data[startNoise:startNoise+self.length]**2)/self.length
         return 10.*np.log10(pS/pN)
 
-    def spectrogram(self,data,sampleRate=0,window='Hann',multitaper=False):
+    def spectrogram(self,data,sampleRate=0,window='Hann',mean_normalise=True,onesided=True,multitaper=False,need_even=False):
         # Compute the spectrogram from amplitude data
         # Note that this returns the power spectrum (not the density) and without the log10.
         # Also, it's the absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discimination
@@ -87,25 +87,144 @@ class SignalProc:
             print "unknown window, using Hann"
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)))
 
-        sg = np.zeros((self.window_width / 2, int(np.ceil(float(len(data)) / self.incr))))
+        if mean_normalise:
+            data -= data.mean()
 
         if multitaper:
             from spectrum import dpss, pmtm
             [tapers, eigen] = dpss(self.window_width, 2.5, 4)
             counter = 0
+            sg = np.zeros((int(np.ceil(float(len(data)) / self.incr)),self.window_width / 2))
             for start in range(0, len(data) - self.window_width, self.incr):
                 S = pmtm(data[start:start + self.window_width], e=tapers, v=eigen, show=False)
-                sg[:, counter:counter + 1] = S[self.window_width / 2:]
+                sg[counter:counter + 1,:] = S[self.window_width / 2:].T
                 counter += 1
+            sg = np.fliplr(sg)
         else:
             starts = range(0, len(data) - self.window_width, self.incr)
+            if need_even:
+                starts = np.hstack((starts, np.zeros((self.window_width - len(data) % self.window_width))))
+
             ft = np.zeros((len(starts), self.window_width))
             for i in starts:
                 ft[i / self.incr, :] = window * data[i:i + self.window_width]
             ft = np.fft.fft(ft)
-            sg = np.absolute(ft[:, self.window_width / 2:]).T
-
+            if onesided:
+                #sg = np.absolute(ft[:, self.window_width / 2:]).T
+                sg = np.absolute(ft[:, :self.window_width / 2])
+            else:
+                sg = np.absolute(ft)
+            #sg = (ft*np.conj(ft))[:,self.window_width / 2:].T
         return sg
+
+    def show_invS(self):
+        print "Inverting spectrogam with window ", self.window_width, " and increment ", int(self.window_width/4.)
+        oldIncr = self.incr
+        self.incr = int(self.window_width/4.)
+        sg = self.spectrogram(self.data)
+        sgi = self.invertSpectrogram(sg,self.window_width,self.incr)
+        self.incr = oldIncr
+        sg = self.spectrogram(sgi)
+        sgi = sgi.astype('int16')
+        wavfile.write('test.wav',self.sampleRate, sgi)
+        return sg
+
+    def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10):
+        # Assumes that this is the plain (not power) spectrogram
+        import copy
+        # Make the spectrogram two-sided and make the values small
+        sg = np.concatenate([sg, sg[:, ::-1]], axis=1)
+
+        sg_best = copy.deepcopy(sg)
+        for i in range(nits):
+            sgi = self.invert_spectrogram(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0))
+        est = self.spectrogram(sgi, onesided=False,need_even=True)
+        phase = est / np.maximum(np.max(sg)/1E8, np.abs(est))
+
+        sg_best = sg * phase[:len(sg)]
+        sgi = self.invert_spectrogram(sg_best, incr, calculate_offset=True,set_zero_phase=False)
+        return np.real(sgi)
+
+    def invert_spectrogram(self,sg, incr, calculate_offset=True, set_zero_phase=True):
+        """
+        Under MSR-LA License
+        Based on MATLAB implementation from Spectrogram Inversion Toolbox
+        References
+        ----------
+        D. Griffin and J. Lim. Signal estimation from modified
+        short-time Fourier transform. IEEE Trans. Acoust. Speech
+        Signal Process., 32(2):236-243, 1984.
+        Malcolm Slaney, Daniel Naar and Richard F. Lyon. Auditory
+        Model Inversion for Sound Separation. Proc. IEEE-ICASSP,
+        Adelaide, 1994, II.77-80.
+        Xinglei Zhu, G. Beauregard, L. Wyse. Real-Time Signal
+        Estimation from Modified Short-Time Fourier Transform
+        Magnitude Spectra. IEEE Transactions on Audio Speech and
+        Language Processing, 08/2007.
+        """
+        size = int(np.shape(sg)[1] // 2)
+        wave = np.zeros((np.shape(sg)[0] * incr + size))
+        # Getting overflow warnings with 32 bit...
+        wave = wave.astype('float64')
+        total_windowing_sum = np.zeros((np.shape(sg)[0] * incr + size))
+        window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
+
+        est_start = int(size // 2) - 1
+        est_end = est_start + size
+        for i in range(sg.shape[0]):
+            wave_start = int(incr * i)
+            wave_end = wave_start + size
+            if set_zero_phase:
+                spectral_slice = sg[i].real + 0j
+            else:
+                # already complex
+                spectral_slice = sg[i]
+
+            # Don't need fftshift due to different impl.
+            wave_est = np.real(np.fft.ifft(spectral_slice))[::-1]
+            if calculate_offset and i > 0:
+                offset_size = size - incr
+                if offset_size <= 0:
+                    print("WARNING: Large step size >50\% detected! "
+                          "This code works best with high overlap - try "
+                          "with 75% or greater")
+                    offset_size = incr
+                offset = self.xcorr_offset(wave[wave_start:wave_start + offset_size],
+                                      wave_est[est_start:est_start + offset_size])
+            else:
+                offset = 0
+            wave[wave_start:wave_end] += window * wave_est[
+                est_start - offset:est_end - offset]
+            total_windowing_sum[wave_start:wave_end] += window
+        wave = np.real(wave) / (total_windowing_sum + 1E-6)
+        return wave
+
+    def xcorr_offset(self,x1, x2):
+        """
+        Under MSR-LA License
+        Based on MATLAB implementation from Spectrogram Inversion Toolbox
+        References
+        ----------
+        D. Griffin and J. Lim. Signal estimation from modified
+        short-time Fourier transform. IEEE Trans. Acoust. Speech
+        Signal Process., 32(2):236-243, 1984.
+        Malcolm Slaney, Daniel Naar and Richard F. Lyon. Auditory
+        Model Inversion for Sound Separation. Proc. IEEE-ICASSP,
+        Adelaide, 1994, II.77-80.
+        Xinglei Zhu, G. Beauregard, L. Wyse. Real-Time Signal
+        Estimation from Modified Short-Time Fourier Transform
+        Magnitude Spectra. IEEE Transactions on Audio Speech and
+        Language Processing, 08/2007.
+        """
+        x1 = x1 - x1.mean()
+        x2 = x2 - x2.mean()
+        frame_size = len(x2)
+        half = frame_size // 2
+        corrs = np.convolve(x1.astype('float32'), x2[::-1].astype('float32'))
+        corrs[:half] = -1E30
+        corrs[-half:] = -1E30
+        offset = corrs.argmax() - len(x1)
+        return offset
 
     # Functions for denoising (wavelet and bandpass filtering)
     def ShannonEntropy(self,s):
