@@ -301,6 +301,8 @@ class AviaNZInterface(QMainWindow):
         self.showInvSpec.setCheckable(True)
         self.showInvSpec.setChecked(False)
 
+        self.redoaxis = specMenu.addAction("Make frequency axis tight", self.redoFreqAxis)
+
         colMenu = specMenu.addMenu("&Choose colour map")
         colGroup = QActionGroup(self)
         for colour in self.colourList:
@@ -909,7 +911,7 @@ class AviaNZInterface(QMainWindow):
         #self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
         self.sampleRate, self.audiodata = wavfile.read(self.filename)
         self.minFreq = 0
-        self.maxFreq = self.sampleRate/2000.
+        self.maxFreq = self.sampleRate/2.
         # None of the following should be necessary for librosa
         if self.audiodata.dtype is not 'float':
             self.audiodata = self.audiodata.astype('float') #/ 32768.0
@@ -1133,7 +1135,7 @@ class AviaNZInterface(QMainWindow):
         #self.specPlot.setImage(np.fliplr(self.sg))
         self.specPlot.setImage(self.sg)
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
-        FreqRange = self.maxFreq-self.minFreq
+        FreqRange = (self.maxFreq-self.minFreq)/1000.
         height = self.sampleRate/2./np.shape(self.sg)[1]
         self.specaxis.setTicks([[(0,self.minFreq/1000.),(np.shape(self.sg)[1]/4,self.minFreq/1000.+FreqRange/4.),(np.shape(self.sg)[1]/2,self.minFreq/1000.+FreqRange/2.),(3*np.shape(self.sg)[1]/4,self.minFreq/1000.+3*FreqRange/4.),(np.shape(self.sg)[1],self.minFreq/1000.+FreqRange)]])
         self.specaxis.setLabel('kHz')
@@ -2296,23 +2298,32 @@ class AviaNZInterface(QMainWindow):
         # Calculation to turn the start and end of the bands into spectrogram y coordinates and then cut it down
         # The - signs are because the spectrogram is upside-down
         #print np.shape(self.sg), self.sampleRate
-        height = self.sampleRate/2./np.shape(self.sg)[1]
         #print height, int(str(start)), float(str(start))/height, int(float(str(start))/height), float(str(end))/height
-        self.overviewImage.setImage(self.sg[:,-int(float(str(end))/height)-1:-int(float(str(start))/height)])
-        self.specPlot.setImage(self.sg[:,-int(float(str(end))/height)-1:-int(float(str(start))/height)])
+        self.overviewImage.setImage(self.sg)
+
+        self.specPlot.setImage(self.sg)
         self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate*1000.0,num=self.datalength,endpoint=True),self.audiodata)
         #self.specaxis.setTicks([[(0,0),(np.shape(self.sg)[1]/4,self.sampleRate/8000),(np.shape(self.sg)[1]/2,self.sampleRate/4000),(3*np.shape(self.sg)[1]/4,3*self.sampleRate/8000),(np.shape(self.sg)[1],self.sampleRate/2000)]])
         self.minFreq = int(str(start))
         self.maxFreq = int(str(end))
-        FreqRange = self.maxFreq-self.minFreq
-        height = self.sampleRate/2./np.shape(self.sg)[1]
-        SpecRange = (int(str(end)) - int(str(start)))/height
-        #print self.minFreq, self.maxFreq, FreqRange, SpecRange, np.shape(self.sg[:,int(float(str(start))/height):int(float(str(end))/height)+1])
-
-        self.specaxis.setTicks([[(0,(self.minFreq/1000.)),(SpecRange/4,(self.minFreq/1000.+FreqRange/4000.)),(SpecRange/2,(self.minFreq/1000.+FreqRange/2000.)),(3*SpecRange/4,(self.minFreq/1000.+3*FreqRange/4000.)),(SpecRange,(self.minFreq/1000.+FreqRange/1000.))]])
-        #print ([[(0,self.minFreq/1000.),(SpecRange/4,self.minFreq/1000.+FreqRange/4000.),(SpecRange/2,self.minFreq/1000.+FreqRange/2000.),(3*SpecRange/4,self.minFreq/1000.+3*FreqRange/4000.),(SpecRange,self.minFreq/1000.+FreqRange/1000.)]])
 
         self.setColourLevels()
+
+    def redoFreqAxis(self):
+        start = self.minFreq
+        end = self.maxFreq
+
+        height = self.sampleRate / 2. / np.shape(self.sg)[1]
+
+        self.overviewImage.setImage(self.sg[:,int(float(start)/height):int(float(end)/height)])
+        self.specPlot.setImage(self.sg[:,int(float(start)/height):int(float(end)/height)])
+
+        FreqRange = end - start
+        SpecRange = FreqRange/height
+        #print self.minFreq, self.maxFreq, FreqRange, SpecRange, np.shape(self.sg[:,int(float(str(start))/height):int(float(str(end))/height)+1])
+
+        self.specaxis.setTicks([[(0,(start/1000.)),(SpecRange/4,(start/1000.+FreqRange/4000.)),(SpecRange/2,(start/1000.+FreqRange/2000.)),(3*SpecRange/4,(start/1000.+3*FreqRange/4000.)),(SpecRange,(start/1000.+FreqRange/1000.))]])
+        #print ([[(0,self.minFreq/1000.),(SpecRange/4,self.minFreq/1000.+FreqRange/4000.),(SpecRange/2,self.minFreq/1000.+FreqRange/2000.),(3*SpecRange/4,self.minFreq/1000.+3*FreqRange/4000.),(SpecRange,self.minFreq/1000.+FreqRange/1000.)]])
 
     def denoise_undo(self):
         # Listener for undo button in denoising dialog
