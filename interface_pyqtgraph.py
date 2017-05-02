@@ -26,7 +26,8 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 import PyQt4.phonon as phonon
 
-from scipy.io import wavfile
+import wavio
+#from scipy.io import wavfile
 import numpy as np
 
 import pyqtgraph as pg
@@ -52,9 +53,17 @@ import Segment
 # Make the scrollbar be the same size as the spectrogram -> hard!
 # Make the segmented play work with the phonon player? -> hard!
 
-# Would it be good to smooth the image? Actually, lots of ideas here! Might be nice way to denoise?
+# Finish segmentation -> mostly there, need to test them, consider aggregating them
 
-# How to plot things on the spectrogram? Currently use ROI -- ugly
+# Finish plotting of fundamental -- need to split into pieces and plot each individually
+# Get the line rather than the points, (with filtering?) and add shape metric
+
+# Finish the raven features
+
+# Try the harvest f0
+
+# Would it be good to smooth the image? Actually, lots of ideas here! Might be nice way to denoise?
+    # Median filter, smoothing, consider also grab-cut
 
 # Modify the user manual to include shift-click, cmd-click, backspace key, scrollbar, etc., and segmented play
 # Some way of allowing marking of 'possible' or 'maybe' or 'unsure' classifications -> cmd-click
@@ -73,7 +82,7 @@ import Segment
 
 # Decide on license
 
-# Add a minimum length of time for a segment, debug the segmentation algorithms
+# Add a minimum length of time for a segment, debug the segmentation algorithms -> make this a parameter
 # Finish sorting out parameters for median clipping segmentation, energy segmentation
 # Finish cross-correlation to pick out similar bits of spectrogram -> and what other methods?
 
@@ -85,14 +94,11 @@ import Segment
 # Show a mini picture of spectrogram images by the bird names in the file, or a cheat sheet or similar
 
 # Try yaapt or bana as well as yin for fundamental frequency
-# Get the line rather than the points, (with filtering?) and add shape metric
 
 # Is there something weird with spectrogram and denoising? Why are there spikes?
 # Should load in the new sound file after denoising and play that
 
 # Have a busy bar when computing
-
-# Finish the raven features
 
 # Look into ParameterTree for saving the config stuff in particular
 # Better loading of files -> paging, not computing whole spectrogram (how to deal with overview? -> coarser spec?)
@@ -297,6 +303,10 @@ class AviaNZInterface(QMainWindow):
         self.showFundamental.setCheckable(True)
         self.showFundamental.setChecked(False)
 
+        self.showFundamental2 = specMenu.addAction("Show fundamental frequency2", self.showFundamentalFreq2)
+        self.showFundamental2.setCheckable(True)
+        self.showFundamental2.setChecked(False)
+
         self.showInvSpec = specMenu.addAction("Show inverted spectrogram", self.showInvertedSpectrogram)
         self.showInvSpec.setCheckable(True)
         self.showInvSpec.setChecked(False)
@@ -325,6 +335,7 @@ class AviaNZInterface(QMainWindow):
         actionMenu.addAction("Segment",self.segmentationDialog)
         actionMenu.addAction("Find matches",self.findMatches)
         actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
+        actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
         actionMenu.addSeparator()
         actionMenu.addAction("Check segments 1",self.humanClassifyDialog1)
         actionMenu.addAction("Check segments 2",self.humanClassifyDialog2)
@@ -495,6 +506,8 @@ class AviaNZInterface(QMainWindow):
 
         self.specPlot = pg.ImageItem()
         self.p_spec.addItem(self.specPlot)
+        self.specPlot2 = pg.PlotDataItem()
+        self.p_spec.addItem(self.specPlot2)
 
         # Connect up the listeners
         #self.p_overview.scene().sigMouseClicked.connect(self.mouseClicked_overview)
@@ -812,7 +825,7 @@ class AviaNZInterface(QMainWindow):
         # Used when new files are loaded
 
         # Remove the segments
-        self.deleteAll(True)
+        self.removeSegments()
         if hasattr(self, 'overviewImageRegion'):
             self.p_overview.removeItem(self.overviewImageRegion)
 
@@ -909,7 +922,10 @@ class AviaNZInterface(QMainWindow):
         else:
             self.filename = self.dirName+'/'+str(name.text())
         #self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
-        self.sampleRate, self.audiodata = wavfile.read(self.filename)
+        #self.sampleRate, self.audiodata = wavfile.read(self.filename)
+        wavobj = wavio.read(self.filename)
+        self.sampleRate = wavobj.rate
+        self.audiodata = wavobj.data
         self.minFreq = 0
         self.maxFreq = self.sampleRate/2.
         # None of the following should be necessary for librosa
@@ -927,11 +943,8 @@ class AviaNZInterface(QMainWindow):
 
         # Get the data for the spectrogram
         self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
-        self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
-        #maxsg = np.max(self.sgRaw)
-        #self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
-
-        #print np.max(self.sg)
+        maxsg = np.min(self.sgRaw)
+        self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
 
         # Load any previous segments stored
         if os.path.isfile(self.filename+'.data'):
@@ -1035,12 +1048,24 @@ class AviaNZInterface(QMainWindow):
         # Draw the fundamental frequency
         if self.showFundamental.isChecked():
             if not hasattr(self,'seg'):
-                self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'])
+                self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
             pitch, y, minfreq, W = self.seg.yin()
             ind = np.squeeze(np.where(pitch>minfreq))
             pitch = pitch[ind]
-            ind = ind*W/self.config['window_width']
+            ind = ind*W/(self.config['window_width']/2.)
             x = (pitch*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
+
+            # Get the individual pieces
+            # TODO: FINISH!
+            print ind
+            segs = self.seg.identifySegments(ind,maxgap=10,minlength=5)
+            for s in segs:
+                s[0] = s[0] * self.sampleRate / float(self.config['incr'])
+                s[1] = s[1] * self.sampleRate / float(self.config['incr'])
+                i = np.where((ind>s[0]) & (ind<s[1]))
+                print s, i
+                self.specPlot2.setData(ind[i],x[i],pen=pg.mkPen('r', width=3))
+
             self.yinRois = []
             for r in range(len(x)):
                 self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
@@ -1056,21 +1081,61 @@ class AviaNZInterface(QMainWindow):
                 self.p_spec.removeItem(r)
         #self.specPlot.setImage(self.sg)
 
+    def showFundamentalFreq2(self):
+        # yaapt
+        import pYAAPT
+        import basic_tools
+        # Actually this is a pain, since it either gives back a value for each amplitude sample, or for it's own weird windows
+        if self.showFundamental2.isChecked():
+            y = basic_tools.SignalObj(self.filename)
+            x = pYAAPT.yaapt(y)
+            self.yinRois = []
+            for r in range(len(x)):
+                self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
+            for r in self.yinRois:
+                self.p_spec.addItem(r)
+        else:
+            for r in self.yinRois:
+                self.p_spec.removeItem(r)
+
+    def showFundamentalFreq3(self):
+        # Harvest
+        import audio_tools
+        if self.showFundamental2.isChecked():
+            p, f, t, fa = audio_tools.harvest(self.audiodata,self.sampleRate)
+            ind = f/self.config['window_width']
+            x = (p*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
+            print ind, x
+            self.yinRois = []
+            for r in range(len(x)):
+                self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
+            for r in self.yinRois:
+                self.p_spec.addItem(r)
+        else:
+            for r in self.yinRois:
+                self.p_spec.removeItem(r)
+
     def showInvertedSpectrogram(self):
         if self.showInvSpec.isChecked():
             self.sgRaw = self.sp.show_invS()
         else:
             self.sgRaw = self.sp.spectrogram(self.audiodata, self.sampleRate, mean_normalise=True, onesided=True,
                                          multitaper=False)
-        self.sg = np.abs(np.where(self.sgRaw == 0, 0.0, 10.0 * np.log10(self.sgRaw)))
+        maxsg = np.min(self.sgRaw)
+        self.sg = np.abs(np.where(self.sgRaw == 0, 0.0, 10.0 * np.log10(self.sgRaw / maxsg)))
         self.overviewImage.setImage(self.sg)
         self.specPlot.setImage(self.sg)
 
     def medianFilterSpec(self):
         from scipy.ndimage.filters import median_filter
-        median_filter(self.sg,size=(10,10))
+        median_filter(self.sg,size=(100,20))
         self.specPlot.setImage(self.sg)
 
+    def denoiseImage(self):
+        from cv2 import fastNlMeansDenoising
+        sg = np.array(self.sg/np.max(self.sg)*255,dtype = np.uint8)
+        sg = fastNlMeansDenoising(sg,10,7,21)
+        self.specPlot.setImage(sg)
 # ==============
 # Code for drawing and using the main figure
 
@@ -1134,6 +1199,7 @@ class AviaNZInterface(QMainWindow):
 
         #self.specPlot.setImage(np.fliplr(self.sg))
         self.specPlot.setImage(self.sg)
+
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
         FreqRange = (self.maxFreq-self.minFreq)/1000.
         height = self.sampleRate/2./np.shape(self.sg)[1]
@@ -1171,8 +1237,7 @@ class AviaNZInterface(QMainWindow):
                 x1 = self.convertSpectoAmpl(sender.getRegion()[0])
                 x2 = self.convertSpectoAmpl(sender.getRegion()[1])
             self.listRectanglesa1[i].setRegion([x1,x2])
-            #self.listLabels[i].setPos(x1,self.minampl)
-            self.listLabels[i].setPos(sender.pos()[0],self.textpos)
+            self.listLabels[i].setPos(sender.getRegion()[0],self.textpos)
 
             self.segments[i][0] = x1
             self.segments[i][1] = x2
@@ -1198,7 +1263,7 @@ class AviaNZInterface(QMainWindow):
             else:
                 self.listRectanglesa2[i].setRegion([x1,x2])
             #self.listLabels[i].setPos(sender.getRegion()[0],self.minampl)
-            self.listLabels[i].setPos(sender.getRegion()[0],self.textpos)
+            self.listLabels[i].setPos(x1,self.textpos)
 
             self.segments[i][0] = sender.getRegion()[0]
             self.segments[i][1] = sender.getRegion()[1]
@@ -2171,7 +2236,7 @@ class AviaNZInterface(QMainWindow):
     def showSpectrogramDialog(self):
         # Create the spectrogram dialog when the button is pressed
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Spectrogram()
+            self.spectrogramDialog = Spectrogram(self.config['window_width'],self.config['incr'])
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
@@ -2183,31 +2248,46 @@ class AviaNZInterface(QMainWindow):
         [alg, mean_normalise, multitaper, window_width, incr] = self.spectrogramDialog.getValues()
 
         self.sp.set_width(int(str(window_width)), int(str(incr)))
-        self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg),mean_normalise=mean_normalise,onesided=True,multitaper=multitaper)
-        maxsg = np.max(self.sgRaw)
-        self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
-        self.overviewImage.setImage(self.sg)
-        self.specPlot.setImage(self.sg)
+        self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg),mean_normalise=True,onesided=True,multitaper=multitaper)
+        maxsg = np.min(self.sgRaw)
+        self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
+
+        #self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
+        #self.w_spec.removeItem(self.timeaxis)
+        #self.timeaxis = None
 
         # If the size of the spectrogram has changed, need to update the positions of things
-        if int(str(incr)) != self.config['incr']:
+        if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
             self.config['incr'] = int(str(incr))
+            self.config['window_width'] = int(str(window_width))
             self.changeWidth(self.widthWindow.value())
             # Update the positions of the segments
+            self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
             for s in range(len(self.listRectanglesa2)):
                 x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
                 x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
                 self.listRectanglesa2[s].setRegion([x1, x2])
-        if int(str(window_width)) != self.config['window_width']:
-            self.config['window_width'] = int(str(window_width))
+                self.listLabels[s].setPos(x1,self.textpos)
             # Update the axis
-            FreqRange = self.maxFreq - self.minFreq
-            height = self.sampleRate / 2. / np.shape(self.sg)[1]
+            FreqRange = (self.maxFreq - self.minFreq)/1000.
             self.specaxis.setTicks([[(0, self.minFreq / 1000.),
                                      (np.shape(self.sg)[1] / 4, self.minFreq / 1000. + FreqRange / 4.),
                                      (np.shape(self.sg)[1] / 2, self.minFreq / 1000. + FreqRange / 2.),
                                      (3 * np.shape(self.sg)[1] / 4, self.minFreq / 1000. + 3 * FreqRange / 4.),
                                      (np.shape(self.sg)[1], self.minFreq / 1000. + FreqRange)]])
+
+            # Redraw everything and redraw it
+            self.removeSegments()
+            for r in self.SegmentRects:
+                self.p_overview2.removeItem(r)
+            self.SegmentRects = []
+            self.p_overview.removeItem(self.overviewImageRegion)
+
+            self.drawOverview()
+            self.drawfigMain()
+            if hasattr(self, 'seg'):
+                self.seg.setNewData(self.audiodata, self.sgRaw, self.sampleRate, self.config['window_width'],
+                                    self.config['incr'])
 
     def denoiseDialog(self):
         # Create the denoising dialog when the relevant button is pressed
@@ -2294,7 +2374,8 @@ class AviaNZInterface(QMainWindow):
             self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
 
         self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
-        self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw)))
+        maxsg = np.min(self.sgRaw)
+        self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
         # Calculation to turn the start and end of the bands into spectrogram y coordinates and then cut it down
         # The - signs are because the spectrogram is upside-down
         #print np.shape(self.sg), self.sampleRate
@@ -2336,14 +2417,15 @@ class AviaNZInterface(QMainWindow):
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     self.sp.setNewData(self.audiodata,self.sampleRate)
                     self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
-                    self.sg = np.abs(np.where(self.sgRaw == 0, 0.0, 10.0 * np.log10(self.sgRaw)))
+                    maxsg = np.min(self.sgRaw)
+                    self.sg = np.abs(np.where(self.sgRaw == 0, 0.0, 10.0 * np.log10(self.sgRaw / maxsg)))
                     self.overviewImage.setImage(self.sg)
                     self.specPlot.setImage(self.sg)
                     self.amplPlot.setData(
                         np.linspace(0.0, float(self.datalength) / self.sampleRate, num=self.datalength, endpoint=True),
                         self.audiodata)
                     if hasattr(self,'seg'):
-                        self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate)
+                        self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
 
                     self.setColourLevels()
 
@@ -2358,7 +2440,8 @@ class AviaNZInterface(QMainWindow):
         #import soundfile as sf
         filename = self.filename[:-4] + '_d' + self.filename[-4:]
         self.audiodata = self.audiodata.astype('int16')
-        wavfile.write(filename,self.sampleRate, self.audiodata)
+        #wavfile.write(filename,self.sampleRate, self.audiodata)
+        wavio.write(filename,self.audiodata,self.sampleRate)
         #sf.write(filename,self.audiodata,self.sampleRate,subtype='PCM_16')
 
     def segmentationDialog(self):
@@ -2375,9 +2458,9 @@ class AviaNZInterface(QMainWindow):
         # TODO: Add in the wavelet one
         # TODO: More testing of the algorithms, parameters, etc.
         seglen = len(self.segments)
-        [alg, ampThr, medThr,HarmaThr1,HarmaThr2,minfreq,minperiods,Yinthr,window,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
+        [alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
         if not hasattr(self,'seg'):
-            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'])
+            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
         if str(alg) == "Amplitude":
             newSegments = self.seg.segmentByAmplitude(float(str(ampThr)))
             # TODO: *** Next few lines need updating
@@ -2390,12 +2473,17 @@ class AviaNZInterface(QMainWindow):
             #print newSegments
         elif str(alg) == "Harma":
             newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)))
+        elif str(alg) == "Power":
+            newSegments = self.seg.segmentByPower(float(str(PowerThr)))
         elif str(alg) == "Onsets":
             newSegments = self.seg.onsets()
             #print newSegments
         elif str(alg) == "Fundamental Frequency":
             newSegments, pitch, times = self.seg.yin(int(str(minfreq)),int(str(minperiods)),float(str(Yinthr)),int(str(window)),returnSegs=True)
             #print newSegments
+        elif str(alg) == "FIR":
+            newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
+            print newSegments
         else:
             #"Wavelets"
             # TODO!!
@@ -2411,7 +2499,9 @@ class AviaNZInterface(QMainWindow):
                 end = int(str(end))
             # TODO: needs learning and samplerate
                 #newSegments = self.seg.segmentByWavelet(thrType,float(str(thr)), int(str(depth)), wavelet,sampleRate,bandchoice,start,end,learning,)
+        print len(newSegments)
         for seg in newSegments:
+            print seg[0], seg[1]
             self.addSegment(seg[0],seg[1],0,0,"Don't Know",True)
 
     def findMatches(self):
@@ -2421,7 +2511,7 @@ class AviaNZInterface(QMainWindow):
         # TODO: Tell user if there isn't a box highlighted, or grey out the button
         #print self.box1id
         if not hasattr(self,'seg'):
-            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'])
+            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
 
         if self.box1id is None or self.box1id == -1:
             print "No box selected"
@@ -2622,32 +2712,29 @@ class AviaNZInterface(QMainWindow):
             del self.listRectanglesa2[self.box1id]
             self.box1id = -1
 
-    def deleteAll(self,force=False):
+    def deleteAll(self):
         # Listener for delete all button
-        if not force:
-            reply = QMessageBox.question(self,"Delete All Segments","Are you sure you want to delete all segments?",    QMessageBox.Yes | QMessageBox.No)
-        else:
-            reply = QMessageBox.Yes
+        reply = QMessageBox.question(self,"Delete All Segments","Are you sure you want to delete all segments?",    QMessageBox.Yes | QMessageBox.No)
         if reply==QMessageBox.Yes:
             self.segments=[]
-            for r in self.listLabels:
-                self.p_spec.removeItem(r)
-                if self.useAmplitude:
-                    self.p_ampl.removeItem(r)
-                else:
-                    self.p_spec.removeItem(r)
-            for r in self.listRectanglesa1:
-                self.p_ampl.removeItem(r)
-            for r in self.listRectanglesa2:
-                self.p_spec.removeItem(r)
-            for r in self.SegmentRects:
-                r.setBrush(pg.mkBrush('w'))
-                r.update()
+            self.removeSegments()
 
             self.listRectanglesa1 = []
             self.listRectanglesa2 = []
             self.listLabels = []
-            self.box1id = -1
+
+    def removeSegments(self):
+        for r in self.listLabels:
+            self.p_spec.removeItem(r)
+        for r in self.listRectanglesa1:
+            self.p_ampl.removeItem(r)
+        for r in self.listRectanglesa2:
+            self.p_spec.removeItem(r)
+        for r in self.SegmentRects:
+            r.setBrush(pg.mkBrush('w'))
+            r.update()
+
+        self.box1id = -1
 
     def saveSegments(self):
         # This saves the segmentation data as a json file
@@ -2700,7 +2787,7 @@ class AviaNZInterface(QMainWindow):
 class Spectrogram(QDialog):
     # Class for the spectrogram dialog box
     # TODO: Steal the graph from Raven (View/Configure Brightness)
-    def __init__(self, parent=None):
+    def __init__(self, width, incr, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
 
@@ -2708,14 +2795,15 @@ class Spectrogram(QDialog):
         self.algs.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
 
         self.mean_normalise = QCheckBox()
+        self.mean_normalise.setChecked(True)
         self.multitaper = QCheckBox()
 
         self.activate = QPushButton("Update Spectrogram")
 
         self.window_width = QLineEdit(self)
-        self.window_width.setText('256')
+        self.window_width.setText(str(width))
         self.incr = QLineEdit(self)
-        self.incr.setText('128')
+        self.incr.setText(str(incr))
 
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
@@ -2759,7 +2847,7 @@ class Segmentation(QDialog):
 
         self.algs = QComboBox()
         #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
-        self.algs.addItems(["Amplitude","Harma","Median Clipping","Onsets","Fundamental Frequency"])
+        self.algs.addItems(["Amplitude","Harma","Power","Median Clipping","Onsets","Fundamental Frequency","FIR"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Amplitude"
         self.activate = QPushButton("Segment")
@@ -2778,12 +2866,17 @@ class Segmentation(QDialog):
         self.HarmaThr1 = QSpinBox()
         self.HarmaThr1.setRange(10,50)
         self.HarmaThr1.setSingleStep(1)
-        self.HarmaThr1.setValue(30)
+        self.HarmaThr1.setValue(10)
         self.HarmaThr2 = QDoubleSpinBox()
         self.HarmaThr2.setRange(0.1,0.95)
         self.HarmaThr2.setSingleStep(0.05)
         self.HarmaThr2.setDecimals(2)
         self.HarmaThr2.setValue(0.9)
+
+        self.PowerThr = QDoubleSpinBox()
+        self.PowerThr.setRange(0.0,2.0)
+        self.PowerThr.setSingleStep(0.1)
+        self.PowerThr.setValue(1.0)
 
         self.Fundminfreqlabel = QLabel("Min Frequency")
         self.Fundminfreq = QLineEdit()
@@ -2814,6 +2907,11 @@ class Segmentation(QDialog):
         self.ecThr.setSingleStep(1)
         self.ecThr.setDecimals(3)
         self.ecThr.setValue(1)
+
+        self.FIRThr1 = QDoubleSpinBox()
+        self.FIRThr1.setRange(0.0,1.0)
+        self.FIRThr1.setSingleStep(0.05)
+        self.FIRThr1.setValue(0.1)
 
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
@@ -2914,6 +3012,9 @@ class Segmentation(QDialog):
         Box.addWidget(self.HarmaThr2)
         self.HarmaThr1.hide()
         self.HarmaThr2.hide()
+        Box.addWidget(self.PowerThr)
+        self.PowerThr.hide()
+
         Box.addWidget(self.medThr)
         self.medThr.hide()
         for i in range(len(self.ecthrtype)):
@@ -2921,6 +3022,9 @@ class Segmentation(QDialog):
             self.ecthrtype[i].hide()
         Box.addWidget(self.ecThr)
         self.ecThr.hide()
+
+        Box.addWidget(self.FIRThr1)
+        self.FIRThr1.hide()
 
         Box.addWidget(self.Fundminfreqlabel)
         self.Fundminfreqlabel.hide()
@@ -2960,6 +3064,8 @@ class Segmentation(QDialog):
             self.Harmalabel.hide()
             self.HarmaThr1.hide()
             self.HarmaThr2.hide()
+        elif self.prevAlg == "Power":
+            self.PowerThr.hide()
         elif self.prevAlg == "Median Clipping":
             self.medlabel.hide()
             self.medThr.hide()
@@ -2973,8 +3079,9 @@ class Segmentation(QDialog):
             self.Fundthrlabel.hide()
             self.Fundwindowlabel.hide()
         elif self.prevAlg == "Onsets":
-            # Don't need to do anything
             self.Onsetslabel.hide()
+        elif self.prevAlg == "FIR":
+            self.FIRThr1.hide()
         else:
             self.wavlabel.hide()
             self.depthlabel.hide()
@@ -2993,6 +3100,7 @@ class Segmentation(QDialog):
             self.blabel2.hide()
             self.bandchoice.hide()
         self.prevAlg = str(alg)
+
         if str(alg) == "Amplitude":
             self.amplabel.show()
             self.ampThr.show()
@@ -3006,6 +3114,8 @@ class Segmentation(QDialog):
             self.Harmalabel.show()
             self.HarmaThr1.show()
             self.HarmaThr2.show()
+        elif str(alg) == "Power":
+            self.PowerThr.show()
         elif str(alg) == "Median Clipping":
             self.medlabel.show()
             self.medThr.show()
@@ -3020,6 +3130,8 @@ class Segmentation(QDialog):
             self.Fundwindowlabel.show()
         elif str(alg) == "Onsets":
             self.Onsetslabel.show()
+        elif str(alg) == "FIR":
+            self.FIRThr1.show()
         else:
             #"Wavelets"
             self.wavlabel.show()
@@ -3045,7 +3157,7 @@ class Segmentation(QDialog):
         self.end.setEnabled(not self.end.isEnabled())
 
     def getValues(self):
-        return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
+        return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
 
 class Denoise(QDialog):
     # Class for the denoising dialog box
@@ -3073,7 +3185,7 @@ class Denoise(QDialog):
         self.thrtype[0].setChecked(True)
 
         self.thrlabel = QLabel("Multiplier of std dev for threshold")
-        self.thr = QSpinBox()
+        self.thr = QDoubleSpinBox()
         self.thr.setRange(1,10)
         self.thr.setSingleStep(1)
         self.thr.setValue(5)
