@@ -3,6 +3,7 @@
 # import numpy as np
 import pywt
 from scipy.io import wavfile
+import numpy as np
 import librosa
 import os
 import glob
@@ -42,7 +43,7 @@ class WaveletSeg:
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
-        wp = pywt.WaveletPacket(data=data, wavelet='dmey', mode='symmetric', maxlevel=maxlevel)
+        wp = pywt.WaveletPacket(data=data, wavelet='db3', mode='symmetric', maxlevel=maxlevel)
 
         det1 = wp['d'].data
         # Note magic conversion number
@@ -67,7 +68,7 @@ class WaveletSeg:
         for t in range(300):
             E = []
             for level in range(1,6):
-                wp = pywt.WaveletPacket(data=fwData[t * sampleRate:(t + 1) * sampleRate], wavelet='dmey', mode='symmetric', maxlevel=level)
+                wp = pywt.WaveletPacket(data=fwData[t * sampleRate:(t + 1) * sampleRate], wavelet='db3', mode='symmetric', maxlevel=level)
                 e = np.array([np.sum(n.data**2) for n in wp.get_level(level, "natural")])
                 if np.sum(e)>0:
                     e = 100.0*e/np.sum(e)
@@ -180,7 +181,7 @@ class WaveletSeg:
             sampleRate=self.sampleRate
         import string
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
-        new_wp = pywt.WaveletPacket(data=None, wavelet='dmey', mode='symmetric')
+        new_wp = pywt.WaveletPacket(data=None, wavelet='db3', mode='symmetric')
         # First, turn the index into a leaf name.
         level = np.floor(np.log2(node))
         first = 2**level-1
@@ -228,7 +229,7 @@ class WaveletSeg:
         detected = np.zeros((300,len(listnodes)))
         count = 0
         for index in listnodes:
-            new_wp = pywt.WaveletPacket(data=None, wavelet='dmey', mode='symmetric')
+            new_wp = pywt.WaveletPacket(data=None, wavelet='db3', mode='symmetric')
             # First, turn the index into a leaf name.
             level = np.floor(np.log2(index))
             first = 2**level-1
@@ -274,7 +275,7 @@ class WaveletSeg:
         # about different size coefficient arrays most of the time.
         import string
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
-        new_wp = pywt.WaveletPacket(data=None, wavelet='dmey', mode='symmetric')
+        new_wp = pywt.WaveletPacket(data=None, wavelet='db3', mode='symmetric')
 
         for index in listnodes:
             # First, turn the index into a leaf name.
@@ -406,7 +407,7 @@ def findCalls_train(self,fName,species='kiwi'):
     print nodes
 
     # Generate a full 5 level wavelet packet decomposition
-    wpFull = pywt.WaveletPacket(data=fwData, wavelet='dmey', mode='symmetric', maxlevel=5)
+    wpFull = pywt.WaveletPacket(data=fwData, wavelet='db3', mode='symmetric', maxlevel=5)
 
     # Now check the F2 values and add node if it improves F2
     listnodes = []
@@ -443,7 +444,7 @@ def findCalls_test(listnodes,fName,species='kiwi'):
         ws.sampleRate=fs
     wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
     fwData = ws.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
-    wpFull = pywt.WaveletPacket(data=fwData, wavelet='dmey', mode='symmetric', maxlevel=5)
+    wpFull = pywt.WaveletPacket(data=fwData, wavelet='db3', mode='symmetric', maxlevel=5)
     detected = ws.detectCalls_test(wpFull, listnodes, ws.sampleRate) #detect based on a previously defined nodeset
     print fName
     ws.fBetaScore(ws.annotation, detected)
@@ -458,7 +459,7 @@ def processFolder(folder_to_process = 'Sound Files/survey/5min', species='kiwi')
         ws.loadData(filename[:-4],trainTest=False)
         wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
         fwData = ws.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
-        wpFull = pywt.WaveletPacket(data=fwData, wavelet='dmey', mode='symmetric', maxlevel=5)
+        wpFull = pywt.WaveletPacket(data=fwData, wavelet='db3', mode='symmetric', maxlevel=5)
         detected[i,:] = ws.detectCalls_test(wpFull, nodelist_kiwi, ws.sampleRate) #detect based on a previously defined nodeset
     return detected
 

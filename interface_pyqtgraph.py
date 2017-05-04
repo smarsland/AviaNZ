@@ -47,8 +47,11 @@ import Segment
 
 # Finalise layout, menu items
 
+# Make the median filter on the spectrogram have params and a dialog. Other options?
+
 # Finish implementation to show individual segments to user and ask for feedback and the other feedback dialogs
 # Ditto lots of segments at once -> some weirdness here
+# Also, option to show a species
 
 # Make the scrollbar be the same size as the spectrogram -> hard!
 # Make the segmented play work with the phonon player? -> hard!
@@ -294,6 +297,11 @@ class AviaNZInterface(QMainWindow):
         self.useFilesTick.setCheckable(True)
         self.useFilesTick.setChecked(True)
         self.useFiles = True
+
+        self.showOverviewSegsTick = specMenu.addAction("Show annotation overview", self.showOverviewSegsCheck)
+        self.showOverviewSegsTick.setCheckable(True)
+        self.showOverviewSegsTick.setChecked(True)
+        self.showOverviewSegs = True
 
         self.dragRectangles = specMenu.addAction("Drag boxes in spectrogram", self.dragRectanglesCheck)
         self.dragRectangles.setCheckable(True)
@@ -865,7 +873,9 @@ class AviaNZInterface(QMainWindow):
         if self.previousFile is not None:
             if self.segments != [] or self.hasSegments:
                 self.saveSegments()
-        self.previousFile = fileName
+        # TODO: Should check if the file is in the list in the Files box and then actually store it for colouring
+        # Also find current and highlight it
+        self.previousFile = None
         self.resetStorageArrays()
         self.showFundamental.setChecked(False)
         self.showInvSpec.setChecked(False)
@@ -891,7 +901,7 @@ class AviaNZInterface(QMainWindow):
             dir.cd(self.listOfFiles[i].fileName())
             # Now repopulate the listbox
             #print "Now in "+self.listOfFiles[i].fileName()
-            self.dirName=dir.absolutePath()
+            self.dirName=str(dir.absolutePath())
             self.listFiles.clearSelection()
             self.listFiles.clearFocus()
             self.listFiles.clear()
@@ -915,12 +925,14 @@ class AviaNZInterface(QMainWindow):
         #fdd.exec_()
         #username = fdd.getData()
 
+        print type(name)
         if isinstance(name,str):
             self.filename = self.dirName+'/'+name
         elif isinstance(name,QString):
-            self.filename = name
+            self.filename = str(name)
         else:
-            self.filename = self.dirName+'/'+str(name.text())
+            self.filename = str(self.dirName+'/'+name.text())
+        print self.filename, type(self.filename)
         #self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
         #self.sampleRate, self.audiodata = wavfile.read(self.filename)
         wavobj = wavio.read(self.filename)
@@ -958,7 +970,7 @@ class AviaNZInterface(QMainWindow):
         # Update the data that is seen by the other classes
         # TODO: keep an eye on this to add other classes as required
         if hasattr(self,'seg'):
-            self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate)
+            self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
         self.sp.setNewData(self.audiodata,self.sampleRate)
 
         # Delete any denoising backups from the previous one
@@ -1043,6 +1055,13 @@ class AviaNZInterface(QMainWindow):
             self.d_files.show()
         else:
             self.d_files.hide()
+
+    def showOverviewSegsCheck(self):
+        if self.showOverviewSegsTick.isChecked():
+            self.p_overview2.show()
+        else:
+            self.p_overview2.hide()
+
 
     def showFundamentalFreq(self):
         # Draw the fundamental frequency
@@ -2625,7 +2644,8 @@ class AviaNZInterface(QMainWindow):
             import sounddevice as sd
 
             data = self.audiodata[start:stop]
-            data = self.sp.bandpassFilter(data, bottom, top)
+            print bottom, top
+            data = self.sp.ButterworthBandpass(data, self.sampleRate, bottom, top,order=2)
 
             sd.play(data,self.sampleRate)
         else:
@@ -2676,8 +2696,12 @@ class AviaNZInterface(QMainWindow):
         # Deletes segment if one is selected, otherwise does nothing
         if self.box1id>-1:
             # Work out which overview segment this segment is in (could be more than one) and update it
-            inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0]))/self.widthOverviewSegment)
-            inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]))/self.widthOverviewSegment)
+            if (self.segments[self.box1id][2] == 0) and (self.segments[self.box1id][3] == 0):
+                inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0]))/self.widthOverviewSegment)
+                inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]))/self.widthOverviewSegment)
+            else:
+                inds = int(float(self.segments[self.box1id][0])/self.widthOverviewSegment)
+                inde = int(float(self.segments[self.box1id][1])/self.widthOverviewSegment)
             #print np.shape(self.overviewSegments), inds, inde
             #print self.box1id, self.segments[self.box1id][4]
             if self.segments[self.box1id][4] == "Don't Know":
@@ -2702,10 +2726,7 @@ class AviaNZInterface(QMainWindow):
 
             self.p_ampl.removeItem(self.listRectanglesa1[self.box1id])
             self.p_spec.removeItem(self.listRectanglesa2[self.box1id])
-            if self.useAmplitude:
-                self.p_ampl.removeItem(self.listLabels[self.box1id])
-            else:
-                self.p_spec.removeItem(self.listLabels[self.box1id])
+            self.p_spec.removeItem(self.listLabels[self.box1id])
             del self.listLabels[self.box1id]
             del self.segments[self.box1id]
             del self.listRectanglesa1[self.box1id]
@@ -2716,12 +2737,8 @@ class AviaNZInterface(QMainWindow):
         # Listener for delete all button
         reply = QMessageBox.question(self,"Delete All Segments","Are you sure you want to delete all segments?",    QMessageBox.Yes | QMessageBox.No)
         if reply==QMessageBox.Yes:
-            self.segments=[]
             self.removeSegments()
 
-            self.listRectanglesa1 = []
-            self.listRectanglesa2 = []
-            self.listLabels = []
 
     def removeSegments(self):
         for r in self.listLabels:
@@ -2733,7 +2750,10 @@ class AviaNZInterface(QMainWindow):
         for r in self.SegmentRects:
             r.setBrush(pg.mkBrush('w'))
             r.update()
-
+        self.segments=[]
+        self.listRectanglesa1 = []
+        self.listRectanglesa2 = []
+        self.listLabels = []
         self.box1id = -1
 
     def saveSegments(self):
@@ -3187,8 +3207,8 @@ class Denoise(QDialog):
         self.thrlabel = QLabel("Multiplier of std dev for threshold")
         self.thr = QDoubleSpinBox()
         self.thr.setRange(1,10)
-        self.thr.setSingleStep(1)
-        self.thr.setValue(5)
+        self.thr.setSingleStep(0.5)
+        self.thr.setValue(4.0)
 
         self.waveletlabel = QLabel("Type of wavelet")
         self.wavelet = QComboBox()

@@ -248,7 +248,7 @@ class SignalProc:
             print currentlevelmaxE
         return level
 
-    def waveletDenoise_all(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
+    def waveletDenoise_all(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='db3'):
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
@@ -282,7 +282,7 @@ class SignalProc:
 
         return self.wData
 
-    def waveletDenoise(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
+    def waveletDenoise(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='db3'):
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
@@ -322,11 +322,13 @@ class SignalProc:
         return self.wData
 
 
-    def bandpassFilter(self,data=None,start=1000,end=10000):
+    def bandpassFilter(self,data=None,sampleRate=0,start=1000,end=10000):
         # Bandpass filter
         if data is None:
             data = self.data
-        nyquist = self.sampleRate/2.0
+        if sampleRate == 0:
+            sampleRate = self.sampleRate
+        nyquist = sampleRate/2.0
         #ripple_db = 80.0
         #width = 1.0/nyquist
         #ntaps, beta = signal.kaiserord(ripple_db, width)
@@ -335,7 +337,8 @@ class SignalProc:
         taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
         return signal.lfilter(taps, 1.0, data)
 
-    def ButterworthBandpass(self,data,sampleRate,low=1000,high=5000,order=10):
+    def ButterworthBandpass(self,data,sampleRate,low=1000,high=5000,order=5):
+        # Might need to use lower order
         if data is None:
             data = self.data
             sampleRate = self.sampleRate
@@ -346,6 +349,7 @@ class SignalProc:
         print nyquist, low, high
         b, a = signal.butter(order, [low, high], btype='band')
         # apply filter
+        #return signal.lfilt(b, a, data)
         return signal.filtfilt(b, a, data)
 
     def medianFilter(self,data=None,width=11):
