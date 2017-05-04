@@ -3,7 +3,8 @@
 
 import numpy as np
 import pywt
-from scipy.io import wavfile
+# from scipy.io import wavfile
+import wavio
 import scipy.signal as signal
 import pylab as pl
 
@@ -126,7 +127,8 @@ class SignalProc:
         self.incr = oldIncr
         sg = self.spectrogram(sgi)
         sgi = sgi.astype('int16')
-        wavfile.write('test.wav',self.sampleRate, sgi)
+        # wavfile.write('test.wav',self.sampleRate, sgi)
+        wavio.write('test.wav',sgi,self.sampleRate)
         return sg
 
     def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10):
@@ -248,7 +250,7 @@ class SignalProc:
             print currentlevelmaxE
         return level
 
-    def waveletDenoise_all(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='db3'):
+    def waveletDenoise_all(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
@@ -263,7 +265,7 @@ class SignalProc:
         self.wData = np.zeros(len(data))
         for i in range(0,len(data),self.sampleRate/2):
             d = data[i:i+self.sampleRate/2]
-            wp = pywt.WaveletPacket(data=d, wavelet=wavelet, mode='symmetric',maxlevel=self.maxlevel)
+            wp = pywt.WaveletPacket(data=d, wavelet=wavelet, mode='zero',maxlevel=self.maxlevel)
 
             det1 = wp['d'].data
             # Note magic conversion number
@@ -322,13 +324,11 @@ class SignalProc:
         return self.wData
 
 
-    def bandpassFilter(self,data=None,sampleRate=0,start=1000,end=10000):
+    def bandpassFilter(self,data=None,start=1000,end=10000):
         # Bandpass filter
         if data is None:
             data = self.data
-        if sampleRate == 0:
-            sampleRate = self.sampleRate
-        nyquist = sampleRate/2.0
+        nyquist = self.sampleRate/2.0
         #ripple_db = 80.0
         #width = 1.0/nyquist
         #ntaps, beta = signal.kaiserord(ripple_db, width)
@@ -337,8 +337,7 @@ class SignalProc:
         taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
         return signal.lfilter(taps, 1.0, data)
 
-    def ButterworthBandpass(self,data,sampleRate,low=1000,high=5000,order=5):
-        # Might need to use lower order
+    def ButterworthBandpass(self,data,sampleRate,low=1000,high=5000,order=10):
         if data is None:
             data = self.data
             sampleRate = self.sampleRate
@@ -349,7 +348,6 @@ class SignalProc:
         print nyquist, low, high
         b, a = signal.butter(order, [low, high], btype='band')
         # apply filter
-        #return signal.lfilt(b, a, data)
         return signal.filtfilt(b, a, data)
 
     def medianFilter(self,data=None,width=11):
@@ -373,18 +371,27 @@ class SignalProc:
         # Need them to be 16 bit integers
         self.wData *= 32768.0
         self.wData = self.wData.astype('int16')
-        wavfile.write(name,self.sampleRate, self.wData)
+        # wavfile.write(name,self.sampleRate, self.wData)
+        wavio.write(name,self.wData,self.sampleRate)
+
 
     def loadData(self,fileName):
         # Load a sound file and normalise it
-        self.sampleRate, self.data = wavfile.read(fileName)
+        # self.sampleRate, self.data = wavfile.read(fileName)
+        wavobj = wavio.read(fileName)
+        self.sampleRate = wavobj.rate
+        self.data = wavobj.data
         # self.sampleRate, self.data = wavfile.read('../Birdsong/more1.wav')
         # self.sampleRate, self.data = wavfile.read('../Birdsong/Denoise/Primary dataset/kiwi/female/female1.wav')
         #self.sampleRate, self.data = wavfile.read('ruru.wav')
         #self.sampleRate, self.data = wavfile.read('tril1.wav')
         # self.sampleRate, self.data = wavfile.read('male1.wav')
         # The constant is for normalisation (2^15, as 16 bit numbers)
-        self.data = self.data.astype('float') / 32768.0
+        if self.data.dtype is not 'float':
+            self.data = self.data.astype('float') #/ 32768.0
+        if np.shape(np.shape(self.data))[0]>1:
+            self.data = self.data[:,0]
+        # self.data = self.data.astype('float') / 32768.0
 
 def denoiseFile(fileName,thresholdMultiplier):
     sp = SignalProc(thresholdMultiplier=thresholdMultiplier)
@@ -468,8 +475,7 @@ def show():
 
 #pl.ion()
 
-#denoiseFile('tril1.wav',1.5)
-#denoiseFile('tril1.wav',2.5)
+denoiseFile('Sound Files/tril1.wav',4.5)
 #denoiseFile('tril1.wav',3.5)
 #denoiseFile('tril1.wav',4.0)
 #denoiseFile('tril1.wav',4.5)
