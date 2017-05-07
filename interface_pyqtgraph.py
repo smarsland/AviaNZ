@@ -51,15 +51,18 @@ import Segment
 # Make the median filter on the spectrogram have params and a dialog. Other options?
 
 # Finish implementation to show individual segments to user and ask for feedback and the other feedback dialogs
+    # TODO: Get the results out, debug them both
 # Ditto lots of segments at once
 # Also, option to show a species
     # TODO: There is a small problem here that you have to click twice the first time. Is it true on Windows?
+
+# Mouse location printing -> Is it correct? Better place?
 
 # Decide on license
 
 # Finish segmentation
 #   Mostly there, need to test them
-#   Add a minimum length of time for a segment, debug the segmentation algorithms -> make this a parameter
+#   Add a minimum length of time for a segment -> make this a parameter
 #   Finish sorting out parameters for median clipping segmentation, energy segmentation
 #   Finish cross-correlation to pick out similar bits of spectrogram -> and what other methods?
 #   Add something that aggregates them -> needs planning
@@ -82,8 +85,6 @@ import Segment
 
 # Colourmaps
     # HistogramLUTItem
-
-# Mouse location printing -> Is it correct? Better place?
 
 # Make the scrollbar be the same size as the spectrogram -> hard!
 # Make the segmented play work with the phonon player? -> hard!
@@ -1664,18 +1665,8 @@ class AviaNZInterface(QMainWindow):
                     pass
                 else:
                     # Add the new bird name.
-                    #count = 0
-                    #while self.config['BirdList'][count] < text and count < len(self.config['BirdList'])-1:
-                    #    count += 1
-                    #self.config['BirdList'].insert(count-1,text)
                     self.config['BirdList'].insert(0,text)
                     self.saveConfig = True
-
-                    #bird = self.menuBird2.addAction(text)
-                    #receiver = lambda birdname=text: self.birdSelected(birdname)
-                    #self.connect(bird, SIGNAL("triggered()"), receiver)
-                    #self.menuBird2.addAction(bird)
-        #print "Updated segments",self.overviewSegments
 
     def mouseMoved(self,evt):
         # Print the time, frequency, power for mouse location in the spectrogram
@@ -1685,7 +1676,9 @@ class AviaNZInterface(QMainWindow):
             indexx = int(mousePoint.x())
             indexy = int(mousePoint.y())
             if indexx > 0 and indexx < np.shape(self.sg)[0] and indexy > 0 and indexy < np.shape(self.sg)[1]:
-                self.pointData.setText('time=%0.2f (s), freq=%0.1f (Hz),power=%0.1f (dB)' % (self.convertSpectoAmpl(mousePoint.x()), mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1], self.sg[indexx, indexy]))
+                seconds = self.convertSpectoAmpl(mousePoint.x()) % 60
+                minutes = int((self.convertSpectoAmpl(mousePoint.x()) / 60) % 60)
+                self.pointData.setText('time=%d:%0.2f (m:s), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1], self.sg[indexx, indexy]))
 
     # def activateRadioButtons(self):
         # Make the radio buttons selectable
@@ -1727,67 +1720,6 @@ class AviaNZInterface(QMainWindow):
             self.prevBoxCol = self.ColourNone
 
         self.lastSpecies = text
-
-    # def radioBirdsClicked(self):
-    #     # Listener for when the user selects a radio button
-    #     # Update the text and store the data
-    #     for button in self.birds1 + self.birds2:
-    #         if button.isChecked():
-    #             if button.text() == "Other":
-    #                 self.birdList.setEnabled(True)
-    #             else:
-    #                 self.birdList.setEnabled(False)
-    #                 self.updateText(str(button.text()))
-    #
-    # def listBirdsClicked(self, item):
-    #     # Listener for clicks in the listbox of birds
-    #     if (item.text() == "Other"):
-    #         self.tbox.setEnabled(True)
-    #     else:
-    #         # Save the entry
-    #         self.updateText(str(item.text()))
-    #         # self.segments[self.box1id][4] = str(item.text())
-    #         # self.a1text[self.box1id].set_text(str(item.text()))
-    #         # # The font size is a pain because the window is in pixels, so have to transform it
-    #         # # Force a redraw to make bounding box available
-    #         # self.canvasMain.draw()
-    #         # # fs = a1t.get_fontsize()
-    #         # width = self.a1text[self.box1id].get_window_extent().inverse_transformed(self.a1.transData).width
-    #         # if width > self.segments[self.box1id][1] - self.segments[self.box1id][0]:
-    #         #     self.a1text[self.box1id].set_fontsize(8)
-    #         #
-    #         # self.listRectanglesa1[self.box1id].set_facecolor('b')
-    #         # self.listRectanglesa2[self.box1id].set_facecolor('b')
-    #         # self.topBoxCol = self.listRectanglesa1[self.box1id].get_facecolor()
-    #         # self.canvasMain.draw()
-    #
-    # def birdTextEntered(self):
-    #     # Listener for the text entry in the bird list
-    #     # Check text isn't already in the listbox, and add if not
-    #     # Doesn't sort the list, but will when program is closed
-    #     item = self.birdList.findItems(self.tbox.text(), Qt.MatchExactly)
-    #     if item:
-    #         pass
-    #     else:
-    #         self.birdList.addItem(self.tbox.text())
-    #         self.config['ListBirdsEntries'].append(str(self.tbox.text()))
-    #     self.updateText(str(self.tbox.text()))
-    #     # self.segments[self.box1id][4] = str(self.tbox.text())
-    #     # self.a1text[self.box1id].set_text(str(self.tbox.text()))
-    #     # # The font size is a pain because the window is in pixels, so have to transform it
-    #     # # Force a redraw to make bounding box available
-    #     # self.canvasMain.draw()
-    #     # # fs = self.a1text[self.box1id].get_fontsize()
-    #     # width = self.a1text[self.box1id].get_window_extent().inverse_transformed(self.a1.transData).width
-    #     # if width > self.segments[self.box1id][1] - self.segments[self.box1id][0]:
-    #     #     self.a1text[self.box1id].set_fontsize(8)
-    #     #
-    #     # self.listRectanglesa1[self.box1id].set_facecolor('b')
-    #     # self.listRectanglesa2[self.box1id].set_facecolor('b')
-    #     # self.topBoxCol = self.listRectanglesa1[self.box1id].get_facecolor()
-    #     # self.canvasMain.draw()
-    #     self.saveConfig = True
-    #     # self.tbox.setEnabled(False)
 
     def setColourMap(self,cmap):
         self.config['cmap'] = cmap
@@ -1851,41 +1783,6 @@ class AviaNZInterface(QMainWindow):
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
         self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
-
-    # def showSegments(self,seglen=0):
-    #     # This plots the segments that are returned from any of the segmenters and adds them to the set of segments
-    #     # If there are segments, show them
-    #     for count in range(seglen,len(self.segments)):
-    #         if self.segments[count][4] == 'None' or self.segments[count][4] == "Don't Know":
-    #             facecolour = 'r'
-    #         else:
-    #             facecolour = 'b'
-    #         a1R = self.a1.add_patch(pl.Rectangle((self.segments[count][0], np.min(self.audiodata)),
-    #                                              self.segments[count][1] - self.segments[count][0],
-    #                                              self.plotheight,
-    #                                              facecolor=facecolour,
-    #                                              alpha=0.5))
-    #         a2R = self.a2.add_patch(pl.Rectangle((self.segments[count][0]*self.sampleRate / self.config['incr'], self.segments[count][2]),
-    #                                              self.segments[count][1]*self.sampleRate / self.config['incr'] - self.segments[count][
-    #                                                  0]*self.sampleRate / self.config['incr'],
-    #                                              self.segments[count][3], facecolor=facecolour,
-    #                                              alpha=0.5))
-    #
-    #         self.listRectanglesa1.append(a1R)
-    #         self.listRectanglesa2.append(a2R)
-    #         a1t = self.a1.text(self.segments[count][0], np.min(self.audiodata), self.segments[count][4])
-    #         # The font size is a pain because the window is in pixels, so have to transform it
-    #         # Force a redraw to make bounding box available
-    #         self.canvasMain.draw()
-    #         # fs = a1t.get_fontsize()
-    #         width = a1t.get_window_extent().inverse_transformed(self.a1.transData).width
-    #         #print width, self.segments[count][1] - self.segments[count][0]
-    #         if width > self.segments[count][1] - self.segments[count][0]:
-    #             a1t.set_fontsize(8)
-    #
-    #         self.a1text.append(a1t)
-    #
-    #     self.canvasMain.draw()
 
     def changeWidth(self, value):
         # This is the listener for the spinbox that decides the width of the main window.
