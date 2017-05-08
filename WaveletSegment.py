@@ -39,11 +39,17 @@ class WaveletSeg:
             self.data = data
             self.sampleRate = sampleRate
 
+        [lowd,highd,lowr,highr] = np.loadtxt('dmey.txt')
+        self.wavelet = pywt.Wavelet(filter_bank=[lowd,highd,lowr,highr])
+
+        #self.wavelet = pywt.Wavelet(name='dmey')
+        print self.wavelet
+
     def denoise(self,data=None,thresholdType='soft', maxlevel=5):
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
-        wp = pywt.WaveletPacket(data=data, wavelet='db3', mode='symmetric', maxlevel=maxlevel)
+        wp = pywt.WaveletPacket(data=data, wavelet=self.wavelet, mode='symmetric', maxlevel=maxlevel)
 
         det1 = wp['d'].data
         # Note magic conversion number
@@ -68,7 +74,7 @@ class WaveletSeg:
         for t in range(300):
             E = []
             for level in range(1,6):
-                wp = pywt.WaveletPacket(data=fwData[t * sampleRate:(t + 1) * sampleRate], wavelet='db3', mode='symmetric', maxlevel=level)
+                wp = pywt.WaveletPacket(data=fwData[t * sampleRate:(t + 1) * sampleRate], wavelet=self.wavelet, mode='symmetric', maxlevel=level)
                 e = np.array([np.sum(n.data**2) for n in wp.get_level(level, "natural")])
                 if np.sum(e)>0:
                     e = 100.0*e/np.sum(e)
@@ -163,7 +169,7 @@ class WaveletSeg:
 
     def ButterworthBandpass(self,data=None,sampleRate=0,order=10,low=1000,high=7000):
         import scipy.signal as signal
-        if data==None:
+        if data is None:
             data=self.data
         if sampleRate==0:
             sampleRate=self.sampleRate
@@ -181,7 +187,7 @@ class WaveletSeg:
             sampleRate=self.sampleRate
         import string
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
-        new_wp = pywt.WaveletPacket(data=None, wavelet='db3', mode='symmetric')
+        new_wp = pywt.WaveletPacket(data=None, wavelet=self.wavelet, mode='symmetric')
         # First, turn the index into a leaf name.
         level = np.floor(np.log2(node))
         first = 2**level-1
@@ -229,7 +235,7 @@ class WaveletSeg:
         detected = np.zeros((300,len(listnodes)))
         count = 0
         for index in listnodes:
-            new_wp = pywt.WaveletPacket(data=None, wavelet='db3', mode='symmetric')
+            new_wp = pywt.WaveletPacket(data=None, wavelet=self.wavelet, mode='symmetric')
             # First, turn the index into a leaf name.
             level = np.floor(np.log2(index))
             first = 2**level-1
@@ -275,7 +281,7 @@ class WaveletSeg:
         # about different size coefficient arrays most of the time.
         import string
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
-        new_wp = pywt.WaveletPacket(data=None, wavelet='db3', mode='symmetric')
+        new_wp = pywt.WaveletPacket(data=None, wavelet=self.wavelet, mode='symmetric')
 
         for index in listnodes:
             # First, turn the index into a leaf name.
@@ -366,7 +372,7 @@ class WaveletSeg:
                 #librosa.output.write_wav(fName, data[start:start+fs*60*5], fs)
                 i+=1
 
-def findCalls_train(self,fName,species='kiwi'):
+def findCalls_train(fName,species='kiwi'):
     # Load data and annotation
     ws=WaveletSeg()
     ws.loadData(fName)
@@ -407,7 +413,7 @@ def findCalls_train(self,fName,species='kiwi'):
     print nodes
 
     # Generate a full 5 level wavelet packet decomposition
-    wpFull = pywt.WaveletPacket(data=fwData, wavelet='db3', mode='symmetric', maxlevel=5)
+    wpFull = pywt.WaveletPacket(data=fwData, wavelet=ws.wavelet, mode='symmetric', maxlevel=5)
 
     # Now check the F2 values and add node if it improves F2
     listnodes = []
@@ -444,7 +450,7 @@ def findCalls_test(listnodes,fName,species='kiwi'):
         ws.sampleRate=fs
     wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
     fwData = ws.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
-    wpFull = pywt.WaveletPacket(data=fwData, wavelet='db3', mode='symmetric', maxlevel=5)
+    wpFull = pywt.WaveletPacket(data=fwData, wavelet=self.wavelet, mode='symmetric', maxlevel=5)
     detected = ws.detectCalls_test(wpFull, listnodes, ws.sampleRate) #detect based on a previously defined nodeset
     print fName
     ws.fBetaScore(ws.annotation, detected)
@@ -459,7 +465,7 @@ def processFolder(folder_to_process = 'Sound Files/survey/5min', species='kiwi')
         ws.loadData(filename[:-4],trainTest=False)
         wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
         fwData = ws.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
-        wpFull = pywt.WaveletPacket(data=fwData, wavelet='db3', mode='symmetric', maxlevel=5)
+        wpFull = pywt.WaveletPacket(data=fwData, wavelet=self.wavelet, mode='symmetric', maxlevel=5)
         detected[i,:] = ws.detectCalls_test(wpFull, nodelist_kiwi, ws.sampleRate) #detect based on a previously defined nodeset
     return detected
 
@@ -485,6 +491,8 @@ def genReport(folder_to_process,detected):
 #Test
 nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
 #nodelist_kiwi = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55] # matlab
+#[36, 35, 43, 41, 38, 45, 44, 55]
+#[36, 35, 43, 41, 38, 45, 44, 39, 31, 17, 21, 18, 20, 15, 8, 10, 3, 4, 1, 55]
 
 # def test(nodelist):
 #     for filename in glob.glob(os.path.join('Sound Files/test','*.wav')):
@@ -498,6 +506,8 @@ nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
 # ws.splitAudio(folder_to_process='Sound Files/survey')
 # print "5-min splitting done"
 # Now to process survey data
-detected=processFolder(folder_to_process='Sound Files/survey/5min', species='kiwi')
-genReport(folder_to_process='Sound Files/survey/5min',detected=detected)
-print detected
+#detected=processFolder(folder_to_process='Sound Files/survey/5min', species='kiwi')
+#genReport(folder_to_process='Sound Files/survey/5min',detected=detected)
+#print detected
+
+print findCalls_train('Wavelet Segmentation/kiwi/train/train1',species='kiwi')
