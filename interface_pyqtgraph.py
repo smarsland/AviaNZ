@@ -67,7 +67,7 @@ import Segment
 #   Add something that aggregates them -> needs planning
 
 # Fundamental frequency
-#   Finish plotting with line -- need to split into pieces and plot each individually
+#   Finish plotting with line -- need to split into pieces and plot each individually (and make deletable)
 #   Smoothing?
 #   Add shape metric
 #   Try the harvest f0
@@ -880,47 +880,52 @@ class AviaNZInterface(QMainWindow):
         #fdd.exec_()
         #username = fdd.getData()
 
-        print type(name)
-        if isinstance(name,str):
-            self.filename = self.dirName+'/'+name
-        elif isinstance(name,QString):
-            self.filename = str(name)
-        else:
-            self.filename = str(self.dirName+'/'+name.text())
-        print self.filename, type(self.filename)
-        #self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
-        #self.sampleRate, self.audiodata = wavfile.read(self.filename)
-        wavobj = wavio.read(self.filename)
-        self.sampleRate = wavobj.rate
-        self.audiodata = wavobj.data
-        self.minFreq = 0
-        self.maxFreq = self.sampleRate/2.
-        # None of the following should be necessary for librosa
-        if self.audiodata.dtype is not 'float':
-            self.audiodata = self.audiodata.astype('float') #/ 32768.0
-        if np.shape(np.shape(self.audiodata))[0]>1:
-            self.audiodata = self.audiodata[:,0]
-        self.datalength = np.shape(self.audiodata)[0]
-        self.setWindowTitle('AviaNZ - ' + self.filename)
-        print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate)
+        with pg.ProgressDialog("Loading..", 0, 5) as dlg:
+            if isinstance(name,str):
+                self.filename = self.dirName+'/'+name
+            elif isinstance(name,QString):
+                self.filename = str(name)
+            else:
+                self.filename = str(self.dirName+'/'+name.text())
+            dlg += 1
+            #self.audiodata, self.sampleRate = lr.load(self.filename,sr=None)
+            #self.sampleRate, self.audiodata = wavfile.read(self.filename)
 
-        # Create an instance of the Signal Processing class
-        if not hasattr(self,'sp'):
-            self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate,self.config['window_width'],self.config['incr'])
+            wavobj = wavio.read(self.filename)
+            self.sampleRate = wavobj.rate
+            self.audiodata = wavobj.data
+            self.minFreq = 0
+            self.maxFreq = self.sampleRate/2.
+            dlg += 1
+            # None of the following should be necessary for librosa
+            if self.audiodata.dtype is not 'float':
+                self.audiodata = self.audiodata.astype('float') #/ 32768.0
+            if np.shape(np.shape(self.audiodata))[0]>1:
+                self.audiodata = self.audiodata[:,0]
+            self.datalength = np.shape(self.audiodata)[0]
+            self.setWindowTitle('AviaNZ - ' + self.filename)
+            print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate)
+            dlg += 1
 
-        # Get the data for the spectrogram
-        self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
-        maxsg = np.min(self.sgRaw)
-        self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
+            # Create an instance of the Signal Processing class
+            if not hasattr(self,'sp'):
+                self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate,self.config['window_width'],self.config['incr'])
 
-        # Load any previous segments stored
-        if os.path.isfile(self.filename+'.data'):
-            file = open(self.filename+'.data', 'r')
-            self.segments = json.load(file)
-            file.close()
-            self.hasSegments = True
-        else:
-            self.hasSegments = False
+            # Get the data for the spectrogram
+            self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
+            maxsg = np.min(self.sgRaw)
+            self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
+            dlg += 1
+
+            # Load any previous segments stored
+            if os.path.isfile(self.filename+'.data'):
+                file = open(self.filename+'.data', 'r')
+                self.segments = json.load(file)
+                file.close()
+                self.hasSegments = True
+            else:
+                self.hasSegments = False
+            dlg += 1
 
         # Update the data that is seen by the other classes
         # TODO: keep an eye on this to add other classes as required
