@@ -475,7 +475,7 @@ def show():
 
 #pl.ion()
 
-denoiseFile('Sound Files/tril1.wav',4.5)
+#denoiseFile('Sound Files/tril1.wav',4.5)
 #denoiseFile('tril1.wav',3.5)
 #denoiseFile('tril1.wav',4.0)
 #denoiseFile('tril1.wav',4.5)

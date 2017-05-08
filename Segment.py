@@ -2,7 +2,7 @@
 # Author: Stephen Marsland
 
 import numpy as np
-# import scipy.ndimage as spi
+import scipy.ndimage as spi
 #import librosa
 
 # TODO:
@@ -24,7 +24,7 @@ class Segment:
     # It also implements two forms of recognition:
     # Cross-correlation and DTW
 
-    # Each returns start and stop times for each segment as a Python list of pairs
+    # Each returns start and stop times for each segment (in seconds) as a Python list of pairs
     # See also the species-specific segmentation in WaveletSegment
 
     def __init__(self,data,sg,sp,fs,minSegment,window_width=256,incr=128):
@@ -41,30 +41,78 @@ class Segment:
         self.window_width = window_width
         self.incr = incr
 
-    def setNewData(self,data,sg,fs):
+    def setNewData(self, data, sg, fs, window_width, incr):
         # To be called when a new sound file is loaded
         self.data = data
         self.fs = fs
         self.sg = sg
+        self.window_width = window_width
+        self.incr = incr
+
+    def identifySegments(self, seg, maxgap=1, minlength=1):
+        segments = []
+        start = seg[0]
+        for i in range(1, len(seg)):
+            if seg[i] <= seg[i - 1] + maxgap:
+                pass
+            else:
+                # If segment is long enough to be worth bothering with
+                # print seg[i-1] - start, start
+                if (seg[i - 1] - start) > minlength:
+                    # print([float(start) , float(seg[i-1])])
+                    segments.append([float(start) * self.incr / self.fs, float(seg[i - 1]) * self.incr / self.fs])
+                start = seg[i]
+        if seg[-1] - start > minlength:
+            # print([float(start), float(seg[-1])])
+            segments.append([float(start) * self.incr / self.fs, float(seg[-1]) * self.incr / self.fs])
+        # print len(segments)
+        # print segments
+        # for segs in segments:
+        #    print segs[0] * self.fs/self.incr, segs[1]*self.fs/self.incr
+        return segments
+
+    def segmentByFIR(self, threshold):
+        # Create an FIR envelope (as a negative exponential -- params are hacks!)
+        from scipy.interpolate import interp1d
+        print self.fs, self.window_width, self.incr
+        nsecs = len(self.data) / float(self.fs)
+        fftrate = int(np.shape(self.sg)[0]) / nsecs
+        upperlimit = 100
+        # a = np.arange(upperlimit)
+        # FIR = 0.06 * np.exp(-a / 5.)
+        FIR = [0.078573000000000004, 0.053921000000000004, 0.041607999999999999, 0.036006000000000003, 0.031521,
+               0.029435000000000003, 0.028122000000000001, 0.027286999999999999, 0.026241000000000004,
+               0.025225999999999998, 0.024076, 0.022926999999999999, 0.021703999999999998, 0.020487000000000002,
+               0.019721000000000002, 0.019015000000000001, 0.018563999999999997, 0.017953, 0.01753,
+               0.017077000000000002, 0.016544, 0.015762000000000002, 0.015056, 0.014456999999999999, 0.013913,
+               0.013299, 0.012879, 0.012568000000000001, 0.012454999999999999, 0.012056000000000001, 0.011634,
+               0.011077, 0.010707, 0.010217, 0.0098840000000000004, 0.0095959999999999986, 0.0093607000000000013,
+               0.0090197999999999997, 0.0086908999999999997, 0.0083841000000000002, 0.0081481999999999995,
+               0.0079185000000000002, 0.0076363000000000004, 0.0073406000000000009, 0.0070686999999999998,
+               0.0068438999999999991, 0.0065873000000000008, 0.0063688999999999994, 0.0061700000000000001,
+               0.0059743000000000001, 0.0057561999999999995, 0.0055351000000000003, 0.0053633999999999991,
+               0.0051801, 0.0049743000000000001, 0.0047431000000000001, 0.0045648999999999993,
+               0.0043972000000000004, 0.0042459999999999998, 0.0041016000000000004, 0.0039503000000000003,
+               0.0038013000000000005, 0.0036351, 0.0034856000000000002, 0.0033270999999999999,
+               0.0032066999999999998, 0.0030569999999999998, 0.0029206999999999996, 0.0027760000000000003,
+               0.0026561999999999996, 0.0025301999999999998, 0.0024185000000000001, 0.0022967,
+               0.0021860999999999998, 0.0020696999999999998, 0.0019551999999999998, 0.0018563,
+               0.0017562000000000001, 0.0016605000000000001, 0.0015522000000000001, 0.0014482999999999998,
+               0.0013492000000000001, 0.0012600000000000001, 0.0011788, 0.0010909000000000001, 0.0010049,
+               0.00091527999999999998, 0.00082061999999999999, 0.00074465000000000002, 0.00067159000000000001,
+               0.00060258999999999996, 0.00053370999999999996, 0.00046135000000000002, 0.00039071,
+               0.00032736000000000001, 0.00026183000000000001, 0.00018987999999999999, 0.00011976000000000001,
+               6.0781000000000006e-05, 0.0]
+        f = interp1d(np.arange(0, len(FIR)), np.squeeze(FIR))
+        samples = f(np.arange(1, upperlimit, float(upperlimit) / int(fftrate / 10.)))
+        padded = np.concatenate((np.zeros(int(fftrate / 10.)), np.mean(self.sg, axis=1), np.zeros(int(fftrate / 10.))))
+        envelope = spi.filters.convolve(padded, samples, mode='constant')[:-int(fftrate / 10.)]
+        seg = np.squeeze(np.where(envelope > np.median(envelope) + threshold * np.std(envelope)))
+        return self.identifySegments(seg, minlength=10)
 
     def segmentByAmplitude(self,threshold):
-        self.seg = np.where(np.abs(self.data)>threshold,1,0)
-        inSegment=False
-        segments = []
-        for i in range(len(self.data)):
-            if self.seg[i] > 0:
-                if inSegment:
-                    pass
-                else:
-                    inSegment = True
-                    start = i
-            else:
-                if inSegment:
-                    # If segment is long enough to be worth bothering with
-                    if i-start>1:
-                        segments.append([float(start)/self.fs, float(i)/self.fs])
-                    inSegment = False
-        return segments
+        seg = np.where(np.abs(self.data)>threshold)
+        return self.identifySegments(seg)
 
     def segmentByEnergy(self,threshold,width,min_width=450):
         # Based on description in Jinnai et al. 2012 paper in Acoustics
@@ -119,20 +167,23 @@ class Segment:
         # TODO: And then compute the geometric distance to templates
         return Emm, maxpoints
 
+
     def Harma(self,thr=10.,stop_thr=0.8):
         # Harma's method, but with a different stopping criterion
         # Note that this will go wrong with librosa's load because the elements of the spectrogram lie in [0,1] and hence interesting things with the log
         #print np.shape(self.sg), np.min(self.sg), np.max(self.sg)
-        maxFreqs = 20. * np.log10(np.max(self.sg, 0))
-        #print np.shape(maxFreqs)
-        #maxFreqInds = np.argmax(self.sg, 0)
+        maxFreqs = 10. * np.log10(np.max(self.sg, axis = 1))
+        from scipy.signal import medfilt
+        maxFreqs = medfilt(maxFreqs,21)
+        #import pylab as pl
+        #pl.savetxt('poo.txt',maxFreqs)
         biggest = np.max(maxFreqs)
         segs = []
-        print biggest
 
         while np.max(maxFreqs)>stop_thr*biggest:
             t0 = np.argmax(maxFreqs)
             a_n = maxFreqs[t0]
+            print t0, a_n
 
             # Go backwards looking for where the syllable stops
             t = t0
@@ -144,15 +195,26 @@ class Segment:
             t = t0
             while maxFreqs[t] > a_n - thr and t<len(maxFreqs)-1:
                 t += 1
-            t_end = t+1
+            t_end = t
 
+            print t_start, t_end
             # Set the syllable just found to 0
             maxFreqs[t_start:t_end] = 0
             if float(t_end - t_start)*self.incr/self.fs*1000.0 > self.minSegment:
                 segs.append([float(t_start)* self.incr / self.fs,float(t_end)* self.incr / self.fs])
 
-            print t_start, t_end, stop_thr*biggest, np.max(maxFreqs)
+            #print t_start, t_end, stop_thr*biggest, np.max(maxFreqs)
         return segs
+
+    def segmentByPower(self,thr=1.):
+        # Harma's method, but with a different stopping criterion
+        # Note that this will go wrong with librosa's load because the elements of the spectrogram lie in [0,1] and hence interesting things with the log
+        #print np.shape(self.sg), np.min(self.sg), np.max(self.sg)
+        maxFreqs = 10. * np.log10(np.max(self.sg, axis = 1))
+        from scipy.signal import medfilt
+        maxFreqs = medfilt(maxFreqs,21)
+        seg = np.squeeze(np.where(maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))))
+        return self.identifySegments(seg,minlength=10)
 
     def medianClip(self,thr=3.0,medfiltersize=5,minsize=80,minaxislength=5):
         # Median clipping for segmentation
@@ -325,24 +387,26 @@ class Segment:
                 pitch[int(i*2./W)] = float(self.fs)/newtau
 
         if returnSegs:
-            segs = []
             ind = np.squeeze(np.where(pitch > minfreq))
-            inseg = False
-            i = 0
-            while i < len(ind):
-                if not inseg:
-                    start = ind[i]
-                    inseg = True
-                elif ind[i] != ind[i - 1] + 1:
-                    # TODO: Consider allowing for a couple of points to be missed?
-                    inseg = False
-                    # TODO: Consider not including segments that are too short
-                    if float(starts[ind[i-1]] - starts[start]) / self.fs * 1000.0 > self.minSegment:
-                        segs.append([float(starts[start]) / self.fs, float(starts[ind[i-1]]) / self.fs])
-                i += 1
-            # Add the last segment
-            if (starts[ind[i - 1]] - starts[start]) / self.fs  * 1000.0> self.minSegment:
-                segs.append([float(starts[start]) / self.fs, float(starts[ind[i - 1]]) / self.fs])
+            segs = identifySegments(ind)
+            # segs = []
+            # ind = np.squeeze(np.where(pitch > minfreq))
+            # inseg = False
+            # i = 0
+            # while i < len(ind):
+            #     if not inseg:
+            #         start = ind[i]
+            #         inseg = True
+            #     elif ind[i] != ind[i - 1] + 1:
+            #         # TODO: Consider allowing for a couple of points to be missed?
+            #         inseg = False
+            #         # TODO: Consider not including segments that are too short
+            #         if float(starts[ind[i-1]] - starts[start]) / self.fs * 1000.0 > self.minSegment:
+            #             segs.append([float(starts[start]) / self.fs, float(starts[ind[i-1]]) / self.fs])
+            #     i += 1
+            # # Add the last segment
+            # if (starts[ind[i - 1]] - starts[start]) / self.fs  * 1000.0> self.minSegment:
+            #     segs.append([float(starts[start]) / self.fs, float(starts[ind[i - 1]]) / self.fs])
             return segs, pitch, np.array(starts)
         else:
             return pitch, np.array(starts), minfreq, W
@@ -493,3 +557,13 @@ def testYin():
     pl.ion()
     pl.figure, pl.imshow(sg)
     pl.show()
+
+def testsegFIR():
+    from scipy.io import wavfile
+    fs, data = wavfile.read('Sound Files/tril1.wav')
+    import SignalProc
+    sp = SignalProc.SignalProc(data,fs,256,128,)
+    sg = sp.spectrogram(data,multitaper=False,mean_normalise=False)
+    s = Segment.Segment(data,sg,sp,fs)
+    segments = s.segmentByFIR(1.0)
+    print segments

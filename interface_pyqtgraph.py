@@ -98,6 +98,7 @@ import Segment
 # Should load in the new sound file after denoising and play that
 
 # Have a busy bar when computing?
+    # -> put one in for loading, good idea for other stuff (denoising, etc.)
 
 # Look into ParameterTree for saving the config stuff in particular
 # Better loading of files -> paging, not computing whole spectrogram (how to deal with overview? -> coarser spec?)
@@ -469,8 +470,8 @@ class AviaNZInterface(QMainWindow):
 
         self.specPlot = pg.ImageItem()
         self.p_spec.addItem(self.specPlot)
-        self.specPlot2 = pg.PlotDataItem()
-        self.p_spec.addItem(self.specPlot2)
+        #self.specPlot2 = pg.PlotDataItem()
+        #self.p_spec.addItem(self.specPlot2)
 
         # Connect up the listeners
         #self.p_overview.scene().sigMouseClicked.connect(self.mouseClicked_overview)
@@ -1031,31 +1032,36 @@ class AviaNZInterface(QMainWindow):
             pitch, y, minfreq, W = self.seg.yin()
             ind = np.squeeze(np.where(pitch>minfreq))
             pitch = pitch[ind]
-            ind = ind*W/(self.config['window_width']/2.)
+            ind = ind*W/(self.config['window_width'])
             x = (pitch*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
 
             # Get the individual pieces
-            # TODO: FINISH!
-            print ind
             segs = self.seg.identifySegments(ind,maxgap=10,minlength=5)
+            count = 0
+            self.segmentPlots = []
             for s in segs:
+                count += 1
                 s[0] = s[0] * self.sampleRate / float(self.config['incr'])
                 s[1] = s[1] * self.sampleRate / float(self.config['incr'])
                 i = np.where((ind>s[0]) & (ind<s[1]))
-                print s, i
-                self.specPlot2.setData(ind[i],x[i],pen=pg.mkPen('r', width=3))
+                self.segmentPlots.append(pg.PlotDataItem())
+                self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=3))
+                self.p_spec.addItem(self.segmentPlots[-1])
 
-            self.yinRois = []
-            for r in range(len(x)):
-                self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
-            for r in self.yinRois:
-                self.p_spec.addItem(r)
+            #self.yinRois = []
+            #for r in range(len(x)):
+            #    self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
+            #for r in self.yinRois:
+            #    self.p_spec.addItem(r)
 
             # TODO: Fit a spline and draw it
             #from scipy.interpolate import interp1d
             #f = interp1d(x, ind, kind='cubic')
             #self.sg[ind,x] = 1
         else:
+            # TODO: delete the lines
+            for r in self.segmentPlots:
+                self.p_spec.removeItem(r)
             for r in self.yinRois:
                 self.p_spec.removeItem(r)
         #self.specPlot.setImage(self.sg)
