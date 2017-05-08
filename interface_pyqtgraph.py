@@ -54,7 +54,6 @@ import Segment
     # TODO: Get the results out, debug them both
 # Ditto lots of segments at once
 # Also, option to show a species
-    # TODO: There is a small problem here that you have to click twice the first time. Is it true on Windows?
 
 # Mouse location printing -> Is it correct? Better place?
 

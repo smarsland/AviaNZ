@@ -84,11 +84,9 @@ class PicButton(QAbstractButton):
         self.im1 = im1
         self.im2 = im2
         self.buttonClicked = False
-        self.clicked.connect(self.update)
+        self.clicked.connect(self.changePic)
 
     def paintEvent(self, event):
-        # TODO: First click has to be done twice?
-        #print self.buttonClicked, type(event)
         im = self.im2 if self.buttonClicked else self.im1
 
         if type(event) is not bool:
@@ -99,7 +97,7 @@ class PicButton(QAbstractButton):
     def sizeHint(self):
         return self.im1.size()
 
-    def update(self,event):
+    def changePic(self,event):
         self.buttonClicked = not(self.buttonClicked)
-        #print "Button " + str(self.index) + " clicked", self.buttonClicked
         self.paintEvent(event)
+        self.update()

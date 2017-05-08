@@ -681,7 +681,7 @@ class HumanClassify1(QDialog):
     # This dialog is different to the others. The aim is to check (or ask for) classifications for segments.
     # This version shows a single segment at a time, working through all the segments.
     # So it needs to show a segment, and its current label
-    # TODO: Select the right option in the list
+    # TODO: Select the right option in the list -> DEBUG
     # TODO: Deal with changes
     # TODO: Make the plot the correct size
 
@@ -695,6 +695,7 @@ class HumanClassify1(QDialog):
         self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
         self.label = label
+        self.birdList = birdList
         self.saveConfig = False
 
         # Set up the plot window, then the right and wrong buttons, and a close button
@@ -731,16 +732,16 @@ class HumanClassify1(QDialog):
             self.connect(self.birds2[i], SIGNAL("clicked()"), self.radioBirdsClicked)
 
         # The list of less common birds
-        self.birdList = QListWidget(self)
-        self.birdList.setMaximumWidth(150)
-        for item in birdList[20:]:
-            self.birdList.addItem(item)
-        self.birdList.sortItems()
+        self.birds3 = QListWidget(self)
+        self.birds3.setMaximumWidth(150)
+        for item in self.birdList[20:]:
+            self.birds3.addItem(item)
+        self.birds3.sortItems()
         # Explicitly add "Other" option in
-        self.birdList.insertItem(0, 'Other')
+        self.birds3.insertItem(0, 'Other')
 
-        self.connect(self.birdList, SIGNAL("itemClicked(QListWidgetItem*)"), self.listBirdsClicked)
-        self.birdList.setEnabled(False)
+        self.connect(self.birds3, SIGNAL("itemClicked(QListWidgetItem*)"), self.listBirdsClicked)
+        self.birds3.setEnabled(False)
 
         # This is the text box for missing birds
         self.tbox = QLineEdit(self)
@@ -761,7 +762,7 @@ class HumanClassify1(QDialog):
             birds2Layout.addWidget(self.birds2[i])
 
         birdListLayout = QVBoxLayout()
-        birdListLayout.addWidget(self.birdList)
+        birdListLayout.addWidget(self.birds3)
         birdListLayout.addWidget(QLabel("If bird isn't in list, select Other"))
         birdListLayout.addWidget(QLabel("Type below, Return at end"))
         birdListLayout.addWidget(self.tbox)
@@ -785,16 +786,26 @@ class HumanClassify1(QDialog):
         vboxFull.addWidget(self.close)
 
         self.setLayout(vboxFull)
-        self.setImage(seg, self.label)
+        self.setImage(seg,self.label)
 
-    def setImage(self, seg, label):
+    def setImage(self, seg,label):
         self.plot.setImage(seg)
         self.plot.setLookupTable(self.lut)
+
         if self.cmapInverted:
             self.plot.setLevels([self.colourEnd, self.colourStart])
         else:
             self.plot.setLevels([self.colourStart, self.colourEnd])
+
+        # Make one of the options be selected
         self.species.setText(label)
+        ind = self.birdList.index(label)
+        if ind < 10:
+            self.birds1[ind].setChecked(True)
+        elif ind < 19:
+            self.birds2[ind-10].setChecked(True)
+        else:
+            self.birds3[ind-19].setChecked(True)
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
@@ -830,6 +841,127 @@ class HumanClassify1(QDialog):
 
     def getValues(self):
         return [self.label, self.saveConfig]
+
+#======
+class HumanClassify2(QDialog):
+    # This dialog is different to the others. The aim is to check (or ask for) classifications for segments.
+    # This version gets *12* at a time, and put them all out together on buttons, and their labels.
+    # It could be all the same species, or the ones that it is unsure about, or whatever.
+
+    # TODO: First thing is to add a dialog that asks what you want -- all calls, a species, uncertain ones, whatever
+    # Decide what you want to do with it. I think that it is about saying which ones are right or wrong, not correcting them.
+    # Or just getting labels, or something
+    def __init__(self, sg, segments, label, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Check Classifications')
+        self.frame = QWidget()
+
+        self.sampleRate = sampleRate
+        self.incr = incr
+        self.lut = lut
+        self.colourStart = colourStart
+        self.colourEnd = colourEnd
+        self.cmapInverted = cmapInverted
+
+        # Seems that image is backwards?
+        self.sg = np.fliplr(sg)
+        self.segments = segments
+        self.firstSegment = 0
+
+        # TODO: Add a label with instructions
+        # TODO: More next button turn into a close and then close the window at the end
+
+        species = QLabel(label)
+        next = QPushButton("Next")
+        self.connect(next, SIGNAL("clicked()"), self.next)
+
+        # TODO: Decide on these sizes
+        self.width = 3
+        self.height = 4
+        self.grid = QGridLayout()
+
+        self.makeButtons()
+
+        vboxFull = QVBoxLayout()
+        vboxFull.addWidget(species)
+        vboxFull.addLayout(self.grid)
+        vboxFull.addWidget(next)
+        self.setLayout(vboxFull)
+
+    def makeButtons(self):
+        positions = [(i, j) for i in range(self.height) for j in range(self.width)]
+        images = []
+        segRemain = len(self.segments) - self.firstSegment
+        print segRemain, self.firstSegment
+
+        if segRemain < self.width * self.height:
+            for i in range(segRemain):
+                ind = i + self.firstSegment
+                if (self.segments[ind][2] == 0) and (self.segments[ind][3] == 0):
+                    x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
+                    x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
+                    x3 = 0
+                    x4 = np.shape(self.sg)[1]
+                else:
+                    x1 = int(self.segments[ind][0])
+                    x2 = int(self.segments[ind][1])
+                    x3 = int(self.segments[ind][2])
+                    x4 = int(self.segments[ind][3])
+                images.append(self.setImage(self.sg[x1:x2, x3:x4]))
+            for i in range(segRemain, self.width * self.height):
+                images.append([None, None])
+        else:
+            for i in range(self.width * self.height):
+                ind = i + self.firstSegment
+                if (self.segments[ind][2] == 0) and (self.segments[ind][3] == 0):
+                    x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
+                    x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
+                    x3 = 0
+                    x4 = np.shape(self.sg)[1]
+                else:
+                    x1 = int(self.segments[ind][0])
+                    x2 = int(self.segments[ind][1])
+                    x3 = int(self.segments[ind][2])
+                    x4 = int(self.segments[ind][3])
+                images.append(self.setImage(self.sg[x1:x2, x3:x4]))
+        self.buttons = []
+        for position, im in zip(positions, images):
+            if im[0] is not None:
+                self.buttons.append(SupportClasses.PicButton(position[0] * self.width + position[1], im[0], im[1]))
+                self.grid.addWidget(self.buttons[-1], *position)
+
+    def convertAmpltoSpec(self, x):
+        return x * self.sampleRate / self.incr
+
+    def setImage(self, seg):
+        if self.cmapInverted:
+            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourEnd, self.colourStart])
+        else:
+            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourStart, self.colourEnd])
+        im1 = fn.makeQImage(im, alpha)
+
+        if self.cmapInverted:
+            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourStart, self.colourEnd])
+        else:
+            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourEnd, self.colourStart])
+
+        im2 = fn.makeQImage(im, alpha)
+
+        return [im1, im2]
+
+    def next(self):
+        # TODO: Make this close the dialog
+        if (len(self.segments) - self.firstSegment) < self.width * self.height:
+            # Have finished
+            return
+        else:
+            self.firstSegment += self.width * self.height
+            if self.firstSegment != len(self.segments):
+                for i in range(self.width * self.height):
+                    self.grid.removeWidget(self.buttons[i])
+                self.makeButtons()
+            else:
+                return
 
 # ======
 # class CorrectHumanClassify1(QDialog):
@@ -955,124 +1087,3 @@ class HumanClassify1(QDialog):
 #
 #     def setImage(self,seg,label):
 #         self.plot.setImage(seg)
-
-#======
-class HumanClassify2(QDialog):
-    # This dialog is different to the others. The aim is to check (or ask for) classifications for segments.
-    # This version gets *12* at a time, and put them all out together on buttons, and their labels.
-    # It could be all the same species, or the ones that it is unsure about, or whatever.
-
-    # TODO: First thing is to add a dialog that asks what you want -- all calls, a species, uncertain ones, whatever
-    # Decide what you want to do with it. I think that it is about saying which ones are right or wrong, not correcting them.
-    # Or just getting labels, or something
-    def __init__(self, sg, segments, label, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
-        QDialog.__init__(self, parent)
-        self.setWindowTitle('Check Classifications')
-        self.frame = QWidget()
-
-        self.sampleRate = sampleRate
-        self.incr = incr
-        self.lut = lut
-        self.colourStart = colourStart
-        self.colourEnd = colourEnd
-        self.cmapInverted = cmapInverted
-
-        # Seems that image is backwards?
-        self.sg = np.fliplr(sg)
-        self.segments = segments
-        self.firstSegment = 0
-
-        # TODO: Add a label with instructions
-        # TODO: More next button turn into a close and then close the window at the end
-
-        species = QLabel(label)
-        next = QPushButton("Next")
-        self.connect(next, SIGNAL("clicked()"), self.next)
-
-        # TODO: Decide on these sizes
-        self.width = 3
-        self.height = 1
-        self.grid = QGridLayout()
-
-        self.makeButtons()
-
-        vboxFull = QVBoxLayout()
-        vboxFull.addWidget(species)
-        vboxFull.addLayout(self.grid)
-        vboxFull.addWidget(next)
-        self.setLayout(vboxFull)
-
-    def makeButtons(self):
-        positions = [(i, j) for i in range(self.height) for j in range(self.width)]
-        images = []
-        segRemain = len(self.segments) - self.firstSegment
-        print segRemain, self.firstSegment
-
-        if segRemain < self.width * self.height:
-            for i in range(segRemain):
-                ind = i + self.firstSegment
-                if (self.segments[ind][2] == 0) and (self.segments[ind][3] == 0):
-                    x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
-                    x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
-                    x3 = 0
-                    x4 = np.shape(self.sg)[1]
-                else:
-                    x1 = int(self.segments[ind][0])
-                    x2 = int(self.segments[ind][1])
-                    x3 = int(self.segments[ind][2])
-                    x4 = int(self.segments[ind][3])
-                images.append(self.setImage(self.sg[x1:x2, x3:x4]))
-            for i in range(segRemain, self.width * self.height):
-                images.append([None, None])
-        else:
-            for i in range(self.width * self.height):
-                ind = i + self.firstSegment
-                if (self.segments[ind][2] == 0) and (self.segments[ind][3] == 0):
-                    x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
-                    x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
-                    x3 = 0
-                    x4 = np.shape(self.sg)[1]
-                else:
-                    x1 = int(self.segments[ind][0])
-                    x2 = int(self.segments[ind][1])
-                    x3 = int(self.segments[ind][2])
-                    x4 = int(self.segments[ind][3])
-                images.append(self.setImage(self.sg[x1:x2, x3:x4]))
-        self.buttons = []
-        for position, im in zip(positions, images):
-            if im[0] is not None:
-                self.buttons.append(SupportClasses.PicButton(position[0] * self.width + position[1], im[0], im[1]))
-                self.grid.addWidget(self.buttons[-1], *position)
-
-    def convertAmpltoSpec(self, x):
-        return x * self.sampleRate / self.incr
-
-    def setImage(self, seg):
-        if self.cmapInverted:
-            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourEnd, self.colourStart])
-        else:
-            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourStart, self.colourEnd])
-        im1 = fn.makeQImage(im, alpha)
-
-        if self.cmapInverted:
-            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourStart, self.colourEnd])
-        else:
-            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourEnd, self.colourStart])
-
-        im2 = fn.makeQImage(im, alpha)
-
-        return [im1, im2]
-
-    def next(self):
-        # TODO: Make this close the dialog
-        if (len(self.segments) - self.firstSegment) < self.width * self.height:
-            # Have finished
-            return
-        else:
-            self.firstSegment += self.width * self.height
-            if self.firstSegment != len(self.segments):
-                for i in range(self.width * self.height):
-                    self.grid.removeWidget(self.buttons[i])
-                self.makeButtons()
-            else:
-                return
