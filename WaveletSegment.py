@@ -510,4 +510,31 @@ nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
 #genReport(folder_to_process='Sound Files/survey/5min',detected=detected)
 #print detected
 
-print findCalls_train('Wavelet Segmentation/kiwi/train/train1',species='kiwi')
+#print findCalls_train('Wavelet Segmentation/kiwi/train/train1',species='kiwi')
+
+ws = WaveletSeg()
+ws.loadData('Wavelet Segmentation/kiwi/train/train1')
+
+fs = 16000
+if ws.sampleRate != fs:
+    ws.data = librosa.core.audio.resample(ws.data, ws.sampleRate, fs)
+    ws.sampleRate = fs
+
+# Get the five level wavelet decomposition
+#wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
+# librosa.output.write_wav('train/kiwi/D/', wData, sampleRate, norm=False)
+
+# Bandpass filter
+# fwData = bandpass(wData,sampleRate)
+# TODO: Params in here!
+# bittern
+# fwData = ButterworthBandpass(wData,sampleRate,low=100,high=400)
+# kiwi
+#fwData = ws.ButterworthBandpass(wData, ws.sampleRate, low=1100, high=7500)
+#print fwData
+
+fwData = ws.data
+# fwData = data
+waveletCoefs = ws.computeWaveletEnergy(fwData, ws.sampleRate)
+
+np.savetxt('waveout.txt',waveletCoefs)

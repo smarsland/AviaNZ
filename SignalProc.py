@@ -254,6 +254,11 @@ class SignalProc:
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
+
+        if wavelet == 'dmey':
+            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
+            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
+
         if maxlevel is None:
             self.maxlevel = self.BestLevel(wavelet)
         else:
@@ -284,10 +289,15 @@ class SignalProc:
 
         return self.wData
 
-    def waveletDenoise(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='db3'):
+    def waveletDenoise(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
+
+        if wavelet == 'dmey':
+            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
+            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
+
         if maxlevel is None:
             self.maxlevel = self.BestLevel(wavelet)
         else:

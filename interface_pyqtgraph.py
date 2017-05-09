@@ -67,7 +67,6 @@ import Segment
 #   Add something that aggregates them -> needs planning
 
 # Fundamental frequency
-#   Finish plotting with line -- need to split into pieces and plot each individually (and make deletable)
 #   Smoothing?
 #   Add shape metric
 #   Try the harvest f0

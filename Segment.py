@@ -388,7 +388,7 @@ class Segment:
 
         if returnSegs:
             ind = np.squeeze(np.where(pitch > minfreq))
-            segs = identifySegments(ind)
+            segs = self.identifySegments(ind)
             # segs = []
             # ind = np.squeeze(np.where(pitch > minfreq))
             # inseg = False
