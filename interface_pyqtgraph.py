@@ -51,13 +51,13 @@ import Segment
 # Make the median filter on the spectrogram have params and a dialog. Other options?
 
 # Finish implementation to show individual segments to user and ask for feedback and the other feedback dialogs
-    # TODO: Get the results out, debug them both
-# Ditto lots of segments at once
-# Also, option to show a species
+    # TODO: Deal with the outputs
 
 # Mouse location printing -> Is it correct? Better place?
 
 # Decide on license
+
+# Change directory menu item?
 
 # Finish segmentation
 #   Mostly there, need to test them
@@ -172,7 +172,6 @@ class AviaNZInterface(QMainWindow):
     def __init__(self,root=None,configfile=None):
         # Main part of the initialisation is loading a configuration file, or creating a new one if it doesn't
         # exist. Also loads an initial file (specified explicitly) and sets up the window.
-        # TODO: better way to choose initial file (or don't choose one at all)
         super(AviaNZInterface, self).__init__()
         self.root = root
         if configfile is not None:
@@ -208,7 +207,7 @@ class AviaNZInterface(QMainWindow):
         self.setWindowTitle('AviaNZ')
 
         # Make life easier for now: preload a birdsong
-        self.firstFile = 'tril1.wav' #'male1.wav' # 'kiwi.wav'#'
+        firstFile = 'tril1.wav' #'male1.wav' # 'kiwi.wav'#'
         #self.firstFile = 'kiwi.wav'
 
         self.createMenu()
@@ -218,11 +217,12 @@ class AviaNZInterface(QMainWindow):
         if not os.path.isdir(self.dirName):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
-        if not os.path.isfile(self.dirName+'/'+self.firstFile):
+        if not os.path.isfile(self.dirName+'/'+firstFile):
             fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
             if fileName:
-                self.firstFile = fileName
-        self.loadFile(self.firstFile)
+                firstFile = fileName
+        self.loadFile(firstFile)
+        self.fillFileList(firstFile)
 
         # Save the segments every minute
         self.timer = QTimer()
@@ -370,13 +370,13 @@ class AviaNZInterface(QMainWindow):
             # Amount of overlap for 2 segments to be counted as the same
             'overlap_allowed': 5,
 
-            'BirdButtons1': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)",
-                             "Petrel"],
-            'BirdButtons2': ["Rifleman", "Ruru", "Saddleback", "Silvereye", "Tomtit", "Tui", "Warbler", "Not Bird",
-                             "Don't Know", "Other"],
-            'ListBirdsEntries': ['Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit',
-                                 'Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover',
-                                 'Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
+            #'BirdButtons1': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)",
+            #                 "Petrel"],
+            #'BirdButtons2': ["Rifleman", "Ruru", "Saddleback", "Silvereye", "Tomtit", "Tui", "Warbler", "Not Bird",
+            #                 "Don't Know", "Other"],
+            #'ListBirdsEntries': ['Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit',
+            #                     'Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover',
+            #                     'Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
             'BirdList': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)","Petrel","Rifleman", "Ruru", "Saddleback", "Silvereye", "Tomtit", "Tui", "Warbler", "Not Bird", "Don't Know",'Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit','Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover','Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
 
             'ColourList': ['Grey','Viridis', 'Inferno', 'Plasma', 'Autumn', 'Cool', 'Bone', 'Copper', 'Hot', 'Jet','Thermal','Flame','Yellowy','Bipolar','Spectrum'],
@@ -599,11 +599,9 @@ class AviaNZInterface(QMainWindow):
         self.w_controls.addWidget(QLabel('Visible window width (seconds)'),row=7,col=0,colspan=2)
         self.w_controls.addWidget(self.widthWindow,row=8,col=0,colspan=2)#,colspan=2)
 
-
         # List to hold the list of files
         self.listFiles = QListWidget(self)
         self.listFiles.setFixedWidth(150)
-        self.fillFileList()
         self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
 
         self.w_files.addWidget(QLabel('Double click to select'),row=0,col=0)
@@ -757,12 +755,13 @@ class AviaNZInterface(QMainWindow):
             self.connect(bird, SIGNAL("triggered()"), receiver)
             self.menuBird2.addAction(bird)
 
-    def fillFileList(self):
+    def fillFileList(self,fileName):
         # Generates the list of files for the listbox on lower left
         # Most of the work is to deal with directories in that list
         if not os.path.isdir(self.dirName):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
+
         self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
         listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
         listOfLongFiles = QDir(self.dirName).entryList(['*_1.wav'])
@@ -776,7 +775,7 @@ class AviaNZInterface(QMainWindow):
                 item.setText(file.fileName())
                 if file.fileName()+'.data' in listOfDataFiles:
                     item.setTextColor(Qt.red)
-        index = self.listFiles.findItems(self.firstFile,Qt.MatchExactly)
+        index = self.listFiles.findItems(fileName,Qt.MatchExactly)
         if len(index)>0:
             self.listFiles.setCurrentItem(index[0])
         else:
@@ -825,16 +824,8 @@ class AviaNZInterface(QMainWindow):
         while fileName[i] != '/' and i>0:
             i = i-1
         self.dirName = fileName[:i+1]
-        if self.previousFile is not None:
-            if self.segments != [] or self.hasSegments:
-                self.saveSegments()
-        # TODO: Should check if the file is in the list in the Files box and then actually store it for colouring
-        # Also find current and highlight it
-        self.previousFile = None
-        self.resetStorageArrays()
-        self.showFundamental.setChecked(False)
-        self.showInvSpec.setChecked(False)
-        self.loadFile(fileName)
+
+        self.listLoadFile(fileName)
 
     def listLoadFile(self,current):
         # Listener for when the user clicks on a filename
@@ -847,11 +838,18 @@ class AviaNZInterface(QMainWindow):
         self.previousFile = current
         self.resetStorageArrays()
 
+        self.showFundamental.setChecked(False)
+        self.showInvSpec.setChecked(False)
+
+        if type(current) is QString:
+            pass
+        else:
+            current = current.text()
+
         i=0
-        while self.listOfFiles[i].fileName() != current.text():
+        while self.listOfFiles[i].fileName() != current and i<len(self.listOfFiles)-1:
             i+=1
-        # Slightly dangerous, but the file REALLY should exist
-        if self.listOfFiles[i].isDir():
+        if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
             dir = QDir(self.dirName)
             dir.cd(self.listOfFiles[i].fileName())
             # Now repopulate the listbox
@@ -861,7 +859,13 @@ class AviaNZInterface(QMainWindow):
             self.listFiles.clearFocus()
             self.listFiles.clear()
             self.previousFile = None
-            self.fillFileList()
+            if (i == len(self.listOfFiles)-1) and (self.listOfFiles[i].fileName() != current):
+                self.loadFile(current)
+            self.fillFileList(current)
+            # Show the selected file
+            index = self.listFiles.findItems(os.path.basename(str(current)), Qt.MatchExactly)
+            if len(index) > 0:
+                self.listFiles.setCurrentItem(index[0])
         else:
             self.loadFile(current)
 
@@ -884,7 +888,8 @@ class AviaNZInterface(QMainWindow):
             if isinstance(name,str):
                 self.filename = self.dirName+'/'+name
             elif isinstance(name,QString):
-                self.filename = str(name)
+                name = os.path.basename(str(name))
+                self.filename = self.dirName+'/'+ name
             else:
                 self.filename = str(self.dirName+'/'+name.text())
             dlg += 1
@@ -912,9 +917,9 @@ class AviaNZInterface(QMainWindow):
                 self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate,self.config['window_width'],self.config['incr'])
 
             # Get the data for the spectrogram
-            self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
-            maxsg = np.min(self.sgRaw)
-            self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
+            sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
+            maxsg = np.min(sgRaw)
+            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
             dlg += 1
 
             # Load any previous segments stored
@@ -930,7 +935,10 @@ class AviaNZInterface(QMainWindow):
         # Update the data that is seen by the other classes
         # TODO: keep an eye on this to add other classes as required
         if hasattr(self,'seg'):
-            self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
+            self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
+        else:
+            self.seg = Segment.Segment(self.audiodata, sgRaw, self.sp, self.sampleRate, self.config['minSegment'],
+                                       self.config['window_width'], self.config['incr'])
         self.sp.setNewData(self.audiodata,self.sampleRate)
 
         # Delete any denoising backups from the previous one
@@ -1026,13 +1034,18 @@ class AviaNZInterface(QMainWindow):
     def showFundamentalFreq(self):
         # Draw the fundamental frequency
         if self.showFundamental.isChecked():
-            if not hasattr(self,'seg'):
-                self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
+            #if not hasattr(self,'seg'):
+            #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
             pitch, y, minfreq, W = self.seg.yin()
             ind = np.squeeze(np.where(pitch>minfreq))
             pitch = pitch[ind]
             ind = ind*W/(self.config['window_width'])
             x = (pitch*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
+
+            # TODO: Fit a spline and draw that instead
+            #from scipy.interpolate import interp1d
+            #f = interp1d(x, ind, kind='cubic')
+            #self.sg[ind,x] = 1
 
             # Get the individual pieces
             segs = self.seg.identifySegments(ind,maxgap=10,minlength=5)
@@ -1053,12 +1066,8 @@ class AviaNZInterface(QMainWindow):
             #for r in self.yinRois:
             #    self.p_spec.addItem(r)
 
-            # TODO: Fit a spline and draw it
-            #from scipy.interpolate import interp1d
-            #f = interp1d(x, ind, kind='cubic')
-            #self.sg[ind,x] = 1
+
         else:
-            # TODO: delete the lines
             for r in self.segmentPlots:
                 self.p_spec.removeItem(r)
             for r in self.yinRois:
@@ -1089,7 +1098,7 @@ class AviaNZInterface(QMainWindow):
             p, f, t, fa = audio_tools.harvest(self.audiodata,self.sampleRate)
             ind = f/self.config['window_width']
             x = (p*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
-            print ind, x
+
             self.yinRois = []
             for r in range(len(x)):
                 self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
@@ -1101,12 +1110,12 @@ class AviaNZInterface(QMainWindow):
 
     def showInvertedSpectrogram(self):
         if self.showInvSpec.isChecked():
-            self.sgRaw = self.sp.show_invS()
+            sgRaw = self.sp.show_invS()
         else:
-            self.sgRaw = self.sp.spectrogram(self.audiodata, self.sampleRate, mean_normalise=True, onesided=True,
+            sgRaw = self.sp.spectrogram(self.audiodata, self.sampleRate, mean_normalise=True, onesided=True,
                                          multitaper=False)
-        maxsg = np.min(self.sgRaw)
-        self.sg = np.abs(np.where(self.sgRaw == 0, 0.0, 10.0 * np.log10(self.sgRaw / maxsg)))
+        maxsg = np.min(sgRaw)
+        self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
         self.overviewImage.setImage(self.sg)
         self.specPlot.setImage(self.sg)
 
@@ -1679,7 +1688,6 @@ class AviaNZInterface(QMainWindow):
 
     def mouseMoved(self,evt):
         # Print the time, frequency, power for mouse location in the spectrogram
-        # TODO: Format the time string, check the others
         if self.p_spec.sceneBoundingRect().contains(evt):
             mousePoint = self.p_spec.mapSceneToView(evt)
             indexx = int(mousePoint.x())
@@ -1864,12 +1872,21 @@ class AviaNZInterface(QMainWindow):
 
     def humanClassifyDialog2(self):
         # Create the dialog that shows calls to the user for verification
-        # TODO: Fix the next line
-        label = "Bird"
         if len(self.segments)>0:
-            self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,self.segments,label,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.cmapInverted)
-            self.humanClassifyDialog2.show()
-            self.humanClassifyDialog2.activateWindow()
+            names = [item[4] for item in self.segments]
+            names = [n if n[-1] != '?' else n[:-1] for n in names]
+            # Should make them unique
+            keys = {}
+            for n in names:
+                keys[n] = 1
+            names = keys.keys()
+            self.humanClassifyDialog2a = Dialogs.HumanClassify2a(names)
+
+            if self.humanClassifyDialog2a.exec_() == 1:
+                label = self.humanClassifyDialog2a.getValues()
+                self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,self.segments,label,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.cmapInverted)
+                self.humanClassifyDialog2.show()
+                self.humanClassifyDialog2.activateWindow()
 
     def showSpectrogramDialog(self):
         # Create the spectrogram dialog when the button is pressed
@@ -1886,9 +1903,9 @@ class AviaNZInterface(QMainWindow):
         [alg, mean_normalise, multitaper, window_width, incr] = self.spectrogramDialog.getValues()
 
         self.sp.set_width(int(str(window_width)), int(str(incr)))
-        self.sgRaw = self.sp.spectrogram(self.audiodata,str(alg),mean_normalise=True,onesided=True,multitaper=multitaper)
-        maxsg = np.min(self.sgRaw)
-        self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
+        sgRaw = self.sp.spectrogram(self.audiodata,str(alg),mean_normalise=True,onesided=True,multitaper=multitaper)
+        maxsg = np.min(sgRaw)
+        self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
 
         #self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
         #self.w_spec.removeItem(self.timeaxis)
@@ -1924,7 +1941,7 @@ class AviaNZInterface(QMainWindow):
             self.drawOverview()
             self.drawfigMain()
             if hasattr(self, 'seg'):
-                self.seg.setNewData(self.audiodata, self.sgRaw, self.sampleRate, self.config['window_width'],
+                self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'],
                                     self.config['incr'])
 
     def denoiseDialog(self):
@@ -2011,9 +2028,9 @@ class AviaNZInterface(QMainWindow):
             #"Median Filter"
             self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
 
-        self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
-        maxsg = np.min(self.sgRaw)
-        self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
+        sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
+        maxsg = np.min(sgRaw)
+        self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
         self.overviewImage.setImage(self.sg)
 
         self.specPlot.setImage(self.sg)
@@ -2047,16 +2064,16 @@ class AviaNZInterface(QMainWindow):
                     self.audiodata = np.copy(self.audiodata_backup[:,-1])
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     self.sp.setNewData(self.audiodata,self.sampleRate)
-                    self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
-                    maxsg = np.min(self.sgRaw)
-                    self.sg = np.abs(np.where(self.sgRaw == 0, 0.0, 10.0 * np.log10(self.sgRaw / maxsg)))
+                    sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
+                    maxsg = np.min(sgRaw)
+                    self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
                     self.overviewImage.setImage(self.sg)
                     self.specPlot.setImage(self.sg)
                     self.amplPlot.setData(
                         np.linspace(0.0, float(self.datalength) / self.sampleRate, num=self.datalength, endpoint=True),
                         self.audiodata)
                     if hasattr(self,'seg'):
-                        self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
+                        self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
 
                     self.setColourLevels()
 
@@ -2089,8 +2106,8 @@ class AviaNZInterface(QMainWindow):
         # TODO: More testing of the algorithms, parameters, etc.
         seglen = len(self.segments)
         [alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
-        if not hasattr(self,'seg'):
-            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
+        #if not hasattr(self,'seg'):
+        #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
         if str(alg) == "Amplitude":
             newSegments = self.seg.segmentByAmplitude(float(str(ampThr)))
         elif str(alg) == "Median Clipping":
@@ -2134,8 +2151,8 @@ class AviaNZInterface(QMainWindow):
         # TODO: Other methods apart from c-c?
         # So there needs to be a currently highlighted box
         # TODO: If there isn't a box highlighted, grey out the menu option
-        if not hasattr(self,'seg'):
-            self.seg = Segment.Segment(self.audiodata,self.sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
+        #if not hasattr(self,'seg'):
+        #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
 
         if self.box1id is None or self.box1id == -1:
             print "No box selected"
@@ -2151,16 +2168,15 @@ class AviaNZInterface(QMainWindow):
             # Only want to draw new segments, so find out how many there are now
             seglen = len(self.segments)
             # Get the segment -- note that takes the full y range
-            # TODO: is this correct?
             if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
                 x1 = self.listRectanglesa2[self.box1id].pos().x()
                 x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
             else:
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             print x1, x2
-            segment = self.sgRaw[int(x1):int(x2),:]
+            segment = sgRaw[int(x1):int(x2),:]
             len_seg = (x2-x1) * self.config['incr'] / self.sampleRate
-            indices = self.seg.findCCMatches(segment,self.sgRaw,self.config['corrThr'])
+            indices = self.seg.findCCMatches(segment,sgRaw,self.config['corrThr'])
             # indices are in spectrogram pixels, need to turn into times
             for i in indices:
                 # Miss out the one selected: note the hack parameter

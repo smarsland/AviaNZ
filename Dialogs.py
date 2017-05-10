@@ -848,9 +848,9 @@ class HumanClassify2(QDialog):
     # This version gets *12* at a time, and put them all out together on buttons, and their labels.
     # It could be all the same species, or the ones that it is unsure about, or whatever.
 
-    # TODO: First thing is to add a dialog that asks what you want -- all calls, a species, uncertain ones, whatever
-    # Decide what you want to do with it. I think that it is about saying which ones are right or wrong, not correcting them.
+    # TODO: Decide what you want to do with it. I think that it is about saying which ones are right or wrong, not correcting them.
     # Or just getting labels, or something
+    # TODO: Deal with the results
     def __init__(self, sg, segments, label, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
@@ -868,33 +868,42 @@ class HumanClassify2(QDialog):
         self.segments = segments
         self.firstSegment = 0
 
-        # TODO: Add a label with instructions
-        # TODO: More next button turn into a close and then close the window at the end
-
-        species = QLabel(label)
-        next = QPushButton("Next")
+        self.segments = [item for item in self.segments if item[4] == label or item[4][:-1] == label]
+        print len(self.segments)
+        next = QPushButton("Next/Finish")
         self.connect(next, SIGNAL("clicked()"), self.next)
 
-        # TODO: Decide on these sizes
-        self.width = 3
-        self.height = 4
-        self.grid = QGridLayout()
+        if len(self.segments) > 0:
 
-        self.makeButtons()
+            species = QLabel(label)
 
-        vboxFull = QVBoxLayout()
-        vboxFull.addWidget(species)
-        vboxFull.addLayout(self.grid)
-        vboxFull.addWidget(next)
+            # TODO: Decide on these sizes
+            self.w = 3
+            self.h = 4
+            self.grid = QGridLayout()
+
+            self.makeButtons()
+
+            vboxFull = QVBoxLayout()
+            vboxFull.addWidget(QLabel('Click on the images that are incorrectly labelled'))
+            vboxFull.addWidget(species)
+            vboxFull.addLayout(self.grid)
+            vboxFull.addWidget(next)
+        else:
+            vboxFull = QVBoxLayout()
+            vboxFull.addWidget(QLabel('No images to show'))
+            vboxFull.addWidget(next)
+
         self.setLayout(vboxFull)
 
+
     def makeButtons(self):
-        positions = [(i, j) for i in range(self.height) for j in range(self.width)]
+        positions = [(i, j) for i in range(self.h) for j in range(self.w)]
         images = []
         segRemain = len(self.segments) - self.firstSegment
         print segRemain, self.firstSegment
 
-        if segRemain < self.width * self.height:
+        if segRemain < self.w * self.h:
             for i in range(segRemain):
                 ind = i + self.firstSegment
                 if (self.segments[ind][2] == 0) and (self.segments[ind][3] == 0):
@@ -908,10 +917,10 @@ class HumanClassify2(QDialog):
                     x3 = int(self.segments[ind][2])
                     x4 = int(self.segments[ind][3])
                 images.append(self.setImage(self.sg[x1:x2, x3:x4]))
-            for i in range(segRemain, self.width * self.height):
+            for i in range(segRemain, self.w * self.h):
                 images.append([None, None])
         else:
-            for i in range(self.width * self.height):
+            for i in range(self.w * self.h):
                 ind = i + self.firstSegment
                 if (self.segments[ind][2] == 0) and (self.segments[ind][3] == 0):
                     x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
@@ -927,7 +936,7 @@ class HumanClassify2(QDialog):
         self.buttons = []
         for position, im in zip(positions, images):
             if im[0] is not None:
-                self.buttons.append(SupportClasses.PicButton(position[0] * self.width + position[1], im[0], im[1]))
+                self.buttons.append(SupportClasses.PicButton(position[0] * self.w + position[1], im[0], im[1]))
                 self.grid.addWidget(self.buttons[-1], *position)
 
     def convertAmpltoSpec(self, x):
@@ -950,19 +959,63 @@ class HumanClassify2(QDialog):
         return [im1, im2]
 
     def next(self):
-        # TODO: Make this close the dialog
-        if (len(self.segments) - self.firstSegment) < self.width * self.height:
-            # Have finished
-            return
-        else:
-            self.firstSegment += self.width * self.height
-            if self.firstSegment != len(self.segments):
-                for i in range(self.width * self.height):
-                    self.grid.removeWidget(self.buttons[i])
-                self.makeButtons()
+        if len(self.segments) > 0:
+            if (len(self.segments) - self.firstSegment) < self.w * self.h:
+                self.close()
             else:
-                return
+                self.firstSegment += self.w * self.h
+                if self.firstSegment != len(self.segments):
+                    for i in range(self.w * self.h):
+                        self.grid.removeWidget(self.buttons[i])
+                    self.makeButtons()
+                else:
+                    self.close()
+        else:
+            self.close()
 
+# ======
+class HumanClassify2a(QDialog):
+    def __init__(self, birdlist,parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Check Classification')
+
+        self.birds = QListWidget(self)
+        self.birds.setMaximumWidth(150)
+        #self.birds.addItem('All calls')
+        #self.birds.addItem('Uncertain calls')
+        for item in birdlist:
+            self.birds.addItem(item)
+        #self.birds.setCurrentRow(0)
+        self.connect(self.birds, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.dbl)
+
+        ok = QPushButton('OK')
+        cancel = QPushButton('Cancel')
+        self.connect(ok, SIGNAL('clicked()'), self.ok)
+        self.connect(cancel,SIGNAL('clicked()'), self.cancel)
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel('Choose the bird you wish to see classification of:'))
+        layout.addWidget(self.birds)
+        layout.addWidget(ok)
+        layout.addWidget(cancel)
+
+        # Now put everything into the frame
+        self.setLayout(layout)
+
+    def dbl(self,item):
+        self.birds.setCurrentItem(item)
+        self.accept()
+
+    def ok(self):
+        #self.chosen = self.birds.selectedItems()
+        self.accept()
+
+    def cancel(self):
+        #self.chosen = None
+        self.reject()
+
+    def getValues(self):
+        return self.birds.currentItem().text()
 # ======
 # class CorrectHumanClassify1(QDialog):
 #     # This is to correct the classification of those that the program got wrong

@@ -32,7 +32,7 @@ class Segment:
         self.fs = fs
         # This is the length of a window to average to get the power
         #self.length = 100
-        # This is the spectrogram
+        # This is the (raw -- psd) spectrogram
         self.sg = sg
         # This is the reference to SignalProc
         self.sp = sp
