@@ -2,7 +2,6 @@ import sys, os, json,glob
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 import math
-import PyQt4.phonon as phonon
 import pywt
 
 import wavio
@@ -19,8 +18,8 @@ from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.dockarea import *
 import pyqtgraph.functions as fn
 
-import SupportClasses as SupportClasses
-import Dialogs as Dialogs
+# import SupportClasses as SupportClasses
+# import Dialogs as Dialogs
 # from Dialogs import *
 
 import SignalProc
