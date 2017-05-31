@@ -41,7 +41,6 @@ import pyqtgraph.functions as fn
 
 import SupportClasses as SupportClasses
 import Dialogs as Dialogs
-from Dialogs import *
 
 import SignalProc
 import Segment
@@ -2478,28 +2477,28 @@ class AviaNZInterface(QMainWindow):
     #
     #     return [im1, im2]
 
-# Start the application
-app = QApplication(sys.argv)
-
-# This screen asks what you want to do, then gets the response
-# TODO: Why don't the buttons appear at once? fixed
-first = StartScreen()
-first.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
-first.show()
-app.exec_()
-
-task = first.getValues()
-print task
-
-if task == 1:
-    avianz = AviaNZInterface(configfile='AviaNZconfig.txt')
-    avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
-    avianz.show()
-    app.exec_()
-elif task==2:
-    avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(configfile='AviaNZconfig.txt')
-    avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
-    avianz.show()
-    app.exec_()
-else:
-    app.exit()
+# # Start the application
+# app = QApplication(sys.argv)
+#
+# # This screen asks what you want to do, then gets the response
+# # TODO: Why don't the buttons appear at once? fixed
+# first = StartScreen()
+# first.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+# first.show()
+# app.exec_()
+#
+# task = first.getValues()
+# print task
+#
+# if task == 1:
+#     avianz = AviaNZInterface(configfile='AviaNZconfig.txt')
+#     avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+#     avianz.show()
+#     app.exec_()
+# elif task==2:
+#     avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(configfile='AviaNZconfig.txt')
+#     avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+#     avianz.show()
+#     app.exec_()
+# else:
+#     app.exit()
