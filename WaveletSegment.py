@@ -40,15 +40,20 @@ class WaveletSeg:
             self.sampleRate = sampleRate
 
         [lowd,highd,lowr,highr] = np.loadtxt('dmey.txt')
-        self.wavelet = pywt.Wavelet(filter_bank=[lowd,highd,lowr,highr])
+        self.wavelet = pywt.Wavelet(name="mydmey",filter_bank=[lowd,highd,lowr,highr])
+        self.wavelet.orthogonal=True
 
-        #self.wavelet = pywt.Wavelet(name='dmey')
+        # self.wavelet='dmey'
+
+        # self.wavelet = pywt.Wavelet(name='dmey')
         print self.wavelet
+        print self.wavelet.name
 
     def denoise(self,data=None,thresholdType='soft', maxlevel=5):
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
+        # wp = pywt.WaveletPacket(data=data, wavelet=self.wavelet, mode='symmetric', maxlevel=maxlevel)
         wp = pywt.WaveletPacket(data=data, wavelet=self.wavelet, mode='symmetric', maxlevel=maxlevel)
 
         det1 = wp['d'].data
@@ -167,7 +172,7 @@ class WaveletSeg:
 
         return newlist
 
-    def ButterworthBandpass(self,data=None,sampleRate=0,order=10,low=1000,high=7000):
+    def ButterworthBandpass(self,data=None,sampleRate=0,low=1000,high=7000):
         import scipy.signal as signal
         if data is None:
             data=self.data
@@ -175,10 +180,16 @@ class WaveletSeg:
             sampleRate=self.sampleRate
         nyquist = sampleRate/2.0
 
-        low = float(low)/nyquist
-        high = float(high)/nyquist
+        lowPass = float(low)/nyquist
+        highPass = float(high)/nyquist
+        lowStop = float(low-50)/nyquist
+        highStop = float(high+50)/nyquist
         #print nyquist, low, high
-        b, a = signal.butter(order, [low, high], btype='band')
+        # calculate the best order
+        order,wN = signal.buttord([lowPass, highPass], [lowStop, highStop], 5, 50)
+        if order>5:
+            order=5
+        b, a = signal.butter(order, [lowPass, highPass], btype='band')
         # apply filter
         return signal.filtfilt(b, a, data)
 
@@ -240,6 +251,7 @@ class WaveletSeg:
             level = np.floor(np.log2(index))
             first = 2**level-1
             bin = np.binary_repr(index-first,width=int(level))
+            print bin
             bin = string.replace(bin,'0','a',maxreplace=-1)
             bin = string.replace(bin,'1','d',maxreplace=-1)
             #print index+1, bin
@@ -450,7 +462,7 @@ def findCalls_test(listnodes,fName,species='kiwi'):
         ws.sampleRate=fs
     wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
     fwData = ws.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
-    wpFull = pywt.WaveletPacket(data=fwData, wavelet=self.wavelet, mode='symmetric', maxlevel=5)
+    wpFull = pywt.WaveletPacket(data=fwData, wavelet=ws.wavelet, mode='symmetric', maxlevel=5)
     detected = ws.detectCalls_test(wpFull, listnodes, ws.sampleRate) #detect based on a previously defined nodeset
     print fName
     ws.fBetaScore(ws.annotation, detected)
@@ -489,16 +501,19 @@ def genReport(folder_to_process,detected):
             of.write(col_format.format(*x))
 
 #Test
-nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
+# nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python with default 'dmey'
+nodelist_kiwi = [33, 34, 35, 36, 37, 38, 39, 40, 41, 43, 44, 45, 46, 55]  # python with custom made 'dmey'
 #nodelist_kiwi = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55] # matlab
 #[36, 35, 43, 41, 38, 45, 44, 55]
 #[36, 35, 43, 41, 38, 45, 44, 39, 31, 17, 21, 18, 20, 15, 8, 10, 3, 4, 1, 55]
 
-# def test(nodelist):
-#     for filename in glob.glob(os.path.join('Sound Files/test','*.wav')):
-#         findCalls_test(nodelist,filename[0:len(filename)-4])
+def test(nodelist):
+    for filename in glob.glob(os.path.join('Sound Files/test','*.wav')):
+        findCalls_test(nodelist,filename[0:len(filename)-4])
 #
 # test(nodelist_kiwi)
+# findCalls_test(nodelist_kiwi, 'Sound Files/test-filter/kiwi-test4')
+# findCalls_test(nodelist_kiwi,'Sound Files/test-filter/more2')
 
 # #Survey data processing
 # #First split audio into 5-min to a subfolder '5min'
@@ -512,13 +527,13 @@ nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
 
 #print findCalls_train('Wavelet Segmentation/kiwi/train/train1',species='kiwi')
 
-ws = WaveletSeg()
-ws.loadData('Wavelet Segmentation/kiwi/train/train1')
-
-fs = 16000
-if ws.sampleRate != fs:
-    ws.data = librosa.core.audio.resample(ws.data, ws.sampleRate, fs)
-    ws.sampleRate = fs
+# ws = WaveletSeg()
+# ws.loadData('Wavelet Segmentation/kiwi/train/train1')
+#
+# fs = 16000
+# if ws.sampleRate != fs:
+#     ws.data = librosa.core.audio.resample(ws.data, ws.sampleRate, fs)
+#     ws.sampleRate = fs
 
 # Get the five level wavelet decomposition
 #wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
@@ -533,8 +548,8 @@ if ws.sampleRate != fs:
 #fwData = ws.ButterworthBandpass(wData, ws.sampleRate, low=1100, high=7500)
 #print fwData
 
-fwData = ws.data
-# fwData = data
-waveletCoefs = ws.computeWaveletEnergy(fwData, ws.sampleRate)
-
-np.savetxt('waveout.txt',waveletCoefs)
+# fwData = ws.data
+# # fwData = data
+# waveletCoefs = ws.computeWaveletEnergy(fwData, ws.sampleRate)
+#
+# np.savetxt('waveout.txt',waveletCoefs)

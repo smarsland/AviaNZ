@@ -21,13 +21,14 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys, os, json  #glob
+import sys, os, json    #,glob
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 import PyQt4.phonon as phonon
 
 import wavio
 #from scipy.io import wavfile
+import librosa
 import numpy as np
 
 import pyqtgraph as pg
@@ -40,14 +41,36 @@ import pyqtgraph.functions as fn
 
 import SupportClasses as SupportClasses
 import Dialogs as Dialogs
+from Dialogs import *
 
 import SignalProc
 import Segment
 #import Features
 #import Learning
+import interface_FindSpecies
 # ==============
 # TODO
 
+# Fix the moving bar when playing a bandlimited segment, it goes back to the beginning.
+# and set permission of temp file to allow rewriting or delete the file after playing it.
+
+# Status bar is used to indicate the user when computing - missing any?
+
+# Actions -> Segment: segments need scaling e.g. when median clipping and fundamental freq. They seems to left-shifted.
+# FIR, onsets, amp, and power are fine.
+
+# We should be able to read other sound types e.g. mp3
+
+# At times the program does not respond and ask to repair/close (e.g. when move the overview slider fast or something like that).
+# Need to work on memory management!
+
+# Fix the issue of uncontrollable segments left when the user click to start a segment and then open a new file without completing a segment.
+
+# Interface -> inverted spectrogram does not work - spec and amp do not synchronize
+
+# Denoise -> bandpass: spectro is updated but the wavform is empty??
+
+# Actions -> Denoise -> median filter check
 # Make the median filter on the spectrogram have params and a dialog. Other options?
 
 # Finish implementation to show individual segments to user and ask for feedback and the other feedback dialogs
@@ -193,6 +216,7 @@ class AviaNZInterface(QMainWindow):
         self.listRectanglesa1 = []
         self.listRectanglesa2 = []
         self.SegmentRects = []
+        self.segmentPlots=[]
         self.box1id = -1
 
         self.lastSpecies = "Don't Know"
@@ -235,7 +259,7 @@ class AviaNZInterface(QMainWindow):
         fileMenu = self.menuBar().addMenu("&File")
         fileMenu.addAction("&Open sound file", self.openFile, "Ctrl+O")
         #fileMenu.addSeparator()
-        fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
+        # fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
         fileMenu.addAction("&Quit",self.quit,"Ctrl+Q")
 
         specMenu = self.menuBar().addMenu("&Interface")
@@ -315,6 +339,7 @@ class AviaNZInterface(QMainWindow):
     def showAbout(self):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
+        msg.setWindowIcon(QIcon('img/Avianz.ico'))
         msg.setText("The AviaNZ Program, v0.10 (April 2017)")
         msg.setInformativeText("By Stephen Marsland, Massey University (2016--2017). With input from Nirosha Priyadarshani, Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann. s.r.marsland@massey.ac.nz")
         msg.setWindowTitle("About")
@@ -326,6 +351,7 @@ class AviaNZInterface(QMainWindow):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
         msg.setText("Open the pdf file Docs/AvianzManual.pdf")
+        msg.setWindowIcon(QIcon('img/Avianz.ico'))
         msg.setWindowTitle("Help")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
@@ -502,6 +528,7 @@ class AviaNZInterface(QMainWindow):
 
         self.playButton = QtGui.QToolButton()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.setToolTip("Play visible")
         #self.playButton = QPushButton("&Play")
         self.connect(self.playButton, SIGNAL('clicked()'), self.playSegment)
         self.timePlayed = QLabel()
@@ -511,11 +538,13 @@ class AviaNZInterface(QMainWindow):
         self.playSegButton = QtGui.QToolButton()
         self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
         self.playSegButton.setIconSize(QtCore.QSize(20, 20))
+        self.playSegButton.setToolTip("Play selected")
         self.connect(self.playSegButton, SIGNAL('clicked()'), self.playSelectedSegment)
         self.playSegButton.setEnabled(False)
 
         self.playBandLimitedSegButton = QtGui.QToolButton()
-        self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
+        self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
+        self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.setIconSize(QtCore.QSize(20, 20))
         self.connect(self.playBandLimitedSegButton, SIGNAL('clicked()'), self.playBandLimitedSegment)
         self.playBandLimitedSegButton.setEnabled(False)
@@ -601,7 +630,8 @@ class AviaNZInterface(QMainWindow):
 
         # List to hold the list of files
         self.listFiles = QListWidget(self)
-        self.listFiles.setFixedWidth(150)
+        self.listFiles.setMinimumWidth(150)
+        # self.listFiles.setFixedWidth(150)
         self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
 
         self.w_files.addWidget(QLabel('Double click to select'),row=0,col=0)
@@ -806,6 +836,11 @@ class AviaNZInterface(QMainWindow):
             self.p_overview2.removeItem(r)
         self.SegmentRects = []
 
+        # remove any fundamrntal freq dawings from previous file
+        for r in self.segmentPlots:
+            self.p_spec.removeItem(r)
+        self.segmentPlots=[]
+
         #self.recta1 = None
         #self.recta2 = None
         #self.focusRegionSelected = False
@@ -884,7 +919,7 @@ class AviaNZInterface(QMainWindow):
         #fdd.exec_()
         #username = fdd.getData()
 
-        with pg.ProgressDialog("Loading..", 0, 5) as dlg:
+        with pg.ProgressDialog("Loading..", 0, 7) as dlg:
             if isinstance(name,str):
                 self.filename = self.dirName+'/'+name
             elif isinstance(name,QString):
@@ -908,7 +943,6 @@ class AviaNZInterface(QMainWindow):
             if np.shape(np.shape(self.audiodata))[0]>1:
                 self.audiodata = self.audiodata[:,0]
             self.datalength = np.shape(self.audiodata)[0]
-            self.setWindowTitle('AviaNZ - ' + self.filename)
             print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate)
             dlg += 1
 
@@ -932,50 +966,55 @@ class AviaNZInterface(QMainWindow):
                 self.hasSegments = False
             dlg += 1
 
-        # Update the data that is seen by the other classes
-        # TODO: keep an eye on this to add other classes as required
-        if hasattr(self,'seg'):
-            self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
-        else:
-            self.seg = Segment.Segment(self.audiodata, sgRaw, self.sp, self.sampleRate, self.config['minSegment'],
-                                       self.config['window_width'], self.config['incr'])
-        self.sp.setNewData(self.audiodata,self.sampleRate)
+            # Update the data that is seen by the other classes
+            # TODO: keep an eye on this to add other classes as required
+            if hasattr(self,'seg'):
+                self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
+            else:
+                self.seg = Segment.Segment(self.audiodata, sgRaw, self.sp, self.sampleRate, self.config['minSegment'],
+                                           self.config['window_width'], self.config['incr'])
+            self.sp.setNewData(self.audiodata,self.sampleRate)
 
-        # Delete any denoising backups from the previous one
-        if hasattr(self,'audiodata_backup'):
-            self.audiodata_backup = None
+            # Delete any denoising backups from the previous one
+            if hasattr(self,'audiodata_backup'):
+                self.audiodata_backup = None
 
-        # Set the values for the segmentation thresholds
-        # self.ampThr.setRange(0.001,np.max(self.audiodata)+0.001)
-        # self.ampThr.setSingleStep(0.001)
-        # self.ampThr.setDecimals(4)
-        # self.ampThr.setValue(np.max(self.audiodata)+0.001)
+            # Set the values for the segmentation thresholds
+            # self.ampThr.setRange(0.001,np.max(self.audiodata)+0.001)
+            # self.ampThr.setSingleStep(0.001)
+            # self.ampThr.setDecimals(4)
+            # self.ampThr.setValue(np.max(self.audiodata)+0.001)
 
-        # Set the window size
-        self.windowSize = self.config['windowWidth']
-        self.widthWindow.setRange(0.5, float(len(self.audiodata))/self.sampleRate)
+            # Set the window size
+            self.windowSize = self.config['windowWidth']
+            self.widthWindow.setRange(0.5, float(len(self.audiodata))/self.sampleRate)
 
-        # Reset it if the file is shorter than the window
-        if float(len(self.audiodata))/self.sampleRate < self.windowSize:
-            self.windowSize = float(len(self.audiodata))/self.sampleRate
-        self.widthWindow.setValue(self.windowSize)
+            # Reset it if the file is shorter than the window
+            if float(len(self.audiodata))/self.sampleRate < self.windowSize:
+                self.windowSize = float(len(self.audiodata))/self.sampleRate
+            self.widthWindow.setValue(self.windowSize)
 
-        # Load the file for playback as well, and connect up the listeners for it
-        self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
-        self.totalTime = self.convertMillisecs(self.media_obj.totalTime())
-        print self.media_obj.totalTime(), self.totalTime
-        self.media_obj.tick.connect(self.movePlaySlider)
+            self.totalTime = self.convertMillisecs((float(self.datalength)/self.sampleRate)*1000)
 
-        # Set the length of the scrollbar
-        print np.shape(self.sg)
-        self.scrollSlider.setRange(0,np.shape(self.sg)[0]-self.convertAmpltoSpec(self.widthWindow.value()))
-        self.scrollSlider.setValue(0)
+            # Load the file for playback as well, and connect up the listeners for it
+            self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
+            # self.totalTime = self.convertMillisecs(self.media_obj.totalTime())
+            # print self.media_obj.totalTime(), self.totalTime
+            self.media_obj.tick.connect(self.movePlaySlider)
 
-        # Get the height of the amplitude for plotting the box
-        self.minampl = np.min(self.audiodata)+0.1*(np.max(self.audiodata)+np.abs(np.min(self.audiodata)))
-        #self.plotheight = np.abs(self.minampl) + np.max(self.audiodata)
-        self.drawOverview()
-        self.drawfigMain()
+            # Set the length of the scrollbar
+            # print np.shape(self.sg)
+            self.scrollSlider.setRange(0,np.shape(self.sg)[0]-self.convertAmpltoSpec(self.widthWindow.value()))
+            self.scrollSlider.setValue(0)
+
+            # Get the height of the amplitude for plotting the box
+            self.minampl = np.min(self.audiodata)+0.1*(np.max(self.audiodata)+np.abs(np.min(self.audiodata)))
+            #self.plotheight = np.abs(self.minampl) + np.max(self.audiodata)
+            self.drawOverview()
+            dlg += 1
+            self.drawfigMain()
+            self.setWindowTitle('AviaNZ - ' + self.filename)
+            dlg += 1
 
     # def openFile(self):
     #     # If have an open file option this will deal with it via a file dialog
@@ -1034,6 +1073,7 @@ class AviaNZInterface(QMainWindow):
     def showFundamentalFreq(self):
         # Draw the fundamental frequency
         if self.showFundamental.isChecked():
+            self.statusBar().showMessage("Drawing fundamental frequency...")
             #if not hasattr(self,'seg'):
             #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
             pitch, y, minfreq, W = self.seg.yin()
@@ -1065,14 +1105,14 @@ class AviaNZInterface(QMainWindow):
             #    self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
             #for r in self.yinRois:
             #    self.p_spec.addItem(r)
-
-
         else:
+            self.statusBar().showMessage("Removing fundamental frequency...")
             for r in self.segmentPlots:
                 self.p_spec.removeItem(r)
-            for r in self.yinRois:
-                self.p_spec.removeItem(r)
+            # for r in self.yinRois:
+            #     self.p_spec.removeItem(r)
         #self.specPlot.setImage(self.sg)
+        self.statusBar().showMessage("Ready")
 
     def showFundamentalFreq2(self):
         # yaapt
@@ -1901,7 +1941,7 @@ class AviaNZInterface(QMainWindow):
     def spectrogram(self):
         # Listener for the spectrogram dialog.
         [alg, mean_normalise, multitaper, window_width, incr] = self.spectrogramDialog.getValues()
-
+        self.statusBar().showMessage("Updating the spectrogram...")
         self.sp.set_width(int(str(window_width)), int(str(incr)))
         sgRaw = self.sp.spectrogram(self.audiodata,str(alg),mean_normalise=True,onesided=True,multitaper=multitaper)
         maxsg = np.min(sgRaw)
@@ -1943,6 +1983,7 @@ class AviaNZInterface(QMainWindow):
             if hasattr(self, 'seg'):
                 self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'],
                                     self.config['incr'])
+        self.statusBar().showMessage("Ready")
 
     def denoiseDialog(self):
         # Create the denoising dialog when the relevant button is pressed
@@ -1977,6 +2018,7 @@ class AviaNZInterface(QMainWindow):
         # TODO: deal with these!
         # TODO: Undo needs testing
         self.backup()
+        self.statusBar().showMessage("Denoising...")
         if str(alg) == "Wavelets":
             if thrType is True:
                 type = 'Soft'
@@ -2021,12 +2063,18 @@ class AviaNZInterface(QMainWindow):
             #self.audiodata = self.sp.waveletDenoise(self.audiodata,float(str(thr)),int(str(depth)),str(wavelet))
             #self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
         elif str(alg) == "Bandpass":
-            self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
+            # self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
+            self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
         elif str(alg) == "Butterworth Bandpass":
             self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
         else:
             #"Median Filter"
             self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
+
+        # audiodata = self.audiodata.astype('int16')
+        # # wavio.write('Sound Files/robin_d.wav',self.audiodata.astype('int16'),self.sampleRate)
+        # import librosa
+        # librosa.output.write_wav('Sound Files/robin_d.wav', audiodata, self.sampleRate)
 
         sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
         maxsg = np.min(sgRaw)
@@ -2040,6 +2088,7 @@ class AviaNZInterface(QMainWindow):
         self.maxFreq = int(str(end))
 
         self.setColourLevels()
+        self.statusBar().showMessage("Ready")
 
     def redoFreqAxis(self):
         start = self.minFreq
@@ -2087,9 +2136,20 @@ class AviaNZInterface(QMainWindow):
         #self.audiodata = self.audiodata.astype('int16')
         #import soundfile as sf
         filename = self.filename[:-4] + '_d' + self.filename[-4:]
-        self.audiodata = self.audiodata.astype('int16')
+        # self.audiodata*= 32768.0
+        # print self.audiodata.dtype
+        # self.audiodata = self.audiodata.astype('int16')
         #wavfile.write(filename,self.sampleRate, self.audiodata)
-        wavio.write(filename,self.audiodata,self.sampleRate)
+        wavio.write(filename,self.audiodata,self.sampleRate,sampwidth=2) #sampwidth=2 for 'int16' output
+        # librosa.output.write_wav(filename, self.audiodata, self.sampleRate)
+        # msg = QMessageBox()
+        # msg.setIcon(QMessageBox.Information)
+        # msg.setWindowIcon(QIcon('Avianz.ico'))
+        # msg.setText("Saved!")
+        # msg.setWindowTitle("Update")
+        # msg.setStandardButtons(QMessageBox.Ok)
+        # msg.exec_()
+        self.statusBar().showMessage("Saved")
 
     def segmentationDialog(self):
         # Create the segmentation dialog when the relevant button is pressed
@@ -2108,6 +2168,7 @@ class AviaNZInterface(QMainWindow):
         [alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,depth,thrType,thr,wavelet,bandchoice,start,end] = self.segmentDialog.getValues()
         #if not hasattr(self,'seg'):
         #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
+        self.statusBar().showMessage("Segmenting...")
         if str(alg) == "Amplitude":
             newSegments = self.seg.segmentByAmplitude(float(str(ampThr)))
         elif str(alg) == "Median Clipping":
@@ -2145,6 +2206,7 @@ class AviaNZInterface(QMainWindow):
         for seg in newSegments:
             print seg[0], seg[1]
             self.addSegment(seg[0],seg[1],0,0,"Don't Know",True)
+        self.statusBar().showMessage("Ready")
 
     def findMatches(self):
         # Calls the cross-correlation function to find matches like the currently highlighted box
@@ -2159,11 +2221,13 @@ class AviaNZInterface(QMainWindow):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segment selected to match")
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
             msg.setWindowTitle("Error")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
             return
         else:
+            self.statusBar().showMessage("Finding matches...")
             #[alg, thr] = self.matchDialog.getValues()
             # Only want to draw new segments, so find out how many there are now
             seglen = len(self.segments)
@@ -2174,6 +2238,8 @@ class AviaNZInterface(QMainWindow):
             else:
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             print x1, x2
+            # Get the data for the spectrogram
+            sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)#***
             segment = sgRaw[int(x1):int(x2),:]
             len_seg = (x2-x1) * self.config['incr'] / self.sampleRate
             indices = self.seg.findCCMatches(segment,sgRaw,self.config['corrThr'])
@@ -2183,7 +2249,7 @@ class AviaNZInterface(QMainWindow):
                 if np.abs(i-x1) > self.config['overlap_allowed']:
                     time = float(i)*self.config['incr'] / self.sampleRate
                     self.addSegment(time, time+len_seg,0,0,self.segments[self.box1id][4])
-
+            self.statusBar().showMessage("Ready")
     def recognise(self):
         # This will eventually call methods to do automatic recognition
         # Actually, will produce a dialog to ask which species, etc.
@@ -2198,15 +2264,17 @@ class AviaNZInterface(QMainWindow):
         self.segmentStop = self.playSlider.maximum()
         if self.media_obj.state() == phonon.Phonon.PlayingState:
             self.media_obj.pause()
-            self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
             self.media_obj.play()
-            self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
 
     def playFinished(self):
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        #self.bar.setValue(0)
-        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0))
+        self.media_obj.stop()
+        self.media_obj.seek(self.playSlider.value()-self.widthWindow.value()*1000)
+        # self.playSlider.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0-self.widthWindow.value()))
+        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0-self.widthWindow.value()))
 
     def sliderMoved(self):
         # When the slider is moved, change the position of playback
@@ -2241,52 +2309,59 @@ class AviaNZInterface(QMainWindow):
             start = self.listRectanglesa1[self.box1id].getRegion()[0]*1000
             self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1]*1000
             self.media_obj.seek(start)
+            self.media_obj.seek(start)
             #self.media_obj.play()
             #self.segmentStop = self.playSlider.maximum()
             if self.media_obj.state() == phonon.Phonon.PlayingState:
                 self.media_obj.pause()
-                self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
+                # self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+                # self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
                 # self.playButton.setText("Play")
             elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
                 self.media_obj.play()
-                #self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
+                # self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
 
     def playBandLimitedSegment(self):
         # Get the band limits of the segment, bandpass filter, then play that
-        # TODO: This version uses sounddevice to play it back because the phonon needed to save it and then still wouldn't actually play it. Does it matter? You can't see the bar moving.
         start = int(self.listRectanglesa1[self.box1id].getRegion()[0]*self.sampleRate)
         stop = int(self.listRectanglesa1[self.box1id].getRegion()[1]*self.sampleRate)
         bottom = int(self.segments[self.box1id][2]*self.sampleRate/2./np.shape(self.sg)[1])
         top = int(self.segments[self.box1id][3]*self.sampleRate/2./np.shape(self.sg)[1])
         if bottom > 0 and top>0:
-            import sounddevice as sd
-
             data = self.audiodata[start:stop]
-            print bottom, top
-            data = self.sp.ButterworthBandpass(data, self.sampleRate, bottom, top,order=2)
+            print "low-high: ",bottom, top
+            # data = self.sp.ButterworthBandpass(data, self.sampleRate, bottom, top,order=2)
+            data = self.sp.ButterworthBandpass(data, self.sampleRate, bottom, top)
+            # TODO: delete the temp file to allow re-play. disconnect the sound from media obj
+            if os.path.isfile(self.dirName+'/'+'temp.wav'):
+                os.remove(self.dirName+'/'+'temp.wav')
+            else:
+                pass
+            # Save
+            filename = self.dirName+'/'+'temp.wav'
+            data = data.astype('int16')
+            wavio.write(filename,data,self.sampleRate,sampwidth=2)
 
-            sd.play(data,self.sampleRate)
+            # Instantiate a Qt media object and prepare it (for audio playback)
+            media_obj = phonon.Phonon.MediaObject(self)
+            self.audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
+            phonon.Phonon.createPath(media_obj, self.audio_output)
+            media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
+            media_obj.setTickInterval(20)
+            media_obj.tick.connect(self.movePlaySlider)
+            # media_obj.finished.connect(self.playFinished)
+            # self.bar.setValue(self.sampleRate*10) #(float(start)/self.sampleRate)*1000
+            # media_obj.tick.connect(self.movePlaySlider)
+            self.movePlaySlider((float(start)/self.sampleRate)*1000)
+            media_obj.play()
+            # TODO: fix the bar, it goes back to the beginning here
+            # import stat
+            # os.chmod(filename, stat.S_IRWXO)
+            #os.remove(filename)
+            # self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
+            # self.media_obj.tick.connect(self.movePlaySlider)
         else:
             self.playSelectedSegment()
-        # TODO!! Why won't this actually play back? The file exists, and it will play if you load it
-        # So there is something odd about the media_obj
-        # Kludge: save the file, load, play, put it back
-        # Save
-        #filename = 'temp.wav'
-        #data = data.astype('int16')
-        #wavfile.write(filename,self.sampleRate, data)
-
-        #sr, data = wavfile.read(filename)
-
-        #self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
-        #self.media_obj.tick.connect(self.movePlaySlider)
-
-        #print "got here"
-        #print self.convertMillisecs(self.media_obj.totalTime())
-        #self.media_obj.play()
-
-        #self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
-        #self.media_obj.tick.connect(self.movePlaySlider)
 
 # ============
 # Various actions: deleting, saving, quitting
@@ -2326,6 +2401,7 @@ class AviaNZInterface(QMainWindow):
     def deleteAll(self):
         # Listener for delete all button
         reply = QMessageBox.question(self,"Delete All Segments","Are you sure you want to delete all segments?",    QMessageBox.Yes | QMessageBox.No)
+        # reply.setWindowIcon(QIcon('Avianz.ico'))
         if reply==QMessageBox.Yes:
             self.removeSegments()
 
@@ -2391,8 +2467,6 @@ class AviaNZInterface(QMainWindow):
         filename = name[:-4] + '_' + str((count)) + name[-4:]
         lr.output.write_wav(filename,data,self.sampleRate)
 
-
-
     # def setImage2(self,seg):
     #     # This was an attempt to do it with pixmaps, which didn't work
     #     self.image = pg.ImageItem()
@@ -2408,13 +2482,24 @@ class AviaNZInterface(QMainWindow):
 app = QApplication(sys.argv)
 
 # This screen asks what you want to do, then gets the response
-# TODO: Why don't the buttons appear at once?
-#first = StartScreen()
-#first.exec_()
-
-#task = first.getValues()
-
-#if task == 0:
-avianz = AviaNZInterface(configfile='AviaNZconfig.txt')
-avianz.show()
+# TODO: Why don't the buttons appear at once? fixed
+first = StartScreen()
+first.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+first.show()
 app.exec_()
+
+task = first.getValues()
+print task
+
+if task == 1:
+    avianz = AviaNZInterface(configfile='AviaNZconfig.txt')
+    avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+    avianz.show()
+    app.exec_()
+elif task==2:
+    avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(configfile='AviaNZconfig.txt')
+    avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+    avianz.show()
+    app.exec_()
+else:
+    app.exit()

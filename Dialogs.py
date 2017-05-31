@@ -1,6 +1,6 @@
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
-
+import sys
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 import pyqtgraph as pg
@@ -13,35 +13,58 @@ import SupportClasses as SupportClasses
 class StartScreen(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
-        self.setWindowTitle('Choose Task')
+        self.setWindowTitle('AviaNZ - Choose Task')
+        self.setAutoFillBackground(False)
+        self.setFixedSize(430, 210)
+        self.setStyleSheet("background-image: url(img/AviaNZ_SW.jpg);")
         self.activateWindow()
 
-        #b1 = QPushButton(QIcon(":/Resources/play.svg"), "&Play Window")
+        btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:16px}'
         b1 = QPushButton("Manual Segmentation")
         b2 = QPushButton("Find a species")
         b3 = QPushButton("Denoise a folder")
+        l1 = QLabel("")
+        b1.setStyleSheet(btn_style)
+        b2.setStyleSheet(btn_style)
+        b3.setStyleSheet(btn_style)
+        l1.setStyleSheet('QLabel {color: white}')
+
+        hbox = QHBoxLayout()
+        hbox.addStretch(1)
+        hbox.addWidget(b1)
+        hbox.addWidget(b2)
+        hbox.addWidget(b3)
+
+        vbox = QVBoxLayout()
+        vbox.addStretch(1)
+        vbox.addLayout(hbox)
+        vbox.addWidget(l1)
+
+        self.setLayout(vbox)
+
+        # self.setGeometry(300, 300, 430, 210)
 
         self.connect(b1, SIGNAL('clicked()'), self.manualSeg)
         self.connect(b2, SIGNAL('clicked()'), self.findSpecies)
         self.connect(b3, SIGNAL('clicked()'), self.denoise)
 
-        vbox = QVBoxLayout()
-        for w in [b1, b2, b3]:
-                vbox.addWidget(w)
-
-        self.setLayout(vbox)
+        # vbox = QVBoxLayout()
+        # for w in [b1, b2, b3]:
+        #         vbox.addWidget(w)
+        #
+        # self.setLayout(vbox)
         self.task = -1
 
     def manualSeg(self):
-        self.task = 0
-        self.accept()
-
-    def findSpecies(self):
         self.task = 1
         self.accept()
 
-    def denoise(self):
+    def findSpecies(self):
         self.task = 2
+        self.accept()
+
+    def denoise(self):
+        self.task = 3
         self.accept()
 
     def getValues(self):
@@ -156,7 +179,7 @@ class Segmentation(QDialog):
         self.ampThr.setValue(maxv+0.001)
 
         self.HarmaThr1 = QSpinBox()
-        self.HarmaThr1.setRange(10,50)
+        self.HarmaThr1.setRange(10,90)
         self.HarmaThr1.setSingleStep(1)
         self.HarmaThr1.setValue(10)
         self.HarmaThr2 = QDoubleSpinBox()
@@ -201,7 +224,7 @@ class Segmentation(QDialog):
         self.ecThr.setValue(1)
 
         self.FIRThr1 = QDoubleSpinBox()
-        self.FIRThr1.setRange(0.0,1.0)
+        self.FIRThr1.setRange(0.0,2.0) #setRange(0.0,1.0)
         self.FIRThr1.setSingleStep(0.05)
         self.FIRThr1.setValue(0.1)
 
@@ -459,7 +482,7 @@ class Denoise(QDialog):
         self.setWindowTitle('Denoising Options')
 
         self.algs = QComboBox()
-        self.algs.addItems(["Wavelets","Bandpass", "Wavelets --> Bandpass","Bandpass --> Wavelets","Median Filter"])
+        self.algs.addItems(["Wavelets","Bandpass","Butterworth Bandpass" ,"Wavelets --> Bandpass","Bandpass --> Wavelets","Median Filter"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Wavelets"
 
@@ -1016,6 +1039,327 @@ class HumanClassify2a(QDialog):
 
     def getValues(self):
         return self.birds.currentItem().text()
+
+# class AutoSegmentation(QDockWidget):
+#     # Class for the auto segmentation dock
+#     # def __init__(self, maxv, Box,parent=None):
+#     #     QDockWidget.__init__(self, parent)
+#     def __init__(self, maxv, Box):
+#         # QDockWidget.__init__(self)
+#         self.algs = QComboBox()
+#         #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
+#         self.algs.addItems(["Wavelets", "Amplitude","Harma","Power","Median Clipping","Onsets","Fundamental Frequency","FIR"])
+#         Box.addWidget(self.algs,row=2,col=1)
+#         self.prevAlg = "Wavelets"
+#         a = self.algs.currentIndex()
+#         item = self.algs.itemText(a)
+#         print str(item)=="Wavelets"
+#         # self.algs.currentIndexChanged[QString].connect(alg)
+#         # self.algs.activated['QString'].connect(self.changeBoxes(item))
+#         # self.algs.currentIndexChanged.connect(self.changeBoxes(item))
+#
+#         # Define the whole set of possible options for the dialog box here, just to have them together.
+#         # Then hide and show them as required as the algorithm chosen changes.
+#
+#         # Spin box for amplitude threshold
+#         self.ampThr = QDoubleSpinBox()
+#         self.ampThr.setRange(0.001,maxv+0.001)
+#         self.ampThr.setSingleStep(0.002)
+#         self.ampThr.setDecimals(4)
+#         self.ampThr.setValue(maxv+0.001)
+#
+#         self.HarmaThr1 = QSpinBox()
+#         self.HarmaThr1.setRange(10,50)
+#         self.HarmaThr1.setSingleStep(1)
+#         self.HarmaThr1.setValue(10)
+#         self.HarmaThr2 = QDoubleSpinBox()
+#         self.HarmaThr2.setRange(0.1,0.95)
+#         self.HarmaThr2.setSingleStep(0.05)
+#         self.HarmaThr2.setDecimals(2)
+#         self.HarmaThr2.setValue(0.9)
+#
+#         self.PowerThr = QDoubleSpinBox()
+#         self.PowerThr.setRange(0.0,2.0)
+#         self.PowerThr.setSingleStep(0.1)
+#         self.PowerThr.setValue(1.0)
+#
+#         self.Fundminfreqlabel = QLabel("Min Frequency")
+#         self.Fundminfreq = QLineEdit()
+#         self.Fundminfreq.setText('100')
+#         self.Fundminperiodslabel = QLabel("Min Number of periods")
+#         self.Fundminperiods = QSpinBox()
+#         self.Fundminperiods.setRange(1,10)
+#         self.Fundminperiods.setValue(3)
+#         self.Fundthrlabel = QLabel("Threshold")
+#         self.Fundthr = QDoubleSpinBox()
+#         self.Fundthr.setRange(0.1,1.0)
+#         self.Fundthr.setDecimals(1)
+#         self.Fundthr.setValue(0.5)
+#         self.Fundwindowlabel = QLabel("Window size (will be rounded up as appropriate)")
+#         self.Fundwindow = QSpinBox()
+#         self.Fundwindow.setRange(300,5000)
+#         self.Fundwindow.setSingleStep(500)
+#         self.Fundwindow.setValue(1000)
+#
+#         self.medThr = QDoubleSpinBox()
+#         self.medThr.setRange(0.2,6)
+#         self.medThr.setSingleStep(1)
+#         self.medThr.setDecimals(1)
+#         self.medThr.setValue(3)
+#
+#         self.ecThr = QDoubleSpinBox()
+#         self.ecThr.setRange(0.001,6)
+#         self.ecThr.setSingleStep(1)
+#         self.ecThr.setDecimals(3)
+#         self.ecThr.setValue(1)
+#
+#         self.FIRThr1 = QDoubleSpinBox()
+#         self.FIRThr1.setRange(0.0,2.0) #setRange(0.0,1.0)
+#         self.FIRThr1.setSingleStep(0.05)
+#         self.FIRThr1.setValue(0.1)
+#
+#         # Box = QDockWidget()
+#         Box.addWidget(self.algs,row=1,col=1)
+#         # Labels
+#         self.amplabel = QLabel("Set threshold amplitude")
+#         Box.addWidget(self.amplabel,row=2,col=0)
+#         self.amplabel.hide()
+#
+#         self.Harmalabel = QLabel("Set decibal threshold")
+#         Box.addWidget(self.Harmalabel,row=2,col=0)
+#         self.Harmalabel.hide()
+#
+#         self.Onsetslabel = QLabel("Onsets: No parameters")
+#         Box.addWidget(self.Onsetslabel)
+#         self.Onsetslabel.hide()
+#
+#         self.medlabel = QLabel("Set median threshold")
+#         Box.addWidget(self.medlabel,row=2,col=0)
+#         self.medlabel.hide()
+#
+#         self.eclabel = QLabel("Set energy curve threshold")
+#         Box.addWidget(self.eclabel,row=2,col=0)
+#         self.eclabel.hide()
+#         self.ecthrtype = [QRadioButton("N standard deviations"), QRadioButton("Threshold")]
+#
+#         self.wavlabel = QLabel("Wavelets")
+#         self.depthlabel = QLabel("Depth of wavelet packet decomposition")
+#         #self.depthchoice = QCheckBox()
+#         #self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
+#         self.depth = QSpinBox()
+#         self.depth.setRange(1,10)
+#         self.depth.setSingleStep(1)
+#         self.depth.setValue(5)
+#
+#         self.thrtypelabel = QLabel("Type of thresholding")
+#         self.thrtype = [QRadioButton("Soft"), QRadioButton("Hard")]
+#         self.thrtype[0].setChecked(True)
+#
+#         self.thrlabel = QLabel("Multiplier of std dev for threshold")
+#         self.thr = QSpinBox()
+#         self.thr.setRange(1,10)
+#         self.thr.setSingleStep(1)
+#         self.thr.setValue(5)
+#
+#         self.waveletlabel = QLabel("Type of wavelet")
+#         self.wavelet = QComboBox()
+#         self.wavelet.addItems(["dmey","db2","db5","haar"])
+#         self.wavelet.setCurrentIndex(0)
+#
+#         self.blabel = QLabel("Start and end points of the band for bandpass filter")
+#         self.start = QLineEdit()
+#         self.start.setText('1000')
+#         self.end = QLineEdit()
+#         self.end.setText('7500')
+#         self.blabel2 = QLabel("Check if not using bandpass")
+#         self.bandchoice = QCheckBox()
+#         # self.connect(self.bandchoice, SIGNAL('clicked()'), self.bandclicked)
+#
+#         Box.addWidget(self.wavlabel,row=3,col=0)
+#         # self.wavlabel.hide()
+#         Box.addWidget(self.depthlabel,row=4,col=0)
+#         # self.depthlabel.hide()
+#         #Box.addWidget(self.depthchoice)
+#         #self.depthchoice.hide()
+#         Box.addWidget(self.depth, row=4,col=1)
+#         # self.depth.hide()
+#
+#         Box.addWidget(self.thrtypelabel,row=5,col=0)
+#         # self.thrtypelabel.hide()
+#         Box.addWidget(self.thrtype[0],row=5,col=1)
+#         # self.thrtype[0].hide()
+#         Box.addWidget(self.thrtype[1],row=5,col=2)
+#         # self.thrtype[1].hide()
+#
+#         Box.addWidget(self.thrlabel,row=6,col=0)
+#         # self.thrlabel.hide()
+#         Box.addWidget(self.thr,row=6,col=1)
+#         # self.thr.hide()
+#
+#         Box.addWidget(self.waveletlabel,row=7,col=0)
+#         # self.waveletlabel.hide()
+#         Box.addWidget(self.wavelet,row=7,col=1)
+#         # self.wavelet.hide()
+#
+#         Box.addWidget(self.blabel,row=8,col=0)
+#         # self.blabel.hide()
+#         Box.addWidget(self.start,row=8,col=1)
+#         # self.start.hide()
+#         Box.addWidget(self.end,row=9,col=1)
+#         # self.end.hide()
+#         Box.addWidget(self.blabel2,row=10,col=0)
+#         # self.blabel2.hide()
+#         Box.addWidget(self.bandchoice,row=10,col=1)
+#         # self.bandchoice.hide()
+#
+#         Box.addWidget(self.ampThr,row=2,col=1)
+#         self.ampThr.hide()
+#         Box.addWidget(self.HarmaThr1,row=2,col=1)
+#         Box.addWidget(self.HarmaThr2,row=3, col=1)
+#         self.HarmaThr1.hide()
+#         self.HarmaThr2.hide()
+#         Box.addWidget(self.PowerThr,row=2,col=1)
+#         self.PowerThr.hide()
+#
+#         Box.addWidget(self.medThr, row=2,col=1)
+#         self.medThr.hide()
+#         for i in range(len(self.ecthrtype)):
+#             Box.addWidget(self.ecthrtype[i])
+#             self.ecthrtype[i].hide()
+#         Box.addWidget(self.ecThr)
+#         self.ecThr.hide()
+#
+#         Box.addWidget(self.FIRThr1, row=2,col=1)
+#         self.FIRThr1.hide()
+#
+#         Box.addWidget(self.Fundminfreqlabel, row=2,col=0)
+#         self.Fundminfreqlabel.hide()
+#         Box.addWidget(self.Fundminfreq,row=2,col=1)
+#         self.Fundminfreq.hide()
+#         Box.addWidget(self.Fundminperiodslabel,row=3,col=0)
+#         self.Fundminperiodslabel.hide()
+#         Box.addWidget(self.Fundminperiods,row=3,col=1)
+#         self.Fundminperiods.hide()
+#         Box.addWidget(self.Fundthrlabel,row=4,col=0)
+#         self.Fundthrlabel.hide()
+#         Box.addWidget(self.Fundthr,row=4,col=1)
+#         self.Fundthr.hide()
+#         Box.addWidget(self.Fundwindowlabel,row=5,col=0)
+#         self.Fundwindowlabel.hide()
+#         Box.addWidget(self.Fundwindow,row=5,col=1)
+#         self.Fundwindow.hide()
+#
+#         # Box.addWidget(self.activate)
+#         #Box.addWidget(self.save)
+#
+#         # Now put everything into the frame
+#         # self.setLayout(Box)
+#
+#     def changeBoxes(self,alg):
+#         # This does the hiding and showing of the options as the algorithm changes
+#         if self.prevAlg == "Amplitude":
+#             self.amplabel.hide()
+#             self.ampThr.hide()
+#         elif self.prevAlg == "Energy Curve":
+#             self.eclabel.hide()
+#             self.ecThr.hide()
+#             for i in range(len(self.ecthrtype)):
+#                 self.ecthrtype[i].hide()
+#             #self.ecThr.hide()
+#         elif self.prevAlg == "Harma":
+#             self.Harmalabel.hide()
+#             self.HarmaThr1.hide()
+#             self.HarmaThr2.hide()
+#         elif self.prevAlg == "Power":
+#             self.PowerThr.hide()
+#         elif self.prevAlg == "Median Clipping":
+#             self.medlabel.hide()
+#             self.medThr.hide()
+#         elif self.prevAlg == "Fundamental Frequency":
+#             self.Fundminfreq.hide()
+#             self.Fundminperiods.hide()
+#             self.Fundthr.hide()
+#             self.Fundwindow.hide()
+#             self.Fundminfreqlabel.hide()
+#             self.Fundminperiodslabel.hide()
+#             self.Fundthrlabel.hide()
+#             self.Fundwindowlabel.hide()
+#         elif self.prevAlg == "Onsets":
+#             self.Onsetslabel.hide()
+#         elif self.prevAlg == "FIR":
+#             self.FIRThr1.hide()
+#         else:
+#             self.wavlabel.hide()
+#             self.depthlabel.hide()
+#             self.depth.hide()
+#             #self.depthchoice.hide()
+#             self.thrtypelabel.hide()
+#             self.thrtype[0].hide()
+#             self.thrtype[1].hide()
+#             self.thrlabel.hide()
+#             self.thr.hide()
+#             self.waveletlabel.hide()
+#             self.wavelet.hide()
+#             self.blabel.hide()
+#             self.start.hide()
+#             self.end.hide()
+#             self.blabel2.hide()
+#             self.bandchoice.hide()
+#         self.prevAlg = str(alg)
+#
+#         if str(alg) == "Amplitude":
+#             self.amplabel.show()
+#             self.ampThr.show()
+#         elif str(alg) == "Energy Curve":
+#             self.eclabel.show()
+#             self.ecThr.show()
+#             for i in range(len(self.ecthrtype)):
+#                 self.ecthrtype[i].show()
+#             self.ecThr.show()
+#         elif str(alg) == "Harma":
+#             self.Harmalabel.show()
+#             self.HarmaThr1.show()
+#             self.HarmaThr2.show()
+#         elif str(alg) == "Power":
+#             self.PowerThr.show()
+#         elif str(alg) == "Median Clipping":
+#             self.medlabel.show()
+#             self.medThr.show()
+#         elif str(alg) == "Fundamental Frequency":
+#             self.Fundminfreq.show()
+#             self.Fundminperiods.show()
+#             self.Fundthr.show()
+#             self.Fundwindow.show()
+#             self.Fundminfreqlabel.show()
+#             self.Fundminperiodslabel.show()
+#             self.Fundthrlabel.show()
+#             self.Fundwindowlabel.show()
+#         elif str(alg) == "Onsets":
+#             self.Onsetslabel.show()
+#         elif str(alg) == "FIR":
+#             self.FIRThr1.show()
+#         else:
+#             #"Wavelets"
+#             self.wavlabel.show()
+#             self.depthlabel.show()
+#             #self.depthchoice.show()
+#             self.depth.show()
+#             self.thrtypelabel.show()
+#             self.thrtype[0].show()
+#             self.thrtype[1].show()
+#             self.thrlabel.show()
+#             self.thr.show()
+#             self.waveletlabel.show()
+#             self.wavelet.show()
+#             self.blabel.show()
+#             self.start.show()
+#             self.end.show()
+#             self.blabel2.show()
+#             self.bandchoice.show()
+#
+#     def getValues(self):
+#         return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
+
 # ======
 # class CorrectHumanClassify1(QDialog):
 #     # This is to correct the classification of those that the program got wrong
@@ -1140,3 +1484,10 @@ class HumanClassify2a(QDialog):
 #
 #     def setImage(self,seg,label):
 #         self.plot.setImage(seg)
+
+# # Start the application
+# app = QApplication(sys.argv)
+# screen1 = StartScreen()
+# screen1.setWindowIcon(QIcon('Avianz.ico'))
+# screen1.show()
+# app.exec_()
