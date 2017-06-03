@@ -3,7 +3,7 @@
 
 import numpy as np
 import scipy.ndimage as spi
-#import librosa
+import librosa
 
 # TODO:
 # Pure energy threshold-> think about threshold, add automatic gain
@@ -37,6 +37,7 @@ class Segment:
         # This is the reference to SignalProc
         self.sp = sp
         self.minSegment = minSegment
+        # print "minSegment:", minSegment
         # These are the spectrogram params. Needed to compute times
         self.window_width = window_width
         self.incr = incr
@@ -61,10 +62,12 @@ class Segment:
                 if (seg[i - 1] - start) > minlength:
                     # print([float(start) , float(seg[i-1])])
                     segments.append([float(start) * self.incr / self.fs, float(seg[i - 1]) * self.incr / self.fs])
+                    # segments.append([float(start)/self.fs, float(seg[-1])/self.fs])
                 start = seg[i]
         if seg[-1] - start > minlength:
             # print([float(start), float(seg[-1])])
             segments.append([float(start) * self.incr / self.fs, float(seg[-1]) * self.incr / self.fs])
+            # segments.append([float(start)/self.fs, float(seg[-1])/self.fs])
         # print len(segments)
         # print segments
         # for segs in segments:
@@ -74,7 +77,7 @@ class Segment:
     def segmentByFIR(self, threshold):
         # Create an FIR envelope (as a negative exponential -- params are hacks!)
         from scipy.interpolate import interp1d
-        print self.fs, self.window_width, self.incr
+        # print self.fs, self.window_width, self.incr
         nsecs = len(self.data) / float(self.fs)
         fftrate = int(np.shape(self.sg)[0]) / nsecs
         upperlimit = 100
@@ -108,11 +111,24 @@ class Segment:
         padded = np.concatenate((np.zeros(int(fftrate / 10.)), np.mean(self.sg, axis=1), np.zeros(int(fftrate / 10.))))
         envelope = spi.filters.convolve(padded, samples, mode='constant')[:-int(fftrate / 10.)]
         seg = np.squeeze(np.where(envelope > np.median(envelope) + threshold * np.std(envelope)))
+        print seg
         return self.identifySegments(seg, minlength=10)
 
     def segmentByAmplitude(self,threshold):
         seg = np.where(np.abs(self.data)>threshold)
-        return self.identifySegments(seg)
+        print seg
+        # print self.incr
+        # return self.identifySegments(np.squeeze(seg))
+        return self.identifySegments(np.squeeze(seg)/float(self.incr))
+
+    def segmentByAmplitude1(self,threshold): #replaced the amplitude value thr to a percentage. e.g. extract top 70%
+        seg = np.where(np.abs(self.data)>threshold*np.max(self.data))
+        print seg
+        print np.shape(np.squeeze(seg))[0]
+        if np.shape(np.squeeze(seg))[0]>0:
+            return self.identifySegments(np.squeeze(seg)/float(self.incr))  #TODO: self.incr is the right value to devide with?
+        else:
+            return []
 
     def segmentByEnergy(self,threshold,width,min_width=450):
         # Based on description in Jinnai et al. 2012 paper in Acoustics
@@ -211,9 +227,11 @@ class Segment:
         # Note that this will go wrong with librosa's load because the elements of the spectrogram lie in [0,1] and hence interesting things with the log
         #print np.shape(self.sg), np.min(self.sg), np.max(self.sg)
         maxFreqs = 10. * np.log10(np.max(self.sg, axis = 1))
+        # print np.shape(maxFreqs)
         from scipy.signal import medfilt
         maxFreqs = medfilt(maxFreqs,21)
         seg = np.squeeze(np.where(maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))))
+        # print seg
         return self.identifySegments(seg,minlength=10)
 
     def medianClip(self,thr=3.0,medfiltersize=5,minsize=80,minaxislength=5):
@@ -388,6 +406,8 @@ class Segment:
 
         if returnSegs:
             ind = np.squeeze(np.where(pitch > minfreq))
+            # ind=ind*??  #TODO: check this
+            # print ind
             segs = self.identifySegments(ind)
             # segs = []
             # ind = np.squeeze(np.where(pitch > minfreq))
@@ -560,10 +580,19 @@ def testYin():
 
 def testsegFIR():
     from scipy.io import wavfile
-    fs, data = wavfile.read('Sound Files/tril1.wav')
+    fs, data = wavfile.read('Sound Files/New folder/robin.wav')
     import SignalProc
     sp = SignalProc.SignalProc(data,fs,256,128,)
     sg = sp.spectrogram(data,multitaper=False,mean_normalise=False)
-    s = Segment.Segment(data,sg,sp,fs)
+    s = Segment(data,sg,sp,fs,50) #(data,sg,sp,fs,minSegment,window_width=256,incr=128)
     segments = s.segmentByFIR(1.0)
     print segments
+
+# testsegFIR()
+
+# A=[51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  65,  66,  67,  68, 69,  70,  72,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,
+#   98,  99, 100, 101, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 137, 140, 141, 142, 143, 144, 145, 146, 147,
+#  148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161]
+# [[0.408, 0.56], [0.664, 0.808], [0.888, 1.064], [1.12, 1.288]]
+
+# B=self.identifySegments(A, minlength=10)

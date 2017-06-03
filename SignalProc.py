@@ -124,12 +124,12 @@ class SignalProc:
         oldIncr = self.incr
         self.incr = int(self.window_width/4.)
         sg = self.spectrogram(self.data)
-        sgi = self.invertSpectrogram(sg,self.window_width,self.incr)
-        self.incr = oldIncr
-        sg = self.spectrogram(sgi)
-        sgi = sgi.astype('int16')
+        # sgi = self.invertSpectrogram(sg,self.window_width,self.incr)
+        # self.incr = oldIncr
+        # sg = self.spectrogram(sgi)
+        # sgi = sgi.astype('int16')
         # wavfile.write('test.wav',self.sampleRate, sgi)
-        wavio.write('test.wav',sgi,self.sampleRate)
+        # wavio.write('test.wav',sgi,self.sampleRate)
         return sg
 
     def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10):
@@ -295,9 +295,9 @@ class SignalProc:
         if data is None:
             data = self.data
 
-        if wavelet == 'dmey':
-            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
-            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
+        # if wavelet == 'dmey':
+        #     [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
+        #     wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
 
         if maxlevel is None:
             self.maxlevel = self.BestLevel(wavelet)
@@ -494,11 +494,23 @@ class SignalProc:
             sampleRate = self.sampleRate
         nyquist = sampleRate/2.0
 
-        low = float(low)/nyquist
-        high = float(high)/nyquist
-        print nyquist, low, high
-        b, a = signal.butter(order, [low, high], btype='band')
+        # low = float(low)/nyquist
+        # high = float(high)/nyquist
+        # print nyquist, low, high
+        # b, a = signal.butter(order, [low, high], btype='band')
         # apply filter
+        lowPass = float(low)/nyquist
+        highPass = float(high)/nyquist
+        lowStop = float(low-50)/nyquist
+        highStop = float(high+50)/nyquist
+        # calculate the best order
+        order,wN = signal.buttord([lowPass, highPass], [lowStop, highStop], 3, 50)
+        print 'order=', order
+        # print 'wN=', wN
+        # print 'lowpass, highpass', lowPass,highPass
+        if order>10:
+            order=10
+        b, a = signal.butter(order,[lowPass, highPass], btype='band')
         return signal.filtfilt(b, a, data)
 
     def medianFilter(self,data=None,width=11):

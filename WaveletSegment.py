@@ -43,12 +43,15 @@ class WaveletSeg:
                 self.data = self.data.astype('float') / 32768.0
 
         [lowd,highd,lowr,highr] = np.loadtxt('dmey.txt')
-        self.wavelet = pywt.Wavelet(filter_bank=[lowd,highd,lowr,highr])
+        self.wavelet = pywt.Wavelet(name="mydmey",filter_bank=[lowd,highd,lowr,highr])
+        self.wavelet.orthogonal=True
 
         #self.wavelet = pywt.Wavelet(name='dmey')
         print self.wavelet
+        print self.wavelet.name
 
-    def denoise(self,data=None,thresholdType='soft',threshold=4.5,maxlevel=5,bandpass=False,wavelet='dmey',costfn='threshold'):
+    def denoise(self, data=None, thresholdType='soft', threshold=4.5, maxlevel=5, bandpass=False, wavelet='dmey',
+                costfn='threshold'):
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
@@ -62,10 +65,10 @@ class WaveletSeg:
         threshold = threshold * sigma
 
         # Compute the `cost' of each node
-        nnodes = 2**(wp.maxlevel+1)-1
+        nnodes = 2 ** (wp.maxlevel + 1) - 1
         cost = np.zeros(nnodes)
         count = 0
-        for level in range(wp.maxlevel+1):
+        for level in range(wp.maxlevel + 1):
             for n in wp.get_level(level, 'natural'):
                 if costfn == 'threshold':
                     # Threshold
@@ -86,14 +89,14 @@ class WaveletSeg:
                 count += 1
 
         # Compute the best tree using those cost values
-        flags = 2*np.ones(nnodes)
-        flags[2**wp.maxlevel-1:] = 1
+        flags = 2 * np.ones(nnodes)
+        flags[2 ** wp.maxlevel - 1:] = 1
         # Work up the tree from just above leaves
-        inds = np.arange(2**wp.maxlevel-1)
+        inds = np.arange(2 ** wp.maxlevel - 1)
         inds = inds[-1::-1]
         for i in inds:
             # Get children
-            children = (i+1)*2 + np.arange(2) - 1
+            children = (i + 1) * 2 + np.arange(2) - 1
             c = cost[children[0]] + cost[children[1]]
             if c < cost[i]:
                 cost[i] = c
@@ -102,8 +105,8 @@ class WaveletSeg:
                 flags[i] = flags[children[0]] + 2
                 flags[children] = -flags[children]
 
-        keepers = np.where(flags>2)[0]
-        #keepers = [ 2, 10, 14, 16, 17, 27, 28 ]
+        keepers = np.where(flags > 2)[0]
+        # keepers = [ 2, 10, 14, 16, 17, 27, 28 ]
         print keepers
 
         # Now get the new leaves of the tree. Anything below these nodes is deleted.
@@ -130,7 +133,7 @@ class WaveletSeg:
         inds = np.delete(inds, tbd)
 
         # Make a new tree with these in
-        new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric',maxlevel=wp.maxlevel)
+        new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
 
         # There seems to be a bit of a bug to do with the size of the reconstucted nodes, so prime them
         for level in range(wp.maxlevel):
@@ -138,31 +141,31 @@ class WaveletSeg:
                 n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
 
         for i in inds:
-                if i == 0:
-                    bin = ''
-                else:
-                    level = np.floor(np.log2(i+1))
-                    first = 2**level-1
-                    bin = np.binary_repr(i-first,width=int(level))
-                    bin = string.replace(bin,'0','a',maxreplace=-1)
-                    bin = string.replace(bin,'1','d',maxreplace=-1)
-                #print i, bin
-                new_wp[bin] = wp[bin].data
+            if i == 0:
+                bin = ''
+            else:
+                level = np.floor(np.log2(i + 1))
+                first = 2 ** level - 1
+                bin = np.binary_repr(i - first, width=int(level))
+                bin = string.replace(bin, '0', 'a', maxreplace=-1)
+                bin = string.replace(bin, '1', 'd', maxreplace=-1)
+            # print i, bin
+            new_wp[bin] = wp[bin].data
 
         # TODO: Is this necessary? It seems not
-        #new_wp.reconstruct(update=True)
+        # new_wp.reconstruct(update=True)
 
         # Threshold the coefficients
-        for level in range(1,maxlevel):
+        for level in range(1, maxlevel):
             for n in new_wp.get_level(level, 'natural'):
                 if thresholdType == 'hard':
                     # Hard thresholding
                     n.data = np.where(np.abs(n.data) < threshold, 0.0, n.data)
                 else:
                     # Soft thresholding
-                    #n.data = np.sign(n.data) * np.maximum((np.abs(n.data) - threshold), 0.0)
+                    # n.data = np.sign(n.data) * np.maximum((np.abs(n.data) - threshold), 0.0)
                     tmp = np.abs(n.data) - threshold
-                    tmp = (tmp + np.abs(tmp))/2.
+                    tmp = (tmp + np.abs(tmp)) / 2.
                     n.data = np.sign(n.data) * tmp
 
         y = new_wp.reconstruct(update=True)
@@ -298,9 +301,15 @@ class WaveletSeg:
             sampleRate=self.sampleRate
         nyquist = sampleRate/2.0
 
-        low = float(low)/nyquist
-        high = float(high)/nyquist
+        lowPass = float(low)/nyquist
+        highPass = float(high)/nyquist
+        lowStop = float(low-50)/nyquist
+        highStop = float(high+50)/nyquist
         #print nyquist, low, high
+        # calculate the best order
+        order,wN = signal.buttord([lowPass, highPass], [lowStop, highStop], 5, 50)
+        if order>5:
+            order=5
         b, a = signal.butter(order, [low, high], btype='band')
         # apply filter
         return signal.filtfilt(b, a, data)
@@ -613,8 +622,6 @@ def genReport(folder_to_process,detected):
 
 #Test
 nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
-#[35, 36, 17, 43, 44, 21, 45, 22, 10, 55, 8, 27, 13, 6, 2, 31, 32, 34, 15, 3]
-#[35, 36, 17, 43, 44, 45, 31, 34, 3]
 #nodelist_kiwi = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55] # matlab
 #[36, 35, 43, 41, 38, 45, 44, 55]
 #[36, 35, 43, 41, 38, 45, 44, 39, 31, 17, 21, 18, 20, 15, 8, 10, 3, 4, 1, 55]
@@ -637,14 +644,13 @@ nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
 
 #print findCalls_train('Wavelet Segmentation/kiwi/train/train1',species='kiwi')
 
-# ws = WaveletSeg()
-# #ws.loadData('Sound Files/tril1',trainTest=False)
-# ws.loadData('Wavelet Segmentation/kiwi/train/train1')
-#
-# fs = 16000
-# if ws.sampleRate != fs:
-#     ws.data = librosa.core.audio.resample(ws.data, ws.sampleRate, fs)
-#     ws.sampleRate = fs
+#ws = WaveletSeg()
+#ws.loadData('Wavelet Segmentation/kiwi/train/train1')
+
+#fs = 16000
+#if ws.sampleRate != fs:
+ #   ws.data = librosa.core.audio.resample(ws.data, ws.sampleRate, fs)
+ #   ws.sampleRate = fs
 
 # Get the five level wavelet decomposition
 #wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
@@ -663,6 +669,6 @@ nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
 # fwData = data
 #waveletCoefs = ws.computeWaveletEnergy(fwData, ws.sampleRate)
 
-findCalls_train('Wavelet Segmentation/kiwi/train/train1')
-
 #np.savetxt('waveout.txt',waveletCoefs)
+
+#findCalls_train('Wavelet Segmentation/kiwi/train/train1')
