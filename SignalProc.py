@@ -395,7 +395,8 @@ class SignalProc:
                     bin = ''
                 else:
                     level = np.floor(np.log2(i+1))
-                    first = 2**level-1
+                    first = int(2**level-1)     #??
+                    # print "i-first", i-first
                     bin = np.binary_repr(i-first,width=int(level))
                     bin = string.replace(bin,'0','a',maxreplace=-1)
                     bin = string.replace(bin,'1','d',maxreplace=-1)
@@ -405,8 +406,9 @@ class SignalProc:
         # TODO: Is this necessary? It seems not
         #new_wp.reconstruct(update=True)
 
+        # print "maxlevel", maxlevel
         # Threshold the coefficients
-        for level in range(1,maxlevel):
+        for level in range(1,new_wp.maxlevel):     #??
             for n in new_wp.get_level(level, 'natural'):
                 if thresholdType == 'hard':
                     # Hard thresholding
@@ -528,16 +530,6 @@ class SignalProc:
 
         return mData
 
-    # Functions for loading and saving files -- largely unnecessary
-    def writeFile(self,name):
-        # Save a sound file (after denoising)
-        # Need them to be 16 bit integers
-        self.wData *= 32768.0
-        self.wData = self.wData.astype('int16')
-        # wavfile.write(name,self.sampleRate, self.wData)
-        wavio.write(name,self.wData,self.sampleRate)
-
-
     def loadData(self,fileName):
         # Load a sound file and normalise it
         # self.sampleRate, self.data = wavfile.read(fileName)
@@ -556,11 +548,21 @@ class SignalProc:
             self.data = self.data[:,0]
         # self.data = self.data.astype('float') / 32768.0
 
+# Functions for loading and saving files -- largely unnecessary
+def writeFile(data,name,fs):
+    # Save a sound file (after denoising)
+    # Need them to be 16 bit integers
+    data *= 32768.0
+    dData = data.astype('int16')
+    # wavfile.write(name,self.sampleRate, self.wData)
+    wavio.write(name,data,fs,sampwidth=2)
+
+
 def denoiseFile(fileName,thresholdMultiplier):
     sp = SignalProc(thresholdMultiplier=thresholdMultiplier)
     sp.loadData(fileName)
-    sp.waveletDenoise()
-    sp.writeFile(fileName[:-4]+'denoised'+str(sp.thresholdMultiplier)+fileName[-4:])
+    yd=sp.waveletDenoise()
+    writeFile(yd,fileName[:-4]+'denoised'+str(sp.thresholdMultiplier)+fileName[-4:],sp.sampleRate)
 
 def test():
     #pl.ion()
@@ -638,7 +640,7 @@ def show():
 
 #pl.ion()
 
-#denoiseFile('Sound Files/tril1.wav',4.5)
+denoiseFile('Sound Files/tril1.wav',4.5)
 #denoiseFile('tril1.wav',3.5)
 #denoiseFile('tril1.wav',4.0)
 #denoiseFile('tril1.wav',4.5)
