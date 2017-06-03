@@ -231,7 +231,7 @@ class Segment:
         from scipy.signal import medfilt
         maxFreqs = medfilt(maxFreqs,21)
         seg = np.squeeze(np.where(maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))))
-        # print seg
+        print seg
         return self.identifySegments(seg,minlength=10)
 
     def medianClip(self,thr=3.0,medfiltersize=5,minsize=80,minaxislength=5):
@@ -242,7 +242,7 @@ class Segment:
         # TODO: Parameters!!
         # Use the multitaper spectrogram, it helps a lot
         print np.max(self.sg)
-        sg = self.sg/np.max(self.sg)
+        sg = self.sg.T/np.max(self.sg)
 
         # This next line gives an exact match to Lasseck, but screws up bitterns!
         #sg = sg[4:232, :]
@@ -297,7 +297,7 @@ class Segment:
         list = []
         list.append([blobs[ind[0]].bbox[1],blobs[ind[0]].bbox[1]])
         for i in centroids:
-            if i - centroid < minsize / 2:
+            if i - centroid < minsize / 2.:
                 if blobs[ind[count]].bbox[1]<list[current][0]:
                     list[current][0] = blobs[ind[count]].bbox[1]
                 if blobs[ind[count]].bbox[3] > list[current][1]:
@@ -310,6 +310,7 @@ class Segment:
 
         segments = []
         for i in list:
+            print i
             if float(i[1] - i[0])*self.incr/self.fs*1000 > self.minSegment:
                 segments.append([float(i[0]) * self.incr / self.fs, float(i[1]) * self.incr / self.fs])
             else:
@@ -406,9 +407,11 @@ class Segment:
 
         if returnSegs:
             ind = np.squeeze(np.where(pitch > minfreq))
-            # ind=ind*??  #TODO: check this
-            # print ind
             segs = self.identifySegments(ind)
+            #ind = ind.astype('float')
+            for s in segs:
+                s[0] *= W / self.window_width
+                s[1] *= W / self.window_width
             # segs = []
             # ind = np.squeeze(np.where(pitch > minfreq))
             # inseg = False

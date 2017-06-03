@@ -55,19 +55,16 @@ import interface_FindSpecies
 
 # Status bar is used to indicate the user when computing - missing any?
 
-# Actions -> Segment: segments need scaling e.g. when median clipping and fundamental freq. They seems to left-shifted.
-# FIR, onsets, amp, and power are fine.
-
 # We should be able to read other sound types e.g. mp3
+    # Look up audioread
 
 # At times the program does not respond and ask to repair/close (e.g. when move the overview slider fast or something like that).
 # Need to work on memory management!
 
-# Fix the issue of uncontrollable segments left when the user click to start a segment and then open a new file without completing a segment.
-
 # Interface -> inverted spectrogram does not work - spec and amp do not synchronize
 
 # Denoise -> bandpass: spectro is updated but the wavform is empty??
+    # This seems to be a plotting bug. Will need to look into it
 
 # Actions -> Denoise -> median filter check
 # Make the median filter on the spectrogram have params and a dialog. Other options?
@@ -219,6 +216,7 @@ class AviaNZInterface(QMainWindow):
         self.box1id = -1
 
         self.lastSpecies = "Don't Know"
+        self.started = False
         self.resetStorageArrays()
 
         self.dirName = self.config['dirpath']
@@ -821,6 +819,18 @@ class AviaNZInterface(QMainWindow):
             self.p_overview.removeItem(self.overviewImageRegion)
 
         # This is a flag to say if the next thing that they click on should be a start or a stop for segmentation
+        if self.started:
+            if self.started_window == 'a':
+                self.p_ampl.scene().sigMouseMoved.disconnect()
+                self.p_ampl.removeItem(self.vLine_a)
+            else:
+                self.p_spec.scene().sigMouseMoved.disconnect()
+                # Add the other mouse move listener back
+                self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
+                self.p_spec.removeItem(self.vLine_s)
+
+            self.p_ampl.removeItem(self.drawingBox_ampl)
+            self.p_spec.removeItem(self.drawingBox_spec)
         self.started = False
 
         # Keep track of start points and selected buttons
@@ -2027,7 +2037,7 @@ class AviaNZInterface(QMainWindow):
                 depth = None
             else:
                 depth = int(str(depth))
-            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))
+            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))[:self.datalength]
         elif str(alg) == "Bandpass --> Wavelets":
             if thrType is True:
                 type = 'soft'
@@ -2038,7 +2048,7 @@ class AviaNZInterface(QMainWindow):
             else:
                 depth = int(str(depth))
             self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
-            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))
+            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))[:self.datalength]
         elif str(alg) == "Wavelets --> Bandpass":
             if thrType is True:
                 type = 'soft'
@@ -2048,7 +2058,7 @@ class AviaNZInterface(QMainWindow):
                 depth = None
             else:
                 depth = int(str(depth))
-            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))
+            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))[:self.datalength]
             self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
         #elif str(alg) == "Wavelets + Bandpass":
             #if thrType is True:
