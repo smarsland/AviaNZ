@@ -481,7 +481,7 @@ class Denoise(QDialog):
         self.thr = QDoubleSpinBox()
         self.thr.setRange(1,10)
         self.thr.setSingleStep(0.5)
-        self.thr.setValue(4.0)
+        self.thr.setValue(4.5)
 
         self.waveletlabel = QLabel("Type of wavelet")
         self.wavelet = QComboBox()
@@ -813,9 +813,10 @@ class HumanClassify1(QDialog):
         for button in self.birds1 + self.birds2:
             if button.isChecked():
                 if button.text() == "Other":
-                    self.birdList.setEnabled(True)
+                    pass
+                    #self.birdList.setEnabled(True)
                 else:
-                    self.birdList.setEnabled(False)
+                    #self.birdList.setEnabled(False)
                     self.label = str(button.text())
 
     def listBirdsClicked(self, item):

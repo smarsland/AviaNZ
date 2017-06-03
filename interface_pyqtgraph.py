@@ -57,8 +57,6 @@ import Segment
 
 # Decide on license
 
-# Change directory menu item?
-
 # Finish segmentation
 #   Mostly there, need to test them
 #   Add a minimum length of time for a segment -> make this a parameter
@@ -904,7 +902,7 @@ class AviaNZInterface(QMainWindow):
             dlg += 1
             # None of the following should be necessary for librosa
             if self.audiodata.dtype is not 'float':
-                self.audiodata = self.audiodata.astype('float') #/ 32768.0
+                self.audiodata = self.audiodata.astype('float') / 32768.0
             if np.shape(np.shape(self.audiodata))[0]>1:
                 self.audiodata = self.audiodata[:,0]
             self.datalength = np.shape(self.audiodata)[0]
@@ -1970,6 +1968,7 @@ class AviaNZInterface(QMainWindow):
             self.audiodata_backup[:, 0] = np.copy(self.audiodata)
 
     def denoise(self):
+        print np.min(self.audiodata), np.mean(self.audiodata), np.max(self.audiodata)
         # Listener for the denoising dialog.
         # Calls the denoiser and then plots the updated data
         # TODO: should it be saved automatically, or a button added?
@@ -1986,7 +1985,10 @@ class AviaNZInterface(QMainWindow):
                 depth = None
             else:
                 depth = int(str(depth))
-            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))
+            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))[:self.datalength]
+            # Here and in next two, wavelets can slightly change length of array
+            #self.datalength = len(self.audiodata)
+
         elif str(alg) == "Bandpass --> Wavelets":
             if thrType is True:
                 type = 'soft'
@@ -1997,7 +1999,7 @@ class AviaNZInterface(QMainWindow):
             else:
                 depth = int(str(depth))
             self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
-            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))
+            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))[:self.datalength]
         elif str(alg) == "Wavelets --> Bandpass":
             if thrType is True:
                 type = 'soft'
@@ -2007,7 +2009,7 @@ class AviaNZInterface(QMainWindow):
                 depth = None
             else:
                 depth = int(str(depth))
-            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))
+            self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))[:self.datalength]
             self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
         #elif str(alg) == "Wavelets + Bandpass":
             #if thrType is True:
@@ -2028,12 +2030,14 @@ class AviaNZInterface(QMainWindow):
             #"Median Filter"
             self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
 
+        # TODO: This shouldn't really have the params in
         sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
         maxsg = np.min(sgRaw)
         self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
         self.overviewImage.setImage(self.sg)
 
         self.specPlot.setImage(self.sg)
+        print np.min(self.audiodata), np.mean(self.audiodata), np.max(self.audiodata)
         self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate*1000.0,num=self.datalength,endpoint=True),self.audiodata)
         #self.specaxis.setTicks([[(0,0),(np.shape(self.sg)[1]/4,self.sampleRate/8000),(np.shape(self.sg)[1]/2,self.sampleRate/4000),(3*np.shape(self.sg)[1]/4,3*self.sampleRate/8000),(np.shape(self.sg)[1],self.sampleRate/2000)]])
         self.minFreq = int(str(start))

@@ -7,6 +7,7 @@ import numpy as np
 import librosa
 import os
 import glob
+import string
 
 # Nirosha's approach of simultaneous segmentation and recognition using wavelets
 
@@ -38,6 +39,8 @@ class WaveletSeg:
         if data != []:
             self.data = data
             self.sampleRate = sampleRate
+            if self.data.dtype is not 'float':
+                self.data = self.data.astype('float') / 32768.0
 
         [lowd,highd,lowr,highr] = np.loadtxt('dmey.txt')
         self.wavelet = pywt.Wavelet(filter_bank=[lowd,highd,lowr,highr])
@@ -45,7 +48,127 @@ class WaveletSeg:
         #self.wavelet = pywt.Wavelet(name='dmey')
         print self.wavelet
 
-    def denoise(self,data=None,thresholdType='soft', maxlevel=5):
+    def denoise(self,data=None,thresholdType='soft',threshold=4.5,maxlevel=5,bandpass=False,wavelet='dmey',costfn='threshold'):
+        # Perform wavelet denoising. Can use soft or hard thresholding
+        if data is None:
+            data = self.data
+
+        wp = pywt.WaveletPacket(data=data, wavelet=self.wavelet, mode='symmetric', maxlevel=maxlevel)
+
+        # Get the threshold
+        det1 = wp['d'].data
+        # Note magic conversion number
+        sigma = np.median(np.abs(det1)) / 0.6745
+        threshold = threshold * sigma
+
+        # Compute the `cost' of each node
+        nnodes = 2**(wp.maxlevel+1)-1
+        cost = np.zeros(nnodes)
+        count = 0
+        for level in range(wp.maxlevel+1):
+            for n in wp.get_level(level, 'natural'):
+                if costfn == 'threshold':
+                    # Threshold
+                    d = np.abs(n.data)
+                    cost[count] = np.sum(d > threshold)
+                elif costfn == 'entropy':
+                    # Entropy
+                    d = n.data ** 2
+                    cost[count] = -np.sum(np.where(d != 0, d * np.log(d), 0))
+                else:
+                    # SURE
+                    # TODO: Check this one ***
+                    d = n.data ** 2
+                    t2 = threshold * threshold
+                    ds = np.sum(d > t2)
+                    cost[count] = 2 * ds - len(n.data) + t2 * ds + np.sum(d * (d <= t2))
+
+                count += 1
+
+        # Compute the best tree using those cost values
+        flags = 2*np.ones(nnodes)
+        flags[2**wp.maxlevel-1:] = 1
+        # Work up the tree from just above leaves
+        inds = np.arange(2**wp.maxlevel-1)
+        inds = inds[-1::-1]
+        for i in inds:
+            # Get children
+            children = (i+1)*2 + np.arange(2) - 1
+            c = cost[children[0]] + cost[children[1]]
+            if c < cost[i]:
+                cost[i] = c
+                flags[i] = 2
+            else:
+                flags[i] = flags[children[0]] + 2
+                flags[children] = -flags[children]
+
+        keepers = np.where(flags>2)[0]
+        #keepers = [ 2, 10, 14, 16, 17, 27, 28 ]
+        print keepers
+
+        # Now get the new leaves of the tree. Anything below these nodes is deleted.
+        newleaves = np.where(flags > 2)[0]
+
+        # Make a list of the children of the newleaves, and recursively their children
+        # This shouldn't be necessary, since deleting a node should delete it's children, but I'm not sure.
+        def getchildren(n):
+            level = int(np.floor(np.log2(n + 1)))
+            if level <= wp.maxlevel:
+                tbd.append((n + 1) * 2 - 1)
+                tbd.append((n + 1) * 2)
+                getchildren((n + 1) * 2 - 1)
+                getchildren((n + 1) * 2)
+
+        tbd = []
+        for i in newleaves:
+            getchildren(i)
+
+        tbd = np.unique(tbd)
+
+        # I tried deleting these from the wp tree, but wasn't happy that they really were, so am making a new tree instead
+        inds = np.arange(2 ** wp.maxlevel - 1)
+        inds = np.delete(inds, tbd)
+
+        # Make a new tree with these in
+        new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric',maxlevel=wp.maxlevel)
+
+        # There seems to be a bit of a bug to do with the size of the reconstucted nodes, so prime them
+        for level in range(wp.maxlevel):
+            for n in new_wp.get_level(level, 'natural'):
+                n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+
+        for i in inds:
+                if i == 0:
+                    bin = ''
+                else:
+                    level = np.floor(np.log2(i+1))
+                    first = 2**level-1
+                    bin = np.binary_repr(i-first,width=int(level))
+                    bin = string.replace(bin,'0','a',maxreplace=-1)
+                    bin = string.replace(bin,'1','d',maxreplace=-1)
+                #print i, bin
+                new_wp[bin] = wp[bin].data
+
+        # TODO: Is this necessary? It seems not
+        #new_wp.reconstruct(update=True)
+
+        # Threshold the coefficients
+        for level in range(1,maxlevel):
+            for n in new_wp.get_level(level, 'natural'):
+                if thresholdType == 'hard':
+                    # Hard thresholding
+                    n.data = np.where(np.abs(n.data) < threshold, 0.0, n.data)
+                else:
+                    # Soft thresholding
+                    #n.data = np.sign(n.data) * np.maximum((np.abs(n.data) - threshold), 0.0)
+                    tmp = np.abs(n.data) - threshold
+                    tmp = (tmp + np.abs(tmp))/2.
+                    n.data = np.sign(n.data) * tmp
+
+        y = new_wp.reconstruct(update=True)
+        return y
+
+    def denoise2(self,data=None,thresholdType='soft', maxlevel=5):
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
@@ -333,7 +456,7 @@ class WaveletSeg:
         if self.data.dtype is not 'float':
             self.data = self.data.astype('float') / 32768.0
         if np.shape(np.shape(self.data))[0]>1:
-            self.data = self.data[:,0]
+            self.data = np.squeeze(self.data[:,0])
 
         if trainTest==True:     #survey data don't have annotations
             # Get the segmentation from the excel file
@@ -490,6 +613,8 @@ def genReport(folder_to_process,detected):
 
 #Test
 nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
+#[35, 36, 17, 43, 44, 21, 45, 22, 10, 55, 8, 27, 13, 6, 2, 31, 32, 34, 15, 3]
+#[35, 36, 17, 43, 44, 45, 31, 34, 3]
 #nodelist_kiwi = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55] # matlab
 #[36, 35, 43, 41, 38, 45, 44, 55]
 #[36, 35, 43, 41, 38, 45, 44, 39, 31, 17, 21, 18, 20, 15, 8, 10, 3, 4, 1, 55]
@@ -512,13 +637,14 @@ nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
 
 #print findCalls_train('Wavelet Segmentation/kiwi/train/train1',species='kiwi')
 
-ws = WaveletSeg()
-ws.loadData('Wavelet Segmentation/kiwi/train/train1')
-
-fs = 16000
-if ws.sampleRate != fs:
-    ws.data = librosa.core.audio.resample(ws.data, ws.sampleRate, fs)
-    ws.sampleRate = fs
+# ws = WaveletSeg()
+# #ws.loadData('Sound Files/tril1',trainTest=False)
+# ws.loadData('Wavelet Segmentation/kiwi/train/train1')
+#
+# fs = 16000
+# if ws.sampleRate != fs:
+#     ws.data = librosa.core.audio.resample(ws.data, ws.sampleRate, fs)
+#     ws.sampleRate = fs
 
 # Get the five level wavelet decomposition
 #wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
@@ -533,8 +659,10 @@ if ws.sampleRate != fs:
 #fwData = ws.ButterworthBandpass(wData, ws.sampleRate, low=1100, high=7500)
 #print fwData
 
-fwData = ws.data
+#fwData = ws.data
 # fwData = data
-waveletCoefs = ws.computeWaveletEnergy(fwData, ws.sampleRate)
+#waveletCoefs = ws.computeWaveletEnergy(fwData, ws.sampleRate)
 
-np.savetxt('waveout.txt',waveletCoefs)
+findCalls_train('Wavelet Segmentation/kiwi/train/train1')
+
+#np.savetxt('waveout.txt',waveletCoefs)

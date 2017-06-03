@@ -7,6 +7,7 @@ import pywt
 import wavio
 import scipy.signal as signal
 import pylab as pl
+import string
 
 # TODO:
 # Denoising needs work
@@ -276,7 +277,7 @@ class SignalProc:
             # Note magic conversion number
             sigma = np.median(np.abs(det1)) / 0.6745
             threshold = self.thresholdMultiplier*sigma
-            for level in range(self.maxlevel):
+            for level in range(self.maxlevel+1):
                 for n in wp.get_level(level, 'natural'):
                     if thresholdType == 'hard':
                         # Hard thresholding
@@ -284,15 +285,148 @@ class SignalProc:
                     else:
                         # Soft thresholding
                         n.data = np.sign(n.data)*np.maximum((np.abs(n.data)-threshold),0.0)
-            wp.reconstruct(update=True)
+            #wp.reconstruct(update=True)
             self.wData[i:i+self.sampleRate/2] = wp.data
 
         return self.wData
 
-    def waveletDenoise(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
+    def waveletDenoise(self,data=None,thresholdType='soft',threshold=4.5,maxlevel=None,bandpass=False,wavelet='dmey',costfn='threshold'):
         # Perform wavelet denoising. Can use soft or hard thresholding
         if data is None:
             data = self.data
+
+        if wavelet == 'dmey':
+            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
+            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
+
+        if maxlevel is None:
+            self.maxlevel = self.BestLevel(wavelet)
+        else:
+            self.maxlevel = maxlevel
+        print "Best level is ",self.maxlevel
+        self.thresholdMultiplier = threshold
+
+        wp = pywt.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric', maxlevel=self.maxlevel)
+
+        # Get the threshold
+        det1 = wp['d'].data
+        # Note magic conversion number
+        sigma = np.median(np.abs(det1)) / 0.6745
+        threshold = self.thresholdMultiplier * sigma
+
+        # Compute the `cost' of each node
+        nnodes = 2**(wp.maxlevel+1)-1
+        cost = np.zeros(nnodes)
+        count = 0
+        for level in range(wp.maxlevel+1):
+            for n in wp.get_level(level, 'natural'):
+                if costfn == 'threshold':
+                    # Threshold
+                    d = np.abs(n.data)
+                    cost[count] = np.sum(d > threshold)
+                elif costfn == 'entropy':
+                    # Entropy
+                    d = n.data ** 2
+                    cost[count] = -np.sum(np.where(d != 0, d * np.log(d), 0))
+                else:
+                    # SURE
+                    # TODO: Check this one ***
+                    d = n.data ** 2
+                    t2 = threshold * threshold
+                    ds = np.sum(d > t2)
+                    cost[count] = 2 * ds - len(n.data) + t2 * ds + np.sum(d * (d <= t2))
+
+                count += 1
+
+        # Compute the best tree using those cost values
+        flags = 2*np.ones(nnodes)
+        flags[2**wp.maxlevel-1:] = 1
+        # Work up the tree from just above leaves
+        inds = np.arange(2**wp.maxlevel-1)
+        inds = inds[-1::-1]
+        for i in inds:
+            # Get children
+            children = (i+1)*2 + np.arange(2) - 1
+            c = cost[children[0]] + cost[children[1]]
+            if c < cost[i]:
+                cost[i] = c
+                flags[i] = 2
+            else:
+                flags[i] = flags[children[0]] + 2
+                flags[children] = -flags[children]
+
+        keepers = np.where(flags>2)[0]
+        #keepers = [ 2, 10, 14, 16, 17, 27, 28 ]
+        print keepers
+
+        # Now get the new leaves of the tree. Anything below these nodes is deleted.
+        newleaves = np.where(flags > 2)[0]
+
+        # Make a list of the children of the newleaves, and recursively their children
+        # This shouldn't be necessary, since deleting a node should delete it's children, but I'm not sure.
+        def getchildren(n):
+            level = int(np.floor(np.log2(n + 1)))
+            if level <= wp.maxlevel:
+                tbd.append((n + 1) * 2 - 1)
+                tbd.append((n + 1) * 2)
+                getchildren((n + 1) * 2 - 1)
+                getchildren((n + 1) * 2)
+
+        tbd = []
+        for i in newleaves:
+            getchildren(i)
+
+        tbd = np.unique(tbd)
+
+        # I tried deleting these from the wp tree, but wasn't happy that they really were, so am making a new tree instead
+        inds = np.arange(2 ** wp.maxlevel - 1)
+        inds = np.delete(inds, tbd)
+
+        # Make a new tree with these in
+        new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric',maxlevel=wp.maxlevel)
+
+        # There seems to be a bit of a bug to do with the size of the reconstucted nodes, so prime them
+        for level in range(wp.maxlevel):
+            for n in new_wp.get_level(level, 'natural'):
+                n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+
+        for i in inds:
+                if i == 0:
+                    bin = ''
+                else:
+                    level = np.floor(np.log2(i+1))
+                    first = 2**level-1
+                    bin = np.binary_repr(i-first,width=int(level))
+                    bin = string.replace(bin,'0','a',maxreplace=-1)
+                    bin = string.replace(bin,'1','d',maxreplace=-1)
+                #print i, bin
+                new_wp[bin] = wp[bin].data
+
+        # TODO: Is this necessary? It seems not
+        #new_wp.reconstruct(update=True)
+
+        # Threshold the coefficients
+        for level in range(1,maxlevel):
+            for n in new_wp.get_level(level, 'natural'):
+                if thresholdType == 'hard':
+                    # Hard thresholding
+                    n.data = np.where(np.abs(n.data) < threshold, 0.0, n.data)
+                else:
+                    # Soft thresholding
+                    #n.data = np.sign(n.data) * np.maximum((np.abs(n.data) - threshold), 0.0)
+                    tmp = np.abs(n.data) - threshold
+                    tmp = (tmp + np.abs(tmp))/2.
+                    n.data = np.sign(n.data) * tmp
+
+        y = new_wp.reconstruct(update=True)
+        return y
+    
+    def waveletDenoise2(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
+        # Perform wavelet denoising. Can use soft or hard thresholding
+        if data is None:
+            data = self.data
+
+        print data[:10]
 
         if wavelet == 'dmey':
             [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
@@ -314,11 +448,13 @@ class SignalProc:
         #         del self.wp[n.path]
         #     nlevels -= 1
 
-        print wp.maxlevel
         det1 = wp['d'].data
         # Note magic conversion number
         sigma = np.median(np.abs(det1)) / 0.6745
         threshold = self.thresholdMultiplier*sigma
+        print threshold
+        print wp.data[:10]
+
         for level in range(self.maxlevel):
             for n in wp.get_level(level, 'natural'):
                 if thresholdType == 'hard':
@@ -326,9 +462,14 @@ class SignalProc:
                     n.data = np.where(np.abs(n.data)<threshold,0.0,n.data)
                 else:
                     # Soft thresholding
-                    n.data = np.sign(n.data)*np.maximum((np.abs(n.data)-threshold),0.0)
+                    #n.data = np.sign(n.data)*np.maximum((np.abs(n.data)-threshold),0.0)
+                    tmp = np.abs(n.data) - threshold
+                    tmp = (tmp + np.abs(tmp))/2.
+                    n.data = np.sign(n.data) * tmp
+        #wp.data/=32768.
+        print wp.data[:10], np.max(wp.data)
 
-        wp.reconstruct(update=False)
+        #wp.reconstruct(update=False)
         self.wData = wp.data
 
         return self.wData
