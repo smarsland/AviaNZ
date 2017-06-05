@@ -2555,13 +2555,13 @@ class AviaNZ(QMainWindow):
 # Start the application
 app = QApplication(sys.argv)
 
-DOC=True    # DOC features or all
+DOC=False    # DOC features or all
 if DOC==False:
     import interface_FindSpecies
 
 # This screen asks what you want to do, then gets the response
 # TODO: Why don't the buttons appear at once? fixed
-first = Dialogs.StartScreen()
+first = Dialogs.StartScreen(DOC=DOC)
 first.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
 first.show()
 app.exec_()
