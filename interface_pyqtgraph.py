@@ -46,7 +46,7 @@ import SignalProc
 import Segment
 #import Features
 #import Learning
-import interface_FindSpecies
+#import interface_FindSpecies
 # ==============
 # TODO
 
@@ -189,13 +189,13 @@ import interface_FindSpecies
     # Look up freebird and raven and also BatSearch
 # ===============
 
-class AviaNZInterface(QMainWindow):
+class AviaNZ(QMainWindow):
     # Main class for the interface, which contains most of the user interface and plotting code
 
     def __init__(self,root=None,configfile=None,DOC=False):
         # Main part of the initialisation is loading a configuration file, or creating a new one if it doesn't
         # exist. Also loads an initial file (specified explicitly) and sets up the window.
-        super(AviaNZInterface, self).__init__()
+        super(AviaNZ, self).__init__()
         self.root = root
         if configfile is not None:
             try:
@@ -2396,9 +2396,9 @@ class AviaNZInterface(QMainWindow):
             filename = self.dirName+'/'+'temp.wav'
             print filename
             if os.path.isfile(filename):
-                print "hi", os.path.isfile(filename)
+                # print "hi", os.path.isfile(filename)
                 os.remove(filename)
-                print "temp deleted!"
+                # print "temp deleted!"
             else:
                 pass
             # Save
@@ -2552,28 +2552,32 @@ class AviaNZInterface(QMainWindow):
     #
     #     return [im1, im2]
 
-# # Start the application
-# app = QApplication(sys.argv)
-#
-# # This screen asks what you want to do, then gets the response
-# # TODO: Why don't the buttons appear at once? fixed
-# first = StartScreen()
-# first.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
-# first.show()
-# app.exec_()
-#
-# task = first.getValues()
-# print task
-#
-# if task == 1:
-#     avianz = AviaNZInterface(configfile='AviaNZconfig.txt')
-#     avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
-#     avianz.show()
-#     app.exec_()
-# elif task==2:
-#     avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(configfile='AviaNZconfig.txt')
-#     avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
-#     avianz.show()
-#     app.exec_()
-# else:
-#     app.exit()
+# Start the application
+app = QApplication(sys.argv)
+
+DOC=True    # DOC features or all
+if DOC==False:
+    import interface_FindSpecies
+
+# This screen asks what you want to do, then gets the response
+# TODO: Why don't the buttons appear at once? fixed
+first = Dialogs.StartScreen()
+first.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+first.show()
+app.exec_()
+
+task = first.getValues()
+print task
+
+if task == 1:
+    avianz = AviaNZ(configfile='AviaNZconfig.txt')
+    avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+    avianz.show()
+    app.exec_()
+elif task==2:
+    avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(configfile='AviaNZconfig.txt')
+    avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+    avianz.show()
+    app.exec_()
+else:
+    app.exit()
