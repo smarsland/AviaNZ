@@ -11,13 +11,15 @@ import SupportClasses as SupportClasses
 
 #======
 class StartScreen(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None,DOC=True):
         QDialog.__init__(self, parent)
         self.setWindowTitle('AviaNZ - Choose Task')
         self.setAutoFillBackground(False)
         self.setFixedSize(430, 210)
         self.setStyleSheet("background-image: url(img/AviaNZ_SW.jpg);")
         self.activateWindow()
+
+        self.DOC=DOC
 
         btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:16px}'
         b1 = QPushButton("Manual Segmentation")
@@ -45,8 +47,9 @@ class StartScreen(QDialog):
         # self.setGeometry(300, 300, 430, 210)
 
         self.connect(b1, SIGNAL('clicked()'), self.manualSeg)
-        self.connect(b2, SIGNAL('clicked()'), self.findSpecies)
-        self.connect(b3, SIGNAL('clicked()'), self.denoise)
+        if DOC==False:
+            self.connect(b2, SIGNAL('clicked()'), self.findSpecies)
+            self.connect(b3, SIGNAL('clicked()'), self.denoise)
 
         # vbox = QVBoxLayout()
         # for w in [b1, b2, b3]:
