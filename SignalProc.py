@@ -375,12 +375,9 @@ class SignalProc:
         if data is None:
             data = self.data
 
-        #if data.dtype=='int16':
-        #    data = data.astype('float')/32768.
-
-        # if wavelet == 'dmey':
-        #     [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
-        #     wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
+        if wavelet == 'dmey':
+            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
+            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
 
         if maxlevel is None:
             self.maxlevel = self.BestLevel(wavelet)
@@ -429,7 +426,10 @@ class SignalProc:
 
         wavio.write('testme.wav', new_wp[''].data, self.sampleRate, sampwidth=2)
 
+        np.savetxt('testme.txt',new_wp[''].data)
         print new_wp[''].data[:10]
+        #data = new_wp[''].data
+        #data = float(2**16) * (data - np.min(data)) / (np.max(data)-np.min(data)) - 2**15
         return new_wp[''].data
 
     def waveletDenoise_all(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
