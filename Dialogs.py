@@ -731,14 +731,16 @@ class HumanClassify1(QDialog):
         self.pPlot.addItem(self.plot)
 
         self.species = QLabel(self.label)
+        font = self.species.font()
+        font.setPointSize(24)
+        font.setBold(True)
+        self.species.setFont(font)
 
         # The buttons to move through the overview
         self.correct = QtGui.QToolButton()
         self.correct.setIcon(QtGui.QIcon('Resources/tick.png'))
         # self.wrong = QtGui.QToolButton()
         # self.wrong.setIcon(QtGui.QIcon('Resources/cross.png'))
-
-        self.close = QPushButton("Close")
 
         # An array of radio buttons and a list and a text entry box
         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
@@ -762,7 +764,7 @@ class HumanClassify1(QDialog):
         self.birds3.setMaximumWidth(150)
         for item in self.birdList[20:]:
             self.birds3.addItem(item)
-        self.birds3.sortItems()
+        #self.birds3.sortItems()
         # Explicitly add "Other" option in
         self.birds3.insertItem(0, 'Other')
 
@@ -775,8 +777,8 @@ class HumanClassify1(QDialog):
         self.connect(self.tbox, SIGNAL('editingFinished()'), self.birdTextEntered)
         self.tbox.setEnabled(False)
 
-        self.close = QPushButton("Done")
-        self.connect(self.close, SIGNAL("clicked()"), self.accept)
+        #self.close = QPushButton("Done")
+        #self.connect(self.close, SIGNAL("clicked()"), self.accept)
 
         # The layouts
         birds1Layout = QVBoxLayout()
@@ -802,14 +804,14 @@ class HumanClassify1(QDialog):
         hboxButtons = QHBoxLayout()
         hboxButtons.addWidget(self.correct)
         # hboxButtons.addWidget(self.wrong)
-        hboxButtons.addWidget(self.close)
+        #hboxButtons.addWidget(self.close)
 
         vboxFull = QVBoxLayout()
         vboxFull.addWidget(self.wPlot)
         vboxFull.addWidget(self.species)
         vboxFull.addLayout(hboxBirds)
         vboxFull.addLayout(hboxButtons)
-        vboxFull.addWidget(self.close)
+        #vboxFull.addWidget(self.close)
 
         self.setLayout(vboxFull)
         self.setImage(seg,self.label)
@@ -831,7 +833,9 @@ class HumanClassify1(QDialog):
         elif ind < 19:
             self.birds2[ind-10].setChecked(True)
         else:
-            self.birds3[ind-19].setChecked(True)
+            self.birds2[9].setChecked(True)
+            self.birds3.setEnabled(True)
+            self.birds3.setCurrentRow(ind-19)
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
@@ -839,11 +843,12 @@ class HumanClassify1(QDialog):
         for button in self.birds1 + self.birds2:
             if button.isChecked():
                 if button.text() == "Other":
-                    pass
-                    #self.birdList.setEnabled(True)
+                    #pass
+                    self.birds3.setEnabled(True)
                 else:
-                    #self.birdList.setEnabled(False)
+                    self.birds3.setEnabled(False)
                     self.label = str(button.text())
+                    self.species.setText(self.label)
 
     def listBirdsClicked(self, item):
         # Listener for clicks in the listbox of birds
@@ -851,18 +856,21 @@ class HumanClassify1(QDialog):
             self.tbox.setEnabled(True)
         else:
             # Save the entry
+            self.tbox.setEnabled(False)
             self.label = str(item.text())
+            self.species.setText(self.label)
 
     def birdTextEntered(self):
         # Listener for the text entry in the bird list
         # Check text isn't already in the listbox, and add if not
         # Doesn't sort the list, but will when program is closed
-        item = self.birdList.findItems(self.tbox.text(), Qt.MatchExactly)
+        item = self.birds3.findItems(self.tbox.text(), Qt.MatchExactly)
         if item:
             pass
         else:
-            self.birdList.addItem(self.tbox.text())
+            self.birds3.addItem(self.tbox.text())
         self.label = str(self.tbox.text())
+        self.species.setText(self.label)
         self.saveConfig = True
         self.tbox.setEnabled(False)
 

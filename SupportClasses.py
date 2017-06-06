@@ -72,7 +72,7 @@ class DragViewBox(pg.ViewBox):
             self.updateScaleBox(ev.buttonDownPos(), ev.pos())
 
     def keyPressEvent(self,ev):
-        # TODO: This catches the keypresses and sends out a signal
+        # This catches the keypresses and sends out a signal
         #print ev.key(), ev.text()
         self.emit(SIGNAL("keyPressed"),ev)
 

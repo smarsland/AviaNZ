@@ -22,6 +22,8 @@ import string
         # This is based on thresholded reconstruction
     # (6) Classify as call if OR of (5) is true
 # Stephen: Think about (4), fix (0), (5), (6) -> learning!
+    # MLP or decision tree
+    # DT: most informative nodes?
 
 # TODO: more testing, proper code to run experiment, work out desired output, work on parameters for each species
 
@@ -733,4 +735,5 @@ nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
 
 #np.savetxt('waveout.txt',waveletCoefs)
 
-findCalls_train('Wavelet Segmentation/kiwi/train/train1')
+# Just uncomment this one to test
+#findCalls_train('Wavelet Segmentation/kiwi/train/train1')
