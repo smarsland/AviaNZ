@@ -125,9 +125,6 @@ import Segment
 # Is there something weird with spectrogram and denoising? Why are there spikes?
 # Should load in the new sound file after denoising and play that
 
-# Have a busy bar when computing?
-    # -> put one in for loading, good idea for other stuff (denoising, etc.)
-
 # Look into ParameterTree for saving the config stuff in particular
 # Better loading of files -> paging, not computing whole spectrogram (how to deal with overview? -> coarser spec?)
     # Maybe: check length of file. If > 5 mins, load first 5 only (? how to move to next 5?)
@@ -136,11 +133,7 @@ import Segment
     # Take the segments that have been given and try to classify them in lots of ways:
     # Cross-correlation, DTW, shape metric, features and learning
 
-# Some bug in denoising? -> tril1
-
 # Needs decent testing
-
-# Option to turn button menu on/off?
 
 # Minor:
 # Turn stereo sound into mono using librosa, consider always resampling to 22050Hz (except when it's less in file :) )
