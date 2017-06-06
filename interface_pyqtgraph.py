@@ -50,6 +50,13 @@ import Segment
 # ==============
 # TODO
 
+# Decide what should happen with Check segments 2
+# Decide on license
+
+# Remove spectrogram drag boxes' fill color - check self.background.setZValue(-1e6) and setBackgroundColor() in ViewBox.py
+# Why the spectrogram view is created with custom viewbox(in SupportClasses) instead of default viewbox? Isn't the custom
+# viewbox is for segment boxes?
+
 # Fix the moving bar when playing a bandlimited segment, it goes back to the beginning.
 # and set permission of temp file to allow rewriting or delete the file after playing it? File is deleting when exit the program!
 # probably need to break the link (path) between media object and sink, how?
@@ -62,6 +69,13 @@ import Segment
 # We should be able to read other sound types e.g. mp3
     # Look up audioread
 
+# Finish segmentation
+#   Mostly there, need to test them
+#   Add a minimum length of time for a segment -> make this a parameter
+#   Finish sorting out parameters for median clipping segmentation, energy segmentation
+#   Finish cross-correlation to pick out similar bits of spectrogram -> and what other methods?
+#   Add something that aggregates them -> needs planning
+
 # At times the program does not respond and ask to repair/close (e.g. when move the overview slider fast or something like that).
 # Need to work on memory management!
 
@@ -70,24 +84,9 @@ import Segment
 # Actions -> Denoise -> median filter check
 # Make the median filter on the spectrogram have params and a dialog. Other options?
 
-# Decide what should happen with Check segments 2
-
-# Remove spectrogram drag boxes' fill color - check self.background.setZValue(-1e6) and setBackgroundColor() in ViewBox.py
-# Why the spectrogram view is created with custom viewbox(in SupportClasses) instead of default viewbox? Isn't the custom
-# viewbox is for segment boxes?
-
 # Mouse location printing -> Is it correct? Better place?
 
-# Decide on license
-
 # Change directory menu item?
-
-# Finish segmentation
-#   Mostly there, need to test them
-#   Add a minimum length of time for a segment -> make this a parameter
-#   Finish sorting out parameters for median clipping segmentation, energy segmentation
-#   Finish cross-correlation to pick out similar bits of spectrogram -> and what other methods?
-#   Add something that aggregates them -> needs planning
 
 # Fundamental frequency
 #   Smoothing?
