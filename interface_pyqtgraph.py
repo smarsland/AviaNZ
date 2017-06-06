@@ -53,6 +53,7 @@ import Segment
 # Fix the moving bar when playing a bandlimited segment, it goes back to the beginning.
 # and set permission of temp file to allow rewriting or delete the file after playing it? File is deleting when exit the program!
 # probably need to break the link (path) between media object and sink, how?
+    # I think this is done -- needs checking
 
 # Add to manual - press 'esc' to pause sound is there now
 
@@ -69,8 +70,7 @@ import Segment
 # Actions -> Denoise -> median filter check
 # Make the median filter on the spectrogram have params and a dialog. Other options?
 
-# Finish implementation to show individual segments to user and ask for feedback and the other feedback dialogs
-# TODO: Deal with the outputs
+# Decide what should happen with Check segments 2
 
 # Remove spectrogram drag boxes' fill color - check self.background.setZValue(-1e6) and setBackgroundColor() in ViewBox.py
 # Why the spectrogram view is created with custom viewbox(in SupportClasses) instead of default viewbox? Isn't the custom
@@ -108,7 +108,6 @@ import Segment
     # HistogramLUTItem
 
 # Make the scrollbar be the same size as the spectrogram -> hard!
-# Make the segmented play work with the phonon player? -> hard!
 
 # Context menu different for day and night birds?
 
@@ -219,11 +218,8 @@ class AviaNZ(QMainWindow):
         self.segmentPlots=[]
         self.box1id = -1
         self.DOC=DOC
-        self.bandLimited=False
-        bandLimitedStart=0
         self.started=False
         self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
-        self.bandPlayed=False #playbandlimited
 
         self.lastSpecies = "Don't Know"
         self.resetStorageArrays()
@@ -1920,7 +1916,7 @@ class AviaNZ(QMainWindow):
             self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.cmapInverted, self.config['BirdList'])
             self.humanClassifyDialog1.show()
             self.humanClassifyDialog1.activateWindow()
-            self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
+            #self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
             self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
 
     def humanClassifyClose1(self):
@@ -1943,16 +1939,22 @@ class AviaNZ(QMainWindow):
             self.humanClassifyDialog1.setImage(self.sg[x1:x2,:],self.segments[self.box1id][4])
         else:
             print "Last image"
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setWindowIcon(QIcon('Avianz.ico'))
+            msg.setText("All segmentations checked")
+            msg.setWindowTitle("Finished")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
             self.humanClassifyClose1()
 
     def humanClassifyCorrect1(self):
         label, self.saveConfig = self.humanClassifyDialog1.getValues()
-        # TODO: Test, particularly that new birds are added
-        # TODO: update the listRects
+        #print label, self.segments[self.box1id][4]
         if label != self.segments[self.box1id][4]:
             self.updateText(label)
             if self.saveConfig:
-                self.config['ListBirdsEntries'].append(label)
+                self.config['BirdList'].append(label)
 
         self.humanClassifyNextImage1()
 
@@ -2183,6 +2185,7 @@ class AviaNZ(QMainWindow):
         #self.audiodata = self.audiodata.astype('int16')
         #import soundfile as sf
         filename = self.filename[:-4] + '_d' + self.filename[-4:]
+        print "here", filename
         # self.audiodata*= 32768.0
         # print self.audiodata.dtype
         # self.audiodata = self.audiodata.astype('int16')
@@ -2329,11 +2332,7 @@ class AviaNZ(QMainWindow):
         # When the slider is moved, change the position of playback
         self.media_obj.seek(self.playSlider.value())
         # playSlider.value() is in ms, need to convert this into spectrogram pixels
-        if self.bandLimited==True:
-            print("inside here")
-            self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0+self.bandLimitedStart))
-        else:
-            self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0))
+        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0))
 
     def barMoved(self,evt):
         self.playSlider.setValue(self.convertSpectoAmpl(evt.x())*1000)
@@ -2362,7 +2361,7 @@ class AviaNZ(QMainWindow):
             start = self.listRectanglesa1[self.box1id].getRegion()[0]*1000
             self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1]*1000
             self.media_obj.seek(start)
-            self.media_obj.seek(start)
+            #self.media_obj.seek(start)
             #self.media_obj.play()
             #self.segmentStop = self.playSlider.maximum()
             if self.media_obj.state() == phonon.Phonon.PlayingState:
@@ -2374,47 +2373,57 @@ class AviaNZ(QMainWindow):
                 self.media_obj.play()
                 # self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
 
+    def movePlaySlider2(self,time):
+        if not self.playSlider.isSliderDown():
+            self.playSlider.setValue(time)
+        #self.timePlayed.setText(self.convertMillisecs(time)+"/"+self.totalTime)
+        if time > min(self.playSlider.maximum(),self.segmentStop):
+            self.media_obj2.stop()
+            #self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+            #self.media_obj.seek(self.playSlider.minimum())
+        self.bar2.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0)+self.bandLimitedStart)
+
+    def playFinished2(self):
+        self.media_obj2.stop()
+        self.p_spec.removeItem(self.bar2)
+        #self.media_ob2 = None
+        os.remove(self.dirName+'/'+'temp.wav')
+
     def playBandLimitedSegment(self):
         # Get the band limits of the segment, bandpass filter, then play that
         start = int(self.listRectanglesa1[self.box1id].getRegion()[0]*self.sampleRate)
         stop = int(self.listRectanglesa1[self.box1id].getRegion()[1]*self.sampleRate)
         bottom = int(self.segments[self.box1id][2]*self.sampleRate/2./np.shape(self.sg)[1])
         top = int(self.segments[self.box1id][3]*self.sampleRate/2./np.shape(self.sg)[1])
-        # if self.bandPlayed==True:
-        #     media_obj=None
-        #     print "path disconnected!"
-        # played=False
+
         if bottom > 0 and top>0:
-            self.bandPlayed=True
-            self.bandLimited=True
-            self.bandLimitedStart=start
+            self.bandLimitedStart=self.convertAmpltoSpec(float(start)/self.sampleRate)
             data = self.audiodata[start:stop]
-            print "low-high: ",bottom, top
+            #print "low-high: ",bottom, top
             # data = self.sp.ButterworthBandpass(data, self.sampleRate, bottom, top,order=2)
             data = self.sp.ButterworthBandpass(data, self.sampleRate, bottom, top)
             # TODO: delete the temp file to allow re-play. disconnect the sound from media obj
             filename = self.dirName+'/'+'temp.wav'
             print filename
-            if os.path.isfile(filename):
-                # print "hi", os.path.isfile(filename)
-                os.remove(filename)
-                # print "temp deleted!"
-            else:
-                pass
-            # Save
             data = data.astype('int16')
             wavio.write(filename,data,self.sampleRate,scale='dtype-limits',sampwidth=2)
 
+            if not hasattr(self, 'bar2'):
+                self.bar2 = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'r', 'width': 3})
+                self.media_obj2 = phonon.Phonon.MediaObject(self)
+                audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
+                self.path = phonon.Phonon.createPath(self.media_obj2, audio_output)
+                self.media_obj2.setTickInterval(20)
+                self.media_obj2.tick.connect(self.movePlaySlider2)
+                self.media_obj2.finished.connect(self.playFinished2)
+            self.bar2.setValue(self.bandLimitedStart)
+            self.p_spec.addItem(self.bar2, ignoreBounds=True)
+
             # Instantiate a Qt media object and prepare it (for audio playback)
-            media_obj = phonon.Phonon.MediaObject(self)
-            audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
-            self.path=phonon.Phonon.createPath(media_obj, audio_output)
-            media_obj.setTickInterval(20)
-            #self.media_obj.tick.connect(self.movePlaySlider)
-            media_obj.finished.connect(self.playFinished)
-            media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
-            media_obj.play()
-            return
+            self.media_obj2.setCurrentSource(phonon.Phonon.MediaSource(filename))
+            self.media_obj.seek(0)
+            self.media_obj2.play()
+            #return
             # # Instantiate a Qt media object and prepare it (for audio playback)
             # media_obj = phonon.Phonon.MediaObject(self)
             # self.audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
