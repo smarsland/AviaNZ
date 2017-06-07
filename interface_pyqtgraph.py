@@ -351,60 +351,36 @@ class AviaNZ(QMainWindow):
 
     def showHelp(self):
 
-        win = QWebView()
-        #win.setContent(img, 'image/png')
-        win.setHtml('''
-  <html>
-    <head>
-      <title>A Demo Page</title>
- 
-      <script language="javascript">
-        // Completes the full-name control and
-        // shows the submit button
-        function completeAndReturnName() {
-          var fname = document.getElementById('fname').value;
-          var lname = document.getElementById('lname').value;
-          var full = fname + ' ' + lname;
- 
-          document.getElementById('fullname').value = full;
-          document.getElementById('submit-btn').style.display = 'block';
- 
-          return full;
-        }
-      </script>
-    </head>
- 
-    <body>
-      <form>
-        <label for="fname">First name:</label>
-        <input type="text" name="fname" id="fname"></input>
-        <br />
-        <label for="lname">Last name:</label>
-        <input type="text" name="lname" id="lname"></input>
-        <br />
-        <label for="fullname">Full name:</label>
-        <input disabled type="text" name="fullname" id="fullname"></input>
-        <br />
-        <input style="display: none;" type="submit" id="submit-btn"></input>
-      </form>
-    </body>
-  </html>
-''')
-        win.show()
+        # TODO: This needs work
+        dialog = QtGui.QDialog()
+        dialog.setWindowTitle("Help")
+        #dialog.resize(*size)
+        webview = QWebView()
+        webpage = QWebPage()
+        webview.setPage(webpage)
+        webpage.loadFinished.connect(lambda: _on_qt_page_load_finished(dialog, webview))
+        #webview.setUrl(QtCore.QUrl.fromEncoded("http://stephenmonika.net"))
+        webview.settings().setAttribute(QWebSettings.PluginsEnabled, True)
+        webview.load(QUrl('file://Users/srmarsla/Projects/AviaNZ/Docs/AvianzManual.pdf'))
+        layout = QtGui.QGridLayout()
+        layout.addWidget(webview)
+        dialog.setLayout(layout)
+        dialog.authorization_code = None
+        dialog.show()
 
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
-        msg.setText("Open the pdf file Docs/AvianzManual.pdf")
-        msg.setWindowIcon(QIcon('img/Avianz.ico'))
-        msg.setWindowTitle("Help")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        #msg = QMessageBox()
+        #msg.setIcon(QMessageBox.Information)
+        #msg.setText("Open the pdf file Docs/AvianzManual.pdf")
+        #msg.setWindowIcon(QIcon('img/Avianz.ico'))
+        #msg.setWindowTitle("Help")
+        #msg.setStandardButtons(QMessageBox.Ok)
+        #msg.exec_()
 
         #web = QWebView()
         #web.settings().setAttribute(QWebSettings.PluginsEnabled, True)
         #web.show()
         #web.load(QUrl('file://Docs/AvianzManual.pdf'))
-        return
+        #return
 
     def genConfigFile(self):
         # Generates a configuration file with default values for parameters
