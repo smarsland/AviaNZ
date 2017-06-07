@@ -239,16 +239,16 @@ class SignalProc:
     def BestLevel(self,wavelet):
         # Compute the best level for the wavelet packet decomposition by using the Shannon entropy
         previouslevelmaxE = self.ShannonEntropy(self.data)
-        print previouslevelmaxE
+        #print previouslevelmaxE
         self.wp = pywt.WaveletPacket(data=self.data, wavelet=wavelet, mode='symmetric', maxlevel=self.maxsearch)
         level = 1
         currentlevelmaxE = np.max([self.ShannonEntropy(n.data) for n in self.wp.get_level(level, "freq")])
-        print currentlevelmaxE
+        #print currentlevelmaxE
         while currentlevelmaxE < previouslevelmaxE and level<self.maxsearch:
             previouslevelmaxE = currentlevelmaxE
             level += 1
             currentlevelmaxE = np.max([self.ShannonEntropy(n.data) for n in self.wp.get_level(level, "freq")])
-            print currentlevelmaxE
+            #print currentlevelmaxE
         return level
 
     def convert(self,i):
@@ -369,15 +369,20 @@ class SignalProc:
             #print "next level: ", level
         return new_wp
 
-    def waveletDenoise(self,data=None,thresholdType='soft',threshold=4.5,maxlevel=None,bandpass=False,wavelet='dmey',costfn='threshold'):
+    def waveletDenoise(self,data=None,thresholdType='soft',threshold=4.5,maxlevel=None,bandpass=False,wavelet='dmey2',costfn='threshold'):
         # Perform wavelet denoising. Can use soft or hard thresholding
 
         if data is None:
             data = self.data
 
-        if wavelet == 'dmey':
+        print data[:10]
+
+        if wavelet == 'dmey2':
             [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
             wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
+            wavelet.orthogonal=True
+
+        print wavelet
 
         if maxlevel is None:
             self.maxlevel = self.BestLevel(wavelet)
@@ -423,108 +428,14 @@ class SignalProc:
 
         # Reconstruct the internal nodes and the data
         new_wp = self.reconstruct(new_wp,wp.wavelet,bestleaves)
+        print new_wp[''].data[:10]
 
         wavio.write('testme.wav', new_wp[''].data, self.sampleRate, sampwidth=2)
 
-        np.savetxt('testme.txt',new_wp[''].data)
-        print new_wp[''].data[:10]
+        #np.savetxt('testme.txt',new_wp[''].data)
         #data = new_wp[''].data
         #data = float(2**16) * (data - np.min(data)) / (np.max(data)-np.min(data)) - 2**15
         return new_wp[''].data
-
-    def waveletDenoise_all(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
-        # Perform wavelet denoising. Can use soft or hard thresholding
-        if data is None:
-            data = self.data
-
-        if wavelet == 'dmey':
-            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
-            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
-
-        if maxlevel is None:
-            self.maxlevel = self.BestLevel(wavelet)
-        else:
-            self.maxlevel = maxlevel
-        print "Best level is ",self.maxlevel
-        if threshold is not None:
-            self.thresholdMultiplier = threshold
-
-        self.wData = np.zeros(len(data))
-        for i in range(0,len(data),self.sampleRate/2):
-            d = data[i:i+self.sampleRate/2]
-            wp = pywt.WaveletPacket(data=d, wavelet=wavelet, mode='zero',maxlevel=self.maxlevel)
-
-            det1 = wp['d'].data
-            # Note magic conversion number
-            sigma = np.median(np.abs(det1)) / 0.6745
-            threshold = self.thresholdMultiplier*sigma
-            for level in range(self.maxlevel+1):
-                for n in wp.get_level(level, 'natural'):
-                    if thresholdType == 'hard':
-                        # Hard thresholding
-                        n.data = np.where(np.abs(n.data)<threshold,0.0,n.data)
-                    else:
-                        # Soft thresholding
-                        n.data = np.sign(n.data)*np.maximum((np.abs(n.data)-threshold),0.0)
-            #wp.reconstruct(update=True)
-            self.wData[i:i+self.sampleRate/2] = wp.data
-
-        return self.wData
-
-
-    def waveletDenoise2(self,data=None,thresholdType='soft',threshold=None,maxlevel=None,bandpass=False,wavelet='dmey'):
-        # Perform wavelet denoising. Can use soft or hard thresholding
-        if data is None:
-            data = self.data
-
-        print data[:10]
-
-        if wavelet == 'dmey':
-            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
-            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
-
-        if maxlevel is None:
-            self.maxlevel = self.BestLevel(wavelet)
-        else:
-            self.maxlevel = maxlevel
-        print "Best level is ",self.maxlevel
-        if threshold is not None:
-            self.thresholdMultiplier = threshold
-
-        wp = pywt.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric',maxlevel=self.maxlevel)
-
-        # nlevels = self.maxsearch
-        # while nlevels > self.maxlevel:
-        #     for n in self.wp.get_leaf_nodes():
-        #         del self.wp[n.path]
-        #     nlevels -= 1
-
-        det1 = wp['d'].data
-        # Note magic conversion number
-        sigma = np.median(np.abs(det1)) / 0.6745
-        threshold = self.thresholdMultiplier*sigma
-        print threshold
-        print wp.data[:10]
-
-        for level in range(self.maxlevel):
-            for n in wp.get_level(level, 'natural'):
-                if thresholdType == 'hard':
-                    # Hard thresholding
-                    n.data = np.where(np.abs(n.data)<threshold,0.0,n.data)
-                else:
-                    # Soft thresholding
-                    #n.data = np.sign(n.data)*np.maximum((np.abs(n.data)-threshold),0.0)
-                    tmp = np.abs(n.data) - threshold
-                    tmp = (tmp + np.abs(tmp))/2.
-                    n.data = np.sign(n.data) * tmp
-        #wp.data/=32768.
-        print wp.data[:10], np.max(wp.data)
-
-        #wp.reconstruct(update=False)
-        self.wData = wp.data
-
-        return self.wData
-
 
     def bandpassFilter(self,data=None,start=1000,end=10000):
         # Bandpass filter
@@ -545,11 +456,6 @@ class SignalProc:
             sampleRate = self.sampleRate
         nyquist = sampleRate/2.0
 
-        # low = float(low)/nyquist
-        # high = float(high)/nyquist
-        # print nyquist, low, high
-        # b, a = signal.butter(order, [low, high], btype='band')
-        # apply filter
         lowPass = float(low)/nyquist
         highPass = float(high)/nyquist
         lowStop = float(low-50)/nyquist

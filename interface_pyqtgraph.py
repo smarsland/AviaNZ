@@ -5,8 +5,8 @@
 # Version 0.10 16/04/17
 # Author: Stephen Marsland, with input from Nirosha Priyadarshani
 
-#     <one line to give the program's name and a brief idea of what it does.>
-#    Copyright (C) <year>  <name of author>
+#    AviaNZ birdsong analysis program
+#    Copyright (C) 2017
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -24,6 +24,7 @@
 import sys, os, json    #,glob
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
+from PyQt4.QtWebKit import *
 import PyQt4.phonon as phonon
 
 import wavio
@@ -52,8 +53,6 @@ import Segment
 
 # Decide what should happen with Check segments 2
 
-# Decide on license
-
 # Make the play sounds work on the denoised version without saving it?
     # Save a temp version
 
@@ -66,9 +65,6 @@ import Segment
 # and set permission of temp file to allow rewriting or delete the file after playing it? File is deleting when exit the program!
 # probably need to break the link (path) between media object and sink, how?
     # I think this is done -- needs checking
-
-# Add to manual - press 'esc' to pause sound is there now
-# And volume control
 
 # We should be able to read other sound types e.g. mp3
     # Look up audioread
@@ -354,6 +350,48 @@ class AviaNZ(QMainWindow):
         return
 
     def showHelp(self):
+
+        win = QWebView()
+        #win.setContent(img, 'image/png')
+        win.setHtml('''
+  <html>
+    <head>
+      <title>A Demo Page</title>
+ 
+      <script language="javascript">
+        // Completes the full-name control and
+        // shows the submit button
+        function completeAndReturnName() {
+          var fname = document.getElementById('fname').value;
+          var lname = document.getElementById('lname').value;
+          var full = fname + ' ' + lname;
+ 
+          document.getElementById('fullname').value = full;
+          document.getElementById('submit-btn').style.display = 'block';
+ 
+          return full;
+        }
+      </script>
+    </head>
+ 
+    <body>
+      <form>
+        <label for="fname">First name:</label>
+        <input type="text" name="fname" id="fname"></input>
+        <br />
+        <label for="lname">Last name:</label>
+        <input type="text" name="lname" id="lname"></input>
+        <br />
+        <label for="fullname">Full name:</label>
+        <input disabled type="text" name="fullname" id="fullname"></input>
+        <br />
+        <input style="display: none;" type="submit" id="submit-btn"></input>
+      </form>
+    </body>
+  </html>
+''')
+        win.show()
+
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
         msg.setText("Open the pdf file Docs/AvianzManual.pdf")
@@ -361,6 +399,11 @@ class AviaNZ(QMainWindow):
         msg.setWindowTitle("Help")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
+
+        #web = QWebView()
+        #web.settings().setAttribute(QWebSettings.PluginsEnabled, True)
+        #web.show()
+        #web.load(QUrl('file://Docs/AvianzManual.pdf'))
         return
 
     def genConfigFile(self):

@@ -275,7 +275,7 @@ class Segmentation(QDialog):
 
         self.waveletlabel = QLabel("Type of wavelet")
         self.wavelet = QComboBox()
-        self.wavelet.addItems(["dmey","db2","db5","haar"])
+        self.wavelet.addItems(["dmey2","db2","db5","haar"])
         self.wavelet.setCurrentIndex(0)
 
         self.blabel = QLabel("Start and end points of the band for bandpass filter")
@@ -511,7 +511,7 @@ class Denoise(QDialog):
 
         self.waveletlabel = QLabel("Type of wavelet")
         self.wavelet = QComboBox()
-        self.wavelet.addItems(["dmey","db2","db5","haar"])
+        self.wavelet.addItems(["dmey2","db2","db5","haar"])
         self.wavelet.setCurrentIndex(0)
 
         # Median: width of filter
