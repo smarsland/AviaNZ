@@ -1,58 +1,118 @@
 
-0. Pyqtgraph? 
-   How to get a moving pointer working?!
+# TODO for AviaNZ
+
+(1) Minor bugs and extensions
+
+    NP: Add Sumudu's name
+
+    SM: Tidy code, ensure comments, etc.
+
+    NP: Make the oscillogram and spectrogram line up (basically, just sort out y-axis labels)
+
+    SM: Enable removal of fill colour for spectrogram drag boxes
+
+    NP: Sort out the bandlimited playing -> Windows permissions for deleting file
+    NP: Make play sounds play the denoised version after denoising
+    SM: Undo for segmentation
+    
+    ??: Spectrogram drawing after changes (e.g. denoising) seems to have a bug -> question: is it about the contrast and brightness?
+    
+    SM: Save the amount of time the user makes the window show back into the config file
+
+    SM: Add in the 'who the user is' annotation
+    SM: Get the time from the file name (if standard) and use it to put day or night birds first
+
+    NP: Read mp3 files
+
+    SM: Make the arrows (on top-right) move on to next file if double clicked (and at start/end?)
+
+    NP: Add a change directory option
+
+    SM (?): Make the boxes below the overview be clickable to get to that section
+    NP: And stop the lines going too far to the right
+
+    SM: Get the manual and cheat sheet included in the program
+
+    NP: Make it possible to change parameters (look into pyqtgraph ParameterTree)
+
+    ??: What to do with stereo sound? How about consistent sample rates?
+
+    The updating of the colour of the overview seg has some colour weirdness -- gets darker. Some sort of overlapping? Not a major problem.
+
+	NP: Add play button to check segment, pictue alone is not enough to confirm. Make the pictures (check segment 1) small.
+
+	NP: Stop loading the file when choose to cancel the progress bar.
+
+	Can we reproduce? File list dock becomes frozen - one was experiencing this. Had to restart the program.
  
-1. Interface for Kim.
-    -> user manual
-    -> extra points she wanted
+	Control marking the same segments again and again - multiple clicks on Find matches with the same pattern.
+	
+	Udate the status bar when auto saving the annotation? Users want to know/confirm.
 
-2. Finish median clipping segmentation (and also thresholded power and amplitude).
+	
+(2) Memory management
+    NP: It's a pain, but needs thinking about and then doing
+    Could just split the file into shorter pieces? 
+    Split files into 5 minute segments or whatever or look into paging
 
-3. Finish the Raven feature selection.
+(3) Denoising, Wavelets and Segmentation
+    Make denoising work
+        Is there something wrong?
+        How long should a denoise piece be?
+	(1) Compare with matlab for long files
+	(2) Compare with making wavelet trees on shorter pieces
+	(3) Denoise the segments separately
+    
+    NP: Stop the segmentation being based on 1s
+    NP: Fully integrate wavelet seg into program
+    NP: We actually want Kiwi (M) and Kiwi (F), and need to get all the ruru calls
+    NP: Want to have some form of machine learning
+		(1) decision tree
+		(2) MLP
+		(3) SVM
+		(4) boosting
+    SM: And need to think about the 95% confidence thing a lot more
+    SM: Add in the Check Segments 2 bit for this, and actually process the results!
 
-4. Finish the wavelet segmentation.
+    SM: Make the segmentations work fully
+        Get the minimum time of a segment parameter sorted
+        Work out how to combine the methods, particularly, spot overlaps in segments and combine them
+        Work out parameters and how to set them
+        Remove cross-correlation? Or just improve?
 
-5. 100% confidence on existence and non-existence of (e.g.,) kiwi. Show those not sure about.
+    Both: Think about nice ways to train a new wavelet filter
+		And get the whole workflow sorted for it
 
------
+    Use intensity of colour to encode certainty?
 
-5. Testing of the interface, finishing the denoising, segmentation.
+(4) Features
+    Use the wavelets
+    Finish the Raven features
+    Add MFCC (nearly done)
+    And whatever else seems interesting
 
-6. Cross correlation and related.
+    More on fundamental frequency
+        smoothing?
+        harvest or bana (yaapt was awful)
+    Shape metrics
 
-7. Some learning.
+(5) Learning
+    Standard methods
+        MLP
+        Decision tree
+        Boosting
+        SVM
+    LSTM or GRU
 
-8. Some code in C?
+    HMM to string syllables together
 
-9. What needs tidying in the code?
+(6) Other
+    Think more about the spectrogram inversion
+        If it works --> Stu's bats
+        Denoise the spectrogram fully (median filter, smoothing, consider grab-cut)
 
-Some ideas about things that would be nice:
-    User picks a segment, algorithm to find similar ones and show just those (or copy label)
-    Would it be good to have a 'confirmed' button so that algorithm knows it is correct? Or just assume?
-        So after processing a file, you either run through it, or you get shown each one in it's own window (or a column of them)
-        Could then click on those that are wrong
-    Some database storage stuff and meta information about the sound files?
+    Any necessary database or metadata things?
 
+    Bats do keep on coming up...
 
-------
-Button for multitapering on/off
-Tidy up the naming for the interface elements
-Mini method for text resizing
-Make choice of context menu or list of birds
-
-GNU License:
-    <one line to give the program's name and a brief idea of what it does.>
-    Copyright (C) <year>  <name of author>
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+    Generative noise model
