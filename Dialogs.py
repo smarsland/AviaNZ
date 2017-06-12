@@ -47,9 +47,9 @@ class StartScreen(QDialog):
         # self.setGeometry(300, 300, 430, 210)
 
         self.connect(b1, SIGNAL('clicked()'), self.manualSeg)
-        if DOC==False:
-            self.connect(b2, SIGNAL('clicked()'), self.findSpecies)
-            self.connect(b3, SIGNAL('clicked()'), self.denoise)
+        # if DOC==False:
+        self.connect(b2, SIGNAL('clicked()'), self.findSpecies)
+        self.connect(b3, SIGNAL('clicked()'), self.denoise)
 
         # vbox = QVBoxLayout()
         # for w in [b1, b2, b3]:
@@ -165,7 +165,7 @@ class Segmentation(QDialog):
 
         self.algs = QComboBox()
         #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
-        self.algs.addItems(["Amplitude","Harma","Power","Median Clipping","Onsets","Fundamental Frequency","FIR"])
+        self.algs.addItems(["Amplitude","Harma","Power","Median Clipping","Onsets","Fundamental Frequency","FIR","Wavelets"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Amplitude"
         self.activate = QPushButton("Segment")
@@ -254,7 +254,11 @@ class Segmentation(QDialog):
         self.eclabel.hide()
         self.ecthrtype = [QRadioButton("N standard deviations"), QRadioButton("Threshold")]
 
-        self.wavlabel = QLabel("Wavelets")
+        self.specieslabel = QLabel("Species")
+        self.species=QComboBox()
+        self.species.addItems(["kiwi","ruru"])
+        self.species.currentIndexChanged[QString].connect(self.changeBoxes)
+
         self.depthlabel = QLabel("Depth of wavelet packet decomposition")
         #self.depthchoice = QCheckBox()
         #self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
@@ -288,8 +292,10 @@ class Segmentation(QDialog):
         self.connect(self.bandchoice, SIGNAL('clicked()'), self.bandclicked)
 
 
-        Box.addWidget(self.wavlabel)
-        self.wavlabel.hide()
+        Box.addWidget(self.specieslabel)
+        self.specieslabel.hide()
+        Box.addWidget(self.species)
+        self.species.hide()
         Box.addWidget(self.depthlabel)
         self.depthlabel.hide()
         #Box.addWidget(self.depthchoice)
@@ -401,7 +407,8 @@ class Segmentation(QDialog):
         elif self.prevAlg == "FIR":
             self.FIRThr1.hide()
         else:
-            self.wavlabel.hide()
+            self.specieslabel.hide()
+            self.species.hide()
             self.depthlabel.hide()
             self.depth.hide()
             #self.depthchoice.hide()
@@ -452,7 +459,8 @@ class Segmentation(QDialog):
             self.FIRThr1.show()
         else:
             #"Wavelets"
-            self.wavlabel.show()
+            self.specieslabel.show()
+            self.species.show()
             self.depthlabel.show()
             #self.depthchoice.show()
             self.depth.show()
@@ -475,7 +483,7 @@ class Segmentation(QDialog):
         self.end.setEnabled(not self.end.isEnabled())
 
     def getValues(self):
-        return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
+        return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text(),self.species.currentText()]
 
 #======
 class Denoise(QDialog):
@@ -827,6 +835,10 @@ class HumanClassify1(QDialog):
 
         # Make one of the options be selected
         self.species.setText(label)
+        if label[-1]=='?':
+            print label
+            label = label[:-1]
+            print label
         ind = self.birdList.index(label)
         if ind < 10:
             self.birds1[ind].setChecked(True)

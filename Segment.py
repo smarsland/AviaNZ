@@ -111,20 +111,20 @@ class Segment:
         padded = np.concatenate((np.zeros(int(fftrate / 10.)), np.mean(self.sg, axis=1), np.zeros(int(fftrate / 10.))))
         envelope = spi.filters.convolve(padded, samples, mode='constant')[:-int(fftrate / 10.)]
         seg = np.squeeze(np.where(envelope > np.median(envelope) + threshold * np.std(envelope)))
-        print seg
+        # print seg
         return self.identifySegments(seg, minlength=10)
 
     def segmentByAmplitude(self,threshold):
         seg = np.where(np.abs(self.data)>threshold)
-        print seg
+        #print seg
         # print self.incr
         # return self.identifySegments(np.squeeze(seg))
         return self.identifySegments(np.squeeze(seg)/float(self.incr))
 
     def segmentByAmplitude1(self,threshold): #replaced the amplitude value thr to a percentage. e.g. extract top 70%
         seg = np.where(np.abs(self.data)>threshold*np.max(self.data))
-        print seg
-        print np.shape(np.squeeze(seg))[0]
+        #print seg
+        #print np.shape(np.squeeze(seg))[0]
         if np.shape(np.squeeze(seg))[0]>0:
             return self.identifySegments(np.squeeze(seg)/float(self.incr))  #TODO: self.incr is the right value to devide with?
         else:
@@ -231,7 +231,7 @@ class Segment:
         from scipy.signal import medfilt
         maxFreqs = medfilt(maxFreqs,21)
         seg = np.squeeze(np.where(maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))))
-        print seg
+        #print seg
         return self.identifySegments(seg,minlength=10)
 
     def medianClip(self,thr=3.0,medfiltersize=5,minsize=80,minaxislength=5):
