@@ -1,58 +1,116 @@
 
-0. Pyqtgraph? 
-   How to get a moving pointer working?!
+# TODO for AviaNZ
+
+(1) Minor bugs and extensions
+
+    Add Sumudu's name
+
+    Tidy code, ensure comments, etc.
+
+    Make the oscillogram and spectrogram line up (basically, just sort out y-axis labels)
+
+    Enable removal of fill colour for spectrogram drag boxes
+
+    Sort out the bandlimited playing -> Windows permissions for deleting file
+
+    Undo for segmentation
+    
+    Spectrogram drawing after changes (e.g. denoising) seems to have a bug
+    Make play sounds play the denoised version after denoising
+
+    Save the amount of time the user makes the window show back into the config file
+
+    Add in the 'who the user is' annotation
+    Get the time from the file name (if standard) and use it to put day or night birds first
+
+    Read mp3 files
+
+    Make the arrows (on top-right) move on to next file if double clicked (and at start/end?)
+
+    Add a change directory option
+
+    And make the Choose Folder in the Process Folder be a folder not a file!
+
+    Make the boxes below the overview be clickable to get to that section
+    And stop the lines going too far to the right
+
+    Get the manual and cheat sheet included in the program
+
+    Make it possible to change parameters (look into pyqtgraph ParameterTree)
+    
+    Output to excel
+
+    What to do with stereo sound? How about consistent sample rates?
+
+    The updating of the colour of the overview seg has some colour weirdness -- gets darker. Some sort of overlapping? Not a major problem.
+
+	Add play button to check segment, pictue alone is not enough to confirm. Make the pictures (check segment 1) small.
+
+	Stop loading the file when choose to cancel the progress bar.
+
+	File list dock becomes frozen - one was experiencing this. Had to restart the program.
  
-1. Interface for Kim.
-    -> user manual
-    -> extra points she wanted
+	Control marking the same segments again and again - multiple clicks on Find matches with the same pattern.
+	
+	Udate the status bar when auto saving the annotation? Users want to know/confirm.
 
-2. Finish median clipping segmentation (and also thresholded power and amplitude).
+	
+(2) Memory management
+    It's a pain, but needs thinking about and then doing
+    Could just split the file into shorter pieces? 
+    Split files into 5 minute segments or whatever or look into paging
 
-3. Finish the Raven feature selection.
+(3) Denoising, Wavelets and Segmentation
+    Make denoising work
+        Is there something wrong?
+        How long should a denoise piece be?
+    
+    Stop the segmentation being based on 1s
+    Fully integrate wavelet seg into program
+    We actually want Kiwi (M) and Kiwi (F), and need to get all the ruru calls
+    Want to have some form of machine learning
+    And need to think about the 95% confidence thing a lot more
+    Add in the Check Segments 2 bit for this, and actually process the results!
 
-4. Finish the wavelet segmentation.
+    Make the segmentations work fully
+        Get the minimum time of a segment parameter sorted
+        Work out how to combine the methods, particularly, spot overlaps in segments and combine them
+        Work out parameters and how to set them
+        Remove cross-correlation? Or just improve?
 
-5. 100% confidence on existence and non-existence of (e.g.,) kiwi. Show those not sure about.
+    Think about nice ways to train a new wavelet filter
 
------
+    And get the whole workflow sorted for it
 
-5. Testing of the interface, finishing the denoising, segmentation.
+    Use intensity of colour to encode certainty?
 
-6. Cross correlation and related.
+(4) Features
+    Use the wavelets
+    Finish the Raven features
+    Add MFCC (nearly done)
+    And whatever else seems interesting
 
-7. Some learning.
+    More on fundamental frequency
+        smoothing?
+        harvest or bana (yaapt was awful)
+    Shape metrics
 
-8. Some code in C?
+(5) Learning
+    Standard methods
+        MLP
+        Decision tree
+        Boosting
+        SVM
+    LSTM or GRU
 
-9. What needs tidying in the code?
+    HMM to string syllables together
 
-Some ideas about things that would be nice:
-    User picks a segment, algorithm to find similar ones and show just those (or copy label)
-    Would it be good to have a 'confirmed' button so that algorithm knows it is correct? Or just assume?
-        So after processing a file, you either run through it, or you get shown each one in it's own window (or a column of them)
-        Could then click on those that are wrong
-    Some database storage stuff and meta information about the sound files?
+(6) Other
+    Think more about the spectrogram inversion
+        If it works --> Stu's bats
+        Denoise the spectrogram fully (median filter, smoothing, consider grab-cut)
 
+    Any necessary database or metadata things?
 
-------
-Button for multitapering on/off
-Tidy up the naming for the interface elements
-Mini method for text resizing
-Make choice of context menu or list of birds
+    Bats do keep on coming up...
 
-GNU License:
-    <one line to give the program's name and a brief idea of what it does.>
-    Copyright (C) <year>  <name of author>
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
