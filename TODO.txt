@@ -10,6 +10,7 @@
     SM: Enable removal of fill colour for spectrogram drag boxes
 
     NP: Make play sounds play the denoised version after denoising
+
     SM: Undo for segmentation
     
     ??: Spectrogram drawing after changes (e.g. denoising) seems to have a bug -> question: is it about the contrast and brightness?
@@ -22,6 +23,10 @@
     NP: Read mp3 files
 
     SM: Make the arrows (on top-right) move on to next file if double clicked (and at start/end?)
+
+    NP: Add a change directory option
+# Don't want to change what's drawn there (currently selected file and its spectro), but effects when opening a new file
+
 
     SM (?): Make the boxes below the overview be clickable to get to that section
     NP: And stop the lines going too far to the right
