@@ -10,6 +10,8 @@ import wavio
 import librosa
 import numpy as np
 
+from openpyxl import load_workbook, Workbook
+
 import pyqtgraph as pg
 # pg.setConfigOption('background','w')
 # pg.setConfigOption('foreground','k')
@@ -85,7 +87,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.w_speLabel = QLabel("  Select Species")
         self.d_detection.addWidget(self.w_speLabel,row=1,col=0)
         self.w_spe = QComboBox()
-        self.w_spe.addItems(["  Brown kiwi", "Ruru"])
+        self.w_spe.addItems(["  Kiwi", "Ruru"])
         self.d_detection.addWidget(self.w_spe,row=1,col=1)
 
         self.w_methodLabel = QLabel("  Select Method")
@@ -247,7 +249,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
 
         self.waveletlabel = QLabel("  Type of wavelet")
         self.wavelet = QComboBox()
-        self.wavelet.addItems(["dmey","db2","db5","haar"])
+        self.wavelet.addItems(["dmey2","dmey","db2","db5","haar"])
         self.wavelet.setCurrentIndex(0)
 
         self.blabel = QLabel("  Start and end points for bandpass filter")
@@ -419,26 +421,38 @@ class AviaNZFindSpeciesInterface(QMainWindow):
 
 
     def browse(self):
-        fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose Folder to Process', ".", "Wav files (*.wav)")
-        if fileName:
-            # Find the '/' in the fileName
-            i=len(fileName)-1
-            while fileName[i] != '/' and i>0:
-                i = i-1
-            self.dirName = fileName[:i+1]
-            self.setWindowTitle('AviaNZ - '+ self.dirName)
-            self.w_dir.setText(self.dirName)
+        self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',"Wav files (*.wav)")
+        print "Dir:", self.dirName
+        self.setWindowTitle('AviaNZ - '+ self.dirName)
+        self.w_dir.setText(self.dirName)
 
-            files=[]
-            self.w_fileList.clear()
-            for f in os.listdir(self.dirName):
-                if f.endswith(".wav"): #os.path.isfile(f) and
-                    self.w_fileList.addItem(f)
-                    # files.append(f)
-            # print files
+        files=[]
+        self.w_fileList.clear()
+        for f in os.listdir(self.dirName):
+            if f.endswith(".wav"): #os.path.isfile(f) and
+                self.w_fileList.addItem(f)
+                files.append(f)
+        print files
+        # fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose Folder to Process', ".", "Wav files (*.wav)")
+        # if fileName:
+        #     # Find the '/' in the fileName
+        #     i=len(fileName)-1
+        #     while fileName[i] != '/' and i>0:
+        #         i = i-1
+        #     self.dirName = fileName[:i+1]
+        #     self.setWindowTitle('AviaNZ - '+ self.dirName)
+        #     self.w_dir.setText(self.dirName)
+        #
+        #     files=[]
+        #     self.w_fileList.clear()
+        #     for f in os.listdir(self.dirName):
+        #         if f.endswith(".wav"): #os.path.isfile(f) and
+        #             self.w_fileList.addItem(f)
+        #             # files.append(f)
+        #     # print files
 
     def detect(self):
-        # print self.dirName
+        print self.dirName
         # print self.dirName[:-1]
         # nfiles=len(glob.glob(os.path.join(str(self.dirName[:-1]),'*.wav')))
         # print nfiles
@@ -447,13 +461,14 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             self.statusBar().showMessage("Processing...")
             i=self.w_spe.currentIndex()
             if i==0:
-                self.species='kiwi'
-            for filename in glob.glob(os.path.join(str(self.dirName[:-1]),'*.wav')):
+                self.species="Kiwi"
+            elif i==1:
+                self.species="Ruru"
+            for filename in glob.glob(os.path.join(str(self.dirName),'*.wav')):
                 # print filename
-                # type(filename)
                 self.filename=filename
                 self.loadFile()
-                self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate, self.config['minSegment'],                                           self.config['window_width'], self.config['incr'])
+                self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate, self.config['minSegment'],self.config['window_width'], self.config['incr'])
                 # print self.algs.itemText(self.algs.currentIndex())
                 if self.algs.currentText() == "Amplitude":
                     newSegments = self.seg.segmentByAmplitude(float(str(self.ampThr.text())))
@@ -475,9 +490,8 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                     # newSegments = self.seg.segmentByFIR(0.1)
                     newSegments = self.seg.segmentByFIR(float(str(self.FIRThr1.text())))
                     # print newSegments
-                else:
-                    #"Wavelets"
-                    nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46]
+                elif self.algs.currentText()=='Wavelets':
+                    # nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46]
                     depth=int(str(self.depth.text()))
                     if self.thrtype[0].isChecked() is True:
                         type = 'soft'
@@ -491,33 +505,38 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                     else:
                         start = int(str(self.start.text()))
                         end = int(str(self.end.text()))
+                    # species=self.w_spe.currentText()
                     # TODO: needs learning and samplerate
-                        ws=WaveletSegment.WaveletSeg()
-                        ws.data =self.audiodata
-                        ws.sampleRate=self.sampleRate
-                        wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
-                        fwData = ws.ButterworthBandpass(wData,16000,low=1000,high=7000)
-                        wpFull = pywt.WaveletPacket(data=fwData, wavelet=ws.wavelet, mode='symmetric', maxlevel=5)
-                        print 'here'
-                        detected = ws.detectCalls_test(wpFull, nodelist_kiwi, int(ws.sampleRate)) #detect based on a previously defined nodeset
+                    newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
 
-                        # newSegments = ws.detectCalls_test(thrType,float(str(thr)), int(str(depth)), wavelet,sampleRate,bandchoice,start,end,learning,)
-                        # newSegments = self.seg.segmentByWavelet(thrType,float(str(thr)), int(str(depth)), wavelet,sampleRate,bandchoice,start,end,learning,)
+                # Generate Binary output ('Binary)
+                n=math.ceil(float(self.datalength)/self.sampleRate)
+                print 'n=', n
+                detected=np.zeros(int(n))
+                for seg in newSegments:
+                    for a in range(len(detected)):
+                        if math.floor(seg[0])<=a and a<math.ceil(seg[1]):
+                            detected[a]=1
+                print detected
+                self.saveSegments(detected, mode='Binary') # append
 
-                print "New segments:",newSegments
-                if self.algs.currentText() == "Wavelets":
-                    print np.shape(detected)
-                    print detected
-                else:
-                    # convert the segments into a binary output
-                    n=math.ceil(float(self.datalength)/self.sampleRate)
-                    print 'n=', n
-                    detected=np.zeros(int(n))
+                # Generate annotation friendly output ('Annotation')
+                print len(newSegments)
+                if len(newSegments)>0:
+                    annotation=[]
                     for seg in newSegments:
-                        for a in range(len(detected)):
-                            if math.floor(seg[0])<=a and a<math.ceil(seg[1]):
-                                detected[a]=1
-                    print detected
+                        annotation.append([float(seg[0]),float(seg[1]),0,0,self.species+'?'])
+                    print annotation
+                    self.saveSegments(annotation, mode='Annotation')
+                else:
+                    pass
+
+                # Generate time stamps [start(mm:ss) end(mm:ss)] ('Excel')
+                annotation=[]
+                for seg in newSegments:
+                    annotation.append([self.convertMillisecs(seg[0]*1000),self.convertMillisecs(seg[1]*1000)])
+                print annotation
+                self.saveSegments(annotation, mode='Excel') # append
             self.statusBar().showMessage("Ready")
         else:
             msg = QMessageBox()
@@ -528,6 +547,66 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
         # return newSegments
+
+    def saveSegments(self,annotation,mode):
+        # This saves the detections into three different formats: annotation, excel, and binary
+        # print("Saving detections to "+self.filename)
+
+        # Find the '\' in the self.filename and isolate the filename
+        i=len(self.filename)-1
+        while self.filename[i] != '\\' and i>0:
+            i = i-1
+        fileName = self.filename[i+1:]
+
+        method=self.algs.currentText()
+
+        if mode=='Annotation':
+            if isinstance(self.filename, str):
+                file = open(self.filename + '.data', 'w')
+            else:
+                file = open(str(self.filename) + '.data', 'w')
+            json.dump(annotation,file)
+        elif mode=='Excel':
+            eFile=self.dirName+'\AutoDetections_'+self.species+'_'+method+'.xlsx'
+            # # Find the '\' in the self.filename and isolate the filename
+            # i=len(self.filename)-1
+            # while self.filename[i] != '\\' and i>0:
+            #     i = i-1
+            # fileName = self.filename[i+1:]
+            if os.path.isfile(eFile):   #if the file is already there
+                try:
+                    wb = load_workbook(str(eFile))
+                    ws=wb.get_sheet_by_name('Sheet')
+                    ws.append([fileName, str(annotation)])    # Append this filename and its detections
+                    wb.save(str(eFile))
+                except:
+                    print "Unable to open file"           #Does not exist OR no read permissions
+            else:
+                wb = Workbook()
+                ws = wb.active
+                ws.append(["File Name","Detections [start(mm:ss),end(mm:ss)]"])
+                ws.append([fileName, str(annotation)])   # Append this filename and its detections
+                wb.save(str(eFile))
+        else:   # mode=='Binary'
+            eFile=self.dirName+'\AutoDetections_'+self.species+'_'+method+'_sec.xlsx'
+            # # Find the '\' in the self.filename and isolate the filename
+            # i=len(self.filename)-1
+            # while self.filename[i] != '\\' and i>0:
+            #     i = i-1
+            # fileName = self.filename[i+1:]
+            if os.path.isfile(eFile):   #if the file is already there
+                try:
+                    wb = load_workbook(str(eFile))
+                    ws=wb.get_sheet_by_name('Sheet')
+                    ws.append([fileName, str(annotation)])    # Append this filename and its detections
+                    wb.save(str(eFile))
+                except:
+                    print "Unable to open file"           #Does not exist OR no read permissions
+            else:
+                wb = Workbook()
+                ws = wb.active
+                ws.append([fileName, str(annotation)])   # Append this filename and its detections
+                wb.save(str(eFile))
 
     def loadFile(self):
         wavobj = wavio.read(self.filename)
@@ -543,7 +622,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.datalength = np.shape(self.audiodata)[0]
         print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate,self.sampleRate)
 
-        if self.species=='kiwi' and self.sampleRate!=16000:
+        if self.species=='Kiwi' and self.sampleRate!=16000:
             self.audiodata = librosa.core.audio.resample(self.audiodata,self.sampleRate,16000)
             self.sampleRate=16000
             self.datalength = np.shape(self.audiodata)[0]
@@ -570,3 +649,8 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.sp.setNewData(self.audiodata,self.sampleRate)
 
         self.setWindowTitle('AviaNZ - ' + self.filename)
+
+    def convertMillisecs(self,millisecs):
+        seconds = (millisecs / 1000) % 60
+        minutes = (millisecs / (1000 * 60)) % 60
+        return "%02d" % minutes+":"+"%02d" % seconds
