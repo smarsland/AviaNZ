@@ -3,15 +3,12 @@
 
 (1) Minor bugs and extensions
 
-    NP: Add Sumudu's name
-
     SM: Tidy code, ensure comments, etc.
 
     NP: Make the oscillogram and spectrogram line up (basically, just sort out y-axis labels)
 
     SM: Enable removal of fill colour for spectrogram drag boxes
 
-    NP: Sort out the bandlimited playing -> Windows permissions for deleting file
     NP: Make play sounds play the denoised version after denoising
     SM: Undo for segmentation
     
@@ -25,8 +22,6 @@
     NP: Read mp3 files
 
     SM: Make the arrows (on top-right) move on to next file if double clicked (and at start/end?)
-
-    NP: Add a change directory option
 
     SM (?): Make the boxes below the overview be clickable to get to that section
     NP: And stop the lines going too far to the right
