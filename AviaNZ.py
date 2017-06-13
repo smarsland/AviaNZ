@@ -49,6 +49,8 @@ import Segment
 import interface_FindSpecies
 import WaveletSegment
 import math
+
+import pyqtgraph.parametertree.parameterTypes as pTree
 # ==============
 # TODO
 
@@ -449,11 +451,12 @@ class AviaNZ(QMainWindow):
         self.w_overview = pg.LayoutWidget()
         self.d_overview.addWidget(self.w_overview)
         self.w_overview1 = pg.GraphicsLayoutWidget()
-        self.w_overview.addWidget(self.w_overview1)
+        self.w_overview1.ci.layout.setContentsMargins(0.5, 1, 0.5, 1)
+        self.w_overview.addWidget(self.w_overview1,row=0,col=2,rowspan=2)
         self.p_overview = self.w_overview1.addViewBox(enableMouse=False,enableMenu=False,row=0,col=0)
         self.p_overview2 = self.w_overview1.addViewBox(enableMouse=False, enableMenu=False, row=1, col=0)
         self.p_overview2.setXLink(self.p_overview)
-
+        # self.p_overview2.
         self.w_ampl = pg.GraphicsLayoutWidget()
         self.p_ampl = self.w_ampl.addViewBox(enableMouse=False,enableMenu=False)
         self.w_ampl.addItem(self.p_ampl,row=0,col=1)
@@ -467,6 +470,8 @@ class AviaNZ(QMainWindow):
         self.ampaxis = pg.AxisItem(orientation='left')
         self.w_ampl.addItem(self.ampaxis,row=0,col=0)
         self.ampaxis.linkToView(self.p_ampl)
+        self.ampaxis.setWidth(w=65)
+        self.ampaxis.setLabel('')
 
         self.w_spec = pg.GraphicsLayoutWidget()
         # self.p_spec = pg.ViewBox(enableMouse=False,enableMenu=False)
@@ -489,6 +494,7 @@ class AviaNZ(QMainWindow):
         self.specaxis = pg.AxisItem(orientation='left')
         self.w_spec.addItem(self.specaxis,row=0,col=0)
         self.specaxis.linkToView(self.p_spec)
+        self.specaxis.setWidth(w=65)
 
         self.overviewImage = pg.ImageItem(enableMouse=False)
         self.p_overview.addItem(self.overviewImage)
@@ -522,11 +528,17 @@ class AviaNZ(QMainWindow):
         self.leftBtn = QToolButton()
         self.leftBtn.setArrowType(Qt.LeftArrow)
         self.connect(self.leftBtn, SIGNAL('clicked()'), self.moveLeft)
-        self.w_overview.addWidget(self.leftBtn)
+        self.w_overview.addWidget(self.leftBtn,row=0,col=0)
         self.rightBtn = QToolButton()
         self.rightBtn.setArrowType(Qt.RightArrow)
         self.connect(self.rightBtn, SIGNAL('clicked()'), self.moveRight)
-        self.w_overview.addWidget(self.rightBtn)
+        self.w_overview.addWidget(self.rightBtn,row=0,col=1)
+
+        #Button to move to next file in the list
+        self.nextFileBtn=QToolButton()
+        self.nextFileBtn.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSkipForward))
+        # self.connect(self.rightBtn, SIGNAL('clicked()'), self.openNextFile) #TODO: write openNextFile
+        self.w_overview.addWidget(self.nextFileBtn,row=1,colspan=2)
 
         # The instructions and buttons below figMain
         # playButton = QPushButton(QIcon(":/Resources/play.svg"),"&Play Window")
@@ -642,7 +654,7 @@ class AviaNZ(QMainWindow):
         # self.listFiles.setFixedWidth(150)
         self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
 
-        self.w_files.addWidget(QLabel('Double click to select'),row=0,col=0)
+        self.w_files.addWidget(QLabel('Double click to open'),row=0,col=0)
         self.w_files.addWidget(QLabel('Red names have segments'),row=1,col=0)
         self.w_files.addWidget(self.listFiles,row=2,col=0)
 
@@ -968,6 +980,7 @@ class AviaNZ(QMainWindow):
         #username = fdd.getData()
 
         with pg.ProgressDialog("Loading..", 0, 7) as dlg:
+            dlg.setCancelButton(None)
             if isinstance(name,str):
                 self.filename = self.dirName+'/'+name
             elif isinstance(name,QString):
@@ -2131,17 +2144,7 @@ class AviaNZ(QMainWindow):
                 depth = int(str(depth))
             self.audiodata = self.sp.waveletDenoise(self.audiodata,type,float(str(thr)),depth,str(wavelet))
             self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
-        #elif str(alg) == "Wavelets + Bandpass":
-            #if thrType is True:
-                #type = 'soft'
-            #else:
-                #type = 'hard'
-            #if depthchoice:
-                #depth = None
-            #else:
-                #depth = int(str(depth))
-            #self.audiodata = self.sp.waveletDenoise(self.audiodata,float(str(thr)),int(str(depth)),str(wavelet))
-            #self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
+
         elif str(alg) == "Bandpass":
             # self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
             self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
@@ -2151,11 +2154,6 @@ class AviaNZ(QMainWindow):
             #"Median Filter"
             self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
 
-        # audiodata = self.audiodata.astype('int16')
-        # # wavio.write('Sound Files/robin_d.wav',self.audiodata.astype('int16'),self.sampleRate)
-        # import librosa
-        # librosa.output.write_wav('Sound Files/robin_d.wav', audiodata, self.sampleRate)
-
         # Write to a temp file
         import tempfile
         f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
@@ -2164,18 +2162,7 @@ class AviaNZ(QMainWindow):
         # self.audiodata = self.audiodata.astype('int16')
         wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits',sampwidth=2)
 
-        # self.media_obj = phonon.Phonon.MediaObject(self)
-        self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
-        # self.audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
-        # print self.media_obj
-        # phonon.Phonon.createPath(self.media_obj, self.audio_output)
-        # self.media_obj.tick.connect(self.movePlaySlider)
-        self.media_obj.setTickInterval(20)
-        # self.media_obj.tick.connect(self.movePlaySlider)
-        self.media_obj.finished.connect(self.playFinished)
-        # self.media_obj.play
-
-        #open temp file
+        #open the temp file
         wavobj = wavio.read(filename)
         self.sampleRate = wavobj.rate
         self.audiodata = wavobj.data
@@ -2183,6 +2170,9 @@ class AviaNZ(QMainWindow):
             self.audiodata = self.audiodata.astype('float') #/ 32768.0
 
         self.audiodata=self.audiodata[:,0]
+
+        f.close()
+
         # print np.shape(self.audiodata)
         sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
         maxsg = np.min(sgRaw)
@@ -2198,8 +2188,16 @@ class AviaNZ(QMainWindow):
 
         self.setColourLevels()
 
-        # f.close()
         self.statusBar().showMessage("Ready")
+
+        # # media_obj = phonon.Phonon.MediaObject(self)
+        # self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
+        # audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
+        # phonon.Phonon.createPath(self.media_obj, audio_output)
+        # self.media_obj.tick.connect(self.movePlaySlider)
+        # self.media_obj.setTickInterval(20)
+        # self.media_obj.tick.connect(self.movePlaySlider)
+        # self.media_obj.finished.connect(self.playFinished)
 
     def redoFreqAxis(self):
         start = self.minFreq
@@ -2318,30 +2316,36 @@ class AviaNZ(QMainWindow):
                 newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species='kiwi',trainTest=False)
 
         # Generate annotation friendly output
-        for seg in newSegments:
-            self.addSegment(seg[0],seg[1],0,0,species+"?")
+        # Merge neighbours for wavelet seg
+        if str(alg)=="Wavelets":
+            mergedSeg=self.mergeSeg(newSegments)
+            for seg in mergedSeg:
+                self.addSegment(float(seg[0]),float(seg[1]),0,0,species+"?")
+        else:
+            for seg in newSegments:
+                self.addSegment(float(seg[0]),float(seg[1]),0,0,species+"?")
         # annotation=[]
         # for seg in newSegments:
         #     annotation.append([seg[0],seg[1],0,0,str(species)+"?"])
         # self.saveSegments2(annotation)
 
         # Generate binary output
-        print "Binary output:"
+        # print "Binary output:"
         n=math.ceil(float(self.datalength)/self.sampleRate)
-        print 'n=', n
+        # print 'n=', n
         detected=np.zeros(int(n))
         for seg in newSegments:
             for a in range(len(detected)):
                 if math.floor(seg[0])<=a and a<math.ceil(seg[1]):
                     detected[a]=1
-        print detected
+        # print detected
 
         #Generate time stampls [start(mm:ss) end(mm:ss)]
-        print "start end (mm:ss):"
+        # print "start end (mm:ss):"
         annotation=[]
         for seg in newSegments:
             annotation.append([self.convertMillisecs(seg[0]*1000),self.convertMillisecs(seg[1]*1000)])
-        print annotation
+        # print annotation
 
         self.statusBar().showMessage("Ready")
 
@@ -2589,6 +2593,22 @@ class AviaNZ(QMainWindow):
             else:
                 file = open(str(self.filename) + '.data', 'w')
             json.dump(self.segments,file)
+            # import codecs
+            # json.dump(self.segments,codecs.getwriter('utf-8')(file), ensure_ascii=False)
+
+    def mergeSeg(self,segments):
+        indx=[]
+        for i in range(len(segments)-1):
+            if segments[i][1]==segments[i+1][0]:
+                indx.append(i)
+        indx.reverse()
+        for i in indx:
+            segments[i][1]=segments[i+1][1]
+            del(segments[i+1])
+        return segments
+
+
+
 
     # def saveSegments2(self,annotation):     #to save the data after auto segmentation
     #     # This saves the segmentation data as a json file
