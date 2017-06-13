@@ -81,14 +81,14 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.connect(self.w_browse, SIGNAL('clicked()'), self.browse)
         self.w_dir = QLineEdit()
         self.w_dir.setText('')
-        self.d_detection.addWidget(self.w_dir,row=0,col=1)
+        self.d_detection.addWidget(self.w_dir,row=0,col=1,colspan=2)
         self.d_detection.addWidget(self.w_browse,row=0,col=0)
 
         self.w_speLabel = QLabel("  Select Species")
         self.d_detection.addWidget(self.w_speLabel,row=1,col=0)
         self.w_spe = QComboBox()
         self.w_spe.addItems(["  Kiwi", "Ruru"])
-        self.d_detection.addWidget(self.w_spe,row=1,col=1)
+        self.d_detection.addWidget(self.w_spe,row=1,col=1,colspan=2)
 
         self.w_methodLabel = QLabel("  Select Method")
         self.d_detection.addWidget(self.w_methodLabel,row=2,col=0)
@@ -97,7 +97,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
 
         self.algs = QComboBox()
         self.algs.addItems(["Wavelets", "Amplitude","Harma","Power","Median Clipping","Onsets","Fundamental Frequency","FIR"])
-        self.d_detection.addWidget(self.algs,row=2,col=1)
+        self.d_detection.addWidget(self.algs,row=2,col=1,colspan=2)
         self.prevAlg = "FIR"
         self.algs.setCurrentIndex(7)
         a = self.algs.currentIndex()
@@ -120,7 +120,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.amplabel = QLabel("  Set threshold (%) amplitude")
         self.d_detection.addWidget(self.amplabel,row=3,col=0)
         self.amplabel.hide()
-        self.d_detection.addWidget(self.ampThr,row=3,col=1)
+        self.d_detection.addWidget(self.ampThr,row=3,col=1,colspan=2)
         self.ampThr.hide()
 
         self.HarmaThr1 = QSpinBox()
@@ -136,8 +136,8 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.Harmalabel = QLabel("  Set decibal threshold")
         self.d_detection.addWidget(self.Harmalabel,row=3,col=0)
         self.Harmalabel.hide()
-        self.d_detection.addWidget(self.HarmaThr1,row=3,col=1)
-        self.d_detection.addWidget(self.HarmaThr2,row=4, col=1)
+        self.d_detection.addWidget(self.HarmaThr1,row=3,col=1,colspan=2)
+        self.d_detection.addWidget(self.HarmaThr2,row=4, col=1,colspan=2)
         self.HarmaThr1.hide()
         self.HarmaThr2.hide()
 
@@ -149,7 +149,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.PowerThrLabel = QLabel("  Threshold")
         self.d_detection.addWidget(self.PowerThrLabel,row=3, col=0)
         self.PowerThrLabel.hide()
-        self.d_detection.addWidget(self.PowerThr,row=3,col=1)
+        self.d_detection.addWidget(self.PowerThr,row=3,col=1,colspan=2)
         self.PowerThr.hide()
 
         self.Fundminfreqlabel = QLabel("  Min Frequency")
@@ -172,19 +172,19 @@ class AviaNZFindSpeciesInterface(QMainWindow):
 
         self.d_detection.addWidget(self.Fundminfreqlabel, row=3,col=0)
         self.Fundminfreqlabel.hide()
-        self.d_detection.addWidget(self.Fundminfreq,row=3,col=1)
+        self.d_detection.addWidget(self.Fundminfreq,row=3,col=1,colspan=2)
         self.Fundminfreq.hide()
         self.d_detection.addWidget(self.Fundminperiodslabel,row=4,col=0)
         self.Fundminperiodslabel.hide()
-        self.d_detection.addWidget(self.Fundminperiods,row=4,col=1)
+        self.d_detection.addWidget(self.Fundminperiods,row=4,col=1,colspan=2)
         self.Fundminperiods.hide()
         self.d_detection.addWidget(self.Fundthrlabel,row=5,col=0)
         self.Fundthrlabel.hide()
-        self.d_detection.addWidget(self.Fundthr,row=5,col=1)
+        self.d_detection.addWidget(self.Fundthr,row=5,col=1,colspan=2)
         self.Fundthr.hide()
         self.d_detection.addWidget(self.Fundwindowlabel,row=6,col=0)
         self.Fundwindowlabel.hide()
-        self.d_detection.addWidget(self.Fundwindow,row=6,col=1)
+        self.d_detection.addWidget(self.Fundwindow,row=6,col=1,colspan=2)
         self.Fundwindow.hide()
 
         self.medThr = QDoubleSpinBox()
@@ -196,7 +196,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.medlabel = QLabel("  Set median threshold")
         self.d_detection.addWidget(self.medlabel,row=3,col=0)
         self.medlabel.hide()
-        self.d_detection.addWidget(self.medThr, row=3,col=1)
+        self.d_detection.addWidget(self.medThr, row=3,col=1,colspan=2)
         self.medThr.hide()
 
         self.ecThr = QDoubleSpinBox()
@@ -222,7 +222,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.FIRthrlabel=QLabel("  Set threshold")
 
         self.d_detection.addWidget(self.FIRthrlabel,row=3,col=0)
-        self.d_detection.addWidget(self.FIRThr1, row=3,col=1)
+        self.d_detection.addWidget(self.FIRThr1, row=3,col=1,colspan=2)
         # self.FIRThr1.hide()
 
         # self.Onsetslabel = QLabel("  Onsets: No parameters")
@@ -242,10 +242,10 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.thrtype[0].setChecked(True)
 
         self.thrlabel = QLabel("  Multiplier of std dev for threshold")
-        self.thr = QSpinBox()
+        self.thr = QDoubleSpinBox()
         self.thr.setRange(1,10)
-        self.thr.setSingleStep(1)
-        self.thr.setValue(5)
+        self.thr.setSingleStep(0.5)
+        self.thr.setValue(4.5)
 
         self.waveletlabel = QLabel("  Type of wavelet")
         self.wavelet = QComboBox()
@@ -265,7 +265,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.depthlabel.hide()
         #Box.addWidget(self.depthchoice)
         #self.depthchoice.hide()
-        self.d_detection.addWidget(self.depth, row=3,col=1)
+        self.d_detection.addWidget(self.depth, row=3,col=1,colspan=2)
         self.depth.hide()
 
         self.d_detection.addWidget(self.thrtypelabel,row=4,col=0)
@@ -277,28 +277,29 @@ class AviaNZFindSpeciesInterface(QMainWindow):
 
         self.d_detection.addWidget(self.thrlabel,row=5,col=0)
         self.thrlabel.hide()
-        self.d_detection.addWidget(self.thr,row=5,col=1)
+        self.d_detection.addWidget(self.thr,row=5,col=1,colspan=2)
         self.thr.hide()
 
         self.d_detection.addWidget(self.waveletlabel,row=6,col=0)
         self.waveletlabel.hide()
-        self.d_detection.addWidget(self.wavelet,row=6,col=1)
+        self.d_detection.addWidget(self.wavelet,row=6,col=1,colspan=2)
         self.wavelet.hide()
 
         self.d_detection.addWidget(self.blabel,row=7,col=0)
         self.blabel.hide()
-        self.d_detection.addWidget(self.start,row=7,col=1)
+        self.d_detection.addWidget(self.start,row=7,col=1,colspan=2)
         self.start.hide()
-        self.d_detection.addWidget(self.end,row=8,col=1)
+        self.d_detection.addWidget(self.end,row=8,col=1,colspan=2)
         self.end.hide()
         self.d_detection.addWidget(self.blabel2,row=9,col=0)
         self.blabel2.hide()
-        self.d_detection.addWidget(self.bandchoice,row=9,col=1)
+        self.d_detection.addWidget(self.bandchoice,row=9,col=1,colspan=2)
         self.bandchoice.hide()
 
         self.w_processButton = QPushButton("&Process Folder")
         self.connect(self.w_processButton, SIGNAL('clicked()'), self.detect)
-        self.d_detection.addWidget(self.w_processButton,row=10,col=1)
+        self.d_detection.addWidget(self.w_processButton,row=10,col=2)
+        self.w_processButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
 
         # Store the state of the docks
         self.state = self.area.saveState()
@@ -408,13 +409,13 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             self.thrtype[1].show()
             self.thrlabel.show()
             self.thr.show()
-            self.waveletlabel.show()
-            self.wavelet.show()
-            self.blabel.show()
-            self.start.show()
-            self.end.show()
-            self.blabel2.show()
-            self.bandchoice.show()
+            # self.waveletlabel.show()
+            # self.wavelet.show()
+            # self.blabel.show()
+            # self.start.show()
+            # self.end.show()
+            # self.blabel2.show()
+            # self.bandchoice.show()
 
     # def getValues(self):
     #     return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
@@ -452,7 +453,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         #     # print files
 
     def detect(self):
-        print self.dirName
+        # print self.dirName
         # print self.dirName[:-1]
         # nfiles=len(glob.glob(os.path.join(str(self.dirName[:-1]),'*.wav')))
         # print nfiles
@@ -509,24 +510,36 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                     # TODO: needs learning and samplerate
                     newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
 
+                # We actually want Kiwi (M) and Kiwi (F), and need to get all the ruru calls
+                # Add machine learning to tune results. How??
+                # (1) feed newSegments to a MLP (that was trained to kiwi(M), kiwi(F))
+
+
+
                 # Generate Binary output ('Binary)
                 n=math.ceil(float(self.datalength)/self.sampleRate)
-                print 'n=', n
+                # print 'n=', n
                 detected=np.zeros(int(n))
                 for seg in newSegments:
                     for a in range(len(detected)):
                         if math.floor(seg[0])<=a and a<math.ceil(seg[1]):
                             detected[a]=1
-                print detected
+                # print detected
                 self.saveSegments(detected, mode='Binary') # append
 
                 # Generate annotation friendly output ('Annotation')
-                print len(newSegments)
+                # print "Generate annotation friendly output", newSegments
+                annotation=[]
                 if len(newSegments)>0:
-                    annotation=[]
-                    for seg in newSegments:
-                        annotation.append([float(seg[0]),float(seg[1]),0,0,self.species+'?'])
-                    print annotation
+                    if self.algs.currentText()=='Wavelets':
+                        mergedSeg=self.mergeSeg(newSegments)
+                        if len(mergedSeg)>0:
+                            for seg in mergedSeg:
+                                annotation.append([float(seg[0]),float(seg[1]),0,0,self.species+'?'])
+                    elif len(newSegments)>0:
+                        for seg in newSegments:
+                            annotation.append([float(seg[0]),float(seg[1]),0,0,self.species+'?'])
+                        # print annotation
                     self.saveSegments(annotation, mode='Annotation')
                 else:
                     pass
@@ -535,7 +548,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                 annotation=[]
                 for seg in newSegments:
                     annotation.append([self.convertMillisecs(seg[0]*1000),self.convertMillisecs(seg[1]*1000)])
-                print annotation
+                # print annotation
                 self.saveSegments(annotation, mode='Excel') # append
             self.statusBar().showMessage("Ready")
         else:
@@ -547,6 +560,17 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
         # return newSegments
+
+    def mergeSeg(self,segments):
+        indx=[]
+        for i in range(len(segments)-1):
+            if segments[i][1]==segments[i+1][0]:
+                indx.append(i)
+        indx.reverse()
+        for i in indx:
+            segments[i][1]=segments[i+1][1]
+            del(segments[i+1])
+        return segments
 
     def saveSegments(self,annotation,mode):
         # This saves the detections into three different formats: annotation, excel, and binary

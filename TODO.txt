@@ -6,15 +6,16 @@
     SM: Tidy code, ensure comments, etc.
 
     NP: Make the oscillogram and spectrogram line up (basically, just sort out y-axis labels)
+# Done
 
     SM: Enable removal of fill colour for spectrogram drag boxes
 
     NP: Make play sounds play the denoised version after denoising
+# This seems to be complicated with undo etc. Still thinking whats the best way to do it,
+  can easily add a separate button to play denoised but not nice. I fixed the plotting problem though.
 
     SM: Undo for segmentation
-    
-    ??: Spectrogram drawing after changes (e.g. denoising) seems to have a bug -> question: is it about the contrast and brightness?
-    
+
     SM: Save the amount of time the user makes the window show back into the config file
 
     SM: Add in the 'who the user is' annotation
@@ -23,10 +24,11 @@
     NP: Read mp3 files
 
     SM: Make the arrows (on top-right) move on to next file if double clicked (and at start/end?)
+# Button is there have to write the function
 
     NP: Add a change directory option
-# Don't want to change what's drawn there (currently selected file and its spectro), but effects when opening a new file
-
+# Don't want to change what's drawn there (currently selected file and its spectro), but effects thereafter
+  when opening a new file
 
     SM (?): Make the boxes below the overview be clickable to get to that section
     NP: And stop the lines going too far to the right
@@ -41,13 +43,16 @@
 
 	NP: Add play button to check segment, pictue alone is not enough to confirm. Make the pictures (check segment 1) small.
 
-	NP: Stop loading the file when choose to cancel the progress bar.
+	NP: Stop loading the file when choose to cancel the progress bar
+# Removed the cancel button for now. otherwise have to unroll what happened inside the loadFile when the user cancel it.
 
 	Can we reproduce? File list dock becomes frozen - one was experiencing this. Had to restart the program.
  
 	Control marking the same segments again and again - multiple clicks on Find matches with the same pattern.
 	
-	Udate the status bar when auto saving the annotation? Users want to know/confirm.
+	Interface --> Change spectrogram parameters --> add visible frequency range e.g. from:0 to:8000
+
+	Update the status bar when auto saving the annotation? Users want to know/confirm.
 
 	
 (2) Memory management
@@ -57,13 +62,14 @@
 
 (3) Denoising, Wavelets and Segmentation
     Make denoising work
-        Is there something wrong?
-        How long should a denoise piece be?
-	(1) Compare with matlab for long files
+        Is there something wrong? No
+        How long should a denoise piece be? Depends
+	(1) Compare with matlab for long files: Almost similar results
 	(2) Compare with making wavelet trees on shorter pieces
 	(3) Denoise the segments separately
     
     NP: Stop the segmentation being based on 1s
+# Done
     NP: Fully integrate wavelet seg into program
     NP: We actually want Kiwi (M) and Kiwi (F), and need to get all the ruru calls
     NP: Want to have some form of machine learning
