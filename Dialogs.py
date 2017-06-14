@@ -168,6 +168,7 @@ class Segmentation(QDialog):
         self.algs.addItems(["Amplitude","Harma","Power","Median Clipping","Onsets","Fundamental Frequency","FIR","Wavelets"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Amplitude"
+        self.undo = QPushButton("Undo")
         self.activate = QPushButton("Segment")
         #self.save = QPushButton("Save segments")
 
@@ -367,6 +368,7 @@ class Segmentation(QDialog):
         Box.addWidget(self.Fundwindow)
         self.Fundwindow.hide()
 
+        Box.addWidget(self.undo)
         Box.addWidget(self.activate)
         #Box.addWidget(self.save)
 
