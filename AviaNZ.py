@@ -54,15 +54,12 @@ import pyqtgraph.parametertree.parameterTypes as pTree
 # ==============
 # TODO
 
+# (1) sort out the transparency thing for the dragged spectrogram boxes
+# (2) Sort out the overview thing as buttons
+# (3) undo for segments
+# (4) pysox
+
 # Decide what should happen with Check segments 2
-
-# Make the play sounds work on the denoised version without saving it?
-    # Save a temp version
-
-# There is still a bug in the spectrogram drawing after changes (such as denoising)
-
-# Remove spectrogram drag boxes' fill color - check self.background.setZValue(-1e6) and setBackgroundColor() in ViewBox.py
-    # Make this an option
 
 # We should be able to read other sound types e.g. mp3
     # Look up audioread
@@ -84,11 +81,6 @@ import pyqtgraph.parametertree.parameterTypes as pTree
 
 # Actions -> Denoise -> median filter check
 # Make the median filter on the spectrogram have params and a dialog. Other options?
-
-# At times the program does not respond and ask to repair/close (e.g. when move the overview slider fast or something like that).
-# Need to work on memory management!
-
-# Change directory menu item?
 
 # Fundamental frequency
 #   Smoothing?
@@ -278,6 +270,10 @@ class AviaNZ(QMainWindow):
         self.dragRectangles = specMenu.addAction("Drag boxes in spectrogram", self.dragRectanglesCheck)
         self.dragRectangles.setCheckable(True)
         self.dragRectangles.setChecked(False)
+
+        self.dragRectTransparent = specMenu.addAction("Make dragged boxes transparent", self.dragRectsTransparent)
+        self.dragRectTransparent.setCheckable(True)
+        self.dragRectTransparent.setChecked(False)
 
         self.showFundamental = specMenu.addAction("Show fundamental frequency", self.showFundamentalFreq)
         self.showFundamental.setCheckable(True)
@@ -1096,6 +1092,47 @@ class AviaNZ(QMainWindow):
             #print "Unchecked"
             self.p_spec.setMouseMode(pg.ViewBox.PanMode)
 
+    def dragRectsTransparent(self):
+        # TODO: sort out the colours, and restore the pen for it. This is a bit of a pain!
+        # The check menu item that decides if the user wants the dragged rectangles to have colour or not
+        # Reset the colours
+        if self.dragRectTransparent.isChecked():
+            self.ColourSelected = QtGui.QBrush(
+                QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1],
+                             self.config['ColourSelected'][2], 0))
+            self.ColourNamed = QtGui.QBrush(QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1],
+                                                         self.config['ColourNamed'][2], 0))
+            self.ColourNone = QtGui.QBrush(
+                QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2],
+                             0))
+            self.ColourPossible = QtGui.QBrush(
+                QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1],
+                             self.config['ColourPossible'][2], 0))
+
+        else:
+            self.ColourSelected = QtGui.QBrush(
+                QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1],
+                             self.config['ColourSelected'][2], self.config['ColourSelected'][3]))
+            self.ColourNamed = QtGui.QBrush(QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1],
+                                                         self.config['ColourNamed'][2], self.config['ColourNamed'][3]))
+            self.ColourNone = QtGui.QBrush(
+                QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2],
+                             self.config['ColourNone'][3]))
+            self.ColourPossible = QtGui.QBrush(
+                QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1],
+                             self.config['ColourPossible'][2], self.config['ColourPossible'][3]))
+        # Redraw the boxes, work out which colour they were, recolour
+        if self.dragRectTransparent.isChecked():
+            alpha = 0
+        else:
+            alpha = self.config['ColourPossible'][3]
+        for box in self.listRectanglesa2:
+            if type(box) == self.ROItype:
+                print box.currentBrush.color.alpha()
+                box.currentBrush.color().setAlpha(255)
+                box.update()
+                print box.currentBrush.color.alpha()
+
     def useAmplitudeCheck(self):
         # Note that this doesn't remove the dock, just hide it. So it's all still live and easy to replace :)
         # Also move all the labels
@@ -1274,6 +1311,7 @@ class AviaNZ(QMainWindow):
         # Listener for when the overview box is changed
         # Does the work of keeping all the plots in the right range
         # TODO: Why does this update the other plots so slowly?
+        # TODO: Update the timeaxis. It seems to not really update the p_ampl plot, which the axis is attached to
         minX, maxX = self.overviewImageRegion.getRegion()
         #print "updating overview", minX, maxX, self.convertSpectoAmpl(maxX)
         self.widthWindow.setValue(self.convertSpectoAmpl(maxX-minX))
@@ -1285,6 +1323,8 @@ class AviaNZ(QMainWindow):
         self.setSliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
         self.pointData.setPos(minX,0)
+        self.config['windowWidth'] = self.convertSpectoAmpl(maxX-minX)
+        self.saveConfig = True
         pg.QtGui.QApplication.processEvents()
 
     def drawfigMain(self):
@@ -2265,6 +2305,7 @@ class AviaNZ(QMainWindow):
         self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata))
         self.segmentDialog.show()
         self.segmentDialog.activateWindow()
+        self.segmentDialog.undo.clicked.connect(self.segment_undo)
         self.segmentDialog.activate.clicked.connect(self.segment)
         #self.segmentDialog.save.clicked.connect(self.segments_save)
 
@@ -2348,6 +2389,12 @@ class AviaNZ(QMainWindow):
         # print annotation
 
         self.statusBar().showMessage("Ready")
+
+    def segment_undo(self):
+        # Listener for undo button in segmentation dialog
+        # TODO: Complete this
+        # TODO: And sort out the mergeseg
+        print("Undoing")
 
     def findMatches(self):
         # Calls the cross-correlation function to find matches like the currently highlighted box
