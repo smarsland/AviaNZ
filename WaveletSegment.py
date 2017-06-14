@@ -83,7 +83,14 @@ class WaveletSeg:
             fB=((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
         else:
             fB=None
-        print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%0.2f" %(TP,P-TP,300-(P+T-TP),T-TP,recall,precision,fB)
+        if recall==None and precision==None:
+            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%s \tPrecision=%s \tfB=%s" %(TP,P-TP,300-(P+T-TP),T-TP,recall,precision,fB)
+        elif recall==None:
+            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%s \tPrecision=%0.2f \tfB=%s" %(TP,P-TP,300-(P+T-TP),T-TP,recall,precision,fB)
+        elif precision==None:
+            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%s \tfB=%s" %(TP,P-TP,300-(P+T-TP),T-TP,recall,precision,fB)
+        else:
+            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%0.2f" %(TP,P-TP,300-(P+T-TP),T-TP,recall,precision,fB)
         #print TP, int(T), int(P), recall, precision, ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
         return fB
 
@@ -198,17 +205,18 @@ class WaveletSeg:
 
         return detected
 
-    def detectCalls_test(self,wp,listnodes,sampleRate):
+    def detectCalls_test(self,wp,sampleRate, listnodes=[34,35,36,38,40,41,42,43,44,45,46,55],trainTest=False): #default kiwi
         #for test recordings given the set of nodes
         import string
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
-        detected = np.zeros((300,len(listnodes)))
+        # detected = np.zeros((300,len(listnodes)))
+        detected = np.zeros((int(len(wp.data)/sampleRate),len(listnodes)))
         count = 0
         for index in listnodes:
             new_wp = pywt.WaveletPacket(data=None, wavelet=self.wavelet, mode='symmetric')
             # First, turn the index into a leaf name.
             level = np.floor(np.log2(index))
-            first = 2**level-1
+            first = int(2**level-1)
             bin = np.binary_repr(index-first,width=int(level))
             bin = string.replace(bin,'0','a',maxreplace=-1)
             bin = string.replace(bin,'1','d',maxreplace=-1)
@@ -244,7 +252,13 @@ class WaveletSeg:
                 j+=1
             count += 1
 
-        return np.max(detected,axis=1)
+        detected= np.max(detected,axis=1)
+        if trainTest==True:
+            return detected
+        else:
+            detected=np.where(detected>0)
+            print "det",detected
+            return self.identifySegments(np.squeeze(detected))
 
     def detectCalls1(self,wp,listnodes,sampleRate):
         # This way should be the best -- reconstruct from setting all of the relevant nodes. But it gives an error message
@@ -294,6 +308,13 @@ class WaveletSeg:
             j+=1
 
         return detected
+
+    def identifySegments(self, seg): #, maxgap=1, minlength=1):
+        segments = []
+        if len(seg)>0:
+            for s in seg:
+                segments.append([s, s+1])
+        return segments
 
     def loadData(self,fName,trainTest=True):
         # Load data
@@ -411,10 +432,14 @@ def findCalls_train(fName,species='kiwi'):
             break
     return listnodes
 
-def findCalls_test(listnodes,fName,species='kiwi'):
+def findCalls_test(fName=None,data=None, sampleRate=None, species='kiwi',trainTest=False):
     #data, sampleRate_o, annotation = loadData(fName)
     ws=WaveletSeg()
-    ws.loadData(fName)
+    if fName!=None:
+        ws.loadData(fName,trainTest)
+    else:
+        ws.data=data
+        ws.sampleRate=sampleRate
     if species=='boom':
         fs=1000
     else:
@@ -424,10 +449,12 @@ def findCalls_test(listnodes,fName,species='kiwi'):
         ws.sampleRate=fs
     wData = ws.sp.waveletDenoise(ws.data, thresholdType='soft', maxlevel=5)
     fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
-    wpFull = pywt.WaveletPacket(data=fwData, wavelet=self.wavelet, mode='symmetric', maxlevel=5)
-    detected = ws.detectCalls_test(wpFull, listnodes, ws.sampleRate) #detect based on a previously defined nodeset
-    print fName
-    ws.fBetaScore(ws.annotation, detected)
+    wpFull = pywt.WaveletPacket(data=fwData, wavelet=ws.wavelet, mode='symmetric', maxlevel=5)
+    detected = ws.detectCalls_test(wpFull, ws.sampleRate,trainTest=trainTest) #detect based on a previously defined nodeset, default for kiwi
+    if trainTest==True:
+        print fName
+        ws.fBetaScore(ws.annotation, detected)
+    return detected
 
 def processFolder(folder_to_process = 'Sound Files/survey/5min', species='kiwi'):
     #process survey recordings
@@ -440,7 +467,7 @@ def processFolder(folder_to_process = 'Sound Files/survey/5min', species='kiwi')
         wData = ws.waveletDenoise(ws.data, thresholdType='soft', maxlevel=5)
         fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
         wpFull = pywt.WaveletPacket(data=fwData, wavelet=self.wavelet, mode='symmetric', maxlevel=5)
-        detected[i,:] = ws.detectCalls_test(wpFull, nodelist_kiwi, ws.sampleRate) #detect based on a previously defined nodeset
+        detected[i,:] = ws.detectCalls_test(wpFull, ws.sampleRate, nodelist_kiwi) #detect based on a previously defined nodeset
     return detected
 
 def genReport(folder_to_process,detected):

@@ -6,7 +6,7 @@ import pywt
 # from scipy.io import wavfile
 import wavio
 import scipy.signal as signal
-import pylab as pl
+#import pylab as pl
 import string
 
 # TODO:
@@ -382,7 +382,7 @@ class SignalProc:
             wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
             wavelet.orthogonal=True
 
-        print wavelet
+        # print wavelet
 
         if maxlevel is None:
             self.maxlevel = self.BestLevel(wavelet)
@@ -430,7 +430,7 @@ class SignalProc:
         new_wp = self.reconstruct(new_wp,wp.wavelet,bestleaves)
         print new_wp[''].data[:10]
 
-        wavio.write('testme.wav', new_wp[''].data, self.sampleRate, sampwidth=2)
+        # wavio.write('testme.wav', new_wp[''].data, self.sampleRate, sampwidth=2)
 
         #np.savetxt('testme.txt',new_wp[''].data)
         #data = new_wp[''].data
@@ -519,74 +519,74 @@ def denoiseFile(fileName,thresholdMultiplier):
     yd=sp.waveletDenoise()
     writeFile(yd,fileName[:-4]+'denoised'+str(sp.thresholdMultiplier)+fileName[-4:],sp.sampleRate)
 
-def test():
-    #pl.ion()
-    a = SignalProc()
-    #a.splitFile5mins('ST0026.wav')
+# def test():
+    # #pl.ion()
+    # a = SignalProc()
+    # #a.splitFile5mins('ST0026.wav')
 
-    a.loadData()
-    #a.play()
-    #a.testTree()
-    sg = a.spectrogram(a.data)
-    pl.figure()
-    pl.imshow(10.0*np.log10(sg),cmap='gray')
-    a.waveletDenoise()
-    sgn = a.spectrogram(a.wData)
-    pl.figure()
-    pl.imshow(10.0*np.log10(sgn),cmap='gray')
-    pl.figure()
-    pl.plot(a.wData)
-    #a.plot()
-    #a.play()
-    a.writefile('out.wav')
-    pl.show()
+    # a.loadData()
+    # #a.play()
+    # #a.testTree()
+    # sg = a.spectrogram(a.data)
+    # pl.figure()
+    # pl.imshow(10.0*np.log10(sg),cmap='gray')
+    # a.waveletDenoise()
+    # sgn = a.spectrogram(a.wData)
+    # pl.figure()
+    # pl.imshow(10.0*np.log10(sgn),cmap='gray')
+    # pl.figure()
+    # pl.plot(a.wData)
+    # #a.plot()
+    # #a.play()
+    # a.writefile('out.wav')
+    # pl.show()
 
-def testCorr():
-    # This is an outmoded (as slower) version of cross-correlation
-    sp = SignalProc()
-    sp.loadData('Sound Files/tril1.wav')
-    sg = sp.spectrogram(sp.data,multitaper=True)
-    seg = sg[:,79:193]
-    indices = sp.findMatches(seg,sg,0.4)
-    #pl.figure()
-    #pl.plot(matches)
-    #for i in indices:
-    #    pl.plot(i,0.6,'x')
-    print indices
+# def testCorr():
+    # # This is an outmoded (as slower) version of cross-correlation
+    # sp = SignalProc()
+    # sp.loadData('Sound Files/tril1.wav')
+    # sg = sp.spectrogram(sp.data,multitaper=True)
+    # seg = sg[:,79:193]
+    # indices = sp.findMatches(seg,sg,0.4)
+    # #pl.figure()
+    # #pl.plot(matches)
+    # #for i in indices:
+    # #    pl.plot(i,0.6,'x')
+    # print indices
 
-    #print corr
-    fig = pl.figure()
-    ax = fig.add_subplot(111)
-    ax.imshow(sg)
-    for i in indices:
-        ax.add_patch(pl.Rectangle((i,0),114,128,alpha=0.3))
-    #pl.subplot(212), pl.imshow(corr)
+    # #print corr
+    # fig = pl.figure()
+    # ax = fig.add_subplot(111)
+    # ax.imshow(sg)
+    # for i in indices:
+        # ax.add_patch(pl.Rectangle((i,0),114,128,alpha=0.3))
+    # #pl.subplot(212), pl.imshow(corr)
 
-    #c1 = np.max(corr, axis=0)
-    #import heapq
-    #heapq.nlargest(20, range(len(c1)), c1.take)
-    # Peaks are at 990, 588, 135
-    return indices
+    # #c1 = np.max(corr, axis=0)
+    # #import heapq
+    # #heapq.nlargest(20, range(len(c1)), c1.take)
+    # # Peaks are at 990, 588, 135
+    # return indices
 
 
-def show():
-    #pl.ion()
-    a = SignalProc()
-    #a.loadData('Sound Files/male1.wav')
-    a.loadData('Sound Files/tril1.wav')
-    #a.data = a.data[:60000,0]
-    sg = a.spectrogram(a.data)
-    #pl.figure()
-    #pl.plot(a.data)
-    pl.figure()
-    pl.imshow(10.0*np.log10(sg),cmap='gray_r')
-    pl.figure()
-    b = a.ButterworthBandpass(a.data,a.sampleRate)
-    print np.shape(a.data), np.shape(b)
-    pl.imshow(10.0*np.log10(a.spectrogram(a.ButterworthBandpass(a.data,a.sampleRate))),cmap='gray')
-    #pl.figure()
-    #pl.imshow(10.0*np.log10(a.spectrogram(a.bandpassFilter(a.data,a.sampleRate))),cmap='gray')
-    pl.show()
+# def show():
+    # #pl.ion()
+    # a = SignalProc()
+    # #a.loadData('Sound Files/male1.wav')
+    # a.loadData('Sound Files/tril1.wav')
+    # #a.data = a.data[:60000,0]
+    # sg = a.spectrogram(a.data)
+    # #pl.figure()
+    # #pl.plot(a.data)
+    # pl.figure()
+    # pl.imshow(10.0*np.log10(sg),cmap='gray_r')
+    # pl.figure()
+    # b = a.ButterworthBandpass(a.data,a.sampleRate)
+    # print np.shape(a.data), np.shape(b)
+    # pl.imshow(10.0*np.log10(a.spectrogram(a.ButterworthBandpass(a.data,a.sampleRate))),cmap='gray')
+    # #pl.figure()
+    # #pl.imshow(10.0*np.log10(a.spectrogram(a.bandpassFilter(a.data,a.sampleRate))),cmap='gray')
+    # pl.show()
 
 #show()
 #pl.show()
