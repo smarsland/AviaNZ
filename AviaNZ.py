@@ -246,6 +246,7 @@ class AviaNZ(QMainWindow):
 
         fileMenu = self.menuBar().addMenu("&File")
         fileMenu.addAction("&Open sound file", self.openFile, "Ctrl+O")
+        fileMenu.addAction("&Change Directory", self.chDir)
         #fileMenu.addSeparator()
         # fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
         fileMenu.addAction("&Quit",self.quit,"Ctrl+Q")
@@ -309,7 +310,6 @@ class AviaNZ(QMainWindow):
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
 
         actionMenu = self.menuBar().addMenu("&Actions")
-        actionMenu.addAction("&Change Directory", self.chDir)
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
         actionMenu.addAction("Denoise",self.denoiseDialog)
         actionMenu.addAction("Segment",self.segmentationDialog)
@@ -533,7 +533,7 @@ class AviaNZ(QMainWindow):
         #Button to move to next file in the list
         self.nextFileBtn=QToolButton()
         self.nextFileBtn.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSkipForward))
-        # self.connect(self.rightBtn, SIGNAL('clicked()'), self.openNextFile) #TODO: write openNextFile
+        self.connect(self.nextFileBtn, SIGNAL('clicked()'), self.openNextFile) #TODO: write openNextFile
         self.w_overview.addWidget(self.nextFileBtn,row=1,colspan=2)
 
         # The instructions and buttons below figMain
@@ -842,12 +842,13 @@ class AviaNZ(QMainWindow):
                 item.setText(file.fileName())
                 if file.fileName()+'.data' in listOfDataFiles:
                     item.setTextColor(Qt.red)
-        index = self.listFiles.findItems(fileName,Qt.MatchExactly)
-        if len(index)>0:
-            self.listFiles.setCurrentItem(index[0])
-        else:
-            index = self.listFiles.findItems(self.listOfFiles[0].fileName(),Qt.MatchExactly)
-            self.listFiles.setCurrentItem(index[0])
+        if fileName:
+            index = self.listFiles.findItems(fileName,Qt.MatchExactly)
+            if len(index)>0:
+                self.listFiles.setCurrentItem(index[0])
+            else:
+                index = self.listFiles.findItems(self.listOfFiles[0].fileName(),Qt.MatchExactly)
+                self.listFiles.setCurrentItem(index[0])
 
     def resetStorageArrays(self):
         # These variables hold the data to be saved and/or plotted
@@ -1072,7 +1073,29 @@ class AviaNZ(QMainWindow):
             dlg += 1
             self.drawfigMain()
             self.setWindowTitle('AviaNZ - ' + self.filename)
+
             dlg += 1
+        self.statusBar().showMessage("Ready")
+
+    def openNextFile(self):
+        i=self.listFiles.currentRow()
+        if i+1<len(self.listFiles):
+            self.listFiles.setCurrentRow(i+1)
+            self.loadFile(self.listFiles.currentItem())
+        else:
+        #     self.statusBar().showMessage("You are back to the begining of the list!")
+        #     # Find the first .wav file in the list    # TODO
+            i=0
+            c=self.listFiles.setCurrentRow(i)
+        #     name = os.path.basename(str(c))
+        #     fname = self.dirName+'/'+ name
+        #     print fname
+        #     while os.path.splitext(fname)[1] != ".wav":
+        #         c=self.listFiles.setCurrentRow(i+1)
+        #         name = os.path.basename(str(c))
+        #         fname = self.dirName+'/'+ name
+        #         i=i+1
+            self.loadFile(self.listFiles.currentItem())
 
     # def openFile(self):
     #     # If have an open file option this will deal with it via a file dialog
@@ -2606,7 +2629,17 @@ class AviaNZ(QMainWindow):
         # Listener for Change directory menu item
         # Don't want to change what's drawn there (currently selected file and its spectro),
         # but effects when opening a new file
-        self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',"Wav files (*.wav)")
+        dir= QtGui.QFileDialog.getExistingDirectory(self,'Choose Directory',self.dirName,QtGui.QFileDialog.ShowDirsOnly) #"Wav files (*.wav)")
+        if dir!='':
+            self.dirName=os.path.abspath(dir)
+            # Now repopulate the listbox
+            #print "Now in "+self.listOfFiles[i].fileName()
+            # self.dirName=str(dir.absolutePath())
+            self.listFiles.clearSelection()
+            self.listFiles.clearFocus()
+            self.listFiles.clear()
+            self.previousFile = None
+            self.fillFileList(fileName=None)
 
     def deleteAll(self):
         # Listener for delete all button
