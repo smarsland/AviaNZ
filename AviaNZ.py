@@ -54,9 +54,6 @@ import pyqtgraph.parametertree.parameterTypes as pTree
 # ==============
 # TODO
 
-# (1) sort out the transparency thing for the dragged spectrogram boxes
-# (2) Sort out the overview thing as buttons
-# (3) undo for segments
 # (4) pysox
 
 # Decide what should happen with Check segments 2
@@ -255,26 +252,24 @@ class AviaNZ(QMainWindow):
 
         self.useAmplitudeTick = specMenu.addAction("Show amplitude plot", self.useAmplitudeCheck)
         self.useAmplitudeTick.setCheckable(True)
-        self.useAmplitudeTick.setChecked(True)
+        self.useAmplitudeTick.setChecked(self.config['showAmplitudePlot'])
         self.useAmplitude = True
 
         self.useFilesTick = specMenu.addAction("Show list of files", self.useFilesCheck)
         self.useFilesTick.setCheckable(True)
-        self.useFilesTick.setChecked(True)
-        self.useFiles = True
+        self.useFilesTick.setChecked(self.config['showListofFiles'])
 
         self.showOverviewSegsTick = specMenu.addAction("Show annotation overview", self.showOverviewSegsCheck)
         self.showOverviewSegsTick.setCheckable(True)
-        self.showOverviewSegsTick.setChecked(True)
-        self.showOverviewSegs = True
+        self.showOverviewSegsTick.setChecked(self.config['showAnnotationOverview'])
 
         self.dragRectangles = specMenu.addAction("Drag boxes in spectrogram", self.dragRectanglesCheck)
         self.dragRectangles.setCheckable(True)
-        self.dragRectangles.setChecked(False)
+        self.dragRectangles.setChecked(self.config['dragBoxes'])
 
         self.dragRectTransparent = specMenu.addAction("Make dragged boxes transparent", self.dragRectsTransparent)
         self.dragRectTransparent.setCheckable(True)
-        self.dragRectTransparent.setChecked(False)
+        self.dragRectTransparent.setChecked(self.config['transparentBoxes'])
 
         self.showFundamental = specMenu.addAction("Show fundamental frequency", self.showFundamentalFreq)
         self.showFundamental.setCheckable(True)
@@ -298,13 +293,14 @@ class AviaNZ(QMainWindow):
         for colour in self.config['ColourList']:
             cm = colMenu.addAction(colour)
             cm.setCheckable(True)
-            if colour==self.config['ColourList'][0]:
+            if colour==self.config['cmap']:
                 cm.setChecked(True)
             receiver = lambda cmap=colour: self.setColourMap(cmap)
             self.connect(cm, SIGNAL("triggered()"), receiver)
             colGroup.addAction(cm)
-        specMenu.addAction("Invert colour map",self.invertColourMap)
-        self.cmapInverted = False
+        self.invertcm = specMenu.addAction("Invert colour map",self.invertColourMap)
+        self.invertcm.setCheckable(True)
+        self.invertcm.setChecked(self.config['invertColourMap'])
 
         specMenu.addSeparator()
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
@@ -391,7 +387,6 @@ class AviaNZ(QMainWindow):
             #'colourEnd': 0.75,
             'brightness': 50,
             'contrast': 50,
-            'coloursInverted': False,
 
             # Params for cross-correlation and related
             'corrThr': 0.4,
@@ -414,7 +409,14 @@ class AviaNZ(QMainWindow):
             'ColourNamed': (255, 0, 0, 100), # Red
             'ColourPossible': (255, 255, 0, 100), # Yellow
 
-            'cmap': 'Grey'
+            'cmap': 'Grey',
+
+            'showAmplitudePlot': True,
+            'showAnnotationOverview': True,
+            'dragBoxes': False,
+            'transparentBoxes': False,
+            'showListofFiles': True,
+            'invertColourMap': False
         }
 
     def createFrame(self):
@@ -450,7 +452,9 @@ class AviaNZ(QMainWindow):
         self.w_overview1.ci.layout.setContentsMargins(0.5, 1, 0.5, 1)
         self.w_overview.addWidget(self.w_overview1,row=0,col=2,rowspan=2)
         self.p_overview = self.w_overview1.addViewBox(enableMouse=False,enableMenu=False,row=0,col=0)
-        self.p_overview2 = self.w_overview1.addViewBox(enableMouse=False, enableMenu=False, row=1, col=0)
+        #self.p_overview2 = self.w_overview1.addViewBox(enableMouse=False, enableMenu=False, row=1, col=0)
+        self.p_overview2 = SupportClasses.ChildInfoViewBox(enableMouse=False, enableMenu=False)
+        self.w_overview1.addItem(self.p_overview2,row=1,col=0)
         self.p_overview2.setXLink(self.p_overview)
         # self.p_overview2.
         self.w_ampl = pg.GraphicsLayoutWidget()
@@ -770,10 +774,16 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.volSlider,row=1,col=1,colspan=2)
 
         # Make the colours
-        self.ColourSelected = QtGui.QBrush(QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], self.config['ColourSelected'][3]))
-        self.ColourNamed = QtGui.QBrush(QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], self.config['ColourNamed'][3]))
-        self.ColourNone = QtGui.QBrush(QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3]))
-        self.ColourPossible = QtGui.QBrush(QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], self.config['ColourPossible'][3]))
+        self.ColourSelected = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], self.config['ColourSelected'][3])
+        self.ColourNamed = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], self.config['ColourNamed'][3])
+        self.ColourNone = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3])
+        self.ColourPossible = QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], self.config['ColourPossible'][3])
+
+        self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], 255)
+        self.ColourNamedDark = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], 255)
+        self.ColourNoneDark = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], 255)
+        self.ColourPossibleDark = QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], 255)
+
 
         # Hack to get the type of an ROI
         p_spec_r = SupportClasses.ShadedRectROI(0, 0)
@@ -783,6 +793,13 @@ class AviaNZ(QMainWindow):
         self.connect(self.p_spec, SIGNAL("keyPressed"),self.handleKey)
         # Store the state of the docks
         self.state = self.area.saveState()
+
+        # Check if should show various parts of the interface, whether dragging or not
+        self.useAmplitudeCheck()
+        self.useFilesCheck()
+        self.showOverviewSegsCheck()
+        self.dragRectsTransparent()
+        self.dragRectanglesCheck()
 
         # Plot everything
         self.show()
@@ -1114,47 +1131,28 @@ class AviaNZ(QMainWindow):
         else:
             #print "Unchecked"
             self.p_spec.setMouseMode(pg.ViewBox.PanMode)
+        self.config['dragBoxes'] = self.dragRectangles.isChecked()
 
     def dragRectsTransparent(self):
-        # TODO: sort out the colours, and restore the pen for it. This is a bit of a pain!
         # The check menu item that decides if the user wants the dragged rectangles to have colour or not
-        # Reset the colours
         if self.dragRectTransparent.isChecked():
-            self.ColourSelected = QtGui.QBrush(
-                QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1],
-                             self.config['ColourSelected'][2], 0))
-            self.ColourNamed = QtGui.QBrush(QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1],
-                                                         self.config['ColourNamed'][2], 0))
-            self.ColourNone = QtGui.QBrush(
-                QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2],
-                             0))
-            self.ColourPossible = QtGui.QBrush(
-                QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1],
-                             self.config['ColourPossible'][2], 0))
-
+            for box in self.listRectanglesa2:
+                if type(box) == self.ROItype:
+                    col = box.brush.color()
+                    col.setAlpha(255)
+                    box.setBrush(pg.mkBrush(None))
+                    box.setPen(pg.mkPen(col,width=5))
+                    box.update()
         else:
-            self.ColourSelected = QtGui.QBrush(
-                QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1],
-                             self.config['ColourSelected'][2], self.config['ColourSelected'][3]))
-            self.ColourNamed = QtGui.QBrush(QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1],
-                                                         self.config['ColourNamed'][2], self.config['ColourNamed'][3]))
-            self.ColourNone = QtGui.QBrush(
-                QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2],
-                             self.config['ColourNone'][3]))
-            self.ColourPossible = QtGui.QBrush(
-                QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1],
-                             self.config['ColourPossible'][2], self.config['ColourPossible'][3]))
-        # Redraw the boxes, work out which colour they were, recolour
-        if self.dragRectTransparent.isChecked():
-            alpha = 0
-        else:
-            alpha = self.config['ColourPossible'][3]
-        for box in self.listRectanglesa2:
-            if type(box) == self.ROItype:
-                print box.currentBrush.color.alpha()
-                box.currentBrush.color().setAlpha(255)
-                box.update()
-                print box.currentBrush.color.alpha()
+            for box in self.listRectanglesa2:
+                if type(box) == self.ROItype:
+                    col = box.pen.color()
+                    col.setAlpha(self.ColourNamed.alpha())
+                    #print "Transparent", col.getRgb()
+                    box.setBrush(pg.mkBrush(col))
+                    box.setPen(pg.mkPen(None))
+                    box.update()
+        self.config['transparentBoxes'] = self.dragRectTransparent.isChecked()
 
     def useAmplitudeCheck(self):
         # Note that this doesn't remove the dock, just hide it. So it's all still live and easy to replace :)
@@ -1179,12 +1177,14 @@ class AviaNZ(QMainWindow):
                 #self.p_spec.addItem(r)
                 #r.setPos(self.textpos)
             self.d_ampl.hide()
+        self.config['showAmplitudePlot'] = self.useAmplitudeTick.isChecked()
 
     def useFilesCheck(self):
         if self.useFilesTick.isChecked():
             self.d_files.show()
         else:
             self.d_files.hide()
+        self.config['showListofFiles'] = self.useFilesTick.isChecked()
 
     def showOverviewSegsCheck(self):
         if self.showOverviewSegsTick.isChecked():
@@ -1192,6 +1192,7 @@ class AviaNZ(QMainWindow):
         else:
             self.p_overview2.hide()
 
+        self.config['showAnnotationOverview'] = self.showOverviewSegsTick.isChecked()
 
     def showFundamentalFreq(self):
         # Draw the fundamental frequency
@@ -1320,15 +1321,22 @@ class AviaNZ(QMainWindow):
         # Three y values are No. not known, No. known, No. possible
         # widthOverviewSegment is in seconds
         numSegments = int(np.ceil(np.shape(self.sg)[0]/self.convertAmpltoSpec(self.config['widthOverviewSegment'])))
-        self.widthOverviewSegment = int(np.shape(self.sg)[0]/numSegments)
+        self.widthOverviewSegment = int(float(np.shape(self.sg)[0])/numSegments)
         self.overviewSegments = np.zeros((numSegments,3))
         for i in range(numSegments):
-            r = pg.QtGui.QGraphicsRectItem(i*self.widthOverviewSegment, 0, (i+1)*self.widthOverviewSegment, 0.5)
+            #r = pg.QtGui.QGraphicsRectItem(i*self.widthOverviewSegment, 0, (i+1)*self.widthOverviewSegment, 0.5)
+            r = SupportClasses.ClickableRectItem(i*self.widthOverviewSegment, 0, self.widthOverviewSegment, 0.5)
             r.setPen(pg.mkPen('k'))
-            #r.setPen(pg.mkPen(None))
             r.setBrush(pg.mkBrush('w'))
             self.SegmentRects.append(r)
             self.p_overview2.addItem(r)
+        self.p_overview2.sigChildMessage.connect(self.overviewSegmentClicked)
+
+    def overviewSegmentClicked(self,x):
+        minX, maxX = self.overviewImageRegion.getRegion()
+        self.overviewImageRegion.setRegion([x, x+maxX-minX])
+        self.updateOverview()
+        self.playPosition = int(self.convertSpectoAmpl(x)*1000.0)
 
     def updateOverview(self):
         # Listener for when the overview box is changed
@@ -1381,6 +1389,8 @@ class AviaNZ(QMainWindow):
     def updateRegion_spec(self):
         # This is the listener for when a segment box is changed
         # It updates the position of the matching box, and also the text within it
+        # TODO: Check drag updates
+
         sender = self.sender()
         i = 0
         while self.listRectanglesa2[i] != sender and i<len(self.listRectanglesa2):
@@ -1391,11 +1401,14 @@ class AviaNZ(QMainWindow):
             if type(sender) == self.ROItype:
                 x1 = self.convertSpectoAmpl(sender.pos()[0])
                 x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
+                self.segments[i][2] = sender.pos()[1]
+                self.segments[i][3] = sender.pos()[1]+sender.size()[1]
+                self.listLabels[i].setPos(sender.pos()[0], self.textpos)
             else:
                 x1 = self.convertSpectoAmpl(sender.getRegion()[0])
                 x2 = self.convertSpectoAmpl(sender.getRegion()[1])
+                self.listLabels[i].setPos(sender.getRegion()[0], self.textpos)
             self.listRectanglesa1[i].setRegion([x1,x2])
-            self.listLabels[i].setPos(sender.getRegion()[0],self.textpos)
 
             self.segments[i][0] = x1
             self.segments[i][1] = x2
@@ -1497,7 +1510,18 @@ class AviaNZ(QMainWindow):
         else:
             startpointS = QPointF(self.convertAmpltoSpec(startpoint),y1)
             endpointS = QPointF(self.convertAmpltoSpec(endpoint),y2)
-            p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, pen='r')
+            p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS)
+            if self.dragRectTransparent.isChecked():
+                col = self.prevBoxCol.rgb()
+                col = QtGui.QColor(col)
+                col.setAlpha(255)
+                #print "Add Seg", col.getRgb(), self.prevBoxCol.getRgb()
+                p_spec_r.setBrush(None)
+                p_spec_r.setPen(pg.mkPen(col,width=5))
+            else:
+                p_spec_r.setBrush(pg.mkBrush(self.prevBoxCol))
+                p_spec_r.setPen(pg.mkPen(None))
+            #p_spec_r.setPen(pg.mkPen('r'))
             #self.p_spec.addItem(p_spec_r, ignoreBounds=True)
             #p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
         self.p_spec.addItem(p_spec_r, ignoreBounds=True)
@@ -1528,7 +1552,15 @@ class AviaNZ(QMainWindow):
         if self.box1id>-1:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
-            self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                col = self.prevBoxCol.rgb()
+                col = QtGui.QColor(col)
+                col.setAlpha(255)
+                #print "ampl", self.prevBoxCol.getRgb()
+                self.listRectanglesa2[self.box1id].setPen(col,width=5)
+            else:
+                self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+
             self.listRectanglesa2[self.box1id].update()
 
         if self.p_ampl.sceneBoundingRect().contains(pos):
@@ -1571,7 +1603,12 @@ class AviaNZ(QMainWindow):
 
                 self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
                 self.listRectanglesa1[self.box1id].update()
-                self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
+
+                if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                    self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=5))
+                else:
+                    self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
+
                 self.listRectanglesa2[self.box1id].update()
 
                 self.started = not(self.started)
@@ -1593,7 +1630,11 @@ class AviaNZ(QMainWindow):
                     self.listRectanglesa1[box1id].update()
                     self.playSegButton.setEnabled(True)
                     self.playBandLimitedSegButton.setEnabled(True)
-                    self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
+                    if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[box1id]) == self.ROItype:
+                        self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=5))
+                    else:
+                        self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
+
                     self.listRectanglesa2[box1id].update()
 
                     modifiers = QtGui.QApplication.keyboardModifiers()
@@ -1630,7 +1671,14 @@ class AviaNZ(QMainWindow):
         if self.box1id>-1:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
-            self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                col = self.prevBoxCol.rgb()
+                col = QtGui.QColor(col)
+                col.setAlpha(255)
+                #print "spec", self.prevBoxCol.getRgb()
+                self.listRectanglesa2[self.box1id].setPen(col,width=5)
+            else:
+                self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa2[self.box1id].update()
 
         if self.p_spec.sceneBoundingRect().contains(pos):
@@ -1673,7 +1721,11 @@ class AviaNZ(QMainWindow):
 
                     self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
                     self.listRectanglesa1[self.box1id].update()
-                    self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
+                    if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                        self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=5))
+                    else:
+                        self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
+
                     self.listRectanglesa2[self.box1id].update()
 
                     self.started = not(self.started)
@@ -1702,7 +1754,11 @@ class AviaNZ(QMainWindow):
                     self.listRectanglesa1[box1id].update()
                     self.playSegButton.setEnabled(True)
                     self.playBandLimitedSegButton.setEnabled(True)
-                    self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
+                    if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[box1id]) == self.ROItype:
+                        self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=5))
+                    else:
+                        self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
+
                     self.listRectanglesa2[box1id].update()
                     modifiers = QtGui.QApplication.keyboardModifiers()
                     if modifiers == QtCore.Qt.ControlModifier:
@@ -1737,9 +1793,17 @@ class AviaNZ(QMainWindow):
 
     def mouseDragged_spec(self, evt1, evt2, evt3):
         if self.box1id>-1:
+            #print self.prevBoxCol.getRgb()
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
-            self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                col = self.prevBoxCol.rgb()
+                col = QtGui.QColor(col)
+                col.setAlpha(255)
+                #print "spec drag", self.prevBoxCol.getRgb()
+                self.listRectanglesa2[self.box1id].setPen(pg.mkPen(col,width=5))
+            else:
+                self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa2[self.box1id].update()
 
         if self.dragRectangles.isChecked():
@@ -1755,7 +1819,7 @@ class AviaNZ(QMainWindow):
                 # Context menu
                 self.box1id = len(self.segments) - 1
                 self.fillBirdList(unsure=True)
-                self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                self.menuBirdList.popup(QPoint(evt3.x(), evt3.y()))
             else:
                 self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y(), evt2.y())
                 # Context menu
@@ -1768,7 +1832,15 @@ class AviaNZ(QMainWindow):
 
             self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
             self.listRectanglesa1[self.box1id].update()
-            self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
+            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(None))
+                self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=5))
+            else:
+                # TODO This needs fixing
+                self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
+                self.listRectanglesa2[self.box1id].setPen(None)
+
+
             self.listRectanglesa2[self.box1id].update()
         else:
             return
@@ -1904,6 +1976,7 @@ class AviaNZ(QMainWindow):
         else:
             self.prevBoxCol = self.ColourNone
 
+        #print "updateText:", self.prevBoxCol.getRgb(), self.ColourPossible.getRgb(), self.ColourNamed.getRgb(), self.ColourNone.getRgb()
         self.lastSpecies = text
 
     def setColourMap(self,cmap):
@@ -1919,19 +1992,19 @@ class AviaNZ(QMainWindow):
         self.overviewImage.setLookupTable(self.lut)
 
     def invertColourMap(self):
-        self.cmapInverted = not self.cmapInverted
+        self.config['invertColourMap'] = not self.config['invertColourMap']
         self.setColourLevels()
 
     def setColourLevels(self):
         # Choose the black and white levels
         minsg = np.min(self.sg)
         maxsg = np.max(self.sg)
-        brightness = self.brightnessSlider.value()
-        contrast = self.contrastSlider.value()
-        self.colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
-        self.colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + self.colourStart
+        self.config['brightness'] = self.brightnessSlider.value()
+        self.config['contrast'] = self.contrastSlider.value()
+        self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
+        self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
-        if self.cmapInverted:
+        if self.config['invertColourMap']:
             self.overviewImage.setLevels([self.colourEnd, self.colourStart])
             self.specPlot.setLevels([self.colourEnd, self.colourStart])
         else:
@@ -2010,7 +2083,7 @@ class AviaNZ(QMainWindow):
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             x1 = int(x1)
             x2 = int(x2)
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.cmapInverted, self.config['BirdList'])
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'])
             self.humanClassifyDialog1.show()
             self.humanClassifyDialog1.activateWindow()
             #self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
@@ -2079,7 +2152,7 @@ class AviaNZ(QMainWindow):
 
             if self.humanClassifyDialog2a.exec_() == 1:
                 label = self.humanClassifyDialog2a.getValues()
-                self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,self.segments,label,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.cmapInverted)
+                self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,self.segments,label,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'])
                 self.humanClassifyDialog2.show()
                 self.humanClassifyDialog2.activateWindow()
         self.statusBar().showMessage("Ready")
@@ -2382,9 +2455,7 @@ class AviaNZ(QMainWindow):
         # Generate annotation friendly output
         # Merge neighbours for wavelet seg
         if str(alg)=="Wavelets":
-            mergedSeg=self.mergeSeg(newSegments)
-            for seg in mergedSeg:
-                self.addSegment(float(seg[0]),float(seg[1]),0,0,species+"?")
+            newSegments=self.mergeSeg(newSegments)
         else:
             for seg in newSegments:
                 self.addSegment(float(seg[0]),float(seg[1]),0,0,species+"?")
@@ -2403,7 +2474,7 @@ class AviaNZ(QMainWindow):
                 if math.floor(seg[0])<=a and a<math.ceil(seg[1]):
                     detected[a]=1
         # print detected
-
+        self.lenNewSegments = len(newSegments)
         #Generate time stampls [start(mm:ss) end(mm:ss)]
         # print "start end (mm:ss):"
         annotation=[]
@@ -2411,13 +2482,18 @@ class AviaNZ(QMainWindow):
             annotation.append([self.convertMillisecs(seg[0]*1000),self.convertMillisecs(seg[1]*1000)])
         # print annotation
 
+        self.segmentDialog.undo.setEnabled(True)
+
         self.statusBar().showMessage("Ready")
 
     def segment_undo(self):
         # Listener for undo button in segmentation dialog
-        # TODO: Complete this
-        # TODO: And sort out the mergeseg
-        print("Undoing")
+        # This is very cheap: the segments were appended, so delete the last len of them (from the end)
+        end = len(self.segments)
+        for seg in range(end-1,end-self.lenNewSegments-1,-1):
+            self.deleteSegment(seg)
+        self.segmentDialog.undo.setEnabled(False)
+
 
     def findMatches(self):
         # Calls the cross-correlation function to find matches like the currently highlighted box
@@ -2448,7 +2524,7 @@ class AviaNZ(QMainWindow):
                 x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
             else:
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
-            print x1, x2
+            #print x1, x2
             # Get the data for the spectrogram
             sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)#***
             segment = sgRaw[int(x1):int(x2),:]
@@ -2592,10 +2668,13 @@ class AviaNZ(QMainWindow):
 
 # ============
 # Various actions: deleting, saving, quitting
-    def deleteSegment(self):
+    def deleteSegment(self,id=-1):
         # Listener for delete segment button, or backspace key
         # Deletes segment if one is selected, otherwise does nothing
+        if id>-1:
+            self.box1id = id
         if self.box1id>-1:
+            print self.box1id, self.segments[self.box1id]
             # Work out which overview segment this segment is in (could be more than one) and update it
             inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0]))/self.widthOverviewSegment)
             inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]))/self.widthOverviewSegment)
@@ -2760,7 +2839,7 @@ first.show()
 app.exec_()
 
 task = first.getValues()
-print task
+#print task
 
 if task == 1:
     avianz = AviaNZ(configfile='AviaNZconfig.txt')

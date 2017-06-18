@@ -18,11 +18,12 @@ class ShadedROI(pg.ROI):
         #brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))
         if not hasattr(self, 'currentBrush'):
             self.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 50)))
-
+        if not hasattr(self, 'currentPen'):
+            self.setPen(QtGui.QPen(QtGui.QColor(255, 0, 0, 255)))
         p.save()
         r = self.boundingRect()
         p.setRenderHint(QtGui.QPainter.Antialiasing)
-        p.setPen(fn.mkPen(None))
+        p.setPen(self.currentPen)
         p.setBrush(self.currentBrush)
         p.translate(r.left(), r.top())
         p.scale(r.width(), r.height())
@@ -35,6 +36,11 @@ class ShadedROI(pg.ROI):
         """
         self.brush = fn.mkBrush(*br, **kargs)
         self.currentBrush = self.brush
+
+    def setPen(self, *br, **kargs):
+        self.pen = fn.mkPen(*br, **kargs)
+        self.currentPen = self.pen
+
 
 class ShadedRectROI(ShadedROI):
     def __init__(self, pos, size, centered=False, sideScalers=False, **args):
@@ -76,6 +82,16 @@ class DragViewBox(pg.ViewBox):
         #print ev.key(), ev.text()
         self.emit(SIGNAL("keyPressed"),ev)
 
+class ChildInfoViewBox(pg.ViewBox):
+    # Normal ViewBox, but with ability to pass a message back from a child
+    sigChildMessage = QtCore.Signal(object)
+
+    def __init__(self, *args, **kwds):
+        pg.ViewBox.__init__(self, *args, **kwds)
+
+    def resend(self,x):
+        self.sigChildMessage.emit(x)
+
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     def __init__(self, index, im1, im2, parent=None):
@@ -101,3 +117,12 @@ class PicButton(QAbstractButton):
         self.buttonClicked = not(self.buttonClicked)
         self.paintEvent(event)
         self.update()
+
+class ClickableRectItem(QtGui.QGraphicsRectItem):
+    # QGraphicsItem doesn't include signals, hence this mess
+    def __init__(self, *args, **kwds):
+        QtGui.QGraphicsRectItem.__init__(self, *args, **kwds)
+
+    def mousePressEvent(self, ev):
+        super(ClickableRectItem, self).mousePressEvent(ev)
+        self.parentWidget().resend(self.mapRectToParent(self.boundingRect()).x())

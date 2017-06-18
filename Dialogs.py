@@ -369,6 +369,7 @@ class Segmentation(QDialog):
         self.Fundwindow.hide()
 
         Box.addWidget(self.undo)
+        self.undo.setEnabled(False)
         Box.addWidget(self.activate)
         #Box.addWidget(self.save)
 
@@ -918,7 +919,7 @@ class HumanClassify2(QDialog):
         self.firstSegment = 0
 
         self.segments = [item for item in self.segments if item[4] == label or item[4][:-1] == label]
-        print len(self.segments)
+        #print len(self.segments)
         next = QPushButton("Next/Finish")
         self.connect(next, SIGNAL("clicked()"), self.next)
 
@@ -950,7 +951,7 @@ class HumanClassify2(QDialog):
         positions = [(i, j) for i in range(self.h) for j in range(self.w)]
         images = []
         segRemain = len(self.segments) - self.firstSegment
-        print segRemain, self.firstSegment
+        #print segRemain, self.firstSegment
 
         if segRemain < self.w * self.h:
             for i in range(segRemain):
