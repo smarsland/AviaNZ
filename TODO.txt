@@ -5,27 +5,47 @@
 
     SM: Tidy code, ensure comments, etc.
 
+    SM: Add in the 'who the user is' annotation
+
+    SM: Get the time from the file name (if standard) and use it to put day or night birds first
+
+    NP: Read mp3 files
+# SM: pysox
+
+    SM: Update the manual, correct the cheat sheet, get them included in the program (via web interface)
+
+    NP: Make it possible to change parameters (look into pyqtgraph ParameterTree)
+
+    ??: What to do with stereo sound? How about consistent sample rates?
+
+	NP: Add play button to check segment, picture alone is not enough to confirm. Make the pictures (check segment 1) small.
+
+    Control marking the same segments again and again - multiple clicks on Find matches with the same pattern.
+	# Thing to do is probably move find matches into the segmentations
+
+	Interface --> Change spectrogram parameters --> add visible frequency range e.g. from:0 to:8000
+
+	Update the status bar when auto saving the annotation? Users want to know/confirm.
+
+    Readonly mode
+
+    NP: Make play sounds play the denoised version after denoising
+# This seems to be complicated with undo etc. Still thinking whats the best way to do it,
+  can easily add a separate button to play denoised but not nice. I fixed the plotting problem though.
+
     NP: Make the oscillogram and spectrogram line up (basically, just sort out y-axis labels)
 # Done
 
     SM: Enable removal of fill colour for spectrogram drag boxes
 # Done
 
-    NP: Make play sounds play the denoised version after denoising
-# This seems to be complicated with undo etc. Still thinking whats the best way to do it,
-  can easily add a separate button to play denoised but not nice. I fixed the plotting problem though.
+
 
     SM: Undo for segmentation
 # Done
 
     SM: Save the amount of time the user makes the window show back into the config file
  # Done. Also for the various interface options
-
-    SM: Add in the 'who the user is' annotation
-    SM: Get the time from the file name (if standard) and use it to put day or night birds first
-
-    NP: Read mp3 files
-# SM: pysox
 
     SM: Make the arrows (on top-right) move on to next file if double clicked (and at start/end?)
 # Done
@@ -39,30 +59,14 @@
     NP: And stop the lines going too far to the right
 # Done
 
-    SM: Update the manual, correct the cheat sheet, get them included in the program (via web interface)
-
-    NP: Make it possible to change parameters (look into pyqtgraph ParameterTree)
-
-    ??: What to do with stereo sound? How about consistent sample rates?
-
     The updating of the colour of the overview seg has some colour weirdness -- gets darker. Some sort of overlapping? Not a major problem.
 # Done
-
-	NP: Add play button to check segment, picture alone is not enough to confirm. Make the pictures (check segment 1) small.
 
 	NP: Stop loading the file when choose to cancel the progress bar
 # Removed the cancel button for now. otherwise have to unroll what happened inside the loadFile when the user cancel it.
 
 	File list dock becomes frozen - one was experiencing this. Had to restart the program.
 	    # Can we reproduce it?
- 
-	Control marking the same segments again and again - multiple clicks on Find matches with the same pattern.
-	# Thing to do is probably move find matches into the segmentations
-	
-	Interface --> Change spectrogram parameters --> add visible frequency range e.g. from:0 to:8000
-
-	Update the status bar when auto saving the annotation? Users want to know/confirm.
-
 	
 (2) Memory management
     NP: It's a pain, but needs thinking about and then doing
@@ -72,10 +76,10 @@
 (3) Denoising, Wavelets and Segmentation
     Make denoising work
         Is there something wrong? No
-        How long should a denoise piece be? Depends
-	(1) Compare with matlab for long files: Almost similar results
-	(2) Compare with making wavelet trees on shorter pieces
-	(3) Denoise the segments separately
+        *** How long should a denoise piece be? Depends
+	(1) Compare with matlab for long files: Almost identical results
+	(2) *** Compare with making wavelet trees on shorter pieces
+	(3) *** Denoise the segments separately
     
     NP: Stop the segmentation being based on 1s
 # Done
