@@ -1,24 +1,51 @@
 
 # TODO for AviaNZ
 
+FEATURE SELECTION
+Test the selected nodes
+    Use x of the identified kiwi male / kiwi female / ruru any examples
+    Use existing code to get the wavelet nodes
+        Nearly done -- hard work is left :)
+        Modify CreateDataSet_data to make sure it saves all the segment data -> big file
+        Modify findCalls_train_learning as in the comments
+    Modify the learning code to only use those nodes
+    Compare with current results
+
+We will use the full range of frequencies (no bandpass)
+
+So we need to save the 3 (male, female kiwi, ruru) learners
+And then add code to use it
+
+Test out having if both learner and OR say yes -> sure, if xor(learner,OR) -> maybe? (or something...)
+For this version, that's it
+    -> extensions (add other features and learners) MFCC, Raven, etc.
+    -> combine with previous second data
+    -> etc.
+
+SM: Add in the 'who the user is' annotation
+SM: Update the manual
+    -> correct the cheat sheet
+    -> get them included in the program (via web interface or pdf)
+NP: Check Seg 1 -> smaller pictures
+                -> play sounds
+SM: Check Seg 2 -> process output
+
+NP: Installation!!!
+
 (1) Minor bugs and extensions
 
     SM: Tidy code, ensure comments, etc.
-
-    SM: Add in the 'who the user is' annotation
 
     SM: Get the time from the file name (if standard) and use it to put day or night birds first
 
     NP: Read mp3 files
 # SM: pysox
 
-    SM: Update the manual, correct the cheat sheet, get them included in the program (via web interface)
 
     NP: Make it possible to change parameters (look into pyqtgraph ParameterTree)
 
     ??: What to do with stereo sound? How about consistent sample rates?
 
-	NP: Add play button to check segment, picture alone is not enough to confirm. Make the pictures (check segment 1) small.
 
     Control marking the same segments again and again - multiple clicks on Find matches with the same pattern.
 	# Thing to do is probably move find matches into the segmentations
@@ -38,8 +65,6 @@
 
     SM: Enable removal of fill colour for spectrogram drag boxes
 # Done
-
-
 
     SM: Undo for segmentation
 # Done
