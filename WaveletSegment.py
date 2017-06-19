@@ -738,8 +738,8 @@ def CreateDataSet(directory,species='kiwi'):
                             target=0
                         else:
                             target=1
-                        E.append(target)
                         E.append(spp)
+                        E.append(target)
                         f2.write(str(E)[1:-1]+"\n")
     f2.close()
 
