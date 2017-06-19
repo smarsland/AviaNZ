@@ -371,6 +371,63 @@ class WaveletSeg:
     #             #librosa.output.write_wav(fName, data[start:start+fs*60*5], fs)
     #             i+=1
 
+def findCalls_train_learning(fName,species='kiwi'):
+
+    waveletCoefs = np.loadtxt('wE_km')
+
+    # Compute point-biserial correlations and sort wrt it, return top nNodes
+    # *** Note only first 100 for TESTING OF CODE!
+    nodes = ws.compute_r(waveletCoefs[:100,62],waveletCoefs[:100,:62])
+    print nodes
+
+    # Now for Nirosha's sorting
+    # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
+    nodes = ws.sortListByChild(np.ndarray.tolist(nodes))
+
+    # These nodes refer to the unrooted tree, so add 1 to get the real indices
+    nodes = [n + 1 for n in nodes]
+    print nodes
+
+    # **** We actually need the real data :(
+    # Generate a full 5 level wavelet packet decomposition
+    # **** load newdata, spp
+    wpFull = pywt.WaveletPacket(data=newdata, wavelet=ws.wavelet, mode='symmetric', maxlevel=5)
+
+    # **** A version of the below to turn the spp labels into 0 or 1 -> annotation
+    data[:, 62] = 0
+    # inds = np.where(data[:,63] == 7)
+    # data[inds,62] = 1
+    inds = np.where(data[:, 63] == 0)
+    data[inds, 62] = 1
+    inds = np.where(data[:, 63] == 6)
+    data[inds, 62] = 1
+    inds = np.where(data[:, 63] == 14)
+    data[inds, 62] = 1
+    inds = np.where(data[:, 63] == 15)
+    data[inds, 62] = 1
+
+    # Now check the F2 values and add node if it improves F2
+    listnodes = []
+    bestBetaScore = 0
+    detected = np.zeros(300)
+
+    for node in nodes:
+        testlist = listnodes[:]
+        testlist.append(node)
+        print testlist
+        detected_c = ws.detectCalls(wpFull,node,ws.sampleRate)
+        #update the detections
+        det=np.maximum.reduce([detected,detected_c])
+        fB = ws.fBetaScore(annotation, det)
+        if fB > bestBetaScore:
+            bestBetaScore = fB
+            #now apend the detections of node c to detected
+            detected=det
+            listnodes.append(node)
+        if bestBetaScore == 1:
+            break
+    return listnodes
+
 def findCalls_train(fName,species='kiwi'):
     # Load data and annotation
     ws=WaveletSeg()
@@ -753,6 +810,59 @@ def CreateDataSet(directory,species='kiwi',choice='all',denoise=False):
                             target=1
                         E.append(spp)
                         E.append(target)
+                        f2.write(str(E)[1:-1]+"\n")
+    f2.close()
+
+def CreateDataSet_data(directory,species='kiwi',choice='all',denoise=False):
+    #Generate the wavelet energy (all nodes)give the directory with sound and annotation
+    ws=WaveletSeg()
+    if choice=='all' and denoise==False:
+        filename='wEnergyAll.data'
+    elif choice=='all' and denoise==True:
+        filename='wEnergyAllDenoised.data'
+    elif choice=='bandpass' and denoise==False:
+        filename='wEnergyBandpass.data'
+    elif choice=='bandpass' and denoise==True:
+        filename='wEnergyBandpassDenoised.data'
+    f2=open('Sound Files/MLdata/'+filename,'a')
+    newdata = []
+    labels = []
+    for root, dirs, files in os.walk(directory):
+        for filename in files:
+            if filename.endswith('.wav'):
+                if not os.path.isfile(root+'/'+filename+'.data'): # if no AviaNZ annotation then skip
+                    continue
+                ws.loadData(root+'/'+filename[:-4],trainTest=False)
+                if species !='boom' and ws.sampleRate!=16000:
+                    ws.data=librosa.core.audio.resample(ws.data,ws.sampleRate,16000)
+                    ws.sampleRate=16000
+                # Read the AviaNZ annotation
+                with open(root+'/'+filename+".data") as f:
+                    segments = json.load(f)
+                for seg in segments:
+                    # If the length of a segment is less than 1 sec make it 1sec
+                    if seg[1]-seg[0]<1:
+                        seg[1]=seg[0]+1
+                    # Discard the tail (<1 sec)
+                    seg[1]=seg[0]+np.floor(seg[1]-seg[0])
+                    n=int(seg[1]-seg[0])
+                    for i in range(n):
+                        current=ws.data[(int(seg[0])+i)*ws.sampleRate:(int(seg[0])+(i+1))*ws.sampleRate]
+
+                        # Compute wavelet energy for this second
+                        E=computeWaveletEnergy_1s(current,'dmey2',choice,denoise)
+                        # E=genWEnergy(filename[:-4],species=species) # try later with bp filter e.g when trainig for kiwi male use 1200-7500
+                        E=E.tolist()
+                        spp=str(seg[4])
+                        if 'Noise' in spp:
+                            target=0
+                        else:
+                            target=1
+                        E.append(spp)
+                        E.append(target)
+                        newdata.append(current)
+                        labels.append(spp)
+                        # *** Save newdata and labels
                         f2.write(str(E)[1:-1]+"\n")
     f2.close()
 
