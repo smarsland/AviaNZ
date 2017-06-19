@@ -564,14 +564,19 @@ nodelist_kiwi=[34,35,36,38,40,41,42,43,44,45,46,55] # removed first three nodes 
 
 # **********************************************PREPARE DATA SET (using 5 min recordings) FOR ML************************
 
-def computeWaveletEnergy_1s(data,wavelet):
+def computeWaveletEnergy_1s(data,wavelet,choice='all',denoise=False):
     # Generate wavelet energy (all 62 nodes) given 1 sec data
     E=[]
+    ws=WaveletSeg()
     for level in range(1,6):
         if wavelet == 'dmey2':
             [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
             wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
             wavelet.orthogonal=True
+        if denoise==True:
+            data = ws.sp.waveletDenoise(data, thresholdType='soft', maxlevel=5)
+        if choice=='bandpass':
+            data=ws.sp.ButterworthBandpass(data,16000,low=500,high=7500)
         wp = pywt.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric', maxlevel=level)
         e = np.array([np.sum(n.data**2) for n in wp.get_level(level, "natural")])
         if np.sum(e)>0:
@@ -704,10 +709,18 @@ def computeWaveletEnergy_1s(data,wavelet):
 
 #***************************************************************************************
 # Create DATA SET FOR ML - using annotations made with AviaNZ
-def CreateDataSet(directory,species='kiwi'):
+def CreateDataSet(directory,species='kiwi',choice='all',denoise=False):
     #Generate the wavelet energy (all nodes)give the directory with sound and annotation
     ws=WaveletSeg()
-    f2=open('Sound Files/MLdata/test.data','a')
+    if choice=='all' and denoise==False:
+        filename='wEnergyAll.data'
+    elif choice=='all' and denoise==True:
+        filename='wEnergyAllDenoised.data'
+    elif choice=='bandpass' and denoise==False:
+        filename='wEnergyBandpass.data'
+    elif choice=='bandpass' and denoise==True:
+        filename='wEnergyBandpassDenoised.data'
+    f2=open('Sound Files/MLdata/'+filename,'a')
     for root, dirs, files in os.walk(directory):
         for filename in files:
             if filename.endswith('.wav'):
@@ -730,7 +743,7 @@ def CreateDataSet(directory,species='kiwi'):
                     for i in range(n):
                         current=ws.data[(int(seg[0])+i)*ws.sampleRate:(int(seg[0])+(i+1))*ws.sampleRate]
                         # Compute wavelet energy for this second
-                        E=computeWaveletEnergy_1s(current,'dmey2')
+                        E=computeWaveletEnergy_1s(current,'dmey2',choice,denoise)
                         # E=genWEnergy(filename[:-4],species=species) # try later with bp filter e.g when trainig for kiwi male use 1200-7500
                         E=E.tolist()
                         spp=str(seg[4])
@@ -743,4 +756,6 @@ def CreateDataSet(directory,species='kiwi'):
                         f2.write(str(E)[1:-1]+"\n")
     f2.close()
 
-CreateDataSet(directory= 'E:/SONGSCAPE/AviaNZ/Sound Files/MLdata')
+# CreateDataSet(directory= 'E:/AviaNZ/Sound Files/MLdata',choice='all',denoise=False)
+# CreateDataSet(directory= 'E:/AviaNZ/Sound Files/MLdata',choice='bandpass',denoise=False)
+# CreateDataSet(directory= 'E:/AviaNZ/Sound Files/MLdata',choice='bandpass',denoise=True)

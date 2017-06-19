@@ -801,6 +801,8 @@ class AviaNZ(QMainWindow):
         self.dragRectsTransparent()
         self.dragRectanglesCheck()
 
+        self.statusBar().showMessage("Ready")
+
         # Plot everything
         self.show()
 
@@ -1090,7 +1092,6 @@ class AviaNZ(QMainWindow):
             dlg += 1
             self.drawfigMain()
             self.setWindowTitle('AviaNZ - ' + self.filename)
-
             dlg += 1
         self.statusBar().showMessage("Ready")
 
@@ -1141,7 +1142,7 @@ class AviaNZ(QMainWindow):
                     col = box.brush.color()
                     col.setAlpha(255)
                     box.setBrush(pg.mkBrush(None))
-                    box.setPen(pg.mkPen(col,width=5))
+                    box.setPen(pg.mkPen(col,width=1))
                     box.update()
         else:
             for box in self.listRectanglesa2:
@@ -1221,7 +1222,7 @@ class AviaNZ(QMainWindow):
                 s[1] = s[1] * self.sampleRate / float(self.config['incr'])
                 i = np.where((ind>s[0]) & (ind<s[1]))
                 self.segmentPlots.append(pg.PlotDataItem())
-                self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=3))
+                self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=1))
                 self.p_spec.addItem(self.segmentPlots[-1])
 
             #self.yinRois = []
@@ -1517,7 +1518,7 @@ class AviaNZ(QMainWindow):
                 col.setAlpha(255)
                 #print "Add Seg", col.getRgb(), self.prevBoxCol.getRgb()
                 p_spec_r.setBrush(None)
-                p_spec_r.setPen(pg.mkPen(col,width=5))
+                p_spec_r.setPen(pg.mkPen(col,width=1))
             else:
                 p_spec_r.setBrush(pg.mkBrush(self.prevBoxCol))
                 p_spec_r.setPen(pg.mkPen(None))
@@ -1557,7 +1558,7 @@ class AviaNZ(QMainWindow):
                 col = QtGui.QColor(col)
                 col.setAlpha(255)
                 #print "ampl", self.prevBoxCol.getRgb()
-                self.listRectanglesa2[self.box1id].setPen(col,width=5)
+                self.listRectanglesa2[self.box1id].setPen(col,width=1)
             else:
                 self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
 
@@ -1605,7 +1606,7 @@ class AviaNZ(QMainWindow):
                 self.listRectanglesa1[self.box1id].update()
 
                 if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                    self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=5))
+                    self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
                 else:
                     self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
@@ -1631,7 +1632,7 @@ class AviaNZ(QMainWindow):
                     self.playSegButton.setEnabled(True)
                     self.playBandLimitedSegButton.setEnabled(True)
                     if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[box1id]) == self.ROItype:
-                        self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=5))
+                        self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
                     else:
                         self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
@@ -1676,7 +1677,7 @@ class AviaNZ(QMainWindow):
                 col = QtGui.QColor(col)
                 col.setAlpha(255)
                 #print "spec", self.prevBoxCol.getRgb()
-                self.listRectanglesa2[self.box1id].setPen(col,width=5)
+                self.listRectanglesa2[self.box1id].setPen(col,width=1)
             else:
                 self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa2[self.box1id].update()
@@ -1722,7 +1723,7 @@ class AviaNZ(QMainWindow):
                     self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
                     self.listRectanglesa1[self.box1id].update()
                     if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                        self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=5))
+                        self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
                     else:
                         self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
@@ -1755,7 +1756,7 @@ class AviaNZ(QMainWindow):
                     self.playSegButton.setEnabled(True)
                     self.playBandLimitedSegButton.setEnabled(True)
                     if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[box1id]) == self.ROItype:
-                        self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=5))
+                        self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
                     else:
                         self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
@@ -1801,7 +1802,7 @@ class AviaNZ(QMainWindow):
                 col = QtGui.QColor(col)
                 col.setAlpha(255)
                 #print "spec drag", self.prevBoxCol.getRgb()
-                self.listRectanglesa2[self.box1id].setPen(pg.mkPen(col,width=5))
+                self.listRectanglesa2[self.box1id].setPen(pg.mkPen(col,width=1))
             else:
                 self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa2[self.box1id].update()
@@ -1834,7 +1835,7 @@ class AviaNZ(QMainWindow):
             self.listRectanglesa1[self.box1id].update()
             if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
                 self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(None))
-                self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=5))
+                self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
             else:
                 # TODO This needs fixing
                 self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
@@ -2456,9 +2457,8 @@ class AviaNZ(QMainWindow):
         # Merge neighbours for wavelet seg
         if str(alg)=="Wavelets":
             newSegments=self.mergeSeg(newSegments)
-        else:
-            for seg in newSegments:
-                self.addSegment(float(seg[0]),float(seg[1]),0,0,species+"?")
+        for seg in newSegments:
+            self.addSegment(float(seg[0]),float(seg[1]),0,0,species+"?")
         # annotation=[]
         # for seg in newSegments:
         #     annotation.append([seg[0],seg[1],0,0,str(species)+"?"])

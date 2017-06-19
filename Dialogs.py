@@ -750,6 +750,8 @@ class HumanClassify1(QDialog):
         # The buttons to move through the overview
         self.correct = QtGui.QToolButton()
         self.correct.setIcon(QtGui.QIcon('Resources/tick.png'))
+        iconSize = QtCore.QSize(50, 50)
+        self.correct.setIconSize(iconSize)
         # self.wrong = QtGui.QToolButton()
         # self.wrong.setIcon(QtGui.QIcon('Resources/cross.png'))
 
@@ -812,20 +814,50 @@ class HumanClassify1(QDialog):
         hboxBirds.addLayout(birdListLayout)
 
         # The layouts
-        hboxButtons = QHBoxLayout()
-        hboxButtons.addWidget(self.correct)
+        vboxButtons = QVBoxLayout()
+        vboxButtons.addWidget(self.correct)
         # hboxButtons.addWidget(self.wrong)
         #hboxButtons.addWidget(self.close)
 
-        vboxFull = QVBoxLayout()
+        self.playButton = QtGui.QToolButton()
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.setIconSize(iconSize)
+        vboxLabel = QVBoxLayout()
+        vboxLabel.addWidget(self.species)
+        vboxLabel.addWidget(self.playButton)
+        self.connect(self.playButton, SIGNAL('clicked()'), self.playSeg)
+
+        vboxFull = QHBoxLayout()
         vboxFull.addWidget(self.wPlot)
-        vboxFull.addWidget(self.species)
+        vboxFull.addLayout(vboxLabel)
         vboxFull.addLayout(hboxBirds)
-        vboxFull.addLayout(hboxButtons)
+        vboxFull.addLayout(vboxButtons)
         #vboxFull.addWidget(self.close)
 
         self.setLayout(vboxFull)
+        # print seg
         self.setImage(seg,self.label)
+
+    def playSeg(self):  #This is not the right place though
+        import tempfile
+        import wavio
+        f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
+        filename=f.name
+        # print filename
+        data = data.astype('int16') # how to get data - seg??
+        wavio.write(f.name,data,self.sampleRate,scale='dtype-limits',sampwidth=2)
+        import PyQt4.phonon as phonon
+        # Create a media object
+        media_obj = phonon.Phonon.MediaObject(self)
+        audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
+        phonon.Phonon.createPath(media_obj, audio_output)
+
+        if self.media_obj.state() == phonon.Phonon.PlayingState:
+            self.media_obj.pause()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
+            self.media_obj.play()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
 
     def setImage(self, seg,label):
         self.plot.setImage(seg)
