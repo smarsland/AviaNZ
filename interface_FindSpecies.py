@@ -301,6 +301,8 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.d_detection.addWidget(self.w_processButton,row=10,col=2)
         self.w_processButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
 
+        self.statusBar().showMessage("Ready")
+
         # Store the state of the docks
         self.state = self.area.saveState()
 
@@ -434,23 +436,6 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                 self.w_fileList.addItem(f)
                 files.append(f)
         print files
-        # fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose Folder to Process', ".", "Wav files (*.wav)")
-        # if fileName:
-        #     # Find the '/' in the fileName
-        #     i=len(fileName)-1
-        #     while fileName[i] != '/' and i>0:
-        #         i = i-1
-        #     self.dirName = fileName[:i+1]
-        #     self.setWindowTitle('AviaNZ - '+ self.dirName)
-        #     self.w_dir.setText(self.dirName)
-        #
-        #     files=[]
-        #     self.w_fileList.clear()
-        #     for f in os.listdir(self.dirName):
-        #         if f.endswith(".wav"): #os.path.isfile(f) and
-        #             self.w_fileList.addItem(f)
-        #             # files.append(f)
-        #     # print files
 
     def detect(self):
         # print self.dirName
@@ -514,7 +499,27 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                 # Add machine learning to tune results. How??
                 # (1) feed newSegments to a MLP (that was trained to kiwi(M), kiwi(F))
 
-
+                # Weed out FP of wavelet segmentation with the help of ML
+                if self.algs.currentText()=='Wavelets':
+                   # load the model from disk
+                   import pickle
+                   MLP = pickle.load(open('MLP_kiwi', 'rb'))
+                   for seg in newSegments:
+                       seg=self.audiodata[seg[0]*self.sampleRate:seg[1]*self.sampleRate]
+                       print np.shape(seg)
+                       E1=WaveletSegment.computeWaveletEnergy_1s(seg,'dmey2') # bandpass? denoise? choose nodes?
+                       # Add the input that match the bias node
+                       E=np.ones((np.shape(E1)[0]+1))
+                       E[0:np.shape(E1)[0]]=E1[:]
+                       # print np.shape(E)
+                       predict = MLP.mlpfwd(np.asanyarray(E))
+                       print predict
+                       if predict!=1:
+                           #delete seg from newSegments or label them possible
+                           pass
+                       else:
+                           # label them as definite kiwi
+                            pass
 
                 # Generate Binary output ('Binary)
                 n=math.ceil(float(self.datalength)/self.sampleRate)
