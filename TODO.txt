@@ -22,7 +22,7 @@ For this version, that's it
     -> combine with previous second data
     -> etc.
 
-*** SM: Fix the file loading error
+*** SM: Fix the file loading error, and the list getting longer with duplicates
 
 SM: Add in the 'who the user is' annotation
     # Done, but currently has a False in it's call to stop it

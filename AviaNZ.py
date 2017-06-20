@@ -2518,7 +2518,8 @@ class AviaNZ(QMainWindow):
             #     ws=WaveletSegment.WaveletSeg()
             #     ws.data=self.audiodata
             #     ws.sampleRate=self.sampleRate
-                newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species='kiwi',trainTest=False)
+                # TODO: have ruru as a real option in next line!
+                newSegments = WaveletSegment.findCalls_learn(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species='kiwi',trainTest=False)
 
         # Generate annotation friendly output
         # Merge neighbours for wavelet seg

@@ -495,6 +495,25 @@ def findCalls_train(fName,species='kiwi'):
             break
     return listnodes
 
+def findCalls_learn(fName=None,data=None, sampleRate=None, species='kiwi',trainTest=False):
+    import xgboost as xgb
+    if species == 'Kiwi (M)':
+        clf = joblib.load('maleKiwiClassifier.pkl')
+    elif species == 'Kiwi (F)':
+        clf = joblib.load('femaleKiwiClassifier.pkl')
+    elif species == 'Ruru':
+        clf = joblib.load('ruruClassifier.pkl')
+
+    # Second by second, run through the data file and compute the wavelet energy, then classify them
+    segs = []
+    for i in range(0,len(data),sampleRate):
+        currentSec = data[i:(i+1)*sampleRate]
+        # Compute wavelet energy for this second
+        E = computeWaveletEnergy_1s(currentSec, 'dmey2')
+        segs.append(clf.predict(E))
+
+    return segs
+
 def findCalls_test(fName=None,data=None, sampleRate=None, species='kiwi',trainTest=False):
     #data, sampleRate_o, annotation = loadData(fName)
     ws=WaveletSeg()
