@@ -13,6 +13,7 @@ import SupportClasses as SupportClasses
 class StartScreen(QDialog):
     def __init__(self, parent=None,DOC=True):
         QDialog.__init__(self, parent)
+        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         self.setWindowTitle('AviaNZ - Choose Task')
         self.setAutoFillBackground(False)
         self.setFixedSize(430, 210)
@@ -722,7 +723,7 @@ class HumanClassify1(QDialog):
     # TODO: Deal with changes
     # TODO: Make the plot the correct size
 
-    def __init__(self, seg, label, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
+    def __init__(self, seg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.frame = QWidget()
@@ -836,31 +837,44 @@ class HumanClassify1(QDialog):
 
         self.setLayout(vboxFull)
         # print seg
-        self.setImage(seg,self.label)
+        self.setImage(seg,audiodata,sampleRate,self.label)
 
     def playSeg(self):  #This is not the right place though
         import tempfile
         import wavio
-        f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
-        filename=f.name
-        # print filename
-        data = data.astype('int16') # how to get data - seg??
-        wavio.write(f.name,data,self.sampleRate,scale='dtype-limits',sampwidth=2)
+        f = tempfile.NamedTemporaryFile(mode='w+t', delete=True)
+        print f.name
+        self.audiodata = self.audiodata.astype('int16') # how to get data - seg??
+        print self.audiodata
+        wavio.write(f.name,self.audiodata,self.sampleRate,scale='dtype-limits',sampwidth=2)
         import PyQt4.phonon as phonon
         # Create a media object
         media_obj = phonon.Phonon.MediaObject(self)
         audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
         phonon.Phonon.createPath(media_obj, audio_output)
+        media_obj.setTickInterval(20)
+        media_obj.setCurrentSource(phonon.Phonon.MediaSource(f.name))
+        media_obj.seek(0)
+        media_obj.play()
+        #if media_obj.state() == phonon.Phonon.PlayingState:
+        #    media_obj.pause()
+        #    playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        #elif media_obj.state() == phonon.Phonon.PausedState or media_obj.state() == phonon.Phonon.StoppedState:
+        #    media_obj.play()
+        #    playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
 
-        if self.media_obj.state() == phonon.Phonon.PlayingState:
-            self.media_obj.pause()
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
-            self.media_obj.play()
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
+    def setImage(self, seg, audiodata, sampleRate, label):
 
-    def setImage(self, seg,label):
-        self.plot.setImage(seg)
+        self.audiodata = audiodata
+        self.sampleRate = sampleRate
+
+        if np.shape(seg)[0] < 100 or np.shape(seg)[1]<100:
+            seg2 = 255*np.ones((100,128))
+            seg2[:np.shape(seg)[0],:np.shape(seg)[1]] = seg
+        else:
+            seg2 = seg
+
+        self.plot.setImage(seg2)
         self.plot.setLookupTable(self.lut)
 
         if self.cmapInverted:
@@ -949,6 +963,7 @@ class HumanClassify2(QDialog):
         self.sg = np.fliplr(sg)
         self.segments = segments
         self.firstSegment = 0
+        self.errors = []
 
         self.segments = [item for item in self.segments if item[4] == label or item[4][:-1] == label]
         #print len(self.segments)
@@ -1041,6 +1056,15 @@ class HumanClassify2(QDialog):
         return [im1, im2]
 
     def next(self):
+        # Find out which buttons have been clicked (so are not correct)
+
+        for i in range(len(self.buttons)):
+            #print self.buttons[i].buttonClicked
+            if self.buttons[i].buttonClicked:
+                self.errors.append(i+self.firstSegment)
+        #print self.errors
+
+        # Now find out if there are more segments to check, and remake the buttons, otherwise close
         if len(self.segments) > 0:
             if (len(self.segments) - self.firstSegment) < self.w * self.h:
                 self.close()
@@ -1055,6 +1079,8 @@ class HumanClassify2(QDialog):
         else:
             self.close()
 
+    def getValues(self):
+        return self.errors
 # ======
 class HumanClassify2a(QDialog):
     def __init__(self, birdlist,parent=None):
@@ -1550,3 +1576,35 @@ class HumanClassify2a(QDialog):
 # screen1.setWindowIcon(QIcon('Avianz.ico'))
 # screen1.show()
 # app.exec_()
+
+#======
+class getUserData(QDialog):
+    # Class for the user data collection dialog box
+    def __init__(self, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('User data')
+
+        self.name = QLineEdit(self)
+        self.name.setText('')
+        self.easting = QLineEdit(self)
+        self.easting.setText('')
+        self.northing = QLineEdit(self)
+        self.northing.setText('')
+
+        button = QPushButton("OK")
+        button.clicked.connect(self.accept)
+
+        Box = QVBoxLayout()
+        Box.addWidget(QLabel('Person annotating'))
+        Box.addWidget(self.name)
+        Box.addWidget(QLabel('Easting'))
+        Box.addWidget(self.easting)
+        Box.addWidget(QLabel('Northing'))
+        Box.addWidget(self.northing)
+        Box.addWidget(button)
+
+        # Now put everything into the frame
+        self.setLayout(Box)
+
+    def getValues(self):
+        return [self.name.text(),self.easting.text(),self.northing.text()]

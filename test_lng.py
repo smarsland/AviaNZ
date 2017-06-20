@@ -50,43 +50,45 @@ def test_all_ruru():
     # Split into training and testing and check of positive class examples in the split
     ind = np.random.permutation(np.shape(data)[0])
     print("Energy all")
-    test_classifiers(data)
+    test_classifiers(data,ind)
 
     data = np.loadtxt('wEB_ruru.txt')
     print("Energy bandpass ")
-    test_classifiers(data)
+    test_classifiers(data,ind)
 
     data = np.loadtxt('wEBD_ruru.txt')
     print("Energy bandpass, denoised ")
-    test_classifiers(data)
+    test_classifiers(data,ind)
 
 def test_all_kiwi():
 
+    nodes = [44, 43, 16, 62]
+    #nodes = [44, 43, 40, 61, 60, 34, 16]
     data = np.loadtxt('wE_km.txt')
     # Split into training and testing and check of positive class examples in the split
     ind = np.random.permutation(np.shape(data)[0])
     print("Energy all, male")
-    test_classifiers(data)
+    test_classifiers2(data[:,nodes],ind)
 
     data = np.loadtxt('wE_kf.txt')
     print("Energy all, female")
-    test_classifiers(data)
+    test_classifiers2(data[:,nodes],ind)
 
     data = np.loadtxt('wEB_km.txt')
     print("Energy bandpass, male")
-    test_classifiers(data)
+    test_classifiers2(data[:,nodes],ind)
 
     data = np.loadtxt('wEB_kf.txt')
     print("Energy bandpass, female")
-    test_classifiers(data)
+    test_classifiers2(data[:,nodes],ind)
 
     data = np.loadtxt('wEBD_km.txt')
     print("Energy bandpass, denoised, male")
-    test_classifiers(data)
+    test_classifiers2(data[:,nodes],ind)
 
     data = np.loadtxt('wEBD_kf.txt')
     print("Energy bandpass, denoised, female")
-    test_classifiers(data)
+    test_classifiers2(data[:,nodes],ind)
 
 print np.where(data[ind[:1000],62]==1)
 print np.where(data[ind[1000:],62]==1)
@@ -107,7 +109,7 @@ print clf, falseneg, falsepos
 #clf = SVC(decision_function_shape='ovr',class_weight='balanced',verbose=True)
 #clf.fit(data[ind[:1000],:62], data[ind[:1000],62]) 
 
-def test_classifiers(data):
+def test_classifiers(data,ind):
     from sklearn.ensemble import AdaBoostClassifier
     clf = AdaBoostClassifier(n_estimators=100)
     clf.fit(data[ind[:1000],:62], data[ind[:1000],62]) 
@@ -133,5 +135,34 @@ def test_classifiers(data):
     xgb_model = xgb.XGBClassifier().fit(data[ind[:1000],:62],data[ind[:1000],62])
     out = xgb_model.predict(data[ind[1000:],:62])
     a = confusion_matrix(data[ind[1000:],62], out)
+    print float(a[0,0]+a[1,1])/np.sum(a) 
+    print a
+
+def test_classifiers2(data,ind):
+    from sklearn.ensemble import AdaBoostClassifier
+    clf = AdaBoostClassifier(n_estimators=100)
+    clf.fit(data[ind[:1000],:-1], data[ind[:1000],-1]) 
+    print clf.score(data[ind[1000:],:-1], data[ind[1000:],-1])
+    out = clf.predict(data[ind[1000:],:-1])
+    print(confusion_matrix(data[ind[1000:],-1], out))
+    
+    from sklearn.ensemble import GradientBoostingClassifier
+    clf = GradientBoostingClassifier(n_estimators=100, learning_rate=1.0,max_depth=1, random_state=0)
+    clf.fit(data[ind[:1000],:-1], data[ind[:1000],-1])
+    print clf.score(data[ind[1000:],:-1], data[ind[1000:],-1])
+    out = clf.predict(data[ind[1000:],:-1])
+    print(confusion_matrix(data[ind[1000:],-1], out))
+    
+    from sklearn.neural_network import MLPClassifier
+    clf = MLPClassifier(solver='lbfgs', alpha=1e-5,  hidden_layer_sizes=(10, 10), random_state=1)
+    clf.fit(data[ind[:1000],:-1], data[ind[:1000],-1])
+    print clf.score(data[ind[1000:],:-1], data[ind[1000:],-1])
+    out = clf.predict(data[ind[1000:],:-1])
+    print(confusion_matrix(data[ind[1000:],-1], out))
+    
+    import xgboost as xgb
+    xgb_model = xgb.XGBClassifier().fit(data[ind[:1000],:-1],data[ind[:1000],-1])
+    out = xgb_model.predict(data[ind[1000:],:-1])
+    a = confusion_matrix(data[ind[1000:],-1], out)
     print float(a[0,0]+a[1,1])/np.sum(a) 
     print a
