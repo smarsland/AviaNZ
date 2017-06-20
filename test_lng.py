@@ -62,8 +62,8 @@ def test_all_ruru():
 
 def test_all_kiwi():
 
-    nodes = [44, 43, 16, 62]
-    #nodes = [44, 43, 40, 61, 60, 34, 16]
+    #nodes = [44, 43, 16, 62]
+    #nodes = [44, 43, 40, 61, 60, 34, 16,62]
     data = np.loadtxt('wE_km.txt')
     # Split into training and testing and check of positive class examples in the split
     ind = np.random.permutation(np.shape(data)[0])
@@ -166,3 +166,20 @@ def test_classifiers2(data,ind):
     a = confusion_matrix(data[ind[1000:],-1], out)
     print float(a[0,0]+a[1,1])/np.sum(a) 
     print a
+
+def best_classifiers(data,ind):
+    import xgboost as xgb
+    xgb_model = xgb.XGBClassifier().fit(data[ind[:1000],:62],data[ind[:1000],62])
+    out = xgb_model.predict(data[ind[1000:],:62])
+    a = confusion_matrix(data[ind[1000:],62], out)
+    print float(a[0,0]+a[1,1])/np.sum(a)
+    print a
+
+    from sklearn.externals import joblib
+    #joblib.dump(xgb_model,'femaleKiwiClassifier.pkl')
+    #joblib.dump(xgb_model,'maleKiwiClassifier.pkl')
+    joblib.dump(xgb_model,'ruruClassifier.pkl')
+    #clf2 = joblib.load('maleKiwiClassifier.pkl')
+    #out = clf2.predict(data[ind[1000:],:62])
+    #a = confusion_matrix(data[ind[1000:],62], out)
+    #print a

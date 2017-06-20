@@ -234,8 +234,9 @@ class AviaNZ(QMainWindow):
             fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
             if fileName:
                 firstFile = fileName
-        self.loadFile(firstFile)
         self.fillFileList(firstFile)
+        self.listLoadFile(QString(firstFile))
+        #self.previousFile = firstFile
 
         # Save the segments every minute
         self.timer = QTimer()
@@ -942,9 +943,19 @@ class AviaNZ(QMainWindow):
         # Listener for when the user clicks on a filename
         # Saves segments of current file, resets flags and calls loader
         #self.p_ampl.clear()
+
+
         if self.previousFile is not None:
+            if type(self.previousFile) is not 'QListWidgetItem':
+                print "here"
+                self.previousFile = self.ListFiles.findItems(self.previousFile)
+                print self.previousFile
+
             if self.segments != [] or self.hasSegments:
-                if self.segments[0][0] > -1:
+                if len(self.segments)>0:
+                    if self.segments[0][0] > -1:
+                        self.segments.insert(0, [-1, -1, str(self.username), str(self.eastings), str(self.northings)])
+                else:
                     self.segments.insert(0, [-1, -1, str(self.username), str(self.eastings), str(self.northings)])
                 self.saveSegments()
                 self.previousFile.setTextColor(Qt.red)
@@ -1047,10 +1058,11 @@ class AviaNZ(QMainWindow):
                 self.segments = json.load(file)
                 file.close()
                 # TODO: What to do with this info?
-                print self.segments[0]
-                if self.segments[0][0] == -1:
-                    print "here", self.segments[0]
-                    del self.segments[0]
+                print len(self.segments)
+                if len(self.segments)>0:
+                    if self.segments[0][0] == -1:
+                        print "here", self.segments[0]
+                        del self.segments[0]
                 print self.segments
                 self.hasSegments = True
             else:
@@ -1880,7 +1892,7 @@ class AviaNZ(QMainWindow):
             self.drawingBox_ampl.setRegion([self.start_location, self.convertSpectoAmpl(mousePoint.x())])
             self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_location), mousePoint.x()])
 
-    def birdSelected(self,birdname):
+    def birdSelected(self,birdname,update=True):
         # This collects the label for a bird from the context menu and processes it
         #print birdname, self.box1id
 
@@ -1929,11 +1941,12 @@ class AviaNZ(QMainWindow):
         # Now update the text
         if birdname is not 'Other':
             self.updateText(birdname)
-            # Put the selected bird name at the top of the list
-            if birdname[-1] == '?':
-                birdname = birdname[:-1]
-            self.config['BirdList'].remove(birdname)
-            self.config['BirdList'].insert(0,birdname)
+            if update:
+                # Put the selected bird name at the top of the list
+                if birdname[-1] == '?':
+                    birdname = birdname[:-1]
+                self.config['BirdList'].remove(birdname)
+                self.config['BirdList'].insert(0,birdname)
         else:
             text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
             if ok:
@@ -1944,7 +1957,10 @@ class AviaNZ(QMainWindow):
                     pass
                 else:
                     # Add the new bird name.
-                    self.config['BirdList'].insert(0,text)
+                    if update:
+                        self.config['BirdList'].insert(0,text)
+                    else:
+                        self.config['BirdList'].append(text)
                     self.saveConfig = True
 
     def mouseMoved(self,evt):
@@ -2144,9 +2160,31 @@ class AviaNZ(QMainWindow):
             self.humanClassifyClose1()
 
     def humanClassifyCorrect1(self):
-        label, self.saveConfig = self.humanClassifyDialog1.getValues()
+        label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
+        print label, checkText, len(checkText)
+        if len(checkText) > 0:
+            label = str(checkText)
+            self.humanClassifyDialog1.birdTextEntered()
+            self.saveConfig = True
+            #self.humanClassifyDialog1.tbox.setText('')
+
         if label != self.segments[self.box1id][4]:
-            self.updateText(label)
+            #self.updateText(label)
+            self.birdSelected(label,update=False)
+
+            self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
+            self.listRectanglesa1[self.box1id].update()
+            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                col = self.prevBoxCol.rgb()
+                col = QtGui.QColor(col)
+                col.setAlpha(255)
+                #print "ampl", self.prevBoxCol.getRgb()
+                self.listRectanglesa2[self.box1id].setPen(col,width=1)
+            else:
+                self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+
+            self.listRectanglesa2[self.box1id].update()
+
             if self.saveConfig:
                 self.config['BirdList'].append(label)
 
@@ -2820,7 +2858,10 @@ class AviaNZ(QMainWindow):
     def quit(self):
         # Listener for the quit button
         print("Quitting")
-        if self.segments[0][0] > -1:
+        if len(self.segments) > 0:
+            if self.segments[0][0] > -1:
+                self.segments.insert(0, [-1, -1, str(self.username), str(self.eastings), str(self.northings)])
+        else:
             self.segments.insert(0, [-1, -1, str(self.username), str(self.eastings), str(self.northings)])
         self.saveSegments()
         if self.saveConfig == True:
