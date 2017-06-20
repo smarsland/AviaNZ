@@ -759,10 +759,10 @@ class HumanClassify1(QDialog):
         # An array of radio buttons and a list and a text entry box
         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
         self.birds1 = []
-        for item in birdList[:10]:
+        for item in self.birdList[:10]:
             self.birds1.append(QRadioButton(item))
         self.birds2 = []
-        for item in birdList[10:19]:
+        for item in self.birdList[10:19]:
             self.birds2.append(QRadioButton(item))
         self.birds2.append(QRadioButton('Other'))
 
@@ -776,7 +776,7 @@ class HumanClassify1(QDialog):
         # The list of less common birds
         self.birds3 = QListWidget(self)
         self.birds3.setMaximumWidth(150)
-        for item in self.birdList[20:]:
+        for item in self.birdList[19:]:
             self.birds3.addItem(item)
         #self.birds3.sortItems()
         # Explicitly add "Other" option in
@@ -789,6 +789,7 @@ class HumanClassify1(QDialog):
         self.tbox = QLineEdit(self)
         self.tbox.setMaximumWidth(150)
         self.connect(self.tbox, SIGNAL('editingFinished()'), self.birdTextEntered)
+        #self.connect(self.tbox, SIGNAL('textChanged(QString*)'), self.birdTextEntered)
         self.tbox.setEnabled(False)
 
         #self.close = QPushButton("Done")
@@ -884,10 +885,9 @@ class HumanClassify1(QDialog):
 
         # Make one of the options be selected
         self.species.setText(label)
+        self.label=label
         if label[-1]=='?':
-            print label
             label = label[:-1]
-            print label
         ind = self.birdList.index(label)
         if ind < 10:
             self.birds1[ind].setChecked(True)
@@ -896,7 +896,7 @@ class HumanClassify1(QDialog):
         else:
             self.birds2[9].setChecked(True)
             self.birds3.setEnabled(True)
-            self.birds3.setCurrentRow(ind-19)
+            self.birds3.setCurrentRow(ind-18)
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
@@ -931,12 +931,14 @@ class HumanClassify1(QDialog):
         else:
             self.birds3.addItem(self.tbox.text())
         self.label = str(self.tbox.text())
+        print self.label
         self.species.setText(self.label)
         self.saveConfig = True
+        self.tbox.setText('')
         self.tbox.setEnabled(False)
 
     def getValues(self):
-        return [self.label, self.saveConfig]
+        return [self.label, self.saveConfig, self.tbox.text()]
 
 #======
 class HumanClassify2(QDialog):
