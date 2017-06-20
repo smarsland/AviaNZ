@@ -174,7 +174,7 @@ import pyqtgraph.parametertree.parameterTypes as pTree
 class AviaNZ(QMainWindow):
     # Main class for the interface, which contains most of the user interface and plotting code
 
-    def __init__(self,root=None,configfile=None,DOC=True):
+    def __init__(self,root=None,configfile=None,DOC=True,username=None,eastings=None,northings=None):
         # Main part of the initialisation is loading a configuration file, or creating a new one if it doesn't
         # exist. Also loads an initial file (specified explicitly) and sets up the window.
         super(AviaNZ, self).__init__()
@@ -192,6 +192,10 @@ class AviaNZ(QMainWindow):
             self.genConfigFile()
             self.saveConfig=True
             self.configfile = 'AviaNZconfig.txt'
+
+        self.username = username
+        self.eastings = eastings
+        self.northings = northings
 
         # The data structures for the segments
         self.listLabels = []
@@ -361,6 +365,7 @@ class AviaNZ(QMainWindow):
         # TODO: enable parameter changing
         print("Generating new config file")
         self.config = {
+            'username': "Stephen",
             # Params for spectrogram
             'window_width': 256,
             'incr': 128,
@@ -939,6 +944,8 @@ class AviaNZ(QMainWindow):
         #self.p_ampl.clear()
         if self.previousFile is not None:
             if self.segments != [] or self.hasSegments:
+                if self.segments[0][0] > -1:
+                    self.segments.insert(0, [-1, -1, str(self.username), str(self.eastings), str(self.northings)])
                 self.saveSegments()
                 self.previousFile.setTextColor(Qt.red)
         self.previousFile = current
@@ -1036,9 +1043,15 @@ class AviaNZ(QMainWindow):
 
             # Load any previous segments stored
             if os.path.isfile(self.filename+'.data'):
-                file = open(self.filename+'.data', 'r')
+                file = open(self.filename + '.data', 'r')
                 self.segments = json.load(file)
                 file.close()
+                # TODO: What to do with this info?
+                print self.segments[0]
+                if self.segments[0][0] == -1:
+                    print "here", self.segments[0]
+                    del self.segments[0]
+                print self.segments
                 self.hasSegments = True
             else:
                 self.hasSegments = False
@@ -1103,8 +1116,15 @@ class AviaNZ(QMainWindow):
         else:
         #     self.statusBar().showMessage("You are back to the begining of the list!")
         #     # Find the first .wav file in the list    # TODO
-            i=0
-            c=self.listFiles.setCurrentRow(i)
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText("You've finished processing the folder")
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setWindowTitle("Last file")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
+            #i=0
+            #c=self.listFiles.setCurrentRow(i)
         #     name = os.path.basename(str(c))
         #     fname = self.dirName+'/'+ name
         #     print fname
@@ -1113,7 +1133,7 @@ class AviaNZ(QMainWindow):
         #         name = os.path.basename(str(c))
         #         fname = self.dirName+'/'+ name
         #         i=i+1
-            self.loadFile(self.listFiles.currentItem())
+            #self.loadFile(self.listFiles.currentItem())
 
     # def openFile(self):
     #     # If have an open file option this will deal with it via a file dialog
@@ -2084,7 +2104,9 @@ class AviaNZ(QMainWindow):
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             x1 = int(x1)
             x2 = int(x2)
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'])
+            x3 = int(self.listRectanglesa1[self.box1id].getRegion()[0] * self.sampleRate)
+            x4 = int(self.listRectanglesa1[self.box1id].getRegion()[1] * self.sampleRate)
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'])
             self.humanClassifyDialog1.show()
             self.humanClassifyDialog1.activateWindow()
             #self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
@@ -2107,7 +2129,9 @@ class AviaNZ(QMainWindow):
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             x1 = int(x1)
             x2 = int(x2)
-            self.humanClassifyDialog1.setImage(self.sg[x1:x2,:],self.segments[self.box1id][4])
+            x3 = int(self.listRectanglesa1[self.box1id].getRegion()[0] * self.sampleRate)
+            x4 = int(self.listRectanglesa1[self.box1id].getRegion()[1] * self.sampleRate)
+            self.humanClassifyDialog1.setImage(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4])
         else:
             print "Last image"
             msg = QMessageBox()
@@ -2154,8 +2178,13 @@ class AviaNZ(QMainWindow):
             if self.humanClassifyDialog2a.exec_() == 1:
                 label = self.humanClassifyDialog2a.getValues()
                 self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,self.segments,label,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'])
-                self.humanClassifyDialog2.show()
-                self.humanClassifyDialog2.activateWindow()
+                #self.humanClassifyDialog2.show()
+                self.humanClassifyDialog2.exec_()
+                errors = self.humanClassifyDialog2.getValues()
+                #print errors
+                # TODO: Should store these somewhere and improve the learning, for now just deleting
+                for error in errors[-1::-1]:
+                    self.deleteSegment(error)
         self.statusBar().showMessage("Ready")
 
     def showSpectrogramDialog(self):
@@ -2537,6 +2566,7 @@ class AviaNZ(QMainWindow):
                     time = float(i)*self.config['incr'] / self.sampleRate
                     self.addSegment(time, time+len_seg,0,0,self.segments[self.box1id][4])
             self.statusBar().showMessage("Ready")
+
     def recognise(self):
         # This will eventually call methods to do automatic recognition
         # Actually, will produce a dialog to ask which species, etc.
@@ -2642,7 +2672,7 @@ class AviaNZ(QMainWindow):
             import tempfile
             f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
             filename=f.name
-            # print filename
+            print filename
             data = data.astype('int16')
             wavio.write(f.name,data,self.sampleRate,scale='dtype-limits',sampwidth=2)
 
@@ -2650,7 +2680,7 @@ class AviaNZ(QMainWindow):
                 self.bar2 = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'r', 'width': 2})
                 self.media_obj2 = phonon.Phonon.MediaObject(self)
                 audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
-                self.path = phonon.Phonon.createPath(self.media_obj2, audio_output)
+                phonon.Phonon.createPath(self.media_obj2, audio_output)
                 self.media_obj2.setTickInterval(20)
                 self.media_obj2.tick.connect(self.movePlaySlider2)
                 self.media_obj2.finished.connect(self.playFinished2)
@@ -2659,7 +2689,7 @@ class AviaNZ(QMainWindow):
 
             # Instantiate a Qt media object and prepare it (for audio playback)
             self.media_obj2.setCurrentSource(phonon.Phonon.MediaSource(filename))
-            self.media_obj.seek(0)
+            self.media_obj2.seek(0)
             self.media_obj2.play()
             f.close()
             return
@@ -2751,6 +2781,10 @@ class AviaNZ(QMainWindow):
                 file = open(self.filename + '.data', 'w')
             else:
                 file = open(str(self.filename) + '.data', 'w')
+            #file.write(self.username+'\n')
+            #file.write(self.eastings+'\n')
+            #file.write(self.northings+'\n')
+            #print self.segments
             json.dump(self.segments,file)
             # import codecs
             # json.dump(self.segments,codecs.getwriter('utf-8')(file), ensure_ascii=False)
@@ -2786,6 +2820,8 @@ class AviaNZ(QMainWindow):
     def quit(self):
         # Listener for the quit button
         print("Quitting")
+        if self.segments[0][0] > -1:
+            self.segments.insert(0, [-1, -1, str(self.username), str(self.eastings), str(self.northings)])
         self.saveSegments()
         if self.saveConfig == True:
             print "Saving config file"
@@ -2815,24 +2851,12 @@ class AviaNZ(QMainWindow):
         filename = name[:-4] + '_' + str((count)) + name[-4:]
         lr.output.write_wav(filename,data,self.sampleRate)
 
-    # def setImage2(self,seg):
-    #     # This was an attempt to do it with pixmaps, which didn't work
-    #     self.image = pg.ImageItem()
-    #     self.image.setImage(seg)
-    #     im1 = self.image.getPixmap()
-    #
-    #     self.image.setImage(-seg)
-    #     im2 = self.image.getPixmap()
-    #
-    #     return [im1, im2]
-
 # Start the application
 app = QApplication(sys.argv)
 
 DOC=True    # DOC features or all
 
 # This screen asks what you want to do, then gets the response
-# TODO: Why don't the buttons appear at once? fixed
 first = Dialogs.StartScreen(DOC=DOC)
 first.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
 first.show()
@@ -2842,7 +2866,16 @@ task = first.getValues()
 #print task
 
 if task == 1:
-    avianz = AviaNZ(configfile='AviaNZconfig.txt')
+    if DOC and False:
+        # Modal dialog to get the user data
+        userdata = Dialogs.getUserData()
+        userdata.show()
+        userdata.exec_()
+        username,eastings,northings = userdata.getValues()
+        print username, eastings, northings
+        avianz = AviaNZ(configfile='AviaNZconfig.txt',username=username,eastings=eastings,northings=northings)
+    else:
+        avianz = AviaNZ(configfile='AviaNZconfig.txt',username=None,eastings=None,northings=None)
     avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
     avianz.show()
     app.exec_()
