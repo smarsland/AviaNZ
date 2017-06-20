@@ -183,3 +183,33 @@ def best_classifiers(data,ind):
     #out = clf2.predict(data[ind[1000:],:62])
     #a = confusion_matrix(data[ind[1000:],62], out)
     #print a
+
+
+def computeWaveletEnergy(fwData,sampleRate):
+    # Get the energy of the nodes in the wavelet packet decomposition
+    # There are 62 coefficients up to level 5 of the wavelet tree (without root), and 300 seconds in 5 mins
+    # The energy is the sum of the squares of the data in each node divided by the total in the tree
+    totalTime = int(float(len(fwData))/sampleRate)
+    coefs = np.zeros((62, totalTime))
+    for t in range(totalTime):
+        E = []
+        for level in range(1,6):
+            wp = pywt.WaveletPacket(data=fwData[t * sampleRate:(t + 1) * sampleRate], wavelet=wavelet, mode='symmetric', maxlevel=level)
+            e = np.array([np.sum(n.data**2) for n in wp.get_level(level, "natural")])
+            if np.sum(e)>0:
+                e = 100.0*e/np.sum(e)
+            E = np.concatenate((E, e),axis=0)
+        coefs[:, t] = E
+    return coefs
+
+import wavio
+wavobj = wavio.read('Sound Files/tril1.wav')
+sampleRate = wavobj.rate
+data = np.squeeze(wavobj.data)
+coefs = computeWaveletEnergy(data,sampleRate)
+
+clf = joblib.load('ruruClassifier.pkl')
+out = clf.predict(coefs)
+print out
+# a = confusion_matrix(data[ind[1000:],62], out)
+# print a
