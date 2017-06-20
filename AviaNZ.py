@@ -864,6 +864,7 @@ class AviaNZ(QMainWindow):
             else:
                 # If there is a .data version, colour the name red to show it has been labelled
                 item = QListWidgetItem(self.listFiles)
+                self.listitemtype = type(item)
                 item.setText(file.fileName())
                 if file.fileName()+'.data' in listOfDataFiles:
                     item.setTextColor(Qt.red)
@@ -944,12 +945,11 @@ class AviaNZ(QMainWindow):
         # Saves segments of current file, resets flags and calls loader
         #self.p_ampl.clear()
 
-
         if self.previousFile is not None:
-            if type(self.previousFile) is not 'QListWidgetItem':
-                print "here"
-                self.previousFile = self.ListFiles.findItems(self.previousFile)
-                print self.previousFile
+            if type(self.previousFile) is not self.listitemtype:
+                self.previousFile = self.listFiles.findItems(os.path.basename(str(self.previousFile)), Qt.MatchExactly)
+                if len(self.previousFile)>0:
+                    self.previousFile = self.previousFile[0]
 
             if self.segments != [] or self.hasSegments:
                 if len(self.segments)>0:
@@ -1058,12 +1058,9 @@ class AviaNZ(QMainWindow):
                 self.segments = json.load(file)
                 file.close()
                 # TODO: What to do with this info?
-                print len(self.segments)
                 if len(self.segments)>0:
                     if self.segments[0][0] == -1:
-                        print "here", self.segments[0]
                         del self.segments[0]
-                print self.segments
                 self.hasSegments = True
             else:
                 self.hasSegments = False
@@ -2161,11 +2158,11 @@ class AviaNZ(QMainWindow):
 
     def humanClassifyCorrect1(self):
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
-        print label, checkText, len(checkText)
         if len(checkText) > 0:
-            label = str(checkText)
-            self.humanClassifyDialog1.birdTextEntered()
-            self.saveConfig = True
+            if label != checkText:
+                label = str(checkText)
+                self.humanClassifyDialog1.birdTextEntered()
+                self.saveConfig = True
             #self.humanClassifyDialog1.tbox.setText('')
 
         if label != self.segments[self.box1id][4]:
@@ -2187,7 +2184,8 @@ class AviaNZ(QMainWindow):
 
             if self.saveConfig:
                 self.config['BirdList'].append(label)
-
+        self.humanClassifyDialog1.tbox.setText('')
+        self.humanClassifyDialog1.tbox.setEnabled(False)
         self.humanClassifyNextImage1()
 
     def humanClassifyDialog2(self):
@@ -2479,7 +2477,8 @@ class AviaNZ(QMainWindow):
         # TODO: Add in the wavelet one
         # TODO: More testing of the algorithms, parameters, etc.
         seglen = len(self.segments)
-        [alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,depth,thrType,thr,wavelet,bandchoice,start,end,species] = self.segmentDialog.getValues()
+        [alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,species] = self.segmentDialog.getValues()
+        #[alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,depth,thrType,thr,wavelet,bandchoice,start,end,species] = self.segmentDialog.getValues()
         if species=='kiwi':
             species="Kiwi"
         #if not hasattr(self,'seg'):
@@ -2503,23 +2502,8 @@ class AviaNZ(QMainWindow):
             newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
             # print newSegments
         elif str(alg)=="Wavelets":
-            # TODO!!
-            if thrType is True:
-                type = 'soft'
-            else:
-                type = 'hard'
-            if bandchoice:
-                start = None
-                end = None
-            else:
-                start = int(str(start))
-                end = int(str(end))
-            # TODO: needs learning and samplerate
-            #     ws=WaveletSegment.WaveletSeg()
-            #     ws.data=self.audiodata
-            #     ws.sampleRate=self.sampleRate
-                # TODO: have ruru as a real option in next line!
-                newSegments = WaveletSegment.findCalls_learn(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species='kiwi',trainTest=False)
+            species = str(species)
+            newSegments = WaveletSegment.findCalls_learn(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
 
         # Generate annotation friendly output
         # Merge neighbours for wavelet seg
@@ -2711,7 +2695,7 @@ class AviaNZ(QMainWindow):
             import tempfile
             f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
             filename=f.name
-            print filename
+            #print filename
             data = data.astype('int16')
             wavio.write(f.name,data,self.sampleRate,scale='dtype-limits',sampwidth=2)
 
@@ -2743,7 +2727,7 @@ class AviaNZ(QMainWindow):
         if id>-1:
             self.box1id = id
         if self.box1id>-1:
-            print self.box1id, self.segments[self.box1id]
+            #print self.box1id, self.segments[self.box1id]
             # Work out which overview segment this segment is in (could be more than one) and update it
             inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0]))/self.widthOverviewSegment)
             inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]))/self.widthOverviewSegment)
@@ -2914,7 +2898,7 @@ if task == 1:
         userdata.show()
         userdata.exec_()
         username,eastings,northings = userdata.getValues()
-        print username, eastings, northings
+        #print username, eastings, northings
         avianz = AviaNZ(configfile='AviaNZconfig.txt',username=username,eastings=eastings,northings=northings)
     else:
         avianz = AviaNZ(configfile='AviaNZconfig.txt',username=None,eastings=None,northings=None)

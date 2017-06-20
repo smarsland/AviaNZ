@@ -497,6 +497,8 @@ def findCalls_train(fName,species='kiwi'):
 
 def findCalls_learn(fName=None,data=None, sampleRate=None, species='kiwi',trainTest=False):
     import xgboost as xgb
+    from sklearn.externals import joblib
+
     if species == 'Kiwi (M)':
         clf = joblib.load('maleKiwiClassifier.pkl')
     elif species == 'Kiwi (F)':
@@ -510,8 +512,13 @@ def findCalls_learn(fName=None,data=None, sampleRate=None, species='kiwi',trainT
         currentSec = data[i:(i+1)*sampleRate]
         # Compute wavelet energy for this second
         E = computeWaveletEnergy_1s(currentSec, 'dmey2')
-        segs.append(clf.predict(E))
+        E = np.ones((1,len(E))) * E
+        #segs.append(int(clf.predict(E)[0]))
+        print clf.predict(E)[0]
+        if int(clf.predict(E)[0]) == 1:
+            segs.append([float(i)/self.sampleRate,float(i+self.sampleRate)/self.sampleRate])
 
+    print segs
     return segs
 
 def findCalls_test(fName=None,data=None, sampleRate=None, species='kiwi',trainTest=False):
