@@ -258,7 +258,7 @@ class Segmentation(QDialog):
 
         self.specieslabel = QLabel("Species")
         self.species=QComboBox()
-        self.species.addItems(["Kiwi (M)","Kiwi (F)","Ruru"])
+        self.species.addItems(["kiwi","ruru"])
         self.species.currentIndexChanged[QString].connect(self.changeBoxes)
 
         # self.depthlabel = QLabel("Depth of wavelet packet decomposition")
@@ -841,7 +841,7 @@ class HumanClassify1(QDialog):
     def playSeg(self):  #This is not the right place though
         import tempfile
         import wavio
-        f = tempfile.NamedTemporaryFile(mode='w+t', delete=True)
+        f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
         #print f.name
         self.audiodata = self.audiodata.astype('int16') # how to get data - seg??
         wavio.write(f.name,self.audiodata,self.sampleRate,scale='dtype-limits',sampwidth=2)

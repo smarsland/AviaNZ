@@ -346,19 +346,7 @@ class AviaNZ(QMainWindow):
         return
 
     def showHelp(self):
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
-        msg.setText("Open the pdf file Docs/AvianzManual.pdf")
-        msg.setWindowIcon(QIcon('img/Avianz.ico'))
-        msg.setWindowTitle("Help")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
-
-        #web = QWebView()
-        #web.settings().setAttribute(QWebSettings.PluginsEnabled, True)
-        #web.show()
-        #web.load(QUrl('file://Docs/AvianzManual.pdf'))
-        return
+        os.system('Docs\\AviaNZManual.pdf')
 
     def genConfigFile(self):
         # Generates a configuration file with default values for parameters
@@ -1118,12 +1106,38 @@ class AviaNZ(QMainWindow):
         self.statusBar().showMessage("Ready")
 
     def openNextFile(self):
+        # Listener for next file >> button
+        # save current segments and open the next one in the list
         i=self.listFiles.currentRow()
         if i+1<len(self.listFiles):
+            if self.previousFile is not None:
+                if type(self.previousFile) is not self.listitemtype:
+                    self.previousFile = self.listFiles.findItems(os.path.basename(str(self.previousFile)), Qt.MatchExactly)
+                    if len(self.previousFile)>0:
+                        self.previousFile = self.previousFile[0]
+
+                if self.segments != [] or self.hasSegments:
+                    if len(self.segments)>0:
+                        if self.segments[0][0] > -1:
+                            self.segments.insert(0, [-1, -1, str(self.username), str(self.eastings), str(self.northings)])
+                    else:
+                        self.segments.insert(0, [-1, -1, str(self.username), str(self.eastings), str(self.northings)])
+                    self.saveSegments()
+                    self.previousFile.setTextColor(Qt.red)
+            if self.media_obj.state() == phonon.Phonon.PlayingState:
+                self.media_obj.pause()
+                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+                # self.playSegment()
+
+            self.showFundamental.setChecked(False)
+            if self.DOC==False:
+                self.showInvSpec.setChecked(False)
+
+            # self.previousFile = current
+            self.resetStorageArrays()
             self.listFiles.setCurrentRow(i+1)
             self.loadFile(self.listFiles.currentItem())
         else:
-        #     self.statusBar().showMessage("You are back to the begining of the list!")
         #     # Find the first .wav file in the list    # TODO
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -1132,25 +1146,6 @@ class AviaNZ(QMainWindow):
             msg.setWindowTitle("Last file")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
-            #i=0
-            #c=self.listFiles.setCurrentRow(i)
-        #     name = os.path.basename(str(c))
-        #     fname = self.dirName+'/'+ name
-        #     print fname
-        #     while os.path.splitext(fname)[1] != ".wav":
-        #         c=self.listFiles.setCurrentRow(i+1)
-        #         name = os.path.basename(str(c))
-        #         fname = self.dirName+'/'+ name
-        #         i=i+1
-            #self.loadFile(self.listFiles.currentItem())
-
-    # def openFile(self):
-    #     # If have an open file option this will deal with it via a file dialog
-    #     # Currently unused
-    #     Formats = "Wav file (*.wav)"
-    #     filename = QFileDialog.getOpenFileName(self, 'Open File', '/Users/srmarsla/Projects/AviaNZ', Formats)
-    #     if filename != None:
-    #         self.loadFile(filename)
 
     def dragRectanglesCheck(self):
         # The checkbox that says if the user is dragging rectangles or clicking on the spectrogram has changed state
@@ -2479,8 +2474,7 @@ class AviaNZ(QMainWindow):
         seglen = len(self.segments)
         [alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,species] = self.segmentDialog.getValues()
         #[alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,depth,thrType,thr,wavelet,bandchoice,start,end,species] = self.segmentDialog.getValues()
-        if species=='kiwi':
-            species="Kiwi"
+        species = str(species)
         #if not hasattr(self,'seg'):
         #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
         self.statusBar().showMessage("Segmenting...")
@@ -2502,37 +2496,73 @@ class AviaNZ(QMainWindow):
             newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
             # print newSegments
         elif str(alg)=="Wavelets":
-            species = str(species)
-            newSegments = WaveletSegment.findCalls_learn(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
+            newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
+            print newSegments
 
-        # Generate annotation friendly output
+            # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
+            # # but ML is extremely slow and crappy. So I decided to use just the wavelets
+            # newSegmentsML = WaveletSegment.findCalls_learn(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
+            # print np.shape(newSegmentsML),type(newSegmentsML), newSegmentsML
+            #
+            # newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species='kiwi',trainTest=False)
+            # # print type(newSegments),newSegments
+            # import itertools
+            # newSegments=list(itertools.chain.from_iterable(newSegments))
+            # temp=np.zeros(len(newSegmentsML))
+            # for i in newSegments:
+            #     temp[i]=1
+            # newSegments=temp.astype(int)
+            # newSegments=newSegments.tolist()
+            # print np.shape(newSegments), type(newSegments), newSegments
+            #
+            # newSegmentsDef=np.minimum.reduce([newSegmentsML,newSegments])
+            # newSegmentsDef=newSegmentsDef.tolist()
+            # print "newSegmentsDef:", np.shape(newSegmentsDef), type(newSegmentsDef), newSegmentsDef
+            # C=[(a and not b) or (not a and b) for a,b in zip(newSegmentsML,newSegments)]
+            # newSegmentsPb=[int(c) for c in C]
+            # print "newSegmentsPosi:", np.shape(newSegmentsPb), type(newSegmentsPb), newSegmentsPb
+            #
+            # # convert these segments to [start,end] format
+            # newSegmentsDef=self.binary2seg(newSegmentsDef)
+            # newSegmentsPb=self.binary2seg(newSegmentsPb)
+
+        # Generate annotation friendly output. That's inogh for interface?
         # Merge neighbours for wavelet seg
         if str(alg)=="Wavelets":
             newSegments=self.mergeSeg(newSegments)
         for seg in newSegments:
-            self.addSegment(float(seg[0]),float(seg[1]),0,0,species+"?")
+            self.addSegment(float(seg[0]),float(seg[1]),0,0,species.title()+"?") # TODO: sometimes got index exceed max
+
+        #     newSegmentsDef=self.mergeSeg(newSegmentsDef)
+        #     newSegmentsPb=self.mergeSeg(newSegmentsPb)
+        # for seg in newSegmentsDef:
+        #     self.addSegment(float(seg[0]),float(seg[1]),0,0,species)
+        # for seg in newSegmentsPb:
+        #     self.addSegment(float(seg[0]),float(seg[1]),0,0,species+"?")
+
         # annotation=[]
         # for seg in newSegments:
         #     annotation.append([seg[0],seg[1],0,0,str(species)+"?"])
         # self.saveSegments2(annotation)
 
-        # Generate binary output
-        # print "Binary output:"
-        n=math.ceil(float(self.datalength)/self.sampleRate)
-        # print 'n=', n
-        detected=np.zeros(int(n))
-        for seg in newSegments:
-            for a in range(len(detected)):
-                if math.floor(seg[0])<=a and a<math.ceil(seg[1]):
-                    detected[a]=1
-        # print detected
         self.lenNewSegments = len(newSegments)
-        #Generate time stampls [start(mm:ss) end(mm:ss)]
-        # print "start end (mm:ss):"
-        annotation=[]
-        for seg in newSegments:
-            annotation.append([self.convertMillisecs(seg[0]*1000),self.convertMillisecs(seg[1]*1000)])
-        # print annotation
+        # # Generate binary output
+        # # print "Binary output:"
+        # n=math.ceil(float(self.datalength)/self.sampleRate)
+        # # print 'n=', n
+        # detected=np.zeros(int(n))
+        # for seg in newSegments:
+        #     for a in range(len(detected)):
+        #         if math.floor(seg[0])<=a and a<math.ceil(seg[1]):
+        #             detected[a]=1
+        # # print detected
+        # self.lenNewSegments = len(newSegments)
+        # #Generate time stampls [start(mm:ss) end(mm:ss)]
+        # # print "start end (mm:ss):"
+        # annotation=[]
+        # for seg in newSegments:
+        #     annotation.append([self.convertMillisecs(seg[0]*1000),self.convertMillisecs(seg[1]*1000)])
+        # # print annotation
 
         self.segmentDialog.undo.setEnabled(True)
 
@@ -2695,7 +2725,7 @@ class AviaNZ(QMainWindow):
             import tempfile
             f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
             filename=f.name
-            #print filename
+            print filename
             data = data.astype('int16')
             wavio.write(f.name,data,self.sampleRate,scale='dtype-limits',sampwidth=2)
 
@@ -2823,6 +2853,12 @@ class AviaNZ(QMainWindow):
             del(segments[i+1])
         return segments
 
+    def binary2seg(self,binary):
+        segments=[]
+        for i in range(len(binary)):
+            if binary[i]==1:
+                segments.append([i,i+1])
+        return segments
 
 
 
