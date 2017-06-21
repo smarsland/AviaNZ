@@ -23,20 +23,22 @@ class StartScreen(QDialog):
         self.DOC=DOC
 
         btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:16px}'
+        btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
         b1 = QPushButton("Manual Segmentation")
         b2 = QPushButton("Find a species")
         b3 = QPushButton("Denoise a folder")
         l1 = QLabel("")
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
-        b3.setStyleSheet(btn_style)
-        l1.setStyleSheet('QLabel {color: white}')
+        b3.setStyleSheet(btn_style2)
+        l1.setStyleSheet('QLabel {color:transparent}')
 
         hbox = QHBoxLayout()
         hbox.addStretch(1)
         hbox.addWidget(b1)
         hbox.addWidget(b2)
         hbox.addWidget(b3)
+        b3.setEnabled(False)
 
         vbox = QVBoxLayout()
         vbox.addStretch(1)
