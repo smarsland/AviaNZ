@@ -11,6 +11,14 @@ import glob
 import string
 import SignalProc
 
+mingw_path = 'C:\\Program Files\\mingw-w64\\x86_64-7.1.0-posix-seh-rt_v5-rev0\\mingw64\\bin'
+os.environ['PATH'] = mingw_path + ';' + os.environ['PATH']
+import xgboost as xgb
+from sklearn.externals import joblib
+clf_maleKiwi = joblib.load('maleKiwiClassifier.pkl')
+clf_femaleKiwi = joblib.load('femaleKiwiClassifier.pkl')
+clf_ruru = joblib.load('ruruClassifier.pkl')
+
 # Nirosha's approach of simultaneous segmentation and recognition using wavelets
 
 # Nirosha's version:
@@ -85,13 +93,13 @@ class WaveletSeg:
         else:
             fB=None
         if recall==None and precision==None:
-            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%s \tPrecision=%s \tfB=%s" %(TP,P-TP,300-(P+T-TP),T-TP,recall,precision,fB)
+            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%s \tPrecision=%s \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB)
         elif recall==None:
-            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%s \tPrecision=%0.2f \tfB=%s" %(TP,P-TP,300-(P+T-TP),T-TP,recall,precision,fB)
+            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%s \tPrecision=%0.2f \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB)
         elif precision==None:
-            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%s \tfB=%s" %(TP,P-TP,300-(P+T-TP),T-TP,recall,precision,fB)
+            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%s \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB)
         else:
-            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%0.2f" %(TP,P-TP,300-(P+T-TP),T-TP,recall,precision,fB)
+            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%0.2f" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB)
         #print TP, int(T), int(P), recall, precision, ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
         return fB
 
@@ -160,7 +168,7 @@ class WaveletSeg:
 
         return newlist
 
-    def detectCalls(self,wp,node,sampleRate=0):
+    def detectCalls(self,wp,node,sampleRate=0,n=300):
         if sampleRate==0:
             sampleRate=self.sampleRate
         import string
@@ -198,7 +206,7 @@ class WaveletSeg:
 
         # If there is a call anywhere in the window, report it as a call
         E = np.where(E<threshold, 0, 1)
-        detected = np.zeros(300)
+        detected = np.zeros(n)
         j = 0
         for i in range(0,N-sampleRate,sampleRate):
             detected[j] = np.max(E[i:i+sampleRate])
@@ -260,6 +268,7 @@ class WaveletSeg:
             detected=np.where(detected>0)
             # print "det",detected
             return self.identifySegments(np.squeeze(detected))
+            return detected
 
     def detectCalls1(self,wp,listnodes,sampleRate):
         # This way should be the best -- reconstruct from setting all of the relevant nodes. But it gives an error message
@@ -373,11 +382,33 @@ class WaveletSeg:
 
 def findCalls_train_learning(fName,species='kiwi'):
 
-    waveletCoefs = np.loadtxt('wE_km')
+    ws=WaveletSeg()
+    f = np.genfromtxt("Sound Files\MLdata\wE.data",delimiter=',',dtype=None)
+    ld = len(f[0])
+    data = np.zeros((len(f),ld))
+
+    names = []
+
+    for i in range(len(f)):
+        for j in range(ld-2):
+            data[i,j] = f[i][j]
+        data[i,ld-1] = f[i][ld-1]
+        if not f[i][ld-2] in names:
+            names.append(f[i][ld-2])
+            data[i,ld-2] = len(names)
+        else:
+            data[i,ld-2] = names.index(f[i][ld-2])
+
+    # Decide on a class to be the 1 to detect
+    # It is choosing male kiwi as the positive class (10) here
+    data[:,63] = 0
+    ind = np.where(data[:,62] == 10)
+    data[ind,63] = 1
+    # ind = np.where(data[:,62] == 4)
+    # data[ind,63] = 1
 
     # Compute point-biserial correlations and sort wrt it, return top nNodes
-    # *** Note only first 100 for TESTING OF CODE!
-    nodes = ws.compute_r(waveletCoefs[:100,62],waveletCoefs[:100,:62])
+    nodes = ws.compute_r(data[:,62],data[:,:62].transpose())
     print nodes
 
     # Now for Nirosha's sorting
@@ -388,37 +419,37 @@ def findCalls_train_learning(fName,species='kiwi'):
     nodes = [n + 1 for n in nodes]
     print nodes
 
+
     # **** We actually need the real data :(
     # Generate a full 5 level wavelet packet decomposition
     # **** load newdata, spp
-    wpFull = pywt.WaveletPacket(data=newdata, wavelet=ws.wavelet, mode='symmetric', maxlevel=5)
+    f = np.genfromtxt("Sound Files\MLdata\data-1s.data",delimiter=',',dtype=None)
+    f = np.squeeze(np.reshape(f,(np.shape(f)[0]*np.shape(f)[1],1)))
+    #g = np.genfromtxt("Sound Files\MLdata\label-1s",delimiter=',',dtype=None)
 
-    # **** A version of the below to turn the spp labels into 0 or 1 -> annotation
-    data[:, 62] = 0
-    # inds = np.where(data[:,63] == 7)
-    # data[inds,62] = 1
-    inds = np.where(data[:, 63] == 0)
-    data[inds, 62] = 1
-    inds = np.where(data[:, 63] == 6)
-    data[inds, 62] = 1
-    inds = np.where(data[:, 63] == 14)
-    data[inds, 62] = 1
-    inds = np.where(data[:, 63] == 15)
-    data[inds, 62] = 1
+    return f, data, nodes
+    #g = g[:4]
 
+# full, datafull, nodes = findCalls_train_learning()
+# f = full
+# data = datafull
+
+def moretest():
+    ws=WaveletSeg()
+    wpFull = pywt.WaveletPacket(data=f, wavelet=ws.wavelet, mode='symmetric', maxlevel=5)
     # Now check the F2 values and add node if it improves F2
     listnodes = []
     bestBetaScore = 0
-    detected = np.zeros(300)
+    detected = np.zeros(len(data))
 
     for node in nodes:
         testlist = listnodes[:]
         testlist.append(node)
         print testlist
-        detected_c = ws.detectCalls(wpFull,node,ws.sampleRate)
+        detected_c = ws.detectCalls(wpFull,node,16000,n=len(data))
         #update the detections
         det=np.maximum.reduce([detected,detected_c])
-        fB = ws.fBetaScore(annotation, det)
+        fB = ws.fBetaScore(data[:,63], det)
         if fB > bestBetaScore:
             bestBetaScore = fB
             #now apend the detections of node c to detected
@@ -426,6 +457,7 @@ def findCalls_train_learning(fName,species='kiwi'):
             listnodes.append(node)
         if bestBetaScore == 1:
             break
+    # listnodes_all=listnodes_all.append(listnodes)
     return listnodes
 
 def findCalls_train(fName,species='kiwi'):
@@ -496,34 +528,40 @@ def findCalls_train(fName,species='kiwi'):
     return listnodes
 
 def findCalls_learn(fName=None,data=None, sampleRate=None, species='kiwi',trainTest=False):
-    import xgboost as xgb
-    from sklearn.externals import joblib
+    # import xgboost as xgb
+    # from sklearn.externals import joblib
 
     if species == 'Kiwi (M)':
-        clf = joblib.load('maleKiwiClassifier.pkl')
+        clf = clf_maleKiwi
     elif species == 'Kiwi (F)':
-        clf = joblib.load('femaleKiwiClassifier.pkl')
+        clf = clf_femaleKiwi
     elif species == 'Ruru':
-        clf = joblib.load('ruruClassifier.pkl')
+        clf = clf_ruru
 
     # Second by second, run through the data file and compute the wavelet energy, then classify them
     segs = []
     for i in range(0,len(data),sampleRate):
         currentSec = data[i:(i+1)*sampleRate]
         # Compute wavelet energy for this second
-        E = computeWaveletEnergy_1s(currentSec, 'dmey2')
+        E = computeWaveletEnergy_1s(currentSec, 'dmey2')    # always calculate E on row data not denoised or bp
         E = np.ones((1,len(E))) * E
         #segs.append(int(clf.predict(E)[0]))
         print clf.predict(E)[0]
-        if int(clf.predict(E)[0]) == 1:
-            segs.append([float(i)/self.sampleRate,float(i+self.sampleRate)/self.sampleRate])
-
+        # if int(clf.predict(E)[0]) == 1:
+        #     segs.append([float(i)/sampleRate,float(i+sampleRate)/sampleRate])
+        segs.append(int(clf.predict(E)[0]))
     print segs
     return segs
 
 def findCalls_test(fName=None,data=None, sampleRate=None, species='kiwi',trainTest=False):
     #data, sampleRate_o, annotation = loadData(fName)
     ws=WaveletSeg()
+    print species
+    if species=='kiwi':
+        nodes=[34,35,36,38,40,41,42,43,44,45,46,55]
+    elif species=='ruru':
+        nodes=[33,37,38]
+    print nodes
     if fName!=None:
         ws.loadData(fName,trainTest)
     else:
@@ -537,9 +575,13 @@ def findCalls_test(fName=None,data=None, sampleRate=None, species='kiwi',trainTe
         ws.data = librosa.core.audio.resample(ws.data,ws.sampleRate,fs)
         ws.sampleRate=fs
     wData = ws.sp.waveletDenoise(ws.data, thresholdType='soft', maxlevel=5)
-    fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
+    if species=='kiwi':
+        fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
+    elif species=='ruru':
+        fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=500,high=7000)
     wpFull = pywt.WaveletPacket(data=fwData, wavelet=ws.wavelet, mode='symmetric', maxlevel=5)
-    detected = ws.detectCalls_test(wpFull, ws.sampleRate,trainTest=trainTest) #detect based on a previously defined nodeset, default for kiwi
+    # detect based on a previously defined nodeset, default for kiwi
+    detected = ws.detectCalls_test(wpFull, ws.sampleRate,listnodes=nodes,trainTest=trainTest)
     if trainTest==True:
         print fName
         ws.fBetaScore(ws.annotation, detected)
@@ -592,8 +634,7 @@ def genReport(folder_to_process,detected):
 # nodelist_kiwi=[1,15,20,34,35,36,38,40,41,42,43,44,45,46,55] # python with new implimentation
 nodelist_kiwi=[34,35,36,38,40,41,42,43,44,45,46,55] # removed first three nodes from python with new implimentation
 #nodelist_kiwi = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55] # matlab
-#[36, 35, 43, 41, 38, 45, 44, 55]
-#[36, 35, 43, 41, 38, 45, 44, 39, 31, 17, 21, 18, 20, 15, 8, 10, 3, 4, 1, 55]
+nodelist_ruru=[33,37,38]
 
 # def test(nodelist):
 #     for filename in glob.glob(os.path.join('E:/SONGSCAPE/birdscapeConda2/Sound Files/test','*.wav')):
@@ -611,7 +652,7 @@ nodelist_kiwi=[34,35,36,38,40,41,42,43,44,45,46,55] # removed first three nodes 
 # genReport(folder_to_process='Sound Files/survey/5min',detected=detected)
 # print detected
 
-#print findCalls_train('Wavelet Segmentation/kiwi/train/train1',species='kiwi')
+# print findCalls_train('E:/SONGSCAPE/birdscapeConda2/Sound Files/train/kiwi/train1',species='kiwi')
 
 #ws = WaveletSeg()
 #ws.loadData('Wavelet Segmentation/kiwi/train/train1')
@@ -803,7 +844,7 @@ def CreateDataSet(directory,species='kiwi',choice='all',denoise=False):
         filename='wEnergyBandpass.data'
     elif choice=='bandpass' and denoise==True:
         filename='wEnergyBandpassDenoised.data'
-    f2=open('Sound Files/MLdata/'+filename,'a')
+    f2=open(str(directory)+'/'+filename,'a')
     for root, dirs, files in os.walk(directory):
         for filename in files:
             if filename.endswith('.wav'):
@@ -816,6 +857,7 @@ def CreateDataSet(directory,species='kiwi',choice='all',denoise=False):
                 # Read the AviaNZ annotation
                 with open(root+'/'+filename+".data") as f:
                     segments = json.load(f)
+                segments=segments[1:]
                 for seg in segments:
                     # If the length of a segment is less than 1 sec make it 1sec
                     if seg[1]-seg[0]<1:
@@ -840,19 +882,22 @@ def CreateDataSet(directory,species='kiwi',choice='all',denoise=False):
     f2.close()
 
 def CreateDataSet_data(directory,species='kiwi',choice='all',denoise=False):
-    #Generate the wavelet energy (all nodes)give the directory with sound and annotation
+    # Generate the wavelet energy (all nodes)give the directory with sound and annotation
+    # This also saves all the 1sec data along with their labels to be used in findCalls_train_learning
+    # to find the wavelet nodes
     ws=WaveletSeg()
     if choice=='all' and denoise==False:
-        filename='wEnergyAll.data'
+        filename='wE.data'
     elif choice=='all' and denoise==True:
-        filename='wEnergyAllDenoised.data'
+        filename='wED.data'
     elif choice=='bandpass' and denoise==False:
-        filename='wEnergyBandpass.data'
+        filename='wEB.data'
     elif choice=='bandpass' and denoise==True:
-        filename='wEnergyBandpassDenoised.data'
-    f2=open('Sound Files/MLdata/'+filename,'a')
-    newdata = []
-    labels = []
+        filename='wEDB.data'
+    f0=open(str(directory)+'/data-1s.data','a')   # 1 sec data
+    f1=open(str(directory)+'/label-1s','a')      # 1 sec labels
+    f2=open(str(directory)+'/'+filename,'a')     # wavelet segments
+
     for root, dirs, files in os.walk(directory):
         for filename in files:
             if filename.endswith('.wav'):
@@ -874,7 +919,6 @@ def CreateDataSet_data(directory,species='kiwi',choice='all',denoise=False):
                     n=int(seg[1]-seg[0])
                     for i in range(n):
                         current=ws.data[(int(seg[0])+i)*ws.sampleRate:(int(seg[0])+(i+1))*ws.sampleRate]
-
                         # Compute wavelet energy for this second
                         E=computeWaveletEnergy_1s(current,'dmey2',choice,denoise)
                         # E=genWEnergy(filename[:-4],species=species) # try later with bp filter e.g when trainig for kiwi male use 1200-7500
@@ -886,12 +930,20 @@ def CreateDataSet_data(directory,species='kiwi',choice='all',denoise=False):
                             target=1
                         E.append(spp)
                         E.append(target)
-                        newdata.append(current)
-                        labels.append(spp)
-                        # *** Save newdata and labels
+                        current=current.tolist()
+                        f0.write(str(current)[1:-1]+"\n")
+                        f1.write(str(spp)+"\n")
                         f2.write(str(E)[1:-1]+"\n")
     f2.close()
 
 # CreateDataSet(directory= 'E:/AviaNZ/Sound Files/MLdata',choice='all',denoise=False)
 # CreateDataSet(directory= 'E:/AviaNZ/Sound Files/MLdata',choice='bandpass',denoise=False)
 # CreateDataSet(directory= 'E:/AviaNZ/Sound Files/MLdata',choice='bandpass',denoise=True)
+
+# CreateDataSet(directory= 'E:/AviaNZ/Sound Files/testsmall',choice='all',denoise=False)
+
+
+# CreateDataSet_data(directory= 'E:/AviaNZ/Sound Files/MLdata/',choice='all',denoise=False)
+
+# findCalls_train_learning(species='kiwi')
+# moretest()
