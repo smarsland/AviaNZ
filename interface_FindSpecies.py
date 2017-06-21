@@ -555,9 +555,9 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             else:
                 file = open(str(self.filename) + '.data', 'w')
             json.dump(annotation,file)
-        elif mode=='Excel':
-            eFile=self.dirName+'\AutoDet_'+self.species+'_'+method+'.xlsx'
 
+        elif mode=='Excel':
+            eFile=self.dirName+'\\1TimeStamps_'+self.species+'_'+method+'.xlsx'
             if os.path.isfile(eFile):   #if the file is already there
                 try:
                     wb = load_workbook(str(eFile))
@@ -587,20 +587,69 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                     c=c+1
                 # ws.append([relfname, str(annotation)])   # Append this filename and its detections
                 wb.save(str(eFile))
-        else:   # mode=='Binary'
-            eFile=self.dirName+'\AutoDet_'+self.species+'_'+method+'_sec.xlsx'
+            # Presence absence excel
+            eFile=self.dirName+'\\2PresenceAbsence_'+self.species+'_'+method+'.xlsx'
             if os.path.isfile(eFile):   #if the file is already there
                 try:
                     wb = load_workbook(str(eFile))
+                    # ws=wb.create_sheet(title="PresenceAbsence",index=2)
                     ws=wb.get_sheet_by_name('Sheet')
-                    ws.append([relfname, str(annotation)])    # Append this filename and its detections
+                    r=ws.max_row+1 # TODO: get last row number from existing file
+                    ws.cell(row=r,column=1,value=str(relfname))
+                    if annotation:
+                        ws.cell(row=r,column=2,value='Yes')
+                    else:
+                        ws.cell(row=r,column=2,value='_')
                     wb.save(str(eFile))
                 except:
                     print "Unable to open file"           #Does not exist OR no read permissions
             else:
                 wb = Workbook()
                 ws = wb.active
-                ws.append([relfname, str(annotation)])   # Append this filename and its detections
+                ws.append(["File Name","Presence/Absence"])
+                ws.cell(row=1,column=1, value="File Name")
+                ws.cell(row=1,column=2, value="Presence/Absence")
+                c=1
+                r=2
+                ws.cell(row=2,column=1,value=str(relfname))
+                if annotation:
+                    ws.cell(row=2,column=2,value='Yes')
+                else:
+                    ws.cell(row=2,column=2,value='_')
+                wb.save(str(eFile))
+
+        else:   # mode=='Binary'
+            eFile=self.dirName+'\\3PerSecond_'+self.species+'_'+method+'.xlsx'
+            if os.path.isfile(eFile):   #if the file is already there
+                try:
+                    wb = load_workbook(str(eFile))
+                    ws=wb.get_sheet_by_name('Sheet')
+                    c=1
+                    r=ws.max_row+1 # TODO: get last row number from existing file
+                    ws.cell(row=r,column=1,value=str(relfname))
+                    for seg in annotation:
+                        ws.cell(row=r,column=c+1,value=seg)
+                        c=c+1
+                    # ws.append([relfname, str(annotation)])    # Append this filename and its detections
+                    wb.save(str(eFile))
+                except:
+                    print "Unable to open file"           #Does not exist OR no read permissions
+            else:
+                wb = Workbook()
+                ws = wb.active
+                ws.cell(row=1,column=1, value="File Name")
+                ws.cell(row=1,column=2, value="Presence=1/Absence=0")
+                c=2
+                for i in range(900):
+                    ws.cell(row=2,column=c, value="sec "+str(i+1))
+                    c=c+1
+                c=1
+                r=3
+                ws.cell(row=r,column=c,value=str(relfname))
+                for seg in annotation:
+                    ws.cell(row=r,column=c+1,value=seg)
+                    c=c+1
+                # ws.append([relfname, str(annotation)])   # Append this filename and its detections
                 wb.save(str(eFile))
 
     def loadFile(self):
