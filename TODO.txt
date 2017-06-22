@@ -34,6 +34,10 @@ Make a new method (not inside Segmentation):
 
 NP: So we need to save the 3 (male, female kiwi, ruru) learners
 NP: And then add code to use it
+# Done, but ML is extremely slow and no good results! There is a gap between the dataset and real thing which needs
+    more research. A partial solution to increase speed would be just pass only the positive wavelet segments to ML
+    rather than the whole file.
+    However I decided to use Wavelets and make available all other alternative segmentation methods for this first release.
 
 Test out having if both learner and OR say yes -> sure, if xor(learner,OR) -> maybe? (or something...)
 For this version, that's it
@@ -46,11 +50,21 @@ SM: Add in the 'who the user is' annotation
     # Need to know what info they want
     # And ask on every file?
     # And show on screen?
+    
 SM: Update the manual
     -> correct the cheat sheet
     -> get them included in the program (via web interface or pdf)
+   # pdf is there and working in Windows
+    
+NP: Bring the outputs to a nice format
+    (1) excel summary for the directory processed <DirName>_<spp>_<method>
+    (2) AviaNZ annotation (this is going to be the last method if the user had several runs with different methods)
+    (3) binary output (just for us to evaluate the results)    
+    
+NP: Stop saving temp files used to playback? however in Windows it goes to the local temp (garbage collection)
 
 NP: Installation!!!
+# Done, some tiding up is needed
 
 (1) Minor bugs and extensions
 
