@@ -1,36 +1,21 @@
 
 # TODO for AviaNZ
 
-Add cheat sheet
-
-Seg 1:
-    add Delete Seg option
-
-Seg 2:
-    check what is drawn
-    make sizes OK
-        too small, treat like Seg 1
-        if too long, reduce the number in the row
-
-On Mac:
-    import platform
-    if platform.system() == 'Darwin':
-    size of splash screen
-    manual doesn't open
-    about and quit aren't there (see stack overflow)
-    temp file plays don't work. No real idea why -- except possibly, needs a file extension?
-
-Look up Freebird to see what data is needed in the info screen
-
-    Control marking the same segments again and again - multiple clicks on Find matches with the same pattern.
-	# Thing to do is probably move find matches into the segmentations
-
 Make a new method (not inside Segmentation):
     (1) Perform segmentation using at least one of old wavelet method and any other segmenter, possibly multiple options
     (2) Combine the segments as appropriate
     (3) Perform classification on each segment using at least one of wavelet energies, Raven feature, MFCC
 
     For kiwi, separate classification of M and F but combined in the return
+
+
+Look up Freebird to see what data is needed in the info screen
+    Reviewer and Something!
+
+Control marking the same segments again and again - multiple clicks on Find matches with the same pattern.
+	# Thing to do is probably move find matches into the segmentations
+
+
 
 NP: So we need to save the 3 (male, female kiwi, ruru) learners
 NP: And then add code to use it
@@ -70,6 +55,8 @@ NP: Installation!!!
 
 
     SM: Tidy code, ensure comments, etc.
+
+    SM: Tidy the repository
 
     SM: Get the time from the file name (if standard) and use it to put day or night birds first
 

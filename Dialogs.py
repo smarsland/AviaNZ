@@ -22,8 +22,8 @@ class StartScreen(QDialog):
 
         self.DOC=DOC
 
-        btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:16px}'
-        btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
+        btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:14px}'
+        btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:14px}'
         b1 = QPushButton("Manual Segmentation")
         b2 = QPushButton("Find a species")
         b3 = QPushButton("Denoise a folder")
@@ -717,12 +717,9 @@ class Denoise(QDialog):
 
 #======
 class HumanClassify1(QDialog):
-    # This dialog is different to the others. The aim is to check (or ask for) classifications for segments.
-    # This version shows a single segment at a time, working through all the segments.
-    # So it needs to show a segment, and its current label
-    # TODO: Select the right option in the list -> DEBUG
-    # TODO: Deal with changes
-    # TODO: Make the plot the correct size
+    # This dialog allows the checking of classifications for segments.
+    # It shows a single segment at a time, working through all the segments.
+    # TODO: Delete segment button
 
     def __init__(self, seg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
         QDialog.__init__(self, parent)
@@ -751,9 +748,15 @@ class HumanClassify1(QDialog):
 
         # The buttons to move through the overview
         self.correct = QtGui.QToolButton()
-        self.correct.setIcon(QtGui.QIcon('Resources/tick.png'))
+        self.correct.setIcon(QtGui.QIcon('img/tick.png'))
         iconSize = QtCore.QSize(50, 50)
         self.correct.setIconSize(iconSize)
+
+        self.delete = QtGui.QToolButton()
+        self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
+        iconSize = QtCore.QSize(50, 50)
+        self.delete.setIconSize(iconSize)
+
         # self.wrong = QtGui.QToolButton()
         # self.wrong.setIcon(QtGui.QIcon('Resources/cross.png'))
 
@@ -819,12 +822,14 @@ class HumanClassify1(QDialog):
         # The layouts
         vboxButtons = QVBoxLayout()
         vboxButtons.addWidget(self.correct)
+        vboxButtons.addWidget(self.delete)
         # hboxButtons.addWidget(self.wrong)
         #hboxButtons.addWidget(self.close)
 
         self.playButton = QtGui.QToolButton()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.setIconSize(iconSize)
+
         vboxLabel = QVBoxLayout()
         vboxLabel.addWidget(self.species)
         vboxLabel.addWidget(self.playButton)
@@ -842,19 +847,23 @@ class HumanClassify1(QDialog):
         self.setImage(seg,audiodata,sampleRate,self.label)
 
     def playSeg(self):  #This is not the right place though
-        import tempfile
         import wavio
-        f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
-        #print f.name
+
+        if platform.system() == 'Darwin':
+            filename = 'temp.wav'
+        else:
+            import tempfile
+            f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
+            filename = f.name
         self.audiodata = self.audiodata.astype('int16') # how to get data - seg??
-        wavio.write(f.name,self.audiodata,self.sampleRate,scale='dtype-limits',sampwidth=2)
+        wavio.write(filename,self.audiodata,self.sampleRate,scale='dtype-limits',sampwidth=2)
         import PyQt4.phonon as phonon
         # Create a media object
         media_obj = phonon.Phonon.MediaObject(self)
         audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
         phonon.Phonon.createPath(media_obj, audio_output)
         media_obj.setTickInterval(20)
-        media_obj.setCurrentSource(phonon.Phonon.MediaSource(f.name))
+        media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
         media_obj.seek(0)
         media_obj.play()
         #if media_obj.state() == phonon.Phonon.PlayingState:
@@ -944,9 +953,7 @@ class HumanClassify2(QDialog):
     # This version gets *12* at a time, and put them all out together on buttons, and their labels.
     # It could be all the same species, or the ones that it is unsure about, or whatever.
 
-    # TODO: Decide what you want to do with it. I think that it is about saying which ones are right or wrong, not correcting them.
-    # Or just getting labels, or something
-    # TODO: Deal with the results
+    # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
     def __init__(self, sg, segments, label, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
@@ -967,6 +974,133 @@ class HumanClassify2(QDialog):
 
         self.segments = [item for item in self.segments if item[4] == label or item[4][:-1] == label]
         #print len(self.segments)
+        next = QPushButton("Next/Finish")
+        self.connect(next, SIGNAL("clicked()"), self.nextPage)
+
+        if len(self.segments) > 0:
+
+            species = QLabel(label)
+
+            # Check that width is at least max seg width, or there is a problem!
+            self.width = 0
+            for ind in range(len(self.segments)):
+                x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
+                x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
+                if x2 - x1 > self.width:
+                    self.width = x2-x1
+            self.width = max(800,self.width+10)
+            print self.width
+            self.h = 4
+            self.flowLayout = SupportClasses.FlowLayout()
+            self.makeButtons()
+
+            self.vboxFull = QVBoxLayout()
+            self.vboxFull.addWidget(QLabel('Click on the images that are incorrectly labelled'))
+            self.vboxFull.addWidget(species)
+            self.vboxFull.addLayout(self.flowLayout)
+            self.vboxFull.addWidget(next)
+        else:
+            self.vboxFull = QVBoxLayout()
+            self.vboxFull.addWidget(QLabel('No images to show'))
+            self.vboxFull.addWidget(next)
+
+        self.setLayout(self.vboxFull)
+
+
+    def makeButtons(self):
+        segRemain = len(self.segments) - self.firstSegment
+        width = 0
+        col = 0
+
+        ind = self.firstSegment
+        self.buttons = []
+
+        while segRemain>0 and col<self.h:
+            x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
+            x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
+            im = self.setImage(self.sg[x1:x2, :])
+            segRemain -= 1
+            ind += 1
+            if width + x2-x1 < self.width:
+                width = width + x2-x1
+                self.buttons.append(SupportClasses.PicButton(0,im[0], im[1]))
+                self.flowLayout.addWidget(self.buttons[-1])
+            else:
+                col += 1
+                width = 0
+
+    def convertAmpltoSpec(self, x):
+        return x * self.sampleRate / self.incr
+
+    def setImage(self, seg):
+        if self.cmapInverted:
+            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourEnd, self.colourStart])
+        else:
+            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourStart, self.colourEnd])
+        im1 = fn.makeQImage(im, alpha)
+
+        if self.cmapInverted:
+            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourStart, self.colourEnd])
+        else:
+            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourEnd, self.colourStart])
+
+        im2 = fn.makeQImage(im, alpha)
+
+        return [im1, im2]
+
+    def nextPage(self):
+        # Find out which buttons have been clicked (so are not correct)
+        for i in range(len(self.buttons)):
+            if self.buttons[i].buttonClicked:
+                self.errors.append(i+self.firstSegment)
+
+        # Now find out if there are more segments to check, and remake the buttons, otherwise close
+        if len(self.segments) > 0:
+            self.firstSegment += len(self.buttons)
+            if self.firstSegment != len(self.segments):
+                for btn in reversed(self.buttons):
+                    self.flowLayout.removeWidget(btn)
+                    # remove it from the gui
+                    btn.setParent(None)
+                self.makeButtons()
+            else:
+                self.close()
+        else:
+            self.close()
+
+    def getValues(self):
+        return self.errors
+
+# ======
+class HumanClassify3(QDialog):
+    # TODO: Delete when other version works!
+    # This dialog is different to the others. The aim is to check (or ask for) classifications for segments.
+    # This version gets *12* at a time, and put them all out together on buttons, and their labels.
+    # It could be all the same species, or the ones that it is unsure about, or whatever.
+
+    # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
+
+    def __init__(self, sg, segments, label, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted,
+                 parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Check Classifications')
+        self.frame = QWidget()
+
+        self.sampleRate = sampleRate
+        self.incr = incr
+        self.lut = lut
+        self.colourStart = colourStart
+        self.colourEnd = colourEnd
+        self.cmapInverted = cmapInverted
+
+        # Seems that image is backwards?
+        self.sg = np.fliplr(sg)
+        self.segments = segments
+        self.firstSegment = 0
+        self.errors = []
+
+        self.segments = [item for item in self.segments if item[4] == label or item[4][:-1] == label]
+        # print len(self.segments)
         next = QPushButton("Next/Finish")
         self.connect(next, SIGNAL("clicked()"), self.next)
 
@@ -993,43 +1127,26 @@ class HumanClassify2(QDialog):
 
         self.setLayout(vboxFull)
 
-
     def makeButtons(self):
         positions = [(i, j) for i in range(self.h) for j in range(self.w)]
         images = []
         segRemain = len(self.segments) - self.firstSegment
-        #print segRemain, self.firstSegment
+        # print segRemain, self.firstSegment
 
         if segRemain < self.w * self.h:
             for i in range(segRemain):
                 ind = i + self.firstSegment
-                if (self.segments[ind][2] == 0) and (self.segments[ind][3] == 0):
-                    x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
-                    x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
-                    x3 = 0
-                    x4 = np.shape(self.sg)[1]
-                else:
-                    x1 = int(self.segments[ind][0])
-                    x2 = int(self.segments[ind][1])
-                    x3 = int(self.segments[ind][2])
-                    x4 = int(self.segments[ind][3])
-                images.append(self.setImage(self.sg[x1:x2, x3:x4]))
+                x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
+                x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
+                images.append(self.setImage(self.sg[x1:x2, :]))
             for i in range(segRemain, self.w * self.h):
                 images.append([None, None])
         else:
             for i in range(self.w * self.h):
                 ind = i + self.firstSegment
-                if (self.segments[ind][2] == 0) and (self.segments[ind][3] == 0):
-                    x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
-                    x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
-                    x3 = 0
-                    x4 = np.shape(self.sg)[1]
-                else:
-                    x1 = int(self.segments[ind][0])
-                    x2 = int(self.segments[ind][1])
-                    x3 = int(self.segments[ind][2])
-                    x4 = int(self.segments[ind][3])
-                images.append(self.setImage(self.sg[x1:x2, x3:x4]))
+                x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
+                x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
+                images.append(self.setImage(self.sg[x1:x2, :]))
         self.buttons = []
         for position, im in zip(positions, images):
             if im[0] is not None:
@@ -1059,10 +1176,10 @@ class HumanClassify2(QDialog):
         # Find out which buttons have been clicked (so are not correct)
 
         for i in range(len(self.buttons)):
-            #print self.buttons[i].buttonClicked
+            # print self.buttons[i].buttonClicked
             if self.buttons[i].buttonClicked:
-                self.errors.append(i+self.firstSegment)
-        #print self.errors
+                self.errors.append(i + self.firstSegment)
+        # print self.errors
 
         # Now find out if there are more segments to check, and remake the buttons, otherwise close
         if len(self.segments) > 0:
@@ -1081,6 +1198,7 @@ class HumanClassify2(QDialog):
 
     def getValues(self):
         return self.errors
+
 # ======
 class HumanClassify2a(QDialog):
     def __init__(self, birdlist,parent=None):
