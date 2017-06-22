@@ -346,7 +346,7 @@ class AviaNZ(QMainWindow):
         return
 
     def showHelp(self):
-        os.system('Docs\\AviaNZManual.pdf')
+        os.system('Docs/AviaNZManual.pdf')
 
     def genConfigFile(self):
         # Generates a configuration file with default values for parameters

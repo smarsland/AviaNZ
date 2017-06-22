@@ -1,6 +1,29 @@
 
 # TODO for AviaNZ
 
+
+Seg 1:
+    add Delete Seg option
+
+Seg 2:
+    check what is drawn
+    make sizes OK
+        too small, treat like Seg 1
+        if too long, reduce the number in the row
+
+On Mac:
+    import platform
+    if platform.system() == 'Darwin':
+    size of splash screen
+    manual doesn't open
+    about and quit aren't there (see stack overflow)
+    temp file plays don't work. No real idea why -- except possibly, needs a file extension?
+
+Look up Freebird to see what data is needed in the info screen
+
+    Control marking the same segments again and again - multiple clicks on Find matches with the same pattern.
+	# Thing to do is probably move find matches into the segmentations
+
 FEATURE SELECTION
 Test the selected nodes
     Use x of the identified kiwi male / kiwi female / ruru any examples
@@ -22,8 +45,6 @@ For this version, that's it
     -> combine with previous second data
     -> etc.
 
-*** SM: Fix the file loading error, and the list getting longer with duplicates
-
 SM: Add in the 'who the user is' annotation
     # Done, but currently has a False in it's call to stop it
     # Need to know what info they want
@@ -33,18 +54,10 @@ SM: Update the manual
     -> correct the cheat sheet
     -> get them included in the program (via web interface or pdf)
 
-SM: Check Seg 1 -> smaller pictures
-                -> play sounds
-    # Done
-SM: Check Seg 2 -> process output
-    # Done
-
 NP: Installation!!!
 
 (1) Minor bugs and extensions
 
-    ??: The temp file plays don't work on a Mac. No real idea why -- except possibly, needs a file extension?
-    ??: Sometimes updated segments don't seem to save
 
     SM: Tidy code, ensure comments, etc.
 
@@ -58,10 +71,6 @@ NP: Installation!!!
 
     ??: What to do with stereo sound? How about consistent sample rates?
 
-
-    Control marking the same segments again and again - multiple clicks on Find matches with the same pattern.
-	# Thing to do is probably move find matches into the segmentations
-
 	Interface --> Change spectrogram parameters --> add visible frequency range e.g. from:0 to:8000
 
 	Update the status bar when auto saving the annotation? Users want to know/confirm.
@@ -72,32 +81,9 @@ NP: Installation!!!
 # This seems to be complicated with undo etc. Still thinking whats the best way to do it,
   can easily add a separate button to play denoised but not nice. I fixed the plotting problem though.
 
-    NP: Make the oscillogram and spectrogram line up (basically, just sort out y-axis labels)
-# Done
-
-    SM: Enable removal of fill colour for spectrogram drag boxes
-# Done
-
-    SM: Undo for segmentation
-# Done
-
-    SM: Save the amount of time the user makes the window show back into the config file
- # Done. Also for the various interface options
-
-    SM: Make the arrows (on top-right) move on to next file if double clicked (and at start/end?)
-# Done
-
     NP: Add a change directory option
 # Don't want to change what's drawn there (currently selected file and its spectro), but effects thereafter
   when opening a new file
-
-    SM (?): Make the boxes below the overview be clickable to get to that section
-# Done
-    NP: And stop the lines going too far to the right
-# Done
-
-    The updating of the colour of the overview seg has some colour weirdness -- gets darker. Some sort of overlapping? Not a major problem.
-# Done
 
 	NP: Stop loading the file when choose to cancel the progress bar
 # Removed the cancel button for now. otherwise have to unroll what happened inside the loadFile when the user cancel it.
@@ -118,8 +104,7 @@ NP: Installation!!!
 	(2) *** Compare with making wavelet trees on shorter pieces
 	(3) *** Denoise the segments separately
     
-    NP: Stop the segmentation being based on 1s
-# Done
+
     NP: Fully integrate wavelet seg into program
     NP: We actually want Kiwi (M) and Kiwi (F), and need to get all the ruru calls
     NP: Want to have some form of machine learning

@@ -750,7 +750,7 @@ class HumanClassify1(QDialog):
 
         # The buttons to move through the overview
         self.correct = QtGui.QToolButton()
-        self.correct.setIcon(QtGui.QIcon('Resources/tick.png'))
+        self.correct.setIcon(QtGui.QIcon('img/tick.png'))
         iconSize = QtCore.QSize(50, 50)
         self.correct.setIconSize(iconSize)
         # self.wrong = QtGui.QToolButton()
@@ -1010,8 +1010,8 @@ class HumanClassify2(QDialog):
                 else:
                     x1 = int(self.segments[ind][0])
                     x2 = int(self.segments[ind][1])
-                    x3 = int(self.segments[ind][2])
-                    x4 = int(self.segments[ind][3])
+                    x3 = 0
+                    x4 = np.shape(self.sg)[1]
                 images.append(self.setImage(self.sg[x1:x2, x3:x4]))
             for i in range(segRemain, self.w * self.h):
                 images.append([None, None])
@@ -1026,8 +1026,8 @@ class HumanClassify2(QDialog):
                 else:
                     x1 = int(self.segments[ind][0])
                     x2 = int(self.segments[ind][1])
-                    x3 = int(self.segments[ind][2])
-                    x4 = int(self.segments[ind][3])
+                    x3 = 0
+                    x4 = np.shape(self.sg)[1]
                 images.append(self.setImage(self.sg[x1:x2, x3:x4]))
         self.buttons = []
         for position, im in zip(positions, images):
