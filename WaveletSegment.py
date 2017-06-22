@@ -11,13 +11,13 @@ import glob
 import string
 import SignalProc
 
-mingw_path = 'C:\\Program Files\\mingw-w64\\x86_64-7.1.0-posix-seh-rt_v5-rev0\\mingw64\\bin'
-os.environ['PATH'] = mingw_path + ';' + os.environ['PATH']
-import xgboost as xgb
-from sklearn.externals import joblib
-clf_maleKiwi = joblib.load('maleKiwiClassifier.pkl')
-clf_femaleKiwi = joblib.load('femaleKiwiClassifier.pkl')
-clf_ruru = joblib.load('ruruClassifier.pkl')
+# mingw_path = 'C:\\Program Files\\mingw-w64\\x86_64-7.1.0-posix-seh-rt_v5-rev0\\mingw64\\bin'
+# os.environ['PATH'] = mingw_path + ';' + os.environ['PATH']
+# import xgboost as xgb
+# from sklearn.externals import joblib
+# clf_maleKiwi = joblib.load('maleKiwiClassifier.pkl')
+# clf_femaleKiwi = joblib.load('femaleKiwiClassifier.pkl')
+# clf_ruru = joblib.load('ruruClassifier.pkl')
 
 # Nirosha's approach of simultaneous segmentation and recognition using wavelets
 
@@ -268,7 +268,6 @@ class WaveletSeg:
             detected=np.where(detected>0)
             # print "det",detected
             return self.identifySegments(np.squeeze(detected))
-            return detected
 
     def detectCalls1(self,wp,listnodes,sampleRate):
         # This way should be the best -- reconstruct from setting all of the relevant nodes. But it gives an error message
@@ -381,7 +380,6 @@ class WaveletSeg:
     #             i+=1
 
 def findCalls_train_learning(fName,species='kiwi'):
-
     ws=WaveletSeg()
     f = np.genfromtxt("Sound Files\MLdata\wE.data",delimiter=',',dtype=None)
     ld = len(f[0])
@@ -418,7 +416,6 @@ def findCalls_train_learning(fName,species='kiwi'):
     # These nodes refer to the unrooted tree, so add 1 to get the real indices
     nodes = [n + 1 for n in nodes]
     print nodes
-
 
     # **** We actually need the real data :(
     # Generate a full 5 level wavelet packet decomposition
@@ -527,41 +524,41 @@ def findCalls_train(fName,species='kiwi'):
             break
     return listnodes
 
-def findCalls_learn(fName=None,data=None, sampleRate=None, species='kiwi',trainTest=False):
-    # import xgboost as xgb
-    # from sklearn.externals import joblib
-
-    if species == 'Kiwi (M)':
-        clf = clf_maleKiwi
-    elif species == 'Kiwi (F)':
-        clf = clf_femaleKiwi
-    elif species == 'Ruru':
-        clf = clf_ruru
-
-    # Second by second, run through the data file and compute the wavelet energy, then classify them
-    segs = []
-    for i in range(0,len(data),sampleRate):
-        currentSec = data[i:(i+1)*sampleRate]
-        # Compute wavelet energy for this second
-        E = computeWaveletEnergy_1s(currentSec, 'dmey2')    # always calculate E on row data not denoised or bp
-        E = np.ones((1,len(E))) * E
-        #segs.append(int(clf.predict(E)[0]))
-        print clf.predict(E)[0]
-        # if int(clf.predict(E)[0]) == 1:
-        #     segs.append([float(i)/sampleRate,float(i+sampleRate)/sampleRate])
-        segs.append(int(clf.predict(E)[0]))
-    print segs
-    return segs
+# def findCalls_learn(fName=None,data=None, sampleRate=None, species='kiwi',trainTest=False):
+#     # import xgboost as xgb
+#     # from sklearn.externals import joblib
+#
+#     if species == 'Kiwi (M)':
+#         clf = clf_maleKiwi
+#     elif species == 'Kiwi (F)':
+#         clf = clf_femaleKiwi
+#     elif species == 'Ruru':
+#         clf = clf_ruru
+#
+#     # Second by second, run through the data file and compute the wavelet energy, then classify them
+#     segs = []
+#     for i in range(0,len(data),sampleRate):
+#         currentSec = data[i:(i+1)*sampleRate]
+#         # Compute wavelet energy for this second
+#         E = computeWaveletEnergy_1s(currentSec, 'dmey2')    # always calculate E on row data not denoised or bp
+#         E = np.ones((1,len(E))) * E
+#         #segs.append(int(clf.predict(E)[0]))
+#         print clf.predict(E)[0]
+#         # if int(clf.predict(E)[0]) == 1:
+#         #     segs.append([float(i)/sampleRate,float(i+sampleRate)/sampleRate])
+#         segs.append(int(clf.predict(E)[0]))
+#     print segs
+#     return segs
 
 def findCalls_test(fName=None,data=None, sampleRate=None, species='kiwi',trainTest=False):
     #data, sampleRate_o, annotation = loadData(fName)
     ws=WaveletSeg()
-    print species
-    if species=='kiwi':
+    # print species
+    if species.title()=='Kiwi':
         nodes=[34,35,36,38,40,41,42,43,44,45,46,55]
-    elif species=='ruru':
+    elif species.title()=='Ruru':
         nodes=[33,37,38]
-    print nodes
+    # print nodes
     if fName!=None:
         ws.loadData(fName,trainTest)
     else:
@@ -575,9 +572,9 @@ def findCalls_test(fName=None,data=None, sampleRate=None, species='kiwi',trainTe
         ws.data = librosa.core.audio.resample(ws.data,ws.sampleRate,fs)
         ws.sampleRate=fs
     wData = ws.sp.waveletDenoise(ws.data, thresholdType='soft', maxlevel=5)
-    if species=='kiwi':
+    if species.title()=='Kiwi':
         fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
-    elif species=='ruru':
+    elif species.title()=='Ruru':
         fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=500,high=7000)
     wpFull = pywt.WaveletPacket(data=fwData, wavelet=ws.wavelet, mode='symmetric', maxlevel=5)
     # detect based on a previously defined nodeset, default for kiwi
