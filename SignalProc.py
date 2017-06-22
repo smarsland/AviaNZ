@@ -375,7 +375,7 @@ class SignalProc:
         if data is None:
             data = self.data
 
-        print data[:10]
+        # print data[:10]
 
         if wavelet == 'dmey2':
             [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
@@ -389,7 +389,7 @@ class SignalProc:
             print "Best level is ", self.maxlevel
         else:
             self.maxlevel = maxlevel
-            print "Using level ", self.maxlevel
+            # print "Using level ", self.maxlevel
 
         self.thresholdMultiplier = threshold
 
@@ -402,7 +402,7 @@ class SignalProc:
         threshold = self.thresholdMultiplier * sigma
 
         bestleaves = self.BestTree(wp,threshold)
-        print bestleaves
+        # print bestleaves
 
         # Make a new tree with these in
         new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='zero', maxlevel=wp.maxlevel)
@@ -428,7 +428,7 @@ class SignalProc:
 
         # Reconstruct the internal nodes and the data
         new_wp = self.reconstruct(new_wp,wp.wavelet,bestleaves)
-        print new_wp[''].data[:10]
+        # print new_wp[''].data[:10]
 
         # wavio.write('testme.wav', new_wp[''].data, self.sampleRate, sampwidth=2)
 
@@ -436,6 +436,32 @@ class SignalProc:
         #data = new_wp[''].data
         #data = float(2**16) * (data - np.min(data)) / (np.max(data)-np.min(data)) - 2**15
         return new_wp[''].data
+
+    def waveletCoeff(self,data=None,maxlevel=None,bandpass=False,wavelet='dmey2'):
+        # Return the wavelet coefficients of leaf nodes
+        data = data
+        if wavelet == 'dmey2':
+            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
+            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
+            wavelet.orthogonal=True
+
+        if maxlevel is None:
+            maxlevel = self.BestLevel(wavelet)
+            print "Best level is ", self.maxlevel
+        else:
+            maxlevel = maxlevel
+            # print "Using level ", self.maxlevel
+
+        wp = pywt.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric', maxlevel=maxlevel)
+        leafNodes=wp.get_leaf_nodes(decompose=False)
+        # make the matrix 64*n
+        leaves=[node.path for node in wp.get_level(maxlevel, 'natural')]
+        mat=np.zeros((len(leaves),len(leafNodes[0][leaves[0]].data)))
+        j=0
+        for leaf in leaves:
+            mat[j]=leafNodes[0][leaf].data
+            j=j+1
+        return mat
 
     def bandpassFilter(self,data=None,start=1000,end=10000):
         # Bandpass filter
@@ -462,7 +488,7 @@ class SignalProc:
         highStop = float(high+50)/nyquist
         # calculate the best order
         order,wN = signal.buttord([lowPass, highPass], [lowStop, highStop], 3, 50)
-        print 'order=', order
+        # print 'order=', order
         # print 'wN=', wN
         # print 'lowpass, highpass', lowPass,highPass
         if order>10:

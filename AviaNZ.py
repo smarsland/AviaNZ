@@ -336,17 +336,17 @@ class AviaNZ(QMainWindow):
 
     def showAbout(self):
         msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
+        msg.setIconPixmap(QPixmap("img\AviaNZ.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
-        msg.setText("The AviaNZ Program, v0.10 (April 2017)")
-        msg.setInformativeText("By Stephen Marsland, Massey University (2016--2017). With input from Nirosha Priyadarshani, Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Manic Purage. s.r.marsland@massey.ac.nz")
+        msg.setText("The AviaNZ Program, v0.10 (June 2017)")
+        msg.setInformativeText("By Stephen Marsland, Massey University (2016--2017). With input from Nirosha Priyadarshani, Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Manic Purage. \ns.r.marsland@massey.ac.nz; n.p.priyadarshani@massey.ac.nz")
         msg.setWindowTitle("About")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
         return
 
     def showHelp(self):
-        os.system('Docs/AviaNZManual.pdf')
+        os.system('Docs\\AviaNZManual.pdf')
 
     def genConfigFile(self):
         # Generates a configuration file with default values for parameters
@@ -2497,7 +2497,7 @@ class AviaNZ(QMainWindow):
             # print newSegments
         elif str(alg)=="Wavelets":
             newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
-            print newSegments
+            #print newSegments
 
             # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
             # # but ML is extremely slow and crappy. So I decided to use just the wavelets
@@ -2530,8 +2530,12 @@ class AviaNZ(QMainWindow):
         # Merge neighbours for wavelet seg
         if str(alg)=="Wavelets":
             newSegments=self.mergeSeg(newSegments)
-        for seg in newSegments:
-            self.addSegment(float(seg[0]),float(seg[1]),0,0,species.title()+"?") # TODO: sometimes got index exceed max
+            for seg in newSegments:
+                self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
+                                species.title() + "?")  # TODO: sometimes got index exceed max
+        else:
+            for seg in newSegments:
+                self.addSegment(float(seg[0]),float(seg[1])) # TODO: sometimes got index exceed max
 
         #     newSegmentsDef=self.mergeSeg(newSegmentsDef)
         #     newSegmentsPb=self.mergeSeg(newSegmentsPb)
@@ -2725,7 +2729,7 @@ class AviaNZ(QMainWindow):
             import tempfile
             f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
             filename=f.name
-            print filename
+            # print filename
             data = data.astype('int16')
             wavio.write(f.name,data,self.sampleRate,scale='dtype-limits',sampwidth=2)
 
@@ -2946,5 +2950,5 @@ elif task==2:
     avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
     avianz.show()
     app.exec_()
-else:
-    app.exit()
+# else:
+#     app.exit()
