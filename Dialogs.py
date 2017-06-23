@@ -848,7 +848,7 @@ class HumanClassify1(QDialog):
 
     def playSeg(self):  #This is not the right place though
         import wavio
-
+        import platform
         if platform.system() == 'Darwin':
             filename = 'temp.wav'
         else:

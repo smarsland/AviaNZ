@@ -30,6 +30,9 @@ class ShadedROI(pg.ROI):
         p.drawRect(0, 0, 1, 1)
         p.restore()
 
+    def setMovable(self,value):
+        self.translatable = value
+
     def setBrush(self, *br, **kargs):
         """Set the brush that fills the region. Can have any arguments that are valid
         for :func:`mkBrush <pyqtgraph.mkBrush>`.

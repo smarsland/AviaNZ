@@ -223,6 +223,13 @@ class WaveletSeg:
         count = 0
         for index in listnodes:
             new_wp = pywt.WaveletPacket(data=None, wavelet=self.wavelet, mode='symmetric')
+
+            # TODO: This primes the tree with zeros, which was necessary for denoising.
+            # Is it needed here?
+            for level in range(wp.maxlevel + 1):
+                for n in new_wp.get_level(level, 'natural'):
+                    n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+
             # First, turn the index into a leaf name.
             level = np.floor(np.log2(index))
             first = int(2**level-1)
