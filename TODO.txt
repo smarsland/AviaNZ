@@ -1,62 +1,57 @@
 
 # TODO for AviaNZ
 
+SM:
 Make a new method (not inside Segmentation):
     (1) Perform segmentation using at least one of old wavelet method and any other segmenter, possibly multiple options
     (2) Combine the segments as appropriate
     (3) Perform classification on each segment using at least one of wavelet energies, Raven feature, MFCC
 
-    For kiwi, separate classification of M and F but combined in the return
+Update the manual
 
+Video of using
 
-Look up Freebird to see what data is needed in the info screen
-    Reviewer and Something!
+For HumanClassify2 errors
+    -> they are currently just deleted.
+    Better is to remove them, but to save them and then after all have been processed,
+    use HumanClassify1 to get labels for them, save them somwhere and reuse for more training
+    There needs to be an option to not do this though :)
 
-Control marking the same segments again and again - multiple clicks on Find matches with the same pattern.
-	# Thing to do is probably move find matches into the segmentations
+move Find Matches to segmentations
 
-
-
-NP: So we need to save the 3 (male, female kiwi, ruru) learners
-NP: And then add code to use it
-# Done, but ML is extremely slow and no good results! There is a gap between the dataset and real thing which needs
-    more research. A partial solution to increase speed would be just pass only the positive wavelet segments to ML
-    rather than the whole file.
-    However I decided to use Wavelets and make available all other alternative segmentation methods for this first release.
-
-Test out having if both learner and OR say yes -> sure, if xor(learner,OR) -> maybe? (or something...)
-For this version, that's it
-    -> extensions (add other features and learners) MFCC, Raven, etc.
-    -> combine with previous second data
-    -> etc.
-
-SM: Add in the 'who the user is' annotation
-    # Done, but currently has a False in it's call to stop it
-    # Need to know what info they want
-    # And ask on every file?
-    # And show on screen?
-    
-SM: Update the manual
-    -> correct the cheat sheet
-    -> get them included in the program (via web interface or pdf)
-   # pdf is there and working in Windows
-    
-NP: Bring the outputs to a nice format
-    (1) excel summary for the directory processed <DirName>_<spp>_<method>
-    (2) AviaNZ annotation (this is going to be the last method if the user had several runs with different methods)
-    (3) binary output (just for us to evaluate the results)    
-    
-NP: Stop saving temp files used to playback? however in Windows it goes to the local temp (garbage collection)
-
-NP: Installation!!!
-# Done, some tiding up is needed
-
-(1) Minor bugs and extensions
-
+get name from standard files and use it
 
     SM: Tidy code, ensure comments, etc.
 
     SM: Tidy the repository
+
+
+
+NP:
+
+Username in the status bar
+
+Make the Manual Seg produce the excel files (Export segmentation option in menu)
+And put all the three excel files into 1 on 3 sheets
+
+Make a pretty (simple) version of the Process File dialog
+
+Enable parameter setting
+
+Paper!
+
+Raven features
+
+Denoising experiments
+    -> short time better than long?
+    -> denoise only segments
+    -> compare python and matlab
+
+Segmentation experiments
+    -> like thesis but better :)
+    -> paper
+
+(1) Minor bugs and extensions
 
     SM: Get the time from the file name (if standard) and use it to put day or night birds first
 
@@ -72,15 +67,9 @@ NP: Installation!!!
 
 	Update the status bar when auto saving the annotation? Users want to know/confirm.
 
-    Readonly mode
-
     NP: Make play sounds play the denoised version after denoising
 # This seems to be complicated with undo etc. Still thinking whats the best way to do it,
   can easily add a separate button to play denoised but not nice. I fixed the plotting problem though.
-
-    NP: Add a change directory option
-# Don't want to change what's drawn there (currently selected file and its spectro), but effects thereafter
-  when opening a new file
 
 	NP: Stop loading the file when choose to cancel the progress bar
 # Removed the cancel button for now. otherwise have to unroll what happened inside the loadFile when the user cancel it.
