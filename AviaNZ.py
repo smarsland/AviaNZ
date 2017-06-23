@@ -250,7 +250,7 @@ class AviaNZ(QMainWindow):
 
         fileMenu = self.menuBar().addMenu("&File")
         fileMenu.addAction("&Open sound file", self.openFile, "Ctrl+O")
-        fileMenu.addAction("&Change Directory", self.chDir)
+        #fileMenu.addAction("&Change Directory", self.chDir)
         #fileMenu.addSeparator()
         fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
@@ -317,6 +317,9 @@ class AviaNZ(QMainWindow):
 
         actionMenu = self.menuBar().addMenu("&Actions")
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
+        self.readonly = actionMenu.addAction("Make read only",self.makeReadOnly)
+        self.readonly.setCheckable(True)
+        self.readonly.setChecked(False)
         actionMenu.addAction("Denoise",self.denoiseDialog)
         actionMenu.addAction("Segment",self.segmentationDialog)
         actionMenu.addAction("Find matches",self.findMatches)
@@ -498,10 +501,11 @@ class AviaNZ(QMainWindow):
         self.p_spec.addItem(self.specPlot)
 
         # Connect up the listeners
+        # Have to connect up both of the spectogram ones so that one can be disconnected in the drag menu item listener
         self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
+        self.p_spec.sigMouseDragged.connect(self.mouseDragged_spec)
         self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
         self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
-        self.p_spec.sigMouseDragged.connect(self.mouseDragged_spec)
 
         # The content of the other two docks
         self.w_controls = pg.LayoutWidget()
@@ -785,7 +789,7 @@ class AviaNZ(QMainWindow):
         while fileName[i] != '/' and i>0:
             i = i-1
         self.dirName = fileName[:i+1]
-
+        print "in openFile: ", self.dirName
         self.listLoadFile(fileName)
 
     def listLoadFile(self,current):
@@ -827,10 +831,13 @@ class AviaNZ(QMainWindow):
         while self.listOfFiles[i].fileName() != current and i<len(self.listOfFiles)-1:
             i+=1
         if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
+            print self.dirName
             dir = QDir(self.dirName)
             dir.cd(self.listOfFiles[i].fileName())
             # Now repopulate the listbox
+            print "in listLoad:", self.dirName, dir.dirName()
             self.dirName=str(dir.absolutePath())
+            print "in listLoad:", self.dirName
             self.listFiles.clearSelection()
             self.listFiles.clearFocus()
             self.listFiles.clear()
@@ -866,6 +873,7 @@ class AviaNZ(QMainWindow):
                 self.filename = self.dirName+'/'+ name
             else:
                 self.filename = str(self.dirName+'/'+name.text())
+            print self.dirName, self.filename
             dlg += 1
 
             # The actual reading of a file
@@ -970,11 +978,17 @@ class AviaNZ(QMainWindow):
     def dragRectanglesCheck(self):
         """ Listener for the menuitem that says if the user is dragging rectangles or clicking on the spectrogram has
         changed state.
-        Changes the pyqtgraph MouseMode. """
+        Changes the pyqtgraph MouseMode.
+        Also swaps the listeners"""
         if self.dragRectangles.isChecked():
             self.p_spec.setMouseMode(pg.ViewBox.RectMode)
+            self.p_spec.scene().sigMouseClicked.disconnect()
+            self.p_spec.sigMouseDragged.connect(self.mouseDragged_spec)
         else:
             self.p_spec.setMouseMode(pg.ViewBox.PanMode)
+            self.p_spec.sigMouseDragged.disconnect()
+            self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
+
         self.config['dragBoxes'] = self.dragRectangles.isChecked()
 
     def dragRectsTransparent(self):
@@ -1026,6 +1040,38 @@ class AviaNZ(QMainWindow):
         else:
             self.p_overview2.hide()
         self.config['showAnnotationOverview'] = self.showOverviewSegsTick.isChecked()
+
+    def makeReadOnly(self):
+        """ Listener to process the check menu item to make the plots read only.
+        Turns off the listeners for the amplitude and spectrogram plots.
+        Also has to go through all of the segments, turn off the listeners, and make them unmovable.
+        """
+        if self.readonly.isChecked():
+            self.p_ampl.scene().sigMouseClicked.disconnect()
+            if self.dragRectangles.isChecked():
+                self.p_spec.sigMouseDragged.disconnect()
+            else:
+                self.p_spec.scene().sigMouseClicked.disconnect()
+            self.p_spec.scene().sigMouseMoved.disconnect()
+            for rect in self.listRectanglesa1:
+                rect.sigRegionChangeFinished.disconnect()
+                rect.setMovable(False)
+            for rect in self.listRectanglesa2:
+                rect.sigRegionChangeFinished.disconnect()
+                rect.setMovable(False)
+        else:
+            self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
+            if self.dragRectangles.isChecked():
+                self.p_spec.sigMouseDragged.connect(self.mouseDragged_spec)
+            else:
+                self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
+            self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
+            for rect in self.listRectanglesa1:
+                rect.sigRegionChangeFinished.connect(self.updateRegion_ampl)
+                rect.setMovable(True)
+            for rect in self.listRectanglesa2:
+                rect.sigRegionChangeFinished.connect(self.updateRegion_spec)
+                rect.setMovable(True)
 
     def dockReplace(self):
         """ Listener for if the docks should be replaced menu item. """
@@ -1151,7 +1197,7 @@ class AviaNZ(QMainWindow):
         self.overviewImageRegion = pg.LinearRegionItem()
         self.p_overview.addItem(self.overviewImageRegion, ignoreBounds=True)
         self.overviewImageRegion.setRegion([0, self.convertAmpltoSpec(self.widthWindow.value())])
-        self.overviewImageRegion.sigRegionChanged.connect(self.updateOverview)
+        self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
 
         # Three y values are No. not known, No. known, No. possible
         # widthOverviewSegment is in seconds
@@ -1971,7 +2017,9 @@ class AviaNZ(QMainWindow):
 
     def humanClassifyDelete1(self):
         # Delete a segment
+        id = self.box1id
         self.deleteSegment(self.box1id)
+        self.box1id = id-1
         self.humanClassifyNextImage1()
 
     def humanClassifyDialog2(self):
@@ -2587,21 +2635,22 @@ class AviaNZ(QMainWindow):
             del self.listRectanglesa2[id]
             self.box1id = -1
 
-    def chDir(self):
-        # Listener for Change directory menu item
-        # Don't want to change what's drawn there (currently selected file and its spectro),
-        # but effects when opening a new file
-        dir= QtGui.QFileDialog.getExistingDirectory(self,'Choose Directory',self.dirName,QtGui.QFileDialog.ShowDirsOnly) #"Wav files (*.wav)")
-        if dir!='':
-            self.dirName=os.path.abspath(dir)
-            # Now repopulate the listbox
-            #print "Now in "+self.listOfFiles[i].fileName()
-            # self.dirName=str(dir.absolutePath())
-            self.listFiles.clearSelection()
-            self.listFiles.clearFocus()
-            self.listFiles.clear()
-            self.previousFile = None
-            self.fillFileList(fileName=None)
+    # def chDir(self):
+    #     # Listener for Change directory menu item
+    #     # Don't want to change what's drawn there (currently selected file and its spectro),
+    #     # but effects when opening a new file
+    #     dir= QtGui.QFileDialog.getExistingDirectory(self,'Choose Directory',self.dirName,QtGui.QFileDialog.ShowDirsOnly) #"Wav files (*.wav)")
+    #     dir = str(dir)
+    #     if dir!='':
+    #         self.dirName=os.path.abspath(dir)
+    #         # Now repopulate the listbox
+    #         #print "Now in "+self.listOfFiles[i].fileName()
+    #         # self.dirName=str(dir.absolutePath())
+    #         self.listFiles.clearSelection()
+    #         self.listFiles.clearFocus()
+    #         self.listFiles.clear()
+    #         self.previousFile = None
+    #         self.fillFileList(fileName=None)
 
     def deleteAll(self):
         """ Listener for delete all button.
