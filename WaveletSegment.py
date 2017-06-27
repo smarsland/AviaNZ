@@ -64,8 +64,9 @@ class WaveletSeg:
         # Get the energy of the nodes in the wavelet packet decomposition
         # There are 62 coefficients up to level 5 of the wavelet tree (without root), and 300 seconds in 5 mins
         # The energy is the sum of the squares of the data in each node divided by the total in the tree
-        coefs = np.zeros((62, 300))
-        for t in range(300):
+        n=len(fwData)/sampleRate
+        coefs = np.zeros((62, n))
+        for t in range(n):
             E = []
             for level in range(1,6):
                 wp = pywt.WaveletPacket(data=fwData[t * sampleRate:(t + 1) * sampleRate], wavelet=self.wavelet, mode='symmetric', maxlevel=level)
@@ -168,7 +169,7 @@ class WaveletSeg:
 
         return newlist
 
-    def detectCalls(self,wp,node,sampleRate=0,n=300):
+    def detectCalls(self,wp,node,sampleRate=0,n=300,species='kiwi'):
         if sampleRate==0:
             sampleRate=self.sampleRate
         import string
@@ -187,8 +188,12 @@ class WaveletSeg:
         C = np.abs(new_wp.reconstruct(update=True))
         N = len(C)
 
+        # wavio.write('E:\Rebecca SIPO\\train\\node'+str(node)+'.wav', C.astype('int16'), sampleRate, scale='dtype-limits', sampwidth=2)
+
         # Compute the number of samples in a window -- species specific
-        M = int(0.8*sampleRate/2.0)
+        M = int(0.8*sampleRate/2.0)     # TODO: set M in relation to the call length, M can make a big difference in res
+        if species.title()=='Sipo':
+            M=int(0.2*sampleRate/2.0)
         #print M
 
         # Compute the energy curve (a la Jinnai et al. 2012)
@@ -199,6 +204,8 @@ class WaveletSeg:
         E = E / (2. * M)
 
         threshold = np.mean(C) + np.std(C)
+        if species.title() == 'Sipo':
+            threshold = np.mean(C) + np.std(C)/4
         # bittern
         # TODO: test
         #thresholds[np.where(waveletCoefs<=32)] = 0
@@ -214,13 +221,14 @@ class WaveletSeg:
 
         return detected
 
-    def detectCalls_test(self,wp,sampleRate, listnodes=[34,35,36,38,40,41,42,43,44,45,46,55],trainTest=False): #default kiwi
+    def detectCalls_test(self,wp,sampleRate, listnodes=[], species='kiwi',trainTest=False): #default kiwi
         #for test recordings given the set of nodes
         import string
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
         # detected = np.zeros((300,len(listnodes)))
         detected = np.zeros((int(len(wp.data)/sampleRate),len(listnodes)))
         count = 0
+
         for index in listnodes:
             new_wp = pywt.WaveletPacket(data=None, wavelet=self.wavelet, mode='symmetric')
 
@@ -245,7 +253,9 @@ class WaveletSeg:
 
             # Compute the number of samples in a window -- species specific
             M = int(0.8*sampleRate/2.0)
-            #print M
+            if species.title()=='Sipo':
+                M = int(0.2 * sampleRate / 2.0)
+            print M
 
             # Compute the energy curve (a la Jinnai et al. 2012)
             E = np.zeros(N)
@@ -255,6 +265,8 @@ class WaveletSeg:
             E = E / (2. * M)
 
             threshold = np.mean(C) + np.std(C)
+            if species.title() == 'Sipo':
+                threshold = np.mean(C) + np.std(C)/2
             # bittern
             # TODO: test
             #thresholds[np.where(waveletCoefs<=32)] = 0
@@ -274,7 +286,12 @@ class WaveletSeg:
         else:
             detected=np.where(detected>0)
             # print "det",detected
-            return self.identifySegments(np.squeeze(detected))
+            if np.shape(detected)[1]>1:
+                return self.identifySegments(np.squeeze(detected))
+            elif np.shape(detected)[1]==1:
+                return self.identifySegments(detected)
+            else:
+                return []
 
     def detectCalls1(self,wp,listnodes,sampleRate):
         # This way should be the best -- reconstruct from setting all of the relevant nodes. But it gives an error message
@@ -327,6 +344,7 @@ class WaveletSeg:
 
     def identifySegments(self, seg): #, maxgap=1, minlength=1):
         segments = []
+        # print seg, type(seg)
         if len(seg)>0:
             for s in seg:
                 segments.append([s, s+1])
@@ -346,18 +364,19 @@ class WaveletSeg:
             self.data = self.data.astype('float') #/ 32768.0
         if np.shape(np.shape(self.data))[0]>1:
             self.data = np.squeeze(self.data[:,0])
+        n=len(self.data)/self.sampleRate
 
         self.sp.setNewData(self.data,self.sampleRate)
 
         if trainTest==True:     #survey data don't have annotations
             # Get the segmentation from the excel file
-            self.annotation = np.zeros(300)
+            self.annotation = np.zeros(n)
             count = 0
             import xlrd
             wb=xlrd.open_workbook(filename = filenameAnnotation)
             ws=wb.sheet_by_index(0)
             col=ws.col(1)
-            for row in range(1,301):
+            for row in range(1,n+1):
                 self.annotation[count]=col[row].value
                 count += 1
         #return self.data, self.sampleRate, self.annotation
@@ -470,6 +489,8 @@ def findCalls_train(fName,species='kiwi'):
     ws.loadData(fName)
     if species=='boom':
         fs=1000
+    elif species.title()=='Sipo':
+        fs=8000
     else:
         fs = 16000
     if ws.sampleRate != fs:
@@ -488,7 +509,12 @@ def findCalls_train(fName,species='kiwi'):
     # bittern
     #fwData = ButterworthBandpass(wData,sampleRate,low=100,high=400)
     # kiwi
-    fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=1100,high=7500)
+    if species == 'kiwi':
+        fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=1100,high=7000)
+    elif species == 'ruru':
+        fwData = ws.sp.ButterworthBandpass(wData, ws.sampleRate, low=500, high=7000)
+    elif species.title()=='Sipo':
+        fwData = ws.sp.ButterworthBandpass(wData, ws.sampleRate, low=1200, high=3800)
     print fwData
 
     #fwData = data
@@ -512,13 +538,14 @@ def findCalls_train(fName,species='kiwi'):
     # Now check the F2 values and add node if it improves F2
     listnodes = []
     bestBetaScore = 0
-    detected = np.zeros(300)
+    m=len(wData)/ws.sampleRate
+    detected = np.zeros(m)
 
     for node in nodes:
         testlist = listnodes[:]
         testlist.append(node)
         print testlist
-        detected_c = ws.detectCalls(wpFull,node,ws.sampleRate)
+        detected_c = ws.detectCalls(wpFull,node,ws.sampleRate,n=m,species=species)
         #update the detections
         det=np.maximum.reduce([detected,detected_c])
         fB = ws.fBetaScore(ws.annotation, det)
@@ -565,6 +592,9 @@ def findCalls_test(fName=None,data=None, sampleRate=None, species='kiwi',trainTe
         nodes=[34,35,36,38,40,41,42,43,44,45,46,55]
     elif species.title()=='Ruru':
         nodes=[33,37,38]
+    elif species.title()=='Sipo':
+        nodes = [61,59,54,51,60,58,49,47]
+        # print "SIPO nodes:", nodes
     # print nodes
     if fName!=None:
         ws.loadData(fName,trainTest)
@@ -573,6 +603,8 @@ def findCalls_test(fName=None,data=None, sampleRate=None, species='kiwi',trainTe
         ws.sampleRate=sampleRate
     if species=='boom':
         fs=1000
+    if species.title()=='Sipo':
+        fs=8000
     else:
         fs = 16000
     if ws.sampleRate != fs:
@@ -583,9 +615,11 @@ def findCalls_test(fName=None,data=None, sampleRate=None, species='kiwi',trainTe
         fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
     elif species.title()=='Ruru':
         fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=500,high=7000)
+    elif species.title() == 'Sipo':
+        fwData = ws.sp.ButterworthBandpass(wData, ws.sampleRate, low=1200, high=3800)
     wpFull = pywt.WaveletPacket(data=fwData, wavelet=ws.wavelet, mode='symmetric', maxlevel=5)
     # detect based on a previously defined nodeset, default for kiwi
-    detected = ws.detectCalls_test(wpFull, ws.sampleRate,listnodes=nodes,trainTest=trainTest)
+    detected = ws.detectCalls_test(wpFull, ws.sampleRate,listnodes=nodes,species=species,trainTest=trainTest)
     if trainTest==True:
         print fName
         ws.fBetaScore(ws.annotation, detected)
@@ -951,3 +985,54 @@ def CreateDataSet_data(directory,species='kiwi',choice='all',denoise=False):
 
 # findCalls_train_learning(species='kiwi')
 # moretest()
+
+
+#### SIPO ############################################################
+def annotation2GT(datFile):
+    # Given the AviaNZ annotation returns the ground truth as an excel
+    import math
+    from openpyxl import load_workbook, Workbook
+    wavFile=datFile[:-5]
+    eFile = datFile[:-9]+'-sec.xlsx'
+    wavobj = wavio.read(wavFile)
+    sampleRate = wavobj.rate
+    data = wavobj.data
+    n=len(data)/sampleRate   # number of secs
+    GT=np.zeros(n)
+    with open(datFile) as f:
+        segments = json.load(f)
+    for seg in segments:
+        s=int(math.floor(seg[0]))
+        e=int(math.ceil(seg[1]))
+        for i in range(s,e):
+            GT[i]=1
+    wb = Workbook()
+    ws = wb.active
+    ws.cell(row=1, column=1, value="time")
+    ws.cell(row=1, column=2, value="call")
+    ws.cell(row=1, column=3, value="call type")
+    ws.cell(row=1, column=4, value="quality")
+    r = 2
+    for i in range(len(GT)):
+        ws.cell(row=r, column=1, value=str(i + 1))
+        ws.cell(row=r, column=2, value=str(int(GT[i])))
+        r = r + 1
+    wb.save(str(eFile))
+    print GT
+
+# generate GT for SIPO
+# annotation2GT('E:\Rebecca SIPO\\train\Mt Cass coastal SIPO 07072012.wav.data')
+# annotation2GT('E:\Rebecca SIPO\\train\\170617_163003_train.wav.data')
+
+# Train
+# nodes= findCalls_train('E:\Rebecca SIPO\\train\Mt Cass coastal SIPO 07072012',species='SIPO')
+# print "Nodes for SIPO: ",nodes
+# # # nodes_SIPO=[54,26,2]
+# #           = [61L, 53L, 60L, 57L]
+#
+# nodes = findCalls_train('E:\Rebecca SIPO\\train\\170617_163003_train', species='SIPO')
+# print "Nodes for SIPO: ",nodes
+# [59L, 54L, 51L, 60L, 58L, 49L, 47L]
+
+# d=findCalls_test(fName='E:\Rebecca SIPO\\train\Mt Cass coastal SIPO 07072012',data=None, sampleRate=None, species='SIPO',trainTest=False)
+# print d
