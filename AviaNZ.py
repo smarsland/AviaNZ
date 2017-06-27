@@ -50,6 +50,8 @@ import interface_FindSpecies
 import WaveletSegment
 #import math
 
+from openpyxl import load_workbook, Workbook
+
 #import pyqtgraph.parametertree.parameterTypes as pTree
 # ==============
 # TODO
@@ -250,8 +252,9 @@ class AviaNZ(QMainWindow):
 
         fileMenu = self.menuBar().addMenu("&File")
         fileMenu.addAction("&Open sound file", self.openFile, "Ctrl+O")
-        #fileMenu.addAction("&Change Directory", self.chDir)
-        #fileMenu.addSeparator()
+        # fileMenu.addAction("&Change Directory", self.chDir)
+        fileMenu.addAction("&Set Operator/Reviewer", self.setOperatorReviewerDialog)
+        fileMenu.addSeparator()
         fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
         # Add it a second time, then it appears!
@@ -662,8 +665,26 @@ class AviaNZ(QMainWindow):
         self.dragRectsTransparent()
         self.dragRectanglesCheck()
 
+        # add statusbar
+        self.statusLeft = QLabel("Left")
+        self.statusLeft.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
+        self.statusMid = QLabel("????")
+        self.statusMid.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
+        self.statusRight = QLabel("Right")
+        self.statusRight.setAlignment(Qt.AlignRight)
+        self.statusRight.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
+        # Style
+        statusStyle='QLabel {border:transparent}'
+        self.statusLeft.setStyleSheet(statusStyle)
+        # self.statusMid.setStyleSheet(statusStyle)
+        self.statusRight.setStyleSheet(statusStyle)
+        self.statusBar().addPermanentWidget(self.statusLeft,1)
+        # self.statusBar().addPermanentWidget(self.statusMid,1)
+        self.statusBar().addPermanentWidget(self.statusRight,1)
+
         # Set the message in the status bar
-        self.statusBar().showMessage("Ready")
+        self.statusLeft.setText("Ready")
+        self.statusRight.setText("Operator/Reviewer:")
 
         # Plot everything
         self.show()
@@ -789,7 +810,7 @@ class AviaNZ(QMainWindow):
         while fileName[i] != '/' and i>0:
             i = i-1
         self.dirName = fileName[:i+1]
-        print "in openFile: ", self.dirName
+
         self.listLoadFile(fileName)
 
     def listLoadFile(self,current):
@@ -831,13 +852,10 @@ class AviaNZ(QMainWindow):
         while self.listOfFiles[i].fileName() != current and i<len(self.listOfFiles)-1:
             i+=1
         if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
-            print self.dirName
             dir = QDir(self.dirName)
             dir.cd(self.listOfFiles[i].fileName())
             # Now repopulate the listbox
-            print "in listLoad:", self.dirName, dir.dirName()
             self.dirName=str(dir.absolutePath())
-            print "in listLoad:", self.dirName
             self.listFiles.clearSelection()
             self.listFiles.clearFocus()
             self.listFiles.clear()
@@ -873,7 +891,6 @@ class AviaNZ(QMainWindow):
                 self.filename = self.dirName+'/'+ name
             else:
                 self.filename = str(self.dirName+'/'+name.text())
-            print self.dirName, self.filename
             dlg += 1
 
             # The actual reading of a file
@@ -956,7 +973,7 @@ class AviaNZ(QMainWindow):
             self.drawfigMain()
             self.setWindowTitle('AviaNZ - ' + self.filename)
             dlg += 1
-        self.statusBar().showMessage("Ready")
+            self.statusLeft.setText("Ready")
 
     def openNextFile(self):
         """ Listener for next file >> button.
@@ -1081,7 +1098,7 @@ class AviaNZ(QMainWindow):
         """ Calls the SignalProc class to compute, and then draws the fundamental frequency.
         Uses the yin algorithm. """
         if self.showFundamental.isChecked():
-            self.statusBar().showMessage("Drawing fundamental frequency...")
+            self.statusLeft.setText("Drawing fundamental frequency...")
             pitch, y, minfreq, W = self.seg.yin()
             ind = np.squeeze(np.where(pitch>minfreq))
             pitch = pitch[ind]
@@ -1106,10 +1123,10 @@ class AviaNZ(QMainWindow):
                 self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=1))
                 self.p_spec.addItem(self.segmentPlots[-1])
         else:
-            self.statusBar().showMessage("Removing fundamental frequency...")
+            self.statusLeft.setText("Removing fundamental frequency...")
             for r in self.segmentPlots:
                 self.p_spec.removeItem(r)
-        self.statusBar().showMessage("Ready")
+        self.statusLeft.setText("Ready")
 
     def showFundamentalFreq2(self):
         # This and the next function are to check whether or not yaapt or harvest are any good. They aren't.
@@ -1160,11 +1177,11 @@ class AviaNZ(QMainWindow):
     def medianFilterSpec(self):
         """ Median filter the spectrogram. To be used in conjunction with spectrogram inversion. """
         # TODO: Play with this
-        self.statusBar().showMessage("Filtering...")
+        self.statusLeft.setText("Filtering...")
         from scipy.ndimage.filters import median_filter
         median_filter(self.sg,size=(100,20))
         self.specPlot.setImage(self.sg)
-        self.statusBar().showMessage("Ready")
+        self.statusLeft.setText("Ready")
 
     def denoiseImage(self):
         """ Denoise the spectrogram. To be used in conjunction with spectrogram inversion. """
@@ -1190,7 +1207,7 @@ class AviaNZ(QMainWindow):
         return "%02d" % minutes+":"+"%02d" % seconds
 
     def drawOverview(self):
-        """ On loading a new file, update the overview figure to show where you are up to in the file. 
+        """ On loading a new file, update the overview figure to show where you are up to in the file.
         Also, compute the new segments for the overview, and make sure that the listeners are connected
         for clicks on them. """
         self.overviewImage.setImage(self.sg)
@@ -1933,7 +1950,7 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             return
         else:
-            self.statusBar().showMessage("Checking...")
+            # self.statusLeft.setText("Checking...")
             self.box1id = 0
             # Different calls for the two types of region
             if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
@@ -1951,7 +1968,7 @@ class AviaNZ(QMainWindow):
             #self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
             self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
             self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
-            self.statusBar().showMessage("Ready")
+            # self.statusLeft.setText("Ready")
 
     def humanClassifyClose1(self):
         # Listener for the human verification dialog.
@@ -2034,7 +2051,7 @@ class AviaNZ(QMainWindow):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
             return
-        self.statusBar().showMessage("Checking...")
+        self.statusLeft.setText("Checking...")
         if len(self.segments)>0:
             names = [item[4] for item in self.segments]
             names = [n if n[-1] != '?' else n[:-1] for n in names]
@@ -2055,7 +2072,7 @@ class AviaNZ(QMainWindow):
                 # TODO: Should store these somewhere and improve the learning, for now just deleting
                 for error in errors[-1::-1]:
                     self.deleteSegment(error)
-        self.statusBar().showMessage("Ready")
+        self.statusLeft.setText("Ready")
 
     def showSpectrogramDialog(self):
         # Create the spectrogram dialog when the button is pressed
@@ -2070,7 +2087,7 @@ class AviaNZ(QMainWindow):
     def spectrogram(self):
         # Listener for the spectrogram dialog.
         [alg, mean_normalise, multitaper, window_width, incr] = self.spectrogramDialog.getValues()
-        self.statusBar().showMessage("Updating the spectrogram...")
+        self.statusLeft.setText("Updating the spectrogram...")
         self.sp.set_width(int(str(window_width)), int(str(incr)))
         sgRaw = self.sp.spectrogram(self.audiodata,str(alg),mean_normalise=True,onesided=True,multitaper=multitaper)
         maxsg = np.min(sgRaw)
@@ -2112,7 +2129,7 @@ class AviaNZ(QMainWindow):
             if hasattr(self, 'seg'):
                 self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'],
                                     self.config['incr'])
-        self.statusBar().showMessage("Ready")
+        self.statusLeft.setText("Ready")
 
     def denoiseDialog(self):
         # Create the denoising dialog when the relevant button is pressed
@@ -2147,7 +2164,7 @@ class AviaNZ(QMainWindow):
         # TODO: deal with these!
         # TODO: Undo needs testing
         self.backup()
-        self.statusBar().showMessage("Denoising...")
+        self.statusLeft.setText("Denoising...")
         if str(alg) == "Wavelets":
             if thrType is True:
                 type = 'Soft'
@@ -2226,7 +2243,7 @@ class AviaNZ(QMainWindow):
 
         self.setColourLevels()
 
-        self.statusBar().showMessage("Ready")
+        self.statusLeft.setText("Ready")
 
         # # media_obj = phonon.Phonon.MediaObject(self)
         # self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
@@ -2296,7 +2313,7 @@ class AviaNZ(QMainWindow):
         # msg.setWindowTitle("Update")
         # msg.setStandardButtons(QMessageBox.Ok)
         # msg.exec_()
-        self.statusBar().showMessage("Saved")
+        self.statusLeft.setText("Saved")
 
     def segmentationDialog(self):
         # Create the segmentation dialog when the relevant button is pressed
@@ -2318,7 +2335,7 @@ class AviaNZ(QMainWindow):
         species = str(species)
         #if not hasattr(self,'seg'):
         #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
-        self.statusBar().showMessage("Segmenting...")
+        self.statusLeft.setText("Segmenting...")
         if str(alg) == "Amplitude":
             newSegments = self.seg.segmentByAmplitude(float(str(ampThr)))
         elif str(alg) == "Median Clipping":
@@ -2367,7 +2384,7 @@ class AviaNZ(QMainWindow):
             # newSegmentsDef=self.binary2seg(newSegmentsDef)
             # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
-        # Generate annotation friendly output. That's inogh for interface?
+        # Generate annotation friendly output. That's enough for interface?
         # Merge neighbours for wavelet seg
         if str(alg)=="Wavelets":
             newSegments=self.mergeSeg(newSegments)
@@ -2378,6 +2395,9 @@ class AviaNZ(QMainWindow):
             for seg in newSegments:
                 self.addSegment(float(seg[0]),float(seg[1])) # TODO: sometimes got index exceed max
 
+        # Save the excel file
+        print newSegments
+        self.saveDetections(newSegments,mode='Excel',species=species)
         #     newSegmentsDef=self.mergeSeg(newSegmentsDef)
         #     newSegmentsPb=self.mergeSeg(newSegmentsPb)
         # for seg in newSegmentsDef:
@@ -2411,7 +2431,99 @@ class AviaNZ(QMainWindow):
 
         self.segmentDialog.undo.setEnabled(True)
 
-        self.statusBar().showMessage("Ready")
+        self.statusLeft.setText("Ready")
+
+    def saveDetections(self, annotation, mode,species): # Origin: saveSegments from interface_FindSpecies
+        # This saves the detections into three different formats: annotation, excel, and binary
+
+        # method=self.algs.currentText()
+        relfname = os.path.relpath(str(self.filename), str(self.dirName))
+        eFile = self.dirName + '\DetectionSummary_' + species + '.xlsx'
+
+        if mode == 'Annotation':
+            if isinstance(self.filename, str):
+                file = open(self.filename + '.data', 'w')
+            else:
+                file = open(str(self.filename) + '.data', 'w')
+            json.dump(annotation, file)
+
+        elif mode == 'Excel':
+            if os.path.isfile(eFile):  # if the file is already there
+                try:
+                    wb = load_workbook(str(eFile))
+                    ws = wb.get_sheet_by_name('TimeStamps')
+                    c = 1
+                    r = ws.max_row + 1  # TODO: get last row number from existing file
+                    ws.cell(row=r, column=1, value=str(relfname))
+                    for seg in annotation:
+                        ws.cell(row=r, column=c + 1, value=str(seg[0]) + '-' + str(seg[1]))
+                        c = c + 1
+                    wb.save(str(eFile))
+                except:
+                    print "Unable to open file"  # Does not exist OR no read permissions
+            else:
+                wb = Workbook()
+                wb.create_sheet(title='TimeStamps', index=1)
+                wb.create_sheet(title='PresenceAbsence', index=2)
+                wb.create_sheet(title='PerSecond', index=3)
+
+                ws = wb.get_sheet_by_name('TimeStamps')
+                ws.cell(row=1, column=1, value="File Name")
+                ws.cell(row=1, column=2, value="Detections [start-end(mm:ss)]")
+                c = 1
+                r = 2
+                ws.cell(row=r, column=c, value=str(relfname))
+                for seg in annotation:
+                    ws.cell(row=r, column=c + 1, value=str(seg[0]) + '-' + str(seg[1]))
+                    c = c + 1
+                # Second sheet
+                ws = wb.get_sheet_by_name('PresenceAbsence')
+                ws.cell(row=1, column=1, value="File Name")
+                ws.cell(row=1, column=2, value="Presence/Absence")
+
+                # Third sheet
+                ws = wb.get_sheet_by_name('PerSecond')
+                ws.cell(row=1, column=1, value="File Name")
+                ws.cell(row=1, column=2, value="Presence=1/Absence=0")
+                c = 2
+                for i in range(900):
+                    ws.cell(row=2, column=c, value="S " + str(i + 1))
+                    c = c + 1
+                first = wb.get_sheet_by_name('Sheet')
+                wb.remove_sheet(first)
+                wb.save(str(eFile))
+
+            # Presence absence excel
+            if os.path.isfile(eFile):  # if the file is already there
+                try:
+                    wb = load_workbook(str(eFile))
+                    # ws=wb.create_sheet(title="PresenceAbsence",index=2)
+                    ws = wb.get_sheet_by_name('PresenceAbsence')
+                    r = ws.max_row + 1  #
+                    ws.cell(row=r, column=1, value=str(relfname))
+                    if annotation:
+                        ws.cell(row=r, column=2, value='Yes')
+                    else:
+                        ws.cell(row=r, column=2, value='_')
+                    wb.save(str(eFile))
+                except:
+                    print "Unable to open file"  # Does not exist OR no read permissions
+
+        else:  # mode=='Binary'
+            # eFile=self.dirName+'\\3PerSecond_'+self.species+'_'+'.xlsx'
+            if os.path.isfile(eFile):  # if the file is already there
+                try:
+                    wb = load_workbook(str(eFile))
+                    ws = wb.get_sheet_by_name('PerSecond')
+                    c = 1
+                    r = ws.max_row + 1  # TODO: get last row number from existing file
+                    ws.cell(row=r, column=1, value=str(relfname))
+                    for seg in annotation:
+                        ws.cell(row=r, column=c + 1, value=seg)
+                        c = c + 1
+                    wb.save(str(eFile))
+                except:
+                    print "Unable to open file"  # Does not exist OR no read permissions
 
     def segment_undo(self):
         # Listener for undo button in segmentation dialog
@@ -2441,7 +2553,7 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             return
         else:
-            self.statusBar().showMessage("Finding matches...")
+            self.statusLeft.setText("Finding matches...")
             #[alg, thr] = self.matchDialog.getValues()
             # Only want to draw new segments, so find out how many there are now
             seglen = len(self.segments)
@@ -2463,7 +2575,8 @@ class AviaNZ(QMainWindow):
                 if np.abs(i-x1) > self.config['overlap_allowed']:
                     time = float(i)*self.config['incr'] / self.sampleRate
                     self.addSegment(time, time+len_seg,0,0,self.segments[self.box1id][4])
-            self.statusBar().showMessage("Ready")
+            self.statusLeft.setText("Ready")
+
 
     def recognise(self):
         # This will eventually call methods to do automatic recognition
@@ -2652,6 +2765,26 @@ class AviaNZ(QMainWindow):
     #         self.previousFile = None
     #         self.fillFileList(fileName=None)
 
+    def setOperatorReviewerDialog(self):
+        # Create the Operator/reviewer dialog when the menu item is selected
+    #     Listener for Set Operator/Reviewer menu item
+    #     if not hasattr(self,'setOperatorReviewerDialog'):
+        self.setOperatorReviewerDialog = Dialogs.OperatorReviewer()
+        self.setOperatorReviewerDialog.show()
+        self.setOperatorReviewerDialog.activateWindow()
+        self.setOperatorReviewerDialog.activate.clicked.connect(self.operator)
+
+    def operator(self):
+        # Listener for the operator/reviewer dialog.
+        [isOperator,name] = self.setOperatorReviewerDialog.getValues()
+        # self.statusLeft.setText("Updating the spectrogram...")
+        if isOperator==True:
+            self.operator=name
+            self.statusRight.setText("Operator: "+self.operator)
+        else:
+            self.reviewer=name
+            self.statusRight.setText("Reviewer: "+self.reviewer)
+
     def deleteAll(self):
         """ Listener for delete all button.
         Checks if the user meant to do it, then calls removeSegments()
@@ -2777,7 +2910,7 @@ if task == 1:
     avianz.show()
     app.exec_()
 elif task==2:
-    avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(configfile='AviaNZconfig.txt')
+    avianz = interface_FindSpecies.AviaNZFindSpeciesInterface()
     avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
     avianz.show()
     app.exec_()
