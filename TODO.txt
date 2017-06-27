@@ -30,11 +30,18 @@ get name from standard files and use it
 NP:
 
 Username in the status bar
+#Done but check it
 
 Make the Manual Seg produce the excel files (Export segmentation option in menu)
 And put all the three excel files into 1 on 3 sheets
+#Done
 
 Make a pretty (simple) version of the Process File dialog
+#Done, but seems like I have to add more features to this interface
+    (1) add a help (manual)
+    (2) Check if the folder has been processed halfway in a previous go find the new starting point rather than starting from first file
+    (3) Train wavelet to detect wind and rain so that the user can run this detector to see the proportion of useful data
+        (e.g. SIPO dataset is rainy, so almost all the recordings turned out to be positive due to rain)
 
 Enable parameter setting
 
