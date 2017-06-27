@@ -1,6 +1,6 @@
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
-import sys
+import sys,os
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 import pyqtgraph as pg
@@ -16,34 +16,37 @@ class StartScreen(QDialog):
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         self.setWindowTitle('AviaNZ - Choose Task')
         self.setAutoFillBackground(False)
-        self.setFixedSize(430, 210)
+        self.setFixedSize(445, 210)
         self.setStyleSheet("background-image: url(img/AviaNZ_SW.jpg);")
         self.activateWindow()
 
         self.DOC=DOC
 
-        btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:14px}'
-        btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:14px}'
+        btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:15px; font-weight: bold}'
+        # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
         b1 = QPushButton("Manual Segmentation")
-        b2 = QPushButton("Find a species")
-        b3 = QPushButton("Denoise a folder")
-        l1 = QLabel("")
+        b2 = QPushButton("Find a Species")
+        #b3 = QPushButton("Denoise a folder")
+        l1 = QLabel("-------")
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
-        b3.setStyleSheet(btn_style2)
+        #b3.setStyleSheet(btn_style2)
         l1.setStyleSheet('QLabel {color:transparent}')
 
         hbox = QHBoxLayout()
         hbox.addStretch(1)
+        hbox.addWidget(l1)
         hbox.addWidget(b1)
+        hbox.addWidget(l1)
         hbox.addWidget(b2)
-        hbox.addWidget(b3)
-        b3.setEnabled(False)
+        hbox.addWidget(l1)
+        #hbox.addWidget(b3)
+        # b3.setEnabled(False)
 
         vbox = QVBoxLayout()
         vbox.addStretch(1)
         vbox.addLayout(hbox)
-        vbox.addWidget(l1)
+        # vbox.addWidget(l1)
 
         self.setLayout(vbox)
 
@@ -52,7 +55,7 @@ class StartScreen(QDialog):
         self.connect(b1, SIGNAL('clicked()'), self.manualSeg)
         # if DOC==False:
         self.connect(b2, SIGNAL('clicked()'), self.findSpecies)
-        self.connect(b3, SIGNAL('clicked()'), self.denoise)
+        # self.connect(b3, SIGNAL('clicked()'), self.denoise)
 
         # vbox = QVBoxLayout()
         # for w in [b1, b2, b3]:
@@ -155,6 +158,34 @@ class Spectrogram(QDialog):
 
     # def resetValues(self,button):
     #     print button.text()
+
+#======
+class OperatorReviewer(QDialog):
+    # Class for the set operator dialog box
+    def __init__(self, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Set Operator/Reviewer')
+
+        self.operatorReviewerlabel = QLabel("Select your role")
+        self.operatorReviewer = [QRadioButton("Operator"), QRadioButton("Reviewer")]
+        self.operatorReviewer[0].setChecked(True)
+        self.name = QLineEdit(self)
+        self.activate = QPushButton("Set")
+
+        Box = QVBoxLayout()
+        Box.addWidget(self.operatorReviewerlabel)
+        Box.addWidget(self.operatorReviewer[0])
+        Box.addWidget(self.operatorReviewer[1])
+        Box.addWidget(QLabel('Name'))
+        Box.addWidget(self.name)
+        Box.addWidget(self.activate)
+
+        # Now put everything into the frame
+        self.setLayout(Box)
+
+    def getValues(self):
+        return [self.operatorReviewer[0].isChecked(), self.name.text()]
+        #return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text(),self.species.currentText()]
 
 #======
 class Segmentation(QDialog):
