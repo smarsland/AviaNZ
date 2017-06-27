@@ -241,13 +241,11 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                     for seg in annotation:
                         ws.cell(row=r,column=c+1,value=seg[0]+'-'+seg[1])
                         c=c+1
-                    # ws.append([relfname, str(annotation)])    # Append this filename and its detections
                     wb.save(str(eFile))
                 except:
                     print "Unable to open file"           #Does not exist OR no read permissions
             else:
                 wb = Workbook()
-
                 wb.create_sheet(title='TimeStamps',index=1)
                 wb.create_sheet(title='PresenceAbsence',index=2)
                 wb.create_sheet(title='PerSecond',index=3)
@@ -265,13 +263,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                 ws = wb.get_sheet_by_name('PresenceAbsence')
                 ws.cell(row=1,column=1, value="File Name")
                 ws.cell(row=1,column=2, value="Presence/Absence")
-                # c=1
-                # r=2
-                # ws.cell(row=2,column=1,value=str(relfname))
-                # if annotation:
-                #     ws.cell(row=2,column=2,value='Yes')
-                # else:
-                #     ws.cell(row=2,column=2,value='_')
+
                 # Third sheet
                 ws = wb.get_sheet_by_name('PerSecond')
                 ws.cell(row=1,column=1, value="File Name")
@@ -280,18 +272,11 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                 for i in range(900):
                     ws.cell(row=2,column=c, value="S "+str(i+1))
                     c=c+1
-                # c=1
-                # r=3
-                # ws.cell(row=r,column=c,value=str(relfname))
-                # for seg in annotation:
-                #     ws.cell(row=r,column=c+1,value=seg)
-                #     c=c+1
                 first=wb.get_sheet_by_name('Sheet')
                 wb.remove_sheet(first)
                 wb.save(str(eFile))
 
             # Presence absence excel
-            # eFile=self.dirName+'\\2PresenceAbsence_'+self.species+'_'+'.xlsx'
             if os.path.isfile(eFile):   #if the file is already there
                 try:
                     wb = load_workbook(str(eFile))
@@ -306,20 +291,6 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                     wb.save(str(eFile))
                 except:
                     print "Unable to open file"           #Does not exist OR no read permissions
-            # else:
-            #     wb = Workbook()
-            #     ws = wb.active
-            #     ws.append(["File Name","Presence/Absence"])
-            #     ws.cell(row=1,column=1, value="File Name")
-            #     ws.cell(row=1,column=2, value="Presence/Absence")
-            #     c=1
-            #     r=2
-            #     ws.cell(row=2,column=1,value=str(relfname))
-            #     if annotation:
-            #         ws.cell(row=2,column=2,value='Yes')
-            #     else:
-            #         ws.cell(row=2,column=2,value='_')
-            #     wb.save(str(eFile))
 
         else:   # mode=='Binary'
             # eFile=self.dirName+'\\3PerSecond_'+self.species+'_'+'.xlsx'
@@ -333,27 +304,9 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                     for seg in annotation:
                         ws.cell(row=r,column=c+1,value=seg)
                         c=c+1
-                    # ws.append([relfname, str(annotation)])    # Append this filename and its detections
                     wb.save(str(eFile))
                 except:
                     print "Unable to open file"           #Does not exist OR no read permissions
-            # else:
-            #     wb = Workbook()
-            #     ws = wb.active
-            #     ws.cell(row=1,column=1, value="File Name")
-            #     ws.cell(row=1,column=2, value="Presence=1/Absence=0")
-            #     c=2
-            #     for i in range(900):
-            #         ws.cell(row=2,column=c, value="sec "+str(i+1))
-            #         c=c+1
-            #     c=1
-            #     r=3
-            #     ws.cell(row=r,column=c,value=str(relfname))
-            #     for seg in annotation:
-            #         ws.cell(row=r,column=c+1,value=seg)
-            #         c=c+1
-            #     # ws.append([relfname, str(annotation)])   # Append this filename and its detections
-            #     wb.save(str(eFile))
 
     def loadFile(self):
         print self.filename
