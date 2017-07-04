@@ -4,9 +4,25 @@
 SM:
 Make a new method (not inside Segmentation):
     (1) Perform segmentation using at least one of old wavelet method and any other segmenter, possibly multiple options
+    # Partly done, (FIR + median clip). Add in wavelets.
+    # And it does need parameters
     (2) Combine the segments as appropriate
+    # Two versions are done. Opens it out so far, no max. Either with or without envelopes kept.
     (3) Perform classification on each segment using at least one of wavelet energies, Raven feature, MFCC
+    # To be done (ready to modify wavelet segmentation part)
 
+Plot the wavelet energy for noise, crickets, calls, etc.
+
+Paging:
+    Ideal option:
+    generate the 15 min overview spectrogram (lower resolution -> increase increment)
+    page in 5 mins worth of sound file and update as move through file in background
+        -> modify wavio
+        # Done
+    # But instead, we are going to load in 5 mins, and show that it is the first 5, and add arrows (and a 1/3 statement)
+    # Anything else is a pain, and doesn't actually save much, since the overview is still massive
+
+    # The segment part of this needs fixing, need to keep track of where you are and subtract off the right amount :(
 Update the manual
 
 Video of using
@@ -14,7 +30,7 @@ Video of using
 For HumanClassify2 errors
     -> they are currently just deleted.
     Better is to remove them, but to save them and then after all have been processed,
-    use HumanClassify1 to get labels for them, save them somwhere and reuse for more training
+    use HumanClassify1 to get labels for them, save them somewhere and reuse for more training
     There needs to be an option to not do this though :)
 
 move Find Matches to segmentations
@@ -25,12 +41,17 @@ get name from standard files and use it
 
     SM: Tidy the repository
 
-
-
 NP:
 
+Test the idea of using the wavelet nodes with either
+    (a or b or c) and not (d or e)
+    (a and (b or c))
+    or maybe both :)
+    Will have to count the number of times each occurs
+    Idea is to reduce (i) misclassifications, (2) crickets, (3) wide-band clicks, (4) rain
+
 Username in the status bar
-#Done but check it
+#Done but check it -> want both, and also to save them
 
 Make the Manual Seg produce the excel files (Export segmentation option in menu)
 And put all the three excel files into 1 on 3 sheets

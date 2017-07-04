@@ -199,7 +199,7 @@ class Segmentation(QDialog):
 
         self.algs = QComboBox()
         #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
-        self.algs.addItems(["Amplitude","Harma","Power","Median Clipping","Onsets","Fundamental Frequency","FIR","Wavelets"])
+        self.algs.addItems(["Amplitude","Harma","Power","Median Clipping","Onsets","Fundamental Frequency","FIR","Wavelets","Best"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Amplitude"
         self.undo = QPushButton("Undo")
@@ -441,6 +441,8 @@ class Segmentation(QDialog):
             self.Onsetslabel.hide()
         elif self.prevAlg == "FIR":
             self.FIRThr1.hide()
+        elif self.prevAlg == "Best":
+            pass
         else:
             self.specieslabel.hide()
             self.species.hide()
@@ -492,6 +494,8 @@ class Segmentation(QDialog):
             self.Onsetslabel.show()
         elif str(alg) == "FIR":
             self.FIRThr1.show()
+        elif str(alg) == "Best":
+            pass
         else:
             #"Wavelets"
             self.specieslabel.show()
@@ -1735,10 +1739,7 @@ class getUserData(QDialog):
 
         self.name = QLineEdit(self)
         self.name.setText('')
-        self.easting = QLineEdit(self)
-        self.easting.setText('')
-        self.northing = QLineEdit(self)
-        self.northing.setText('')
+
 
         button = QPushButton("OK")
         button.clicked.connect(self.accept)
@@ -1746,14 +1747,10 @@ class getUserData(QDialog):
         Box = QVBoxLayout()
         Box.addWidget(QLabel('Person annotating'))
         Box.addWidget(self.name)
-        Box.addWidget(QLabel('Easting'))
-        Box.addWidget(self.easting)
-        Box.addWidget(QLabel('Northing'))
-        Box.addWidget(self.northing)
         Box.addWidget(button)
 
         # Now put everything into the frame
         self.setLayout(Box)
 
     def getValues(self):
-        return [self.name.text(),self.easting.text(),self.northing.text()]
+        return [self.name.text()]

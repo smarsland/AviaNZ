@@ -44,7 +44,7 @@ class SignalProc:
         pN = np.sum(self.data[startNoise:startNoise+self.length]**2)/self.length
         return 10.*np.log10(pS/pN)
 
-    def spectrogram(self,data,sampleRate=0,window='Hann',mean_normalise=True,onesided=True,multitaper=False,need_even=False):
+    def spectrogram(self,data,sampleRate=0,window_width=None,incr=None,window='Hann',mean_normalise=True,onesided=True,multitaper=False,need_even=False):
         # Compute the spectrogram from amplitude data
         # Note that this returns the power spectrum (not the density) and without the log10.
         # Also, it's the absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discimination
@@ -55,68 +55,72 @@ class SignalProc:
         if data is None:
             print ("Error")
 
+        if window_width is None:
+            window_width = self.window_width
+        if incr is None:
+            incr = self.incr
         # Set of window options
         if window=='Hann':
             # This is the Hann window
-            window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)))
+            window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)))
         elif window=='Parzen':
-            # Parzen (self.window_width even)
-            n = np.arange(self.window_width) - 0.5*self.window_width
-            window = np.where(np.abs(n)<0.25*self.window_width,1 - 6*(n/(0.5*self.window_width))**2*(1-np.abs(n)/(0.5*self.window_width)), 2*(1-np.abs(n)/(0.5*self.window_width))**3)
+            # Parzen (window_width even)
+            n = np.arange(window_width) - 0.5*window_width
+            window = np.where(np.abs(n)<0.25*window_width,1 - 6*(n/(0.5*window_width))**2*(1-np.abs(n)/(0.5*window_width)), 2*(1-np.abs(n)/(0.5*window_width))**3)
         elif window=='Welch':
             # Welch
-            window = 1.0 - ((np.arange(self.window_width) - 0.5*(self.window_width-1))/(0.5*(self.window_width-1)))**2
+            window = 1.0 - ((np.arange(window_width) - 0.5*(window_width-1))/(0.5*(window_width-1)))**2
         elif window=='Hamming':
             # Hamming
             alpha = 0.54
             beta = 1.-alpha
-            window = alpha - beta*np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1))
+            window = alpha - beta*np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1))
         elif window=='Blackman':
             # Blackman
             alpha = 0.16
             a0 = 0.5*(1-alpha)
             a1 = 0.5
             a2 = 0.5*alpha
-            window = a0 - a1*np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)) + a2*np.cos(4 * np.pi * np.arange(self.window_width) / (self.window_width - 1))
+            window = a0 - a1*np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)) + a2*np.cos(4 * np.pi * np.arange(window_width) / (window_width - 1))
         elif window=='BlackmanHarris':
             # Blackman-Harris
             a0 = 0.358375
             a1 = 0.48829
             a2 = 0.14128
             a3 = 0.01168
-            window = a0 - a1*np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)) + a2*np.cos(4 * np.pi * np.arange(self.window_width) / (self.window_width - 1)) - a3*np.cos(6 * np.pi * np.arange(self.window_width) / (self.window_width - 1))
+            window = a0 - a1*np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)) + a2*np.cos(4 * np.pi * np.arange(window_width) / (window_width - 1)) - a3*np.cos(6 * np.pi * np.arange(window_width) / (window_width - 1))
         else:
             print "unknown window, using Hann"
-            window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)))
+            window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)))
 
         if mean_normalise:
             data -= data.mean()
 
         if multitaper:
             from spectrum import dpss, pmtm
-            [tapers, eigen] = dpss(self.window_width, 2.5, 4)
+            [tapers, eigen] = dpss(window_width, 2.5, 4)
             counter = 0
-            sg = np.zeros((int(np.ceil(float(len(data)) / self.incr)),self.window_width / 2))
-            for start in range(0, len(data) - self.window_width, self.incr):
-                S = pmtm(data[start:start + self.window_width], e=tapers, v=eigen, show=False)
-                sg[counter:counter + 1,:] = S[self.window_width / 2:].T
+            sg = np.zeros((int(np.ceil(float(len(data)) / incr)),window_width / 2))
+            for start in range(0, len(data) - window_width, incr):
+                S = pmtm(data[start:start + window_width], e=tapers, v=eigen, show=False)
+                sg[counter:counter + 1,:] = S[window_width / 2:].T
                 counter += 1
             sg = np.fliplr(sg)
         else:
-            starts = range(0, len(data) - self.window_width, self.incr)
+            starts = range(0, len(data) - window_width, incr)
             if need_even:
-                starts = np.hstack((starts, np.zeros((self.window_width - len(data) % self.window_width))))
+                starts = np.hstack((starts, np.zeros((window_width - len(data) % window_width))))
 
-            ft = np.zeros((len(starts), self.window_width))
+            ft = np.zeros((len(starts), window_width))
             for i in starts:
-                ft[i / self.incr, :] = window * data[i:i + self.window_width]
+                ft[i / incr, :] = window * data[i:i + window_width]
             ft = np.fft.fft(ft)
             if onesided:
-                #sg = np.absolute(ft[:, self.window_width / 2:]).T
-                sg = np.absolute(ft[:, :self.window_width / 2])
+                #sg = np.absolute(ft[:, window_width / 2:]).T
+                sg = np.absolute(ft[:, :window_width / 2])
             else:
                 sg = np.absolute(ft)
-            #sg = (ft*np.conj(ft))[:,self.window_width / 2:].T
+            #sg = (ft*np.conj(ft))[:,window_width / 2:].T
         return sg
 
     def show_invS(self):
@@ -544,6 +548,45 @@ def denoiseFile(fileName,thresholdMultiplier):
     sp.loadData(fileName)
     yd=sp.waveletDenoise()
     writeFile(yd,fileName[:-4]+'denoised'+str(sp.thresholdMultiplier)+fileName[-4:],sp.sampleRate)
+
+def testSpecTimesQuality():
+    import timeit
+
+    setup = """
+import numpy as np
+import SignalProc as sp
+a = sp.SignalProc(window_width=2**(8), incr = 2**(8)) 
+a.loadData("Sound Files/kiwi_1min.wav")  
+"""
+
+    t = timeit.Timer(stmt="print np.shape(a.spectrogram(a.data))",setup=setup)
+    print t.timeit(number=10)
+
+# 8, 7: 1.05
+# 20,19: 0.385
+    import SignalProc as sp
+    import pyqtgraph as pg
+    from pyqtgraph.Qt import QtCore, QtGui
+    a = sp.SignalProc(window_width=2 ** (8), incr=2 ** (7))
+    a.loadData("Sound Files/kiwi_1min.wav")
+    sg = a.spectrogram(a.data)
+
+    app = QtGui.QApplication([])
+
+    mw = QtGui.QMainWindow()
+    mw.show()
+    mw.resize(800, 600)
+
+    win = pg.GraphicsLayoutWidget()
+    mw.setCentralWidget(win)
+    vb1 = win.addViewBox(enableMouse=False, enableMenu=False, row=0, col=0)
+    im1 = pg.ImageItem(enableMouse=False)
+    vb1.addItem(im1)
+    im1.setImage(10.*np.log10(sg))
+    QtGui.QApplication.instance().exec_()
+
+
+#testSpecTimesQuality()
 
 # def test():
     # #pl.ion()
