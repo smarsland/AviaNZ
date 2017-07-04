@@ -192,6 +192,7 @@ class AviaNZ(QMainWindow):
         self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
 
         self.lastSpecies = "Don't Know"
+        self.nFileSections = None
         self.resetStorageArrays()
 
         self.dirName = self.config['dirpath']
@@ -444,7 +445,7 @@ class AviaNZ(QMainWindow):
         self.d_overview.addWidget(self.w_overview)
         self.w_overview1 = pg.GraphicsLayoutWidget()
         self.w_overview1.ci.layout.setContentsMargins(0.5, 1, 0.5, 1)
-        self.w_overview.addWidget(self.w_overview1,row=0,col=2,rowspan=2)
+        self.w_overview.addWidget(self.w_overview1,row=0, col=2,rowspan=3)
 
         self.p_overview = self.w_overview1.addViewBox(enableMouse=False,enableMenu=False,row=0,col=0)
         self.p_overview2 = SupportClasses.ChildInfoViewBox(enableMouse=False, enableMenu=False)
@@ -530,8 +531,8 @@ class AviaNZ(QMainWindow):
         self.connect(self.next5mins, SIGNAL('clicked()'), self.moveNext5mins)
         self.w_overview.addWidget(self.next5mins,row=1,col=1)
         # TODO: Add a label -- how to squeeze it into the space?
-        self.placeInFileLabel = QLabel('Part 1 of 1')
-        #self.w_overview.addWidget(self.placeInFileLabel,row=2,colspan=2)
+        self.placeInFileLabel = QLabel('')
+        self.w_overview.addWidget(self.placeInFileLabel,row=2,colspan=2)
 
         # The buttons inside the controls dock
         self.playButton = QtGui.QToolButton()
@@ -801,6 +802,8 @@ class AviaNZ(QMainWindow):
             self.p_spec.removeItem(r)
         self.segmentPlots=[]
 
+        #self.nFileSections = None
+
     def openFile(self):
         """ This handles the menu item for opening a file.
         Splits the directory name and filename out, and then passes the filename to the loader."""
@@ -912,9 +915,7 @@ class AviaNZ(QMainWindow):
                 dlg += 2
 
             # Read in the file and make the spectrogram
-            print self.config['maxFileShow'],self.currentFileSection*self.config['maxFileShow']
             self.startRead = max(0,self.currentFileSection*self.config['maxFileShow']-self.config['fileOverlap'])
-            print "new place", self.startRead
             if self.startRead == 0:
                 self.lenRead = self.config['maxFileShow']+self.config['fileOverlap']
             else:
@@ -947,9 +948,15 @@ class AviaNZ(QMainWindow):
                     self.next5mins.setEnabled(True)
                     #self.placeInFileLabel.setText('')
                 else:
+                    self.nFileSections = None
                     self.prev5mins.setEnabled(False)
                     self.next5mins.setEnabled(False)
                     # self.placeInFileLabel.setText('')
+
+            if self.nFileSections is None:
+                self.placeInFileLabel.setText('')
+            else:
+                self.placeInFileLabel.setText("Part "+ str(self.currentFileSection+1) + " of " + str(self.nFileSections))
 
             # Get the data for the main spectrogram
             sgRaw = self.sp.spectrogram(self.audiodata, self.sampleRate, self.config['window_width'],
