@@ -9,9 +9,16 @@ import pyqtgraph.functions as fn
 
 
 class TimeAxis(pg.AxisItem):
+    def __init__(self, *args, **kwargs):
+        super(TimeAxis, self).__init__(*args, **kwargs)
+        self.offset = 0
+
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
-        return [QTime().addSecs(value).toString('mm:ss') for value in values]
+        return [QTime().addSecs(value+self.offset).toString('mm:ss') for value in values]
+
+    def setOffset(self,offset):
+        self.offset = offset
 
 class ShadedROI(pg.ROI):
     def paint(self, p, opt, widget):

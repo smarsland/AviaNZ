@@ -18,8 +18,9 @@ import librosa
 # Frechet distance for DTW?
 
 class Segment:
-    # This class implements five forms of segmentation for the AviaNZ interface:
-    # Amplitude threshold, energy threshold, Harma, median clipping of spectrogram, yin
+    # This class implements six forms of segmentation for the AviaNZ interface:
+    # Amplitude threshold, energy threshold, Harma, median clipping of spectrogram, yin, FIR
+    # And can merge them
 
     # It also implements two forms of recognition:
     # Cross-correlation and DTW
@@ -50,28 +51,133 @@ class Segment:
         self.window_width = window_width
         self.incr = incr
 
+    def bestSegments(self):
+        segs1 = self.segmentByFIR(0.7)
+        segs2 = self.medianClip()
+        segs3, p, t = self.yin(100, thr=0.9, returnSegs=True)
+        segs1 = self.mergeSegments(segs1, segs2)
+        return self.mergeSegments(segs1,segs3)
+
+    def mergeSegments(self,segs1,segs2):
+        # Given two segmentations of the same file, return the merged set of them
+        # Two similar segments should be replaced by their union
+        # Those that are inside another should be removed (?) or the too-large one deleted?
+        # This version is the first of those, next is the second
+
+        from intervaltree import Interval, IntervalTree
+        t = IntervalTree()
+
+        # Put the first set into the tree
+        for s in segs1:
+            t[s[0]:s[1]] = s
+
+        # Decide whether or not to put each segment in the second set in
+        for s in segs2:
+            overlaps = t.search(s[0],s[1])
+            # If there are no overlaps, add it
+            if len(overlaps)==0:
+                t[s[0]:s[1]] = s
+            else:
+                # Search for any enveloped, if there are remove and add the new one
+                envelops = t.search(s[0],s[1],strict=True)
+                if len(envelops) > 0:
+                    # Remove any inside the envelope of the test point
+                    t.remove_envelop(s[0],s[1])
+                    overlaps = t.search(s[0], s[1])
+                    #print s[0], s[1], overlaps
+                    # Open out the region, delete the other
+                    for o in overlaps:
+                        if o.begin < s[0]:
+                            s[0] = o.begin
+                            t.remove(o)
+                        if o.end > s[1]:
+                            s[1] = o.end
+                            t.remove(o)
+                    t[s[0]:s[1]] = s
+                else:
+                    # Check for those that intersect the ends, widen them out a bit
+                    for o in overlaps:
+                        if o.begin > s[0]:
+                            t[s[0]:o[1]] = (s[0],o[1])
+                            t.remove(o)
+                        if o.end < s[1]:
+                            t[o[0]:s[1]] = (o[0],s[1])
+                            t.remove(o)
+
+        segs = []
+        for a in t:
+            segs.append([a[0],a[1]])
+        return segs
+
+    def mergeSegments2(self,segs1,segs2):
+        # Given two segmentations of the same file, return the merged set of them
+        # Two similar segments should be replaced by their union
+        # Those that are inside another should be removed (?) or the too-large one deleted?
+        # This version is the second of those
+
+        from intervaltree import Interval, IntervalTree
+        t = IntervalTree()
+
+        # Put the first set into the tree
+        for s in segs1:
+            t[s[0]:s[1]] = s
+
+        # Decide whether or not to put each segment in the second set in
+        for s in segs2:
+            overlaps = t.search(s[0],s[1])
+            # If there are no overlaps, add it
+            if len(overlaps)==0:
+                t[s[0]:s[1]] = s
+            else:
+                # Search for any enveloped, if there are remove and add the new one
+                envelops = t.search(s[0],s[1],strict=True)
+                if len(envelops) > 0:
+                    # Don't include this one
+                    pass
+                else:
+                    # Check for those that intersect the ends, widen them out a bit
+                    for o in overlaps:
+                        if o.begin > s[0]:
+                            t[s[0]:o[1]] = (s[0],o[1])
+                            t.remove(o)
+                        if o.end < s[1]:
+                            t[o[0]:s[1]] = (o[0],s[1])
+                            t.remove(o)
+
+        segs = []
+        for a in t:
+            segs.append([a[0],a[1]])
+        return segs
+
+    def checkSegmentLength(self,segs, mingap=0.3, minlength=0.2, maxlength=5.0):
+        # Checks whether start/stop segments are long enough
+        # These are species specific!
+        # Doesn't currently use maxlength
+        for i in range(len(segs))[-1::-1]:
+            if i<len(segs)-1:
+                if np.abs(segs[i][1] - segs[i+1][0]) < mingap:
+                    segs[i][1] = segs[i+1][1]
+                    del segs[i+1]
+            if np.abs(segs[i][1] - segs[i][0]) < minlength:
+                del segs[i]
+        return segs
+
     def identifySegments(self, seg, maxgap=1, minlength=1):
+        # Turns presence/absence segments into a list of start/stop times
+        # Note the two parameters
         segments = []
         start = seg[0]
         for i in range(1, len(seg)):
             if seg[i] <= seg[i - 1] + maxgap:
                 pass
             else:
-                # If segment is long enough to be worth bothering with
-                # print seg[i-1] - start, start
+                # See if segment is long enough to be worth bothering with
                 if (seg[i - 1] - start) > minlength:
-                    # print([float(start) , float(seg[i-1])])
                     segments.append([float(start) * self.incr / self.fs, float(seg[i - 1]) * self.incr / self.fs])
-                    # segments.append([float(start)/self.fs, float(seg[-1])/self.fs])
                 start = seg[i]
         if seg[-1] - start > minlength:
-            # print([float(start), float(seg[-1])])
             segments.append([float(start) * self.incr / self.fs, float(seg[-1]) * self.incr / self.fs])
-            # segments.append([float(start)/self.fs, float(seg[-1])/self.fs])
-        # print len(segments)
-        # print segments
-        # for segs in segments:
-        #    print segs[0] * self.fs/self.incr, segs[1]*self.fs/self.incr
+
         return segments
 
     def segmentByFIR(self, threshold):
@@ -112,7 +218,7 @@ class Segment:
         envelope = spi.filters.convolve(padded, samples, mode='constant')[:-int(fftrate / 10.)]
         seg = np.squeeze(np.where(envelope > np.median(envelope) + threshold * np.std(envelope)))
         # print seg
-        return self.identifySegments(seg, minlength=10)
+        return self.identifySegments(seg, minlength=10) #, envelope
 
     def segmentByAmplitude(self,threshold):
         seg = np.where(np.abs(self.data)>threshold)
@@ -130,7 +236,7 @@ class Segment:
         else:
             return []
 
-    def segmentByEnergy(self,threshold,width,min_width=450):
+    def segmentByEnergy(self,thr,width,min_width=450):
         # Based on description in Jinnai et al. 2012 paper in Acoustics
         # Computes the 'energy curve' as windowed sum of absolute values of amplitude
         # I median filter it, 'cos it's very noisy
@@ -155,7 +261,7 @@ class Segment:
             Em[-i] = np.median(E[-2 * i:])
 
         # TODO: Better way to do this?
-        threshold = np.mean(Em) + np.std(Em)
+        threshold = np.mean(Em) + thr*np.std(Em)
 
         # Pick out the regions above threshold and the argmax of each, assuming they are wide enough
         starts = []
@@ -181,7 +287,11 @@ class Segment:
 
         # TODO: SoundID appears to now compute the 44 LPC coeffs for each [midpoint-width:midpoint+width]
         # TODO: And then compute the geometric distance to templates
-        return Emm, maxpoints
+        #return Emm, maxpoints
+        segs = []
+        for i in range(len(starts)):
+            segs.append([float(starts[i])/self.fs,float(ends[i])/self.fs])
+        return segs
 
 
     def Harma(self,thr=10.,stop_thr=0.8):
@@ -199,7 +309,7 @@ class Segment:
         while np.max(maxFreqs)>stop_thr*biggest:
             t0 = np.argmax(maxFreqs)
             a_n = maxFreqs[t0]
-            print t0, a_n
+            #print t0, a_n
 
             # Go backwards looking for where the syllable stops
             t = t0
@@ -213,7 +323,7 @@ class Segment:
                 t += 1
             t_end = t
 
-            print t_start, t_end
+            #print t_start, t_end
             # Set the syllable just found to 0
             maxFreqs[t_start:t_end] = 0
             if float(t_end - t_start)*self.incr/self.fs*1000.0 > self.minSegment:
@@ -241,7 +351,7 @@ class Segment:
         # And it opens up the segments to be maximal (so assumes no overlap)
         # TODO: Parameters!!
         # Use the multitaper spectrogram, it helps a lot
-        print np.max(self.sg)
+        #print np.max(self.sg)
         sg = self.sg.T/np.max(self.sg)
 
         # This next line gives an exact match to Lasseck, but screws up bitterns!
@@ -310,11 +420,11 @@ class Segment:
 
         segments = []
         for i in list:
-            print i
+            #print i
             if float(i[1] - i[0])*self.incr/self.fs*1000 > self.minSegment:
                 segments.append([float(i[0]) * self.incr / self.fs, float(i[1]) * self.incr / self.fs])
-            else:
-                print i[1], i[0], float(i[1] - i[0])*self.incr/self.fs
+            #else:
+                #print i[1], i[0], float(i[1] - i[0])*self.incr/self.fs
 
         return segments
 
@@ -508,7 +618,7 @@ def testsegEnergy():
     sg = sp.spectrogram(data,multitaper=True)
     s = Segment(data,sg,sp,fs)
     segments, midpoints = s.segmentByEnergy(0.005,200)
-    print midpoints
+    #print midpoints
     pl.figure()
     pl.plot(data)
     pl.plot(segments)
@@ -533,7 +643,7 @@ def testsegMC():
     s = Segment.Segment(data,sg,sp,fs)
     #segments, clipped, blobs = s.medianClip()
     segments = s.medianClip()
-    print segments
+    #print segments
     return segments
     # pl.figure(), pl.imshow(clipped)
     # for i in blobs:
@@ -582,15 +692,241 @@ def testYin():
     pl.show()
 
 def testsegFIR():
+    #from scipy.io import wavfile
+    import wavio
+    #fs, data = wavfile.read('Sound Files/New folder/robin.wav')
+    wavobj = wavio.read('Sound Files/20170515_223004 piping.wav')
+    #wavobj = wavio.read('Sound Files/tril1.wav')
+    #wavobj = wavio.read('Sound Files/kiwi_1min.wav')
+    fs = wavobj.rate
+    data = wavobj.data
+    if data.dtype is not 'float':
+        data = data.astype('float')  # / 32768.0
+
+    if np.shape(np.shape(data))[0] > 1:
+        data = data[:, 0]
+
+    #data = data[:fs*30]
+    import SignalProc
+    sp = SignalProc.SignalProc(data,fs,256,128)
+    sg = sp.spectrogram(data,multitaper=False,mean_normalise=False)
+    s = Segment(data,sg,sp,fs,50) #(data,sg,sp,fs,minSegment,window_width=256,incr=128)
+    segments, samp = s.segmentByFIR(1.0)
+
+    import pylab as pl
+    pl.ion()
+    pl.plot(samp)
+    pl.plot(np.arange(len(samp)),(np.median(samp)+np.std(samp))*np.ones(len(samp)))
+    pl.show()
+
+    print segments
+
+
+def testMergeSeg():
     from scipy.io import wavfile
-    fs, data = wavfile.read('Sound Files/New folder/robin.wav')
+    fs, data = wavfile.read('Sound Files/tril1.wav')
     import SignalProc
     sp = SignalProc.SignalProc(data,fs,256,128,)
     sg = sp.spectrogram(data,multitaper=False,mean_normalise=False)
     s = Segment(data,sg,sp,fs,50) #(data,sg,sp,fs,minSegment,window_width=256,incr=128)
-    segments = s.segmentByFIR(1.0)
-    print segments
+    segs1 = s.segmentByFIR(1.0)
+    segs2 = s.medianClip()
+    print "1"
+    print segs1
+    print "2"
+    print segs2
+    segs = s.mergeSegments(segs1,segs2)
+    print "==="
+    print segs
 
+def testMergeSeg2():
+    segs1 = [[0.1, 0.3], [0.6,0.8],[1.1,1.3], [1.5, 1.7]]
+    segs2 = [[0.05,0.2], [0.65,0.75], [0.7,0.9], [1.05,1.75]]
+    print "1"
+    print segs1
+    print "2"
+    print segs2
+    s = Segment(None, None, None, None, 50)
+    segs = s.mergeSegments(segs1,segs2)
+    print "==="
+    print segs
+    print "[[0.05, 0.3], [0.6,0.9], [1.05, 1.75]]"
+
+def convertAmpltoSpec(x,fs,inc):
+    """ Unit conversion """
+    return x*fs/inc
+
+def showSegs():
+    import pyqtgraph as pg
+    from pyqtgraph.Qt import QtCore, QtGui
+    import wavio
+
+    #wavobj = wavio.read('Sound Files/tril1.wav')
+    #wavobj = wavio.read('Sound Files/010816_202935_p1.wav')
+    wavobj = wavio.read('Sound Files/20170515_223004 piping.wav')
+    #wavobj = wavio.read('Sound Files/kiwi_1min.wav')
+    fs = wavobj.rate
+    data = wavobj.data[:20*fs]
+
+    if data.dtype is not 'float':
+        data = data.astype('float') # / 32768.0
+
+    if np.shape(np.shape(data))[0] > 1:
+        data = data[:, 0]
+
+    # Is this worth doing?
+    # import sys
+    # sys.path.append("test")
+    # import audio_tools
+    # newdata, newsg, E = audio_tools.time_attack_agc(data,fs)
+    # newsg = np.real(newsg)
+
+    import SignalProc
+    sp = SignalProc.SignalProc(data,fs,256,128)
+    sg = sp.spectrogram(data,fs,multitaper=False)
+    s = Segment(data,sg,sp,fs,50)
+
+    # FIR: threshold doesn't matter much, but low is better (0.01).
+    # Amplitude: not great, will have to work on width and abs if want to use it (threshold about 0.6)
+    # Power: OK, but threshold matters (0.5)
+    # Median clipping: OK, threshold of 3 fine.
+    # Onsets: Threshold of 4.0 was fine, lower not. Still no offsets!
+    # Yin: Threshold 0.9 is pretty good
+    # Energy: Not great, but thr 1.0
+
+    # Harma: some errors?
+
+    s1, samp = s.segmentByFIR(0.1)
+    s1 = s.checkSegmentLength(s1)
+    s2, x = s.segmentByFIR(1.0)
+    s2 = s.checkSegmentLength(s2)
+    s3 = s.checkSegmentLength(s.medianClip(3.0))
+    s4, p, t = s.yin(100, thr=0.9, returnSegs=True)
+    s4 = s.checkSegmentLength(s4)
+    s5 = s.mergeSegments(s1,s3)
+    s6 = s.mergeSegments(s1,s4)
+    s7 = s.mergeSegments2(s1,s3)
+    #s7 = s.mergeSegments(s1,s.mergeSegments(s3,s4))
+
+    #s4, samp = s.segmentByFIR(0.4)
+    #s4 = s.checkSegmentLength(s4)
+    #s2 = s.segmentByAmplitude1(0.6)
+    #s5 = s.checkSegmentLength(s.segmentByPower(0.3))
+    #s6, samp = s.segmentByFIR(0.6)
+    #s6 = s.checkSegmentLength(s6)
+    #s7 = []
+    #s5 = s.onsets(3.0)
+    #s6 = s.segmentByEnergy(1.0,500)
+
+    import pylab as pl
+    pl.ion()
+    pl.plot(samp)
+    pl.show()
+
+    print np.mean(samp), np.std(samp)
+
+    #s5 = s.Harma(5.0,0.8)
+    #s4 = s.Harma(10.0,0.8)
+    #s7 = s.Harma(15.0,0.8)
+
+    #s2 = s.segmentByAmplitude1(0.7)
+    #s3 = s.segmentByPower(1.)
+    #s4 = s.medianClip(3.0)
+    #s5 = s.onsets(3.0)
+    #s6, p, t = s.yin(100,thr=0.5,returnSegs=True)
+    #s7 = s.Harma(10.0,0.8)
+
+    app = QtGui.QApplication([])
+
+    mw = QtGui.QMainWindow()
+    mw.show()
+    mw.resize(800, 600)
+
+    win = pg.GraphicsLayoutWidget()
+    mw.setCentralWidget(win)
+    vb1 = win.addViewBox(enableMouse=False, enableMenu=False, row=0, col=0)
+    im1 = pg.ImageItem(enableMouse=False)
+    vb1.addItem(im1)
+    im1.setImage(10.*np.log10(sg))
+
+    vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=1, col=0)
+    im2 = pg.ImageItem(enableMouse=False)
+    vb2.addItem(im2)
+    im2.setImage(10.*np.log10(sg))
+
+    vb3 = win.addViewBox(enableMouse=False, enableMenu=False, row=2, col=0)
+    im3 = pg.ImageItem(enableMouse=False)
+    vb3.addItem(im3)
+    im3.setImage(10.*np.log10(sg))
+
+    vb4 = win.addViewBox(enableMouse=False, enableMenu=False, row=3, col=0)
+    im4 = pg.ImageItem(enableMouse=False)
+    vb4.addItem(im4)
+    im4.setImage(10.*np.log10(sg))
+
+    vb5 = win.addViewBox(enableMouse=False, enableMenu=False, row=4, col=0)
+    im5 = pg.ImageItem(enableMouse=False)
+    vb5.addItem(im5)
+    im5.setImage(10.*np.log10(sg))
+
+    vb6 = win.addViewBox(enableMouse=False, enableMenu=False, row=5, col=0)
+    im6 = pg.ImageItem(enableMouse=False)
+    vb6.addItem(im6)
+    im6.setImage(10.*np.log10(sg))
+
+    vb7 = win.addViewBox(enableMouse=False, enableMenu=False, row=6, col=0)
+    im7 = pg.ImageItem(enableMouse=False)
+    vb7.addItem(im7)
+    im7.setImage(10.*np.log10(sg))
+
+    print s1
+    for seg in s1:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        vb1.addItem(a, ignoreBounds=True)
+
+    print s2
+    for seg in s2:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        vb2.addItem(a, ignoreBounds=True)
+
+    print s3
+    for seg in s3:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        vb3.addItem(a, ignoreBounds=True)
+
+    print s4
+    for seg in s4:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        vb4.addItem(a, ignoreBounds=True)
+
+    print s5
+    for seg in s5:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        vb5.addItem(a, ignoreBounds=True)
+
+    print s6
+    for seg in s6:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        vb6.addItem(a, ignoreBounds=True)
+
+    print s7
+    for seg in s7:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        vb7.addItem(a, ignoreBounds=True)
+
+    QtGui.QApplication.instance().exec_()
+
+#showSegs()
+#testsegFIR()
+
+#testMergeSeg2()
 # testsegFIR()
 
 # A=[51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  65,  66,  67,  68, 69,  70,  72,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,
@@ -599,3 +935,11 @@ def testsegFIR():
 # [[0.408, 0.56], [0.664, 0.808], [0.888, 1.064], [1.12, 1.288]]
 
 # B=self.identifySegments(A, minlength=10)
+
+def test_segMerge():
+    s = Segment(None, None, None, None, 5)
+    seg = [[0.808, 1.48], [1.49, 2.22], [3.0, 3.02], [3.2,3.4], [3.5,4.1], [4.408, 5.12], [7.72, 8.36]]
+    segs = s.checkSegmentLength(seg)
+    print segs
+
+#test_segMerge()
