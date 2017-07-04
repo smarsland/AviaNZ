@@ -684,7 +684,7 @@ class AviaNZ(QMainWindow):
 
         # Set the message in the status bar
         self.statusLeft.setText("Ready")
-        self.statusRight.setText("Operator/Reviewer:")
+        self.statusRight.setText("Operator/Reviewer")
 
         # Plot everything
         self.show()
@@ -2046,6 +2046,7 @@ class AviaNZ(QMainWindow):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to check")
+            msg.setIconPixmap(QPixmap("img\Owl_warning.png"))
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
             msg.setWindowTitle("No segment")
             msg.setStandardButtons(QMessageBox.Ok)
@@ -2547,6 +2548,7 @@ class AviaNZ(QMainWindow):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segment selected to match")
+            msg.setIconPixmap(QPixmap("img\Owl_warning.png"))
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
             msg.setWindowTitle("No segment")
             msg.setStandardButtons(QMessageBox.Ok)
