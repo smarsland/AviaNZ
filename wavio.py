@@ -6,7 +6,7 @@ read(file)
 write(filename, data, rate, scale=None, sampwidth=None)
     Write a numpy array to a WAV file.
 -----
-Author: Warren Weckesser
+Author: Warren Weckesser (modifications for paging by Stephen Marsland, 2017)
 License: BSD 2-Clause:
 Copyright (c) 2015, Warren Weckesser
 All rights reserved.
@@ -103,24 +103,27 @@ class Wav(object):
         For example, `sampwidth == 3` is a 24 bit WAV file.
     """
 
-    def __init__(self, data, rate, sampwidth):
+    def __init__(self, data, rate, sampwidth, nframes):
         self.data = data
         self.rate = rate
         self.sampwidth = sampwidth
+        self.nframes = nframes
 
     def __repr__(self):
-        s = ("Wav(data.shape=%s, data.dtype=%s, rate=%r, sampwidth=%r)" %
-             (self.data.shape, self.data.dtype, self.rate, self.sampwidth))
+        s = ("Wav(data.shape=%s, data.dtype=%s, rate=%r, sampwidth=%r, nframes=%r)" %
+             (self.data.shape, self.data.dtype, self.rate, self.sampwidth, self.nframes))
         return s
 
 
-def read(file):
+def read(file,nseconds=None,offset=0):
     """
     Read a WAV file.
     Parameters
     ----------
     file : string or file object
         Either the name of a file or an open file pointer.
+    nseconds : length of part of file you wish to read (in seconds)
+    offset : where to start reading from (in seconds)
     Returns
     -------
     wav : wavio.Wav() instance
@@ -153,10 +156,22 @@ def read(file):
     nchannels = wav.getnchannels()
     sampwidth = wav.getsampwidth()
     nframes = wav.getnframes()
-    data = wav.readframes(nframes)
+
+    if nseconds is None:
+        nseconds = nframes
+
+    if float(nframes)/rate < nseconds:
+        nseconds = float(nframes)/rate
+    if nframes - offset*rate < 0:
+        offset = 0
+    wav.setpos(offset*rate)
+    print nframes, nseconds*rate, int(nseconds*rate), offset
+    data = wav.readframes(int(nseconds*rate))
+
+    #data = wav.readframes(nframes)
     wav.close()
     array = _wav2array(nchannels, sampwidth, data)
-    w = Wav(data=array, rate=rate, sampwidth=sampwidth)
+    w = Wav(data=array, rate=rate, sampwidth=sampwidth, nframes=nframes)
     return w
 
 
