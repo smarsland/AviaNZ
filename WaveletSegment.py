@@ -234,9 +234,9 @@ class WaveletSeg:
 
             # TODO: This primes the tree with zeros, which was necessary for denoising.
             # Is it needed here?
-            for level in range(wp.maxlevel + 1):
-                for n in new_wp.get_level(level, 'natural'):
-                    n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+            #for level in range(wp.maxlevel + 1):
+            #    for n in new_wp.get_level(level, 'natural'):
+            #        n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
 
             # First, turn the index into a leaf name.
             level = np.floor(np.log2(index))
@@ -255,7 +255,7 @@ class WaveletSeg:
             M = int(0.8*sampleRate/2.0)
             if species.title()=='Sipo':
                 M = int(0.2 * sampleRate / 2.0)
-            print M
+            #print M
 
             # Compute the energy curve (a la Jinnai et al. 2012)
             E = np.zeros(N)
@@ -264,9 +264,11 @@ class WaveletSeg:
                 E[i] = E[i - 1] - C[i - M - 1] + C[i + M]
             E = E / (2. * M)
 
-            threshold = np.mean(C) + np.std(C)
             if species.title() == 'Sipo':
                 threshold = np.mean(C) + np.std(C)/2
+            else:
+                threshold = np.mean(C) + np.std(C)
+
             # bittern
             # TODO: test
             #thresholds[np.where(waveletCoefs<=32)] = 0
@@ -499,7 +501,7 @@ def findCalls_train(fName,species='kiwi'):
 
     # Get the five level wavelet decomposition
     wData = ws.sp.waveletDenoise(ws.data, thresholdType='soft', wavelet='dmey',maxlevel=5)  # wavelet='dmey2' ??
-    print np.min(wData), np.max(wData)
+    #print np.min(wData), np.max(wData)
 
     #librosa.output.write_wav('train/kiwi/D/', wData, sampleRate, norm=False)
 
@@ -515,7 +517,7 @@ def findCalls_train(fName,species='kiwi'):
         fwData = ws.sp.ButterworthBandpass(wData, ws.sampleRate, low=500, high=7000)
     elif species.title()=='Sipo':
         fwData = ws.sp.ButterworthBandpass(wData, ws.sampleRate, low=1200, high=3800)
-    print fwData
+    #print fwData
 
     #fwData = data
     waveletCoefs = ws.computeWaveletEnergy(fwData, ws.sampleRate)
