@@ -12,6 +12,8 @@ Make a new method (not inside Segmentation):
     # To be done (ready to modify wavelet segmentation part)
 
 Plot the wavelet energy for noise, crickets, calls, etc.
+    Suppress the noise nodes, reconstruct -- what happens?
+Parallel process the segmenters
 
 Paging:
     Ideal option:
@@ -22,7 +24,6 @@ Paging:
     # But instead, we are going to load in 5 mins, and show that it is the first 5, and add arrows (and a 1/3 statement)
     # Anything else is a pain, and doesn't actually save much, since the overview is still massive
 
-    # The segment part of this needs fixing, need to keep track of where you are and subtract off the right amount :(
 Update the manual
 
 Video of using
@@ -104,7 +105,12 @@ Segmentation experiments
 
 	File list dock becomes frozen - one was experiencing this. Had to restart the program.
 	    # Can we reproduce it?
-	
+
+Isa:
+    (1) save problem -- doesn't always seem to save segments?
+    (2) make the config file somewhere you can write it
+    (3) have a 'take screenshot' option
+
 (2) Memory management
     NP: It's a pain, but needs thinking about and then doing
     Could just split the file into shorter pieces? 

@@ -422,7 +422,7 @@ class SignalProc:
             ind = self.convert(l)
             if thresholdType == 'hard':
                 # Hard thresholding
-                new_wp[ind].data = np.where(np.abs(new_wp[ind].data) < threshold, 0.0, wp[ind].data)
+                new_wp[ind].data = np.where(np.abs(wp[ind].data) < threshold, 0.0, wp[ind].data)
             else:
                 # Soft thresholding
                 # n.data = np.sign(n.data) * np.maximum((np.abs(n.data) - threshold), 0.0)

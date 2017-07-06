@@ -29,7 +29,7 @@ import PyQt4.phonon as phonon
 
 import wavio
 from scipy.misc import imread, imsave
-import librosa as lr
+#import librosa as lr
 import numpy as np
 
 import pyqtgraph as pg
@@ -887,9 +887,6 @@ class AviaNZ(QMainWindow):
         Then it sets up the audio player and fills in the appropriate time data in the window, and makes
         the scroll bar and overview the appropriate lengths.
         """
-
-        # TODO: For files > 5 mins, load the first 5, enable the rest
-        # TODO: Should have an overlap for this? Means a bit longer than 5 mins
 
         with pg.ProgressDialog("Loading..", 0, 7) as dlg:
             dlg.setCancelButton(None)
@@ -2721,11 +2718,11 @@ class AviaNZ(QMainWindow):
                 seglength = np.abs(self.segments[i][1] - self.segments[i][0])
                 if seglength <= 1:
                     # Recognise as is
-                    label = WaveletSegment.findCalls_test(self.audiodata[self.segments[i][0]:self.segments[i][1]])
+                    label = WaveletSegment.computeWaveletEnergy_1s(self.audiodata[self.segments[i][0]:self.segments[i][1]])
                     self.updateText(label,i)
                 else:
                     for sec in range(np.ceil(seglength)):
-                        label = WaveletSegment.findCalls_test(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]])
+                        label = WaveletSegment.computeWaveletEnergy_1s(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]])
                         # TODO: Check if the labels match, decide what to do if not
                     self.updateText(label,i)
 
@@ -3037,7 +3034,7 @@ class AviaNZ(QMainWindow):
 # Start the application
 app = QApplication(sys.argv)
 
-DOC=False    # DOC features or all
+DOC=True    # DOC features or all
 
 # This screen asks what you want to do, then processes the response
 first = Dialogs.StartScreen(DOC=DOC)
