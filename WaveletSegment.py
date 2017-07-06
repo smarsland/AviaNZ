@@ -1,8 +1,6 @@
 # Wavelet Segmentation.py
 
-# import numpy as np
 import pywt
-# from scipy.io import wavfile
 import wavio
 import numpy as np
 import librosa
@@ -10,14 +8,6 @@ import os,json
 import glob
 import string
 import SignalProc
-
-# mingw_path = 'C:\\Program Files\\mingw-w64\\x86_64-7.1.0-posix-seh-rt_v5-rev0\\mingw64\\bin'
-# os.environ['PATH'] = mingw_path + ';' + os.environ['PATH']
-# import xgboost as xgb
-# from sklearn.externals import joblib
-# clf_maleKiwi = joblib.load('maleKiwiClassifier.pkl')
-# clf_femaleKiwi = joblib.load('femaleKiwiClassifier.pkl')
-# clf_ruru = joblib.load('ruruClassifier.pkl')
 
 # Nirosha's approach of simultaneous segmentation and recognition using wavelets
 
@@ -34,13 +24,6 @@ import SignalProc
 # Stephen: Think about (4), fix (0), (5), (6) -> learning!
     # MLP or decision tree
     # DT: most informative nodes?
-
-# TODO: more testing, proper code to run experiment, work out desired output, work on parameters for each species
-
-# a few gotchas:
-    # make sure bandpass max is BELOW nyquist freq -Done
-    # this is like the Matlab code, one wavelet packet at a time, unfortunately
-    # resampling is in librosa - Librosa is working on Windows
 
 class WaveletSeg:
     # This class implements wavelet segmentation for the AviaNZ interface
@@ -383,30 +366,6 @@ class WaveletSeg:
                 count += 1
         #return self.data, self.sampleRate, self.annotation
 
-    # def splitAudio(self,folder_to_process='Sound Files/survey'):
-    #     #Split audio into 5-min to a subfolder '5min'
-    #     #Alternative: read the first, second, third 5 mins from 15 min recs - in this way we dont duplicate recs
-    #     os.makedirs(folder_to_process+'/5min/')
-    #     for filename in glob.glob(os.path.join(folder_to_process,'*.wav')):
-    #         fs,data=wavfile.read(filename) #faster than librosa #fs, data = librosa.load(filename)
-    #         if data.dtype is not 'float':
-    #             data = data.astype('float') / 32768.0
-    #         if np.shape(np.shape(data))[0]>1:
-    #             data = data[:,0]
-    #         if fs!=16000:
-    #             data = librosa.core.audio.resample(data,fs,16000)
-    #             fs=16000
-    #         file=str(filename).split('\\')[-1:][0]
-    #         i=1
-    #         for start in range(0,len(data),fs*60*5):
-    #             fName = folder_to_process+'/5min/'+file[:-4]+'_'+str(i) + '.wav'
-    #             x=data[start:start+fs*60*5]
-    #             x *= 32768.0
-    #             x = x.astype('int16')
-    #             wavfile.write(fName,fs, x)
-    #             #librosa.output.write_wav(fName, data[start:start+fs*60*5], fs)
-    #             i+=1
-
 def findCalls_train_learning(fName,species='kiwi'):
     ws=WaveletSeg()
     f = np.genfromtxt("Sound Files\MLdata\wE.data",delimiter=',',dtype=None)
@@ -435,7 +394,6 @@ def findCalls_train_learning(fName,species='kiwi'):
 
     # Compute point-biserial correlations and sort wrt it, return top nNodes
     nodes = ws.compute_r(data[:,62],data[:,:62].transpose())
-    print nodes
 
     # Now for Nirosha's sorting
     # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
@@ -443,7 +401,6 @@ def findCalls_train_learning(fName,species='kiwi'):
 
     # These nodes refer to the unrooted tree, so add 1 to get the real indices
     nodes = [n + 1 for n in nodes]
-    print nodes
 
     # **** We actually need the real data :(
     # Generate a full 5 level wavelet packet decomposition
@@ -453,11 +410,7 @@ def findCalls_train_learning(fName,species='kiwi'):
     #g = np.genfromtxt("Sound Files\MLdata\label-1s",delimiter=',',dtype=None)
 
     return f, data, nodes
-    #g = g[:4]
 
-# full, datafull, nodes = findCalls_train_learning()
-# f = full
-# data = datafull
 
 def moretest():
     ws=WaveletSeg()
@@ -672,321 +625,11 @@ def genReport(folder_to_process,detected):
 #Test
 # nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
 # nodelist_kiwi=[1,15,20,34,35,36,38,40,41,42,43,44,45,46,55] # python with new implimentation
-nodelist_kiwi=[34,35,36,38,40,41,42,43,44,45,46,55] # removed first three nodes from python with new implimentation
+#nodelist_kiwi=[34,35,36,38,40,41,42,43,44,45,46,55] # removed first three nodes from python with new implimentation
 #nodelist_kiwi = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55] # matlab
-nodelist_ruru=[33,37,38]
-
-# def test(nodelist):
-#     for filename in glob.glob(os.path.join('E:/SONGSCAPE/birdscapeConda2/Sound Files/test','*.wav')):
-#         findCalls_test(nodelist,filename[:-4])
-#
-# test(nodelist_kiwi) # TESTING
-
-# #Survey data processing
-# #First split audio into 5-min to a subfolder '5min'
-# ws=WaveletSeg()
-# ws.splitAudio(folder_to_process='Sound Files/survey')
-# print "5-min splitting done"
-# Now to process survey data
-# detected=processFolder(folder_to_process='Sound Files/survey/5min', species='kiwi')
-# genReport(folder_to_process='Sound Files/survey/5min',detected=detected)
-# print detected
-
-# print findCalls_train('E:/SONGSCAPE/birdscapeConda2/Sound Files/train/kiwi/train1',species='kiwi')
-
-#ws = WaveletSeg()
-#ws.loadData('Wavelet Segmentation/kiwi/train/train1')
-
-#fs = 16000
-#if ws.sampleRate != fs:
-    #ws.data = librosa.core.audio.resample(ws.data, ws.sampleRate, fs)
-    #ws.sampleRate = fs
-
-# Get the five level wavelet decomposition
-#wData = ws.denoise(ws.data, thresholdType='soft', maxlevel=5)
-# librosa.output.write_wav('train/kiwi/D/', wData, sampleRate, norm=False)
-
-# Bandpass filter
-# fwData = bandpass(wData,sampleRate)
-# TODO: Params in here!
-# bittern
-# fwData = ButterworthBandpass(wData,sampleRate,low=100,high=400)
-# kiwi
-#fwData = ws.ButterworthBandpass(wData, ws.sampleRate, low=1100, high=7500)
-#print fwData
-
-#fwData = ws.data
-# fwData = data
-#waveletCoefs = ws.computeWaveletEnergy(fwData, ws.sampleRate)
-
-#np.savetxt('waveout.txt',waveletCoefs)
-
-# findCalls_train('E:/SONGSCAPE/birdscapeConda2/Sound Files/train/kiwi/train1')
-
-# processFolder_train()  #TRAINING
+#nodelist_ruru=[33,37,38]
 
 
-# **********************************************PREPARE DATA SET (using 5 min recordings) FOR ML************************
-
-def computeWaveletEnergy_1s(data,wavelet,choice='all',denoise=False):
-    # Generate wavelet energy (all 62 nodes) given 1 sec data
-    E=[]
-    ws=WaveletSeg()
-    for level in range(1,6):
-        if wavelet == 'dmey2':
-            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
-            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
-            wavelet.orthogonal=True
-        if denoise==True:
-            data = ws.sp.waveletDenoise(data, thresholdType='soft', maxlevel=5)
-        if choice=='bandpass':
-            data=ws.sp.ButterworthBandpass(data,16000,low=500,high=7500)
-        wp = pywt.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric', maxlevel=level)
-        e = np.array([np.sum(n.data**2) for n in wp.get_level(level, "natural")])
-        if np.sum(e)>0:
-            e = 100.0*e/np.sum(e)
-        E = np.concatenate((E, e),axis=0)
-    return E
-
-# def genWEnergy(fName,species='kiwi'):      # origin 'findCalls_train'
-#     # Given the 5 min recording generates the 62x300 (level 5) wavelet energy(all) matrix
-#     # Load data and annotation
-#     ws=WaveletSeg()
-#     ws.loadData(fName)
-#     if species=='boom':
-#         fs=1000
-#     else:
-#         fs = 16000
-#     if ws.sampleRate != fs:
-#         ws.data = librosa.core.audio.resample(ws.data,ws.sampleRate,fs)
-#         ws.sampleRate=fs
-#
-#     # Get the five level wavelet decomposition
-#     wData = ws.sp.waveletDenoise(ws.data, thresholdType='soft', wavelet='dmey',maxlevel=5)
-#     print np.min(wData), np.max(wData)
-#
-#     # Bandpass filter
-#     # bittern
-#     #fwData = ButterworthBandpass(wData,sampleRate,low=100,high=400)
-#     if species=='kiwi':
-#         low=1100
-#         high=7500
-#     elif species=='ruru':
-#         low=0
-#         high=0
-#     elif species=='bittern':
-#         low=100
-#         high=400
-#     fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=low,high=high)
-#     print fwData
-#
-#     #fwData = data
-#     waveletCoefs = ws.computeWaveletEnergy(fwData, ws.sampleRate)
-#     return waveletCoefs
-#
-# def genWEnergyAllNodes(folder= 'E:/SONGSCAPE/MakeExecutable/AviaNZ_12thJune/Sound Files/MLPdata/train', species='kiwi'):
-#     #Generate the wavelet energy (all nodes)
-#     nfiles=len(glob.glob(os.path.join(folder,'*.wav')))
-#     for filename in glob.glob(os.path.join(folder,'*.wav')):
-#         E=genWEnergy(filename,species=species)
-#         np.savetxt(str(filename[:-4])+'_'+ str(species)+'_DF_E_all.dat', E, delimiter=',')
-#
-# # Save data per 5 min
-# # genWEnergyAllNodes(folder= 'E:/SONGSCAPE/MakeExecutable/AviaNZ_12thJune/Sound Files/MLPdata/train', species='kiwi')
-
-#***************************************************************************************
-# Ready DATA SET (using 5 min recordings) FOR ML
-
-# def read_tgt(file):
-#     annotation = np.zeros(300)
-#     count = 0
-#     import xlrd
-#     wb=xlrd.open_workbook(filename = file)
-#     ws=wb.sheet_by_index(0)
-#     col=ws.col(1)
-#     for row in range(1,301):
-#         annotation[count]=col[row].value
-#         count += 1
-#     return annotation
-#
-# data=np.zeros((8*300,63))    #8 rec =8*300=2400 data points, 62 nodes + target (0/1)
-# # train1
-# d = np.loadtxt("Sound Files/MLPdata/train/train1_kiwi_DF_E_all.dat",delimiter=',')
-# t=read_tgt("Sound Files/MLPdata/train/train1-sec.xlsx")
-# print np.shape(d)
-# print np.shape(t)
-# data[0:300,0:62]=d.transpose()
-# data[0:300,62]=t
-# # train2
-# d = np.loadtxt("Sound Files/MLPdata/train/train2_kiwi_DF_E_all.dat",delimiter=',')
-# t=read_tgt("Sound Files/MLPdata/train/train2-sec.xlsx")
-# print np.shape(d)
-# print np.shape(t)
-# data[300:600,0:62]=d.transpose()
-# data[300:600,62]=t
-# # train3
-# d = np.loadtxt("Sound Files/MLPdata/train/train3_kiwi_DF_E_all.dat",delimiter=',')
-# t=read_tgt("Sound Files/MLPdata/train/train3-sec.xlsx")
-# print np.shape(d)
-# print np.shape(t)
-# data[600:900,0:62]=d.transpose()
-# data[600:900,62]=t
-# # train4
-# d = np.loadtxt("Sound Files/MLPdata/train/train4_kiwi_DF_E_all.dat",delimiter=',')
-# t=read_tgt("Sound Files/MLPdata/train/train4-sec.xlsx")
-# print np.shape(d)
-# print np.shape(t)
-# data[900:1200,0:62]=d.transpose()
-# data[900:1200,62]=t
-# # train5
-# d = np.loadtxt("Sound Files/MLPdata/train/train5_kiwi_DF_E_all.dat",delimiter=',')
-# t=read_tgt("Sound Files/MLPdata/train/train5-sec.xlsx")
-# print np.shape(d)
-# print np.shape(t)
-# data[1200:1500,0:62]=d.transpose()
-# data[1200:1500,62]=t
-# # train6
-# d = np.loadtxt("Sound Files/MLPdata/train/train6_kiwi_DF_E_all.dat",delimiter=',')
-# t=read_tgt("Sound Files/MLPdata/train/train6-sec.xlsx")
-# print np.shape(d)
-# print np.shape(t)
-# data[1500:1800,0:62]=d.transpose()
-# data[1500:1800,62]=t
-# # train7
-# d = np.loadtxt("Sound Files/MLPdata/train/train7_kiwi_DF_E_all.dat",delimiter=',')
-# t=read_tgt("Sound Files/MLPdata/train/train7-sec.xlsx")
-# print np.shape(d)
-# print np.shape(t)
-# data[1800:2100,0:62]=d.transpose()
-# data[1800:2100,62]=t
-# # train8
-# d = np.loadtxt("Sound Files/MLPdata/train/train8_kiwi_DF_E_all.dat",delimiter=',')
-# t=read_tgt("Sound Files/MLPdata/train/train8-sec.xlsx")
-# print np.shape(d)
-# print np.shape(t)
-# data[2100:2400,0:62]=d.transpose()
-# data[2100:2400,62]=t
-#
-# # Save it as 2400 sec *63 [62 nodes + tgt]
-# np.savetxt('Sound Files/MLPdata/train/DF_E_all.dat', data, delimiter=',')
-
-
-#***************************************************************************************
-# Create DATA SET FOR ML - using annotations made with AviaNZ
-def CreateDataSet(directory,species='kiwi',choice='all',denoise=False):
-    #Generate the wavelet energy (all nodes)give the directory with sound and annotation
-    ws=WaveletSeg()
-    if choice=='all' and denoise==False:
-        filename='wEnergyAll.data'
-    elif choice=='all' and denoise==True:
-        filename='wEnergyAllDenoised.data'
-    elif choice=='bandpass' and denoise==False:
-        filename='wEnergyBandpass.data'
-    elif choice=='bandpass' and denoise==True:
-        filename='wEnergyBandpassDenoised.data'
-    f2=open(str(directory)+'/'+filename,'a')
-    for root, dirs, files in os.walk(directory):
-        for filename in files:
-            if filename.endswith('.wav'):
-                if not os.path.isfile(root+'/'+filename+'.data'): # if no AviaNZ annotation then skip
-                    continue
-                ws.loadData(root+'/'+filename[:-4],trainTest=False)
-                if species !='boom' and ws.sampleRate!=16000:
-                    ws.data=librosa.core.audio.resample(ws.data,ws.sampleRate,16000)
-                    ws.sampleRate=16000
-                # Read the AviaNZ annotation
-                with open(root+'/'+filename+".data") as f:
-                    segments = json.load(f)
-                segments=segments[1:]
-                for seg in segments:
-                    # If the length of a segment is less than 1 sec make it 1sec
-                    if seg[1]-seg[0]<1:
-                        seg[1]=seg[0]+1
-                    # Discard the tail (<1 sec)
-                    seg[1]=seg[0]+np.floor(seg[1]-seg[0])
-                    n=int(seg[1]-seg[0])
-                    for i in range(n):
-                        current=ws.data[(int(seg[0])+i)*ws.sampleRate:(int(seg[0])+(i+1))*ws.sampleRate]
-                        # Compute wavelet energy for this second
-                        E=computeWaveletEnergy_1s(current,'dmey2',choice,denoise)
-                        # E=genWEnergy(filename[:-4],species=species) # try later with bp filter e.g when trainig for kiwi male use 1200-7500
-                        E=E.tolist()
-                        spp=str(seg[4])
-                        if 'Noise' in spp:
-                            target=0
-                        else:
-                            target=1
-                        E.append(spp)
-                        E.append(target)
-                        f2.write(str(E)[1:-1]+"\n")
-    f2.close()
-
-def CreateDataSet_data(directory,species='kiwi',choice='all',denoise=False):
-    # Generate the wavelet energy (all nodes)give the directory with sound and annotation
-    # This also saves all the 1sec data along with their labels to be used in findCalls_train_learning
-    # to find the wavelet nodes
-    ws=WaveletSeg()
-    if choice=='all' and denoise==False:
-        filename='wE.data'
-    elif choice=='all' and denoise==True:
-        filename='wED.data'
-    elif choice=='bandpass' and denoise==False:
-        filename='wEB.data'
-    elif choice=='bandpass' and denoise==True:
-        filename='wEDB.data'
-    f0=open(str(directory)+'/data-1s.data','a')   # 1 sec data
-    f1=open(str(directory)+'/label-1s','a')      # 1 sec labels
-    f2=open(str(directory)+'/'+filename,'a')     # wavelet segments
-
-    for root, dirs, files in os.walk(directory):
-        for filename in files:
-            if filename.endswith('.wav'):
-                if not os.path.isfile(root+'/'+filename+'.data'): # if no AviaNZ annotation then skip
-                    continue
-                ws.loadData(root+'/'+filename[:-4],trainTest=False)
-                if species !='boom' and ws.sampleRate!=16000:
-                    ws.data=librosa.core.audio.resample(ws.data,ws.sampleRate,16000)
-                    ws.sampleRate=16000
-                # Read the AviaNZ annotation
-                with open(root+'/'+filename+".data") as f:
-                    segments = json.load(f)
-                for seg in segments:
-                    # If the length of a segment is less than 1 sec make it 1sec
-                    if seg[1]-seg[0]<1:
-                        seg[1]=seg[0]+1
-                    # Discard the tail (<1 sec)
-                    seg[1]=seg[0]+np.floor(seg[1]-seg[0])
-                    n=int(seg[1]-seg[0])
-                    for i in range(n):
-                        current=ws.data[(int(seg[0])+i)*ws.sampleRate:(int(seg[0])+(i+1))*ws.sampleRate]
-                        # Compute wavelet energy for this second
-                        E=computeWaveletEnergy_1s(current,'dmey2',choice,denoise)
-                        # E=genWEnergy(filename[:-4],species=species) # try later with bp filter e.g when trainig for kiwi male use 1200-7500
-                        E=E.tolist()
-                        spp=str(seg[4])
-                        if 'Noise' in spp:
-                            target=0
-                        else:
-                            target=1
-                        E.append(spp)
-                        E.append(target)
-                        current=current.tolist()
-                        f0.write(str(current)[1:-1]+"\n")
-                        f1.write(str(spp)+"\n")
-                        f2.write(str(E)[1:-1]+"\n")
-    f2.close()
-
-# CreateDataSet(directory= 'E:/AviaNZ/Sound Files/MLdata',choice='all',denoise=False)
-# CreateDataSet(directory= 'E:/AviaNZ/Sound Files/MLdata',choice='bandpass',denoise=False)
-# CreateDataSet(directory= 'E:/AviaNZ/Sound Files/MLdata',choice='bandpass',denoise=True)
-
-# CreateDataSet(directory= 'E:/AviaNZ/Sound Files/testsmall',choice='all',denoise=False)
-
-
-# CreateDataSet_data(directory= 'E:/AviaNZ/Sound Files/MLdata/',choice='all',denoise=False)
-
-# findCalls_train_learning(species='kiwi')
-# moretest()
 
 
 #### SIPO ############################################################
@@ -1038,3 +681,4 @@ def annotation2GT(datFile):
 
 # d=findCalls_test(fName='E:\Rebecca SIPO\\train\Mt Cass coastal SIPO 07072012',data=None, sampleRate=None, species='SIPO',trainTest=False)
 # print d
+

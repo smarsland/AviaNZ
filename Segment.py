@@ -760,10 +760,11 @@ def showSegs():
     import pyqtgraph as pg
     from pyqtgraph.Qt import QtCore, QtGui
     import wavio
+    import WaveletSegment
 
-    #wavobj = wavio.read('Sound Files/tril1.wav')
+    wavobj = wavio.read('Sound Files/tril1.wav')
     #wavobj = wavio.read('Sound Files/010816_202935_p1.wav')
-    wavobj = wavio.read('Sound Files/20170515_223004 piping.wav')
+    #wavobj = wavio.read('Sound Files/20170515_223004 piping.wav')
     #wavobj = wavio.read('Sound Files/kiwi_1min.wav')
     fs = wavobj.rate
     data = wavobj.data[:20*fs]
