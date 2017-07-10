@@ -1,3 +1,9 @@
+# Version 0.2 10/7/17
+# Author: Stephen Marsland
+
+# Set of colour maps for the AviaNZ interface.
+# These were made using cmaps.py in test
+
 import numpy as np
 
 def colourMaps(cmap):
