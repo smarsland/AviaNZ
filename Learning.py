@@ -5,7 +5,6 @@ import numpy as np
 import pywt
 from scipy.io import wavfile
 import pylab as pl
-import matplotlib
 import sklearn
 
 # TODO:
