@@ -3,7 +3,24 @@
 
 SM:
 
+Screenshot option
+    # Done
+
 On Windows: check if in HumanClassify1, playing second is different to first
+
+Wavelet denoising with best tree?
+
+Tidy up all the letter keys for the menu items
+
+Put freq axis tight option somewhere better
+
+For HumanClassify2 errors
+    -> they are currently just deleted.
+    Better is to remove them, but to save them and then after all have been processed,
+    use HumanClassify1 to get labels for them, save them somewhere and reuse for more training
+    There needs to be an option to not do this though :)
+
+Work out how to make old wavelet method produce too many segments
 
 Make a new method (not inside Segmentation):
     (1) Perform segmentation using at least one of old wavelet method and any other segmenter, possibly multiple options
@@ -22,19 +39,7 @@ Update the manual
 
 Video of using
 
-For HumanClassify2 errors
-    -> they are currently just deleted.
-    Better is to remove them, but to save them and then after all have been processed,
-    use HumanClassify1 to get labels for them, save them somewhere and reuse for more training
-    There needs to be an option to not do this though :)
-
-move Find Matches to segmentations
-
 get name from standard files and use it
-
-    SM: Tidy code, ensure comments, etc.
-
-    SM: Tidy the repository
 
 NP:
 
