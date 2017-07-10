@@ -1,8 +1,7 @@
-# Interface.py
+# AviaNZ.py
 #
 # This is the main class for the AviaNZ interface
-# It's fairly simple, but seems to work OK
-# Version 0.10 16/04/17
+# Version 0.11 10/07/17
 # Author: Stephen Marsland, with input from Nirosha Priyadarshani
 
 #    AviaNZ birdsong analysis program
@@ -297,6 +296,9 @@ class AviaNZ(QMainWindow):
 
         specMenu.addSeparator()
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
+
+        specMenu.addSeparator()
+        specMenu.addAction("Save as image",self.saveImage)
 
         actionMenu = self.menuBar().addMenu("&Actions")
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
@@ -1225,10 +1227,10 @@ class AviaNZ(QMainWindow):
 
     def denoiseImage(self):
         """ Denoise the spectrogram. To be used in conjunction with spectrogram inversion. """
-        from cv2 import fastNlMeansDenoising
-        sg = np.array(self.sg/np.max(self.sg)*255,dtype = np.uint8)
-        sg = fastNlMeansDenoising(sg,10,7,21)
-        self.specPlot.setImage(sg)
+        #from cv2 import fastNlMeansDenoising
+        #sg = np.array(self.sg/np.max(self.sg)*255,dtype = np.uint8)
+        #sg = fastNlMeansDenoising(sg,10,7,21)
+        #self.specPlot.setImage(sg)
 # ==============
 # Code for drawing and using the main figure
 
@@ -2621,7 +2623,6 @@ class AviaNZ(QMainWindow):
             sgRaw = self.sp.spectrogram(self.audiodata,mean_normalise=True,onesided=True,multitaper=False)
             segment = sgRaw[int(x1):int(x2),:]
             len_seg = (x2-x1) * self.config['incr'] / self.sampleRate
-            print thr
             indices = self.seg.findCCMatches(segment,sgRaw,thr)
             # indices are in spectrogram pixels, need to turn into times
             for i in indices:
@@ -2794,6 +2795,31 @@ class AviaNZ(QMainWindow):
         else:
             self.playSelectedSegment()
 
+    def setOperatorReviewerDialog(self):
+        """ Listener for Set Operator/Reviewer menu item.
+        """
+        self.setOperatorReviewerDialog = Dialogs.OperatorReviewer()
+        self.setOperatorReviewerDialog.show()
+        self.setOperatorReviewerDialog.activateWindow()
+        self.setOperatorReviewerDialog.activate.clicked.connect(self.operator)
+
+    def operator(self):
+        """ Listener for the operator/reviewer dialog.
+        """
+        # TODO: save these
+        [isOperator, name] = self.setOperatorReviewerDialog.getValues()
+        if isOperator == True:
+            self.operator = name
+            self.statusRight.setText("Operator: " + self.operator)
+        else:
+            self.reviewer = name
+            self.statusRight.setText("Reviewer: " + self.reviewer)
+
+    def saveImage(self):
+        import pyqtgraph.exporters as pge
+        filename = self.filename[:-4] + '.png'
+        exporter = pge.ImageExporter.ImageExporter(self.p_spec)
+        exporter.export(filename)
 # ============
 # Various actions: deleting segments, saving, quitting
     def deleteSegment(self,id=-1):
@@ -2893,33 +2919,13 @@ class AviaNZ(QMainWindow):
             json.dump(self.config, open(self.configfile, 'wb'))
         QApplication.quit()
 
-    def setOperatorReviewerDialog(self):
-        """ Listener for Set Operator/Reviewer menu item.
-        """
-        self.setOperatorReviewerDialog = Dialogs.OperatorReviewer()
-        self.setOperatorReviewerDialog.show()
-        self.setOperatorReviewerDialog.activateWindow()
-        self.setOperatorReviewerDialog.activate.clicked.connect(self.operator)
-
-    def operator(self):
-        """ Listener for the operator/reviewer dialog.
-        """
-        # TODO: save these
-        [isOperator,name] = self.setOperatorReviewerDialog.getValues()
-        if isOperator==True:
-            self.operator=name
-            self.statusRight.setText("Operator: "+self.operator)
-        else:
-            self.reviewer=name
-            self.statusRight.setText("Reviewer: "+self.reviewer)
-
 # =============
 
 
 # Start the application
 app = QApplication(sys.argv)
 
-DOC=True    # DOC features or all
+DOC=False    # DOC features or all
 
 # This screen asks what you want to do, then processes the response
 first = Dialogs.StartScreen(DOC=DOC)
