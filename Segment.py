@@ -471,14 +471,12 @@ class Segment:
         """
         from skimage.feature import match_template
 
-        print thr
         # seg and sg have the same $y$ size, so the result of match_template is 1D
         matches = np.squeeze(match_template(sg, seg))
 
         import peakutils
         md = np.shape(seg)[0]/2
         threshold = thr*np.max(matches)
-        print np.shape(matches), md, threshold
         indices = peakutils.indexes(matches, thres=threshold, min_dist=md)
         return indices
 
