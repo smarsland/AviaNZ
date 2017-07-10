@@ -1,3 +1,6 @@
+# Version 0.2 10/7/17
+# Author: Stephen Marsland
+
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
 from PyQt4.QtCore import *
@@ -9,6 +12,8 @@ import pyqtgraph.functions as fn
 
 
 class TimeAxis(pg.AxisItem):
+    # Time axis (at bottom of spectrogram)
+    # Writes the time as mm:ss, and can add an offset
     def __init__(self, *args, **kwargs):
         super(TimeAxis, self).__init__(*args, **kwargs)
         self.offset = 0
@@ -21,6 +26,7 @@ class TimeAxis(pg.AxisItem):
         self.offset = offset
 
 class ShadedROI(pg.ROI):
+    # A region of interest that is shaded, for marking segments
     def paint(self, p, opt, widget):
         #brush = QtGui.QBrush(QtGui.QColor(0, 0, 255, 50))
         if not hasattr(self, 'currentBrush'):
@@ -53,6 +59,7 @@ class ShadedROI(pg.ROI):
 
 
 class ShadedRectROI(ShadedROI):
+    # A rectangular ROI that it shaded, for marking segments
     def __init__(self, pos, size, centered=False, sideScalers=False, **args):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
         pg.ROI.__init__(self, pos, size, **args)
@@ -68,7 +75,7 @@ class ShadedRectROI(ShadedROI):
             self.addScaleHandle([0.5, 1], [0.5, center[1]])
 
 class DragViewBox(pg.ViewBox):
-    # Normal ViewBox, but with ability to drag the segments
+    # A normal ViewBox, but with ability to drag the segments
     sigMouseDragged = QtCore.Signal(object,object,object)
 
     def __init__(self, *args, **kwds):
@@ -76,7 +83,7 @@ class DragViewBox(pg.ViewBox):
 
     def mouseDragEvent(self, ev):
         ## if axis is specified, event will only affect that axis.
-        ev.accept()  ## we accept all buttons
+        ev.accept()
         if self.state['mouseMode'] != pg.ViewBox.RectMode or ev.button() == QtCore.Qt.RightButton:
             ev.ignore()
 
@@ -89,7 +96,6 @@ class DragViewBox(pg.ViewBox):
 
     def keyPressEvent(self,ev):
         # This catches the keypresses and sends out a signal
-        #print ev.key(), ev.text()
         self.emit(SIGNAL("keyPressed"),ev)
 
 class ChildInfoViewBox(pg.ViewBox):
@@ -117,7 +123,6 @@ class PicButton(QAbstractButton):
 
         if type(event) is not bool:
             painter = QPainter(self)
-            #painter.drawPixmap(event.rect(), pix)
             painter.drawImage(event.rect(), im)
 
     def sizeHint(self):
@@ -138,6 +143,8 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
         self.parentWidget().resend(self.mapRectToParent(self.boundingRect()).x())
 
 class FlowLayout(QtGui.QLayout):
+    # This is the flow layout which lays out a set of spectrogram pictures on buttons (for HumanClassify2) as
+    # nicely as possible
     # From https://gist.github.com/Cysu/7461066
     def __init__(self, parent=None, margin=0, spacing=-1):
         super(FlowLayout, self).__init__(parent)
@@ -230,3 +237,23 @@ class FlowLayout(QtGui.QLayout):
             lineHeight = max(lineHeight, item.sizeHint().height())
 
         return y + lineHeight - rect.y()
+
+# Helper functions
+def splitFile5mins(self, name):
+    # Nirosha wants to split files that are long (15 mins) into 5 min segments
+    # Could be used when loading long files :)
+    try:
+        self.audiodata, self.sampleRate = lr.load(name,sr=None)
+    except:
+        print("Error: try another file")
+    nsamples = np.shape(self.audiodata)[0]
+    lengthwanted = self.sampleRate * 60 * 5
+    count = 0
+    while (count + 1) * lengthwanted < nsamples:
+        data = self.audiodata[count * lengthwanted:(count + 1) * lengthwanted]
+        filename = name[:-4] + '_' +str(count) + name[-4:]
+        lr.output.write_wav(filename, data, self.sampleRate)
+        count += 1
+    data = self.audiodata[(count) * lengthwanted:]
+    filename = name[:-4] + '_' + str((count)) + name[-4:]
+    lr.output.write_wav(filename,data,self.sampleRate)

@@ -2,6 +2,9 @@
 # TODO for AviaNZ
 
 SM:
+
+On Windows: check if in HumanClassify1, playing second is different to first
+
 Make a new method (not inside Segmentation):
     (1) Perform segmentation using at least one of old wavelet method and any other segmenter, possibly multiple options
     # Partly done, (FIR + median clip). Add in wavelets.
@@ -14,15 +17,6 @@ Make a new method (not inside Segmentation):
 Plot the wavelet energy for noise, crickets, calls, etc.
     Suppress the noise nodes, reconstruct -- what happens?
 Parallel process the segmenters
-
-Paging:
-    Ideal option:
-    generate the 15 min overview spectrogram (lower resolution -> increase increment)
-    page in 5 mins worth of sound file and update as move through file in background
-        -> modify wavio
-        # Done
-    # But instead, we are going to load in 5 mins, and show that it is the first 5, and add arrows (and a 1/3 statement)
-    # Anything else is a pain, and doesn't actually save much, since the overview is still massive
 
 Update the manual
 

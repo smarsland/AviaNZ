@@ -2,14 +2,17 @@
 import pywt
 import wavio
 import numpy as np
-import SignalProc
-import WaveletSegment
+import string
+import os, json
+#import SignalProc
+import LearnWavelets
 
 def showEnergies():
     import pylab as pl
     pl.ion()
 
-    filename = 'Sound Files/tril1_d1.wav'
+    #filename = 'Sound Files/tril1_d1.wav'
+    filename = 'Sound Files/tril1.wav'
     #filename = 'Sound Files/090811_184501.wav'
     #filename = 'Sound Files/kiwi_1min.wav'
     wavobj = wavio.read(filename)
@@ -55,19 +58,19 @@ def showEnergies():
 
     pl.figure()
 
-    e1 = computeWaveletEnergy_1s(data1,'dmey2')
+    e1 = LearnWavelets.computeWaveletEnergy_1s(data1,'dmey2')
     pl.subplot(5,1,1)
     pl.plot(e1)
-    e2 = computeWaveletEnergy_1s(data2,'dmey2')
+    e2 = LearnWavelets.computeWaveletEnergy_1s(data2,'dmey2')
     pl.subplot(5,1,2)
     pl.plot(e2)
-    e3 = computeWaveletEnergy_1s(data3,'dmey2')
+    e3 = LearnWavelets.computeWaveletEnergy_1s(data3,'dmey2')
     pl.subplot(5,1,3)
     pl.plot(e3)
-    e4 = computeWaveletEnergy_1s(data4,'dmey2')
+    e4 = LearnWavelets.computeWaveletEnergy_1s(data4,'dmey2')
     pl.subplot(5,1,4)
     pl.plot(e4)
-    e5 = computeWaveletEnergy_1s(data5,'dmey2')
+    e5 = LearnWavelets.computeWaveletEnergy_1s(data5,'dmey2')
     pl.subplot(5,1,5)
     pl.plot(e5)
 
@@ -107,9 +110,9 @@ def reconWPT():
     if np.shape(np.shape(data))[0] > 1:
         data = np.squeeze(data[:, 0])
 
-    #tbd = [1, 3, 7, 15, 31]
-    tbd = np.concatenate([np.arange(30),np.arange(50,63)])
-
+    tbd = [1, 3, 7, 15, 31]
+    #tbd = np.concatenate([np.arange(30),np.arange(50,63)])
+    #tbd = np.arange(50)
     listnodes = np.arange(63)
     listnodes = np.delete(listnodes, tbd)
 

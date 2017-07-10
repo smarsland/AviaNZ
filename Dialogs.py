@@ -1,3 +1,6 @@
+# Version 0.2 10/7/17
+# Author: Stephen Marsland
+
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
 import sys,os
@@ -114,8 +117,8 @@ class Spectrogram(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
 
-        self.algs = QComboBox()
-        self.algs.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
+        self.windowType = QComboBox()
+        self.windowType.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
 
         self.mean_normalise = QCheckBox()
         self.mean_normalise.setChecked(True)
@@ -129,7 +132,7 @@ class Spectrogram(QDialog):
         self.incr.setText(str(incr))
 
         Box = QVBoxLayout()
-        Box.addWidget(self.algs)
+        Box.addWidget(self.windowType)
         Box.addWidget(QLabel('Mean normalise'))
         Box.addWidget(self.mean_normalise)
         Box.addWidget(QLabel('Multitapering'))
@@ -144,7 +147,7 @@ class Spectrogram(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        return [self.algs.currentText(),self.mean_normalise.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text()]
+        return [self.windowType.currentText(),self.mean_normalise.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text()]
 
     # def closeEvent(self, event):
     #     msg = QMessageBox()
@@ -185,7 +188,6 @@ class OperatorReviewer(QDialog):
 
     def getValues(self):
         return [self.operatorReviewer[0].isChecked(), self.name.text()]
-        #return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text(),self.species.currentText()]
 
 #======
 class Segmentation(QDialog):
@@ -199,9 +201,9 @@ class Segmentation(QDialog):
 
         self.algs = QComboBox()
         #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
-        self.algs.addItems(["Amplitude","Harma","Power","Median Clipping","Onsets","Fundamental Frequency","FIR","Wavelets","Best"])
+        self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
-        self.prevAlg = "Amplitude"
+        self.prevAlg = "Default"
         self.undo = QPushButton("Undo")
         self.activate = QPushButton("Segment")
         #self.save = QPushButton("Save segments")
@@ -266,19 +268,24 @@ class Segmentation(QDialog):
         self.FIRThr1.setSingleStep(0.05)
         self.FIRThr1.setValue(0.1)
 
+        self.CCThr1 = QDoubleSpinBox()
+        self.CCThr1.setRange(0.0,2.0) #setRange(0.0,1.0)
+        self.CCThr1.setSingleStep(0.1)
+        self.CCThr1.setValue(0.4)
+
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
         # Labels
-        self.amplabel = QLabel("Set threshold amplitude")
-        Box.addWidget(self.amplabel)
+        #self.amplabel = QLabel("Set threshold amplitude")
+        #Box.addWidget(self.amplabel)
 
         self.Harmalabel = QLabel("Set decibal threshold")
         Box.addWidget(self.Harmalabel)
         self.Harmalabel.hide()
 
-        self.Onsetslabel = QLabel("Onsets: No parameters")
-        Box.addWidget(self.Onsetslabel)
-        self.Onsetslabel.hide()
+        #self.Onsetslabel = QLabel("Onsets: No parameters")
+        #Box.addWidget(self.Onsetslabel)
+        #self.Onsetslabel.hide()
 
         self.medlabel = QLabel("Set median threshold")
         Box.addWidget(self.medlabel)
@@ -292,79 +299,14 @@ class Segmentation(QDialog):
         self.specieslabel = QLabel("Species")
         self.species=QComboBox()
         # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
-        self.species.addItems(["kiwi","ruru"])
+        self.species.addItems(["Kiwi","Ruru"])
         self.species.currentIndexChanged[QString].connect(self.changeBoxes)
-
-        # self.depthlabel = QLabel("Depth of wavelet packet decomposition")
-        # self.depth = QSpinBox()
-        # self.depth.setRange(1,10)
-        # self.depth.setSingleStep(1)
-        # self.depth.setValue(5)
-        #
-        # self.thrtypelabel = QLabel("Type of thresholding")
-        # self.thrtype = [QRadioButton("Soft"), QRadioButton("Hard")]
-        # self.thrtype[0].setChecked(True)
-        #
-        # self.thrlabel = QLabel("Multiplier of std dev for threshold")
-        # self.thr = QSpinBox()
-        # self.thr.setRange(1,10)
-        # self.thr.setSingleStep(1)
-        # self.thr.setValue(5)
-        #
-        # self.waveletlabel = QLabel("Type of wavelet")
-        # self.wavelet = QComboBox()
-        # self.wavelet.addItems(["dmey2","db2","db5","haar"])
-        # self.wavelet.setCurrentIndex(0)
-        #
-        # self.blabel = QLabel("Start and end points of the band for bandpass filter")
-        # self.start = QLineEdit()
-        # self.start.setText('1000')
-        # self.end = QLineEdit()
-        # self.end.setText('7500')
-        # self.blabel2 = QLabel("Check if not using bandpass")
-        # self.bandchoice = QCheckBox()
-        # self.connect(self.bandchoice, SIGNAL('clicked()'), self.bandclicked)
 
         Box.addWidget(self.specieslabel)
         self.specieslabel.hide()
         Box.addWidget(self.species)
         self.species.hide()
-        #Box.addWidget(self.depthlabel)
-        #self.depthlabel.hide()
-        ##Box.addWidget(self.depthchoice)
-        ##self.depthchoice.hide()
-        #Box.addWidget(self.depth)
-        #self.depth.hide()
 
-        #Box.addWidget(self.thrtypelabel)
-        #self.thrtypelabel.hide()
-        #Box.addWidget(self.thrtype[0])
-        #self.thrtype[0].hide()
-        #Box.addWidget(self.thrtype[1])
-        #self.thrtype[1].hide()
-
-        #Box.addWidget(self.thrlabel)
-        #self.thrlabel.hide()
-        #Box.addWidget(self.thr)
-        #self.thr.hide()
-
-        #Box.addWidget(self.waveletlabel)
-        #self.waveletlabel.hide()
-        #Box.addWidget(self.wavelet)
-        #self.wavelet.hide()
-
-        #Box.addWidget(self.blabel)
-        #self.blabel.hide()
-        #Box.addWidget(self.start)
-        #self.start.hide()
-        #Box.addWidget(self.end)
-        #self.end.hide()
-        #Box.addWidget(self.blabel2)
-        #self.blabel2.hide()
-        #Box.addWidget(self.bandchoice)
-        #self.bandchoice.hide()
-
-        Box.addWidget(self.ampThr)
         Box.addWidget(self.HarmaThr1)
         Box.addWidget(self.HarmaThr2)
         self.HarmaThr1.hide()
@@ -400,6 +342,9 @@ class Segmentation(QDialog):
         Box.addWidget(self.Fundwindow)
         self.Fundwindow.hide()
 
+        Box.addWidget(self.CCThr1)
+        self.CCThr1.hide()
+
         Box.addWidget(self.undo)
         self.undo.setEnabled(False)
         Box.addWidget(self.activate)
@@ -410,9 +355,8 @@ class Segmentation(QDialog):
 
     def changeBoxes(self,alg):
         # This does the hiding and showing of the options as the algorithm changes
-        if self.prevAlg == "Amplitude":
-            self.amplabel.hide()
-            self.ampThr.hide()
+        if self.prevAlg == "Default":
+            pass
         elif self.prevAlg == "Energy Curve":
             self.eclabel.hide()
             self.ecThr.hide()
@@ -437,12 +381,12 @@ class Segmentation(QDialog):
             self.Fundminperiodslabel.hide()
             self.Fundthrlabel.hide()
             self.Fundwindowlabel.hide()
-        elif self.prevAlg == "Onsets":
-            self.Onsetslabel.hide()
+        elif self.prevAlg == "Cross-Correlation":
+            self.CCThr1.hide()
+        #elif self.prevAlg == "Onsets":
+        #    self.Onsetslabel.hide()
         elif self.prevAlg == "FIR":
             self.FIRThr1.hide()
-        elif self.prevAlg == "Best":
-            pass
         else:
             self.specieslabel.hide()
             self.species.hide()
@@ -463,9 +407,8 @@ class Segmentation(QDialog):
             #self.bandchoice.hide()
         self.prevAlg = str(alg)
 
-        if str(alg) == "Amplitude":
-            self.amplabel.show()
-            self.ampThr.show()
+        if str(alg) == "Default":
+            pass
         elif str(alg) == "Energy Curve":
             self.eclabel.show()
             self.ecThr.show()
@@ -490,31 +433,18 @@ class Segmentation(QDialog):
             self.Fundminperiodslabel.show()
             self.Fundthrlabel.show()
             self.Fundwindowlabel.show()
-        elif str(alg) == "Onsets":
-            self.Onsetslabel.show()
+        #elif str(alg) == "Onsets":
+        #    self.Onsetslabel.show()
         elif str(alg) == "FIR":
             self.FIRThr1.show()
-        elif str(alg) == "Best":
-            pass
+        #elif str(alg) == "Best":
+        #    pass
+        elif self.prevAlg == "Cross-Correlation":
+            self.CCThr1.show()
         else:
             #"Wavelets"
             self.specieslabel.show()
             self.species.show()
-            #self.depthlabel.show()
-            ##self.depthchoice.show()
-            #self.depth.show()
-            #self.thrtypelabel.show()
-            #self.thrtype[0].show()
-            #self.thrtype[1].show()
-            #self.thrlabel.show()
-            #self.thr.show()
-            #self.waveletlabel.show()
-            #self.wavelet.show()
-            #self.blabel.show()
-            #self.start.show()
-            #self.end.show()
-            #self.blabel2.show()
-            #self.bandchoice.show()
 
     def bandclicked(self):
         # TODO: Can they be grayed out?
@@ -522,7 +452,7 @@ class Segmentation(QDialog):
         self.end.setEnabled(not self.end.isEnabled())
 
     def getValues(self):
-        return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.species.currentText()]
+        return [self.algs.currentText(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText()]
         #return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text(),self.species.currentText()]
 
 #======
@@ -901,12 +831,6 @@ class HumanClassify1(QDialog):
         media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
         media_obj.seek(0)
         media_obj.play()
-        #if media_obj.state() == phonon.Phonon.PlayingState:
-        #    media_obj.pause()
-        #    playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        #elif media_obj.state() == phonon.Phonon.PausedState or media_obj.state() == phonon.Phonon.StoppedState:
-        #    media_obj.play()
-        #    playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
 
     def setImage(self, seg, audiodata, sampleRate, label):
 

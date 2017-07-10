@@ -1,8 +1,8 @@
+# Version 0.2 10/7/17
+# Author: Stephen Marsland, Nirosha Priyadarshani
 
 import pywt
-import wavio
 import numpy as np
-import SignalProc
 import WaveletSegment
 
 # mingw_path = 'C:\\Program Files\\mingw-w64\\x86_64-7.1.0-posix-seh-rt_v5-rev0\\mingw64\\bin'
@@ -63,26 +63,6 @@ import WaveletSegment
 
 # processFolder_train()  #TRAINING
 
-
-def computeWaveletEnergy_1s(data,wavelet,choice='all',denoise=False):
-    # Generate wavelet energy (all 62 nodes) given 1 sec data
-    E=[]
-    ws=WaveletSeg()
-    for level in range(6):
-        if wavelet == 'dmey2':
-            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
-            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
-            wavelet.orthogonal=True
-        if denoise==True:
-            data = ws.sp.waveletDenoise(data, thresholdType='soft', maxlevel=5)
-        if choice=='bandpass':
-            data=ws.sp.ButterworthBandpass(data,16000,low=500,high=7500)
-        wp = pywt.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric', maxlevel=level)
-        e = np.array([np.sum(n.data**2) for n in wp.get_level(level, "natural")])
-        if np.sum(e)>0:
-            e = 100.0*e/np.sum(e)
-        E = np.concatenate((E, e),axis=0)
-    return E
 
 #***************************************************************************************
 # Ready DATA SET (using 5 min recordings) FOR ML
@@ -164,7 +144,7 @@ def computeWaveletEnergy_1s(data,wavelet,choice='all',denoise=False):
 # Create DATA SET FOR ML - using annotations made with AviaNZ
 def CreateDataSet(directory,species='kiwi',choice='all',denoise=False):
     #Generate the wavelet energy (all nodes)give the directory with sound and annotation
-    ws=WaveletSeg()
+    ws=WaveletSegment.WaveletSegment()
     if choice=='all' and denoise==False:
         filename='wEnergyAll.data'
     elif choice=='all' and denoise==True:
@@ -214,7 +194,7 @@ def CreateDataSet_data(directory,species='kiwi',choice='all',denoise=False):
     # Generate the wavelet energy (all nodes)give the directory with sound and annotation
     # This also saves all the 1sec data along with their labels to be used in findCalls_train_learning
     # to find the wavelet nodes
-    ws=WaveletSeg()
+    ws=WaveletSegment.WaveletSegment()
     if choice=='all' and denoise==False:
         filename='wE.data'
     elif choice=='all' and denoise==True:
