@@ -116,6 +116,8 @@ class Spectrogram(QDialog):
     def __init__(self, width, incr, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setMinimumWidth(300)
 
         self.windowType = QComboBox()
         self.windowType.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
@@ -168,6 +170,8 @@ class OperatorReviewer(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Set Operator/Reviewer')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setMinimumWidth(320)
 
         self.operatorReviewerlabel = QLabel("Select your role")
         self.operatorReviewer = [QRadioButton("Operator"), QRadioButton("Reviewer")]
@@ -198,6 +202,8 @@ class Segmentation(QDialog):
     def __init__(self, maxv, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Segmentation Options')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setMinimumWidth(350)
 
         self.algs = QComboBox()
         #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
@@ -461,6 +467,7 @@ class Denoise(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Denoising Options')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         self.algs = QComboBox()
         self.algs.addItems(["Wavelets","Bandpass","Butterworth Bandpass" ,"Wavelets --> Bandpass","Bandpass --> Wavelets","Median Filter"])
@@ -689,6 +696,7 @@ class HumanClassify1(QDialog):
     def __init__(self, seg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.frame = QWidget()
 
         self.lut = lut
@@ -916,6 +924,7 @@ class HumanClassify2(QDialog):
     def __init__(self, sg, segments, label, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.frame = QWidget()
 
         self.sampleRate = sampleRate
@@ -1043,6 +1052,7 @@ class HumanClassify3(QDialog):
                  parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.frame = QWidget()
 
         self.sampleRate = sampleRate
@@ -1163,6 +1173,7 @@ class HumanClassify2a(QDialog):
     def __init__(self, birdlist,parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classification')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         self.birds = QListWidget(self)
         self.birds.setMaximumWidth(150)
