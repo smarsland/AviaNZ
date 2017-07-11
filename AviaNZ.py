@@ -2867,10 +2867,33 @@ class AviaNZ(QMainWindow):
         """ Listener for delete all button.
         Checks if the user meant to do it, then calls removeSegments()
         """
-        reply = QMessageBox.question(self,"Delete All Segments","Are you sure you want to delete all segments?",    QMessageBox.Yes | QMessageBox.No)
+        if len(self.segments) == 0:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText("No segments to delete")
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setIconPixmap(QPixmap("img\Owl_warning.png"))
+            msg.setWindowTitle("No segments")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
+            return
+        else:
+            msg = QMessageBox()
+            msg.setIconPixmap(QPixmap("img\Owl_thinking.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setText("Are you sure you want to delete all segments?")
+            msg.setWindowTitle("Delete All Segments")
+            msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+            msg.buttonClicked.connect(self.yes)
+            msg.exec_()
+
+        # reply = QMessageBox.question(self,"Delete All Segments","Are you sure you want to delete all segments?",    QMessageBox.Yes | QMessageBox.No)
         # reply.setWindowIcon(QIcon('Avianz.ico'))
-        if reply==QMessageBox.Yes:
-            self.removeSegments()
+        # if reply==QMessageBox.Yes:
+        #     self.removeSegments()
+
+    def yes(self):
+        self.removeSegments()
 
     def removeSegments(self,delete=True):
         """ Remove all the segments in response to the menu selection, or when a new file is loaded. """
