@@ -2155,8 +2155,6 @@ class AviaNZ(QMainWindow):
             if self.saveConfig:
                 self.config['BirdList'].append(label)
 
-
-
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
         self.humanClassifyNextImage1()
@@ -2215,7 +2213,7 @@ class AviaNZ(QMainWindow):
         """ Create the spectrogram dialog when the button is pressed.
         """
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq)
+            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq)   
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
@@ -2693,11 +2691,12 @@ class AviaNZ(QMainWindow):
         # TODO: Finish this
         # Note that this still works on 1 second -- species-specific parameter eventually (here twice: as 1 and in sec loop)
         if self.segments is None or len(self.segments) == 0:
-            print "No segments to recognise"
+            # print "No segments to recognise"
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to recognise")
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
             msg.setWindowTitle("No segments")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
@@ -2868,7 +2867,7 @@ class AviaNZ(QMainWindow):
         self.config['reviewer'] = str(name2)
         self.statusRight.setText("Operator: " + self.config['operator'] + ", Reviewer: "+self.config['reviewer'])
 
-    def saveImage(self):
+    def saveImage(self): # ??? it doesn't save the image
         import pyqtgraph.exporters as pge
         filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
         exporter = pge.ImageExporter.ImageExporter(self.p_spec)
@@ -2917,10 +2916,33 @@ class AviaNZ(QMainWindow):
         """ Listener for delete all button.
         Checks if the user meant to do it, then calls removeSegments()
         """
-        reply = QMessageBox.question(self,"Delete All Segments","Are you sure you want to delete all segments?",    QMessageBox.Yes | QMessageBox.No)
+        if len(self.segments) == 0:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText("No segments to delete")
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+            msg.setWindowTitle("No segments")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
+            return
+        else:
+            msg = QMessageBox()
+            msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setText("Are you sure you want to delete all segments?")
+            msg.setWindowTitle("Delete All Segments")
+            msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+            msg.buttonClicked.connect(self.yes)
+            msg.exec_()
+
+        # reply = QMessageBox.question(self,"Delete All Segments","Are you sure you want to delete all segments?",    QMessageBox.Yes | QMessageBox.No)
         # reply.setWindowIcon(QIcon('Avianz.ico'))
-        if reply==QMessageBox.Yes:
-            self.removeSegments()
+        # if reply==QMessageBox.Yes:
+        #     self.removeSegments()
+
+    def yes(self):
+        self.removeSegments()
 
     def removeSegments(self,delete=True):
         """ Remove all the segments in response to the menu selection, or when a new file is loaded. """
