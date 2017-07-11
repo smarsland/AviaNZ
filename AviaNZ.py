@@ -2213,7 +2213,7 @@ class AviaNZ(QMainWindow):
         """ Create the spectrogram dialog when the button is pressed.
         """
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq)     #???
+            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq)   
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
