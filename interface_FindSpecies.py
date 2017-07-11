@@ -199,7 +199,6 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
-            msg.setIconPixmap(QPixmap("img\Owl_warning.png"))
             msg.setText("Please select a folder to process!")
             msg.setWindowTitle("Select Folder")
             msg.setStandardButtons(QMessageBox.Ok)
