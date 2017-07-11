@@ -980,6 +980,8 @@ class AviaNZ(QMainWindow):
                 file.close()
                 if len(self.segments) > 0:
                     if self.segments[0][0] == -1:
+                        self.config['operator'] = self.segments[0][2]
+                        self.config['reviewer'] = self.segments[0][3]
                         del self.segments[0]
                 self.hasSegments = True
             else:
