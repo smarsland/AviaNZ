@@ -350,7 +350,6 @@ class AviaNZ(QMainWindow):
         """ If the configuration does exists, this generates one with default values for parameters. """
         print("Generating new config file")
         self.config = {
-            'username': "Stephen",
             # Params for spectrogram
             'window_width': 256,
             'incr': 128,
@@ -980,8 +979,8 @@ class AviaNZ(QMainWindow):
                 file.close()
                 if len(self.segments) > 0:
                     if self.segments[0][0] == -1:
-                        self.config['operator'] = self.segments[0][3]
-                        self.config['reviewer'] = self.segments[0][4]
+                        self.config['operator'] = self.segments[0][2]
+                        self.config['reviewer'] = self.segments[0][3]
                         del self.segments[0]
                 self.hasSegments = True
             else:
@@ -1994,9 +1993,9 @@ class AviaNZ(QMainWindow):
         if self.segments != [] or self.hasSegments:
             if len(self.segments)>0:
                 if self.segments[0][0] > -1:
-                    self.segments.insert(0, [-1, -1, str(self.username), -1, -1])
+                    self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
             else:
-                self.segments.insert(0, [-1, -1, str(self.username), -1, -1])
+                self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
             self.saveSegments()
         self.resetStorageArrays()
         # Reset the media player
@@ -2980,7 +2979,7 @@ class AviaNZ(QMainWindow):
 
     def quit(self):
         """ Listener for the quit button, also called by closeEvent().
-        Add in the username at the top, and then save the segments and the config file.
+        Add in the operator and reviewer at the top, and then save the segments and the config file.
         """
         print("Quitting")
         if len(self.segments) > 0:
