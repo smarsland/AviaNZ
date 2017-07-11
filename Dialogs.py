@@ -113,7 +113,7 @@ class FileDataDialog(QDialog):
 class Spectrogram(QDialog):
     # Class for the spectrogram dialog box
     # TODO: Steal the graph from Raven (View/Configure Brightness)
-    def __init__(self, width, incr, parent=None):
+    def __init__(self, width, incr, minFreq, maxFreq, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -125,6 +125,16 @@ class Spectrogram(QDialog):
         self.mean_normalise = QCheckBox()
         self.mean_normalise.setChecked(True)
         self.multitaper = QCheckBox()
+
+        self.low = QSpinBox()
+        self.low.setRange(minFreq,maxFreq)
+        self.low.setSingleStep(100)
+        self.low.setValue(0)
+
+        self.high = QSpinBox()
+        self.high.setRange(minFreq,maxFreq)
+        self.high.setSingleStep(100)
+        self.high.setValue(maxFreq)
 
         self.activate = QPushButton("Update Spectrogram")
 
@@ -143,13 +153,20 @@ class Spectrogram(QDialog):
         Box.addWidget(self.window_width)
         Box.addWidget(QLabel('Hop'))
         Box.addWidget(self.incr)
+
+        Box.addWidget(QLabel('Frequency range to show'))
+        Box.addWidget(QLabel('Lowest frequency'))
+        Box.addWidget(self.low)
+        Box.addWidget(QLabel('Highest frequency'))
+        Box.addWidget(self.high)
+
         Box.addWidget(self.activate)
 
         # Now put everything into the frame
         self.setLayout(Box)
 
     def getValues(self):
-        return [self.windowType.currentText(),self.mean_normalise.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text()]
+        return [self.windowType.currentText(),self.mean_normalise.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text(),self.low.value(),self.high.value()]
 
     # def closeEvent(self, event):
     #     msg = QMessageBox()
@@ -173,25 +190,24 @@ class OperatorReviewer(QDialog):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(320)
 
-        self.operatorReviewerlabel = QLabel("Select your role")
-        self.operatorReviewer = [QRadioButton("Operator"), QRadioButton("Reviewer")]
-        self.operatorReviewer[0].setChecked(True)
-        self.name = QLineEdit(self)
+        self.operatorlabel = QLabel("Operator")
+        self.name1 = QLineEdit(self)
+        self.reviewerlabel = QLabel("Reviewer")
+        self.name2 = QLineEdit(self)
         self.activate = QPushButton("Set")
 
         Box = QVBoxLayout()
-        Box.addWidget(self.operatorReviewerlabel)
-        Box.addWidget(self.operatorReviewer[0])
-        Box.addWidget(self.operatorReviewer[1])
-        Box.addWidget(QLabel('Name'))
-        Box.addWidget(self.name)
+        Box.addWidget(self.operatorlabel)
+        Box.addWidget(self.name1)
+        Box.addWidget(self.reviewerlabel)
+        Box.addWidget(self.name2)
         Box.addWidget(self.activate)
 
         # Now put everything into the frame
         self.setLayout(Box)
 
     def getValues(self):
-        return [self.operatorReviewer[0].isChecked(), self.name.text()]
+        return [self.name1.text(),self.name2.text()]
 
 #======
 class Segmentation(QDialog):
@@ -516,6 +532,9 @@ class Denoise(QDialog):
         self.end = QLineEdit(self)
         self.end.setText('7500')
 
+        self.trimlabel = QLabel("Make frequency axis tight")
+        self.trimaxis = QCheckBox()
+
         # Want combinations of these too!
 
         self.activate = QPushButton("Denoise")
@@ -560,6 +579,11 @@ class Denoise(QDialog):
         Box.addWidget(self.end)
         self.end.hide()
 
+        Box.addWidget(self.trimlabel)
+        self.trimlabel.hide()
+        Box.addWidget(self.trimaxis)
+        self.trimaxis.hide()
+
         Box.addWidget(self.activate)
         Box.addWidget(self.undo)
         Box.addWidget(self.save)
@@ -596,6 +620,8 @@ class Denoise(QDialog):
             self.blabel.hide()
             self.start.hide()
             self.end.hide()
+            self.trimlabel.hide()
+            self.trimaxis.hide()
             self.medlabel.hide()
             self.widthlabel.hide()
             self.width.hide()
@@ -614,6 +640,8 @@ class Denoise(QDialog):
             self.blabel.hide()
             self.start.hide()
             self.end.hide()
+            self.trimlabel.hide()
+            self.trimaxis.hide()
             self.medlabel.hide()
             self.widthlabel.hide()
             self.width.hide()
@@ -622,6 +650,8 @@ class Denoise(QDialog):
             self.blabel.hide()
             self.start.hide()
             self.end.hide()
+            self.trimlabel.hide()
+            self.trimaxis.hide()
         else:
             # Median filter
             self.medlabel.hide()
@@ -656,6 +686,8 @@ class Denoise(QDialog):
             self.blabel.show()
             self.start.show()
             self.end.show()
+            self.trimlabel.show()
+            self.trimaxis.show()
         elif str(alg) == "Bandpass --> Wavelets":
             # self.wblabel.show()
             self.depthlabel.show()
@@ -671,10 +703,14 @@ class Denoise(QDialog):
             self.blabel.show()
             self.start.show()
             self.end.show()
+            self.trimlabel.show()
+            self.trimaxis.show()
         elif str(alg) == "Bandpass" or str(alg) == "Butterworth Bandpass":
             self.bandlabel.show()
             self.start.show()
             self.end.show()
+            self.trimlabel.show()
+            self.trimaxis.show()
         else:
             #"Median filter"
             self.medlabel.show()
@@ -685,7 +721,7 @@ class Denoise(QDialog):
         self.depth.setEnabled(not self.depth.isEnabled())
 
     def getValues(self):
-        return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.start.text(),self.end.text(),self.width.text()]
+        return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.start.text(),self.end.text(),self.width.text(),self.trimaxis.isChecked()]
 
 #======
 class HumanClassify1(QDialog):
@@ -721,7 +757,7 @@ class HumanClassify1(QDialog):
 
         # The buttons to move through the overview
         self.correct = QtGui.QToolButton()
-        self.correct.setIcon(QtGui.QIcon('img/tick.png'))
+        self.correct.setIcon(QtGui.QIcon('img/tick.jpg'))
         iconSize = QtCore.QSize(50, 50)
         self.correct.setIconSize(iconSize)
 
@@ -1665,27 +1701,4 @@ class HumanClassify2a(QDialog):
 # screen1.show()
 # app.exec_()
 
-#======
-class getUserData(QDialog):
-    # Class for the user data collection dialog box
-    def __init__(self, parent=None):
-        QDialog.__init__(self, parent)
-        self.setWindowTitle('User data')
 
-        self.name = QLineEdit(self)
-        self.name.setText('')
-
-
-        button = QPushButton("OK")
-        button.clicked.connect(self.accept)
-
-        Box = QVBoxLayout()
-        Box.addWidget(QLabel('Person annotating'))
-        Box.addWidget(self.name)
-        Box.addWidget(button)
-
-        # Now put everything into the frame
-        self.setLayout(Box)
-
-    def getValues(self):
-        return [self.name.text()]
