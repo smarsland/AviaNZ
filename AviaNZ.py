@@ -155,7 +155,7 @@ class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
 
-    def __init__(self,root=None,configfile=None,DOC=True,username=None):
+    def __init__(self,root=None,configfile=None,DOC=True):
         """Initialisation of the class. Load a configuration file, or create a new one if it doesn't
         exist. Also initialises the data structures and loads an initial file (specified explicitly)
         and sets up the window.
@@ -175,8 +175,6 @@ class AviaNZ(QMainWindow):
             self.genConfigFile()
             self.saveConfig=True
             self.configfile = 'AviaNZconfig.txt'
-
-        self.username = username
 
         # The data structures for the segments
         self.listLabels = []
@@ -263,7 +261,7 @@ class AviaNZ(QMainWindow):
         self.dragRectTransparent.setCheckable(True)
         self.dragRectTransparent.setChecked(self.config['transparentBoxes'])
 
-        self.showFundamental = specMenu.addAction("Show fundamental frequency", self.showFundamentalFreq)
+        self.showFundamental = specMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
         self.showFundamental.setCheckable(True)
         self.showFundamental.setChecked(False)
 
@@ -298,32 +296,32 @@ class AviaNZ(QMainWindow):
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
 
         specMenu.addSeparator()
-        specMenu.addAction("Save as image",self.saveImage)
+        specMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
 
         actionMenu = self.menuBar().addMenu("&Actions")
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
-        self.readonly = actionMenu.addAction("Make read only",self.makeReadOnly)
+        self.readonly = actionMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
         self.readonly.setCheckable(True)
         self.readonly.setChecked(False)
-        actionMenu.addAction("Denoise",self.denoiseDialog)
-        actionMenu.addAction("Segment",self.segmentationDialog)
-        actionMenu.addAction("Classify segments",self.classifySegments)
+        actionMenu.addAction("Denoise",self.denoiseDialog,"Ctrl+N")
+        actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
+        actionMenu.addAction("Classify segments",self.classifySegments,"Ctrl+C")
         #actionMenu.addAction("Find matches",self.findMatches)
         if self.DOC==False:
             actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
             actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
         actionMenu.addSeparator()
-        actionMenu.addAction("Check segments [All segments]",self.humanClassifyDialog1)
-        actionMenu.addAction("Check segments [Choose species]",self.humanClassifyDialog2)
+        actionMenu.addAction("Check segments [All segments]",self.humanClassifyDialog1,"Ctrl+1")
+        actionMenu.addAction("Check segments [Choose species]",self.humanClassifyDialog2,"Ctrl+2")
         actionMenu.addSeparator()
         actionMenu.addAction("Put docks back",self.dockReplace)
 
         helpMenu = self.menuBar().addMenu("&Help")
         #aboutAction = QAction("About")
-        helpMenu.addAction("About",self.showAbout)
+        helpMenu.addAction("About",self.showAbout,"Ctrl+A")
         if platform.system() == 'Darwin':
-            helpMenu.addAction("About",self.showAbout)
-        helpMenu.addAction("Help",self.showHelp)
+            helpMenu.addAction("About",self.showAbout,"Ctrl+A")
+        helpMenu.addAction("Help",self.showHelp,"Ctrl+H")
         helpMenu.addAction("Cheat Sheet", self.showCheatSheet)
 
     def showAbout(self):
@@ -406,13 +404,18 @@ class AviaNZ(QMainWindow):
 
             'cmap': 'Grey',
 
-            # User interface paramaters
+            # User interface parameters
             'showAmplitudePlot': True,
             'showAnnotationOverview': True,
             'dragBoxes': False,
             'transparentBoxes': False,
             'showListofFiles': True,
-            'invertColourMap': False
+            'invertColourMap': False,
+
+            'saveCorrections': True,
+
+            'operator': 'Stephen',
+            'reviewer': 'Stephen'
         }
 
     def createFrame(self):
@@ -523,14 +526,14 @@ class AviaNZ(QMainWindow):
         self.prev5mins=QToolButton()
         self.prev5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekBackward))
         self.connect(self.prev5mins, SIGNAL('clicked()'), self.movePrev5mins)
-        self.w_overview.addWidget(self.prev5mins,row=1,col=0)
+        self.w_overview.addWidget(self.prev5mins,row=2,col=0)
         self.next5mins=QToolButton()
         self.next5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekForward))
         self.connect(self.next5mins, SIGNAL('clicked()'), self.moveNext5mins)
-        self.w_overview.addWidget(self.next5mins,row=1,col=1)
+        self.w_overview.addWidget(self.next5mins,row=2,col=1)
         # TODO: Add a label -- how to squeeze it into the space?
         self.placeInFileLabel = QLabel('')
-        self.w_overview.addWidget(self.placeInFileLabel,row=2,colspan=2)
+        self.w_overview.addWidget(self.placeInFileLabel,row=1,colspan=2)
 
         # The buttons inside the controls dock
         self.playButton = QtGui.QToolButton()
@@ -684,7 +687,7 @@ class AviaNZ(QMainWindow):
 
         # Set the message in the status bar
         self.statusLeft.setText("Ready")
-        self.statusRight.setText("Operator/Reviewer")
+        self.statusRight.setText("Operator: " + self.config['operator'] + ", Reviewer: " + self.config['reviewer'])
 
         # Plot everything
         self.show()
@@ -831,9 +834,9 @@ class AviaNZ(QMainWindow):
             if self.segments != [] or self.hasSegments:
                 if len(self.segments)>0:
                     if self.segments[0][0] > -1:
-                        self.segments.insert(0, [-1, -1, str(self.username), -1, -1])
+                        self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
                 else:
-                    self.segments.insert(0, [-1, -1, str(self.username), -1, -1])
+                    self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
                 self.saveSegments()
                 self.previousFile.setTextColor(Qt.red)
         self.previousFile = current
@@ -905,6 +908,19 @@ class AviaNZ(QMainWindow):
                 self.currentFileSection = 0
                 self.timeaxis.setOffset(0)
 
+                # Check if the filename is in standard DOC format
+                if '_' in name:
+                    last = name[-1::-1].index('_')
+                    dot = name.index('.')
+                    time = name[-last:dot]
+                    if len(time) == 6:
+                        time = int(time[:2])
+                        if time>8 or time < 8:
+                            print "Night time DOC recording"
+                        else:
+                            print "Day time DOC recording"
+                        # TODO: And modify the order of the bird list
+
                 dlg += 1
             else:
                 dlg += 2
@@ -964,6 +980,8 @@ class AviaNZ(QMainWindow):
                 file.close()
                 if len(self.segments) > 0:
                     if self.segments[0][0] == -1:
+                        self.config['operator'] = self.segments[0][2]
+                        self.config['reviewer'] = self.segments[0][3]
                         del self.segments[0]
                 self.hasSegments = True
             else:
@@ -2046,7 +2064,7 @@ class AviaNZ(QMainWindow):
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to check")
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
-            msg.setIconPixmap(QPixmap("img\Owl_warning.png"))
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
             msg.setWindowTitle("No segments")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
@@ -2112,6 +2130,13 @@ class AviaNZ(QMainWindow):
             #self.humanClassifyDialog1.tbox.setText('')
 
         if label != self.segments[self.box1id][4]:
+            if self.config['saveCorrections']:
+                # Save the correction
+                outputError = [self.segments[self.box1id], label]
+                file = open(self.filename + '.corrections', 'a')
+                json.dump(outputError, file)
+                file.close()
+
             #self.updateText(label)
             self.birdSelected(label,update=False)
 
@@ -2129,6 +2154,7 @@ class AviaNZ(QMainWindow):
 
             if self.saveConfig:
                 self.config['BirdList'].append(label)
+
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
         self.humanClassifyNextImage1()
@@ -2170,17 +2196,24 @@ class AviaNZ(QMainWindow):
                 self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,self.segments,label,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'])
                 self.humanClassifyDialog2.exec_()
                 errors = self.humanClassifyDialog2.getValues()
-                #print errors
-                # TODO: Should store these somewhere and improve the learning, for now just deleting
-                for error in errors[-1::-1]:
-                    self.deleteSegment(error)
+                if len(errors)>0:
+                    outputErrors = []
+                    for error in errors[-1::-1]:
+                        outputErrors.append(self.segments[error])
+                        self.deleteSegment(error)
+                    if self.config['saveCorrections']:
+                        # Save the errors in a file
+                        file = open(self.filename + '.corrections_' + str(label), 'a')
+                        json.dump(outputErrors, file)
+                        file.close()
+
         self.statusLeft.setText("Ready")
 
     def showSpectrogramDialog(self):
         """ Create the spectrogram dialog when the button is pressed.
         """
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'])
+            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq)     #???
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
@@ -2190,10 +2223,19 @@ class AviaNZ(QMainWindow):
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
         Has to do quite a bit of work to make sure segments are in the correct place, etc."""
-        [windowType, mean_normalise, multitaper, window_width, incr] = self.spectrogramDialog.getValues()
+        [windowType, mean_normalise, multitaper, window_width, incr,minFreq,maxFreq] = self.spectrogramDialog.getValues()
+        if minFreq>=maxFreq:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText("Incorrect frequency range")
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setWindowTitle("Error")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
         self.statusLeft.setText("Updating the spectrogram...")
         self.sp.setWidth(int(str(window_width)), int(str(incr)))
-        sgRaw = self.sp.spectrogram(self.audiodata,window=str(windowType),mean_normalise=True,onesided=True,multitaper=multitaper)
+        sgRaw = self.sp.spectrogram(self.audiodata,window=str(windowType),mean_normalise=mean_normalise,onesided=True,multitaper=multitaper)
         maxsg = np.min(sgRaw)
         self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
 
@@ -2236,6 +2278,10 @@ class AviaNZ(QMainWindow):
             if hasattr(self, 'seg'):
                 self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'],
                                     self.config['incr'])
+
+        if minFreq != self.minFreq or maxFreq!=self.maxFreq:
+            self.redoFreqAxis(minFreq,maxFreq)
+
         self.statusLeft.setText("Ready")
 
     def denoiseDialog(self):
@@ -2269,7 +2315,7 @@ class AviaNZ(QMainWindow):
         Calls the denoiser and then plots the updated data.
         """
         # TODO: should it be saved automatically, or a button added?
-        [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width] = self.denoiseDialog.getValues()
+        [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width,trimaxis] = self.denoiseDialog.getValues()
         self.backup()
         self.statusLeft.setText("Denoising...")
         if not hasattr(self, 'waveletDenoiser'):
@@ -2307,10 +2353,11 @@ class AviaNZ(QMainWindow):
                 depth = int(str(depth))
             self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
             self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
-
         elif str(alg) == "Bandpass":
             self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
             #self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
+            if trimaxis:
+                self.redoFreqAxis(int(str(start)), int(str(end)))
         elif str(alg) == "Butterworth Bandpass":
             self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
         else:
@@ -2345,6 +2392,9 @@ class AviaNZ(QMainWindow):
         self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
         self.minFreq = int(str(start))
         self.maxFreq = int(str(end))
+
+        if trimaxis:
+            self.redoFreqAxis()
 
         self.setColourLevels()
 
@@ -2392,12 +2442,14 @@ class AviaNZ(QMainWindow):
         wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits', sampwidth=2)
         self.statusLeft.setText("Saved")
 
-    def redoFreqAxis(self):
+    def redoFreqAxis(self,start=None,end=None):
         """ This is the listener for the menu option to make the frequency axis tight (for after bandpass filtering)
         """
         # TODO: Make this automatic, or at least within the dialog box, not a separate menu item.
-        start = self.minFreq
-        end = self.maxFreq
+        if start is None:
+            start = self.minFreq
+        if end is None:
+            end = self.maxFreq
 
         height = self.sampleRate / 2. / np.shape(self.sg)[1]
 
@@ -2606,7 +2658,7 @@ class AviaNZ(QMainWindow):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segment selected to match")
-            msg.setIconPixmap(QPixmap("img\Owl_warning.png"))
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
             msg.setWindowTitle("No segment")
             msg.setStandardButtons(QMessageBox.Ok)
@@ -2639,11 +2691,12 @@ class AviaNZ(QMainWindow):
         # TODO: Finish this
         # Note that this still works on 1 second -- species-specific parameter eventually (here twice: as 1 and in sec loop)
         if self.segments is None or len(self.segments) == 0:
-            print "No segments to recognise"
+            # print "No segments to recognise"
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to recognise")
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
             msg.setWindowTitle("No segments")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
@@ -2804,23 +2857,19 @@ class AviaNZ(QMainWindow):
         self.setOperatorReviewerDialog = Dialogs.OperatorReviewer()
         self.setOperatorReviewerDialog.show()
         self.setOperatorReviewerDialog.activateWindow()
-        self.setOperatorReviewerDialog.activate.clicked.connect(self.operator)
+        self.setOperatorReviewerDialog.activate.clicked.connect(self.changeOperator)
 
-    def operator(self):
+    def changeOperator(self):
         """ Listener for the operator/reviewer dialog.
         """
-        # TODO: save these
-        [isOperator, name] = self.setOperatorReviewerDialog.getValues()
-        if isOperator == True:
-            self.operator = name
-            self.statusRight.setText("Operator: " + self.operator)
-        else:
-            self.reviewer = name
-            self.statusRight.setText("Reviewer: " + self.reviewer)
+        name1, name2 = self.setOperatorReviewerDialog.getValues()
+        self.config['operator'] = str(name1)
+        self.config['reviewer'] = str(name2)
+        self.statusRight.setText("Operator: " + self.config['operator'] + ", Reviewer: "+self.config['reviewer'])
 
-    def saveImage(self):
+    def saveImage(self): # ??? it doesn't save the image
         import pyqtgraph.exporters as pge
-        filename = self.filename[:-4] + '.png'
+        filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
         exporter = pge.ImageExporter.ImageExporter(self.p_spec)
         exporter.export(filename)
 # ============
@@ -2872,14 +2921,14 @@ class AviaNZ(QMainWindow):
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to delete")
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
-            msg.setIconPixmap(QPixmap("img\Owl_warning.png"))
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
             msg.setWindowTitle("No segments")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
             return
         else:
             msg = QMessageBox()
-            msg.setIconPixmap(QPixmap("img\Owl_thinking.png"))
+            msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
             msg.setText("Are you sure you want to delete all segments?")
             msg.setWindowTitle("Delete All Segments")
@@ -2936,9 +2985,9 @@ class AviaNZ(QMainWindow):
         print("Quitting")
         if len(self.segments) > 0:
             if self.segments[0][0] > -1:
-                self.segments.insert(0, [-1, -1, str(self.username), -1, -1])
+                self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
         else:
-            self.segments.insert(0, [-1, -1, str(self.username), -1, -1])
+            self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
         self.saveSegments()
         if self.saveConfig == True:
             print "Saving config file"
@@ -2962,15 +3011,7 @@ app.exec_()
 task = first.getValues()
 
 if task == 1:
-    if DOC and False:
-        # Modal dialog to get the user data
-        userdata = Dialogs.getUserData()
-        userdata.show()
-        userdata.exec_()
-        username = userdata.getValues()
-        avianz = AviaNZ(configfile='AviaNZconfig.txt',username=username,DOC=DOC)
-    else:
-        avianz = AviaNZ(configfile='AviaNZconfig.txt',username=None,DOC=DOC)
+    avianz = AviaNZ(configfile='AviaNZconfig.txt',DOC=DOC)
     avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
     avianz.show()
     app.exec_()
