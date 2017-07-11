@@ -5,7 +5,7 @@ import numpy as np
 import string
 import os, json
 #import SignalProc
-import LearnWavelets
+import WaveletSegment
 
 def showEnergies():
     import pylab as pl
@@ -58,19 +58,19 @@ def showEnergies():
 
     pl.figure()
 
-    e1 = LearnWavelets.computeWaveletEnergy_1s(data1,'dmey2')
+    e1 = WaveletSegment.computeWaveletEnergy_1s(data1,'dmey2')
     pl.subplot(5,1,1)
     pl.plot(e1)
-    e2 = LearnWavelets.computeWaveletEnergy_1s(data2,'dmey2')
+    e2 = WaveletSegment.computeWaveletEnergy_1s(data2,'dmey2')
     pl.subplot(5,1,2)
     pl.plot(e2)
-    e3 = LearnWavelets.computeWaveletEnergy_1s(data3,'dmey2')
+    e3 = WaveletSegment.computeWaveletEnergy_1s(data3,'dmey2')
     pl.subplot(5,1,3)
     pl.plot(e3)
-    e4 = LearnWavelets.computeWaveletEnergy_1s(data4,'dmey2')
+    e4 = WaveletSegment.computeWaveletEnergy_1s(data4,'dmey2')
     pl.subplot(5,1,4)
     pl.plot(e4)
-    e5 = LearnWavelets.computeWaveletEnergy_1s(data5,'dmey2')
+    e5 = WaveletSegment.computeWaveletEnergy_1s(data5,'dmey2')
     pl.subplot(5,1,5)
     pl.plot(e5)
 
@@ -82,6 +82,37 @@ def showEnergies():
     pl.plot(e5)
 
     return e2
+    #pl.show()
+
+
+def showNoiseEnergies():
+    import pylab as pl
+    import SignalProc
+    #sp = SignalProc.SignalProc(data5, sampleRate)
+    pl.ion()
+    tbd = [0, 1, 3, 7, 15, 31]
+    #tbd = np.concatenate([np.arange(30),np.arange(50,63)])
+    #tbd = np.arange(50)
+    listnodes = np.arange(63)
+    listnodes = np.delete(listnodes, tbd)
+
+    for root, dirs, files in os.walk(str('Sound Files/Noise examples/Noise_10s')):
+        for filename in files:
+            if filename.endswith('.wav'):
+                filename = root + '/' + filename
+                wavobj = wavio.read(filename)
+                sampleRate = wavobj.rate
+                data = wavobj.data
+                if data.dtype is not 'float':
+                    data = data.astype('float')  # / 32768.0
+                if np.shape(np.shape(data))[0] > 1:
+                    data = np.squeeze(data[:, 0])
+
+                pl.figure()
+                e1 = WaveletSegment.computeWaveletEnergy_1s(data,'dmey2')
+                pl.plot(e1[listnodes])
+                pl.title(filename)
+
     #pl.show()
 
 def convert(i):
@@ -110,7 +141,7 @@ def reconWPT():
     if np.shape(np.shape(data))[0] > 1:
         data = np.squeeze(data[:, 0])
 
-    tbd = [1, 3, 7, 15, 31]
+    tbd = [0, 1, 3, 7, 15, 31]
     #tbd = np.concatenate([np.arange(30),np.arange(50,63)])
     #tbd = np.arange(50)
     listnodes = np.arange(63)

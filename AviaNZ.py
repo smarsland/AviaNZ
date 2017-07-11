@@ -320,7 +320,7 @@ class AviaNZ(QMainWindow):
         #aboutAction = QAction("About")
         helpMenu.addAction("About",self.showAbout,"Ctrl+A")
         if platform.system() == 'Darwin':
-            helpMenu.addAction("About",self.showAbout,"Ctrl+H")
+            helpMenu.addAction("About",self.showAbout,"Ctrl+A")
         helpMenu.addAction("Help",self.showHelp,"Ctrl+H")
         helpMenu.addAction("Cheat Sheet", self.showCheatSheet)
 
@@ -687,7 +687,7 @@ class AviaNZ(QMainWindow):
 
         # Set the message in the status bar
         self.statusLeft.setText("Ready")
-        self.statusRight.setText("Operator: " + self.config['operator'] + ", Reviewer: " + self.config['reviewer'])
+        self.statusRight.setText("Operator: " + str(self.config['operator']) + ", Reviewer: " + str(self.config['reviewer']))
 
         # Plot everything
         self.show()
@@ -980,8 +980,8 @@ class AviaNZ(QMainWindow):
                 file.close()
                 if len(self.segments) > 0:
                     if self.segments[0][0] == -1:
-                        self.config['operator'] = self.segments[0][2]
-                        self.config['reviewer'] = self.segments[0][3]
+                        self.config['operator'] = self.segments[0][3]
+                        self.config['reviewer'] = self.segments[0][4]
                         del self.segments[0]
                 self.hasSegments = True
             else:

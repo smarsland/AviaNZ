@@ -21,6 +21,7 @@ Plot the wavelet energy for noise, crickets, calls, etc.
 Parallel process the segmenters
 
 Update the manual
+Make windows version of manual open as pdf not in web browser
 
 Video of using
 
