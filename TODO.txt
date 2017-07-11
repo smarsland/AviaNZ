@@ -27,8 +27,8 @@ Video of using
 get name from standard files and use it
     # Name bit is done, not yet used
 
-        manual as a pdf?
-        cheatsheat in web - doesn't work here
+manual as a pdf?
+cheatsheat in web - doesn't work here
 
 On Windows: check if in HumanClassify1, playing second is different to first
     # Apparently OK
