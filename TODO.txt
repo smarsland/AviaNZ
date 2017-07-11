@@ -3,22 +3,7 @@
 
 SM:
 
-Screenshot option
-    # Done
-
-On Windows: check if in HumanClassify1, playing second is different to first
-
 Wavelet denoising with best tree?
-
-Tidy up all the letter keys for the menu items
-
-Put freq axis tight option somewhere better
-
-For HumanClassify2 errors
-    -> they are currently just deleted.
-    Better is to remove them, but to save them and then after all have been processed,
-    use HumanClassify1 to get labels for them, save them somewhere and reuse for more training
-    There needs to be an option to not do this though :)
 
 Work out how to make old wavelet method produce too many segments
 
@@ -28,7 +13,7 @@ Make a new method (not inside Segmentation):
     # And it does need parameters
     (2) Combine the segments as appropriate
     # Two versions are done. Opens it out so far, no max. Either with or without envelopes kept.
-    (3) Perform classification on each segment using at least one of wavelet energies, Raven feature, MFCC
+    (3) Perform classification on each segment using at least one of wavelet energies, Raven feature, MFCC, LPC, fundamental freq
     # To be done (ready to modify wavelet segmentation part)
 
 Plot the wavelet energy for noise, crickets, calls, etc.
@@ -40,8 +25,27 @@ Update the manual
 Video of using
 
 get name from standard files and use it
+    # Name bit is done, not yet used
+
+        manual as a pdf?
+        cheatsheat in web - doesn't work here
+
+On Windows: check if in HumanClassify1, playing second is different to first
+    # Apparently OK
+
+Put freq axis tight option somewhere better
+    # DONE
+
+For HumanClassify2 errors
+    -> they are currently just deleted.
+    Better is to remove them, but to save them and then after all have been processed,
+    use HumanClassify1 to get labels for them, save them somewhere and reuse for more training
+    There needs to be an option to not do this though :)
+    # DONE
 
 NP:
+
+*** Ensure saving of the config file and the data files on Windows
 
 Test the idea of using the wavelet nodes with either
     (a or b or c) and not (d or e)
@@ -51,7 +55,7 @@ Test the idea of using the wavelet nodes with either
     Idea is to reduce (i) misclassifications, (2) crickets, (3) wide-band clicks, (4) rain
 
 Username in the status bar
-#Done but check it -> want both, and also to save them
+#Done
 
 Make the Manual Seg produce the excel files (Export segmentation option in menu)
 And put all the three excel files into 1 on 3 sheets
