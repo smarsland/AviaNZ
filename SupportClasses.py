@@ -25,6 +25,7 @@ class TimeAxis(pg.AxisItem):
     def setOffset(self,offset):
         self.offset = offset
 
+
 class ShadedROI(pg.ROI):
     # A region of interest that is shaded, for marking segments
     def paint(self, p, opt, widget):
