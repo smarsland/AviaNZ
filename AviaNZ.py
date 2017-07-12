@@ -58,8 +58,6 @@ from openpyxl import load_workbook, Workbook
 
 # Check that the paging works, add in a label to say where you are up to (where to put it?!)
 
-# Good idea to project disconnects with exceptions
-
 # Finish segmentation
 #   Mostly there, need to test them
 #   Add a minimum length of time for a segment -> make this a parameter
@@ -775,10 +773,16 @@ class AviaNZ(QMainWindow):
             # This is the second click, so should pay attention and close the segment
             # Stop the mouse motion connection, remove the drawing boxes
             if self.started_window=='a':
-                self.p_ampl.scene().sigMouseMoved.disconnect()
+                try:
+                    self.p_ampl.scene().sigMouseMoved.disconnect()
+                except Exception:
+                    pass
                 self.p_ampl.removeItem(self.vLine_a)
             else:
-                self.p_spec.scene().sigMouseMoved.disconnect()
+                try:
+                    self.p_spec.scene().sigMouseMoved.disconnect()
+                except Exception:
+                    pass
                 # Add the other mouse move listener back
                 self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
                 self.p_spec.removeItem(self.vLine_s)
@@ -1123,18 +1127,38 @@ class AviaNZ(QMainWindow):
         Also has to go through all of the segments, turn off the listeners, and make them unmovable.
         """
         if self.readonly.isChecked():
-            self.p_ampl.scene().sigMouseClicked.disconnect()
+            try:
+                self.p_ampl.scene().sigMouseClicked.disconnect()
+            except Exception:
+                pass
             if self.dragRectangles.isChecked():
-                self.p_spec.sigMouseDragged.disconnect()
+                try:
+                    self.p_spec.sigMouseDragged.disconnect()
+                except Exception:
+                    pass
             else:
-                self.p_spec.scene().sigMouseClicked.disconnect()
-            self.p_spec.scene().sigMouseMoved.disconnect()
+                try:
+                    self.p_spec.scene().sigMouseClicked.disconnect()
+                except Exception:
+                    pass
+            try:
+                self.p_spec.scene().sigMouseMoved.disconnect()
+            except Exception:
+                pass
             for rect in self.listRectanglesa1:
-                rect.sigRegionChangeFinished.disconnect()
-                rect.setMovable(False)
+                if rect is not None:
+                    try:
+                        rect.sigRegionChangeFinished.disconnect()
+                    except Exception:
+                        pass
+                    rect.setMovable(False)
             for rect in self.listRectanglesa2:
-                rect.sigRegionChangeFinished.disconnect()
-                rect.setMovable(False)
+                if rect is not None:
+                    try:
+                        rect.sigRegionChangeFinished.disconnect()
+                    except Exception:
+                        pass
+                    rect.setMovable(False)
         else:
             self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
             if self.dragRectangles.isChecked():
@@ -1143,11 +1167,13 @@ class AviaNZ(QMainWindow):
                 self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
             self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
             for rect in self.listRectanglesa1:
-                rect.sigRegionChangeFinished.connect(self.updateRegion_ampl)
-                rect.setMovable(True)
+                if rect is not None:
+                    rect.sigRegionChangeFinished.connect(self.updateRegion_ampl)
+                    rect.setMovable(True)
             for rect in self.listRectanglesa2:
-                rect.sigRegionChangeFinished.connect(self.updateRegion_spec)
-                rect.setMovable(True)
+                if rect is not None:
+                    rect.sigRegionChangeFinished.connect(self.updateRegion_spec)
+                    rect.setMovable(True)
 
     def dockReplace(self):
         """ Listener for if the docks should be replaced menu item. """
@@ -1366,8 +1392,8 @@ class AviaNZ(QMainWindow):
                 self.listLabels[i].setPos(sender.getRegion()[0], self.textpos)
             self.listRectanglesa1[i].setRegion([x1,x2])
 
-            self.segments[i][0] = x1
-            self.segments[i][1] = x2
+            self.segments[i][0] = x1 + self.startRead
+            self.segments[i][1] = x2 + self.startRead
 
     def updateRegion_ampl(self):
         """ This is the listener for when a segment box is changed in the waveform plot.
@@ -1393,8 +1419,8 @@ class AviaNZ(QMainWindow):
                     self.listRectanglesa2[i].setRegion([x1,x2])
                 self.listLabels[i].setPos(x1,self.textpos)
 
-                self.segments[i][0] = sender.getRegion()[0]
-                self.segments[i][1] = sender.getRegion()[1]
+                self.segments[i][0] = sender.getRegion()[0] + self.startRead
+                self.segments[i][1] = sender.getRegion()[1] + self.startRead
 
     def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=None,saveSeg=True):
         """ When a new segment is created, does the work of creating it and connecting its
@@ -1553,10 +1579,16 @@ class AviaNZ(QMainWindow):
                 # This is the second click, so should pay attention and close the segment
                 # Stop the mouse motion connection, remove the drawing boxes
                 if self.started_window=='a':
-                    self.p_ampl.scene().sigMouseMoved.disconnect()
+                    try:
+                        self.p_ampl.scene().sigMouseMoved.disconnect()
+                    except Exception:
+                        pass
                     self.p_ampl.removeItem(self.vLine_a)
                 else:
-                    self.p_spec.scene().sigMouseMoved.disconnect()
+                    try:
+                        self.p_spec.scene().sigMouseMoved.disconnect()
+                    except Exception:
+                        pass
                     # Add the other mouse move listener back
                     self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
                     self.p_spec.removeItem(self.vLine_s)
@@ -1677,11 +1709,17 @@ class AviaNZ(QMainWindow):
                     return
                 else:
                     if self.started_window == 's':
-                        self.p_spec.scene().sigMouseMoved.disconnect()
+                        try:
+                            self.p_spec.scene().sigMouseMoved.disconnect()
+                        except Exception:
+                            pass
                         self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
                         self.p_spec.removeItem(self.vLine_s)
                     else:
-                        self.p_ampl.scene().sigMouseMoved.disconnect()
+                        try:
+                            self.p_ampl.scene().sigMouseMoved.disconnect()
+                        except Exception:
+                            pass
                         self.p_ampl.removeItem(self.vLine_a)
                     self.p_ampl.removeItem(self.drawingBox_ampl)
                     self.p_spec.removeItem(self.drawingBox_spec)
@@ -2953,7 +2991,8 @@ class AviaNZ(QMainWindow):
     def removeSegments(self,delete=True):
         """ Remove all the segments in response to the menu selection, or when a new file is loaded. """
         for r in self.listLabels:
-            self.p_spec.removeItem(r)
+            if r is not None:
+                self.p_spec.removeItem(r)
         for r in self.listRectanglesa1:
             if r is not None:
                 self.p_ampl.removeItem(r)
