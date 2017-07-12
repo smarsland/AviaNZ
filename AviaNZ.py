@@ -2794,32 +2794,33 @@ class AviaNZ(QMainWindow):
         """
         self.media_obj.seek(self.playSlider.value())
         # playSlider.value() is in ms, need to convert this into spectrogram pixels
-        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0))
+        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0 + self.startRead))
 
     def barMoved(self,evt):
         """ Listener for when the bar showing playback position moves.
         """
-        self.playSlider.setValue(self.convertSpectoAmpl(evt.x())*1000)
-        self.media_obj.seek(self.convertSpectoAmpl(evt.x())*1000)
+        self.playSlider.setValue(self.convertSpectoAmpl(evt.x())*1000 + self.startRead*1000)
+        self.media_obj.seek(self.convertSpectoAmpl(evt.x())*1000 + self.startRead*1000)
 
     def movePlaySlider(self, time):
         """ Listener for when the position of the play slider (which is connected to the play ticks) moves.
         Changes the button to a pause.
         """
         if not self.playSlider.isSliderDown():
-            self.playSlider.setValue(time+1000.*self.startRead)
+            self.playSlider.setValue(time)
         self.timePlayed.setText(self.convertMillisecs(time)+"/"+self.totalTime)
         if time > min(self.playSlider.maximum(),self.segmentStop):
             self.media_obj.stop()
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
             self.media_obj.seek(self.playSlider.minimum())
-        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0))
+        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0-self.startRead))
 
     def setPlaySliderLimits(self, start,end):
         """ Does what it says.
         """
-        print start+1000.0*self.startRead
+        #self.playSlider.setRange(start, end)
         self.playSlider.setRange(start+1000.0*self.startRead, end+1000.0*self.startRead)
+        #self.playSlider.setValue(start)
         self.playSlider.setValue(start+1000.0*self.startRead)
         self.segmentStop = self.playSlider.maximum()
         self.media_obj.seek(start+1000.0*self.startRead)
@@ -2830,8 +2831,8 @@ class AviaNZ(QMainWindow):
         This isn't pausable, since it goes back to the beginning. I think it's OK though -- they should be short?
         """
         if self.box1id > -1:
-            start = self.listRectanglesa1[self.box1id].getRegion()[0]*1000+1000.0*self.startRead
-            self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1]*1000+1000.0*self.startRead
+            start = self.listRectanglesa1[self.box1id].getRegion()[0]*1000+self.startRead*1000
+            self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1]*1000+self.startRead*1000
             self.media_obj.seek(start)
             if self.media_obj.state() == phonon.Phonon.PlayingState:
                 self.media_obj.pause()
@@ -2842,10 +2843,10 @@ class AviaNZ(QMainWindow):
         """ Listener for the play slider that is for inside a segment.
         """
         if not self.playSlider.isSliderDown():
-            self.playSlider.setValue(time-self.startRead*1000)
+            self.playSlider.setValue(time)
         if time > min(self.playSlider.maximum(),self.segmentStop):
             self.media_obj2.stop()
-        self.bar2.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0)+self.bandLimitedStart-self.startRead)
+        self.bar2.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0 + self.startRead)+self.bandLimitedStart)
 
     def playFinished2(self):
         """ Listener for when playback inside a segment stops.
@@ -2858,8 +2859,8 @@ class AviaNZ(QMainWindow):
         Gets the band limits of the segment, bandpass filters, then plays that.
         Currently uses FIR bandpass filter -- Butterworth is commented out.
         """
-        start = int(self.listRectanglesa1[self.box1id].getRegion()[0]*self.sampleRate)+self.startRead
-        stop = int(self.listRectanglesa1[self.box1id].getRegion()[1]*self.sampleRate)+self.startRead
+        start = int(self.listRectanglesa1[self.box1id].getRegion()[0]*self.sampleRate)
+        stop = int(self.listRectanglesa1[self.box1id].getRegion()[1]*self.sampleRate)
         bottom = int(self.segments[self.box1id][2]*self.sampleRate/2./np.shape(self.sg)[1])
         top = int(self.segments[self.box1id][3]*self.sampleRate/2./np.shape(self.sg)[1])
 
@@ -2886,7 +2887,7 @@ class AviaNZ(QMainWindow):
                 self.media_obj2.setTickInterval(20)
                 self.media_obj2.tick.connect(self.movePlaySlider2)
                 self.media_obj2.finished.connect(self.playFinished2)
-            self.bar2.setValue(self.bandLimitedStart)
+            self.bar2.setValue(self.bandLimitedStart + self.convertAmpltoSpec(self.startRead))
             self.p_spec.addItem(self.bar2, ignoreBounds=True)
 
             # Instantiate a Qt media object and prepare it (for audio playback)
