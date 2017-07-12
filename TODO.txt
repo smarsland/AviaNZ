@@ -3,6 +3,13 @@
 
 SM:
 
+*** When you page, the number of segments is not the same as the number of rectangles in the display. This currently causes an
+error since box1id is used for both.
+    # I think it is all fixed, but needs checking
+*** Exporter problem
+
+Classify segments
+
 Wavelet denoising with best tree?
 
 Work out how to make old wavelet method produce too many segments

@@ -1351,7 +1351,7 @@ class AviaNZ(QMainWindow):
         i = 0
         while self.listRectanglesa2[i] != sender and i<len(self.listRectanglesa2):
             i = i+1
-        if i>len(self.listRectanglesa2):
+        if i==len(self.listRectanglesa2):
             print "segment not found!"
         else:
             if type(sender) == self.ROItype:
@@ -1383,17 +1383,18 @@ class AviaNZ(QMainWindow):
             x1 = self.convertAmpltoSpec(sender.getRegion()[0])
             x2 = self.convertAmpltoSpec(sender.getRegion()[1])
 
-            if type(self.listRectanglesa2[i]) == self.ROItype:
-                y1 = self.listRectanglesa2[i].pos().y()
-                y2 = self.listRectanglesa2[i].size().y()
-                self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
-                self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2))
-            else:
-                self.listRectanglesa2[i].setRegion([x1,x2])
-            self.listLabels[i].setPos(x1,self.textpos)
+            if self.listRectanglesa2[i] is not None:
+                if type(self.listRectanglesa2[i]) == self.ROItype:
+                    y1 = self.listRectanglesa2[i].pos().y()
+                    y2 = self.listRectanglesa2[i].size().y()
+                    self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
+                    self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2))
+                else:
+                    self.listRectanglesa2[i].setRegion([x1,x2])
+                self.listLabels[i].setPos(x1,self.textpos)
 
-            self.segments[i][0] = sender.getRegion()[0]
-            self.segments[i][1] = sender.getRegion()[1]
+                self.segments[i][0] = sender.getRegion()[0]
+                self.segments[i][1] = sender.getRegion()[1]
 
     def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=None,saveSeg=True):
         """ When a new segment is created, does the work of creating it and connecting its
@@ -1504,6 +1505,11 @@ class AviaNZ(QMainWindow):
                 # Add the segment to the data
                 # Increment the time to be correct for the current section of the file
                 self.segments.append([startpoint+self.startRead, endpoint+self.startRead, y1, y2, species])
+        else:
+            # Add a None element into the array so that the correct boxids work
+            self.listRectanglesa1.append(None)
+            self.listRectanglesa2.append(None)
+            self.listLabels.append(None)
 
     def mouseMoved(self,evt):
         """ Listener for mouse moves.
@@ -1594,9 +1600,10 @@ class AviaNZ(QMainWindow):
                 # Note: Returns the first one it finds
                 box1id = -1
                 for count in range(len(self.listRectanglesa1)):
-                    x1, x2 = self.listRectanglesa1[count].getRegion()
-                    if x1 <= mousePoint.x() and x2 >= mousePoint.x():
-                        box1id = count
+                    if self.listRectanglesa1[count] is not None:
+                        x1, x2 = self.listRectanglesa1[count].getRegion()
+                        if x1 <= mousePoint.x() and x2 >= mousePoint.x():
+                            box1id = count
 
                 if box1id > -1 and not evt.button() == QtCore.Qt.RightButton:
                     # User clicked in a box (with the left button)
@@ -1706,7 +1713,6 @@ class AviaNZ(QMainWindow):
                         self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
                     self.listRectanglesa2[self.box1id].update()
-
                     self.started = not(self.started)
             else:
                 # Check if the user has clicked in a box
@@ -1720,7 +1726,7 @@ class AviaNZ(QMainWindow):
                         y2 = y1 + self.listRectanglesa2[count].size().y()
                         if x1 <= mousePoint.x() and x2 >= mousePoint.x() and y1 <= mousePoint.y() and y2 >= mousePoint.y():
                             box1id = count
-                    else:
+                    elif self.listRectanglesa2[count] is not None:
                         x1, x2 = self.listRectanglesa2[count].getRegion()
                         if x1 <= mousePoint.x() and x2 >= mousePoint.x():
                             box1id = count
@@ -2246,16 +2252,17 @@ class AviaNZ(QMainWindow):
             # Update the positions of the segments
             self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
             for s in range(len(self.listRectanglesa2)):
-                x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
-                x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
-                if type(self.listRectanglesa2[s]) == self.ROItype:
-                    y1 = self.listRectanglesa2[s].pos().y()
-                    y2 = self.listRectanglesa2[s].size().y()
-                    self.listRectanglesa2[s].setPos(pg.Point(x1, y1))
-                    self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, y2))
-                else:
-                    self.listRectanglesa2[s].setRegion([x1, x2])
-                self.listLabels[s].setPos(x1,self.textpos)
+                if self.listRectanglesa1[s] is not None:
+                    x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
+                    x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
+                    if type(self.listRectanglesa2[s]) == self.ROItype:
+                        y1 = self.listRectanglesa2[s].pos().y()
+                        y2 = self.listRectanglesa2[s].size().y()
+                        self.listRectanglesa2[s].setPos(pg.Point(x1, y1))
+                        self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, y2))
+                    else:
+                        self.listRectanglesa2[s].setRegion([x1, x2])
+                    self.listLabels[s].setPos(x1,self.textpos)
 
             # Update the axis
             FreqRange = (self.maxFreq - self.minFreq)/1000.
@@ -2948,9 +2955,11 @@ class AviaNZ(QMainWindow):
         for r in self.listLabels:
             self.p_spec.removeItem(r)
         for r in self.listRectanglesa1:
-            self.p_ampl.removeItem(r)
+            if r is not None:
+                self.p_ampl.removeItem(r)
         for r in self.listRectanglesa2:
-            self.p_spec.removeItem(r)
+            if r is not None:
+                self.p_spec.removeItem(r)
         for r in self.SegmentRects:
             r.setBrush(pg.mkBrush('w'))
             r.update()
