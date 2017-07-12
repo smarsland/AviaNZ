@@ -993,7 +993,7 @@ class HumanClassify2(QDialog):
                 if x2 - x1 > self.width:
                     self.width = x2-x1
             self.width = max(800,self.width+10)
-            print self.width
+            #print self.width
             self.h = 4
             self.flowLayout = SupportClasses.FlowLayout()
             self.makeButtons()

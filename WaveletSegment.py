@@ -366,7 +366,8 @@ class WaveletSegment:
 def computeWaveletEnergy_1s(data,wavelet,choice='all',denoise=False):
     # Generate wavelet energy (all 62 nodes) given 1 sec data
     E=[]
-    ws=WaveletSegment.WaveletSegment()
+    ws=WaveletSegment()
+
     for level in range(6):
         if wavelet == 'dmey2':
             [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')

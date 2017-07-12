@@ -58,8 +58,6 @@ from openpyxl import load_workbook, Workbook
 
 # Check that the paging works, add in a label to say where you are up to (where to put it?!)
 
-# Good idea to project disconnects with exceptions
-
 # Finish segmentation
 #   Mostly there, need to test them
 #   Add a minimum length of time for a segment -> make this a parameter
@@ -350,7 +348,6 @@ class AviaNZ(QMainWindow):
         """ If the configuration does exists, this generates one with default values for parameters. """
         print("Generating new config file")
         self.config = {
-            'username': "Stephen",
             # Params for spectrogram
             'window_width': 256,
             'incr': 128,
@@ -687,7 +684,7 @@ class AviaNZ(QMainWindow):
 
         # Set the message in the status bar
         self.statusLeft.setText("Ready")
-        self.statusRight.setText("Operator: " + self.config['operator'] + ", Reviewer: " + self.config['reviewer'])
+        self.statusRight.setText("Operator: " + str(self.config['operator']) + ", Reviewer: " + str(self.config['reviewer']))
 
         # Plot everything
         self.show()
@@ -776,10 +773,16 @@ class AviaNZ(QMainWindow):
             # This is the second click, so should pay attention and close the segment
             # Stop the mouse motion connection, remove the drawing boxes
             if self.started_window=='a':
-                self.p_ampl.scene().sigMouseMoved.disconnect()
+                try:
+                    self.p_ampl.scene().sigMouseMoved.disconnect()
+                except Exception:
+                    pass
                 self.p_ampl.removeItem(self.vLine_a)
             else:
-                self.p_spec.scene().sigMouseMoved.disconnect()
+                try:
+                    self.p_spec.scene().sigMouseMoved.disconnect()
+                except Exception:
+                    pass
                 # Add the other mouse move listener back
                 self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
                 self.p_spec.removeItem(self.vLine_s)
@@ -1124,18 +1127,38 @@ class AviaNZ(QMainWindow):
         Also has to go through all of the segments, turn off the listeners, and make them unmovable.
         """
         if self.readonly.isChecked():
-            self.p_ampl.scene().sigMouseClicked.disconnect()
+            try:
+                self.p_ampl.scene().sigMouseClicked.disconnect()
+            except Exception:
+                pass
             if self.dragRectangles.isChecked():
-                self.p_spec.sigMouseDragged.disconnect()
+                try:
+                    self.p_spec.sigMouseDragged.disconnect()
+                except Exception:
+                    pass
             else:
-                self.p_spec.scene().sigMouseClicked.disconnect()
-            self.p_spec.scene().sigMouseMoved.disconnect()
+                try:
+                    self.p_spec.scene().sigMouseClicked.disconnect()
+                except Exception:
+                    pass
+            try:
+                self.p_spec.scene().sigMouseMoved.disconnect()
+            except Exception:
+                pass
             for rect in self.listRectanglesa1:
-                rect.sigRegionChangeFinished.disconnect()
-                rect.setMovable(False)
+                if rect is not None:
+                    try:
+                        rect.sigRegionChangeFinished.disconnect()
+                    except Exception:
+                        pass
+                    rect.setMovable(False)
             for rect in self.listRectanglesa2:
-                rect.sigRegionChangeFinished.disconnect()
-                rect.setMovable(False)
+                if rect is not None:
+                    try:
+                        rect.sigRegionChangeFinished.disconnect()
+                    except Exception:
+                        pass
+                    rect.setMovable(False)
         else:
             self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
             if self.dragRectangles.isChecked():
@@ -1144,11 +1167,13 @@ class AviaNZ(QMainWindow):
                 self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
             self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
             for rect in self.listRectanglesa1:
-                rect.sigRegionChangeFinished.connect(self.updateRegion_ampl)
-                rect.setMovable(True)
+                if rect is not None:
+                    rect.sigRegionChangeFinished.connect(self.updateRegion_ampl)
+                    rect.setMovable(True)
             for rect in self.listRectanglesa2:
-                rect.sigRegionChangeFinished.connect(self.updateRegion_spec)
-                rect.setMovable(True)
+                if rect is not None:
+                    rect.sigRegionChangeFinished.connect(self.updateRegion_spec)
+                    rect.setMovable(True)
 
     def dockReplace(self):
         """ Listener for if the docks should be replaced menu item. """
@@ -1352,7 +1377,7 @@ class AviaNZ(QMainWindow):
         i = 0
         while self.listRectanglesa2[i] != sender and i<len(self.listRectanglesa2):
             i = i+1
-        if i>len(self.listRectanglesa2):
+        if i==len(self.listRectanglesa2):
             print "segment not found!"
         else:
             if type(sender) == self.ROItype:
@@ -1367,8 +1392,8 @@ class AviaNZ(QMainWindow):
                 self.listLabels[i].setPos(sender.getRegion()[0], self.textpos)
             self.listRectanglesa1[i].setRegion([x1,x2])
 
-            self.segments[i][0] = x1
-            self.segments[i][1] = x2
+            self.segments[i][0] = x1 + self.startRead
+            self.segments[i][1] = x2 + self.startRead
 
     def updateRegion_ampl(self):
         """ This is the listener for when a segment box is changed in the waveform plot.
@@ -1384,17 +1409,18 @@ class AviaNZ(QMainWindow):
             x1 = self.convertAmpltoSpec(sender.getRegion()[0])
             x2 = self.convertAmpltoSpec(sender.getRegion()[1])
 
-            if type(self.listRectanglesa2[i]) == self.ROItype:
-                y1 = self.listRectanglesa2[i].pos().y()
-                y2 = self.listRectanglesa2[i].size().y()
-                self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
-                self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2))
-            else:
-                self.listRectanglesa2[i].setRegion([x1,x2])
-            self.listLabels[i].setPos(x1,self.textpos)
+            if self.listRectanglesa2[i] is not None:
+                if type(self.listRectanglesa2[i]) == self.ROItype:
+                    y1 = self.listRectanglesa2[i].pos().y()
+                    y2 = self.listRectanglesa2[i].size().y()
+                    self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
+                    self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2))
+                else:
+                    self.listRectanglesa2[i].setRegion([x1,x2])
+                self.listLabels[i].setPos(x1,self.textpos)
 
-            self.segments[i][0] = sender.getRegion()[0]
-            self.segments[i][1] = sender.getRegion()[1]
+                self.segments[i][0] = sender.getRegion()[0] + self.startRead
+                self.segments[i][1] = sender.getRegion()[1] + self.startRead
 
     def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=None,saveSeg=True):
         """ When a new segment is created, does the work of creating it and connecting its
@@ -1505,6 +1531,11 @@ class AviaNZ(QMainWindow):
                 # Add the segment to the data
                 # Increment the time to be correct for the current section of the file
                 self.segments.append([startpoint+self.startRead, endpoint+self.startRead, y1, y2, species])
+        else:
+            # Add a None element into the array so that the correct boxids work
+            self.listRectanglesa1.append(None)
+            self.listRectanglesa2.append(None)
+            self.listLabels.append(None)
 
     def mouseMoved(self,evt):
         """ Listener for mouse moves.
@@ -1548,10 +1579,16 @@ class AviaNZ(QMainWindow):
                 # This is the second click, so should pay attention and close the segment
                 # Stop the mouse motion connection, remove the drawing boxes
                 if self.started_window=='a':
-                    self.p_ampl.scene().sigMouseMoved.disconnect()
+                    try:
+                        self.p_ampl.scene().sigMouseMoved.disconnect()
+                    except Exception:
+                        pass
                     self.p_ampl.removeItem(self.vLine_a)
                 else:
-                    self.p_spec.scene().sigMouseMoved.disconnect()
+                    try:
+                        self.p_spec.scene().sigMouseMoved.disconnect()
+                    except Exception:
+                        pass
                     # Add the other mouse move listener back
                     self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
                     self.p_spec.removeItem(self.vLine_s)
@@ -1595,9 +1632,10 @@ class AviaNZ(QMainWindow):
                 # Note: Returns the first one it finds
                 box1id = -1
                 for count in range(len(self.listRectanglesa1)):
-                    x1, x2 = self.listRectanglesa1[count].getRegion()
-                    if x1 <= mousePoint.x() and x2 >= mousePoint.x():
-                        box1id = count
+                    if self.listRectanglesa1[count] is not None:
+                        x1, x2 = self.listRectanglesa1[count].getRegion()
+                        if x1 <= mousePoint.x() and x2 >= mousePoint.x():
+                            box1id = count
 
                 if box1id > -1 and not evt.button() == QtCore.Qt.RightButton:
                     # User clicked in a box (with the left button)
@@ -1671,11 +1709,17 @@ class AviaNZ(QMainWindow):
                     return
                 else:
                     if self.started_window == 's':
-                        self.p_spec.scene().sigMouseMoved.disconnect()
+                        try:
+                            self.p_spec.scene().sigMouseMoved.disconnect()
+                        except Exception:
+                            pass
                         self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
                         self.p_spec.removeItem(self.vLine_s)
                     else:
-                        self.p_ampl.scene().sigMouseMoved.disconnect()
+                        try:
+                            self.p_ampl.scene().sigMouseMoved.disconnect()
+                        except Exception:
+                            pass
                         self.p_ampl.removeItem(self.vLine_a)
                     self.p_ampl.removeItem(self.drawingBox_ampl)
                     self.p_spec.removeItem(self.drawingBox_spec)
@@ -1707,7 +1751,6 @@ class AviaNZ(QMainWindow):
                         self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
                     self.listRectanglesa2[self.box1id].update()
-
                     self.started = not(self.started)
             else:
                 # Check if the user has clicked in a box
@@ -1721,7 +1764,7 @@ class AviaNZ(QMainWindow):
                         y2 = y1 + self.listRectanglesa2[count].size().y()
                         if x1 <= mousePoint.x() and x2 >= mousePoint.x() and y1 <= mousePoint.y() and y2 >= mousePoint.y():
                             box1id = count
-                    else:
+                    elif self.listRectanglesa2[count] is not None:
                         x1, x2 = self.listRectanglesa2[count].getRegion()
                         if x1 <= mousePoint.x() and x2 >= mousePoint.x():
                             box1id = count
@@ -1994,9 +2037,9 @@ class AviaNZ(QMainWindow):
         if self.segments != [] or self.hasSegments:
             if len(self.segments)>0:
                 if self.segments[0][0] > -1:
-                    self.segments.insert(0, [-1, -1, str(self.username), -1, -1])
+                    self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
             else:
-                self.segments.insert(0, [-1, -1, str(self.username), -1, -1])
+                self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
             self.saveSegments()
         self.resetStorageArrays()
         # Reset the media player
@@ -2213,7 +2256,7 @@ class AviaNZ(QMainWindow):
         """ Create the spectrogram dialog when the button is pressed.
         """
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq)     #???
+            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq)
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
@@ -2247,16 +2290,17 @@ class AviaNZ(QMainWindow):
             # Update the positions of the segments
             self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
             for s in range(len(self.listRectanglesa2)):
-                x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
-                x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
-                if type(self.listRectanglesa2[s]) == self.ROItype:
-                    y1 = self.listRectanglesa2[s].pos().y()
-                    y2 = self.listRectanglesa2[s].size().y()
-                    self.listRectanglesa2[s].setPos(pg.Point(x1, y1))
-                    self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, y2))
-                else:
-                    self.listRectanglesa2[s].setRegion([x1, x2])
-                self.listLabels[s].setPos(x1,self.textpos)
+                if self.listRectanglesa1[s] is not None:
+                    x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
+                    x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
+                    if type(self.listRectanglesa2[s]) == self.ROItype:
+                        y1 = self.listRectanglesa2[s].pos().y()
+                        y2 = self.listRectanglesa2[s].size().y()
+                        self.listRectanglesa2[s].setPos(pg.Point(x1, y1))
+                        self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, y2))
+                    else:
+                        self.listRectanglesa2[s].setRegion([x1, x2])
+                    self.listLabels[s].setPos(x1,self.textpos)
 
             # Update the axis
             FreqRange = (self.maxFreq - self.minFreq)/1000.
@@ -2947,11 +2991,14 @@ class AviaNZ(QMainWindow):
     def removeSegments(self,delete=True):
         """ Remove all the segments in response to the menu selection, or when a new file is loaded. """
         for r in self.listLabels:
-            self.p_spec.removeItem(r)
+            if r is not None:
+                self.p_spec.removeItem(r)
         for r in self.listRectanglesa1:
-            self.p_ampl.removeItem(r)
+            if r is not None:
+                self.p_ampl.removeItem(r)
         for r in self.listRectanglesa2:
-            self.p_spec.removeItem(r)
+            if r is not None:
+                self.p_spec.removeItem(r)
         for r in self.SegmentRects:
             r.setBrush(pg.mkBrush('w'))
             r.update()
@@ -2980,7 +3027,7 @@ class AviaNZ(QMainWindow):
 
     def quit(self):
         """ Listener for the quit button, also called by closeEvent().
-        Add in the username at the top, and then save the segments and the config file.
+        Add in the operator and reviewer at the top, and then save the segments and the config file.
         """
         print("Quitting")
         if len(self.segments) > 0:
