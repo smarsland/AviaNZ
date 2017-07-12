@@ -943,6 +943,8 @@ class AviaNZ(QMainWindow):
             self.maxFreq = self.sampleRate / 2.
             self.fileLength = wavobj.nframes
             self.timeaxis.setOffset(self.startRead)
+            # This is the only way I found to make the thing redraw so we see the updated axis!
+            self.timeaxis.setLabel('')
             dlg += 1
 
             if self.audiodata.dtype is not 'float':
@@ -1368,6 +1370,7 @@ class AviaNZ(QMainWindow):
             self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.p_spec.addItem(self.bar, ignoreBounds=True)
         self.bar.sigPositionChangeFinished.connect(self.barMoved)
+        QApplication.processEvents()
 
     def updateRegion_spec(self):
         """ This is the listener for when a segment box is changed in the spectrogram.
@@ -2048,10 +2051,9 @@ class AviaNZ(QMainWindow):
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.loadFile()
 
-
     def movePrev5mins(self):
         """ When the button to move to the next 5 minutes is pressed, enable that.
-        Have to update the timeaxis offset, check if the buttons should be disabled or not,
+        Have to check if the buttons should be disabled or not,
         save the segments and reset the arrays, then call loadFile.
         """
         self.currentFileSection -= 1
@@ -2063,7 +2065,7 @@ class AviaNZ(QMainWindow):
 
     def moveNext5mins(self):
         """ When the button to move to the previous 5 minutes is pressed, enable that.
-        Have to update the timeaxis offset, check if the buttons should be disabled or not,
+        Have to check if the buttons should be disabled or not,
         save the segments and reset the arrays, then call loadFile.
         """
         self.currentFileSection += 1
@@ -2156,7 +2158,8 @@ class AviaNZ(QMainWindow):
             print "Last image"
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
-            msg.setWindowIcon(QIcon('Avianz.ico'))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setIconPixmap(QPixmap("img/Owl_done.png"))
             msg.setText("All segmentations checked")
             msg.setWindowTitle("Finished")
             msg.setStandardButtons(QMessageBox.Ok)
@@ -2792,13 +2795,13 @@ class AviaNZ(QMainWindow):
         """
         self.media_obj.seek(self.playSlider.value())
         # playSlider.value() is in ms, need to convert this into spectrogram pixels
-        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0))
+        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0 + self.startRead))
 
     def barMoved(self,evt):
         """ Listener for when the bar showing playback position moves.
         """
-        self.playSlider.setValue(self.convertSpectoAmpl(evt.x())*1000)
-        self.media_obj.seek(self.convertSpectoAmpl(evt.x())*1000)
+        self.playSlider.setValue(self.convertSpectoAmpl(evt.x())*1000 + self.startRead*1000)
+        self.media_obj.seek(self.convertSpectoAmpl(evt.x())*1000 + self.startRead*1000)
 
     def movePlaySlider(self, time):
         """ Listener for when the position of the play slider (which is connected to the play ticks) moves.
@@ -2811,15 +2814,17 @@ class AviaNZ(QMainWindow):
             self.media_obj.stop()
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
             self.media_obj.seek(self.playSlider.minimum())
-        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0))
+        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0-self.startRead))
 
     def setPlaySliderLimits(self, start,end):
         """ Does what it says.
         """
-        self.playSlider.setRange(start, end)
-        self.playSlider.setValue(start)
+        #self.playSlider.setRange(start, end)
+        self.playSlider.setRange(start+1000.0*self.startRead, end+1000.0*self.startRead)
+        #self.playSlider.setValue(start)
+        self.playSlider.setValue(start+1000.0*self.startRead)
         self.segmentStop = self.playSlider.maximum()
-        self.media_obj.seek(start)
+        self.media_obj.seek(start+1000.0*self.startRead)
 
     def playSelectedSegment(self):
         """ Listener for PlaySegment button.
@@ -2827,8 +2832,8 @@ class AviaNZ(QMainWindow):
         This isn't pausable, since it goes back to the beginning. I think it's OK though -- they should be short?
         """
         if self.box1id > -1:
-            start = self.listRectanglesa1[self.box1id].getRegion()[0]*1000
-            self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1]*1000
+            start = self.listRectanglesa1[self.box1id].getRegion()[0]*1000+self.startRead*1000
+            self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1]*1000+self.startRead*1000
             self.media_obj.seek(start)
             if self.media_obj.state() == phonon.Phonon.PlayingState:
                 self.media_obj.pause()
@@ -2842,7 +2847,7 @@ class AviaNZ(QMainWindow):
             self.playSlider.setValue(time)
         if time > min(self.playSlider.maximum(),self.segmentStop):
             self.media_obj2.stop()
-        self.bar2.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0)+self.bandLimitedStart)
+        self.bar2.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0 + self.startRead)+self.bandLimitedStart)
 
     def playFinished2(self):
         """ Listener for when playback inside a segment stops.
@@ -2883,7 +2888,7 @@ class AviaNZ(QMainWindow):
                 self.media_obj2.setTickInterval(20)
                 self.media_obj2.tick.connect(self.movePlaySlider2)
                 self.media_obj2.finished.connect(self.playFinished2)
-            self.bar2.setValue(self.bandLimitedStart)
+            self.bar2.setValue(self.bandLimitedStart + self.convertAmpltoSpec(self.startRead))
             self.p_spec.addItem(self.bar2, ignoreBounds=True)
 
             # Instantiate a Qt media object and prepare it (for audio playback)
@@ -2914,7 +2919,7 @@ class AviaNZ(QMainWindow):
     def saveImage(self): # ??? it doesn't save the image
         import pyqtgraph.exporters as pge
         filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
-        exporter = pge.ImageExporter.ImageExporter(self.p_spec)
+        exporter = pge.ImageExporter(self.p_spec)
         exporter.export(filename)
 # ============
 # Various actions: deleting segments, saving, quitting
