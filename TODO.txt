@@ -3,6 +3,10 @@
 
 SM:
 
+*** Exporter problem
+
+Classify segments
+
 Wavelet denoising with best tree?
 
 Work out how to make old wavelet method produce too many segments
@@ -13,7 +17,7 @@ Make a new method (not inside Segmentation):
     # And it does need parameters
     (2) Combine the segments as appropriate
     # Two versions are done. Opens it out so far, no max. Either with or without envelopes kept.
-    (3) Perform classification on each segment using at least one of wavelet energies, Raven feature, MFCC
+    (3) Perform classification on each segment using at least one of wavelet energies, Raven feature, MFCC, LPC, fundamental freq
     # To be done (ready to modify wavelet segmentation part)
 
 Plot the wavelet energy for noise, crickets, calls, etc.
