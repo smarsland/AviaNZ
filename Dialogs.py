@@ -321,7 +321,7 @@ class Segmentation(QDialog):
         self.specieslabel = QLabel("Species")
         self.species=QComboBox()
         # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
-        self.species.addItems(["Kiwi","Ruru"])
+        self.species.addItems(["Choose species...","Kiwi","Ruru"])
         self.species.currentIndexChanged[QString].connect(self.changeBoxes)
 
         Box.addWidget(self.specieslabel)

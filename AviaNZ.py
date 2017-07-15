@@ -2525,6 +2525,8 @@ class AviaNZ(QMainWindow):
 
         #[alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,depth,thrType,thr,wavelet,bandchoice,start,end,species] = self.segmentDialog.getValues()
         species = str(species)
+        if species=='Choose species...':
+            species='all'
         #if not hasattr(self,'seg'):
         #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
         self.statusLeft.setText("Segmenting...")
@@ -2591,6 +2593,16 @@ class AviaNZ(QMainWindow):
         # Save the excel file
         self.saveDetections(newSegments,mode='Excel',species=species)
 
+        # Generate Binary output ('Binary)
+        import math
+        n = math.ceil(float(self.datalength) / self.sampleRate)
+        detected = np.zeros(int(n))
+        for seg in newSegments:
+            for a in range(len(detected)):
+                if math.floor(seg[0]) <= a and a < math.ceil(seg[1]):
+                    detected[a] = 1
+        self.saveDetections(detected, mode='Binary',species=species)  # append
+
         self.lenNewSegments = len(newSegments)
         self.segmentDialog.undo.setEnabled(True)
         self.statusLeft.setText("Ready")
@@ -2629,7 +2641,7 @@ class AviaNZ(QMainWindow):
                     r = ws.max_row + 1  # Get last row number from existing file
                     ws.cell(row=r, column=1, value=str(relfname))
                     for seg in annotation:
-                        ws.cell(row=r, column=c + 1, value=str(seg[0]) + '-' + str(seg[1]))
+                        ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')) + '-' + str(format(round(seg[1],2),'.2f')))
                         c = c + 1
                     wb.save(str(eFile))
                 except:
@@ -2647,7 +2659,7 @@ class AviaNZ(QMainWindow):
                 r = 2
                 ws.cell(row=r, column=c, value=str(relfname))
                 for seg in annotation:
-                    ws.cell(row=r, column=c + 1, value=str(seg[0]) + '-' + str(seg[1]))
+                    ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')) + '-' + str(format(round(seg[1],2),'.2f')))
                     c = c + 1
                 # Second sheet
                 ws = wb.get_sheet_by_name('PresenceAbsence')
@@ -2682,16 +2694,16 @@ class AviaNZ(QMainWindow):
                 except:
                     print "Unable to open file"  # Does not exist OR no read permissions
 
-        else:  # mode=='Binary'
+        if mode=='Binary':  # Binary excel
             if os.path.isfile(eFile):  # if the file is already there
                 try:
                     wb = load_workbook(str(eFile))
                     ws = wb.get_sheet_by_name('PerSecond')
                     c = 1
                     r = ws.max_row + 1  # Get last row number from existing file
-                    ws.cell(row=r, column=1, value=str(relfname))
+                    ws.cell(row=r, column=c, value=str(relfname))
                     for seg in annotation:
-                        ws.cell(row=r, column=c + 1, value=seg)
+                        ws.cell(row=r, column=c + 1, value=str(int(seg)))
                         c = c + 1
                     wb.save(str(eFile))
                 except:
