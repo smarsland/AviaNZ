@@ -19,16 +19,16 @@ class StartScreen(QDialog):
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         self.setWindowTitle('AviaNZ - Choose Task')
         self.setAutoFillBackground(False)
-        self.setFixedSize(445, 210)
-        self.setStyleSheet("background-image: url(img/AviaNZ_SW.jpg);")
+        self.setFixedSize(681, 315)
+        self.setStyleSheet("background-image: url(img/AviaNZ_SW_Large.jpg);")
         self.activateWindow()
 
         self.DOC=DOC
 
-        btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:15px; font-weight: bold}'
+        btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
         # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
-        b1 = QPushButton("Manual Segmentation")
-        b2 = QPushButton("Find a Species")
+        b1 = QPushButton(" Manual Segmentation ")
+        b2 = QPushButton("      Find a Species      ")
         #b3 = QPushButton("Denoise a folder")
         l1 = QLabel("-------")
         b1.setStyleSheet(btn_style)
@@ -37,7 +37,7 @@ class StartScreen(QDialog):
         l1.setStyleSheet('QLabel {color:transparent}')
 
         hbox = QHBoxLayout()
-        hbox.addStretch(1)
+        # hbox.addStretch(1)
         hbox.addWidget(l1)
         hbox.addWidget(b1)
         hbox.addWidget(l1)
@@ -49,7 +49,7 @@ class StartScreen(QDialog):
         vbox = QVBoxLayout()
         vbox.addStretch(1)
         vbox.addLayout(hbox)
-        # vbox.addWidget(l1)
+        vbox.addWidget(l1)
 
         self.setLayout(vbox)
 
@@ -321,7 +321,7 @@ class Segmentation(QDialog):
         self.specieslabel = QLabel("Species")
         self.species=QComboBox()
         # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
-        self.species.addItems(["Kiwi","Ruru"])
+        self.species.addItems(["Choose species...","Kiwi","Ruru"])
         self.species.currentIndexChanged[QString].connect(self.changeBoxes)
 
         Box.addWidget(self.specieslabel)
