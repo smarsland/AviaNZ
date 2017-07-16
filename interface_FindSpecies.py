@@ -24,7 +24,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         super(AviaNZFindSpeciesInterface, self).__init__()
         self.root = root
         self.dirName=[]
-        self.minSegment=minSegment
+        # self.minSegment=minSegment
 
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
@@ -137,7 +137,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                         self.filename=root+'/'+filename
                         self.loadFile()
 
-                        self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate, minSegment=self.minSegment)
+                        self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
                         # print self.algs.itemText(self.algs.currentIndex())
                         # if self.algs.currentText() == "Amplitude":
                         #     newSegments = self.seg.segmentByAmplitude(float(str(self.ampThr.text())))
@@ -160,7 +160,10 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                         #     newSegments = self.seg.segmentByFIR(float(str(self.FIRThr1.text())))
                         #     # print newSegments
                         # elif self.algs.currentText()=='Wavelets':
-                        newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
+                        if self.species!='Any':
+                            newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
+                        else:
+                            newSegments=self.seg.bestSegments()
                             # TODO: remove short segments?
 
                         # Generate Binary output ('Binary)
@@ -181,9 +184,10 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                                 if len(mergedSeg)>0:
                                     for seg in mergedSeg:
                                         annotation.append([float(seg[0]),float(seg[1]),0,0,self.species+'?'])
-                            elif len(newSegments)>0:
-                                for seg in newSegments:
-                                    annotation.append([float(seg[0]),float(seg[1]),0,0,self.species+'?'])
+                            elif self.species=='Any':
+                                if len(newSegments)>0:
+                                    for seg in newSegments:
+                                        annotation.append([float(seg[0]),float(seg[1]),0,0,"Don't know"])
                                 # print annotation
                             self.saveSegments(annotation, mode='Annotation')
 
@@ -333,10 +337,12 @@ class AviaNZFindSpeciesInterface(QMainWindow):
 
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
-            self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate)
+            # self.sp = SignalProc.SignalProc(self.audiodata, self.sampleRate)
+            self.sp = SignalProc.SignalProc()
 
         # Get the data for the spectrogram
-        self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
+        # self.sgRaw = self.sp.spectrogram(self.audiodata,self.sampleRate,mean_normalise=True,onesided=True,multitaper=False)
+        self.sgRaw = self.sp.spectrogram(self.audiodata, window_width=256, incr=128, window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
         maxsg = np.min(self.sgRaw)
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
 
@@ -345,8 +351,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         if hasattr(self,'seg'):
             self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate,256,128)
         else:
-            self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate, 50,
-                                       256, 128)
+            self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
         self.sp.setNewData(self.audiodata,self.sampleRate)
 
         # self.setWindowTitle('AviaNZ - ' + self.filename)
