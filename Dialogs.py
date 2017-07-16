@@ -957,7 +957,7 @@ class HumanClassify2(QDialog):
     # It could be all the same species, or the ones that it is unsure about, or whatever.
 
     # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
-    def __init__(self, sg, segments, label, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
+    def __init__(self, sg, segments, label, part, nParts, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -976,7 +976,10 @@ class HumanClassify2(QDialog):
         self.firstSegment = 0
         self.errors = []
 
-        self.segments = [item for item in self.segments if item[4] == label or item[4][:-1] == label]
+        #self.indices = []
+        #self.segments = []
+
+        #self.segments = [item for item in self.segments if item[4] == label or item[4][:-1] == label]
         #print len(self.segments)
         next = QPushButton("Next/Finish")
         self.connect(next, SIGNAL("clicked()"), self.nextPage)
@@ -984,6 +987,10 @@ class HumanClassify2(QDialog):
         if len(self.segments) > 0:
 
             species = QLabel(label)
+            if nParts>1:
+                partLabel = QLabel("Part "+str(part+1)+" of " + str(nParts))
+            else:
+                partLabel = QLabel("")
 
             # Check that width is at least max seg width, or there is a problem!
             self.width = 0
@@ -1001,6 +1008,7 @@ class HumanClassify2(QDialog):
             self.vboxFull = QVBoxLayout()
             self.vboxFull.addWidget(QLabel('Click on the images that are incorrectly labelled'))
             self.vboxFull.addWidget(species)
+            self.vboxFull.addWidget(partLabel)
             self.vboxFull.addLayout(self.flowLayout)
             self.vboxFull.addWidget(next)
         else:
@@ -1057,6 +1065,7 @@ class HumanClassify2(QDialog):
         for i in range(len(self.buttons)):
             if self.buttons[i].buttonClicked:
                 self.errors.append(i+self.firstSegment)
+        print self.errors
 
         # Now find out if there are more segments to check, and remake the buttons, otherwise close
         if len(self.segments) > 0:
