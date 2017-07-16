@@ -56,8 +56,6 @@ from openpyxl import load_workbook, Workbook
 
 # (4) pysox
 
-# Check that the paging works, add in a label to say where you are up to (where to put it?!)
-
 # Finish segmentation
 #   Mostly there, need to test them
 #   Add a minimum length of time for a segment -> make this a parameter
@@ -186,7 +184,6 @@ class AviaNZ(QMainWindow):
         self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
 
         self.lastSpecies = "Don't Know"
-        self.nFileSections = None
         self.resetStorageArrays()
 
         self.dirName = self.config['dirpath']
@@ -409,6 +406,7 @@ class AviaNZ(QMainWindow):
             'showListofFiles': True,
             'invertColourMap': False,
 
+            'showAllPages': True,
             'saveCorrections': True,
 
             'operator': 'Stephen',
@@ -528,7 +526,6 @@ class AviaNZ(QMainWindow):
         self.next5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekForward))
         self.connect(self.next5mins, SIGNAL('clicked()'), self.moveNext5mins)
         self.w_overview.addWidget(self.next5mins,row=2,col=1)
-        # TODO: Add a label -- how to squeeze it into the space?
         self.placeInFileLabel = QLabel('')
         self.w_overview.addWidget(self.placeInFileLabel,row=1,colspan=2)
 
@@ -806,8 +803,6 @@ class AviaNZ(QMainWindow):
             self.p_spec.removeItem(r)
         self.segmentPlots=[]
 
-        #self.nFileSections = None
-
     def openFile(self):
         """ This handles the menu item for opening a file.
         Splits the directory name and filename out, and then passes the filename to the loader."""
@@ -962,11 +957,11 @@ class AviaNZ(QMainWindow):
                     self.prev5mins.setEnabled(False)
                     self.next5mins.setEnabled(True)
                 else:
-                    self.nFileSections = None
+                    self.nFileSections = 1
                     self.prev5mins.setEnabled(False)
                     self.next5mins.setEnabled(False)
 
-            if self.nFileSections is None:
+            if self.nFileSections == 1:
                 self.placeInFileLabel.setText('')
             else:
                 self.placeInFileLabel.setText("Part "+ str(self.currentFileSection+1) + " of " + str(self.nFileSections))
@@ -1895,8 +1890,8 @@ class AviaNZ(QMainWindow):
         """
         oldname = self.segments[self.box1id][4]
         # Work out which overview segment this segment is in (could be more than one)
-        inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0])) / self.widthOverviewSegment)
-        inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1])) / self.widthOverviewSegment)
+        inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0]-self.startRead)) / self.widthOverviewSegment)
+        inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead)) / self.widthOverviewSegment)
         if oldname == "Don't Know":
             if birdname != "Don't Know":
                 if birdname[-1] == '?':
@@ -2058,7 +2053,7 @@ class AviaNZ(QMainWindow):
         """
         self.currentFileSection -= 1
         self.next5mins.setEnabled(True)
-        if self.currentFileSection == 0:
+        if self.currentFileSection <= 0:
             self.prev5mins.setEnabled(False)
         self.prepare5minMove()
 
@@ -2070,7 +2065,7 @@ class AviaNZ(QMainWindow):
         """
         self.currentFileSection += 1
         self.prev5mins.setEnabled(True)
-        if self.currentFileSection == self.nFileSections-1:
+        if self.currentFileSection >= self.nFileSections-1:
             self.next5mins.setEnabled(False)
         self.prepare5minMove()
 
@@ -2100,11 +2095,44 @@ class AviaNZ(QMainWindow):
 # ===============
 # Generate the various dialogs that match the menu items
 
+    def loadSegment(self):
+        # Loads a segment for the HumanClassify dialogs
+        wavobj = wavio.read(self.filename, self.config['maxFileShow'], self.startRead)
+        self.audiodata = wavobj.data
+
+        if self.audiodata.dtype is not 'float':
+            self.audiodata = self.audiodata.astype('float')  # / 32768.0
+
+        if np.shape(np.shape(self.audiodata))[0] > 1:
+            self.audiodata = self.audiodata[:, 0]
+
+        # Get the data for the spectrogram
+        sgRaw = self.sp.spectrogram(self.audiodata, self.config['window_width'],
+                                    self.config['incr'], mean_normalise=True, onesided=True,
+                                    multitaper=False)
+        maxsg = np.min(sgRaw)
+        self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+
+    def showFirstPage(self):
+        # After the HumanClassify dialogs have closed, need to show the correct data on the screen
+        # It's arbitrary, so use first page
+        self.currentFileSection = 0
+        self.prepare5minMove()
+        self.next5mins.setEnabled(True)
+        self.prev5mins.setEnabled(False)
+
     def humanClassifyDialog1(self):
         """ Create the dialog that shows calls to the user for verification.
+        There are two versions in here depending on whether you wish to show them from all the pages (5 min sections), the default, or not.
+        The only difference is that that version requires sorting the segments and loading of new file sections and making the spectrogram intermittently.
         """
-        if len(self.segments)==0:
-            print "No box selected"
+
+        # Check there are segments to show on this page
+        self.box1id = 0
+        while self.listRectanglesa2[self.box1id] is None and self.box1id<len(self.segments):
+            self.box1id += 1
+
+        if self.box1id == len(self.segments):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to check")
@@ -2115,18 +2143,41 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             return
         else:
-            # self.statusLeft.setText("Checking...")
-            self.box1id = 0
-            # Different calls for the two types of region
-            if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                x1 = self.listRectanglesa2[self.box1id].pos()[0]
-                x2 = x1 + self.listRectanglesa2[self.box1id].size()[0]
+            if not self.config['showAllPages']:
+                # Different calls for the two types of region
+                if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                    x1 = self.listRectanglesa2[self.box1id].pos()[0]
+                    x2 = x1 + self.listRectanglesa2[self.box1id].size()[0]
+                else:
+                    x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
+                x1 = int(x1)
+                x2 = int(x2)
+                x3 = int(self.listRectanglesa1[self.box1id].getRegion()[0] * self.sampleRate)
+                x4 = int(self.listRectanglesa1[self.box1id].getRegion()[1] * self.sampleRate)
             else:
-                x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
-            x1 = int(x1)
-            x2 = int(x2)
-            x3 = int(self.listRectanglesa1[self.box1id].getRegion()[0] * self.sampleRate)
-            x4 = int(self.listRectanglesa1[self.box1id].getRegion()[1] * self.sampleRate)
+                # Showing them on all pages is a bit more of a pain
+                # Sort the segments into increasing time order, apply same order to listRects and labels
+                sortOrder = sorted(range(len(self.segments)), key=self.segments.__getitem__)
+                self.segments = [self.segments[i] for i in sortOrder]
+                self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
+                self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
+                self.listLabels = [self.listLabels[i] for i in sortOrder]
+
+                # Check which page is first to have segments on
+                self.currentFileSection = 0
+                while self.segments[0][0] > (self.currentFileSection+1)*self.config['maxFileShow']:
+                    self.currentFileSection += 1
+
+                # Load the first segment
+                self.startRead = self.currentFileSection * self.config['maxFileShow']
+                self.loadSegment()
+
+                # And show it
+                x1 = int(self.convertAmpltoSpec(self.segments[self.box1id][0]-self.startRead))
+                x2 = int(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead))
+                x3 = int((self.segments[self.box1id][0]-self.startRead)*self.sampleRate)
+                x4 = int((self.segments[self.box1id][1]-self.startRead)*self.sampleRate)
+
             self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'])
             self.humanClassifyDialog1.show()
             self.humanClassifyDialog1.activateWindow()
@@ -2138,22 +2189,45 @@ class AviaNZ(QMainWindow):
     def humanClassifyClose1(self):
         # Listener for the human verification dialog.
         self.humanClassifyDialog1.done(1)
+        # Want to show a page at the end, so make it the first one
+        if self.config['showAllPages']:
+            self.showFirstPage()
 
     def humanClassifyNextImage1(self):
         # Get the next image
-        if self.box1id != len(self.listRectanglesa2)-1:
+        if self.box1id < len(self.segments)-1:
             self.box1id += 1
-            # Different calls for the two types of region
-            if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                x1 = self.listRectanglesa2[self.box1id].pos()[0]
-                x2 = x1 + self.listRectanglesa2[self.box1id].size()[0]
+            if not self.config['showAllPages']:
+                # Different calls for the two types of region
+                if self.listRectanglesa2[self.box1id] is not None:
+                    if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                        x1 = self.listRectanglesa2[self.box1id].pos()[0]
+                        x2 = x1 + self.listRectanglesa2[self.box1id].size()[0]
+                    else:
+                        x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
+                    x1 = int(x1)
+                    x2 = int(x2)
+                    x3 = int(self.listRectanglesa1[self.box1id].getRegion()[0] * self.sampleRate)
+                    x4 = int(self.listRectanglesa1[self.box1id].getRegion()[1] * self.sampleRate)
+                    self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
+                                                       self.segments[self.box1id][4])
             else:
-                x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
-            x1 = int(x1)
-            x2 = int(x2)
-            x3 = int(self.listRectanglesa1[self.box1id].getRegion()[0] * self.sampleRate)
-            x4 = int(self.listRectanglesa1[self.box1id].getRegion()[1] * self.sampleRate)
-            self.humanClassifyDialog1.setImage(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4])
+                # Check if have moved to next segment, and if so load it
+                # If there was a section without segments this would be a bit inefficient
+                if self.segments[self.box1id][0] > (self.currentFileSection+1)*self.config['maxFileShow']:
+                    self.currentFileSection += 1
+                    self.startRead = self.currentFileSection * self.config['maxFileShow']
+                    print "Loading next page", self.currentFileSection
+                    self.loadSegment()
+
+                # Show the next segment
+                x1 = int(self.convertAmpltoSpec(self.segments[self.box1id][0] - self.startRead))
+                x2 = int(self.convertAmpltoSpec(self.segments[self.box1id][1] - self.startRead))
+                x3 = int((self.segments[self.box1id][0] - self.startRead) * self.sampleRate)
+                x4 = int((self.segments[self.box1id][1] - self.startRead) * self.sampleRate)
+                self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
+                                                   self.segments[self.box1id][4])
+
         else:
             print "Last image"
             msg = QMessageBox()
@@ -2183,19 +2257,21 @@ class AviaNZ(QMainWindow):
                 file.close()
 
             #self.updateText(label)
-            self.birdSelected(label,update=False)
+            # Update the label on the box if it is in the current page
+            if self.listRectanglesa2[self.box1id] is not None:
+                self.birdSelected(label,update=False)
 
-            self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
-            self.listRectanglesa1[self.box1id].update()
-            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                col = self.prevBoxCol.rgb()
-                col = QtGui.QColor(col)
-                col.setAlpha(255)
-                self.listRectanglesa2[self.box1id].setPen(col,width=1)
-            else:
-                self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+                self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
+                self.listRectanglesa1[self.box1id].update()
+                if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                    col = self.prevBoxCol.rgb()
+                    col = QtGui.QColor(col)
+                    col.setAlpha(255)
+                    self.listRectanglesa2[self.box1id].setPen(col,width=1)
+                else:
+                    self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
 
-            self.listRectanglesa2[self.box1id].update()
+                self.listRectanglesa2[self.box1id].update()
 
             if self.saveConfig:
                 self.config['BirdList'].append(label)
@@ -2213,9 +2289,16 @@ class AviaNZ(QMainWindow):
 
     def humanClassifyDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
+        This is complicated because of the pages.
+        Basic idea is to keep track of which page you are on, and load them as required. Unfortunately, it gets convoluted.
         """
-        if len(self.segments)==0:
-            print "No box selected"
+        # Check there are segments to show on this page
+        if not self.config['showAllPages']:
+            if len(self.segments)>0:
+                self.box1id = 0
+                while self.box1id<len(self.segments) and self.listRectanglesa2[self.box1id] is None:
+                    self.box1id += 1
+        if (self.config['showAllPages'] and len(self.segments)==0) or (not self.config['showAllPages'] and (self.box1id == len(self.segments) or len(self.listRectanglesa2)==0)):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to check")
@@ -2226,24 +2309,53 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             return
         self.statusLeft.setText("Checking...")
-        if len(self.segments)>0:
+
+        if not self.config['showAllPages']:
+            # Get the segments that are in the current page
+            segs = []
+            indices = []
+            for i in range(len(self.segments)):
+                if self.listRectanglesa2[i] is not None:
+                    segs.append([self.segments[i][0]-self.startRead,self.segments[i][1]-self.startRead,-1,-1,self.segments[i][4]])
+                    indices.append(i)
+            names = [item[4] for item in segs]
+            names = [n if n[-1] != '?' else n[:-1] for n in names]
+        else:
+            # Get all of them
             names = [item[4] for item in self.segments]
             names = [n if n[-1] != '?' else n[:-1] for n in names]
-            # Should make them unique
-            keys = {}
-            for n in names:
-                keys[n] = 1
-            names = keys.keys()
-            self.humanClassifyDialog2a = Dialogs.HumanClassify2a(names)
+        # Make them unique
+        keys = {}
+        for n in names:
+            keys[n] = 1
+        names = keys.keys()
+        self.humanClassifyDialog2a = Dialogs.HumanClassify2a(names)
 
-            if self.humanClassifyDialog2a.exec_() == 1:
-                label = self.humanClassifyDialog2a.getValues()
-                self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,self.segments,label,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'])
+        if self.humanClassifyDialog2a.exec_() == 1:
+            label = self.humanClassifyDialog2a.getValues()
+            self.indices = []
+            segments = []
+            if not self.config['showAllPages']:
+                # Find the segments that have the right label
+                for ind in range(len(segs)):
+                    if self.segments[ind][4] == label or self.segments[ind][4][:-1] == label:
+                        self.indices.append(ind)
+                        segments.append([segs[ind][0] - self.startRead, segs[i][1] - self.startRead, -1, -1,
+                                     segs[i][4]])
+
+                # Pass those segments to the dialog
+                self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,segments,label,1,1,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'])
                 self.humanClassifyDialog2.exec_()
                 errors = self.humanClassifyDialog2.getValues()
-                if len(errors)>0:
+                # If there are errors, get their correct indices and process them
+                if len(errors) > 0:
+                    # Turn these numbers back into indices into self.segments
+                    # The worst naming ever, sorry. There are two sets of indices -- self.indices keeps track of those with the chosen label, while indices is those on the current page!
+                    inderr = []
+                    for error in errors:
+                        inderr.append(indices[self.indices[error]])
                     outputErrors = []
-                    for error in errors[-1::-1]:
+                    for error in inderr[-1::-1]:
                         outputErrors.append(self.segments[error])
                         self.deleteSegment(error)
                     if self.config['saveCorrections']:
@@ -2251,7 +2363,52 @@ class AviaNZ(QMainWindow):
                         file = open(self.filename + '.corrections_' + str(label), 'a')
                         json.dump(outputErrors, file)
                         file.close()
-
+            else:
+                # Sort everything into order
+                sortOrder = sorted(range(len(self.segments)), key=self.segments.__getitem__)
+                self.segments = [self.segments[i] for i in sortOrder]
+                self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
+                self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
+                self.listLabels = [self.listLabels[i] for i in sortOrder]
+                # Loop over the pages of the file
+                for self.currentFileSection in range(self.nFileSections):
+                    self.startRead = self.currentFileSection * self.config['maxFileShow']
+                    # Get the index of the first and last segments on this page
+                    firstSeg = 0
+                    while firstSeg < len(self.segments) and self.segments[firstSeg][0] < self.startRead:
+                        firstSeg += 1
+                    lastSeg = firstSeg
+                    while lastSeg < len(self.segments) and self.segments[lastSeg][0] < (self.currentFileSection + 1) * self.config['maxFileShow']:
+                        lastSeg += 1
+                    self.indices = []
+                    segments = []
+                    # Loop over the segments on this page and find those with the correct label
+                    for ind in range(firstSeg,lastSeg):
+                        if self.segments[ind][4] == label or self.segments[ind][4][:-1] == label:
+                            self.indices.append(ind)
+                            segments.append([self.segments[ind][0]-self.startRead,self.segments[ind][1]-self.startRead,-1,-1,self.segments[ind][4]])
+                    errors = []
+                    # if there are segments on the next page, load it
+                    if len(segments)>0:
+                        self.loadSegment()
+                        self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,segments,label,self.currentFileSection,self.nFileSections,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'])
+                        self.humanClassifyDialog2.exec_()
+                        errors = self.humanClassifyDialog2.getValues()
+                        if len(errors)>0:
+                            inderr = []
+                            for error in errors:
+                                inderr.append(self.indices[error])
+                            outputErrors = []
+                            for error in inderr[-1::-1]:
+                                outputErrors.append(self.segments[error])
+                                self.deleteSegment(error)
+                            if self.config['saveCorrections']:
+                                # Save the errors in a file
+                                file = open(self.filename + '.corrections_' + str(label), 'a')
+                                json.dump(outputErrors, file)
+                                file.close()
+        # Want to show a page at the end, so make it the first one
+        self.showFirstPage()
         self.statusLeft.setText("Ready")
 
     def showSpectrogramDialog(self):
@@ -2491,7 +2648,6 @@ class AviaNZ(QMainWindow):
     def redoFreqAxis(self,start=None,end=None):
         """ This is the listener for the menu option to make the frequency axis tight (for after bandpass filtering)
         """
-        # TODO: Make this automatic, or at least within the dialog box, not a separate menu item.
         if start is None:
             start = self.minFreq
         if end is None:
@@ -2932,8 +3088,8 @@ class AviaNZ(QMainWindow):
             id = self.box1id
         if id>-1:
             # Work out which overview segment this segment is in (could be more than one) and update it
-            inds = int(float(self.convertAmpltoSpec(self.segments[id][0]))/self.widthOverviewSegment)
-            inde = int(float(self.convertAmpltoSpec(self.segments[id][1]))/self.widthOverviewSegment)
+            inds = int(float(self.convertAmpltoSpec(self.segments[id][0]-self.startRead))/self.widthOverviewSegment)
+            inde = int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment)
 
             if self.segments[id][4] == "Don't Know":
                 self.overviewSegments[inds:inde+1,0] -= 1
@@ -2951,9 +3107,10 @@ class AviaNZ(QMainWindow):
                 else:
                     self.SegmentRects[box].setBrush(pg.mkBrush('w'))
 
-            self.p_ampl.removeItem(self.listRectanglesa1[id])
-            self.p_spec.removeItem(self.listRectanglesa2[id])
-            self.p_spec.removeItem(self.listLabels[id])
+            if self.listRectanglesa1[id] is not None:
+                self.p_ampl.removeItem(self.listRectanglesa1[id])
+                self.p_spec.removeItem(self.listRectanglesa2[id])
+                self.p_spec.removeItem(self.listLabels[id])
             del self.listLabels[id]
             del self.segments[id]
             del self.listRectanglesa1[id]
