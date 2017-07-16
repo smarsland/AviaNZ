@@ -3,7 +3,17 @@
 
 SM:
 
+# Check both human classify segments with showAllPages
+And put the flag in self.config
+
 *** Exporter problem
+
+The classify options only work for the 5 minute sections.
+    # I think done for both, but needs checking
+Problem is that otherwise need to load spectrograms -- then must sort segments
+
+Bars for playing don't work after 1st 'page'
+    # Done, but check
 
 Classify segments
 
@@ -30,9 +40,6 @@ Video of using
 
 get name from standard files and use it
     # Name bit is done, not yet used
-
-manual as a pdf?
-cheatsheat in web - doesn't work here
 
 On Windows: check if in HumanClassify1, playing second is different to first
     # Apparently OK
