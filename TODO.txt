@@ -6,7 +6,8 @@ SM:
 # Check both human classify segments with showAllPages
 And put the flag in self.config
     #Done, but does not work in some cases (e.g. show blank spectrogram)
-
+    # Fixed that
+    
 *** Exporter problem
 
 The classify options only work for the 5 minute sections.

@@ -5,22 +5,31 @@ import numpy as np
 import scipy.ndimage as spi
 
 class Segment:
-    # This class implements six forms of segmentation for the AviaNZ interface:
-    # Amplitude threshold (rubbish)
-    # Energy threshold
-    # Harma
-    # Median clipping of spectrogram
-    # Fundamental frequency using yin
-    # FIR
+    """ This class implements six forms of segmentation for the AviaNZ interface:
+    Amplitude threshold (rubbish)
+    Energy threshold
+    Harma
+    Median clipping of spectrogram
+    Fundamental frequency using yin
+    FIR
 
-    # It also computes ways to merge them
+    It also computes ways to merge them
 
-    # And two forms of recognition:
-    # Cross-correlation
-    # DTW
+    Important parameters:
+        mingap: the smallest space between two segments (otherwise merge them(
+        minlength: the smallest size of a segment (otherwise delete it)
+        ignoreInsideEnvelope: whether you keep the superset of a set of segments or the individuals when merging
+        maxlength: the largest size of a segment (currently unused)
+        threshold: generally this is of the form mean + threshold * std dev and provides a way to filter
 
-    # Each returns start and stop times for each segment (in seconds) as a Python list of pairs
-    # See also the species-specific segmentation in WaveletSegment
+
+    And two forms of recognition:
+    Cross-correlation
+    DTW
+
+    Each returns start and stop times for each segment (in seconds) as a Python list of pairs
+    See also the species-specific segmentation in WaveletSegment
+    """
 
     def __init__(self,data,sg,sp,fs,window_width=256,incr=128):
         self.data = data
@@ -186,12 +195,13 @@ class Segment:
             return []
 
     def segmentByEnergy(self,thr,width,min_width=450):
-        # Based on description in Jinnai et al. 2012 paper in Acoustics
-        # Computes the 'energy curve' as windowed sum of absolute values of amplitude
-        # I median filter it, 'cos it's very noisy
-        # And then threshold it (no info on their threshold) and find max in each bit above threshold
-        # I also check for width of those (they don't say anything)
-        # They then return the max-width:max+width segments for each max
+        """ Based on description in Jinnai et al. 2012 paper in Acoustics
+        Computes the 'energy curve' as windowed sum of absolute values of amplitude
+        I median filter it, 'cos it's very noisy
+        And then threshold it (no info on their threshold) and find max in each bit above threshold
+        I also check for width of those (they don't say anything)
+        They then return the max-width:max+width segments for each max
+        """
         data = np.abs(self.data)
         E = np.zeros(len(data))
         E[width] = np.sum(data[:2*width+1])

@@ -13,6 +13,8 @@ class Wavelets:
     """
 
     def __init__(self,data,wavelet,maxLevel):
+        """ Gets the data and makes the wavelet, loading dmey2 (an exact match to Matlab's dmey) from a file.
+        """
         self.data = data
         self.maxLevel = maxLevel
 
@@ -32,7 +34,7 @@ class Wavelets:
 
     def BestLevel(self,wavelet=None,maxLevel=None):
         """ Compute the best level for the wavelet packet decomposition by using the Shannon entropy.
-        Add a new depth of tree until either the maxLevel level is found, or the entropy drops.
+        Iteratively add a new depth of tree until either the maxLevel level is found, or the entropy drops.
         """
 
         if wavelet is None:
@@ -51,7 +53,7 @@ class Wavelets:
         return level
 
     def ConvertWaveletNodeName(self,i):
-        """ Convert between the integer and 'ad' representations of the wavelet packets
+        """ Convert from an integer to the 'ad' representations of the wavelet packets
         The root is 0 (''), the next level are 1 and 2 ('a' and 'd'), the next 3, 4, 5, 6 ('aa','ad','da','dd) and so on
         """
         import string
@@ -142,7 +144,7 @@ class Wavelets:
     def ReconstructWPT(self,new_wp,wavelet,listleaves):
         """ Create a new wavelet packet tree by copying in the data for the leaves and then performing
         the idwt up the tree to the root.
-        Note that it's a bit hack. Assumes that listleaves is top-to-bottom, so just reverses it.
+        Assumes that listleaves is top-to-bottom, so just reverses it.
         """
         # Sort the list of leaves into order bottom-to-top, left-to-right
         working = listleaves.copy()
@@ -206,8 +208,9 @@ class Wavelets:
         # Make a new tree with these in
         new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='zero', maxlevel=wp.maxlevel)
 
-        # There seems to be a bit of a bug to do with the size of the reconstucted nodes, so prime them
-        # It's worse than that. pywavelet makes the whole tree. So if you don't give it blanks, it copies the details from wp even though it wasn't asked for. And reconstruction with the zeros is different to not reconstructing.
+        # pywavelet makes the whole tree. So if you don't give it blanks from places where you don't want the values in
+        # the original tree, it copies the details from wp even though it wasn't asked for them.
+        # Reconstruction with the zeros is different to not reconstructing.
         for level in range(wp.maxlevel + 1):
             for n in new_wp.get_level(level, 'natural'):
                 n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
