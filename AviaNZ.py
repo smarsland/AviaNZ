@@ -290,6 +290,10 @@ class AviaNZ(QMainWindow):
         specMenu.addSeparator()
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
 
+        self.showAllTick = specMenu.addAction("Show all pages", self.showAllCheck)
+        self.showAllTick.setCheckable(True)
+        self.showAllTick.setChecked(self.config['showAllPages'])
+
         specMenu.addSeparator()
         specMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
 
@@ -1109,6 +1113,10 @@ class AviaNZ(QMainWindow):
         else:
             self.d_files.hide()
         self.config['showListofFiles'] = self.useFilesTick.isChecked()
+
+    def showAllCheck(self):
+        """ Listener to process if the user swaps the check menu item to see the file list. """
+        self.config['showAllPages'] = self.showAllTick.isChecked()
 
     def showOverviewSegsCheck(self):
         """ Listener to process if the user swaps the check menu item to see the overview segment boxes. """
@@ -2187,6 +2195,7 @@ class AviaNZ(QMainWindow):
             # self.statusLeft.setText("Ready")
 
     def humanClassifyClose1(self):
+        # Listener for the human verification dialog.
         # Listener for the human verification dialog.
         self.humanClassifyDialog1.done(1)
         # Want to show a page at the end, so make it the first one
