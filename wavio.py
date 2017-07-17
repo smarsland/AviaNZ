@@ -165,7 +165,7 @@ def read(file,nseconds=None,offset=0):
     if nframes - offset*rate < 0:
         offset = 0
     wav.setpos(offset*rate)
-    print nframes, nseconds*rate, int(nseconds*rate), offset
+    #print nframes, nseconds*rate, int(nseconds*rate), offset
     data = wav.readframes(int(nseconds*rate))
 
     #data = wav.readframes(nframes)

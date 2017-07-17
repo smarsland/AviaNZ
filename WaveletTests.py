@@ -81,8 +81,8 @@ def showEnergies():
     pl.plot(e4)
     pl.plot(e5)
 
-    return e2
-    #pl.show()
+    #return e2
+    pl.show()
 
 
 def showNoiseEnergies():

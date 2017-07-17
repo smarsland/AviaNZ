@@ -42,9 +42,11 @@ class WaveletSegment:
         self.waveletDenoiser = Wavelets.Wavelets(data=data, wavelet=self.wavelet,maxLevel=20)
 
     def computeWaveletEnergy(self,fwData,sampleRate):
-        # Get the energy of the nodes in the wavelet packet decomposition
+        """ Computes the energy of the nodes in the wavelet packet decomposition
         # There are 62 coefficients up to level 5 of the wavelet tree (without root), and 300 seconds in 5 mins
-        # The energy is the sum of the squares of the data in each node divided by the total in the tree
+        # Hence coefs is a 62*300 matrix
+        # The energy is the sum of the squares of the data in each node divided by the total in that level of the tree as a percentage.
+        """
         n=len(fwData)/sampleRate
         coefs = np.zeros((62, n))
         for t in range(n):
@@ -59,6 +61,7 @@ class WaveletSegment:
         return coefs
 
     def fBetaScore(self,annotation, predicted,beta=2):
+        """ Computes the beta scores given two sets of predictions """
         TP = np.sum(np.where((annotation==1)&(predicted==1),1,0))
         T = np.sum(annotation)
         P = np.sum(predicted)
@@ -86,8 +89,9 @@ class WaveletSegment:
         return fB
 
     def compute_r(self,annotation,waveletCoefs,nNodes=20):
-        # Find the correlations (point-biserial)
-        # r = (M_p - M_q) / S * sqrt(p*q), M_p = mean for those that are 0, S = std dev overall, p = proportion that are 0.
+        """ Computes the point-biserial correlations for a set of labels and a set of wavelet coefficients.
+        r = (M_p - M_q) / S * sqrt(p*q), M_p = mean for those that are 0, S = std dev overall, p = proportion that are 0.
+        """
         w0 = np.where(annotation==0)[0]
         w1 = np.where(annotation==1)[0]
 
@@ -101,9 +105,10 @@ class WaveletSegment:
         return order
 
     def sortListByChild(self,order):
-        # Have a list sorted into order of correlation
-        # Want to resort so that any children of the current node that are in the list go first
-        # Assumes that there are five levels in the tree (easy to extend, though)
+        """ Inputs is a list sorted into order of correlation.
+        This functions resort so that any children of the current node that are in the list go first.
+        Assumes that there are five levels in the tree (easy to extend, though)
+        """
 
         newlist = []
         currentIndex = 0
@@ -151,18 +156,22 @@ class WaveletSegment:
         return newlist
 
     def detectCalls(self,wp,node,sampleRate=0,n=300,species='Kiwi'):
+        """ For a given node of the wavelet tree, make the tree, detect calls """
+        # TODO: Pass in (or load) a species-specific threshold and use that
+
         if sampleRate==0:
             sampleRate=self.sampleRate
         import string
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
         new_wp = pywt.WaveletPacket(data=None, wavelet=self.wavelet, mode='symmetric')
         # First, turn the index into a leaf name.
-        level = np.floor(np.log2(node))
-        first = int(2**level-1)
-        bin = np.binary_repr(node-first,width=int(level))
-        bin = string.replace(bin,'0','a',maxreplace=-1)
-        bin = string.replace(bin,'1','d',maxreplace=-1)
-        #print index+1, bin
+        bin = self.waveletDenoiser.ConvertWaveletNodeName(node)
+        # level = np.floor(np.log2(node))
+        # first = int(2**level-1)
+        # bin = np.binary_repr(node-first,width=int(level))
+        # bin = string.replace(bin,'0','a',maxreplace=-1)
+        # bin = string.replace(bin,'1','d',maxreplace=-1)
+        # #print index+1, bin
         new_wp[bin] = wp[bin].data
 
         # Get the coefficients
@@ -220,12 +229,13 @@ class WaveletSegment:
             #        n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
 
             # First, turn the index into a leaf name.
-            level = np.floor(np.log2(index))
-            first = int(2**level-1)
-            bin = np.binary_repr(index-first,width=int(level))
-            bin = string.replace(bin,'0','a',maxreplace=-1)
-            bin = string.replace(bin,'1','d',maxreplace=-1)
+            # level = np.floor(np.log2(index))
+            # first = int(2**level-1)
+            # bin = np.binary_repr(index-first,width=int(level))
+            # bin = string.replace(bin,'0','a',maxreplace=-1)
+            # bin = string.replace(bin,'1','d',maxreplace=-1)
             #print index+1, bin
+            bin = self.waveletDenoiser.ConvertWaveletNodeName(index)
             new_wp[bin] = wp[bin].data
 
             # Get the coefficients
@@ -333,6 +343,18 @@ class WaveletSegment:
                 segments.append([s, s+1])
         return segments
 
+    def mergeSeg(self,segments):
+        """ Combines segments from the wavelet segmenter."""
+        indx = []
+        for i in range(len(segments) - 1):
+            if segments[i][1] == segments[i + 1][0]:
+                indx.append(i)
+        indx.reverse()
+        for i in indx:
+            segments[i][1] = segments[i + 1][1]
+            del (segments[i + 1])
+        return segments
+
     def loadData(self,fName,trainTest=True):
         # Load data
         filename = fName+'.wav' #'train/kiwi/train1.wav'
@@ -349,7 +371,6 @@ class WaveletSegment:
             self.data = np.squeeze(self.data[:,0])
         n=len(self.data)/self.sampleRate
 
-
         if trainTest==True:     #survey data don't have annotations
             # Get the segmentation from the excel file
             self.annotation = np.zeros(n)
@@ -364,7 +385,7 @@ class WaveletSegment:
         #return self.data, self.sampleRate, self.annotation
 
 def computeWaveletEnergy_1s(data,wavelet,choice='all',denoise=False):
-    # Generate wavelet energy (all 62 nodes) given 1 sec data
+    # Generate wavelet energy (all 62 nodes in a 5 level tree) given 1 sec data
     E=[]
     ws=WaveletSegment()
 
@@ -557,18 +578,6 @@ def findCalls_train(fName,species='Kiwi'):
 #     print segs
 #     return segs
 
-def mergeSeg(segments):
-    """ Combines segments from the wavelet segmenter."""
-    indx=[]
-    for i in range(len(segments)-1):
-        if segments[i][1]==segments[i+1][0]:
-            indx.append(i)
-    indx.reverse()
-    for i in indx:
-        segments[i][1]=segments[i+1][1]
-        del(segments[i+1])
-    return segments
-
 def findCalls_test(fName=None,data=None, sampleRate=None, species='Kiwi',trainTest=False):
     #data, sampleRate_o, annotation = loadData(fName)
     ws=WaveletSegment()
@@ -608,7 +617,7 @@ def findCalls_test(fName=None,data=None, sampleRate=None, species='Kiwi',trainTe
     if trainTest==True:
         print fName
         ws.fBetaScore(ws.annotation, detected)
-    return mergeSeg(detected)
+    return ws.mergeSeg(detected)
 
 def binary2seg(self,binary):
     segments=[]

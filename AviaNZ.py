@@ -1438,7 +1438,7 @@ class AviaNZ(QMainWindow):
         if not saveSeg:
             timeRangeStart = self.startRead #self.currentFileSection*self.config['maxFileShow']
             timeRangeEnd = min(self.startRead + self.lenRead, float(self.fileLength) / self.sampleRate)
-            if startpoint > timeRangeStart and endpoint < timeRangeEnd:
+            if startpoint >= timeRangeStart and endpoint <= timeRangeEnd:
                 show = True
                 # Put the startpoint and endpoint in the right range
                 startpoint = startpoint - timeRangeStart
@@ -2136,11 +2136,14 @@ class AviaNZ(QMainWindow):
         """
 
         # Check there are segments to show on this page
-        self.box1id = 0
-        while self.listRectanglesa2[self.box1id] is None and self.box1id<len(self.segments):
-            self.box1id += 1
-
-        if self.box1id == len(self.segments):
+        if not self.config['showAllPages']:
+            if len(self.segments)>0:
+                self.box1id = 0
+                while self.box1id<len(self.segments) and self.listRectanglesa2[self.box1id] is None:
+                    self.box1id += 1
+        else:
+            self.box1id = 0
+        if (self.config['showAllPages'] and len(self.segments)==0) or (not self.config['showAllPages'] and (self.box1id == len(self.segments) or len(self.listRectanglesa2)==0)):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to check")
@@ -2173,18 +2176,22 @@ class AviaNZ(QMainWindow):
 
                 # Check which page is first to have segments on
                 self.currentFileSection = 0
+                print self.segments
                 while self.segments[0][0] > (self.currentFileSection+1)*self.config['maxFileShow']:
                     self.currentFileSection += 1
 
                 # Load the first segment
                 self.startRead = self.currentFileSection * self.config['maxFileShow']
                 self.loadSegment()
+                print self.currentFileSection, self.startRead
 
                 # And show it
                 x1 = int(self.convertAmpltoSpec(self.segments[self.box1id][0]-self.startRead))
                 x2 = int(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead))
                 x3 = int((self.segments[self.box1id][0]-self.startRead)*self.sampleRate)
                 x4 = int((self.segments[self.box1id][1]-self.startRead)*self.sampleRate)
+
+                print self.segments[self.box1id][0]-self.startRead, x1, x2, x3, x4
 
             self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'])
             self.humanClassifyDialog1.show()
@@ -2222,9 +2229,10 @@ class AviaNZ(QMainWindow):
                                                        self.segments[self.box1id][4])
             else:
                 # Check if have moved to next segment, and if so load it
-                # If there was a section without segments this would be a bit inefficient
+                # If there was a section without segments this would be a bit inefficient, actually no, it was wrong!
                 if self.segments[self.box1id][0] > (self.currentFileSection+1)*self.config['maxFileShow']:
-                    self.currentFileSection += 1
+                    while self.segments[self.box1id][0] > (self.currentFileSection+1)*self.config['maxFileShow']:
+                        self.currentFileSection += 1
                     self.startRead = self.currentFileSection * self.config['maxFileShow']
                     print "Loading next page", self.currentFileSection
                     self.loadSegment()
@@ -2249,7 +2257,25 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             self.humanClassifyClose1()
 
+    def updateLabel(self,label):
+        """ Update the label on a segment that is currently shown in the display. """
+        if self.listRectanglesa2[self.box1id] is not None:
+            self.birdSelected(label, update=False)
+
+            self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
+            self.listRectanglesa1[self.box1id].update()
+            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                col = self.prevBoxCol.rgb()
+                col = QtGui.QColor(col)
+                col.setAlpha(255)
+                self.listRectanglesa2[self.box1id].setPen(col, width=1)
+            else:
+                self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+
+            self.listRectanglesa2[self.box1id].update()
+
     def humanClassifyCorrect1(self):
+        """ Correct segment labels, save the old ones if necessary """
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
         if len(checkText) > 0:
             if label != checkText:
@@ -2268,23 +2294,28 @@ class AviaNZ(QMainWindow):
 
             #self.updateText(label)
             # Update the label on the box if it is in the current page
-            if self.listRectanglesa2[self.box1id] is not None:
-                self.birdSelected(label,update=False)
-
-                self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
-                self.listRectanglesa1[self.box1id].update()
-                if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                    col = self.prevBoxCol.rgb()
-                    col = QtGui.QColor(col)
-                    col.setAlpha(255)
-                    self.listRectanglesa2[self.box1id].setPen(col,width=1)
-                else:
-                    self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
-
-                self.listRectanglesa2[self.box1id].update()
+            self.updateLabel(label)
+            # if self.listRectanglesa2[self.box1id] is not None:
+            #     self.birdSelected(label,update=False)
+            #
+            #     self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
+            #     self.listRectanglesa1[self.box1id].update()
+            #     if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+            #         col = self.prevBoxCol.rgb()
+            #         col = QtGui.QColor(col)
+            #         col.setAlpha(255)
+            #         self.listRectanglesa2[self.box1id].setPen(col,width=1)
+            #     else:
+            #         self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+            #
+            #     self.listRectanglesa2[self.box1id].update()
 
             if self.saveConfig:
                 self.config['BirdList'].append(label)
+        elif label[-1] == '?':
+            # Remove the question mark, since the user has agreed
+            self.updateLabel(label[:-1])
+            self.segments[self.box1id][4] = label[:-1]
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
