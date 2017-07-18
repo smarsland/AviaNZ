@@ -3,29 +3,26 @@
 
 SM:
 
-# Check both human classify segments with showAllPages
-    #Done, but does not work in some cases (e.g. show blank spectrogram)
-    # Fixed that
+(1) SRM Update the manual lots
+(2) SRM And the video!
+(3) All Check it's really stable
+(4) What else are we adding? Or removing?
+    DOC version
+(5) SRM Add wavelet segmentation to best
+(6) SRM Multiprocessing where possible
+(7) NP Classify segments
+    (i) Wavelets better version
+    (ii) Learning based on whatever (check Raven features)
+    (iii) SRM Wavelet energy features
+(8) NP Parameter setting
 
-**** Bandpass segment marker on page 2 and above
-**** Change spectrogram size produces error for saved dragged spectrogram boxes -> should save frequencies
-    Need to normalise all of the y of boxes
-    Note that this will stuff up previously saved segments
-    Could detect if >1, assume the spectrogram was 128
+We should start to decide what make a specialised filter
+    Mingap, minlength
+    Threshold for segmenters
+    Wavelet nodes
+    Trained classifiers
 
-Push cheat sheet
 *** Exporter problem
-
-The classify options only work for the 5 minute sections.
-    # I think done for both, but needs checking
-Problem is that otherwise need to load spectrograms -- then must sort segments
-
-Bars for playing don't work after 1st 'page'
-    # Done, but check
-    play visible and play segment are working in all pages.
-    but it doesn't work in the first page too (bandlimited play)
-
-Classify segments
 
 Wavelet denoising with best tree?
 
@@ -44,25 +41,8 @@ Plot the wavelet energy for noise, crickets, calls, etc.
     Suppress the noise nodes, reconstruct -- what happens?
 Parallel process the segmenters
 
-Update the manual
-
-Video of using
-
 get name from standard files and use it
     # Name bit is done, not yet used
-
-On Windows: check if in HumanClassify1, playing second is different to first
-    # Apparently OK
-
-Put freq axis tight option somewhere better
-    # DONE
-
-For HumanClassify2 errors
-    -> they are currently just deleted.
-    Better is to remove them, but to save them and then after all have been processed,
-    use HumanClassify1 to get labels for them, save them somewhere and reuse for more training
-    There needs to be an option to not do this though :)
-    # DONE
 
 NP:
 
@@ -74,13 +54,6 @@ Test the idea of using the wavelet nodes with either
     or maybe both :)
     Will have to count the number of times each occurs
     Idea is to reduce (i) misclassifications, (2) crickets, (3) wide-band clicks, (4) rain
-
-Username in the status bar
-#Done
-
-Make the Manual Seg produce the excel files (Export segmentation option in menu)
-And put all the three excel files into 1 on 3 sheets
-#Done
 
 Make a pretty (simple) version of the Process File dialog
 #Done, but seems like I have to add more features to this interface
@@ -106,19 +79,12 @@ Segmentation experiments
 
 (1) Minor bugs and extensions
 
-    SM: Get the time from the file name (if standard) and use it to put day or night birds first
-
     NP: Read mp3 files
 # SM: pysox
-
 
     NP: Make it possible to change parameters (look into pyqtgraph ParameterTree)
 
     ??: What to do with stereo sound? How about consistent sample rates?
-
-	Interface --> Change spectrogram parameters --> add visible frequency range e.g. from:0 to:8000
-
-	Update the status bar when auto saving the annotation? Users want to know/confirm.
 
     NP: Make play sounds play the denoised version after denoising
 # This seems to be complicated with undo etc. Still thinking whats the best way to do it,
@@ -130,25 +96,6 @@ Segmentation experiments
 	File list dock becomes frozen - one was experiencing this. Had to restart the program.
 	    # Can we reproduce it?
 
-Isa:
-    (1) save problem -- doesn't always seem to save segments?
-    (2) make the config file somewhere you can write it
-    (3) have a 'take screenshot' option
-
-(2) Memory management
-    NP: It's a pain, but needs thinking about and then doing
-    Could just split the file into shorter pieces? 
-    Split files into 5 minute segments or whatever or look into paging
-
-(3) Denoising, Wavelets and Segmentation
-    Make denoising work
-        Is there something wrong? No
-        *** How long should a denoise piece be? Depends
-	(1) Compare with matlab for long files: Almost identical results
-	(2) *** Compare with making wavelet trees on shorter pieces
-	(3) *** Denoise the segments separately
-
-
     NP: Fully integrate wavelet seg into program
     NP: We actually want Kiwi (M) and Kiwi (F), and need to get all the ruru calls
     NP: Want to have some form of machine learning
@@ -157,7 +104,6 @@ Isa:
 		(3) SVM
 		(4) boosting
     SM: And need to think about the 95% confidence thing a lot more
-    SM: Add in the Check Segments 2 bit for this, and actually process the results!
 
     SM: Make the segmentations work fully
         Get the minimum time of a segment parameter sorted
@@ -167,8 +113,6 @@ Isa:
 
     Both: Think about nice ways to train a new wavelet filter
 		And get the whole workflow sorted for it
-
-    Use intensity of colour to encode certainty?
 
 (4) Features
     Use the wavelets
