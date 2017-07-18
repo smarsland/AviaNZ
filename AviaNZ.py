@@ -537,7 +537,7 @@ class AviaNZ(QMainWindow):
         self.playButton = QtGui.QToolButton()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.setToolTip("Play visible")
-        self.connect(self.playButton, SIGNAL('clicked()'), self.playSegment)
+        self.connect(self.playButton, SIGNAL('clicked()'), self.playVisible)
 
         self.playSegButton = QtGui.QToolButton()
         self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
@@ -987,6 +987,14 @@ class AviaNZ(QMainWindow):
                         self.config['operator'] = self.segments[0][2]
                         self.config['reviewer'] = self.segments[0][3]
                         del self.segments[0]
+                if self.segments[0][2] > 1.5 and self.segments[1][2] > 1.5:
+                    # Legacy version didn't normalise the segment data for dragged boxes
+                    # This fixes it, assuming that the spectrogram was 128 pixels high (256 width window)
+                    # The .5 is to take care of rounding errors
+                    print "Old segments, normalising"
+                    for s in self.segments:
+                        s[2] = s[2]/128
+                        s[3] = s[3]/128
                 self.hasSegments = True
             else:
                 self.hasSegments = False
@@ -1389,8 +1397,8 @@ class AviaNZ(QMainWindow):
             if type(sender) == self.ROItype:
                 x1 = self.convertSpectoAmpl(sender.pos()[0])
                 x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
-                self.segments[i][2] = sender.pos()[1]
-                self.segments[i][3] = sender.pos()[1]+sender.size()[1]
+                self.segments[i][2] = sender.pos()[1]/np.shape(self.sg)[1]
+                self.segments[i][3] = (sender.pos()[1]+sender.size()[1])/np.shape(self.sg)[1]
                 self.listLabels[i].setPos(sender.pos()[0], self.textpos)
             else:
                 x1 = self.convertSpectoAmpl(sender.getRegion()[0])
@@ -1431,12 +1439,12 @@ class AviaNZ(QMainWindow):
     def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=None,saveSeg=True):
         """ When a new segment is created, does the work of creating it and connecting its
         listeners. Also updates the relevant overview segment.
-        x, y are in amplitude coordinates.
+        startpoint, endpoint are in amplitude coordinates, while y1, y2 should be between 0 and 1, meaning 0 and np.shape(sg)[1].
         saveSeg means that we are drawing the saved ones. Need to check that those ones fit into
         the current window, can assume the other do, but have to save their times correctly.
         """
         if not saveSeg:
-            timeRangeStart = self.startRead #self.currentFileSection*self.config['maxFileShow']
+            timeRangeStart = self.startRead
             timeRangeEnd = min(self.startRead + self.lenRead, float(self.fileLength) / self.sampleRate)
             if startpoint >= timeRangeStart and endpoint <= timeRangeEnd:
                 show = True
@@ -1508,8 +1516,8 @@ class AviaNZ(QMainWindow):
                 p_spec_r = pg.LinearRegionItem(brush = brush)
                 p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
             else:
-                startpointS = QPointF(self.convertAmpltoSpec(startpoint),y1)
-                endpointS = QPointF(self.convertAmpltoSpec(endpoint),y2)
+                startpointS = QPointF(self.convertAmpltoSpec(startpoint),y1*np.shape(self.sg)[1])
+                endpointS = QPointF(self.convertAmpltoSpec(endpoint),y2*np.shape(self.sg)[1])
                 p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS)
                 if self.dragRectTransparent.isChecked():
                     col = self.prevBoxCol.rgb()
@@ -1843,15 +1851,15 @@ class AviaNZ(QMainWindow):
             # If the user has pressed shift, copy the last species and don't use the context menu
             modifiers = QtGui.QApplication.keyboardModifiers()
             if modifiers == QtCore.Qt.ShiftModifier:
-                self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y(), evt2.y(),self.lastSpecies)
+                self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1],self.lastSpecies)
             elif modifiers == QtCore.Qt.ControlModifier:
-                self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y(), evt2.y())
+                self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1])
                 # Context menu
                 self.box1id = len(self.segments) - 1
                 self.fillBirdList(unsure=True)
                 self.menuBirdList.popup(QPoint(evt3.x(), evt3.y()))
             else:
-                self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y(), evt2.y())
+                self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1])
                 # Context menu
                 self.box1id = len(self.segments) - 1
                 self.fillBirdList()
@@ -2123,8 +2131,8 @@ class AviaNZ(QMainWindow):
 
     def showFirstPage(self):
         # After the HumanClassify dialogs have closed, need to show the correct data on the screen
-        # It's arbitrary, so use first page
-        self.currentFileSection = 0
+        # Returns to the page user started with
+        self.currentFileSection = self.currentPage
         self.prepare5minMove()
         self.next5mins.setEnabled(True)
         self.prev5mins.setEnabled(False)
@@ -2135,6 +2143,8 @@ class AviaNZ(QMainWindow):
         The only difference is that that version requires sorting the segments and loading of new file sections and making the spectrogram intermittently.
         """
 
+        # Store the current page to return to
+        self.currentPage = self.currentFileSection
         # Check there are segments to show on this page
         if not self.config['showAllPages']:
             if len(self.segments)>0:
@@ -2176,22 +2186,18 @@ class AviaNZ(QMainWindow):
 
                 # Check which page is first to have segments on
                 self.currentFileSection = 0
-                print self.segments
                 while self.segments[0][0] > (self.currentFileSection+1)*self.config['maxFileShow']:
                     self.currentFileSection += 1
 
                 # Load the first segment
                 self.startRead = self.currentFileSection * self.config['maxFileShow']
                 self.loadSegment()
-                print self.currentFileSection, self.startRead
 
                 # And show it
                 x1 = int(self.convertAmpltoSpec(self.segments[self.box1id][0]-self.startRead))
                 x2 = int(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead))
                 x3 = int((self.segments[self.box1id][0]-self.startRead)*self.sampleRate)
                 x4 = int((self.segments[self.box1id][1]-self.startRead)*self.sampleRate)
-
-                print self.segments[self.box1id][0]-self.startRead, x1, x2, x3, x4
 
             self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'])
             self.humanClassifyDialog1.show()
@@ -2259,6 +2265,7 @@ class AviaNZ(QMainWindow):
 
     def updateLabel(self,label):
         """ Update the label on a segment that is currently shown in the display. """
+        self.segments[self.box1id][4] = label
         if self.listRectanglesa2[self.box1id] is not None:
             self.birdSelected(label, update=False)
 
@@ -2315,7 +2322,7 @@ class AviaNZ(QMainWindow):
         elif label[-1] == '?':
             # Remove the question mark, since the user has agreed
             self.updateLabel(label[:-1])
-            self.segments[self.box1id][4] = label[:-1]
+            #self.segments[self.box1id][4] = label[:-1]
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
@@ -2478,6 +2485,7 @@ class AviaNZ(QMainWindow):
             msg.exec_()
         self.statusLeft.setText("Updating the spectrogram...")
         self.sp.setWidth(int(str(window_width)), int(str(incr)))
+        oldSpecy = np.shape(self.sg)[1]
         sgRaw = self.sp.spectrogram(self.audiodata,window=str(windowType),mean_normalise=mean_normalise,onesided=True,multitaper=multitaper)
         maxsg = np.min(sgRaw)
         self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
@@ -2494,10 +2502,13 @@ class AviaNZ(QMainWindow):
                     x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
                     x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
                     if type(self.listRectanglesa2[s]) == self.ROItype:
-                        y1 = self.listRectanglesa2[s].pos().y()
-                        y2 = self.listRectanglesa2[s].size().y()
-                        self.listRectanglesa2[s].setPos(pg.Point(x1, y1))
-                        self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, y2))
+                        #print self.listRectanglesa2[s].pos().y(), self.listRectanglesa2[s].size().y()
+                        y1 = self.listRectanglesa2[s].pos().y()/oldSpecy
+                        y2 = self.listRectanglesa2[s].size().y()/oldSpecy
+                        #print y1, y2
+                        self.listRectanglesa2[s].setPos(pg.Point(x1, y1*np.shape(self.sg)[1]))
+                        self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, y2*np.shape(self.sg)[1]))
+                        #print self.listRectanglesa2[s].pos().y(), self.listRectanglesa2[s].size().y()
                     else:
                         self.listRectanglesa2[s].setRegion([x1, x2])
                     self.listLabels[s].setPos(x1,self.textpos)
@@ -2676,6 +2687,7 @@ class AviaNZ(QMainWindow):
                     if hasattr(self,'seg'):
                         self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
 
+                    self.redoFreqAxis(0,self.sampleRate/2)
                     self.setColourLevels()
 
     def denoise_save(self):
@@ -2980,8 +2992,8 @@ class AviaNZ(QMainWindow):
 # ===============
 # Code for playing sounds
     # These functions are the phonon playing code
-    def playSegment(self):
-        """ Listener for button to play a segment."""
+    def playVisible(self):
+        """ Listener for button to play the visible area."""
         self.segmentStop = self.playSlider.maximum()
         if self.media_obj.state() == phonon.Phonon.PlayingState:
             self.media_obj.pause()
@@ -3027,9 +3039,7 @@ class AviaNZ(QMainWindow):
     def setPlaySliderLimits(self, start,end):
         """ Does what it says.
         """
-        #self.playSlider.setRange(start, end)
         self.playSlider.setRange(start+1000.0*self.startRead, end+1000.0*self.startRead)
-        #self.playSlider.setValue(start)
         self.playSlider.setValue(start+1000.0*self.startRead)
         self.segmentStop = self.playSlider.maximum()
         self.media_obj.seek(start+1000.0*self.startRead)
@@ -3055,7 +3065,9 @@ class AviaNZ(QMainWindow):
             self.playSlider.setValue(time)
         if time > min(self.playSlider.maximum(),self.segmentStop):
             self.media_obj2.stop()
-        self.bar2.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0 + self.startRead)+self.bandLimitedStart)
+        #print self.convertAmpltoSpec(self.playSlider.value()/1000.0)
+        #print self.playSlider.value()/1000.0, self.convertAmpltoSpec(self.playSlider.value() / 1000.0)
+        self.bar2.setValue(self.convertAmpltoSpec(self.playSlider.value() / 1000.0)  + self.bandLimitedStart)
 
     def playFinished2(self):
         """ Listener for when playback inside a segment stops.
@@ -3068,15 +3080,15 @@ class AviaNZ(QMainWindow):
         Gets the band limits of the segment, bandpass filters, then plays that.
         Currently uses FIR bandpass filter -- Butterworth is commented out.
         """
-        start = int(self.listRectanglesa1[self.box1id].getRegion()[0]*self.sampleRate)
-        stop = int(self.listRectanglesa1[self.box1id].getRegion()[1]*self.sampleRate)
-        bottom = int(self.segments[self.box1id][2]*self.sampleRate/2./np.shape(self.sg)[1])
-        top = int(self.segments[self.box1id][3]*self.sampleRate/2./np.shape(self.sg)[1])
+        start = int((self.listRectanglesa1[self.box1id].getRegion()[0])*self.sampleRate)+self.startRead
+        stop = int((self.listRectanglesa1[self.box1id].getRegion()[1])*self.sampleRate)+self.startRead
+        bottom = max(self.minFreq,int(self.segments[self.box1id][2]*self.sampleRate/2.))
+        top = min(int(self.segments[self.box1id][3]*self.sampleRate/2.),self.maxFreq)
 
-        if bottom > 0 and top>0:
-            self.bandLimitedStart=self.convertAmpltoSpec(float(start)/self.sampleRate)
+        if bottom > 0 and top > 0:
+            self.bandLimitedStart=self.convertAmpltoSpec(self.listRectanglesa1[self.box1id].getRegion()[0])
             data = self.audiodata[start:stop]
-            data=self.sp.bandpassFilter(data,bottom,top)
+            data = self.sp.bandpassFilter(data,bottom,top)
             # data = self.sp.ButterworthBandpass(data, self.sampleRate, bottom, top,order=5)
 
             if platform.system() == 'Darwin':
@@ -3096,7 +3108,8 @@ class AviaNZ(QMainWindow):
                 self.media_obj2.setTickInterval(20)
                 self.media_obj2.tick.connect(self.movePlaySlider2)
                 self.media_obj2.finished.connect(self.playFinished2)
-            self.bar2.setValue(self.bandLimitedStart + self.convertAmpltoSpec(self.startRead))
+            #print "*", self.listRectanglesa1[self.box1id].getRegion()[0], self.bandLimitedStart
+            self.bar2.setValue(self.bandLimitedStart)
             self.p_spec.addItem(self.bar2, ignoreBounds=True)
 
             # Instantiate a Qt media object and prepare it (for audio playback)
