@@ -248,6 +248,8 @@ class AviaNZ(QMainWindow):
         self.showOverviewSegsTick.setCheckable(True)
         self.showOverviewSegsTick.setChecked(self.config['showAnnotationOverview'])
 
+        specMenu.addSeparator()
+
         self.dragRectangles = specMenu.addAction("Drag boxes in spectrogram", self.dragRectanglesCheck)
         self.dragRectangles.setCheckable(True)
         self.dragRectangles.setChecked(self.config['dragBoxes'])
@@ -256,22 +258,13 @@ class AviaNZ(QMainWindow):
         self.dragRectTransparent.setCheckable(True)
         self.dragRectTransparent.setChecked(self.config['transparentBoxes'])
 
-        self.showFundamental = specMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
-        self.showFundamental.setCheckable(True)
-        self.showFundamental.setChecked(False)
+        specMenu.addSeparator()
 
-        #if self.DOC==False:
-        #    self.showFundamental2 = specMenu.addAction("Show fundamental frequency2", self.showFundamentalFreq2)
-        #    self.showFundamental2.setCheckable(True)
-        #    self.showFundamental2.setChecked(False)
+        self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
+        self.readonly.setCheckable(True)
+        self.readonly.setChecked(False)
 
-        if self.DOC==False:
-            self.showInvSpec = specMenu.addAction("Show inverted spectrogram", self.showInvertedSpectrogram)
-            self.showInvSpec.setCheckable(True)
-            self.showInvSpec.setChecked(False)
-
-        # if self.DOC==False:
-        self.redoaxis = specMenu.addAction("Make frequency axis tight", self.redoFreqAxis)
+        specMenu.addSeparator()
 
         colMenu = specMenu.addMenu("&Choose colour map")
         colGroup = QActionGroup(self)
@@ -287,29 +280,44 @@ class AviaNZ(QMainWindow):
         self.invertcm.setCheckable(True)
         self.invertcm.setChecked(self.config['invertColourMap'])
 
-        specMenu.addSeparator()
+        #if self.DOC==False:
+        #    self.showFundamental2 = specMenu.addAction("Show fundamental frequency2", self.showFundamentalFreq2)
+        #    self.showFundamental2.setCheckable(True)
+        #    self.showFundamental2.setChecked(False)
+
+        if self.DOC==False:
+            self.showInvSpec = specMenu.addAction("Show inverted spectrogram", self.showInvertedSpectrogram)
+            self.showInvSpec.setCheckable(True)
+            self.showInvSpec.setChecked(False)
+
+        # if self.DOC==False:
+        self.redoaxis = specMenu.addAction("Make frequency axis tight", self.redoFreqAxis)
+
+        # specMenu.addSeparator()
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
 
-        self.showAllTick = specMenu.addAction("Show all pages", self.showAllCheck)
-        self.showAllTick.setCheckable(True)
-        self.showAllTick.setChecked(self.config['showAllPages'])
+        self.showFundamental = specMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
+        self.showFundamental.setCheckable(True)
+        self.showFundamental.setChecked(False)
 
         specMenu.addSeparator()
         specMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
 
         actionMenu = self.menuBar().addMenu("&Actions")
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
-        self.readonly = actionMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
-        self.readonly.setCheckable(True)
-        self.readonly.setChecked(False)
+        actionMenu.addSeparator()
         actionMenu.addAction("Denoise",self.denoiseDialog,"Ctrl+N")
-        actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
-        actionMenu.addAction("Classify segments",self.classifySegments,"Ctrl+C")
         #actionMenu.addAction("Find matches",self.findMatches)
         if self.DOC==False:
             actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
             actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
         actionMenu.addSeparator()
+        actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
+        actionMenu.addAction("Classify segments",self.classifySegments,"Ctrl+C")
+        actionMenu.addSeparator()
+        self.showAllTick = actionMenu.addAction("Show all pages", self.showAllCheck)
+        self.showAllTick.setCheckable(True)
+        self.showAllTick.setChecked(self.config['showAllPages'])
         actionMenu.addAction("Check segments [All segments]",self.humanClassifyDialog1,"Ctrl+1")
         actionMenu.addAction("Check segments [Choose species]",self.humanClassifyDialog2,"Ctrl+2")
         actionMenu.addSeparator()
@@ -317,11 +325,12 @@ class AviaNZ(QMainWindow):
 
         helpMenu = self.menuBar().addMenu("&Help")
         #aboutAction = QAction("About")
+        helpMenu.addAction("Help",self.showHelp,"Ctrl+H")
+        helpMenu.addAction("Cheat Sheet", self.showCheatSheet)
+        helpMenu.addSeparator()
         helpMenu.addAction("About",self.showAbout,"Ctrl+A")
         if platform.system() == 'Darwin':
             helpMenu.addAction("About",self.showAbout,"Ctrl+A")
-        helpMenu.addAction("Help",self.showHelp,"Ctrl+H")
-        helpMenu.addAction("Cheat Sheet", self.showCheatSheet)
 
     def showAbout(self):
         """ Create the About Message Box"""
@@ -518,16 +527,19 @@ class AviaNZ(QMainWindow):
         self.nextFileBtn=QToolButton()
         self.nextFileBtn.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSkipForward))
         self.connect(self.nextFileBtn, SIGNAL('clicked()'), self.openNextFile)
+        self.nextFileBtn.setToolTip("Open next file")
         self.w_files.addWidget(self.nextFileBtn,row=0,col=1)
         #self.w_overview.addWidget(self.nextFileBtn,row=1,colspan=2)
 
         # Buttons to move to next/previous five minutes
         self.prev5mins=QToolButton()
         self.prev5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekBackward))
+        self.prev5mins.setToolTip("Previous page")
         self.connect(self.prev5mins, SIGNAL('clicked()'), self.movePrev5mins)
         self.w_overview.addWidget(self.prev5mins,row=2,col=0)
         self.next5mins=QToolButton()
         self.next5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekForward))
+        self.next5mins.setToolTip("Next page")
         self.connect(self.next5mins, SIGNAL('clicked()'), self.moveNext5mins)
         self.w_overview.addWidget(self.next5mins,row=2,col=1)
         self.placeInFileLabel = QLabel('')
@@ -893,6 +905,8 @@ class AviaNZ(QMainWindow):
 
         with pg.ProgressDialog("Loading..", 0, 7) as dlg:
             dlg.setCancelButton(None)
+            dlg.setWindowIcon(QIcon('img/Avianz.ico'))
+            dlg.setWindowTitle('AviaNZ')
             if name is not None:
                 if isinstance(name,str):
                     self.filename = self.dirName+'/'+name
@@ -987,15 +1001,18 @@ class AviaNZ(QMainWindow):
                         self.config['operator'] = self.segments[0][2]
                         self.config['reviewer'] = self.segments[0][3]
                         del self.segments[0]
-                if self.segments[0][2] > 1.5 and self.segments[1][2] > 1.5:
-                    # Legacy version didn't normalise the segment data for dragged boxes
-                    # This fixes it, assuming that the spectrogram was 128 pixels high (256 width window)
-                    # The .5 is to take care of rounding errors
-                    print "Old segments, normalising"
-                    for s in self.segments:
-                        s[2] = s[2]/128
-                        s[3] = s[3]/128
-                self.hasSegments = True
+                if len(self.segments) > 1:
+                    if self.segments[0][2] > 1.5 and self.segments[1][2] > 1.5:
+                        # Legacy version didn't normalise the segment data for dragged boxes
+                        # This fixes it, assuming that the spectrogram was 128 pixels high (256 width window)
+                        # The .5 is to take care of rounding errors
+                        print "Old segments, normalising"
+                        for s in self.segments:
+                            s[2] = s[2]/128
+                            s[3] = s[3]/128
+                    self.hasSegments = True
+                else:
+                    self.hasSegments = False
             else:
                 self.hasSegments = False
 
@@ -3139,10 +3156,23 @@ class AviaNZ(QMainWindow):
         self.statusRight.setText("Operator: " + self.config['operator'] + ", Reviewer: "+self.config['reviewer'])
 
     def saveImage(self): # ??? it doesn't save the image
-        import pyqtgraph.exporters as pge
-        filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
-        exporter = pge.ImageExporter(self.p_spec)
-        exporter.export(filename)
+        if platform.system() == 'Darwin':
+            import pyqtgraph.exporters as pge
+            filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
+            exporter = pge.ImageExporter(self.p_spec)
+            exporter.export(filename)
+        #for Windows to save the image, needs to typecast line 70 of ImageExporter.py
+        # from
+        # bg = np.empty((self.params['width'], self.params['height'], 4), dtype=np.ubyte)
+        # to
+        # bg = np.empty((int(self.params['width']), int(self.params['height']), 4), dtype=np.ubyte)
+        # but its not an independent file to be added to the project! So
+        else:
+            filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.png *.xpm *.jpg)");
+            # print filename
+            import scipy.misc
+            scipy.misc.imsave('image.jpeg', np.flip(np.transpose(self.sg),0))
+
 # ============
 # Various actions: deleting segments, saving, quitting
     def deleteSegment(self,id=-1):
