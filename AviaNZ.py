@@ -286,11 +286,14 @@ class AviaNZ(QMainWindow):
         self.invertcm = specMenu.addAction("Invert colour map",self.invertColourMap)
         self.invertcm.setCheckable(True)
         self.invertcm.setChecked(self.config['invertColourMap'])
+        self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
+        self.readonly.setCheckable(True)
+        self.readonly.setChecked(False)
 
         specMenu.addSeparator()
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
 
-        self.showAllTick = specMenu.addAction("Show all pages", self.showAllCheck)
+        self.showAllTick = specMenu.addAction("Show all pages (check segments)", self.showAllCheck)
         self.showAllTick.setCheckable(True)
         self.showAllTick.setChecked(self.config['showAllPages'])
 
@@ -299,9 +302,6 @@ class AviaNZ(QMainWindow):
 
         actionMenu = self.menuBar().addMenu("&Actions")
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
-        self.readonly = actionMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
-        self.readonly.setCheckable(True)
-        self.readonly.setChecked(False)
         actionMenu.addAction("Denoise",self.denoiseDialog,"Ctrl+N")
         actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
         actionMenu.addAction("Classify segments",self.classifySegments,"Ctrl+C")
@@ -518,16 +518,19 @@ class AviaNZ(QMainWindow):
         self.nextFileBtn=QToolButton()
         self.nextFileBtn.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSkipForward))
         self.connect(self.nextFileBtn, SIGNAL('clicked()'), self.openNextFile)
+        self.nextFileBtn.setToolTip("Open next file")
         self.w_files.addWidget(self.nextFileBtn,row=0,col=1)
         #self.w_overview.addWidget(self.nextFileBtn,row=1,colspan=2)
 
         # Buttons to move to next/previous five minutes
         self.prev5mins=QToolButton()
         self.prev5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekBackward))
+        self.prev5mins.setToolTip("Previous page")
         self.connect(self.prev5mins, SIGNAL('clicked()'), self.movePrev5mins)
         self.w_overview.addWidget(self.prev5mins,row=2,col=0)
         self.next5mins=QToolButton()
         self.next5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekForward))
+        self.next5mins.setToolTip("Next page")
         self.connect(self.next5mins, SIGNAL('clicked()'), self.moveNext5mins)
         self.w_overview.addWidget(self.next5mins,row=2,col=1)
         self.placeInFileLabel = QLabel('')
@@ -893,6 +896,8 @@ class AviaNZ(QMainWindow):
 
         with pg.ProgressDialog("Loading..", 0, 7) as dlg:
             dlg.setCancelButton(None)
+            dlg.setWindowIcon(QIcon('img/Avianz.ico'))
+            dlg.setWindowTitle('AviaNZ')
             if name is not None:
                 if isinstance(name,str):
                     self.filename = self.dirName+'/'+name
@@ -3128,6 +3133,7 @@ class AviaNZ(QMainWindow):
         import pyqtgraph.exporters as pge
         filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
         exporter = pge.ImageExporter(self.p_spec)
+
         exporter.export(filename)
 # ============
 # Various actions: deleting segments, saving, quitting
