@@ -3062,12 +3062,13 @@ class AviaNZ(QMainWindow):
         """ Listener for the play slider that is for inside a segment.
         """
         if not self.playSlider.isSliderDown():
+            #print time
             self.playSlider.setValue(time)
         if time > min(self.playSlider.maximum(),self.segmentStop):
             self.media_obj2.stop()
         #print self.convertAmpltoSpec(self.playSlider.value()/1000.0)
         #print self.playSlider.value()/1000.0, self.convertAmpltoSpec(self.playSlider.value() / 1000.0)
-        self.bar2.setValue(self.convertAmpltoSpec(self.playSlider.value() / 1000.0)  + self.bandLimitedStart)
+        self.bar2.setValue(self.convertAmpltoSpec(time / 1000.0)  + self.bandLimitedStart)
 
     def playFinished2(self):
         """ Listener for when playback inside a segment stops.
