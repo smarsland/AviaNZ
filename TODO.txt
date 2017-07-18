@@ -4,10 +4,16 @@
 SM:
 
 # Check both human classify segments with showAllPages
-And put the flag in self.config
     #Done, but does not work in some cases (e.g. show blank spectrogram)
     # Fixed that
-    
+
+**** Bandpass segment marker on page 2 and above
+**** Change spectrogram size produces error for saved dragged spectrogram boxes -> should save frequencies
+    Need to normalise all of the y of boxes
+    Note that this will stuff up previously saved segments
+    Could detect if >1, assume the spectrogram was 128
+
+Push cheat sheet
 *** Exporter problem
 
 The classify options only work for the 5 minute sections.

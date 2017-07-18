@@ -729,7 +729,7 @@ class HumanClassify1(QDialog):
     # It shows a single segment at a time, working through all the segments.
     # TODO: Delete segment button
 
-    def __init__(self, seg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
+    def __init__(self, sg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -853,7 +853,7 @@ class HumanClassify1(QDialog):
 
         self.setLayout(vboxFull)
         # print seg
-        self.setImage(seg,audiodata,sampleRate,self.label)
+        self.setImage(sg,audiodata,sampleRate,self.label)
 
     def playSeg(self):  #This is not the right place though
         import wavio
@@ -864,7 +864,7 @@ class HumanClassify1(QDialog):
             import tempfile
             f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
             filename = f.name
-        self.audiodata = self.audiodata.astype('int16') # how to get data - seg??
+        self.audiodata = self.audiodata.astype('int16')
         wavio.write(filename,self.audiodata,self.sampleRate,scale='dtype-limits',sampwidth=2)
         import PyQt4.phonon as phonon
         # Create a media object
@@ -876,18 +876,20 @@ class HumanClassify1(QDialog):
         media_obj.seek(0)
         media_obj.play()
 
-    def setImage(self, seg, audiodata, sampleRate, label):
+    def setImage(self, sg, audiodata, sampleRate, label):
 
         self.audiodata = audiodata
         self.sampleRate = sampleRate
 
-        if np.shape(seg)[0] < 100 or np.shape(seg)[1]<100:
-            seg2 = 255*np.ones((100,128))
-            seg2[:np.shape(seg)[0],:np.shape(seg)[1]] = seg
-        else:
-            seg2 = seg
+        sg2 = sg
+        if np.shape(sg)[0] < 100:
+            sg2 = 255*np.ones((100,np.shape(sg)[1]))
+            sg2[:np.shape(sg)[0],:np.shape(sg)[1]] = sg
+        if  np.shape(sg)[1]<100:
+            sg2 = 255 * np.ones((np.shape(sg)[0], 100))
+            sg2[:np.shape(sg)[0],:np.shape(sg)[1]] = sg
 
-        self.plot.setImage(seg2)
+        self.plot.setImage(sg2)
         self.plot.setLookupTable(self.lut)
 
         if self.cmapInverted:
