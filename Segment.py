@@ -16,7 +16,7 @@ class Segment:
     It also computes ways to merge them
 
     Important parameters:
-        mingap: the smallest space between two segments (otherwise merge them(
+        mingap: the smallest space between two segments (otherwise merge them)
         minlength: the smallest size of a segment (otherwise delete it)
         ignoreInsideEnvelope: whether you keep the superset of a set of segments or the individuals when merging
         maxlength: the largest size of a segment (currently unused)
@@ -31,7 +31,7 @@ class Segment:
     See also the species-specific segmentation in WaveletSegment
     """
 
-    def __init__(self,data,sg,sp,fs,window_width=256,incr=128):
+    def __init__(self,data,sg,sp,fs,window_width=256,incr=128,mingap=0.3,minlength=0.2):
         self.data = data
         self.fs = fs
         # Spectrogram
@@ -41,6 +41,8 @@ class Segment:
         # These are the spectrogram params. Needed to compute times.
         self.window_width = window_width
         self.incr = incr
+        self.mingap = mingap
+        self.minlength = minlength
 
     def setNewData(self, data, sg, fs, window_width, incr):
         # To be called when a new sound file is loaded
@@ -112,10 +114,14 @@ class Segment:
             segs.append([a[0],a[1]])
         return segs
 
-    def checkSegmentLength(self,segs, mingap=0.3, minlength=0.2, maxlength=5.0):
+    def checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0):
         """ Checks whether start/stop segments are long enough
         These are species specific!
         """
+        if mingap == 0:
+            mingap = self.mingap
+        if minlength == 0:
+            minlength = self.minlength
         # TODO: Doesn't currently use maxlength
         for i in range(len(segs))[-1::-1]:
             if i<len(segs)-1:
