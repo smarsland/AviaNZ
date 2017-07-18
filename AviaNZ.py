@@ -3168,10 +3168,10 @@ class AviaNZ(QMainWindow):
         # bg = np.empty((int(self.params['width']), int(self.params['height']), 4), dtype=np.ubyte)
         # but its not an independent file to be added to the project!
         else:
-            filename = QFileDialog.getSaveFileName(self, "Save Image");
+            filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.png *.xpm *.jpg)");
             # print filename
             import scipy.misc
-            scipy.misc.imsave(filename, self.sg)
+            scipy.misc.imsave('image.jpeg', np.flip(np.transpose(self.sg),0))
 
 # ============
 # Various actions: deleting segments, saving, quitting
