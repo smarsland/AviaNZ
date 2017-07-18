@@ -3166,7 +3166,7 @@ class AviaNZ(QMainWindow):
         # bg = np.empty((self.params['width'], self.params['height'], 4), dtype=np.ubyte)
         # to
         # bg = np.empty((int(self.params['width']), int(self.params['height']), 4), dtype=np.ubyte)
-        # but its not an independent file to be added to the project!
+        # but its not an independent file to be added to the project! So
         else:
             filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.png *.xpm *.jpg)");
             # print filename
