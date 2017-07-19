@@ -66,6 +66,9 @@ from openpyxl import load_workbook, Workbook
 # Integrate the wavelet segmentation
     # Remove the code that is in SignalProc and use that one
 
+# The image saving doesn't work under windows due to a bug in pyqtgraph exporter. It's a simple fix, but we can't seem to subclass in order to avoid changing their code.
+# Need to look into the subclassing init problem
+
 # At times the program does not respond and ask to repair/close (e.g. when move the overview slider fast or something like that).
 # Need to work on memory management!
 
@@ -3157,7 +3160,8 @@ class AviaNZ(QMainWindow):
 
     def saveImage(self): # ??? it doesn't save the image
         if platform.system() == 'Darwin':
-            import pyqtgraph.exporters as pge
+            #import pyqtgraph.exporters as pge
+            import ImageExporter as pge
             filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
             exporter = pge.ImageExporter(self.p_spec)
             exporter.export(filename)
