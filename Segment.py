@@ -264,6 +264,7 @@ class Segment:
         # Assumes that spectrogram is not normalised
         maxFreqs = 10. * np.log10(np.max(self.sg, axis = 1))
         """
+        maxFreqs = 10. * np.log10(np.max(self.sg, axis=1))
         from scipy.signal import medfilt
         maxFreqs = medfilt(maxFreqs,21)
         biggest = np.max(maxFreqs)
