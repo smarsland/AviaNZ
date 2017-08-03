@@ -174,6 +174,9 @@ class AviaNZ(QMainWindow):
             self.genConfigFile()
             self.saveConfig=True
             self.configfile = 'AviaNZconfig.txt'
+        #     why don't we save it now...
+            print "Saving config file"
+            json.dump(self.config, open(self.configfile, 'wb'))
 
         # The data structures for the segments
         self.listLabels = []
@@ -243,10 +246,11 @@ class AviaNZ(QMainWindow):
         self.useAmplitudeTick.setChecked(self.config['showAmplitudePlot'])
         self.useAmplitude = True
 
-        self.useFilesTick = specMenu.addAction("Show list of files", self.useFilesCheck)
+        self.useFilesTick = specMenu.addAction("Show file list", self.useFilesCheck)
         self.useFilesTick.setCheckable(True)
         self.useFilesTick.setChecked(self.config['showListofFiles'])
 
+        # this can go under "Change interface settings"
         self.showOverviewSegsTick = specMenu.addAction("Show annotation overview", self.showOverviewSegsCheck)
         self.showOverviewSegsTick.setCheckable(True)
         self.showOverviewSegsTick.setChecked(self.config['showAnnotationOverview'])
@@ -260,12 +264,6 @@ class AviaNZ(QMainWindow):
         self.dragRectTransparent = specMenu.addAction("Make dragged boxes transparent", self.dragRectsTransparent)
         self.dragRectTransparent.setCheckable(True)
         self.dragRectTransparent.setChecked(self.config['transparentBoxes'])
-
-        specMenu.addSeparator()
-
-        self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
-        self.readonly.setCheckable(True)
-        self.readonly.setChecked(False)
 
         specMenu.addSeparator()
 
@@ -294,7 +292,7 @@ class AviaNZ(QMainWindow):
             self.showInvSpec.setChecked(False)
 
         # if self.DOC==False:
-        self.redoaxis = specMenu.addAction("Make frequency axis tight", self.redoFreqAxis)
+        # self.redoaxis = specMenu.addAction("Make frequency axis tight", self.redoFreqAxis)
 
         # specMenu.addSeparator()
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
@@ -304,7 +302,14 @@ class AviaNZ(QMainWindow):
         self.showFundamental.setChecked(False)
 
         specMenu.addSeparator()
+        self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
+        self.readonly.setCheckable(True)
+        self.readonly.setChecked(self.config['readOnly'])
+
         specMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
+
+        specMenu.addSeparator()
+        specMenu.addAction("Interface settings", self.changeSettings)
 
         actionMenu = self.menuBar().addMenu("&Actions")
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
@@ -417,6 +422,7 @@ class AviaNZ(QMainWindow):
             # User interface parameters
             'showAmplitudePlot': True,
             'showAnnotationOverview': True,
+            'readOnly': False,
             'dragBoxes': False,
             'transparentBoxes': False,
             'showListofFiles': True,
@@ -426,7 +432,12 @@ class AviaNZ(QMainWindow):
             'saveCorrections': True,
 
             'operator': 'Stephen',
-            'reviewer': 'Stephen'
+            'reviewer': 'Stephen',
+
+            'fs_start':0,
+            'fs_end':0,
+
+            'window':'Hann'
         }
 
     def createFrame(self):
@@ -1215,36 +1226,37 @@ class AviaNZ(QMainWindow):
     def showFundamentalFreq(self):
         """ Calls the SignalProc class to compute, and then draws the fundamental frequency.
         Uses the yin algorithm. """
-        if self.showFundamental.isChecked():
-            self.statusLeft.setText("Drawing fundamental frequency...")
-            pitch, y, minfreq, W = self.seg.yin()
-            ind = np.squeeze(np.where(pitch>minfreq))
-            pitch = pitch[ind]
-            ind = ind*W/(self.config['window_width'])
-            x = (pitch*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
+        with pg.BusyCursor():
+            if self.showFundamental.isChecked():
+                self.statusLeft.setText("Drawing fundamental frequency...")
+                pitch, y, minfreq, W = self.seg.yin()
+                ind = np.squeeze(np.where(pitch>minfreq))
+                pitch = pitch[ind]
+                ind = ind*W/(self.config['window_width'])
+                x = (pitch*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
 
-            # TODO: Fit a spline and draw that instead
-            #from scipy.interpolate import interp1d
-            #f = interp1d(x, ind, kind='cubic')
-            #self.sg[ind,x] = 1
+                # TODO: Fit a spline and draw that instead
+                #from scipy.interpolate import interp1d
+                #f = interp1d(x, ind, kind='cubic')
+                #self.sg[ind,x] = 1
 
-            # Get the individual pieces
-            segs = self.seg.identifySegments(ind,maxgap=10,minlength=5)
-            count = 0
-            self.segmentPlots = []
-            for s in segs:
-                count += 1
-                s[0] = s[0] * self.sampleRate / float(self.config['incr'])
-                s[1] = s[1] * self.sampleRate / float(self.config['incr'])
-                i = np.where((ind>s[0]) & (ind<s[1]))
-                self.segmentPlots.append(pg.PlotDataItem())
-                self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=1))
-                self.p_spec.addItem(self.segmentPlots[-1])
-        else:
-            self.statusLeft.setText("Removing fundamental frequency...")
-            for r in self.segmentPlots:
-                self.p_spec.removeItem(r)
-        self.statusLeft.setText("Ready")
+                # Get the individual pieces
+                segs = self.seg.identifySegments(ind,maxgap=10,minlength=5)
+                count = 0
+                self.segmentPlots = []
+                for s in segs:
+                    count += 1
+                    s[0] = s[0] * self.sampleRate / float(self.config['incr'])
+                    s[1] = s[1] * self.sampleRate / float(self.config['incr'])
+                    i = np.where((ind>s[0]) & (ind<s[1]))
+                    self.segmentPlots.append(pg.PlotDataItem())
+                    self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=1))
+                    self.p_spec.addItem(self.segmentPlots[-1])
+            else:
+                self.statusLeft.setText("Removing fundamental frequency...")
+                for r in self.segmentPlots:
+                    self.p_spec.removeItem(r)
+            self.statusLeft.setText("Ready")
 
     # def showFundamentalFreq2(self):
     #     # This and the next function are to check whether or not yaapt or harvest are any good. They aren't.
@@ -1295,11 +1307,12 @@ class AviaNZ(QMainWindow):
     def medianFilterSpec(self):
         """ Median filter the spectrogram. To be used in conjunction with spectrogram inversion. """
         # TODO: Play with this
-        self.statusLeft.setText("Filtering...")
-        from scipy.ndimage.filters import median_filter
-        median_filter(self.sg,size=(100,20))
-        self.specPlot.setImage(self.sg)
-        self.statusLeft.setText("Ready")
+        with pg.BusyCursor():
+            self.statusLeft.setText("Filtering...")
+            from scipy.ndimage.filters import median_filter
+            median_filter(self.sg,size=(100,20))
+            self.specPlot.setImage(self.sg)
+            self.statusLeft.setText("Ready")
 
     def denoiseImage(self):
         """ Denoise the spectrogram. To be used in conjunction with spectrogram inversion. """
@@ -2152,10 +2165,13 @@ class AviaNZ(QMainWindow):
     def showFirstPage(self):
         # After the HumanClassify dialogs have closed, need to show the correct data on the screen
         # Returns to the page user started with
-        self.currentFileSection = self.currentPage
-        self.prepare5minMove()
-        self.next5mins.setEnabled(True)
-        self.prev5mins.setEnabled(False)
+        if self.config['maxFileShow']<self.datalength/self.sampleRate:
+            print self.datalength, self.sampleRate
+            print self.config['maxFileShow']
+            self.currentFileSection = self.currentPage
+            self.prepare5minMove()
+            self.next5mins.setEnabled(True)
+            self.prev5mins.setEnabled(False)
 
     def humanClassifyDialog1(self):
         """ Create the dialog that shows calls to the user for verification.
@@ -2477,13 +2493,13 @@ class AviaNZ(QMainWindow):
                                 file.close()
         # Want to show a page at the end, so make it the first one
         self.showFirstPage()
-        self.statusLeft.setText("Ready")
+        self.statusLeft.setText("Ready") #Todo: why updated segments doesn't save when no paging? (short files)
 
     def showSpectrogramDialog(self):
         """ Create the spectrogram dialog when the button is pressed.
         """
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq)
+            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq, self.sampleRate)
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
@@ -2503,61 +2519,62 @@ class AviaNZ(QMainWindow):
             msg.setWindowTitle("Error")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
-        self.statusLeft.setText("Updating the spectrogram...")
-        self.sp.setWidth(int(str(window_width)), int(str(incr)))
-        oldSpecy = np.shape(self.sg)[1]
-        sgRaw = self.sp.spectrogram(self.audiodata,window=str(windowType),mean_normalise=mean_normalise,onesided=True,multitaper=multitaper)
-        maxsg = np.min(sgRaw)
-        self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+        with pg.BusyCursor():
+            self.statusLeft.setText("Updating the spectrogram...")
+            self.sp.setWidth(int(str(window_width)), int(str(incr)))
+            oldSpecy = np.shape(self.sg)[1]
+            sgRaw = self.sp.spectrogram(self.audiodata,window=str(windowType),mean_normalise=mean_normalise,onesided=True,multitaper=multitaper)
+            maxsg = np.min(sgRaw)
+            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
 
-        # If the size of the spectrogram has changed, need to update the positions of things
-        if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
-            self.config['incr'] = int(str(incr))
-            self.config['window_width'] = int(str(window_width))
-            self.changeWidth(self.widthWindow.value())
-            # Update the positions of the segments
-            self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
-            for s in range(len(self.listRectanglesa2)):
-                if self.listRectanglesa1[s] is not None:
-                    x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
-                    x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
-                    if type(self.listRectanglesa2[s]) == self.ROItype:
-                        #print self.listRectanglesa2[s].pos().y(), self.listRectanglesa2[s].size().y()
-                        y1 = self.listRectanglesa2[s].pos().y()/oldSpecy
-                        y2 = self.listRectanglesa2[s].size().y()/oldSpecy
-                        #print y1, y2
-                        self.listRectanglesa2[s].setPos(pg.Point(x1, y1*np.shape(self.sg)[1]))
-                        self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, y2*np.shape(self.sg)[1]))
-                        #print self.listRectanglesa2[s].pos().y(), self.listRectanglesa2[s].size().y()
-                    else:
-                        self.listRectanglesa2[s].setRegion([x1, x2])
-                    self.listLabels[s].setPos(x1,self.textpos)
+            # If the size of the spectrogram has changed, need to update the positions of things
+            if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
+                self.config['incr'] = int(str(incr))
+                self.config['window_width'] = int(str(window_width))
+                self.changeWidth(self.widthWindow.value())
+                # Update the positions of the segments
+                self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
+                for s in range(len(self.listRectanglesa2)):
+                    if self.listRectanglesa1[s] is not None:
+                        x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
+                        x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
+                        if type(self.listRectanglesa2[s]) == self.ROItype:
+                            #print self.listRectanglesa2[s].pos().y(), self.listRectanglesa2[s].size().y()
+                            y1 = self.listRectanglesa2[s].pos().y()/oldSpecy
+                            y2 = self.listRectanglesa2[s].size().y()/oldSpecy
+                            #print y1, y2
+                            self.listRectanglesa2[s].setPos(pg.Point(x1, y1*np.shape(self.sg)[1]))
+                            self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, y2*np.shape(self.sg)[1]))
+                            #print self.listRectanglesa2[s].pos().y(), self.listRectanglesa2[s].size().y()
+                        else:
+                            self.listRectanglesa2[s].setRegion([x1, x2])
+                        self.listLabels[s].setPos(x1,self.textpos)
 
-            # Update the axis
-            FreqRange = (self.maxFreq - self.minFreq)/1000.
-            self.specaxis.setTicks([[(0, self.minFreq / 1000.),
-                                     (np.shape(self.sg)[1] / 4, self.minFreq / 1000. + FreqRange / 4.),
-                                     (np.shape(self.sg)[1] / 2, self.minFreq / 1000. + FreqRange / 2.),
-                                     (3 * np.shape(self.sg)[1] / 4, self.minFreq / 1000. + 3 * FreqRange / 4.),
-                                     (np.shape(self.sg)[1], self.minFreq / 1000. + FreqRange)]])
+                # Update the axis
+                FreqRange = (self.maxFreq - self.minFreq)/1000.
+                self.specaxis.setTicks([[(0, self.minFreq / 1000.),
+                                         (np.shape(self.sg)[1] / 4, self.minFreq / 1000. + FreqRange / 4.),
+                                         (np.shape(self.sg)[1] / 2, self.minFreq / 1000. + FreqRange / 2.),
+                                         (3 * np.shape(self.sg)[1] / 4, self.minFreq / 1000. + 3 * FreqRange / 4.),
+                                         (np.shape(self.sg)[1], self.minFreq / 1000. + FreqRange)]])
 
-            # Redraw everything and redraw it
-            self.removeSegments(delete=False)
-            for r in self.SegmentRects:
-                self.p_overview2.removeItem(r)
-            self.SegmentRects = []
-            self.p_overview.removeItem(self.overviewImageRegion)
+                # Redraw everything and redraw it
+                self.removeSegments(delete=False)
+                for r in self.SegmentRects:
+                    self.p_overview2.removeItem(r)
+                self.SegmentRects = []
+                self.p_overview.removeItem(self.overviewImageRegion)
 
-            self.drawOverview()
-            self.drawfigMain()
-            if hasattr(self, 'seg'):
-                self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'],
-                                    self.config['incr'])
+                self.drawOverview()
+                self.drawfigMain()
+                if hasattr(self, 'seg'):
+                    self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'],
+                                        self.config['incr'])
 
-        if minFreq != self.minFreq or maxFreq!=self.maxFreq:
-            self.redoFreqAxis(minFreq,maxFreq)
+            if minFreq != self.minFreq or maxFreq!=self.maxFreq:
+                self.redoFreqAxis(minFreq,maxFreq)
 
-        self.statusLeft.setText("Ready")
+            self.statusLeft.setText("Ready")
 
     def denoiseDialog(self):
         """ Create the denoising dialog when the relevant button is pressed.
@@ -2590,90 +2607,91 @@ class AviaNZ(QMainWindow):
         Calls the denoiser and then plots the updated data.
         """
         # TODO: should it be saved automatically, or a button added?
-        [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width,trimaxis] = self.denoiseDialog.getValues()
-        self.backup()
-        self.statusLeft.setText("Denoising...")
-        if not hasattr(self, 'waveletDenoiser'):
-            self.waveletDenoiser = Wavelets.Wavelets(data=self.audiodata,wavelet=None,maxLevel=self.config['maxSearchDepth'])
+        with pg.BusyCursor():
+            [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width,trimaxis] = self.denoiseDialog.getValues()
+            self.backup()
+            self.statusLeft.setText("Denoising...")
+            if not hasattr(self, 'waveletDenoiser'):
+                self.waveletDenoiser = Wavelets.Wavelets(data=self.audiodata,wavelet=None,maxLevel=self.config['maxSearchDepth'])
 
-        if str(alg) == "Wavelets":
-            if thrType is True:
-                type = 'Soft'
+            if str(alg) == "Wavelets":
+                if thrType is True:
+                    type = 'Soft'
+                else:
+                    type = 'Hard'
+                if depthchoice:
+                    depth = None
+                else:
+                    depth = int(str(depth))
+                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
+            elif str(alg) == "Bandpass --> Wavelets":
+                if thrType is True:
+                    type = 'soft'
+                else:
+                    type = 'hard'
+                if depthchoice:
+                    depth = None
+                else:
+                    depth = int(str(depth))
+                self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
+                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
+            elif str(alg) == "Wavelets --> Bandpass":
+                if thrType is True:
+                    type = 'soft'
+                else:
+                    type = 'hard'
+                if depthchoice:
+                    depth = None
+                else:
+                    depth = int(str(depth))
+                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
+                self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
+            elif str(alg) == "Bandpass":
+                self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
+                #self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
+                if trimaxis:
+                    self.redoFreqAxis(int(str(start)), int(str(end)))
+            elif str(alg) == "Butterworth Bandpass":
+                self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
             else:
-                type = 'Hard'
-            if depthchoice:
-                depth = None
+                #"Median Filter"
+                self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
+
+            # The temp files work properly on a Mac, not on Windows
+            if platform.system() == 'Darwin':
+                filename = 'temp.wav'
             else:
-                depth = int(str(depth))
-            self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
-        elif str(alg) == "Bandpass --> Wavelets":
-            if thrType is True:
-                type = 'soft'
-            else:
-                type = 'hard'
-            if depthchoice:
-                depth = None
-            else:
-                depth = int(str(depth))
-            self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
-            self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
-        elif str(alg) == "Wavelets --> Bandpass":
-            if thrType is True:
-                type = 'soft'
-            else:
-                type = 'hard'
-            if depthchoice:
-                depth = None
-            else:
-                depth = int(str(depth))
-            self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
-            self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
-        elif str(alg) == "Bandpass":
-            self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
-            #self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
+                import tempfile
+                f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
+                filename = f.name
+
+            wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits',sampwidth=2)
+
+            #open the temp file
+            wavobj = wavio.read(filename)
+            self.sampleRate = wavobj.rate
+            self.audiodata = wavobj.data
+            if self.audiodata.dtype is not 'float':
+                self.audiodata = self.audiodata.astype('float') #/ 32768.0
+
+            self.audiodata=self.audiodata[:,0]
+
+            sgRaw = self.sp.spectrogram(self.audiodata,mean_normalise=True,onesided=True,multitaper=False)
+            maxsg = np.min(sgRaw)
+            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+            self.overviewImage.setImage(self.sg)
+
+            self.specPlot.setImage(self.sg)
+            self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
+            self.minFreq = int(str(start))
+            self.maxFreq = int(str(end))
+
             if trimaxis:
-                self.redoFreqAxis(int(str(start)), int(str(end)))
-        elif str(alg) == "Butterworth Bandpass":
-            self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
-        else:
-            #"Median Filter"
-            self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
+                self.redoFreqAxis()
 
-        # The temp files work properly on a Mac, not on Windows
-        if platform.system() == 'Darwin':
-            filename = 'temp.wav'
-        else:
-            import tempfile
-            f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
-            filename = f.name
+            self.setColourLevels()
 
-        wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits',sampwidth=2)
-
-        #open the temp file
-        wavobj = wavio.read(filename)
-        self.sampleRate = wavobj.rate
-        self.audiodata = wavobj.data
-        if self.audiodata.dtype is not 'float':
-            self.audiodata = self.audiodata.astype('float') #/ 32768.0
-
-        self.audiodata=self.audiodata[:,0]
-
-        sgRaw = self.sp.spectrogram(self.audiodata,mean_normalise=True,onesided=True,multitaper=False)
-        maxsg = np.min(sgRaw)
-        self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
-        self.overviewImage.setImage(self.sg)
-
-        self.specPlot.setImage(self.sg)
-        self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
-        self.minFreq = int(str(start))
-        self.maxFreq = int(str(end))
-
-        if trimaxis:
-            self.redoFreqAxis()
-
-        self.setColourLevels()
-
-        self.statusLeft.setText("Ready")
+            self.statusLeft.setText("Ready")
 
         # TODO: Make the temp file playable
         # # media_obj = phonon.Phonon.MediaObject(self)
@@ -2752,88 +2770,89 @@ class AviaNZ(QMainWindow):
         [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species] = self.segmentDialog.getValues()
 
         #[alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,depth,thrType,thr,wavelet,bandchoice,start,end,species] = self.segmentDialog.getValues()
-        species = str(species)
-        if species=='Choose species...':
-            species='all'
-        #if not hasattr(self,'seg'):
-        #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
-        self.statusLeft.setText("Segmenting...")
-        if str(alg) == "Default":
-            newSegments = self.seg.bestSegments()
-        elif str(alg) == "Median Clipping":
-            newSegments = self.seg.medianClip(float(str(medThr)),self.config['minSegment'])
-        elif str(alg) == "Harma":
-            newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),self.config['minSegment'])
-        elif str(alg) == "Power":
-            newSegments = self.seg.segmentByPower(float(str(PowerThr)))
-        elif str(alg) == "Onsets":
-            newSegments = self.seg.onsets()
-        elif str(alg) == "Fundamental Frequency":
-            newSegments, pitch, times = self.seg.yin(int(str(minfreq)),int(str(minperiods)),float(str(Yinthr)),int(str(window)),returnSegs=True)
-        elif str(alg) == "FIR":
-            newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
-        elif str(alg)=="Wavelets":
-            newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
-        elif str(alg)=="Cross-Correlation":
-            self.findMatches(float(str(CCThr1)))
-            newSegments = []
+        with pg.BusyCursor():
+            species = str(species)
+            if species=='Choose species...':
+                species='all'
+            #if not hasattr(self,'seg'):
+            #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
+            self.statusLeft.setText("Segmenting...")
+            if str(alg) == "Default":
+                newSegments = self.seg.bestSegments()
+            elif str(alg) == "Median Clipping":
+                newSegments = self.seg.medianClip(float(str(medThr)),self.config['minSegment'])
+            elif str(alg) == "Harma":
+                newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),self.config['minSegment'])
+            elif str(alg) == "Power":
+                newSegments = self.seg.segmentByPower(float(str(PowerThr)))
+            elif str(alg) == "Onsets":
+                newSegments = self.seg.onsets()
+            elif str(alg) == "Fundamental Frequency":
+                newSegments, pitch, times = self.seg.yin(int(str(minfreq)),int(str(minperiods)),float(str(Yinthr)),int(str(window)),returnSegs=True)
+            elif str(alg) == "FIR":
+                newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
+            elif str(alg)=="Wavelets":
+                newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
+            elif str(alg)=="Cross-Correlation":
+                self.findMatches(float(str(CCThr1)))
+                newSegments = []
 
-            # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
-            # # but ML is extremely slow and crappy. So I decided to use just the wavelets
-            # newSegmentsML = WaveletSegment.findCalls_learn(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
-            # print np.shape(newSegmentsML),type(newSegmentsML), newSegmentsML
-            #
-            # newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species='kiwi',trainTest=False)
-            # # print type(newSegments),newSegments
-            # import itertools
-            # newSegments=list(itertools.chain.from_iterable(newSegments))
-            # temp=np.zeros(len(newSegmentsML))
-            # for i in newSegments:
-            #     temp[i]=1
-            # newSegments=temp.astype(int)
-            # newSegments=newSegments.tolist()
-            # print np.shape(newSegments), type(newSegments), newSegments
-            #
-            # newSegmentsDef=np.minimum.reduce([newSegmentsML,newSegments])
-            # newSegmentsDef=newSegmentsDef.tolist()
-            # print "newSegmentsDef:", np.shape(newSegmentsDef), type(newSegmentsDef), newSegmentsDef
-            # C=[(a and not b) or (not a and b) for a,b in zip(newSegmentsML,newSegments)]
-            # newSegmentsPb=[int(c) for c in C]
-            # print "newSegmentsPosi:", np.shape(newSegmentsPb), type(newSegmentsPb), newSegmentsPb
-            #
-            # # convert these segments to [start,end] format
-            # newSegmentsDef=self.binary2seg(newSegmentsDef)
-            # newSegmentsPb=self.binary2seg(newSegmentsPb)
+                # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
+                # # but ML is extremely slow and crappy. So I decided to use just the wavelets
+                # newSegmentsML = WaveletSegment.findCalls_learn(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
+                # print np.shape(newSegmentsML),type(newSegmentsML), newSegmentsML
+                #
+                # newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species='kiwi',trainTest=False)
+                # # print type(newSegments),newSegments
+                # import itertools
+                # newSegments=list(itertools.chain.from_iterable(newSegments))
+                # temp=np.zeros(len(newSegmentsML))
+                # for i in newSegments:
+                #     temp[i]=1
+                # newSegments=temp.astype(int)
+                # newSegments=newSegments.tolist()
+                # print np.shape(newSegments), type(newSegments), newSegments
+                #
+                # newSegmentsDef=np.minimum.reduce([newSegmentsML,newSegments])
+                # newSegmentsDef=newSegmentsDef.tolist()
+                # print "newSegmentsDef:", np.shape(newSegmentsDef), type(newSegmentsDef), newSegmentsDef
+                # C=[(a and not b) or (not a and b) for a,b in zip(newSegmentsML,newSegments)]
+                # newSegmentsPb=[int(c) for c in C]
+                # print "newSegmentsPosi:", np.shape(newSegmentsPb), type(newSegmentsPb), newSegmentsPb
+                #
+                # # convert these segments to [start,end] format
+                # newSegmentsDef=self.binary2seg(newSegmentsDef)
+                # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
-        # Generate annotation friendly output. That's enough for interface?
-        # Merge neighbours for wavelet seg
-        if str(alg)=="Wavelets":
-            #newSegments=self.mergeSeg(newSegments)
-            if len(newSegments)>0:
-                for seg in newSegments:
-                    self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
-                                    species.title() + "?")
-        else:
-            if len(newSegments)>0:
-                for seg in newSegments:
-                    self.addSegment(float(seg[0]),float(seg[1]))
+            # Generate annotation friendly output. That's enough for interface?
+            # Merge neighbours for wavelet seg
+            if str(alg)=="Wavelets":
+                #newSegments=self.mergeSeg(newSegments)
+                if len(newSegments)>0:
+                    for seg in newSegments:
+                        self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
+                                        species.title() + "?")
+            else:
+                if len(newSegments)>0:
+                    for seg in newSegments:
+                        self.addSegment(float(seg[0]),float(seg[1]))
 
-        # Save the excel file
-        self.saveDetections(newSegments,mode='Excel',species=species)
+            # Save the excel file
+            self.saveDetections(newSegments,mode='Excel',species=species)
 
-        # Generate Binary output ('Binary)
-        import math
-        n = math.ceil(float(self.datalength) / self.sampleRate)
-        detected = np.zeros(int(n))
-        for seg in newSegments:
-            for a in range(len(detected)):
-                if math.floor(seg[0]) <= a and a < math.ceil(seg[1]):
-                    detected[a] = 1
-        self.saveDetections(detected, mode='Binary',species=species)  # append
+            # Generate Binary output ('Binary)
+            import math
+            n = math.ceil(float(self.datalength) / self.sampleRate)
+            detected = np.zeros(int(n))
+            for seg in newSegments:
+                for a in range(len(detected)):
+                    if math.floor(seg[0]) <= a and a < math.ceil(seg[1]):
+                        detected[a] = 1
+            self.saveDetections(detected, mode='Binary',species=species)  # append
 
-        self.lenNewSegments = len(newSegments)
-        self.segmentDialog.undo.setEnabled(True)
-        self.statusLeft.setText("Ready")
+            self.lenNewSegments = len(newSegments)
+            self.segmentDialog.undo.setEnabled(True)
+            self.statusLeft.setText("Ready")
 
     def segment_undo(self):
         """ Listener for undo button in segmentation dialog.
@@ -2989,19 +3008,20 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             return
         else:
-            # TODO: Ask for species; brown kiwi for now
-            # TODO: ***** TIDY UP WAVELET SEG, USE THIS!
-            for i in range(len(self.segments)):
-                seglength = np.abs(self.segments[i][1] - self.segments[i][0])
-                if seglength <= 1:
-                    # Recognise as is
-                    label = WaveletSegment.computeWaveletEnergy_1s(self.audiodata[self.segments[i][0]:self.segments[i][1]],wavelet='dmey2')
-                    self.updateText(label,i)
-                else:
-                    for sec in range(np.ceil(seglength)):
-                        label = WaveletSegment.computeWaveletEnergy_1s(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]],wavelet='dmey2')
-                        # TODO: Check if the labels match, decide what to do if not
-                    self.updateText(label,i)
+            with pg.BusyCursor():
+                # TODO: Ask for species; brown kiwi for now
+                # TODO: ***** TIDY UP WAVELET SEG, USE THIS!
+                for i in range(len(self.segments)):
+                    seglength = np.abs(self.segments[i][1] - self.segments[i][0])
+                    if seglength <= 1:
+                        # Recognise as is
+                        label = WaveletSegment.computeWaveletEnergy_1s(self.audiodata[self.segments[i][0]:self.segments[i][1]],wavelet='dmey2')
+                        self.updateText(label,i)
+                    else:
+                        for sec in range(np.ceil(seglength)):
+                            label = WaveletSegment.computeWaveletEnergy_1s(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]],wavelet='dmey2')
+                            # TODO: Check if the labels match, decide what to do if not
+                        self.updateText(label,i)
 
     def recognise(self):
         # This will eventually call methods to do automatic recognition
@@ -3159,8 +3179,11 @@ class AviaNZ(QMainWindow):
         self.statusRight.setText("Operator: " + self.config['operator'] + ", Reviewer: "+self.config['reviewer'])
 
     def saveImage(self): # ??? it doesn't save the image
+        # filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
+        # exporter = SupportClasses.FixedImageExporter(self.p_spec)
+        # exporter.export(filename)
         if platform.system() == 'Darwin':
-            #import pyqtgraph.exporters as pge
+            import pyqtgraph.exporters as pge
             import ImageExporter as pge
             filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
             exporter = pge.ImageExporter(self.p_spec)
@@ -3170,12 +3193,28 @@ class AviaNZ(QMainWindow):
         # bg = np.empty((self.params['width'], self.params['height'], 4), dtype=np.ubyte)
         # to
         # bg = np.empty((int(self.params['width']), int(self.params['height']), 4), dtype=np.ubyte)
-        # but its not an independent file to be added to the project! So
+        # but its not an independent file to be added to the project!
+        # the following works for Windows.
         else:
-            filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.png *.xpm *.jpg)");
-            # print filename
+            filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.jpeg *.jpg *.png)");
+            print filename
             import scipy.misc
-            scipy.misc.imsave('image.jpeg', np.flip(np.transpose(self.sg),0))
+            try:
+                scipy.misc.imsave(str(filename), np.flip(np.transpose(self.sg),0))
+            except:
+                pass
+
+    def changeSettings(self):
+        """ Create the dialog when the Interface settings menu is pressed.
+        """
+        if not hasattr(self,'interfaceSettingsDialog'):
+            self.interfaceSettingsDialog = Dialogs.InterfaceSettings()     #(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq)
+        # self.interfaceSettingsDialog.show()
+        # self.interfaceSettingsDialog.activateWindow()
+        # self.interfaceSettingsDialog.activate.clicked.connect(self.spectrogram)
+        # This next line was for dynamic update.
+        # self.connect(self.spectrogramDialog, SIGNAL("changed"), self.spectrogram)
+
 
 # ============
 # Various actions: deleting segments, saving, quitting
@@ -3298,9 +3337,10 @@ class AviaNZ(QMainWindow):
         else:
             self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
         self.saveSegments()
-        if self.saveConfig == True:
-            print "Saving config file"
-            json.dump(self.config, open(self.configfile, 'wb'))
+        # TODO: save changes made to the config file
+        # if self.saveConfig == True:
+        #     print "Saving config file"
+        #     json.dump(self.config, open(self.configfile, 'wb'))
         QApplication.quit()
 
 # =============
