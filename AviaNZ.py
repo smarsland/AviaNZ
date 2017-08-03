@@ -3337,7 +3337,7 @@ class AviaNZ(QMainWindow):
         else:
             self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
         self.saveSegments()
-        # TODO: save changes made to the config file
+        # TODO: save changes made to the config file during the session
         # if self.saveConfig == True:
         #     print "Saving config file"
         #     json.dump(self.config, open(self.configfile, 'wb'))
