@@ -3344,8 +3344,6 @@ class AviaNZ(QMainWindow):
         QApplication.quit()
 
 # =============
-
-
 # Start the application
 app = QApplication(sys.argv)
 
