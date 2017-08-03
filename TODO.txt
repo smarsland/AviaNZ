@@ -23,6 +23,13 @@ We should start to decide what make a specialised filter
     Trained classifiers
 
 *** Exporter problem
+Exporter for mac but scipy.misc for Windows - it works fine
+Can we stick to one? Check scipy.misc on mac
+
+paging - curser reading time (bottom left) to be fixed
+
+spectrogram paramaters - have the option to choose visible frequency range (e.g. 0-8000 Hz) but
+cannot undo and segment labels get disappear!
 
 Wavelet denoising with best tree?
 
@@ -47,6 +54,7 @@ get name from standard files and use it
 NP:
 
 *** Ensure saving of the config file and the data files on Windows
+# done
 
 Test the idea of using the wavelet nodes with either
     (a or b or c) and not (d or e)
@@ -63,6 +71,7 @@ Make a pretty (simple) version of the Process File dialog
         (e.g. SIPO dataset is rainy, so almost all the recordings turned out to be positive due to rain)
 
 Enable parameter setting
+# partially done TODO: merge changes done by different ways (parameter tree and other interface shortcuts)
 
 Paper!
 
@@ -83,6 +92,7 @@ Segmentation experiments
 # SM: pysox
 
     NP: Make it possible to change parameters (look into pyqtgraph ParameterTree)
+    done
 
     ??: What to do with stereo sound? How about consistent sample rates?
 
