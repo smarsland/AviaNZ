@@ -1593,7 +1593,7 @@ class AviaNZ(QMainWindow):
             indexy = int(mousePoint.y())
             if indexx > 0 and indexx < np.shape(self.sg)[0] and indexy > 0 and indexy < np.shape(self.sg)[1]:
                 seconds = self.convertSpectoAmpl(mousePoint.x()) % 60
-                minutes = int((self.convertSpectoAmpl(mousePoint.x()) / 60) % 60)
+                minutes = int(((self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] )/ 60) % 60)
                 self.pointData.setText('time=%d:%0.2f (m:s), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1], self.sg[indexx, indexy]))
 
     def mouseClicked_ampl(self,evt):
@@ -2744,6 +2744,8 @@ class AviaNZ(QMainWindow):
         if end is None:
             end = self.maxFreq
 
+        print start, end
+
         height = self.sampleRate / 2. / np.shape(self.sg)[1]
 
         self.overviewImage.setImage(self.sg[:,int(float(start)/height):int(float(end)/height)])
@@ -2870,7 +2872,7 @@ class AviaNZ(QMainWindow):
 
         # method=self.algs.currentText()
         relfname = os.path.relpath(str(self.filename), str(self.dirName))
-        eFile = self.dirName + '\DetectionSummary_' + species + '.xlsx'
+        eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
 
         if mode == 'Annotation':
             if isinstance(self.filename, str):
@@ -3179,15 +3181,15 @@ class AviaNZ(QMainWindow):
         self.statusRight.setText("Operator: " + self.config['operator'] + ", Reviewer: "+self.config['reviewer'])
 
     def saveImage(self): # ??? it doesn't save the image
-        # filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
+        filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
         # exporter = SupportClasses.FixedImageExporter(self.p_spec)
-        # exporter.export(filename)
-        if platform.system() == 'Darwin':
-            import pyqtgraph.exporters as pge
-            import ImageExporter as pge
-            filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
-            exporter = pge.ImageExporter(self.p_spec)
-            exporter.export(filename)
+        #exporter.export(filename)
+        #if platform.system() == 'Darwin':
+        import pyqtgraph.exporters as pge
+        #    import ImageExporter as pge
+        #    filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
+        exporter = pge.ImageExporter(self.p_spec)
+        exporter.export(filename)
         #for Windows to save the image, needs to typecast line 70 of ImageExporter.py
         # from
         # bg = np.empty((self.params['width'], self.params['height'], 4), dtype=np.ubyte)
@@ -3195,14 +3197,14 @@ class AviaNZ(QMainWindow):
         # bg = np.empty((int(self.params['width']), int(self.params['height']), 4), dtype=np.ubyte)
         # but its not an independent file to be added to the project!
         # the following works for Windows.
-        else:
-            filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.jpeg *.jpg *.png)");
-            print filename
-            import scipy.misc
-            try:
-                scipy.misc.imsave(str(filename), np.flip(np.transpose(self.sg),0))
-            except:
-                pass
+        #else:
+        # filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.jpeg *.jpg *.png)");
+        # print str(filename)
+        # from scipy.misc import imsave
+        # try:
+        #     imsave(str(filename), np.flip(np.transpose(self.sg),0))
+        # except:
+        #     print "here"
 
     def changeSettings(self):
         """ Create the dialog when the Interface settings menu is pressed.
