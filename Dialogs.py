@@ -11,6 +11,8 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
 import numpy as np
 import SupportClasses as SupportClasses
+import json
+from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 
 #======
 class StartScreen(QDialog):
@@ -83,6 +85,255 @@ class StartScreen(QDialog):
         return self.task
 
 #======
+class InterfaceSettings(ParameterTree):
+    def __init__(self, parent=None):
+        ParameterTree.__init__(self, parent)
+
+        try:
+            self.config = json.load(open('AviaNZconfig.txt'))
+        except:
+            print("Failed to load config file")
+
+        # print "My config #######\n", type(self.config), '\n', self.config, '\n', self.config['BirdList']
+        birdList = [str(item) for item in self.config['BirdList']]
+        bl=""
+        for i in range(len(birdList)):
+            bl+=birdList[i]
+            bl+= '\n'
+
+        params = [
+            {'name': 'Basic settings', 'type': 'group', 'children': [
+                {'name': 'Show amplitude plot', 'type': 'bool', 'value': self.config['showAmplitudePlot']},
+                {'name': 'Show file list', 'type': 'bool', 'value': self.config['showListofFiles']},
+                {'name': 'Show annotation overview', 'type': 'bool', 'value': self.config['showAnnotationOverview']},
+                {'name': 'Make read-only', 'type': 'bool', 'value': self.config['readOnly']}, ]},
+            {'name': 'Paging', 'type': 'group', 'children': [
+                {'name': 'Page size', 'type': 'int', 'value': self.config['maxFileShow'], 'limits': (5, 900), 'step': 5,
+                 'suffix': ' sec'},
+                {'name': 'Page overlap', 'type': 'int', 'value': self.config['fileOverlap'], 'limits': (0, 20), 'step': 2,
+                 'suffix': ' sec'},
+            ]},
+
+            {'name': 'Annotation', 'type': 'group', 'children': [
+                {'name': 'Drag boxes', 'type': 'bool', 'value': self.config['dragBoxes']},
+                {'name': 'Make drag boxes transparent', 'type': 'bool', 'value': self.config['transparentBoxes']},
+                {'name': 'Show annotation overview', 'type': 'bool', 'value': self.config['showAnnotationOverview']},
+                {'name': 'Auto save segments every', 'type': 'int', 'value': self.config['secsSave'], 'step': 5,
+                 'limits': (5, 900),
+                 'suffix': ' sec'},
+                {'name': 'Annotation overview cell length', 'type': 'int', 'value': self.config['widthOverviewSegment'],
+                 'limits': (5, 300), 'step': 5,
+                 'suffix': ' sec'},
+                {'name': 'Segment colours', 'type': 'group', 'children': [
+                    {'name': 'Confirmed segments', 'type': 'color', 'value': self.config['ColourNamed'][:-1],
+                     'tip': "Correctly labeled segments"},
+                    {'name': 'Possible', 'type': 'color', 'value': self.config['ColourPossible'][:-1],
+                     'tip': "Segments that need further approval"},
+                    {'name': "Don't know", 'type': 'color', 'value': self.config['ColourNone'][:-1],
+                     'tip': "Segments that are not labelled"},
+                    {'name': 'Currently selected', 'type': 'color', 'value': self.config['ColourSelected'][:-1],
+                     'tip': "Currently delected segment"},
+                ]},
+                {'name': 'Text labels', 'type': 'group', 'children': [
+                    {'name': 'Text off-set', 'type': 'int', 'value': self.config['textoffset'], 'tip': ""},
+                    {'name': 'Overlap allowed', 'type': 'int', 'value': self.config['overlap_allowed'], 'tip': ""},
+                ]},
+            ]},
+
+            {'name': 'Spectrogram', 'type': 'group', 'children': [
+                {'name': 'Window width', 'type': 'list', 'values': [256, 512, 1024], 'value': self.config['window_width']},
+                {'name': 'Increment', 'type': 'list', 'values': [128, 256, 512], 'value': self.config['incr']},
+                {'name': 'Windowing', 'type': 'list',
+                 'values': ['Hann', 'Hamming', 'Parzen', 'Welch', 'Blackman', 'Blackmanharris'],
+                 'value': self.config['window']},
+                {'name': 'Visible frequency range', 'type': 'group', 'children': [
+                    {'name': 'Start', 'type': 'int', 'value': self.config['fs_start']},
+                    {'name': 'End', 'type': 'int', 'value': self.config['fs_end']},
+                ]},
+                {'name': 'Invert color map', 'type': 'bool', 'value': self.config['invertColourMap']},
+            ]},
+
+            {'name': 'Operator/Reviewer', 'type': 'group', 'children': [
+                {'name': 'Operator', 'type': 'str', 'value': self.config['operator']},
+                {'name': 'Reviewer', 'type': 'str', 'value': self.config['reviewer']},
+            ]},
+
+            {'name': 'Visible window duration', 'type': 'group', 'children': [
+                {'name': 'Visible window width', 'type': 'int', 'value': self.config['windowWidth'], 'limits': (1, 900),
+                 'step': 1,
+                 'suffix': ' sec'},
+            ]},
+            {'name': 'Human classify', 'type': 'group', 'children': [
+                {'name': 'Show all pages', 'type': 'bool', 'value': self.config['showAllPages'],
+                 'tip': "Relates to check segments"},
+                {'name': 'Save corrections', 'type': 'bool', 'value': self.config['saveCorrections'],
+                 'tip': "This helps the developers"},
+            ]},
+
+            {'name': 'Bird list', 'type': 'group', 'children': [
+                # {'name': 'My bird list', 'type': 'list', 'values': self.config['BirdList']},
+                {'name': 'My bird list', 'type': 'text', 'value': bl},
+            ]},
+        ]
+
+        ## Create tree of Parameter objects
+        self.p = Parameter.create(name='params', type='group', children=params)
+        self.p.sigTreeStateChanged.connect(self.change)
+
+        ## Create ParameterTree widget
+        self.t = ParameterTree()
+        self.t.setParameters(self.p, showTop=False)
+        self.t.show()
+        self.t.setWindowTitle('AviaNZ - Interface Settings')
+        self.t.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.t.resize(450, 1000)
+
+    ## If anything changes in the tree, save it
+    def change(self,param, changes):
+        # print("save changes:")
+        # print self.p.getValues()
+        basicSet = self.p.getValues().get('Basic settings')
+        # print basicSet
+        # print 'Show amplitude plot-', basicSet[1].get('Show amplitude plot')[0]
+        # print 'Show file list-', basicSet[1].get('Show file list')[0]
+        # print 'Show annotation overview-', basicSet[1].get('Show annotation overview')[0]
+        # print 'Make read-only-', basicSet[1].get('Make read-only')[0]
+        #
+        pagingSet = self.p.getValues().get('Paging')
+        # print pagingSet
+        # print 'Page size-', pagingSet[1].get('Page size')[0]
+        # print 'Page overlap-', pagingSet[1].get('Page overlap')[0]
+        #
+        annotationSet = self.p.getValues().get('Annotation')
+        # print annotationSet
+        # print 'Drag boxes-', annotationSet[1].get('Drag boxes')[0]
+        # print 'Make drag boxes transparent-', annotationSet[1].get('Make drag boxes transparent')[0]
+        # print 'Show annotation overview-', annotationSet[1].get('Show annotation overview')[0]
+        # print 'Auto save segments every-', annotationSet[1].get('Auto save segments every')[0]
+        # print 'Annotation overview cell length-', annotationSet[1].get('Annotation overview cell length')[0]
+        annotationClr= annotationSet[1].get('Segment colours')
+        # print annotationClr
+        confirmed=annotationClr[1].get('Confirmed segments')[0]
+        rgbaNamed=list(confirmed.getRgb())
+        rgbaNamed[3]=rgbaNamed[3]*100/255
+        # print 'Confirmed segments-', list(confirmed.getRgb())
+        possible=annotationClr[1].get('Possible')[0]
+        rgbaPossible=list(possible.getRgb())
+        rgbaPossible[3] = rgbaPossible[3] * 100 / 255
+        # print 'Possible-', rgbaPossible
+        none=annotationClr[1].get("Don't know")[0]
+        rgbaNone = list(none.getRgb())
+        rgbaNone[3] = rgbaNone[3] * 100 / 255
+        # print "Don't know-", rgbaNone
+        selected=annotationClr[1].get('Currently selected')[0]
+        rgbaSelected = list(selected.getRgb())
+        rgbaSelected[3] = rgbaSelected[3] * 100 / 255
+        # print 'Currently selected-', list(selected.getRgb())
+        textlbl=annotationSet[1].get('Text labels')
+        # print 'Text labels-', textlbl
+        # print 'Text off-set-', textlbl[1].get('Text off-set')[0]
+        # print 'Overlap allowed-', textlbl[1].get('Overlap allowed')[0]
+        #
+        specSet = self.p.getValues().get('Spectrogram')
+        # print specSet
+        # print 'Window width-', specSet[1].get('Window width')[0]
+        # print 'Increment-', specSet[1].get('Increment')[0]
+        # print 'Windowing-', specSet[1].get('Windowing')[0]
+        visibleRange=specSet[1].get('Visible frequency range')
+        # print 'Visible frequency range-', visibleRange
+        # print 'Visible frequency range-', 'strat-', visibleRange[1].get('Start')[0], ', end-', visibleRange[1].get('End')[0]
+        # print 'Invert color map-', specSet[1].get('Invert color map')[0]
+        #
+        operatorRev=self.p.getValues().get('Operator/Reviewer')
+        # print operatorRev
+        # print 'Operator-', operatorRev[1].get('Operator')[0]
+        # print 'Reviewer-', operatorRev[1].get('Reviewer')[0]
+        #
+        windowLen=self.p.getValues().get('Visible window duration')
+        # print windowLen
+        # print 'Visible window width-', windowLen[1].get('Visible window width')[0]
+        #
+        humanClassify=self.p.getValues().get('Human classify')
+        # print humanClassify
+        # print 'Show all pages-', humanClassify[1].get('Show all pages')[0]
+        # print 'Save corrections-', humanClassify[1].get('Save corrections')[0]
+        #
+        birdList = self.p.getValues().get('Bird list')
+        # print 'My bird list-', birdList[1].get('My bird list')[0].split('\n')
+
+        print "Saving config file..."
+        configuration = {
+            # Basic settings########
+            'showAmplitudePlot': basicSet[1].get('Show amplitude plot')[0],
+            'showListofFiles': basicSet[1].get('Show file list')[0],
+            'readOnly': basicSet[1].get('Make read-only')[0],
+
+            # Paging##########
+            # Max length of file to load at one time (in seconds), and overlap with next file
+            'maxFileShow': pagingSet[1].get('Page size')[0],
+            'fileOverlap': pagingSet[1].get('Page overlap')[0],
+
+            # Annotation############
+            'dragBoxes': annotationSet[1].get('Drag boxes')[0],
+            'transparentBoxes': annotationSet[1].get('Make drag boxes transparent')[0],
+            'showAnnotationOverview': annotationSet[1].get('Show annotation overview')[0],
+            'secsSave': annotationSet[1].get('Auto save segments every')[0],
+            # Width of the segment markers in the overview plot (in seconds)
+            'widthOverviewSegment': annotationSet[1].get('Annotation overview cell length')[0],
+            # The colours for the segment boxes
+            'ColourNamed': rgbaNamed,  # Red
+            'ColourPossible': rgbaPossible,  # Yellow
+            'ColourNone': rgbaNone,  # Blue
+            'ColourSelected': rgbaSelected,  # Green
+            # Text labels
+            'textoffset': textlbl[1].get('Text off-set')[0],
+            # Amount of overlap for 2 segments to be counted as the same
+            # TODO: use this?
+            'overlap_allowed': textlbl[1].get('Overlap allowed')[0],
+
+            # Spectrogram
+            'window_width': specSet[1].get('Window width')[0],
+            'incr': specSet[1].get('Increment')[0],
+            'window': specSet[1].get('Windowing')[0],
+            # Visible frequency range
+            'fs_start': visibleRange[1].get('Start')[0],
+            'fs_end': visibleRange[1].get('End')[0],
+            'invertColourMap': specSet[1].get('Invert color map')[0],
+
+            # Operator/ reviwer
+            'operator': operatorRev[1].get('Operator')[0],
+            'reviewer': operatorRev[1].get('Reviewer')[0],
+
+            # Visible window duration
+            # Param for width in seconds of the main representation
+            'windowWidth': windowLen[1].get('Visible window width')[0],
+
+            # Human classify
+            'showAllPages': humanClassify[1].get('Show all pages')[0],
+            'saveCorrections': humanClassify[1].get('Save corrections')[0],
+
+            # Bird list
+            'BirdList': birdList[1].get('My bird list')[0].split('\n'),
+
+            # Fixed
+            'ColourList': ['Grey', 'Viridis', 'Inferno', 'Plasma', 'Autumn', 'Cool', 'Bone', 'Copper', 'Hot', 'Jet',
+                           'Thermal', 'Flame', 'Yellowy', 'Bipolar', 'Spectrum'],
+
+            # Todo: add to the p tree
+            'brightness': 50,
+            'contrast': 50,
+            'dirpath': self.config['dirpath'],
+            'cmap': self.config['cmap'],
+
+            # Params for denoising
+            'maxSearchDepth': self.config['maxSearchDepth'],
+            # Params for segmentation
+            'minSegment': self.config['minSegment'],
+        }
+        self.configfile = 'AviaNZconfig.txt'
+        json.dump(configuration, open(self.configfile, 'wb'))
+
+#======
 class FileDataDialog(QDialog):
     def __init__(self, name, date, time, parent=None):
         super(FileDataDialog, self).__init__(parent)
@@ -113,7 +364,7 @@ class FileDataDialog(QDialog):
 class Spectrogram(QDialog):
     # Class for the spectrogram dialog box
     # TODO: Steal the graph from Raven (View/Configure Brightness)
-    def __init__(self, width, incr, minFreq, maxFreq, parent=None):
+    def __init__(self, width, incr, minFreq, maxFreq, sampleRate, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -127,12 +378,12 @@ class Spectrogram(QDialog):
         self.multitaper = QCheckBox()
 
         self.low = QSpinBox()
-        self.low.setRange(minFreq,maxFreq)
+        self.low.setRange(minFreq,sampleRate/2)
         self.low.setSingleStep(100)
         self.low.setValue(0)
 
         self.high = QSpinBox()
-        self.high.setRange(minFreq,maxFreq)
+        self.high.setRange(minFreq,sampleRate/2)
         self.high.setSingleStep(100)
         self.high.setValue(maxFreq)
 
@@ -1260,456 +1511,62 @@ class HumanClassify2a(QDialog):
     def getValues(self):
         return self.birds.currentItem().text()
 
-# class AutoSegmentation(QDockWidget):
-#     # Class for the auto segmentation dock
-#     # def __init__(self, maxv, Box,parent=None):
-#     #     QDockWidget.__init__(self, parent)
-#     def __init__(self, maxv, Box):
-#         # QDockWidget.__init__(self)
-#         self.algs = QComboBox()
-#         #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
-#         self.algs.addItems(["Wavelets", "Amplitude","Harma","Power","Median Clipping","Onsets","Fundamental Frequency","FIR"])
-#         Box.addWidget(self.algs,row=2,col=1)
-#         self.prevAlg = "Wavelets"
-#         a = self.algs.currentIndex()
-#         item = self.algs.itemText(a)
-#         print str(item)=="Wavelets"
-#         # self.algs.currentIndexChanged[QString].connect(alg)
-#         # self.algs.activated['QString'].connect(self.changeBoxes(item))
-#         # self.algs.currentIndexChanged.connect(self.changeBoxes(item))
-#
-#         # Define the whole set of possible options for the dialog box here, just to have them together.
-#         # Then hide and show them as required as the algorithm chosen changes.
-#
-#         # Spin box for amplitude threshold
-#         self.ampThr = QDoubleSpinBox()
-#         self.ampThr.setRange(0.001,maxv+0.001)
-#         self.ampThr.setSingleStep(0.002)
-#         self.ampThr.setDecimals(4)
-#         self.ampThr.setValue(maxv+0.001)
-#
-#         self.HarmaThr1 = QSpinBox()
-#         self.HarmaThr1.setRange(10,50)
-#         self.HarmaThr1.setSingleStep(1)
-#         self.HarmaThr1.setValue(10)
-#         self.HarmaThr2 = QDoubleSpinBox()
-#         self.HarmaThr2.setRange(0.1,0.95)
-#         self.HarmaThr2.setSingleStep(0.05)
-#         self.HarmaThr2.setDecimals(2)
-#         self.HarmaThr2.setValue(0.9)
-#
-#         self.PowerThr = QDoubleSpinBox()
-#         self.PowerThr.setRange(0.0,2.0)
-#         self.PowerThr.setSingleStep(0.1)
-#         self.PowerThr.setValue(1.0)
-#
-#         self.Fundminfreqlabel = QLabel("Min Frequency")
-#         self.Fundminfreq = QLineEdit()
-#         self.Fundminfreq.setText('100')
-#         self.Fundminperiodslabel = QLabel("Min Number of periods")
-#         self.Fundminperiods = QSpinBox()
-#         self.Fundminperiods.setRange(1,10)
-#         self.Fundminperiods.setValue(3)
-#         self.Fundthrlabel = QLabel("Threshold")
-#         self.Fundthr = QDoubleSpinBox()
-#         self.Fundthr.setRange(0.1,1.0)
-#         self.Fundthr.setDecimals(1)
-#         self.Fundthr.setValue(0.5)
-#         self.Fundwindowlabel = QLabel("Window size (will be rounded up as appropriate)")
-#         self.Fundwindow = QSpinBox()
-#         self.Fundwindow.setRange(300,5000)
-#         self.Fundwindow.setSingleStep(500)
-#         self.Fundwindow.setValue(1000)
-#
-#         self.medThr = QDoubleSpinBox()
-#         self.medThr.setRange(0.2,6)
-#         self.medThr.setSingleStep(1)
-#         self.medThr.setDecimals(1)
-#         self.medThr.setValue(3)
-#
-#         self.ecThr = QDoubleSpinBox()
-#         self.ecThr.setRange(0.001,6)
-#         self.ecThr.setSingleStep(1)
-#         self.ecThr.setDecimals(3)
-#         self.ecThr.setValue(1)
-#
-#         self.FIRThr1 = QDoubleSpinBox()
-#         self.FIRThr1.setRange(0.0,2.0) #setRange(0.0,1.0)
-#         self.FIRThr1.setSingleStep(0.05)
-#         self.FIRThr1.setValue(0.1)
-#
-#         # Box = QDockWidget()
-#         Box.addWidget(self.algs,row=1,col=1)
-#         # Labels
-#         self.amplabel = QLabel("Set threshold amplitude")
-#         Box.addWidget(self.amplabel,row=2,col=0)
-#         self.amplabel.hide()
-#
-#         self.Harmalabel = QLabel("Set decibal threshold")
-#         Box.addWidget(self.Harmalabel,row=2,col=0)
-#         self.Harmalabel.hide()
-#
-#         self.Onsetslabel = QLabel("Onsets: No parameters")
-#         Box.addWidget(self.Onsetslabel)
-#         self.Onsetslabel.hide()
-#
-#         self.medlabel = QLabel("Set median threshold")
-#         Box.addWidget(self.medlabel,row=2,col=0)
-#         self.medlabel.hide()
-#
-#         self.eclabel = QLabel("Set energy curve threshold")
-#         Box.addWidget(self.eclabel,row=2,col=0)
-#         self.eclabel.hide()
-#         self.ecthrtype = [QRadioButton("N standard deviations"), QRadioButton("Threshold")]
-#
-#         self.wavlabel = QLabel("Wavelets")
-#         self.depthlabel = QLabel("Depth of wavelet packet decomposition")
-#         #self.depthchoice = QCheckBox()
-#         #self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
-#         self.depth = QSpinBox()
-#         self.depth.setRange(1,10)
-#         self.depth.setSingleStep(1)
-#         self.depth.setValue(5)
-#
-#         self.thrtypelabel = QLabel("Type of thresholding")
-#         self.thrtype = [QRadioButton("Soft"), QRadioButton("Hard")]
-#         self.thrtype[0].setChecked(True)
-#
-#         self.thrlabel = QLabel("Multiplier of std dev for threshold")
-#         self.thr = QSpinBox()
-#         self.thr.setRange(1,10)
-#         self.thr.setSingleStep(1)
-#         self.thr.setValue(5)
-#
-#         self.waveletlabel = QLabel("Type of wavelet")
-#         self.wavelet = QComboBox()
-#         self.wavelet.addItems(["dmey","db2","db5","haar"])
-#         self.wavelet.setCurrentIndex(0)
-#
-#         self.blabel = QLabel("Start and end points of the band for bandpass filter")
-#         self.start = QLineEdit()
-#         self.start.setText('1000')
-#         self.end = QLineEdit()
-#         self.end.setText('7500')
-#         self.blabel2 = QLabel("Check if not using bandpass")
-#         self.bandchoice = QCheckBox()
-#         # self.connect(self.bandchoice, SIGNAL('clicked()'), self.bandclicked)
-#
-#         Box.addWidget(self.wavlabel,row=3,col=0)
-#         # self.wavlabel.hide()
-#         Box.addWidget(self.depthlabel,row=4,col=0)
-#         # self.depthlabel.hide()
-#         #Box.addWidget(self.depthchoice)
-#         #self.depthchoice.hide()
-#         Box.addWidget(self.depth, row=4,col=1)
-#         # self.depth.hide()
-#
-#         Box.addWidget(self.thrtypelabel,row=5,col=0)
-#         # self.thrtypelabel.hide()
-#         Box.addWidget(self.thrtype[0],row=5,col=1)
-#         # self.thrtype[0].hide()
-#         Box.addWidget(self.thrtype[1],row=5,col=2)
-#         # self.thrtype[1].hide()
-#
-#         Box.addWidget(self.thrlabel,row=6,col=0)
-#         # self.thrlabel.hide()
-#         Box.addWidget(self.thr,row=6,col=1)
-#         # self.thr.hide()
-#
-#         Box.addWidget(self.waveletlabel,row=7,col=0)
-#         # self.waveletlabel.hide()
-#         Box.addWidget(self.wavelet,row=7,col=1)
-#         # self.wavelet.hide()
-#
-#         Box.addWidget(self.blabel,row=8,col=0)
-#         # self.blabel.hide()
-#         Box.addWidget(self.start,row=8,col=1)
-#         # self.start.hide()
-#         Box.addWidget(self.end,row=9,col=1)
-#         # self.end.hide()
-#         Box.addWidget(self.blabel2,row=10,col=0)
-#         # self.blabel2.hide()
-#         Box.addWidget(self.bandchoice,row=10,col=1)
-#         # self.bandchoice.hide()
-#
-#         Box.addWidget(self.ampThr,row=2,col=1)
-#         self.ampThr.hide()
-#         Box.addWidget(self.HarmaThr1,row=2,col=1)
-#         Box.addWidget(self.HarmaThr2,row=3, col=1)
-#         self.HarmaThr1.hide()
-#         self.HarmaThr2.hide()
-#         Box.addWidget(self.PowerThr,row=2,col=1)
-#         self.PowerThr.hide()
-#
-#         Box.addWidget(self.medThr, row=2,col=1)
-#         self.medThr.hide()
-#         for i in range(len(self.ecthrtype)):
-#             Box.addWidget(self.ecthrtype[i])
-#             self.ecthrtype[i].hide()
-#         Box.addWidget(self.ecThr)
-#         self.ecThr.hide()
-#
-#         Box.addWidget(self.FIRThr1, row=2,col=1)
-#         self.FIRThr1.hide()
-#
-#         Box.addWidget(self.Fundminfreqlabel, row=2,col=0)
-#         self.Fundminfreqlabel.hide()
-#         Box.addWidget(self.Fundminfreq,row=2,col=1)
-#         self.Fundminfreq.hide()
-#         Box.addWidget(self.Fundminperiodslabel,row=3,col=0)
-#         self.Fundminperiodslabel.hide()
-#         Box.addWidget(self.Fundminperiods,row=3,col=1)
-#         self.Fundminperiods.hide()
-#         Box.addWidget(self.Fundthrlabel,row=4,col=0)
-#         self.Fundthrlabel.hide()
-#         Box.addWidget(self.Fundthr,row=4,col=1)
-#         self.Fundthr.hide()
-#         Box.addWidget(self.Fundwindowlabel,row=5,col=0)
-#         self.Fundwindowlabel.hide()
-#         Box.addWidget(self.Fundwindow,row=5,col=1)
-#         self.Fundwindow.hide()
-#
-#         # Box.addWidget(self.activate)
-#         #Box.addWidget(self.save)
-#
-#         # Now put everything into the frame
-#         # self.setLayout(Box)
-#
-#     def changeBoxes(self,alg):
-#         # This does the hiding and showing of the options as the algorithm changes
-#         if self.prevAlg == "Amplitude":
-#             self.amplabel.hide()
-#             self.ampThr.hide()
-#         elif self.prevAlg == "Energy Curve":
-#             self.eclabel.hide()
-#             self.ecThr.hide()
-#             for i in range(len(self.ecthrtype)):
-#                 self.ecthrtype[i].hide()
-#             #self.ecThr.hide()
-#         elif self.prevAlg == "Harma":
-#             self.Harmalabel.hide()
-#             self.HarmaThr1.hide()
-#             self.HarmaThr2.hide()
-#         elif self.prevAlg == "Power":
-#             self.PowerThr.hide()
-#         elif self.prevAlg == "Median Clipping":
-#             self.medlabel.hide()
-#             self.medThr.hide()
-#         elif self.prevAlg == "Fundamental Frequency":
-#             self.Fundminfreq.hide()
-#             self.Fundminperiods.hide()
-#             self.Fundthr.hide()
-#             self.Fundwindow.hide()
-#             self.Fundminfreqlabel.hide()
-#             self.Fundminperiodslabel.hide()
-#             self.Fundthrlabel.hide()
-#             self.Fundwindowlabel.hide()
-#         elif self.prevAlg == "Onsets":
-#             self.Onsetslabel.hide()
-#         elif self.prevAlg == "FIR":
-#             self.FIRThr1.hide()
-#         else:
-#             self.wavlabel.hide()
-#             self.depthlabel.hide()
-#             self.depth.hide()
-#             #self.depthchoice.hide()
-#             self.thrtypelabel.hide()
-#             self.thrtype[0].hide()
-#             self.thrtype[1].hide()
-#             self.thrlabel.hide()
-#             self.thr.hide()
-#             self.waveletlabel.hide()
-#             self.wavelet.hide()
-#             self.blabel.hide()
-#             self.start.hide()
-#             self.end.hide()
-#             self.blabel2.hide()
-#             self.bandchoice.hide()
-#         self.prevAlg = str(alg)
-#
-#         if str(alg) == "Amplitude":
-#             self.amplabel.show()
-#             self.ampThr.show()
-#         elif str(alg) == "Energy Curve":
-#             self.eclabel.show()
-#             self.ecThr.show()
-#             for i in range(len(self.ecthrtype)):
-#                 self.ecthrtype[i].show()
-#             self.ecThr.show()
-#         elif str(alg) == "Harma":
-#             self.Harmalabel.show()
-#             self.HarmaThr1.show()
-#             self.HarmaThr2.show()
-#         elif str(alg) == "Power":
-#             self.PowerThr.show()
-#         elif str(alg) == "Median Clipping":
-#             self.medlabel.show()
-#             self.medThr.show()
-#         elif str(alg) == "Fundamental Frequency":
-#             self.Fundminfreq.show()
-#             self.Fundminperiods.show()
-#             self.Fundthr.show()
-#             self.Fundwindow.show()
-#             self.Fundminfreqlabel.show()
-#             self.Fundminperiodslabel.show()
-#             self.Fundthrlabel.show()
-#             self.Fundwindowlabel.show()
-#         elif str(alg) == "Onsets":
-#             self.Onsetslabel.show()
-#         elif str(alg) == "FIR":
-#             self.FIRThr1.show()
-#         else:
-#             #"Wavelets"
-#             self.wavlabel.show()
-#             self.depthlabel.show()
-#             #self.depthchoice.show()
-#             self.depth.show()
-#             self.thrtypelabel.show()
-#             self.thrtype[0].show()
-#             self.thrtype[1].show()
-#             self.thrlabel.show()
-#             self.thr.show()
-#             self.waveletlabel.show()
-#             self.wavelet.show()
-#             self.blabel.show()
-#             self.start.show()
-#             self.end.show()
-#             self.blabel2.show()
-#             self.bandchoice.show()
-#
-#     def getValues(self):
-#         return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text()]
-
 # ======
-# class CorrectHumanClassify1(QDialog):
-#     # This is to correct the classification of those that the program got wrong
-#     def __init__(self, seg, bb1, bb2, bb3, parent=None):
-#         QDialog.__init__(self, parent)
-#         self.setWindowTitle('Correct Classification')
-#         self.frame = QWidget()
-#
-#         self.saveConfig = False
-#
-#         self.wPlot = pg.GraphicsLayoutWidget()
-#         self.pPlot = self.wPlot.addViewBox(enableMouse=False,row=0,col=1)
-#         self.plot = pg.ImageItem()
-#         self.pPlot.addItem(self.plot)
-#
-#         # An array of radio buttons and a list and a text entry box
-#         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
-#         self.birds1 = []
-#         for item in bb1:
-#             self.birds1.append(QRadioButton(item))
-#         self.birds2 = []
-#         for item in bb2:
-#             self.birds2.append(QRadioButton(item))
-#
-#         for i in xrange(len(self.birds1)):
-#             self.birds1[i].setEnabled(True)
-#             self.connect(self.birds1[i], SIGNAL("clicked()"), self.radioBirdsClicked)
-#         for i in xrange(len(self.birds2)):
-#             self.birds2[i].setEnabled(True)
-#             self.connect(self.birds2[i], SIGNAL("clicked()"), self.radioBirdsClicked)
-#
-#         # The list of less common birds
-#         self.birdList = QListWidget(self)
-#         self.birdList.setMaximumWidth(150)
-#         for item in bb3:
-#             self.birdList.addItem(item)
-#         self.birdList.sortItems()
-#         # Explicitly add "Other" option in
-#         self.birdList.insertItem(0,'Other')
-#
-#         self.connect(self.birdList, SIGNAL("itemClicked(QListWidgetItem*)"), self.listBirdsClicked)
-#         self.birdList.setEnabled(False)
-#
-#         # This is the text box for missing birds
-#         self.tbox = QLineEdit(self)
-#         self.tbox.setMaximumWidth(150)
-#         self.connect(self.tbox, SIGNAL('editingFinished()'), self.birdTextEntered)
-#         self.tbox.setEnabled(False)
-#
-#         self.close = QPushButton("Done")
-#         self.connect(self.close, SIGNAL("clicked()"), self.accept)
-#
-#         # The layouts
-#         birds1Layout = QVBoxLayout()
-#         for i in xrange(len(self.birds1)):
-#             birds1Layout.addWidget(self.birds1[i])
-#
-#         birds2Layout = QVBoxLayout()
-#         for i in xrange(len(self.birds2)):
-#             birds2Layout.addWidget(self.birds2[i])
-#
-#         birdListLayout = QVBoxLayout()
-#         birdListLayout.addWidget(self.birdList)
-#         birdListLayout.addWidget(QLabel("If bird isn't in list, select Other"))
-#         birdListLayout.addWidget(QLabel("Type below, Return at end"))
-#         birdListLayout.addWidget(self.tbox)
-#
-#         hbox = QHBoxLayout()
-#         hbox.addLayout(birds1Layout)
-#         hbox.addLayout(birds2Layout)
-#         hbox.addLayout(birdListLayout)
-#
-#         vboxFull = QVBoxLayout()
-#         vboxFull.addWidget(self.wPlot)
-#         vboxFull.addLayout(hbox)
-#         vboxFull.addWidget(self.close)
-#
-#         self.setLayout(vboxFull)
-#         self.makefig(seg)
-#
-#     def makefig(self,seg):
-#         self.plot.setImage(seg)
-#
-#     def radioBirdsClicked(self):
-#         # Listener for when the user selects a radio button
-#         # Update the text and store the data
-#         for button in self.birds1+self.birds2:
-#             if button.isChecked():
-#                 if button.text()=="Other":
-#                     self.birdList.setEnabled(True)
-#                 else:
-#                     self.birdList.setEnabled(False)
-#                     self.label = str(button.text())
-#
-#     def listBirdsClicked(self, item):
-#         # Listener for clicks in the listbox of birds
-#         if (item.text() == "Other"):
-#             self.tbox.setEnabled(True)
-#         else:
-#             # Save the entry
-#             self.label = str(item.text())
-#
-#     def birdTextEntered(self):
-#         # Listener for the text entry in the bird list
-#         # Check text isn't already in the listbox, and add if not
-#         # Doesn't sort the list, but will when program is closed
-#         item = self.birdList.findItems(self.tbox.text(),Qt.MatchExactly)
-#         if item:
-#             pass
-#         else:
-#             self.birdList.addItem(self.tbox.text())
-#         self.label = str(self.tbox.text())
-#         self.saveConfig=True
-#         self.tbox.setEnabled(False)
-#
-#     # static method to create the dialog and return the correct label
-#     @staticmethod
-#     def getValues(seg, bb1, bb2, bb3,parent=None):
-#         dialog = CorrectHumanClassify1(seg, bb1, bb2, bb3,parent)
-#         result = dialog.exec_()
-#         return dialog.label, dialog.saveConfig
-#
-#     def setImage(self,seg,label):
-#         self.plot.setImage(seg)
+class InterfaceSettings2(QDialog):
+    def __init__(self, parent = None):
+      super(InterfaceSettings2, self).__init__(parent)
 
-# # Start the application
-# app = QApplication(sys.argv)
-# screen1 = StartScreen()
-# screen1.setWindowIcon(QIcon('Avianz.ico'))
-# screen1.show()
-# app.exec_()
+      self.tabWidget = QTabWidget()
+      self.tabWidget.tab1 = QWidget()
+      self.tabWidget.tab2 = QWidget()
+      self.tabWidget.tab3 = QWidget()
 
+      self.tabWidget.addTab(self.tabWidget.tab1,"Tab 1")
+      self.tabWidget.addTab(self.tabWidget.tab2,"Tab 2")
+      self.tabWidget.addTab(self.tabWidget.tab3,"Tab 3")
+      self.tab1UI()
+      self.tab2UI()
+      self.tab3UI()
+      self.setWindowTitle("Interface Settings")
+      self.setWindowIcon(QIcon('img/Avianz.ico'))
+      self.setMinimumWidth(400)
+
+      mainLayout = QVBoxLayout()
+      mainLayout.addWidget(self.tabWidget)
+      self.setLayout(mainLayout)
+
+    def tab1UI(self):
+      layout = QFormLayout()
+      colorNamed=pg.ColorButton()
+      colorNamed.setColor(color='FF0000')
+      colorPossible = pg.ColorButton()
+      colorPossible.setColor(color='FFFF00')
+      colorNone=pg.ColorButton()
+      colorNone.setColor(color='0000FF')
+      colorSelected = pg.ColorButton()
+      colorSelected.setColor(color='00FF00')
+      layout.addRow(QLabel("Confirmed"),colorNamed)
+      layout.addRow(QLabel("Possible"), colorPossible)
+      layout.addRow(QLabel("Don't Know"),colorNone)
+      layout.addRow(QLabel("Currently Selected"), colorSelected)
+      self.tabWidget.setTabText(0, "Segment Colours")
+      self.tabWidget.tab1.setLayout(layout)
+
+    def tab2UI(self):
+      layout = QFormLayout()
+      sex = QHBoxLayout()
+      sex.addWidget(QRadioButton("Male"))
+      sex.addWidget(QRadioButton("Female"))
+      layout.addRow(QLabel("Sex"), sex)
+      layout.addRow("Date of Birth", QLineEdit())
+      self.tabWidget.setTabText(1, "Bird Names")
+      self.tabWidget.tab2.setLayout(layout)
+
+    def tab3UI(self):
+      layout = QHBoxLayout()
+      layout.addWidget(QLabel("subjects"))
+      layout.addWidget(QCheckBox("Physics"))
+      layout.addWidget(QCheckBox("Maths"))
+      self.tabWidget.setTabText(2, "Spectrogram Settings")
+      self.tabWidget.tab3.setLayout(layout)
 
