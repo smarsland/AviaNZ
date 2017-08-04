@@ -50,6 +50,8 @@ import interface_FindSpecies
 
 from openpyxl import load_workbook, Workbook
 
+from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
+
 #import pyqtgraph.parametertree.parameterTypes as pTree
 # ==============
 # TODO
@@ -2040,7 +2042,8 @@ class AviaNZ(QMainWindow):
 
     def invertColourMap(self):
         """ Listener for the menu item that converts the colour map"""
-        self.config['invertColourMap'] = not self.config['invertColourMap']
+        # self.config['invertColourMap'] = not self.config['invertColourMap']
+        self.config['invertColourMap'] = self.invertcm.isChecked()
         self.setColourLevels()
 
     def setColourLevels(self):
@@ -3207,16 +3210,286 @@ class AviaNZ(QMainWindow):
         #     print "here"
 
     def changeSettings(self):
-        """ Create the dialog when the Interface settings menu is pressed.
+        """ Create the parameter tree when the Interface settings menu is pressed.
         """
-        if not hasattr(self,'interfaceSettingsDialog'):
-            self.interfaceSettingsDialog = Dialogs.InterfaceSettings()     #(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq)
-        # self.interfaceSettingsDialog.show()
-        # self.interfaceSettingsDialog.activateWindow()
-        # self.interfaceSettingsDialog.activate.clicked.connect(self.spectrogram)
-        # This next line was for dynamic update.
-        # self.connect(self.spectrogramDialog, SIGNAL("changed"), self.spectrogram)
+        # self.interfaceSettingsTree = Dialogs.InterfaceSettings(self.config)
+        # self.interfaceSettingsTree.closeEvent(self.changeConfig)
+        # self.changeConfig()
 
+        birdList = [str(item) for item in self.config['BirdList']]
+        bl = ""
+        for i in range(len(birdList)):
+            bl += birdList[i]
+            bl += '\n'
+
+        params = [
+            {'name': 'Basic settings', 'type': 'group', 'children': [
+                {'name': 'Show amplitude plot', 'type': 'bool', 'value': self.config['showAmplitudePlot']},
+                {'name': 'Show file list', 'type': 'bool', 'value': self.config['showListofFiles']},
+                {'name': 'Make read-only', 'type': 'bool', 'value': self.config['readOnly']}, ]},
+            {'name': 'Paging', 'type': 'group', 'children': [
+                {'name': 'Page size', 'type': 'int', 'value': self.config['maxFileShow'], 'limits': (5, 900),
+                 'step': 5,
+                 'suffix': ' sec'},
+                {'name': 'Page overlap', 'type': 'int', 'value': self.config['fileOverlap'], 'limits': (0, 20),
+                 'step': 2,
+                 'suffix': ' sec'},
+            ]},
+
+            {'name': 'Annotation', 'type': 'group', 'children': [
+                {'name': 'Drag boxes', 'type': 'bool', 'value': self.config['dragBoxes']},
+                {'name': 'Make drag boxes transparent', 'type': 'bool', 'value': self.config['transparentBoxes']},
+                {'name': 'Show annotation overview', 'type': 'bool',
+                 'value': self.config['showAnnotationOverview']},
+                {'name': 'Auto save segments every', 'type': 'int', 'value': self.config['secsSave'], 'step': 5,
+                 'limits': (5, 900),
+                 'suffix': ' sec'},
+                {'name': 'Annotation overview cell length', 'type': 'int',
+                 'value': self.config['widthOverviewSegment'],
+                 'limits': (5, 300), 'step': 5,
+                 'suffix': ' sec'},
+                {'name': 'Segment colours', 'type': 'group', 'children': [
+                    {'name': 'Confirmed segments', 'type': 'color', 'value': self.config['ColourNamed'][:-1],
+                     'tip': "Correctly labeled segments"},
+                    {'name': 'Possible', 'type': 'color', 'value': self.config['ColourPossible'][:-1],
+                     'tip': "Segments that need further approval"},
+                    {'name': "Don't know", 'type': 'color', 'value': self.config['ColourNone'][:-1],
+                     'tip': "Segments that are not labelled"},
+                    {'name': 'Currently selected', 'type': 'color', 'value': self.config['ColourSelected'][:-1],
+                     'tip': "Currently delected segment"},
+                ]},
+                {'name': 'Text labels', 'type': 'group', 'children': [
+                    {'name': 'Text off-set', 'type': 'int', 'value': self.config['textoffset'], 'tip': ""},
+                    {'name': 'Overlap allowed', 'type': 'int', 'value': self.config['overlap_allowed'], 'tip': ""},
+                ]},
+            ]},
+
+            {'name': 'Spectrogram', 'type': 'group', 'children': [
+                {'name': 'Visible frequency range', 'type': 'group', 'children': [
+                    {'name': 'Start', 'type': 'int', 'value': self.config['fs_start']},
+                    {'name': 'End', 'type': 'int', 'value': self.config['fs_end']},
+                ]},
+                {'name': 'Window width', 'type': 'list', 'values': [256, 512, 1024],
+                 'value': self.config['window_width']},
+                {'name': 'Increment', 'type': 'list', 'values': [128, 256, 512], 'value': self.config['incr']},
+                {'name': 'Windowing', 'type': 'list',
+                 'values': ['Hann', 'Hamming', 'Parzen', 'Welch', 'Blackman', 'Blackmanharris'],
+                 'value': self.config['window']},
+                {'name': 'Invert colour map', 'type': 'bool', 'value': self.config['invertColourMap']},
+            ]},
+
+            {'name': 'Operator/Reviewer', 'type': 'group', 'children': [
+                {'name': 'Operator', 'type': 'str', 'value': self.config['operator']},
+                {'name': 'Reviewer', 'type': 'str', 'value': self.config['reviewer']},
+            ]},
+
+            {'name': 'Visible window duration', 'type': 'group', 'children': [
+                {'name': 'Visible window width', 'type': 'int', 'value': self.config['windowWidth'],
+                 'limits': (1, 900),
+                 'step': 1,
+                 'suffix': ' sec'},
+            ]},
+            {'name': 'Human classify', 'type': 'group', 'children': [
+                {'name': 'Show all pages', 'type': 'bool', 'value': self.config['showAllPages'],
+                 'tip': "Relates to check segments"},
+                {'name': 'Save corrections', 'type': 'bool', 'value': self.config['saveCorrections'],
+                 'tip': "This helps the developers"},
+            ]},
+
+            {'name': 'Bird list', 'type': 'group', 'children': [
+                # {'name': 'My bird list', 'type': 'list', 'values': self.config['BirdList']},
+                {'name': 'My bird list', 'type': 'text', 'value': bl},
+            ]},
+        ]
+
+        ## Create tree of Parameter objects
+        self.p = Parameter.create(name='params', type='group', children=params)
+        self.p.sigTreeStateChanged.connect(self.change)
+
+        ## Create ParameterTree widget
+        self.t = ParameterTree()
+        self.t.setParameters(self.p, showTop=False)
+        self.t.show()
+        self.t.setWindowTitle('AviaNZ - Interface Settings')
+        self.t.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.t.resize(450, 1000)
+        # Disable Interface menu items
+        self.useAmplitudeTick.setEnabled(False)
+        self.useFilesTick.setEnabled(False)
+        self.showOverviewSegsTick.setEnabled(False)
+        self.dragRectangles.setEnabled(False)
+        self.dragRectTransparent.setEnabled(False)
+        self.invertcm.setEnabled(False)
+        self.readonly.setEnabled(False)
+        self.showAllTick.setEnabled(False)
+
+    ## If anything changes in the tree, update self.config
+    def change(self):
+        # print("save changes:")
+        # print self.p.getValues()
+        basicSet = self.p.getValues().get('Basic settings')
+        # print basicSet
+        # print 'Show amplitude plot-', basicSet[1].get('Show amplitude plot')[0]
+        # print 'Show file list-', basicSet[1].get('Show file list')[0]
+        # print 'Show annotation overview-', basicSet[1].get('Show annotation overview')[0]
+        # print 'Make read-only-', basicSet[1].get('Make read-only')[0]
+        #
+        pagingSet = self.p.getValues().get('Paging')
+        # print pagingSet
+        # print 'Page size-', pagingSet[1].get('Page size')[0]
+        # print 'Page overlap-', pagingSet[1].get('Page overlap')[0]
+        #
+        annotationSet = self.p.getValues().get('Annotation')
+        # print annotationSet
+        # print 'Drag boxes-', annotationSet[1].get('Drag boxes')[0]
+        # print 'Make drag boxes transparent-', annotationSet[1].get('Make drag boxes transparent')[0]
+        # print 'Show annotation overview-', annotationSet[1].get('Show annotation overview')[0]
+        # print 'Auto save segments every-', annotationSet[1].get('Auto save segments every')[0]
+        # print 'Annotation overview cell length-', annotationSet[1].get('Annotation overview cell length')[0]
+        annotationClr = annotationSet[1].get('Segment colours')
+        # print annotationClr
+        confirmed = annotationClr[1].get('Confirmed segments')[0]
+        rgbaNamed = list(confirmed.getRgb())
+        rgbaNamed[3] = rgbaNamed[3] * 100 / 255
+        # print 'Confirmed segments-', list(confirmed.getRgb())
+        possible = annotationClr[1].get('Possible')[0]
+        rgbaPossible = list(possible.getRgb())
+        rgbaPossible[3] = rgbaPossible[3] * 100 / 255
+        # print 'Possible-', rgbaPossible
+        none = annotationClr[1].get("Don't know")[0]
+        rgbaNone = list(none.getRgb())
+        rgbaNone[3] = rgbaNone[3] * 100 / 255
+        # print "Don't know-", rgbaNone
+        selected = annotationClr[1].get('Currently selected')[0]
+        rgbaSelected = list(selected.getRgb())
+        rgbaSelected[3] = rgbaSelected[3] * 100 / 255
+        # print 'Currently selected-', list(selected.getRgb())
+        textlbl = annotationSet[1].get('Text labels')
+        # print 'Text labels-', textlbl
+        # print 'Text off-set-', textlbl[1].get('Text off-set')[0]
+        # print 'Overlap allowed-', textlbl[1].get('Overlap allowed')[0]
+        #
+        specSet = self.p.getValues().get('Spectrogram')
+        # print specSet
+        # print 'Window width-', specSet[1].get('Window width')[0]
+        # print 'Increment-', specSet[1].get('Increment')[0]
+        # print 'Windowing-', specSet[1].get('Windowing')[0]
+        visibleRange = specSet[1].get('Visible frequency range')
+        # print 'Visible frequency range-', visibleRange
+        # print 'Visible frequency range-', 'strat-', visibleRange[1].get('Start')[0], ', end-', visibleRange[1].get('End')[0]
+        # print 'Invert colour map-', specSet[1].get('Invert colour map')[0]
+        #
+        operatorRev = self.p.getValues().get('Operator/Reviewer')
+        # print operatorRev
+        # print 'Operator-', operatorRev[1].get('Operator')[0]
+        # print 'Reviewer-', operatorRev[1].get('Reviewer')[0]
+        #
+        windowLen = self.p.getValues().get('Visible window duration')
+        # print windowLen
+        # print 'Visible window width-', windowLen[1].get('Visible window width')[0]
+        #
+        humanClassify = self.p.getValues().get('Human classify')
+        # print humanClassify
+        # print 'Show all pages-', humanClassify[1].get('Show all pages')[0]
+        # print 'Save corrections-', humanClassify[1].get('Save corrections')[0]
+        #
+        birdList = self.p.getValues().get('Bird list')
+
+        print "Saving config file..."
+        self.config = {
+            # Basic settings
+            'showAmplitudePlot': basicSet[1].get('Show amplitude plot')[0],
+            'showListofFiles': basicSet[1].get('Show file list')[0],
+            'readOnly': basicSet[1].get('Make read-only')[0],
+
+            # Paging
+            # Max length of file to load at one time (in seconds), and overlap with next file
+            'maxFileShow': pagingSet[1].get('Page size')[0],
+            'fileOverlap': pagingSet[1].get('Page overlap')[0],
+
+            # Annotation
+            'dragBoxes': annotationSet[1].get('Drag boxes')[0],
+            'transparentBoxes': annotationSet[1].get('Make drag boxes transparent')[0],
+            'showAnnotationOverview': annotationSet[1].get('Show annotation overview')[0],
+            'secsSave': annotationSet[1].get('Auto save segments every')[0],
+            # Width of the segment markers in the overview plot (in seconds)
+            'widthOverviewSegment': annotationSet[1].get('Annotation overview cell length')[0],
+            # The colours for the segment boxes
+            'ColourNamed': rgbaNamed,  # Red
+            'ColourPossible': rgbaPossible,  # Yellow
+            'ColourNone': rgbaNone,  # Blue
+            'ColourSelected': rgbaSelected,  # Green
+            # Text labels
+            'textoffset': textlbl[1].get('Text off-set')[0],
+            # Amount of overlap for 2 segments to be counted as the same
+            # TODO: use this?
+            'overlap_allowed': textlbl[1].get('Overlap allowed')[0],
+
+            # Spectrogram
+            'window_width': specSet[1].get('Window width')[0],
+            'incr': specSet[1].get('Increment')[0],
+            'window': specSet[1].get('Windowing')[0],
+            # Visible frequency range
+            'fs_start': visibleRange[1].get('Start')[0],
+            'fs_end': visibleRange[1].get('End')[0],
+            'invertColourMap': specSet[1].get('Invert colour map')[0],
+
+            # Operator/ reviwer
+            'operator': operatorRev[1].get('Operator')[0],
+            'reviewer': operatorRev[1].get('Reviewer')[0],
+
+            # Visible window duration
+            # Param for width in seconds of the main representation
+            'windowWidth': windowLen[1].get('Visible window width')[0],
+
+            # Human classify
+            'showAllPages': humanClassify[1].get('Show all pages')[0],
+            'saveCorrections': humanClassify[1].get('Save corrections')[0],
+
+            # Bird list
+            'BirdList': filter(None, birdList[1].get('My bird list')[0].split('\n')),
+
+            # Fixed
+            'ColourList': ['Grey', 'Viridis', 'Inferno', 'Plasma', 'Autumn', 'Cool', 'Bone', 'Copper', 'Hot', 'Jet',
+                           'Thermal', 'Flame', 'Yellowy', 'Bipolar', 'Spectrum'],
+
+            # Todo: add to the p tree
+            'brightness': 50,
+            'contrast': 50,
+            'dirpath': self.config['dirpath'],
+            'cmap': self.config['cmap'],
+
+            # Params for denoising
+            'maxSearchDepth': self.config['maxSearchDepth'],
+            # Params for segmentation
+            'minSegment': self.config['minSegment'],
+        }
+        # Update the interface
+        self.useAmplitudeTick.setChecked(self.config['showAmplitudePlot'])
+        self.useAmplitudeCheck()
+        self.useFilesTick.setChecked(self.config['showListofFiles'])
+        self.useFilesCheck()
+        self.showOverviewSegsTick.setChecked(self.config['showAnnotationOverview'])
+        self.showOverviewSegsCheck()
+        self.dragRectangles.setChecked(self.config['dragBoxes'])
+        self.dragRectanglesCheck()
+        self.dragRectTransparent.setChecked(self.config['transparentBoxes'])
+        self.dragRectsTransparent()
+        self.invertcm.setChecked(self.config['invertColourMap'])
+        self.invertColourMap()
+        self.readonly.setChecked(self.config['readOnly'])
+        self.makeReadOnly()
+        self.showAllTick.setChecked(self.config['showAllPages'])
+        self.showAllCheck()
+        # Set them enable
+        self.useAmplitudeTick.setEnabled(True)
+        self.useFilesTick.setEnabled(True)
+        self.showOverviewSegsTick.setEnabled(True)
+        self.dragRectangles.setEnabled(True)
+        self.dragRectTransparent.setEnabled(True)
+        self.invertcm.setEnabled(True)
+        self.readonly.setEnabled(True)
+        self.showAllTick.setEnabled(True)
 
 # ============
 # Various actions: deleting segments, saving, quitting
@@ -3339,10 +3612,9 @@ class AviaNZ(QMainWindow):
         else:
             self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
         self.saveSegments()
-        # TODO: save changes made to the config file during the session
-        # if self.saveConfig == True:
-        #     print "Saving config file"
-        #     json.dump(self.config, open(self.configfile, 'wb'))
+        if self.saveConfig == True:
+            print "Saving config file"
+            json.dump(self.config, open(self.configfile, 'wb'))
         QApplication.quit()
 
 # =============
