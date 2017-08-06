@@ -2893,8 +2893,11 @@ class AviaNZ(QMainWindow):
                     r = ws.max_row + 1  # Get last row number from existing file
                     ws.cell(row=r, column=1, value=str(relfname))
                     for seg in annotation:
-                        ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')) + '-' + str(format(round(seg[1],2),'.2f')))
-                        c = c + 1
+                        # ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')) + '-' + str(format(round(seg[1],2),'.2f')))
+                        # c = c + 1
+                        ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')))
+                        ws.cell(row=r, column=c + 2, value=str(format(round(seg[1],2),'.2f')))
+                        c = c + 2
                     wb.save(str(eFile))
                 except:
                     print "Unable to open file"  # Does not exist OR no read permissions
@@ -2906,13 +2909,23 @@ class AviaNZ(QMainWindow):
 
                 ws = wb.get_sheet_by_name('TimeStamps')
                 ws.cell(row=1, column=1, value="File Name")
-                ws.cell(row=1, column=2, value="Detections [start-end(mm:ss)]")
-                c = 1
+                ws.cell(row=1, column=2, value="start(mm:ss)")
+                c = 3
+                for i in range(100):
+                    ws.cell(row=1, column=c, value="end")
+                    ws.cell(row=1, column=c + 1, value="start")
+                    c = c + 2
+                ws.cell(row=1, column=c, value="end")
+                # ws.cell(row=1, column=2, value="Detections [start-end(mm:ss)]")
                 r = 2
+                c = 1
                 ws.cell(row=r, column=c, value=str(relfname))
                 for seg in annotation:
-                    ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')) + '-' + str(format(round(seg[1],2),'.2f')))
-                    c = c + 1
+                    # ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')) + '-' + str(format(round(seg[1],2),'.2f')))
+                    # c = c + 1
+                    ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')))
+                    ws.cell(row=r, column=c + 2, value=str(format(round(seg[1],2),'.2f')))
+                    c = c + 2
                 # Second sheet
                 ws = wb.get_sheet_by_name('PresenceAbsence')
                 ws.cell(row=1, column=1, value="File Name")
@@ -3193,7 +3206,7 @@ class AviaNZ(QMainWindow):
         #    filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
         exporter = pge.ImageExporter(self.p_spec)
         exporter.export(filename)
-        #for Windows to save the image, needs to typecast line 70 of ImageExporter.py
+        # for Windows to save the image, needs to typecast line 70 of ImageExporter.py
         # from
         # bg = np.empty((self.params['width'], self.params['height'], 4), dtype=np.ubyte)
         # to

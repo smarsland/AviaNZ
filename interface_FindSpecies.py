@@ -10,6 +10,7 @@ from openpyxl import load_workbook, Workbook
 
 from pyqtgraph.Qt import QtGui
 from pyqtgraph.dockarea import *
+import pyqtgraph as pg
 
 import SignalProc
 import Segment
@@ -108,106 +109,107 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         # print files
 
     def detect(self):
-        if self.dirName:
-            self.statusLeft.setText("Processing...")
-            # self.statusBar().showMessage("Processing...")
-            i=self.w_spe.currentIndex()
-            if i==0:
-                self.species="Kiwi"
-            elif i==1:
-                self.species="Ruru"
-            else: # All
-                self.species="Any"
+        with pg.BusyCursor():
+            if self.dirName:
+                self.statusLeft.setText("Processing...")
+                # self.statusBar().showMessage("Processing...")
+                i=self.w_spe.currentIndex()
+                if i==0:
+                    self.species="Kiwi"
+                elif i==1:
+                    self.species="Ruru"
+                else: # All
+                    self.species="Any"
 
-            total=0
-            for root, dirs, files in os.walk(str(self.dirName)):
-                for filename in files:
-                    if filename.endswith('.wav'):
-                        total=total+1
-            cnt=0   # processed number of files
-            self.statusRight.setText("Processing file " + "0/" + str(total))
+                total=0
+                for root, dirs, files in os.walk(str(self.dirName)):
+                    for filename in files:
+                        if filename.endswith('.wav'):
+                            total=total+1
+                cnt=0   # processed number of files
+                self.statusRight.setText("Processing file " + "0/" + str(total))
 
-            for root, dirs, files in os.walk(str(self.dirName)):
-                for filename in files:
-                    if filename.endswith('.wav'):
-                        # if not os.path.isfile(root+'/'+filename+'.data'): # if already processed then skip?
-                        #     continue
-                        cnt=cnt+1
-                        self.statusRight.setText("Processing file " + str(cnt) + "/" + str(total))
-                        self.filename=root+'/'+filename
-                        self.loadFile()
+                for root, dirs, files in os.walk(str(self.dirName)):
+                    for filename in files:
+                        if filename.endswith('.wav'):
+                            # if not os.path.isfile(root+'/'+filename+'.data'): # if already processed then skip?
+                            #     continue
+                            cnt=cnt+1
+                            self.statusRight.setText("Processing file " + str(cnt) + "/" + str(total))
+                            self.filename=root+'/'+filename
+                            self.loadFile()
 
-                        self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
-                        # print self.algs.itemText(self.algs.currentIndex())
-                        # if self.algs.currentText() == "Amplitude":
-                        #     newSegments = self.seg.segmentByAmplitude(float(str(self.ampThr.text())))
-                        # elif self.algs.currentText() == "Median Clipping":
-                        #     newSegments = self.seg.medianClip(float(str(self.medThr.text())))
-                        #     #print newSegments
-                        # elif self.algs.currentText() == "Harma":
-                        #     newSegments = self.seg.Harma(float(str(self.HarmaThr1.text())),float(str(self.HarmaThr2.text())))
-                        # elif self.algs.currentText() == "Power":
-                        #     newSegments = self.seg.segmentByPower(float(str(self.PowerThr.text())))
-                        # elif self.algs.currentText() == "Onsets":
-                        #     newSegments = self.seg.onsets()
-                        #     #print newSegments
-                        # elif self.algs.currentText() == "Fundamental Frequency":
-                        #     newSegments, pitch, times = self.seg.yin(int(str(self.Fundminfreq.text())),int(str(self.Fundminperiods.text())),float(str(self.Fundthr.text())),int(str(self.Fundwindow.text())),returnSegs=True)
-                        #     print newSegments
-                        # elif self.algs.currentText() == "FIR":
-                        #     print float(str(self.FIRThr1.text()))
-                        #     # newSegments = self.seg.segmentByFIR(0.1)
-                        #     newSegments = self.seg.segmentByFIR(float(str(self.FIRThr1.text())))
-                        #     # print newSegments
-                        # elif self.algs.currentText()=='Wavelets':
-                        if self.species!='Any':
-                            newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
-                        else:
-                            newSegments=self.seg.bestSegments()
-                            # TODO: remove short segments?
+                            self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
+                            # print self.algs.itemText(self.algs.currentIndex())
+                            # if self.algs.currentText() == "Amplitude":
+                            #     newSegments = self.seg.segmentByAmplitude(float(str(self.ampThr.text())))
+                            # elif self.algs.currentText() == "Median Clipping":
+                            #     newSegments = self.seg.medianClip(float(str(self.medThr.text())))
+                            #     #print newSegments
+                            # elif self.algs.currentText() == "Harma":
+                            #     newSegments = self.seg.Harma(float(str(self.HarmaThr1.text())),float(str(self.HarmaThr2.text())))
+                            # elif self.algs.currentText() == "Power":
+                            #     newSegments = self.seg.segmentByPower(float(str(self.PowerThr.text())))
+                            # elif self.algs.currentText() == "Onsets":
+                            #     newSegments = self.seg.onsets()
+                            #     #print newSegments
+                            # elif self.algs.currentText() == "Fundamental Frequency":
+                            #     newSegments, pitch, times = self.seg.yin(int(str(self.Fundminfreq.text())),int(str(self.Fundminperiods.text())),float(str(self.Fundthr.text())),int(str(self.Fundwindow.text())),returnSegs=True)
+                            #     print newSegments
+                            # elif self.algs.currentText() == "FIR":
+                            #     print float(str(self.FIRThr1.text()))
+                            #     # newSegments = self.seg.segmentByFIR(0.1)
+                            #     newSegments = self.seg.segmentByFIR(float(str(self.FIRThr1.text())))
+                            #     # print newSegments
+                            # elif self.algs.currentText()=='Wavelets':
+                            if self.species!='Any':
+                                newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
+                            else:
+                                newSegments=self.seg.bestSegments()
+                                # TODO: remove short segments?
 
-                        # Generate Binary output ('Binary)
-                        n=math.ceil(float(self.datalength)/self.sampleRate)
-                        detected=np.zeros(int(n))
-                        for seg in newSegments:
-                            for a in range(len(detected)):
-                                if math.floor(seg[0])<=a and a<math.ceil(seg[1]):
-                                    detected[a]=1
-                        self.saveSegments(detected, mode='Binary') # append
+                            # Generate Binary output ('Binary)
+                            n=math.ceil(float(self.datalength)/self.sampleRate)
+                            detected=np.zeros(int(n))
+                            for seg in newSegments:
+                                for a in range(len(detected)):
+                                    if math.floor(seg[0])<=a and a<math.ceil(seg[1]):
+                                        detected[a]=1
+                            self.saveSegments(detected, mode='Binary') # append
 
-                        # Generate annotation friendly output ('Annotation')
-                        # print "Generate annotation friendly output", newSegments
-                        annotation=[]
-                        if len(newSegments)>0:
-                            if self.species!='Any': # alg="Wavelets"
-                                mergedSeg=self.mergeSeg(newSegments)
-                                if len(mergedSeg)>0:
-                                    for seg in mergedSeg:
-                                        annotation.append([float(seg[0]),float(seg[1]),0,0,self.species+'?'])
-                            elif self.species=='Any':
-                                if len(newSegments)>0:
-                                    for seg in newSegments:
-                                        annotation.append([float(seg[0]),float(seg[1]),0,0,"Don't know"])
-                                # print annotation
-                            self.saveSegments(annotation, mode='Annotation')
+                            # Generate annotation friendly output ('Annotation')
+                            # print "Generate annotation friendly output", newSegments
+                            annotation=[]
+                            if len(newSegments)>0:
+                                if self.species!='Any': # alg="Wavelets"
+                                    mergedSeg=self.mergeSeg(newSegments)
+                                    if len(mergedSeg)>0:
+                                        for seg in mergedSeg:
+                                            annotation.append([float(seg[0]),float(seg[1]),0,0,self.species+'?'])
+                                elif self.species=='Any':
+                                    if len(newSegments)>0:
+                                        for seg in newSegments:
+                                            annotation.append([float(seg[0]),float(seg[1]),0,0,"Don't know"])
+                                    # print annotation
+                                self.saveSegments(annotation, mode='Annotation')
 
-                        # Generate excel summary - time stamps [start(mm:ss) end(mm:ss)]
-                        annotation=[]
-                        for seg in newSegments:
-                            annotation.append([self.convertMillisecs(seg[0]*1000),self.convertMillisecs(seg[1]*1000)])
-                        # print annotation
-                        self.saveSegments(annotation, mode='Excel') # append
-            # self.statusBar().showMessage("Ready")
-            self.statusLeft.setText("Ready")
-        else:
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
-            msg.setWindowIcon(QIcon('img/Avianz.ico'))
-            msg.setText("Please select a folder to process!")
-            msg.setWindowTitle("Select Folder")
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.exec_()
-        # return newSegments
+                            # Generate excel summary - time stamps [start(mm:ss) end(mm:ss)]
+                            annotation=[]
+                            for seg in newSegments:
+                                annotation.append([self.convertMillisecs(seg[0]*1000),self.convertMillisecs(seg[1]*1000)])
+                            # print annotation
+                            self.saveSegments(annotation, mode='Excel') # append
+                # self.statusBar().showMessage("Ready")
+                self.statusLeft.setText("Ready")
+            else:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                msg.setText("Please select a folder to process!")
+                msg.setWindowTitle("Select Folder")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec_()
+            # return newSegments
 
     def mergeSeg(self,segments):
         indx=[]
@@ -243,8 +245,11 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                     r=ws.max_row+1 # TODO: get last row number from existing file
                     ws.cell(row=r,column=1,value=str(relfname))
                     for seg in annotation:
-                        ws.cell(row=r,column=c+1,value=seg[0]+'-'+seg[1])
-                        c=c+1
+                        # ws.cell(row=r,column=c+1,value=seg[0]+'-'+seg[1])
+                        # c=c+1
+                        ws.cell(row=r, column=c + 1, value=seg[0])
+                        ws.cell(row=r, column=c + 2, value=seg[1])
+                        c = c + 2
                     wb.save(str(eFile))
                 except:
                     print "Unable to open file"           #Does not exist OR no read permissions
@@ -256,13 +261,23 @@ class AviaNZFindSpeciesInterface(QMainWindow):
 
                 ws = wb.get_sheet_by_name('TimeStamps')
                 ws.cell(row=1,column=1, value="File Name")
-                ws.cell(row=1,column=2, value="Detections [start-end(mm:ss)]")
+                ws.cell(row=1, column=2, value="start(mm:ss)")
+                c=3
+                for i in range(100):
+                    ws.cell(row=1, column=c , value="end")
+                    ws.cell(row=1, column=c + 1, value="start")
+                    c=c+2
+                ws.cell(row=1, column=c , value="end")
+                # ws.cell(row=1,column=2, value="Detections [start-end(mm:ss)]")
                 c=1
                 r=2
                 ws.cell(row=r,column=c,value=str(relfname))
                 for seg in annotation:
-                    ws.cell(row=r,column=c+1,value=seg[0]+'-'+seg[1])
-                    c=c+1
+                    # ws.cell(row=r,column=c+1,value=seg[0]+'-'+seg[1])
+                    # c=c+1
+                    ws.cell(row=r, column=c + 1, value=seg[0])
+                    ws.cell(row=r, column=c + 2, value=seg[1])
+                    c = c + 2
                 # Second sheet
                 ws = wb.get_sheet_by_name('PresenceAbsence')
                 ws.cell(row=1,column=1, value="File Name")
