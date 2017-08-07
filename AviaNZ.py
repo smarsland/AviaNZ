@@ -1596,7 +1596,7 @@ class AviaNZ(QMainWindow):
             if indexx > 0 and indexx < np.shape(self.sg)[0] and indexy > 0 and indexy < np.shape(self.sg)[1]:
                 seconds = self.convertSpectoAmpl(mousePoint.x()) % 60
                 minutes = int(((self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] )/ 60) % 60)
-                self.pointData.setText('time=%d:%0.2f (m:s), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1], self.sg[indexx, indexy]))
+                self.pointData.setText('time=%d:%0.2f (m:s), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
 
     def mouseClicked_ampl(self,evt):
         """ Listener for if the user clicks on the amplitude plot.
@@ -2757,6 +2757,8 @@ class AviaNZ(QMainWindow):
         FreqRange = end - start
         SpecRange = FreqRange/height
         self.specaxis.setTicks([[(0,(start/1000.)),(SpecRange/4,(start/1000.+FreqRange/4000.)),(SpecRange/2,(start/1000.+FreqRange/2000.)),(3*SpecRange/4,(start/1000.+3*FreqRange/4000.)),(SpecRange,(start/1000.+FreqRange/1000.))]])
+
+        # TODO: sort out self.textpos: loop over the boxes and move the label
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
