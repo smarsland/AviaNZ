@@ -3319,7 +3319,7 @@ class AviaNZ(QMainWindow):
         ## Create tree of Parameter objects
         self.p = Parameter.create(name='params', type='group', children=params)
         self.p.sigTreeStateChanged.connect(self.change) #TODO: how to make this close tree event.
-                                                             # Currently if anything changes in the tree, it updates self.config
+                                                         # Currently if anything changes in the tree, it updates self.config
         ## Create ParameterTree widget
         self.t = ParameterTree()
         self.t.setParameters(self.p, showTop=False)
