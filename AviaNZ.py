@@ -2759,6 +2759,8 @@ class AviaNZ(QMainWindow):
         SpecRange = FreqRange/height
         self.specaxis.setTicks([[(0,(start/1000.)),(SpecRange/4,(start/1000.+FreqRange/4000.)),(SpecRange/2,(start/1000.+FreqRange/2000.)),(3*SpecRange/4,(start/1000.+3*FreqRange/4000.)),(SpecRange,(start/1000.+FreqRange/1000.))]])
 
+        # TODO: sort out self.textpos: loop over the boxes and move the label
+
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
         """
