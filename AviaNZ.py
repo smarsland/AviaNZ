@@ -1172,6 +1172,7 @@ class AviaNZ(QMainWindow):
         Turns off the listeners for the amplitude and spectrogram plots.
         Also has to go through all of the segments, turn off the listeners, and make them unmovable.
         """
+        self.config['readOnly']=self.readonly.isChecked()
         if self.readonly.isChecked():
             try:
                 self.p_ampl.scene().sigMouseClicked.disconnect()
@@ -1596,7 +1597,7 @@ class AviaNZ(QMainWindow):
             if indexx > 0 and indexx < np.shape(self.sg)[0] and indexy > 0 and indexy < np.shape(self.sg)[1]:
                 seconds = self.convertSpectoAmpl(mousePoint.x()) % 60
                 minutes = int(((self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] )/ 60) % 60)
-                self.pointData.setText('time=%d:%0.2f (m:s), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1], self.sg[indexx, indexy]))
+                self.pointData.setText('time=%d:%0.2f (m:s), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
 
     def mouseClicked_ampl(self,evt):
         """ Listener for if the user clicks on the amplitude plot.
@@ -3262,13 +3263,13 @@ class AviaNZ(QMainWindow):
                  'limits': (5, 300), 'step': 5,
                  'suffix': ' sec'},
                 {'name': 'Segment colours', 'type': 'group', 'children': [
-                    {'name': 'Confirmed segments', 'type': 'color', 'value': self.config['ColourNamed'][:-1],
+                    {'name': 'Confirmed segments', 'type': 'color', 'value': self.config['ColourNamed'],
                      'tip': "Correctly labeled segments"},
-                    {'name': 'Possible', 'type': 'color', 'value': self.config['ColourPossible'][:-1],
+                    {'name': 'Possible', 'type': 'color', 'value': self.config['ColourPossible'],
                      'tip': "Segments that need further approval"},
-                    {'name': "Don't know", 'type': 'color', 'value': self.config['ColourNone'][:-1],
+                    {'name': "Don't know", 'type': 'color', 'value': self.config['ColourNone'],
                      'tip': "Segments that are not labelled"},
-                    {'name': 'Currently selected', 'type': 'color', 'value': self.config['ColourSelected'][:-1],
+                    {'name': 'Currently selected', 'type': 'color', 'value': self.config['ColourSelected'],
                      'tip': "Currently delected segment"},
                 ]},
                 {'name': 'Text labels', 'type': 'group', 'children': [
@@ -3317,8 +3318,8 @@ class AviaNZ(QMainWindow):
 
         ## Create tree of Parameter objects
         self.p = Parameter.create(name='params', type='group', children=params)
-        self.p.sigTreeStateChanged.connect(self.change)
-
+        self.p.sigTreeStateChanged.connect(self.change) #TODO: how to make this close tree event.
+                                                             # Currently if anything changes in the tree, it updates self.config
         ## Create ParameterTree widget
         self.t = ParameterTree()
         self.t.setParameters(self.p, showTop=False)
@@ -3326,19 +3327,19 @@ class AviaNZ(QMainWindow):
         self.t.setWindowTitle('AviaNZ - Interface Settings')
         self.t.setWindowIcon(QIcon('img/Avianz.ico'))
         self.t.resize(450, 1000)
-        # Disable Interface menu items
-        self.useAmplitudeTick.setEnabled(False)
-        self.useFilesTick.setEnabled(False)
-        self.showOverviewSegsTick.setEnabled(False)
-        self.dragRectangles.setEnabled(False)
-        self.dragRectTransparent.setEnabled(False)
-        self.invertcm.setEnabled(False)
-        self.readonly.setEnabled(False)
-        self.showAllTick.setEnabled(False)
+        # # Disable Interface menu items
+        # self.useAmplitudeTick.setEnabled(False)
+        # self.useFilesTick.setEnabled(False)
+        # self.showOverviewSegsTick.setEnabled(False)
+        # self.dragRectangles.setEnabled(False)
+        # self.dragRectTransparent.setEnabled(False)
+        # self.invertcm.setEnabled(False)
+        # self.readonly.setEnabled(False)
+        # self.showAllTick.setEnabled(False)
 
     ## If anything changes in the tree, update self.config
     def change(self):
-        # print("save changes:")
+        print("save changes:")
         # print self.p.getValues()
         basicSet = self.p.getValues().get('Basic settings')
         # print basicSet
@@ -3363,19 +3364,23 @@ class AviaNZ(QMainWindow):
         # print annotationClr
         confirmed = annotationClr[1].get('Confirmed segments')[0]
         rgbaNamed = list(confirmed.getRgb())
-        rgbaNamed[3] = rgbaNamed[3] * 100 / 255
+        if rgbaNamed[3] > 100:
+            rgbaNamed[3] = rgbaNamed[3] * 100 / 255
         # print 'Confirmed segments-', list(confirmed.getRgb())
         possible = annotationClr[1].get('Possible')[0]
         rgbaPossible = list(possible.getRgb())
-        rgbaPossible[3] = rgbaPossible[3] * 100 / 255
+        if rgbaPossible[3]>100:
+            rgbaPossible[3] = rgbaPossible[3] * 100 / 255
         # print 'Possible-', rgbaPossible
         none = annotationClr[1].get("Don't know")[0]
         rgbaNone = list(none.getRgb())
-        rgbaNone[3] = rgbaNone[3] * 100 / 255
+        if rgbaNone[3] > 100:
+            rgbaNone[3] = rgbaNone[3] * 100 / 255
         # print "Don't know-", rgbaNone
         selected = annotationClr[1].get('Currently selected')[0]
         rgbaSelected = list(selected.getRgb())
-        rgbaSelected[3] = rgbaSelected[3] * 100 / 255
+        if rgbaSelected[3] > 100:
+            rgbaSelected[3] = rgbaSelected[3] * 100 / 255
         # print 'Currently selected-', list(selected.getRgb())
         textlbl = annotationSet[1].get('Text labels')
         # print 'Text labels-', textlbl
@@ -3408,7 +3413,6 @@ class AviaNZ(QMainWindow):
         #
         birdList = self.p.getValues().get('Bird list')
 
-        print "Saving config file..."
         self.config = {
             # Basic settings
             'showAmplitudePlot': basicSet[1].get('Show amplitude plot')[0],
@@ -3485,24 +3489,25 @@ class AviaNZ(QMainWindow):
         self.showOverviewSegsTick.setChecked(self.config['showAnnotationOverview'])
         self.showOverviewSegsCheck()
         self.dragRectangles.setChecked(self.config['dragBoxes'])
-        self.dragRectanglesCheck()
+        # self.dragRectanglesCheck()
         self.dragRectTransparent.setChecked(self.config['transparentBoxes'])
-        self.dragRectsTransparent()
+        # self.dragRectsTransparent()
         self.invertcm.setChecked(self.config['invertColourMap'])
         self.invertColourMap()
         self.readonly.setChecked(self.config['readOnly'])
         self.makeReadOnly()
         self.showAllTick.setChecked(self.config['showAllPages'])
         self.showAllCheck()
-        # Set them enable
-        self.useAmplitudeTick.setEnabled(True)
-        self.useFilesTick.setEnabled(True)
-        self.showOverviewSegsTick.setEnabled(True)
-        self.dragRectangles.setEnabled(True)
-        self.dragRectTransparent.setEnabled(True)
-        self.invertcm.setEnabled(True)
-        self.readonly.setEnabled(True)
-        self.showAllTick.setEnabled(True)
+        self.widthWindow.setValue(self.config['windowWidth'])
+        # # Set them enable
+        # self.useAmplitudeTick.setEnabled(True)
+        # self.useFilesTick.setEnabled(True)
+        # self.showOverviewSegsTick.setEnabled(True)
+        # self.dragRectangles.setEnabled(True)
+        # self.dragRectTransparent.setEnabled(True)
+        # self.invertcm.setEnabled(True)
+        # self.readonly.setEnabled(True)
+        # self.showAllTick.setEnabled(True)
 
 # ============
 # Various actions: deleting segments, saving, quitting
