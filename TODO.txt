@@ -29,6 +29,8 @@ Can we stick to one? Check scipy.misc on mac
 spectrogram paramaters - have the option to choose visible frequency range (e.g. 0-8000 Hz) but
 cannot undo and segment labels get disappear!
 
+paging - x axis and page overlap, e.g 15 min file ends with 15:10 with overlap=10
+
 Wavelet denoising with best tree?
 
 Work out how to make old wavelet method produce too many segments
@@ -78,7 +80,7 @@ Make a pretty (simple) version of the Process File dialog
         (e.g. SIPO dataset is rainy, so almost all the recordings turned out to be positive due to rain)
 
 Enable parameter setting
-# partially done TODO: merge changes done by different ways (parameter tree and other interface shortcuts)
+#done
 
 Paper!
 
