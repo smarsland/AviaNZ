@@ -3365,6 +3365,14 @@ class AviaNZ(QMainWindow):
                 self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1],
                                                    self.config['ColourSelected'][2], 255)
 
+        # Reload the file to make these changes take effect
+        self.resetStorageArrays()
+        # Reset the media player
+        if self.media_obj.state() == phonon.Phonon.PlayingState:
+            self.media_obj.pause()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.loadFile()
+
 # ============
 # Various actions: deleting segments, saving, quitting
     def deleteSegment(self,id=-1):
