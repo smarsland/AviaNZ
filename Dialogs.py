@@ -57,9 +57,11 @@ class StartScreen(QDialog):
 
         # self.setGeometry(300, 300, 430, 210)
 
-        self.connect(b1, SIGNAL('clicked()'), self.manualSeg)
+        #self.connect(b1, SIGNAL('clicked()'), self.manualSeg)
+        b1.clicked.connect(self.manualSeg)
         # if DOC==False:
-        self.connect(b2, SIGNAL('clicked()'), self.findSpecies)
+        #self.connect(b2, SIGNAL('clicked()'), self.findSpecies)
+        b2.clicked.connect(self.findSpecies)
         # self.connect(b3, SIGNAL('clicked()'), self.denoise)
 
         # vbox = QVBoxLayout()
@@ -496,7 +498,8 @@ class Denoise(QDialog):
         self.wavlabel = QLabel("Wavelets")
         self.depthlabel = QLabel("Depth of wavelet packet decomposition (or tick box to use best)")
         self.depthchoice = QCheckBox()
-        self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
+        #self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
+        self.depthchoice.clicked.connect(self.depthclicked)
         self.depth = QSpinBox()
         self.depth.setRange(1,10)
         self.depth.setSingleStep(1)
@@ -536,6 +539,7 @@ class Denoise(QDialog):
 
         self.trimlabel = QLabel("Make frequency axis tight")
         self.trimaxis = QCheckBox()
+        self.trimaxis.setChecked(True)
 
         # Want combinations of these too!
 
@@ -783,10 +787,12 @@ class HumanClassify1(QDialog):
 
         for i in xrange(len(self.birds1)):
             self.birds1[i].setEnabled(True)
-            self.connect(self.birds1[i], SIGNAL("clicked()"), self.radioBirdsClicked)
+            #self.connect(self.birds1[i], SIGNAL("clicked()"), self.radioBirdsClicked)
+            self.birds1[i].clicked.connect(self.radioBirdsClicked)
         for i in xrange(len(self.birds2)):
             self.birds2[i].setEnabled(True)
-            self.connect(self.birds2[i], SIGNAL("clicked()"), self.radioBirdsClicked)
+            #self.connect(self.birds2[i], SIGNAL("clicked()"), self.radioBirdsClicked)
+            self.birds2[i].clicked.connect(self.radioBirdsClicked)
 
         # The list of less common birds
         self.birds3 = QListWidget(self)
@@ -803,7 +809,8 @@ class HumanClassify1(QDialog):
         # This is the text box for missing birds
         self.tbox = QLineEdit(self)
         self.tbox.setMaximumWidth(150)
-        self.connect(self.tbox, SIGNAL('returnPressed()'), self.birdTextEntered)
+        #self.connect(self.tbox, SIGNAL('returnPressed()'), self.birdTextEntered)
+        self.tbox.returnPressed.connect(self.birdTextEntered)
         #self.connect(self.tbox, SIGNAL('textChanged(QString*)'), self.birdTextEntered)
         self.tbox.setEnabled(False)
 
@@ -844,7 +851,8 @@ class HumanClassify1(QDialog):
         vboxLabel = QVBoxLayout()
         vboxLabel.addWidget(self.species)
         vboxLabel.addWidget(self.playButton)
-        self.connect(self.playButton, SIGNAL('clicked()'), self.playSeg)
+        #self.connect(self.playButton, SIGNAL('clicked()'), self.playSeg)
+        self.playButton.clicked.connect(self.playSeg)
 
         vboxFull = QHBoxLayout()
         vboxFull.addWidget(self.wPlot)
@@ -986,7 +994,8 @@ class HumanClassify2(QDialog):
         #self.segments = [item for item in self.segments if item[4] == label or item[4][:-1] == label]
         #print len(self.segments)
         next = QPushButton("Next/Finish")
-        self.connect(next, SIGNAL("clicked()"), self.nextPage)
+        #self.connect(next, SIGNAL("clicked()"), self.nextPage)
+        next.clicked.connect(self.nextPage)
 
         if len(self.segments) > 0:
 
@@ -1231,12 +1240,15 @@ class HumanClassify2a(QDialog):
         for item in birdlist:
             self.birds.addItem(item)
         #self.birds.setCurrentRow(0)
-        self.connect(self.birds, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.dbl)
+        #self.connect(self.birds, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.dbl)
+        self.birds.itemDoubleClicked.connect(self.dbl)
 
         ok = QPushButton('OK')
         cancel = QPushButton('Cancel')
-        self.connect(ok, SIGNAL('clicked()'), self.ok)
-        self.connect(cancel,SIGNAL('clicked()'), self.cancel)
+        #self.connect(ok, SIGNAL('clicked()'), self.ok)
+        #self.connect(cancel,SIGNAL('clicked()'), self.cancel)
+        self.ok.clicked.connect(self.ok)
+        self.cancel.clicked.connect(self.cancel)
 
         layout = QVBoxLayout()
         layout.addWidget(QLabel('Choose the bird you wish to see classification of:'))
