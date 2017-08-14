@@ -23,7 +23,6 @@
 import sys, os, json, platform
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
-#from PyQt4.QtWebKit import *
 import PyQt4.phonon as phonon
 
 import wavio
@@ -42,7 +41,7 @@ import Dialogs as Dialogs
 import SignalProc
 import Segment
 import WaveletSegment
-import Wavelets
+import WaveletFunctions
 #import Features
 #import Learning
 import interface_FindSpecies
@@ -50,9 +49,8 @@ import interface_FindSpecies
 
 from openpyxl import load_workbook, Workbook
 
-from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
+from pyqtgraph.parametertree import Parameter, ParameterTree #, ParameterItem, registerParameterType
 
-#import pyqtgraph.parametertree.parameterTypes as pTree
 # ==============
 # TODO
 
@@ -98,7 +96,6 @@ from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, reg
     # HistogramLUTItem
 
 # Make the scrollbar be the same size as the spectrogram -> hard!
-
 
 # Context menu different for day and night birds?
 
@@ -220,7 +217,8 @@ class AviaNZ(QMainWindow):
 
         # Save the segments every minute
         self.timer = QTimer()
-        QObject.connect(self.timer, SIGNAL("timeout()"), self.saveSegments)
+        #QObject.connect(self.timer, SIGNAL("timeout()"), self.saveSegments)
+        self.timer.timeout.connect(self.saveSegments)
         self.timer.start(self.config['secsSave']*1000)
 
     def createMenu(self):
@@ -274,7 +272,8 @@ class AviaNZ(QMainWindow):
             if colour==self.config['cmap']:
                 cm.setChecked(True)
             receiver = lambda cmap=colour: self.setColourMap(cmap)
-            self.connect(cm, SIGNAL("triggered()"), receiver)
+            #self.connect(cm, SIGNAL("triggered()"), receiver)
+            cm.triggered.connect(receiver)
             colGroup.addAction(cm)
         self.invertcm = specMenu.addAction("Invert colour map",self.invertColourMap)
         self.invertcm.setCheckable(True)
@@ -345,7 +344,7 @@ class AviaNZ(QMainWindow):
         msg.setIconPixmap(QPixmap("img\AviaNZ.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
         msg.setText("The AviaNZ Program, v0.10 (June 2017)")
-        msg.setInformativeText("By Stephen Marsland, Massey University (2016--2017). With input from Nirosha Priyadarshani, Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Manic Purage. \ns.r.marsland@massey.ac.nz; n.p.priyadarshani@massey.ac.nz")
+        msg.setInformativeText("By Stephen Marsland, Massey University (2016--2017). With code by Nirosha Priyadarshani and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Manic Purage. \ns.r.marsland@massey.ac.nz; n.p.priyadarshani@massey.ac.nz")
         msg.setWindowTitle("About")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
@@ -532,17 +531,20 @@ class AviaNZ(QMainWindow):
         # The buttons to move through the overview
         self.leftBtn = QToolButton()
         self.leftBtn.setArrowType(Qt.LeftArrow)
-        self.connect(self.leftBtn, SIGNAL('clicked()'), self.moveLeft)
+        #self.connect(self.leftBtn, SIGNAL('clicked()'), self.moveLeft)
+        self.leftBtn.clicked.connect(self.moveLeft)
         self.w_overview.addWidget(self.leftBtn,row=0,col=0)
         self.rightBtn = QToolButton()
         self.rightBtn.setArrowType(Qt.RightArrow)
-        self.connect(self.rightBtn, SIGNAL('clicked()'), self.moveRight)
+        #self.connect(self.rightBtn, SIGNAL('clicked()'), self.moveRight)
+        self.rightBtn.clicked.connect(self.moveRight)
         self.w_overview.addWidget(self.rightBtn,row=0,col=1)
 
         # Button to move to the next file in the list
         self.nextFileBtn=QToolButton()
         self.nextFileBtn.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSkipForward))
-        self.connect(self.nextFileBtn, SIGNAL('clicked()'), self.openNextFile)
+        #self.connect(self.nextFileBtn, SIGNAL('clicked()'), self.openNextFile)
+        self.nextFileBtn.clicked.connect(self.openNextFile)
         self.nextFileBtn.setToolTip("Open next file")
         self.w_files.addWidget(self.nextFileBtn,row=0,col=1)
         #self.w_overview.addWidget(self.nextFileBtn,row=1,colspan=2)
@@ -551,12 +553,14 @@ class AviaNZ(QMainWindow):
         self.prev5mins=QToolButton()
         self.prev5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekBackward))
         self.prev5mins.setToolTip("Previous page")
-        self.connect(self.prev5mins, SIGNAL('clicked()'), self.movePrev5mins)
+        #self.connect(self.prev5mins, SIGNAL('clicked()'), self.movePrev5mins)
+        self.prev5mins.clicked.connect(self.movePrev5mins)
         self.w_overview.addWidget(self.prev5mins,row=2,col=0)
         self.next5mins=QToolButton()
         self.next5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekForward))
         self.next5mins.setToolTip("Next page")
-        self.connect(self.next5mins, SIGNAL('clicked()'), self.moveNext5mins)
+        #self.connect(self.next5mins, SIGNAL('clicked()'), self.moveNext5mins)
+        self.next5mins.clicked.connect(self.moveNext5mins)
         self.w_overview.addWidget(self.next5mins,row=2,col=1)
         self.placeInFileLabel = QLabel('')
         self.w_overview.addWidget(self.placeInFileLabel,row=1,colspan=2)
@@ -565,26 +569,30 @@ class AviaNZ(QMainWindow):
         self.playButton = QtGui.QToolButton()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.setToolTip("Play visible")
-        self.connect(self.playButton, SIGNAL('clicked()'), self.playVisible)
+        #self.connect(self.playButton, SIGNAL('clicked()'), self.playVisible)
+        self.playButton.clicked.connect(self.playVisible)
 
         self.playSegButton = QtGui.QToolButton()
         self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
         self.playSegButton.setIconSize(QtCore.QSize(20, 20))
         self.playSegButton.setToolTip("Play selected")
-        self.connect(self.playSegButton, SIGNAL('clicked()'), self.playSelectedSegment)
+        #self.connect(self.playSegButton, SIGNAL('clicked()'), self.playSelectedSegment)
+        self.playSegButton.clicked.connect(self.playSelectedSegment)
         self.playSegButton.setEnabled(False)
 
         self.playBandLimitedSegButton = QtGui.QToolButton()
         self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
         self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.setIconSize(QtCore.QSize(20, 20))
-        self.connect(self.playBandLimitedSegButton, SIGNAL('clicked()'), self.playBandLimitedSegment)
+        #self.connect(self.playBandLimitedSegButton, SIGNAL('clicked()'), self.playBandLimitedSegment)
+        self.playBandLimitedSegButton.clicked.connect(self.playBandLimitedSegment)
         self.playBandLimitedSegButton.setEnabled(False)
 
         # The slider to show playback position
         # This is hidden, but controls the moving bar
         self.playSlider = QSlider(Qt.Horizontal)
-        self.connect(self.playSlider,SIGNAL('sliderReleased()'),self.playSliderMoved)
+        #self.connect(self.playSlider,SIGNAL('sliderReleased()'),self.playSliderMoved)
+        self.playSlider.sliderReleased.connect(self.playSliderMoved)
         self.playSlider.setVisible(False)
         self.d_spec.addWidget(self.playSlider)
         self.timePlayed = QLabel()
@@ -618,7 +626,8 @@ class AviaNZ(QMainWindow):
 
         # Delete segment button
         deleteButton = QPushButton("&Delete Current Segment")
-        self.connect(deleteButton, SIGNAL('clicked()'), self.deleteSegment)
+        #self.connect(deleteButton, SIGNAL('clicked()'), self.deleteSegment)
+        deleteButton.clicked.connect(self.deleteSegment)
 
         # Place all these widgets in the Controls dock
         self.w_controls.addWidget(self.playButton,row=0,col=0)
@@ -636,7 +645,8 @@ class AviaNZ(QMainWindow):
         # List to hold the list of files
         self.listFiles = QListWidget(self)
         self.listFiles.setMinimumWidth(150)
-        self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
+        #self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
+        self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
         self.w_files.addWidget(QLabel('Double click to open'),row=0,col=0)
         self.w_files.addWidget(QLabel('Red names have segments'),row=1,col=0)
@@ -683,6 +693,7 @@ class AviaNZ(QMainWindow):
 
         # Listener for key presses
         self.connect(self.p_spec, SIGNAL("keyPressed"),self.handleKey)
+        #self.p_spec.keyPressed.connect(self.handleKey)
 
         # Store the state of the docks in case the user wants to reset it
         self.state = self.area.saveState()
@@ -746,7 +757,8 @@ class AviaNZ(QMainWindow):
                 item = item+'?'
             bird = self.menuBirdList.addAction(item)
             receiver = lambda birdname=item: self.birdSelected(birdname)
-            self.connect(bird, SIGNAL("triggered()"), receiver)
+            #self.connect(bird, SIGNAL("triggered()"), receiver)
+            bird.triggered.connect(receiver)
             self.menuBirdList.addAction(bird)
         self.menuBird2 = self.menuBirdList.addMenu('Other')
         for item in self.config['BirdList'][20:]+['Other']:
@@ -754,7 +766,8 @@ class AviaNZ(QMainWindow):
                 item = item+'?'
             bird = self.menuBird2.addAction(item)
             receiver = lambda birdname=item: self.birdSelected(birdname)
-            self.connect(bird, SIGNAL("triggered()"), receiver)
+            #self.connect(bird, SIGNAL("triggered()"), receiver)
+            bird.triggered.connect(receiver)
             self.menuBird2.addAction(bird)
 
     def fillFileList(self,fileName):
@@ -1443,7 +1456,13 @@ class AviaNZ(QMainWindow):
             self.listRectanglesa1[i].setRegion([x1,x2])
 
             self.segments[i][0] = x1 + self.startRead
+            #self.segments[i][0] = max(0.0,x1 + self.startRead)
+            #self.segments[i][0] = min(x1 + self.startRead,float(self.fileLength) / self.sampleRate)
+
             self.segments[i][1] = x2 + self.startRead
+            #self.segments[i][1] = max(0.0,x2 + self.startRead)
+            #self.segments[i][1] = min(x2 + self.startRead,float(self.fileLength) / self.sampleRate)
+            #print x1 + self.startRead, float(self.fileLength) / self.sampleRate, self.segments[i]
 
     def updateRegion_ampl(self):
         """ This is the listener for when a segment box is changed in the waveform plot.
@@ -1595,8 +1614,8 @@ class AviaNZ(QMainWindow):
             indexx = int(mousePoint.x())
             indexy = int(mousePoint.y())
             if indexx > 0 and indexx < np.shape(self.sg)[0] and indexy > 0 and indexy < np.shape(self.sg)[1]:
-                seconds = self.convertSpectoAmpl(mousePoint.x()) % 60
-                minutes = int(((self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] )/ 60) % 60)
+                seconds = (self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] - self.config['fileOverlap']) % 60
+                minutes = int(((self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] - self.config['fileOverlap'])/ 60) % 60)
                 self.pointData.setText('time=%d:%0.2f (m:s), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
 
     def mouseClicked_ampl(self,evt):
@@ -2741,14 +2760,12 @@ class AviaNZ(QMainWindow):
         self.statusLeft.setText("Saved")
 
     def redoFreqAxis(self,start=None,end=None):
-        """ This is the listener for the menu option to make the frequency axis tight (for after bandpass filtering)
+        """ This is the listener for the menu option to make the frequency axis tight (after bandpass filtering)
         """
         if start is None:
             start = self.minFreq
         if end is None:
             end = self.maxFreq
-
-        print start, end
 
         height = self.sampleRate / 2. / np.shape(self.sg)[1]
 
@@ -2759,7 +2776,9 @@ class AviaNZ(QMainWindow):
         SpecRange = FreqRange/height
         self.specaxis.setTicks([[(0,(start/1000.)),(SpecRange/4,(start/1000.+FreqRange/4000.)),(SpecRange/2,(start/1000.+FreqRange/2000.)),(3*SpecRange/4,(start/1000.+3*FreqRange/4000.)),(SpecRange,(start/1000.+FreqRange/1000.))]])
 
-        # TODO: sort out self.textpos: loop over the boxes and move the label
+        self.textpos = int(float(end-start)/height) + self.config['textoffset']
+        for i in range(len(self.listLabels)):
+            self.listLabels[i].setPos(self.listLabels[i].pos()[0], self.textpos)
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
@@ -3204,8 +3223,8 @@ class AviaNZ(QMainWindow):
         # exporter = SupportClasses.FixedImageExporter(self.p_spec)
         #exporter.export(filename)
         if platform.system() == 'Darwin':
-            import pyqtgraph.exporters as pge
-            #    import ImageExporter as pge
+            #import pyqtgraph.exporters as pge
+            import ImageExporter as pge
             #    filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
             exporter = pge.ImageExporter(self.p_spec)
             exporter.export(filename)
@@ -3276,7 +3295,7 @@ class AviaNZ(QMainWindow):
 
         ## Create tree of Parameter objects
         self.p = Parameter.create(name='params', type='group', children=params)
-        self.p.sigTreeStateChanged.connect(self.change)
+        self.p.sigTreeStateChanged.connect(self.changeParams)
         ## Create ParameterTree widget
         self.t = ParameterTree()
         self.t.setParameters(self.p, showTop=False)
@@ -3285,7 +3304,7 @@ class AviaNZ(QMainWindow):
         self.t.setWindowIcon(QIcon('img/Avianz.ico'))
         self.t.setFixedSize(420, 485)
 
-    def change(self,param, changes):
+    def changeParams(self,param, changes):
         """ Update the config and the interface if anything changes in the tree
         """
         for param, change, data in changes:

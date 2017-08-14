@@ -10,6 +10,7 @@ SM:
     DOC version
 (5) SRM Add wavelet segmentation to best
 (6) SRM Multiprocessing where possible
+    It made things slower!
 (7) NP Classify segments
     (i) Wavelets better version
     (ii) Learning based on whatever (check Raven features)
@@ -22,16 +23,10 @@ We should start to decide what make a specialised filter
     Wavelet nodes
     Trained classifiers
 
-*** Exporter problem
-Exporter for mac but scipy.misc for Windows - it works fine
-Can we stick to one? Check scipy.misc on mac
-
-spectrogram paramaters - have the option to choose visible frequency range (e.g. 0-8000 Hz) but
-cannot undo and segment labels get disappear!
+Exporter for mac but scipy.misc for Windows - it works fine, but doesn't show the segments on Windows
 
 paging - x axis and page overlap, e.g 15 min file ends with 15:10 with overlap=10
-
-Wavelet denoising with best tree?
+    SRM: I don't see this
 
 Work out how to make old wavelet method produce too many segments
 
@@ -41,7 +36,7 @@ Make a new method (not inside Segmentation):
     # And it does need parameters
     (2) Combine the segments as appropriate
     # Two versions are done. Opens it out so far, no max. Either with or without envelopes kept.
-    (3) Perform classification on each segment using at least one of wavelet energies, Raven feature, MFCC, LPC, fundamental freq
+    (3) Perform classification on each segment using at least one of wavelet energies, Raven features, MFCC, LPC, fundamental freq
     # To be done (ready to modify wavelet segmentation part)
 
 Plot the wavelet energy for noise, crickets, calls, etc.
@@ -50,7 +45,6 @@ Parallel process the segmenters
 
 get name from standard files and use it
     # Name bit is done, not yet used
-
 
 # Look into the invertible CQT
     # Doesn't seem to help with tril1
@@ -81,8 +75,6 @@ Make a pretty (simple) version of the Process File dialog
 
 Enable parameter setting
 #done
-
-Paper!
 
 Raven features
 
@@ -164,3 +156,16 @@ Segmentation experiments
     Bats do keep on coming up...
 
     Generative noise model
+
+# If we do decide to move to qt5
+selecting things from QListWidget seems to have changed
+setTextColor -> setForeground
+there is no phonon -> QMultimedia
+    seek -> setPosition
+    didn't look into this further
+there is no QString -> Python strings now work
+
+# Tier 1
+(1) Segmentation that is as good as we can get it
+(2) Wavelet recognition ditto
+(3) Non-wavelet recognition ditto

@@ -166,7 +166,6 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                                 newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
                             else:
                                 newSegments=self.seg.bestSegments()
-                                # TODO: remove short segments?
 
                             # Generate Binary output ('Binary)
                             n=math.ceil(float(self.datalength)/self.sampleRate)

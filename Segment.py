@@ -22,7 +22,6 @@ class Segment:
         maxlength: the largest size of a segment (currently unused)
         threshold: generally this is of the form mean + threshold * std dev and provides a way to filter
 
-
     And two forms of recognition:
     Cross-correlation
     DTW
@@ -52,12 +51,13 @@ class Segment:
         self.window_width = window_width
         self.incr = incr
 
-    def bestSegments(self):
+    def bestSegments(self,FIRthr=0.7,medianClipthr=3.0,yinthr=0.9,mingap=0, minlength=0, maxlength=5.0):
         # Have a go at performing generally reasonably segmentation
         # TODO: Decide on this!
-        segs1 = self.segmentByFIR(0.7)
-        segs2 = self.medianClip()
-        segs3, p, t = self.yin(100, thr=0.9, returnSegs=True)
+        segs1 = self.checkSegmentLength(self.segmentByFIR(FIRthr),mingap,minlength,maxlength)
+        segs2 = self.checkSegmentLength(self.medianClip(medianClipthr),mingap,minlength,maxlength)
+        segs3, p, t = self.yin(100, thr=yinthr, returnSegs=True)
+        segs3 = self.checkSegmentLength(segs3,mingap,minlength,maxlength)
         segs1 = self.mergeSegments(segs1, segs2)
         return self.mergeSegments(segs1,segs3)
 
@@ -132,7 +132,7 @@ class Segment:
                 del segs[i]
         return segs
 
-    def identifySegments(self, seg, maxgap=1, minlength=1):
+    def identifySegments(self, seg, maxgap=1, minlength=1,notSpec=False):
         """ Turns presence/absence segments into a list of start/stop times
         Note the two parameters
         """
@@ -144,10 +144,16 @@ class Segment:
             else:
                 # See if segment is long enough to be worth bothering with
                 if (seg[i - 1] - start) > minlength:
-                    segments.append([float(start) * self.incr / self.fs, float(seg[i - 1]) * self.incr / self.fs])
+                    if notSpec:
+                        segments.append([start, seg[i - 1]])
+                    else:
+                        segments.append([float(start) * self.incr / self.fs, float(seg[i - 1]) * self.incr / self.fs])
                 start = seg[i]
         if seg[-1] - start > minlength:
-            segments.append([float(start) * self.incr / self.fs, float(seg[-1]) * self.incr / self.fs])
+            if notSpec:
+                segments.append([start, seg[i-1]])
+            else:
+                segments.append([float(start) * self.incr / self.fs, float(seg[-1]) * self.incr / self.fs])
 
         return segments
 
@@ -310,7 +316,7 @@ class Segment:
         The multitaper spectrogram helps a lot
 
         """
-        sg = self.sg.T/np.max(self.sg)
+        sg = self.sg/np.max(self.sg)
 
         # This next line gives an exact match to Lasseck, but screws up bitterns!
         #sg = sg[4:232, :]
@@ -354,7 +360,7 @@ class Segment:
         # Could also look at width and so just merge boxes that are about the same size
         centroids = []
         for i in blobs:
-            centroids.append(i.centroid[1])
+            centroids.append(i.centroid[0])
         centroids = np.array(centroids)
         ind = np.argsort(centroids)
         centroids = centroids[ind]
@@ -363,24 +369,23 @@ class Segment:
         centroid = centroids[0]
         count = 0
         list = []
-        list.append([blobs[ind[0]].bbox[1],blobs[ind[0]].bbox[1]])
+        list.append([blobs[ind[0]].bbox[0],blobs[ind[0]].bbox[2]])
         for i in centroids:
             if i - centroid < minsize / 2.:
-                if blobs[ind[count]].bbox[1]<list[current][0]:
-                    list[current][0] = blobs[ind[count]].bbox[1]
-                if blobs[ind[count]].bbox[3] > list[current][1]:
-                    list[current][1] = blobs[ind[count]].bbox[3]
+                if blobs[ind[count]].bbox[0]<list[current][0]:
+                    list[current][0] = blobs[ind[count]].bbox[0]
+                if blobs[ind[count]].bbox[2] > list[current][1]:
+                    list[current][1] = blobs[ind[count]].bbox[2]
             else:
                 current += 1
                 centroid = centroids[count]
-                list.append([blobs[ind[count]].bbox[1], blobs[ind[count]].bbox[1]])
+                list.append([blobs[ind[count]].bbox[0], blobs[ind[count]].bbox[2]])
             count += 1
 
         segments = []
         for i in list:
             if float(i[1] - i[0])*self.incr/self.fs*1000 > minSegment:
-                segments.append([float(i[0]) * self.incr / self.fs, float(i[1]) * self.incr / self.fs])
-
+                segments.append([float(i[0])*self.incr/self.fs,float(i[1])*self.incr/self.fs])
         return segments
 
     def onsets(self,thr=3.0):
@@ -418,6 +423,7 @@ class Segment:
             W = minwin
         # Make life easier, and make W be a function of the spectrogram window width
         W = int(round(W/self.window_width)*self.window_width)
+        #print "W ",W, W/2
         pitch = np.zeros((int((len(data) - 2 * W) * 2. / W) + 1))
 
         # Compute squared diff between signal and shift
@@ -474,10 +480,14 @@ class Segment:
 
         if returnSegs:
             ind = np.squeeze(np.where(pitch > minfreq))
-            segs = self.identifySegments(ind)
+            segs = self.identifySegments(ind,notSpec=True)
+            print segs, len(ind), len(pitch)
+            #print segs
+            print W, self.window_width
             for s in segs:
-                s[0] *= W / self.window_width
-                s[1] *= W / self.window_width
+               s[0] = float(s[0])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr#W / self.window_width
+               s[1] = float(s[1])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr#W / self.window_width
+            print segs
             return segs, pitch, np.array(starts)
         else:
             return pitch, np.array(starts), minfreq, W
@@ -549,18 +559,81 @@ def convertAmpltoSpec(x,fs,inc):
     """ Unit conversion """
     return x*fs/inc
 
+def testMC():
+    import wavio
+    import pyqtgraph as pg
+    from pyqtgraph.Qt import QtCore, QtGui
+
+    #wavobj = wavio.read('Sound Files/kiwi_1min.wav')
+    wavobj = wavio.read('Sound Files/tril1.wav')
+    fs = wavobj.rate
+    data = wavobj.data#[:20*fs]
+
+    if data.dtype is not 'float':
+        data = data.astype('float')  #/ 32768.0
+
+    if np.shape(np.shape(data))[0] > 1:
+        data = data[:, 0]
+
+    import SignalProc
+    sp = SignalProc.SignalProc(data,fs,256,128)
+    sg = sp.spectrogram(data=data,window_width=256,incr=128,window='Hann',mean_normalise=True,onesided=True,multitaper=False,need_even=False)
+    s = Segment(data,sg,sp,fs)
+
+    #print np.shape(sg)
+
+    #s1 = s.medianClip()
+    s1,p,t = s.yin(returnSegs=True)
+    app = QtGui.QApplication([])
+
+    mw = QtGui.QMainWindow()
+    mw.show()
+    mw.resize(800, 600)
+
+    win = pg.GraphicsLayoutWidget()
+    mw.setCentralWidget(win)
+    vb1 = win.addViewBox(enableMouse=False, enableMenu=False, row=0, col=0)
+    im1 = pg.ImageItem(enableMouse=False)
+    vb1.addItem(im1)
+    im1.setImage(10.*np.log10(sg))
+
+    # vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=1, col=0)
+    # im2 = pg.ImageItem(enableMouse=False)
+    # vb2.addItem(im2)
+    # im2.setImage(c)
+
+    vb3 = win.addViewBox(enableMouse=False, enableMenu=False, row=1, col=0)
+    im3 = pg.ImageItem(enableMouse=False)
+    vb3.addItem(im3)
+    im3.setImage(10.*np.log10(sg))
+
+    vb4 = win.addViewBox(enableMouse=False, enableMenu=False, row=2, col=0)
+    im4 = pg.PlotDataItem(enableMouse=False)
+    vb4.addItem(im4)
+    im4.setData(data)
+
+    for seg in s1:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        #a.setRegion([seg[0],seg[1]])
+        vb3.addItem(a, ignoreBounds=True)
+
+    QtGui.QApplication.instance().exec_()
+
+
 def showSegs():
     import pyqtgraph as pg
     from pyqtgraph.Qt import QtCore, QtGui
     import wavio
     import WaveletSegment
+    from time import time
 
     #wavobj = wavio.read('Sound Files/tril1.wav')
     #wavobj = wavio.read('Sound Files/010816_202935_p1.wav')
     #wavobj = wavio.read('Sound Files/20170515_223004 piping.wav')
     wavobj = wavio.read('Sound Files/kiwi_1min.wav')
     fs = wavobj.rate
-    data = wavobj.data[:20*fs]
+    data = wavobj.data#[:20*fs]
 
     if data.dtype is not 'float':
         data = data.astype('float') # / 32768.0
@@ -570,7 +643,7 @@ def showSegs():
 
     import SignalProc
     sp = SignalProc.SignalProc(data,fs,256,128)
-    sg = sp.spectrogram(data,fs,multitaper=False)
+    sg = sp.spectrogram(data,multitaper=False)
     s = Segment(data,sg,sp,fs,50)
 
     # FIR: threshold doesn't matter much, but low is better (0.01).
@@ -580,17 +653,16 @@ def showSegs():
     # Onsets: Threshold of 4.0 was fine, lower not. Still no offsets!
     # Yin: Threshold 0.9 is pretty good
     # Energy: Not great, but thr 1.0
-
-    s1 = s.segmentByFIR(0.1)
-    s1 = s.checkSegmentLength(s1)
-    s2 = s.segmentByFIR(1.0)
-    s2 = s.checkSegmentLength(s2)
-    s3 = s.checkSegmentLength(s.medianClip(3.0))
-    s4, p, t = s.yin(100, thr=0.9, returnSegs=True)
+    ts = time()
+    s1=s.checkSegmentLength(s.segmentByFIR(0.1))
+    s2=s.checkSegmentLength(s.segmentByFIR(1.0))
+    s3= s.checkSegmentLength(s.medianClip(3.0))
+    s4,p,t=s.yin(100, thr=0.5,returnSegs=True)
     s4 = s.checkSegmentLength(s4)
-    s5 = s.mergeSegments(s1,s3)
-    s6 = s.mergeSegments(s1,s4)
-    s7 = WaveletSegment.findCalls_test(fName=None, data=data, sampleRate=fs,species='Kiwi', trainTest=False)
+    s5=s.mergeSegments(s1,s3)
+    s6=s.mergeSegments(s1,s4)
+    s7=WaveletSegment.findCalls_test(None, data, fs,'Kiwi', False)
+    print('Took {}s'.format(time() - ts))
     #s7 = s.mergeSegments(s1,s.mergeSegments(s3,s4))
 
     #s4, samp = s.segmentByFIR(0.4)
@@ -657,6 +729,7 @@ def showSegs():
     vb7.addItem(im7)
     im7.setImage(10.*np.log10(sg))
 
+    print "===="
     print s1
     for seg in s1:
         a = pg.LinearRegionItem()
