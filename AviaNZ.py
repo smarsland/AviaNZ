@@ -3219,13 +3219,13 @@ class AviaNZ(QMainWindow):
         self.statusRight.setText("Operator: " + self.config['operator'] + ", Reviewer: "+self.config['reviewer'])
 
     def saveImage(self): # ??? it doesn't save the image
-        filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
+        # filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
         # exporter = SupportClasses.FixedImageExporter(self.p_spec)
         #exporter.export(filename)
         if platform.system() == 'Darwin':
             #import pyqtgraph.exporters as pge
             import ImageExporter as pge
-            #    filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
+            filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
             exporter = pge.ImageExporter(self.p_spec)
             exporter.export(filename)
         # for Windows to save the image, needs to typecast line 70 of ImageExporter.py
@@ -3236,11 +3236,12 @@ class AviaNZ(QMainWindow):
         # but its not an independent file to be added to the project!
         # the following works for Windows.
         else:
-            # filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.jpeg *.jpg *.png)");
-            print str(filename)
+            filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.jpeg *.jpg *.png)");
+            # print str(filename)
             from scipy.misc import imsave
             try:
-                imsave(str(filename), self.p_spec)
+                imsave(str(filename), np.flip(np.transpose(self.sg), 0))
+                # imsave(str(filename), self.p_spec)
             except:
                 print "here"
 
