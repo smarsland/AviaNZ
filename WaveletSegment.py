@@ -5,9 +5,9 @@ import pywt
 import WaveletFunctions
 import wavio
 import numpy as np
-import os,json
-import glob
+import json
 import SignalProc
+import Segment
 
 # Nirosha's approach of simultaneous segmentation and recognition using wavelets
     # (0) Bandpass filter with different parameters for each species
@@ -22,6 +22,8 @@ import SignalProc
 
 # TODO: Inconsisient about symmetric or zeros for the wavelet packet
 # TODO: This still needs some tidying up
+# TODO: Make a dictionary and json it with species params in (read-only)
+
 class WaveletSegment:
     # This class implements wavelet segmentation for the AviaNZ interface
 
@@ -33,6 +35,12 @@ class WaveletSegment:
             self.sampleRate = sampleRate
             if self.data.dtype is not 'float':
                 self.data = self.data.astype('float') / 32768.0
+
+        # TODO: What else should be in there? mingap, minlength?
+        # TODO: Weights for learning alg?
+        #speciesdata = json.load(open('species.data'))
+        #self.listnodes = speciesdata[spp][0]
+        #self.listbands = speciesdata[spp][1]
 
         self.sp = SignalProc.SignalProc([],0,256,128)
         self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=data, wavelet=wavelet,maxLevel=20)
@@ -289,14 +297,14 @@ class WaveletSegment:
             else:
                 return []
 
-    # def identifySegments(self, seg): #, maxgap=1, minlength=1):
-    # *** Replace with segmenter.checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0)
-    #     segments = []
-    #     # print seg, type(seg)
-    #     if len(seg)>0:
-    #         for s in seg:
-    #             segments.append([s, s+1])
-    #     return segments
+    def identifySegments(self, seg): #, maxgap=1, minlength=1):
+    # TODO: *** Replace with segmenter.checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0)
+        segments = []
+        # print seg, type(seg)
+        if len(seg)>0:
+            for s in seg:
+                segments.append([s, s+1])
+        return segments
 
     # def mergeSeg(self,segments):
     #     # **** Replace with segmenter.identifySegments(self, seg, maxgap=1, minlength=1,notSpec=False):
@@ -312,7 +320,7 @@ class WaveletSegment:
     #     return segments
 
     # Usage functions
-    def preprocess(species):
+    def preprocess(self,species):
         if species == 'boom':
             fs = 1000
         elif species.title() == 'Sipo':
@@ -325,7 +333,7 @@ class WaveletSegment:
             self.sampleRate = fs
 
         # Get the five level wavelet decomposition
-        denoisedData = self.WaveletFunctions.waveletDenoise(self.data, thresholdType='soft', wavelet=self.WaveletFunctions,maxlevel=5)
+        denoisedData = self.WaveletFunctions.waveletDenoise(self.data, thresholdType='soft', wavelet=self.WaveletFunctions.wavelet,maxLevel=5)
 
         # librosa.output.write_wav('train/kiwi/D/', waveletData, sampleRate, norm=False)
 
@@ -338,13 +346,12 @@ class WaveletSegment:
 
         return filteredDenoisedData
 
-    def waveletSegment_train(fName, species='Kiwi'):
+    def waveletSegment_train(self,fName, species='Kiwi'):
         # *** was findCalls_train
         # Load data and annotation
         self.loadData(fName)
 
         filteredDenoisedData = self.preprocess(species)
-
         waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
 
         # Compute point-biserial correlations and sort wrt it, return top nNodes
@@ -365,14 +372,15 @@ class WaveletSegment:
         # Now check the F2 values and add node if it improves F2
         listnodes = []
         bestBetaScore = 0
-        m = len(denoisedData) / self.sampleRate
+        m = len(filteredDenoisedData) / self.sampleRate
         detected = np.zeros(m)
 
         for node in nodes:
             testlist = listnodes[:]
             testlist.append(node)
             print testlist
-            detected_c = self.detectCalls(wpFull, node, self.sampleRate, n=m, species=species)
+            detected_c = self.detectCalls(wpFull, self.sampleRate, listnodes=testlist, species=species,trainTest=True)
+
             # update the detections
             detections = np.maximum.reduce([detected, detected_c])
             fB = self.fBetaScore(self.annotation, detections)
@@ -383,9 +391,11 @@ class WaveletSegment:
                 listnodes.append(node)
             if bestBetaScore == 1:
                 break
+
+        # TODO: json.dump('species.data', open('species.data', 'wb'))
         return listnodes
 
-    def waveletSegment_test(fName=None, data=None, sampleRate=None, species='Kiwi', trainTest=False):
+    def waveletSegment_test(self,fName=None, data=None, sampleRate=None, species='Kiwi', trainTest=False):
         # Was findCalls_test
 
         # Load the relevant list of nodes
@@ -440,6 +450,11 @@ class WaveletSegment:
                 self.annotation[count]=col[row].value
                 count += 1
         #return self.data, self.sampleRate, self.annotation
+
+def test():
+    ws=WaveletSegment()
+    listnodes = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train1')
+    print listnodes
 
 def waveletSegment_train_learning(fName,species='Kiwi'):
     ws=WaveletSegment()
@@ -542,53 +557,53 @@ def moretest():
 
 # The functions below are to run method from the WaveletSegment class on folders
 # TODO: I'm pretty sure they aren't used anymore, but check!
-def processFolder(folder_to_process = 'Sound Files/survey/5min', species='Kiwi'):
-    #process survey recordings
-    nfiles=len(glob.glob(os.path.join(folder_to_process,'*.wav')))
-    detected=np.zeros((nfiles,300))
-    i=0
-    for filename in glob.glob(os.path.join(folder_to_process,'*.wav')):
-        ws=WaveletSegment()
-        ws.loadData(filename[:-4],trainTest=False)
-        wData = ws.waveletDenoise(ws.data, thresholdType='soft', maxlevel=5)
-        fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
-        wpFull = pywt.WaveletPacket(data=fwData, wavelet=self.wavelet, mode='symmetric', maxlevel=5)
-        detected[i,:] = ws.detectCalls_test(wpFull, ws.sampleRate, nodelist_kiwi) #detect based on a previously defined nodeset
-    return detected
-
-def processFolder_train(folder_to_process = 'E:/SONGSCAPE/MakeExecutable/AviaNZ_12thJune/Sound Files/MLPdata/train', species='Kiwi'):
-    #Trainig on a set of files
-    ws = WaveletSegment()
-    nfiles=len(glob.glob(os.path.join(folder_to_process,'*.wav')))
-    for filename in glob.glob(os.path.join(folder_to_process,'*.wav')):
-        nodes=ws.waveletSegment_train(filename[:-4])
-        print filename
-        print "Node list:", nodes
-        print "**********************************"
-
-def genReport(folder_to_process,detected):
-    #generate the report from the detections (yes-no)
-    #ToDO: detailed report
-    fnames=["" for x in range(np.shape(detected)[0])]
-    presenceAbsence=["" for x in range(np.shape(detected)[0])]
-    i=0
-    for filename in glob.glob(os.path.join(folder_to_process,'*.wav')):
-        fnames[i]=str(filename).split('\\')[-1:][0]
-    for i in range(np.shape(detected)[0]):
-        if sum(detected[i,:])>0:
-            presenceAbsence[i]='Yes'
-        else:
-            presenceAbsence[i]='-'
-
-    col_format = "{:<10}" + "," + "{:<3}" + "\n"
-    with open(folder_to_process+"/presenceAbs.csv", 'w') as of:
-        for x in zip(fnames,presenceAbsence):
-            of.write(col_format.format(*x))
+# def processFolder(folder_to_process = 'Sound Files/survey/5min', species='Kiwi'):
+#     #process survey recordings
+#     nfiles=len(glob.glob(os.path.join(folder_to_process,'*.wav')))
+#     detected=np.zeros((nfiles,300))
+#     i=0
+#     for filename in glob.glob(os.path.join(folder_to_process,'*.wav')):
+#         ws=WaveletSegment()
+#         ws.loadData(filename[:-4],trainTest=False)
+#         wData = ws.waveletDenoise(ws.data, thresholdType='soft', maxlevel=5)
+#         fwData = ws.sp.ButterworthBandpass(wData,ws.sampleRate,low=1000,high=7000)
+#         wpFull = pywt.WaveletPacket(data=fwData, wavelet=self.wavelet, mode='symmetric', maxlevel=5)
+#         detected[i,:] = ws.detectCalls_test(wpFull, ws.sampleRate, nodelist_kiwi) #detect based on a previously defined nodeset
+#     return detected
+#
+# def processFolder_train(folder_to_process = 'E:/SONGSCAPE/MakeExecutable/AviaNZ_12thJune/Sound Files/MLPdata/train', species='Kiwi'):
+#     #Trainig on a set of files
+#     ws = WaveletSegment()
+#     nfiles=len(glob.glob(os.path.join(folder_to_process,'*.wav')))
+#     for filename in glob.glob(os.path.join(folder_to_process,'*.wav')):
+#         nodes=ws.waveletSegment_train(filename[:-4])
+#         print filename
+#         print "Node list:", nodes
+#         print "**********************************"
+#
+# def genReport(folder_to_process,detected):
+#     #generate the report from the detections (yes-no)
+#     #ToDO: detailed report
+#     fnames=["" for x in range(np.shape(detected)[0])]
+#     presenceAbsence=["" for x in range(np.shape(detected)[0])]
+#     i=0
+#     for filename in glob.glob(os.path.join(folder_to_process,'*.wav')):
+#         fnames[i]=str(filename).split('\\')[-1:][0]
+#     for i in range(np.shape(detected)[0]):
+#         if sum(detected[i,:])>0:
+#             presenceAbsence[i]='Yes'
+#         else:
+#             presenceAbsence[i]='-'
+#
+#     col_format = "{:<10}" + "," + "{:<3}" + "\n"
+#     with open(folder_to_process+"/presenceAbs.csv", 'w') as of:
+#         for x in zip(fnames,presenceAbsence):
+#             of.write(col_format.format(*x))
 
 #Test
 # nodelist_kiwi = [20, 31, 34, 35, 36, 38, 40, 41, 43, 44, 45, 46] # python
-# nodelist_kiwi=[1,15,20,34,35,36,38,40,41,42,43,44,45,46,55] # python with new implimentation
-#nodelist_kiwi=[34,35,36,38,40,41,42,43,44,45,46,55] # removed first three nodes from python with new implimentation
+# nodelist_kiwi=[1,15,20,34,35,36,38,40,41,42,43,44,45,46,55] # python with new implementation
+#nodelist_kiwi=[34,35,36,38,40,41,42,43,44,45,46,55] # removed first three nodes from python with new implementation
 #nodelist_kiwi = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55] # matlab
 #nodelist_ruru=[33,37,38]
 
@@ -596,37 +611,37 @@ def genReport(folder_to_process,detected):
 
 
 #### SIPO ############################################################
-def annotation2GT(datFile):
-    # Given the AviaNZ annotation returns the ground truth as an excel
-    import math
-    from openpyxl import load_workbook, Workbook
-    wavFile=datFile[:-5]
-    eFile = datFile[:-9]+'-sec.xlsx'
-    wavobj = wavio.read(wavFile)
-    sampleRate = wavobj.rate
-    data = wavobj.data
-    n=len(data)/sampleRate   # number of secs
-    GT=np.zeros(n)
-    with open(datFile) as f:
-        segments = json.load(f)
-    for seg in segments:
-        s=int(math.floor(seg[0]))
-        e=int(math.ceil(seg[1]))
-        for i in range(s,e):
-            GT[i]=1
-    wb = Workbook()
-    ws = wb.active
-    ws.cell(row=1, column=1, value="time")
-    ws.cell(row=1, column=2, value="call")
-    ws.cell(row=1, column=3, value="call type")
-    ws.cell(row=1, column=4, value="quality")
-    r = 2
-    for i in range(len(GT)):
-        ws.cell(row=r, column=1, value=str(i + 1))
-        ws.cell(row=r, column=2, value=str(int(GT[i])))
-        r = r + 1
-    wb.save(str(eFile))
-    print GT
+# def annotation2GT(datFile):
+#     # Given the AviaNZ annotation returns the ground truth as an excel
+#     import math
+#     from openpyxl import load_workbook, Workbook
+#     wavFile=datFile[:-5]
+#     eFile = datFile[:-9]+'-sec.xlsx'
+#     wavobj = wavio.read(wavFile)
+#     sampleRate = wavobj.rate
+#     data = wavobj.data
+#     n=len(data)/sampleRate   # number of secs
+#     GT=np.zeros(n)
+#     with open(datFile) as f:
+#         segments = json.load(f)
+#     for seg in segments:
+#         s=int(math.floor(seg[0]))
+#         e=int(math.ceil(seg[1]))
+#         for i in range(s,e):
+#             GT[i]=1
+#     wb = Workbook()
+#     ws = wb.active
+#     ws.cell(row=1, column=1, value="time")
+#     ws.cell(row=1, column=2, value="call")
+#     ws.cell(row=1, column=3, value="call type")
+#     ws.cell(row=1, column=4, value="quality")
+#     r = 2
+#     for i in range(len(GT)):
+#         ws.cell(row=r, column=1, value=str(i + 1))
+#         ws.cell(row=r, column=2, value=str(int(GT[i])))
+#         r = r + 1
+#     wb.save(str(eFile))
+#     print GT
 
 # generate GT for SIPO
 # annotation2GT('E:\Rebecca SIPO\\train\Mt Cass coastal SIPO 07072012.wav.data')
