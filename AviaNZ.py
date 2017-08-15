@@ -271,7 +271,7 @@ class AviaNZ(QMainWindow):
             cm.setCheckable(True)
             if colour==self.config['cmap']:
                 cm.setChecked(True)
-            receiver = lambda cmap=colour: self.setColourMap(cmap)
+            receiver = lambda checked, cmap=colour: self.setColourMap(cmap)
             #self.connect(cm, SIGNAL("triggered()"), receiver)
             cm.triggered.connect(receiver)
             colGroup.addAction(cm)
@@ -756,7 +756,7 @@ class AviaNZ(QMainWindow):
             if unsure and item != "Don't Know":
                 item = item+'?'
             bird = self.menuBirdList.addAction(item)
-            receiver = lambda birdname=item: self.birdSelected(birdname)
+            receiver = lambda checked, birdname=item: self.birdSelected(birdname)
             #self.connect(bird, SIGNAL("triggered()"), receiver)
             bird.triggered.connect(receiver)
             self.menuBirdList.addAction(bird)
@@ -765,7 +765,7 @@ class AviaNZ(QMainWindow):
             if unsure and item != "Don't Know" and item != "Other":
                 item = item+'?'
             bird = self.menuBird2.addAction(item)
-            receiver = lambda birdname=item: self.birdSelected(birdname)
+            receiver = lambda checked, birdname=item: self.birdSelected(birdname)
             #self.connect(bird, SIGNAL("triggered()"), receiver)
             bird.triggered.connect(receiver)
             self.menuBird2.addAction(bird)
