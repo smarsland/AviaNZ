@@ -1614,8 +1614,8 @@ class AviaNZ(QMainWindow):
             indexx = int(mousePoint.x())
             indexy = int(mousePoint.y())
             if indexx > 0 and indexx < np.shape(self.sg)[0] and indexy > 0 and indexy < np.shape(self.sg)[1]:
-                seconds = (self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] - self.config['fileOverlap']) % 60
-                minutes = int(((self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] - self.config['fileOverlap'])/ 60) % 60)
+                seconds = (self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] - (self.currentFileSection>0)*self.config['fileOverlap']) % 60
+                minutes = int(((self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] - (self.currentFileSection>0)*self.config['fileOverlap'])/ 60) % 60)
                 self.pointData.setText('time=%d:%0.2f (m:s), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
 
     def mouseClicked_ampl(self,evt):
