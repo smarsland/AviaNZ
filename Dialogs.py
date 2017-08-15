@@ -188,7 +188,7 @@ class Spectrogram(QDialog):
 #======
 class OperatorReviewer(QDialog):
     # Class for the set operator dialog box
-    def __init__(self, parent=None):
+    def __init__(self, operator='', reviewer='', parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Set Operator/Reviewer')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -196,8 +196,10 @@ class OperatorReviewer(QDialog):
 
         self.operatorlabel = QLabel("Operator")
         self.name1 = QLineEdit(self)
+        self.name1.setText(QString(operator))
         self.reviewerlabel = QLabel("Reviewer")
         self.name2 = QLineEdit(self)
+        self.name2.setText(QString(reviewer))
         self.activate = QPushButton("Set")
 
         Box = QVBoxLayout()

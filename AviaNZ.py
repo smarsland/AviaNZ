@@ -3205,7 +3205,7 @@ class AviaNZ(QMainWindow):
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
         """
-        self.setOperatorReviewerDialog = Dialogs.OperatorReviewer()
+        self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.config['operator'],reviewer=self.config['reviewer'])
         self.setOperatorReviewerDialog.show()
         self.setOperatorReviewerDialog.activateWindow()
         self.setOperatorReviewerDialog.activate.clicked.connect(self.changeOperator)
