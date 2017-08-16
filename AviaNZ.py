@@ -3436,17 +3436,10 @@ class AviaNZ(QMainWindow):
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
             msg.setText("Are you sure you want to delete all segments?")
             msg.setWindowTitle("Delete All Segments")
-            msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-            msg.buttonClicked.connect(self.yes)
-            msg.exec_()
-
-        # reply = QMessageBox.question(self,"Delete All Segments","Are you sure you want to delete all segments?",    QMessageBox.Yes | QMessageBox.No)
-        # reply.setWindowIcon(QIcon('Avianz.ico'))
-        # if reply==QMessageBox.Yes:
-        #     self.removeSegments()
-
-    def yes(self):
-        self.removeSegments()
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.Yes:
+                self.removeSegments()
 
     def removeSegments(self,delete=True):
         """ Remove all the segments in response to the menu selection, or when a new file is loaded. """
