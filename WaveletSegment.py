@@ -27,8 +27,8 @@ import Segment
 class WaveletSegment:
     # This class implements wavelet segmentation for the AviaNZ interface
 
-    def __init__(self,data=[],sampleRate=0,spp='Kiwi',wavelet='dmey2',annotation=None,mingap=0.3,minlength=0.2):
-        self.spp=spp
+    def __init__(self,data=[],sampleRate=0,species='Kiwi',wavelet='dmey2',annotation=None,mingap=0.3,minlength=0.2):
+        self.species=species
         self.annotation=annotation
         if data != []:
             self.data = data
@@ -39,8 +39,8 @@ class WaveletSegment:
         # TODO: What else should be in there? mingap, minlength?
         # TODO: Weights for learning alg?
         #speciesdata = json.load(open('species.data'))
-        #self.listnodes = speciesdata[spp][0]
-        #self.listbands = speciesdata[spp][1]
+        #self.listnodes = speciesdata[species][0]
+        #self.listbands = speciesdata[species][1]
 
         self.sp = SignalProc.SignalProc([],0,256,128)
         self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=data, wavelet=wavelet,maxLevel=20)
@@ -364,7 +364,7 @@ class WaveletSegment:
 
         # These nodes refer to the unrooted tree, so add 1 to get the real indices
         nodes = [n + 1 for n in nodes]
-        #print nodes
+        print nodes
 
         # Generate a full 5 level wavelet packet decomposition
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
@@ -417,7 +417,7 @@ class WaveletSegment:
 
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
 
-        detected = self.detectCalls_test(wpFull, self.sampleRate, listnodes=nodes, species=species, trainTest=trainTest)
+        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, species=species, trainTest=trainTest)
 
         if trainTest == True:
             #print fName
@@ -493,7 +493,7 @@ def waveletSegment_train_learning(fName,species='Kiwi'):
 
     # **** We actually need the real data :(
     # Generate a full 5 level wavelet packet decomposition
-    # **** load newdata, spp
+    # **** load newdata, species
     f = np.genfromtxt("Sound Files\MLdata\data-1s.data",delimiter=',',dtype=None)
     f = np.squeeze(np.reshape(f,(np.shape(f)[0]*np.shape(f)[1],1)))
     #g = np.genfromtxt("Sound Files\MLdata\label-1s",delimiter=',',dtype=None)
