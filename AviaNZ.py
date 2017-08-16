@@ -2635,7 +2635,7 @@ class AviaNZ(QMainWindow):
             self.backup()
             self.statusLeft.setText("Denoising...")
             if not hasattr(self, 'waveletDenoiser'):
-                self.waveletDenoiser = Wavelets.Wavelets(data=self.audiodata,wavelet=None,maxLevel=self.config['maxSearchDepth'])
+                self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata,wavelet=None,maxLevel=self.config['maxSearchDepth'])
 
             if str(alg) == "Wavelets":
                 if thrType is True:
@@ -2777,8 +2777,9 @@ class AviaNZ(QMainWindow):
         self.specaxis.setTicks([[(0,(start/1000.)),(SpecRange/4,(start/1000.+FreqRange/4000.)),(SpecRange/2,(start/1000.+FreqRange/2000.)),(3*SpecRange/4,(start/1000.+3*FreqRange/4000.)),(SpecRange,(start/1000.+FreqRange/1000.))]])
 
         self.textpos = int(float(end-start)/height) + self.config['textoffset']
-        for i in range(len(self.listLabels)):
-            self.listLabels[i].setPos(self.listLabels[i].pos()[0], self.textpos)
+        for i in range(len(self.segments)):
+            if self.segments[i][0] >= self.startRead and self.segments[i][1] <= min(self.startRead + self.lenRead, float(self.fileLength) / self.sampleRate):
+                self.listLabels[i].setPos(self.listLabels[i].pos()[0], self.textpos)
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
@@ -2819,7 +2820,8 @@ class AviaNZ(QMainWindow):
             elif str(alg) == "FIR":
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
             elif str(alg)=="Wavelets":
-                newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
+                ws = WaveletSegment.WaveletSegment(species=str(species))
+                newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
             elif str(alg)=="Cross-Correlation":
                 self.findMatches(float(str(CCThr1)))
                 newSegments = []
@@ -3055,11 +3057,11 @@ class AviaNZ(QMainWindow):
                     seglength = np.abs(self.segments[i][1] - self.segments[i][0])
                     if seglength <= 1:
                         # Recognise as is
-                        label = WaveletSegment.computeWaveletEnergy_1s(self.audiodata[self.segments[i][0]:self.segments[i][1]],wavelet='dmey2')
+                        label = WaveletSegment.computeWaveletEnergy(self.audiodata[self.segments[i][0]:self.segments[i][1]],wavelet='dmey2')
                         self.updateText(label,i)
                     else:
                         for sec in range(np.ceil(seglength)):
-                            label = WaveletSegment.computeWaveletEnergy_1s(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]],wavelet='dmey2')
+                            label = WaveletSegment.computeWaveletEnergy(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]],wavelet='dmey2')
                             # TODO: Check if the labels match, decide what to do if not
                         self.updateText(label,i)
 
