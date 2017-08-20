@@ -20,7 +20,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys, os, json, platform
+import sys, os, json, platform, re
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 import PyQt4.phonon as phonon
@@ -184,6 +184,7 @@ class AviaNZ(QMainWindow):
         self.DOC=DOC
         self.started=False
         self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
+        self.startTime = 0
 
         self.lastSpecies = "Don't Know"
         self.resetStorageArrays()
@@ -326,6 +327,8 @@ class AviaNZ(QMainWindow):
         self.showAllTick.setChecked(self.config['showAllPages'])
         actionMenu.addAction("Check segments [All segments]",self.humanClassifyDialog1,"Ctrl+1")
         actionMenu.addAction("Check segments [Choose species]",self.humanClassifyDialog2,"Ctrl+2")
+        actionMenu.addSeparator()
+        actionMenu.addAction("Export segments to Excel",self.exportSegments)
         actionMenu.addSeparator()
         actionMenu.addAction("Put docks back",self.dockReplace)
 
@@ -488,10 +491,7 @@ class AviaNZ(QMainWindow):
         self.d_spec.addWidget(self.w_spec)
 
         # The axes
-        self.timeaxis = SupportClasses.TimeAxis(orientation='bottom')
-        self.w_spec.addItem(self.timeaxis,row=1,col=1)
-        self.timeaxis.linkToView(self.p_ampl)
-        self.timeaxis.setLabel('Time',units='mm:ss')
+        # Time axis has to go separately in loadFile
 
         self.ampaxis = pg.AxisItem(orientation='left')
         self.w_ampl.addItem(self.ampaxis,row=0,col=0)
@@ -853,13 +853,14 @@ class AviaNZ(QMainWindow):
         Splits the directory name and filename out, and then passes the filename to the loader."""
         fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
 
-        # Find the '/' in the fileName
-        i=len(fileName)-1
-        while fileName[i] != '/' and i>0:
-            i = i-1
-        self.dirName = fileName[:i+1]
+        if fileName!='':
+            # Find the '/' in the fileName
+            i=len(fileName)-1
+            while fileName[i] != '/' and i>0:
+                i = i-1
+            self.dirName = fileName[:i+1]
 
-        self.listLoadFile(fileName)
+            self.listLoadFile(fileName)
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
@@ -877,9 +878,9 @@ class AviaNZ(QMainWindow):
             if self.segments != [] or self.hasSegments:
                 if len(self.segments)>0:
                     if self.segments[0][0] > -1:
-                        self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
+                        self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
                 else:
-                    self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
+                    self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
                 self.saveSegments()
                 self.previousFile.setTextColor(Qt.red)
         self.previousFile = current
@@ -951,21 +952,34 @@ class AviaNZ(QMainWindow):
                     self.sp = SignalProc.SignalProc([],0,self.config['window_width'],self.config['incr'])
 
                 self.currentFileSection = 0
-                self.timeaxis.setOffset(0)
+
+                if hasattr(self, 'timeaxis'):
+                    self.w_spec.removeItem(self.timeaxis)
 
                 # Check if the filename is in standard DOC format
-                if '_' in name:
-                    last = name[-1::-1].index('_')
-                    dot = name.index('.')
-                    time = name[-last:dot]
-                    if len(time) == 6:
-                        time = int(time[:2])
-                        if time>8 or time < 8:
-                            print "Night time DOC recording"
-                        else:
-                            print "Day time DOC recording"
-                        # TODO: And modify the order of the bird list
+                # Which is xxxxxx_xxxxxx.wav or ccxx_cccc_xxxxxx_xxxxxx.wav (c=char, x=0-9), could have _ afterward
+                # So this checks for the 6 ints _ 6 ints part anywhere in string
+                DOCRecording = re.search('(\d{6})_(\d{6})',name)
 
+                if DOCRecording:
+                    self.startTime = DOCRecording.group(2)
+
+                    if int(self.startTime[:2]) > 8 or int(self.startTime[:2]) < 8:
+                        print "Night time DOC recording"
+                    else:
+                        print "Day time DOC recording"
+                        # TODO: And modify the order of the bird list
+                    self.startTime = int(self.startTime[:2]) * 3600 + int(self.startTime[2:4]) * 60 + int(self.startTime[4:6])
+                    self.timeaxis = SupportClasses.TimeAxisHour(orientation='bottom',linkView=self.p_ampl)
+                    self.timeaxis.setLabel('Time', units='hh:mm:ss')
+                else:
+                    self.startTime = 0
+                    self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
+                    self.timeaxis.setLabel('Time', units='mm:ss')
+
+                self.w_spec.addItem(self.timeaxis, row=1, col=1)
+                # This next line is a hack to make the axis update
+                self.changeWidth(self.widthWindow.value())
                 dlg += 1
             else:
                 dlg += 2
@@ -984,9 +998,8 @@ class AviaNZ(QMainWindow):
             self.minFreq = 0
             self.maxFreq = self.sampleRate / 2.
             self.fileLength = wavobj.nframes
-            self.timeaxis.setOffset(self.startRead)
-            # This is the only way I found to make the thing redraw so we see the updated axis!
-            self.timeaxis.setLabel('')
+            self.timeaxis.setOffset(self.startRead+self.startTime)
+
             dlg += 1
 
             if self.audiodata.dtype is not 'float':
@@ -1401,6 +1414,7 @@ class AviaNZ(QMainWindow):
         self.pointData.setPos(minX,0)
         self.config['windowWidth'] = self.convertSpectoAmpl(maxX-minX)
         self.saveConfig = True
+        self.timeaxis.update()
         pg.QtGui.QApplication.processEvents()
 
     def drawfigMain(self):
@@ -1408,6 +1422,7 @@ class AviaNZ(QMainWindow):
         Has to do some work to get the axis labels correct.
         """
         self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
+        self.timeaxis.setLabel('')
         self.specPlot.setImage(self.sg)
         self.setColourMap(self.config['cmap'])
         self.setColourLevels()
@@ -2107,9 +2122,9 @@ class AviaNZ(QMainWindow):
         if self.segments != [] or self.hasSegments:
             if len(self.segments)>0:
                 if self.segments[0][0] > -1:
-                    self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
+                    self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
             else:
-                self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
+                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
             self.saveSegments()
         self.resetStorageArrays()
         # Reset the media player
@@ -2189,8 +2204,8 @@ class AviaNZ(QMainWindow):
         # After the HumanClassify dialogs have closed, need to show the correct data on the screen
         # Returns to the page user started with
         if self.config['maxFileShow']<self.datalength/self.sampleRate:
-            print self.datalength, self.sampleRate
-            print self.config['maxFileShow']
+            #print self.datalength, self.sampleRate
+            #print self.config['maxFileShow']
             self.currentFileSection = self.currentPage
             self.prepare5minMove()
             self.next5mins.setEnabled(True)
@@ -2867,17 +2882,7 @@ class AviaNZ(QMainWindow):
                         self.addSegment(float(seg[0]),float(seg[1]))
 
             # Save the excel file
-            self.saveDetections(newSegments,mode='Excel',species=species)
-
-            # Generate Binary output ('Binary)
-            import math
-            n = math.ceil(float(self.datalength) / self.sampleRate)
-            detected = np.zeros(int(n))
-            for seg in newSegments:
-                for a in range(len(detected)):
-                    if math.floor(seg[0]) <= a and a < math.ceil(seg[1]):
-                        detected[a] = 1
-            self.saveDetections(detected, mode='Binary',species=species)  # append
+            self.exportSegments(newSegments,species=species)
 
             self.lenNewSegments = len(newSegments)
             self.segmentDialog.undo.setEnabled(True)
@@ -2892,111 +2897,101 @@ class AviaNZ(QMainWindow):
             self.deleteSegment(seg)
         self.segmentDialog.undo.setEnabled(False)
 
-    def saveDetections(self, annotation, mode,species):
-        """ This saves the detections into one of three different formats: annotation, excel, and binary.
-        Adds a DetectionSummary folder.
+    def exportSegments(self, annotation=None, species='all'):
+        """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence
+        in an excel workbook. It makes the workbook if necessary.
+        TODO: Ask for what species if not specified
+        TODO: Add a presence/absence at minute (or 5 minute) resolution
         """
+        def makeNewWorkbook():
+            wb = Workbook()
+            wb.create_sheet(title='Time Stamps', index=1)
+            wb.create_sheet(title='Presence Absence', index=1)
+            wb.create_sheet(title='Per Second', index=2)
+
+            ws = wb.get_sheet_by_name('Time Stamps')
+            ws.cell(row=1, column=1, value="File Name")
+            ws.cell(row=1, column=2, value="start (hh:mm:ss)")
+            ws.cell(row=1, column=3, value="end (hh:mm:ss)")
+
+            # Second sheet
+            ws = wb.get_sheet_by_name('Presence Absence')
+            ws.cell(row=1, column=1, value="File Name")
+            ws.cell(row=1, column=2, value="Presence/Absence")
+
+            # Third sheet
+            ws = wb.get_sheet_by_name('Per Second')
+            ws.cell(row=1, column=1, value="File Name")
+            ws.cell(row=1, column=2, value="Presence=1, Absence=0")
+
+            # TODO: Per minute sheet?
+
+            # Hack to delete original sheet
+            wb.remove_sheet(wb.get_sheet_by_name('Sheet'))
+            return wb
+
+        def writeToExcelp1():
+            ws = wb.get_sheet_by_name('Time Stamps')
+            r = ws.max_row + 1
+            # Print the filename
+            ws.cell(row=r, column=1, value=str(relfname))
+            # Loop over the annotation
+            for seg in annotation:
+                ws.cell(row=r, column=2, value=str(QTime().addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
+                ws.cell(row=r, column=3, value=str(QTime().addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
+                r += 1
+
+        def writeToExcelp2():
+            ws = wb.get_sheet_by_name('Presence Absence')
+            r = ws.max_row + 1
+            ws.cell(row=r, column=1, value=str(relfname))
+            if annotation:
+                ws.cell(row=r, column=2, value='Yes')
+            else:
+                ws.cell(row=r, column=2, value='_')
+
+        def writeToExcelp3():
+            ws = wb.get_sheet_by_name('Per Second')
+            r = ws.max_row + 1
+            ws.cell(row=r, column=1, value=str(relfname))
+            c = 2
+            for seg in detected:
+                ws.cell(row=r, column=c, value=int(seg))
+                c += 1
+
+        if annotation is None:
+            annotation = self.segments
 
         # method=self.algs.currentText()
-        relfname = os.path.relpath(str(self.filename), str(self.dirName))
         eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
+        relfname = os.path.relpath(str(self.filename), str(self.dirName))
+        #print eFile, relfname
 
-        if mode == 'Annotation':
-            if isinstance(self.filename, str):
-                file = open(self.filename + '.data', 'w')
-            else:
-                file = open(str(self.filename) + '.data', 'w')
-            json.dump(annotation, file)
+        if os.path.isfile(eFile):
+            try:
+                wb = load_workbook(str(eFile))
+            except:
+                print "Unable to open file"  # Does not exist OR no read permissions
+                return
+        else:
+            wb = makeNewWorkbook()
 
-        elif mode == 'Excel':
-            if os.path.isfile(eFile):  # if the file is already there
-                try:
-                    wb = load_workbook(str(eFile))
-                    ws = wb.get_sheet_by_name('TimeStamps')
-                    c = 1
-                    r = ws.max_row + 1  # Get last row number from existing file
-                    ws.cell(row=r, column=1, value=str(relfname))
-                    for seg in annotation:
-                        # ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')) + '-' + str(format(round(seg[1],2),'.2f')))
-                        # c = c + 1
-                        ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')))
-                        ws.cell(row=r, column=c + 2, value=str(format(round(seg[1],2),'.2f')))
-                        c = c + 2
-                    wb.save(str(eFile))
-                except:
-                    print "Unable to open file"  # Does not exist OR no read permissions
-            else:
-                wb = Workbook()
-                wb.create_sheet(title='TimeStamps', index=1)
-                wb.create_sheet(title='PresenceAbsence', index=2)
-                wb.create_sheet(title='PerSecond', index=3)
+        # Now write the data out
+        writeToExcelp1()
+        writeToExcelp2()
 
-                ws = wb.get_sheet_by_name('TimeStamps')
-                ws.cell(row=1, column=1, value="File Name")
-                ws.cell(row=1, column=2, value="start(mm:ss)")
-                c = 3
-                for i in range(100):
-                    ws.cell(row=1, column=c, value="end")
-                    ws.cell(row=1, column=c + 1, value="start")
-                    c = c + 2
-                ws.cell(row=1, column=c, value="end")
-                # ws.cell(row=1, column=2, value="Detections [start-end(mm:ss)]")
-                r = 2
-                c = 1
-                ws.cell(row=r, column=c, value=str(relfname))
-                for seg in annotation:
-                    # ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')) + '-' + str(format(round(seg[1],2),'.2f')))
-                    # c = c + 1
-                    ws.cell(row=r, column=c + 1, value=str(format(round(seg[0],2), '.2f')))
-                    ws.cell(row=r, column=c + 2, value=str(format(round(seg[1],2),'.2f')))
-                    c = c + 2
-                # Second sheet
-                ws = wb.get_sheet_by_name('PresenceAbsence')
-                ws.cell(row=1, column=1, value="File Name")
-                ws.cell(row=1, column=2, value="Presence/Absence")
+        # Generate per second binary output
+        import math
+        n = math.ceil(float(self.datalength) / self.sampleRate)
+        detected = np.zeros(int(n))
+        for seg in annotation:
+            for a in range(len(detected)):
+                if math.floor(seg[0]) <= a and a < math.ceil(seg[1]):
+                    detected[a] = 1
+        writeToExcelp3()
 
-                # Third sheet
-                ws = wb.get_sheet_by_name('PerSecond')
-                ws.cell(row=1, column=1, value="File Name")
-                ws.cell(row=1, column=2, value="Presence=1/Absence=0")
-                c = 2
-                for i in range(900):
-                    ws.cell(row=2, column=c, value="S " + str(i + 1))
-                    c = c + 1
-                first = wb.get_sheet_by_name('Sheet')
-                wb.remove_sheet(first)
-                wb.save(str(eFile))
-
-            # Presence absence excel
-            if os.path.isfile(eFile):  # if the file is already there
-                try:
-                    wb = load_workbook(str(eFile))
-                    # ws=wb.create_sheet(title="PresenceAbsence",index=2)
-                    ws = wb.get_sheet_by_name('PresenceAbsence')
-                    r = ws.max_row + 1  #
-                    ws.cell(row=r, column=1, value=str(relfname))
-                    if annotation:
-                        ws.cell(row=r, column=2, value='Yes')
-                    else:
-                        ws.cell(row=r, column=2, value='_')
-                    wb.save(str(eFile))
-                except:
-                    print "Unable to open file"  # Does not exist OR no read permissions
-
-        if mode=='Binary':  # Binary excel
-            if os.path.isfile(eFile):  # if the file is already there
-                try:
-                    wb = load_workbook(str(eFile))
-                    ws = wb.get_sheet_by_name('PerSecond')
-                    c = 1
-                    r = ws.max_row + 1  # Get last row number from existing file
-                    ws.cell(row=r, column=c, value=str(relfname))
-                    for seg in annotation:
-                        ws.cell(row=r, column=c + 1, value=str(int(seg)))
-                        c = c + 1
-                    wb.save(str(eFile))
-                except:
-                    print "Unable to open file"  # Does not exist OR no read permissions
+        # Save the file
+        wb.save(str(eFile))
 
     def findMatches(self,thr=0.4):
         """ Calls the cross-correlation function to find matches like the currently highlighted box.
@@ -3485,9 +3480,9 @@ class AviaNZ(QMainWindow):
         print("Quitting")
         if len(self.segments) > 0:
             if self.segments[0][0] > -1:
-                self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
+                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
         else:
-            self.segments.insert(0, [-1, -1, self.config['operator'],self.config['reviewer'], -1])
+            self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
         self.saveSegments()
         if self.saveConfig == True:
             print "Saving config file"

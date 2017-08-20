@@ -1247,10 +1247,10 @@ class HumanClassify2a(QDialog):
 
         ok = QPushButton('OK')
         cancel = QPushButton('Cancel')
-        #self.connect(ok, SIGNAL('clicked()'), self.ok)
-        #self.connect(cancel,SIGNAL('clicked()'), self.cancel)
-        self.ok.clicked.connect(self.ok)
-        self.cancel.clicked.connect(self.cancel)
+        self.connect(ok, SIGNAL('clicked()'), self.ok)
+        self.connect(cancel,SIGNAL('clicked()'), self.cancel)
+        #self.ok.clicked.connect(self.ok)
+        #self.cancel.clicked.connect(self.cancel)
 
         layout = QVBoxLayout()
         layout.addWidget(QLabel('Choose the bird you wish to see classification of:'))

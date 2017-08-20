@@ -3,6 +3,10 @@
 
 SM:
 
+Try to replicate bug in loading /Users/srmarsla/Tier 1/CC18_BIRP_150111_024258.wav
+
+Bug in WaveletSegment training? What has changed?
+
 (1) SRM Update the manual lots
 (2) SRM And the video!
 (3) All Check it's really stable
