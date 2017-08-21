@@ -995,7 +995,7 @@ class AviaNZ(QMainWindow):
             if np.shape(np.shape(self.audiodata))[0] > 1:
                 self.audiodata = self.audiodata[:, 0]
             self.datalength = np.shape(self.audiodata)[0]
-            print "Length of file is ", float(self.datalength) / self.sampleRate, " seconds (", self.datalength, "samples) loaded from ", float(self.fileLength) / self.sampleRate, "seconds (", self.fileLength, " samples)"
+            print "Length of file is ", float(self.datalength) / self.sampleRate, " seconds (", self.datalength, "samples) loaded from ", float(self.fileLength) / self.sampleRate, "seconds (", self.fileLength, " samples) with sample rate ",self.sampleRate, " Hz."
 
             if name is not None:
                 if self.datalength != self.fileLength:
@@ -2532,8 +2532,8 @@ class AviaNZ(QMainWindow):
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
         Has to do quite a bit of work to make sure segments are in the correct place, etc."""
-        [windowType, mean_normalise, multitaper, window_width, incr,minFreq,maxFreq] = self.spectrogramDialog.getValues()
-        if minFreq>=maxFreq:
+        [windowType, mean_normalise, multitaper, window_width, incr, minFreq, maxFreq] = self.spectrogramDialog.getValues()
+        if (minFreq >= maxFreq):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("Incorrect frequency range")
@@ -2546,7 +2546,7 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText("Updating the spectrogram...")
             self.sp.setWidth(int(str(window_width)), int(str(incr)))
             oldSpecy = np.shape(self.sg)[1]
-            sgRaw = self.sp.spectrogram(self.audiodata,window=str(windowType),mean_normalise=mean_normalise,onesided=True,multitaper=multitaper)
+            sgRaw = self.sp.spectrogram(self.audiodata,window=str(windowType),mean_normalise=mean_normalise,onesided=True,multitaper=False)
             maxsg = np.min(sgRaw)
             self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
 
