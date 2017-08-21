@@ -4,8 +4,27 @@
 SM:
 
 Try to replicate bug in loading /Users/srmarsla/Tier 1/CC18_BIRP_150111_024258.wav
-
 Bug in WaveletSegment training? What has changed?
+
+SM Choose best sets of nodes and evaluate
+SM Make the general segmentation more sensitive
+SM Get to grips with the bloody wavelet segmenter
+
+NP Features
+NP Good training set
+NP Work out how not to mistake kiwi
+NP Sort out 1 version of code for excel exporting with 1 minute presence/absence
+    Move from AviaNZ to SupportClasses
+    Add the 1 min workflow (see below)
+NP Check manual
+
+BOTH: Decide that v1.0 is ready -- check stability, tidy the segmenters and denoisers options
+
+We should start to decide what makes a specialised filter
+    Mingap, minlength
+    Threshold for segmenters
+    Wavelet nodes
+    Trained classifiers
 
 (1) SRM Update the manual lots
 (2) SRM And the video!
@@ -21,16 +40,18 @@ Bug in WaveletSegment training? What has changed?
     (iii) SRM Wavelet energy features
 (8) NP Parameter setting
 
-We should start to decide what make a specialised filter
-    Mingap, minlength
-    Threshold for segmenters
-    Wavelet nodes
-    Trained classifiers
-
 Exporter for mac but scipy.misc for Windows - it works fine, but doesn't show the segments on Windows
 
-paging - x axis and page overlap, e.g 15 min file ends with 15:10 with overlap=10
-    SRM: I don't see this
+
+# What we want from the Tier 1 output:
+Presence or absence at some time resolution (e.g., 1 min, or 5 mins)
+    (1) Pick up a 1 min section
+    (2) Detect kiwi
+    (3) As soon as a definite kiwi is detected, mark presence, move on to next section
+    (4) If a possible kiwi is detected, mark it and keep on going
+    (5) If you find a definite, delete possible, go to (1)
+    (6) If find no kiwi mark as absence
+    (7) If find only possibles, ask user at end of all file processing using Check segments interface
 
 Work out how to make old wavelet method produce too many segments
 

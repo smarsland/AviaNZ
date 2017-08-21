@@ -241,7 +241,7 @@ class WaveletSegment:
         count = 0
 
         for index in listnodes:
-            new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='zero', maxlevel=wp.maxlevel)
+            new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
 
             # TODO: This primes the tree with zeros, which was necessary for denoising.
             # for level in range(wp.maxlevel + 1):
