@@ -2589,12 +2589,12 @@ class AviaNZ(QMainWindow):
                         self.listLabels[s].setPos(x1,self.textpos)
 
                 # Update the axis
-                FreqRange = (self.maxFreq - self.minFreq)/1000.
-                self.specaxis.setTicks([[(0, self.minFreq / 1000.),
-                                         (np.shape(self.sg)[1] / 4, self.minFreq / 1000. + FreqRange / 4.),
-                                         (np.shape(self.sg)[1] / 2, self.minFreq / 1000. + FreqRange / 2.),
-                                         (3 * np.shape(self.sg)[1] / 4, self.minFreq / 1000. + 3 * FreqRange / 4.),
-                                         (np.shape(self.sg)[1], self.minFreq / 1000. + FreqRange)]])
+                #FreqRange = (self.maxFreq - self.minFreq)/1000.
+                #self.specaxis.setTicks([[(0, self.minFreq / 1000.),
+                #                         (np.shape(self.sg)[1] / 4, self.minFreq / 1000. + FreqRange / 4.),
+                #                         (np.shape(self.sg)[1] / 2, self.minFreq / 1000. + FreqRange / 2.),
+                #                         (3 * np.shape(self.sg)[1] / 4, self.minFreq / 1000. + 3 * FreqRange / 4.),
+                #                         (np.shape(self.sg)[1], self.minFreq / 1000. + FreqRange)]])
 
                 # Redraw everything and redraw it
                 self.removeSegments(delete=False)
@@ -2609,8 +2609,8 @@ class AviaNZ(QMainWindow):
                     self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'],
                                         self.config['incr'])
 
-            if minFreq != self.minFreq or maxFreq!=self.maxFreq:
-                self.redoFreqAxis(minFreq,maxFreq)
+            #if minFreq != self.minFreq or maxFreq!=self.maxFreq:
+            self.redoFreqAxis(minFreq,maxFreq)
 
             self.statusLeft.setText("Ready")
 
