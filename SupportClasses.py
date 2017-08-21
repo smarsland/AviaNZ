@@ -14,11 +14,26 @@ from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, reg
 
 # import pyqtgraph.exporters as pge
 
-class TimeAxis(pg.AxisItem):
+class TimeAxisHour(pg.AxisItem):
+    # Time axis (at bottom of spectrogram)
+    # Writes the time as hh:mm:ss, and can add an offset
+    def __init__(self, *args, **kwargs):
+        super(TimeAxisHour, self).__init__(*args, **kwargs)
+        self.offset = 0
+
+    def tickStrings(self, values, scale, spacing):
+        # Overwrite the axis tick code
+        return [QTime().addSecs(value+self.offset).toString('hh:mm:ss') for value in values]
+
+    def setOffset(self,offset):
+        self.offset = offset
+        #self.update()
+
+class TimeAxisMin(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
     # Writes the time as mm:ss, and can add an offset
     def __init__(self, *args, **kwargs):
-        super(TimeAxis, self).__init__(*args, **kwargs)
+        super(TimeAxisMin, self).__init__(*args, **kwargs)
         self.offset = 0
 
     def tickStrings(self, values, scale, spacing):
@@ -27,7 +42,7 @@ class TimeAxis(pg.AxisItem):
 
     def setOffset(self,offset):
         self.offset = offset
-
+        self.update()
 
 class ShadedROI(pg.ROI):
     # A region of interest that is shaded, for marking segments

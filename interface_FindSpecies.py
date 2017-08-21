@@ -163,7 +163,8 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                             #     # print newSegments
                             # elif self.algs.currentText()=='Wavelets':
                             if self.species!='Any':
-                                newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
+                                ws = WaveletSegment.WaveletSegment(species=self.species)
+                                newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
                             else:
                                 newSegments=self.seg.bestSegments()
 
@@ -174,7 +175,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                                 for a in range(len(detected)):
                                     if math.floor(seg[0])<=a and a<math.ceil(seg[1]):
                                         detected[a]=1
-                            self.saveSegments(detected, mode='Binary') # append
+                            self.exportSegments(detected, mode='Binary') # append
 
                             # Generate annotation friendly output ('Annotation')
                             # print "Generate annotation friendly output", newSegments
@@ -190,14 +191,14 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                                         for seg in newSegments:
                                             annotation.append([float(seg[0]),float(seg[1]),0,0,"Don't know"])
                                     # print annotation
-                                self.saveSegments(annotation, mode='Annotation')
+                                self.exportSegments(annotation, mode='Annotation')
 
                             # Generate excel summary - time stamps [start(mm:ss) end(mm:ss)]
                             annotation=[]
                             for seg in newSegments:
                                 annotation.append([self.convertMillisecs(seg[0]*1000),self.convertMillisecs(seg[1]*1000)])
                             # print annotation
-                            self.saveSegments(annotation, mode='Excel') # append
+                            self.exportSegments(annotation, mode='Excel') # append
                 # self.statusBar().showMessage("Ready")
                 self.statusLeft.setText("Ready")
             else:
@@ -221,7 +222,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             del(segments[i+1])
         return segments
 
-    def saveSegments(self,annotation,mode):
+    def exportSegments(self,annotation,mode):
         # This saves the detections into three different formats: annotation, excel, and binary
 
         # method=self.algs.currentText()
