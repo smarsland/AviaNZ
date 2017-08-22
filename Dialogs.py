@@ -213,6 +213,7 @@ class OperatorReviewer(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
+        print self.name1.text(),self.name2.text()
         return [self.name1.text(),self.name2.text()]
 
 #======
@@ -328,7 +329,7 @@ class Segmentation(QDialog):
         self.species=QComboBox()
         # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
         self.species.addItems(["Choose species...","Kiwi","Ruru"])
-        self.species.currentIndexChanged[QString].connect(self.changeBoxes)
+        # self.species.currentIndexChanged[QString].connect(self.changeBoxes)
 
         Box.addWidget(self.specieslabel)
         self.specieslabel.hide()
@@ -418,6 +419,7 @@ class Segmentation(QDialog):
         else:
             self.specieslabel.hide()
             self.species.hide()
+            self.species.setCurrentIndex(0)
             #self.depthlabel.hide()
             #self.depth.hide()
             ##self.depthchoice.hide()
@@ -486,41 +488,50 @@ class Segmentation(QDialog):
 #======
 class Denoise(QDialog):
     # Class for the denoising dialog box
-    def __init__(self, parent=None):
+    def __init__(self, parent=None,DOC=True,sampleRate=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Denoising Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setMinimumWidth(300)
+        self.setMinimumHeight(250)
+        self.DOC=DOC
+        self.sampleRate=sampleRate
 
         self.algs = QComboBox()
-        self.algs.addItems(["Wavelets","Bandpass","Butterworth Bandpass" ,"Wavelets --> Bandpass","Bandpass --> Wavelets","Median Filter"])
+        # self.algs.addItems(["Wavelets","Bandpass","Butterworth Bandpass" ,"Wavelets --> Bandpass","Bandpass --> Wavelets","Median Filter"])
+        if self.DOC == False:
+            self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass", "Median Filter"])
+        else:
+            self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass"])
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Wavelets"
 
         # Wavelet: Depth of tree, threshold type, threshold multiplier, wavelet
-        self.wavlabel = QLabel("Wavelets")
-        self.depthlabel = QLabel("Depth of wavelet packet decomposition (or tick box to use best)")
-        self.depthchoice = QCheckBox()
-        #self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
-        self.depthchoice.clicked.connect(self.depthclicked)
-        self.depth = QSpinBox()
-        self.depth.setRange(1,10)
-        self.depth.setSingleStep(1)
-        self.depth.setValue(5)
+        # self.wavlabel = QLabel("Wavelets")
+        if self.DOC==False:
+            self.depthlabel = QLabel("Depth of wavelet packet decomposition (or tick box to use best)")
+            self.depthchoice = QCheckBox()
+            #self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
+            self.depthchoice.clicked.connect(self.depthclicked)
+            self.depth = QSpinBox()
+            self.depth.setRange(1,10)
+            self.depth.setSingleStep(1)
+            self.depth.setValue(5)
 
-        self.thrtypelabel = QLabel("Type of thresholding")
-        self.thrtype = [QRadioButton("Soft"), QRadioButton("Hard")]
-        self.thrtype[0].setChecked(True)
+            self.thrtypelabel = QLabel("Type of thresholding")
+            self.thrtype = [QRadioButton("Soft"), QRadioButton("Hard")]
+            self.thrtype[0].setChecked(True)
 
-        self.thrlabel = QLabel("Multiplier of std dev for threshold")
-        self.thr = QDoubleSpinBox()
-        self.thr.setRange(1,10)
-        self.thr.setSingleStep(0.5)
-        self.thr.setValue(4.5)
+            self.thrlabel = QLabel("Multiplier of std dev for threshold")
+            self.thr = QDoubleSpinBox()
+            self.thr.setRange(1,10)
+            self.thr.setSingleStep(0.5)
+            self.thr.setValue(4.5)
 
-        self.waveletlabel = QLabel("Type of wavelet")
-        self.wavelet = QComboBox()
-        self.wavelet.addItems(["dmey2","db2","db5","haar"])
-        self.wavelet.setCurrentIndex(0)
+            self.waveletlabel = QLabel("Type of wavelet")
+            self.wavelet = QComboBox()
+            self.wavelet.addItems(["dmey2","db2","db5","haar"])
+            self.wavelet.setCurrentIndex(0)
 
         # Median: width of filter
         self.medlabel = QLabel("Median Filter")
@@ -534,14 +545,20 @@ class Denoise(QDialog):
         self.bandlabel = QLabel("Bandpass Filter")
         self.wblabel = QLabel("Wavelets and Bandpass Filter")
         self.blabel = QLabel("Start and end points of the band")
-        self.start = QLineEdit(self)
-        self.start.setText('1000')
-        self.end = QLineEdit(self)
-        self.end.setText('7500')
+        self.start = QSpinBox()
+        self.start.setMinimum(10)
+        self.start.setSingleStep(100)
+        self.start.setMaximum(self.sampleRate/2-200)
+        self.start.setValue(1000)
+        self.end = QSpinBox()
+        self.end.setMinimum(100)
+        self.end.setSingleStep(100)
+        self.end.setMaximum(self.sampleRate /2-100)
+        self.end.setValue(7500)
 
         self.trimlabel = QLabel("Make frequency axis tight")
         self.trimaxis = QCheckBox()
-        self.trimaxis.setChecked(True)
+        self.trimaxis.setChecked(False)
 
         # Want combinations of these too!
 
@@ -552,20 +569,20 @@ class Denoise(QDialog):
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
 
-        Box.addWidget(self.wavlabel)
-        Box.addWidget(self.depthlabel)
-        Box.addWidget(self.depthchoice)
-        Box.addWidget(self.depth)
+        if self.DOC == False:
+            Box.addWidget(self.depthlabel)
+            Box.addWidget(self.depthchoice)
+            Box.addWidget(self.depth)
 
-        Box.addWidget(self.thrtypelabel)
-        Box.addWidget(self.thrtype[0])
-        Box.addWidget(self.thrtype[1])
+            Box.addWidget(self.thrtypelabel)
+            Box.addWidget(self.thrtype[0])
+            Box.addWidget(self.thrtype[1])
 
-        Box.addWidget(self.thrlabel)
-        Box.addWidget(self.thr)
+            Box.addWidget(self.thrlabel)
+            Box.addWidget(self.thr)
 
-        Box.addWidget(self.waveletlabel)
-        Box.addWidget(self.wavelet)
+            Box.addWidget(self.waveletlabel)
+            Box.addWidget(self.wavelet)
 
         # Median: width of filter
         Box.addWidget(self.medlabel)
@@ -601,8 +618,8 @@ class Denoise(QDialog):
 
     def changeBoxes(self,alg):
         # This does the hiding and showing of the options as the algorithm changes
-        if self.prevAlg == "Wavelets":
-            self.wavlabel.hide()
+        if self.prevAlg == "Wavelets" and self.DOC==False:
+            # self.wavlabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
             self.depthchoice.hide()
@@ -613,7 +630,7 @@ class Denoise(QDialog):
             self.thr.hide()
             self.waveletlabel.hide()
             self.wavelet.hide()
-        elif self.prevAlg == "Bandpass --> Wavelets":
+        elif self.prevAlg == "Bandpass --> Wavelets" and self.DOC==False:
             self.wblabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
@@ -630,10 +647,11 @@ class Denoise(QDialog):
             self.end.hide()
             self.trimlabel.hide()
             self.trimaxis.hide()
+            self.trimaxis.setChecked(False)
             self.medlabel.hide()
             self.widthlabel.hide()
             self.width.hide()
-        elif self.prevAlg == "Wavelets --> Bandpass":
+        elif self.prevAlg == "Wavelets --> Bandpass" and self.DOC==False:
             self.wblabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
@@ -650,6 +668,7 @@ class Denoise(QDialog):
             self.end.hide()
             self.trimlabel.hide()
             self.trimaxis.hide()
+            self.trimaxis.setChecked(False)
             self.medlabel.hide()
             self.widthlabel.hide()
             self.width.hide()
@@ -660,6 +679,7 @@ class Denoise(QDialog):
             self.end.hide()
             self.trimlabel.hide()
             self.trimaxis.hide()
+            self.trimaxis.setChecked(False)
         else:
             # Median filter
             self.medlabel.hide()
@@ -667,8 +687,8 @@ class Denoise(QDialog):
             self.width.hide()
 
         self.prevAlg = str(alg)
-        if str(alg) == "Wavelets":
-            self.wavlabel.show()
+        if str(alg) == "Wavelets" and self.DOC==False:
+            # self.wavlabel.show()
             self.depthlabel.show()
             self.depthchoice.show()
             self.depth.show()
@@ -679,7 +699,7 @@ class Denoise(QDialog):
             self.thr.show()
             self.waveletlabel.show()
             self.wavelet.show()
-        elif str(alg) == "Wavelets --> Bandpass":
+        elif str(alg) == "Wavelets --> Bandpass" and self.DOC==False:
             # self.wblabel.show()
             self.depthlabel.show()
             self.depthchoice.show()
@@ -696,7 +716,7 @@ class Denoise(QDialog):
             self.end.show()
             self.trimlabel.show()
             self.trimaxis.show()
-        elif str(alg) == "Bandpass --> Wavelets":
+        elif str(alg) == "Bandpass --> Wavelets" and self.DOC==False:
             # self.wblabel.show()
             self.depthlabel.show()
             self.depthchoice.show()
@@ -729,7 +749,10 @@ class Denoise(QDialog):
         self.depth.setEnabled(not self.depth.isEnabled())
 
     def getValues(self):
-        return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.start.text(),self.end.text(),self.width.text(),self.trimaxis.isChecked()]
+        if self.DOC==False:
+            return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.start.text(),self.end.text(),self.width.text(),self.trimaxis.isChecked()]
+        else:
+            return [self.algs.currentText(),self.start.text(),self.end.text(),self.width.text(),self.trimaxis.isChecked()]
 
 #======
 class HumanClassify1(QDialog):

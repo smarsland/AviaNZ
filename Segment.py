@@ -59,7 +59,9 @@ class Segment:
         segs3, p, t = self.yin(100, thr=yinthr, returnSegs=True)
         segs3 = self.checkSegmentLength(segs3,mingap,minlength,maxlength)
         segs1 = self.mergeSegments(segs1, segs2)
-        return self.mergeSegments(segs1,segs3)
+        segs = self.mergeSegments(segs1,segs3)
+        segs = segs[::-1]
+        return segs
 
     def mergeSegments(self,segs1,segs2,ignoreInsideEnvelope=True):
         """ Given two segmentations of the same file, return the merged set of them
