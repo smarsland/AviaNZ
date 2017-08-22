@@ -328,7 +328,7 @@ class AviaNZ(QMainWindow):
         actionMenu.addAction("Check segments [All segments]",self.humanClassifyDialog1,"Ctrl+1")
         actionMenu.addAction("Check segments [Choose species]",self.humanClassifyDialog2,"Ctrl+2")
         actionMenu.addSeparator()
-        actionMenu.addAction("Export segments to Excel",self.exportSegments)
+        actionMenu.addAction("Export segments to Excel",self.exportSeg)
         actionMenu.addSeparator()
         actionMenu.addAction("Put docks back",self.dockReplace)
 
@@ -2835,12 +2835,23 @@ class AviaNZ(QMainWindow):
             elif str(alg) == "FIR":
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
             elif str(alg)=="Wavelets":
-                ws = WaveletSegment.WaveletSegment(species=str(species))
-                newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
+                if species == 'all':    # Ask the species
+                    msg = QMessageBox()
+                    msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+                    msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                    msg.setText("Please select your species!")
+                    msg.setWindowTitle("Select Species")
+                    msg.setStandardButtons(QMessageBox.Ok)
+                    msg.exec_()
+                    return
+                else:
+                    ws = WaveletSegment.WaveletSegment(species=str(species))
+                    newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
             elif str(alg)=="Cross-Correlation":
                 self.findMatches(float(str(CCThr1)))
                 newSegments = []
 
+            print "to excel", newSegments
                 # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
                 # # but ML is extremely slow and crappy. So I decided to use just the wavelets
                 # newSegmentsML = WaveletSegment.findCalls_learn(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
@@ -2868,21 +2879,22 @@ class AviaNZ(QMainWindow):
                 # newSegmentsDef=self.binary2seg(newSegmentsDef)
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
-            # Generate annotation friendly output. That's enough for interface?
+            # Save the excel file
+            out = SupportClasses.exportSegments(annotation=newSegments, species=species, startTime=self.startTime, segments=self.segments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg))
+            out.excel()
+            # self.exportSegments(newSegments,species=species)
+
+            # Generate annotation friendly output.
             # Merge neighbours for wavelet seg
             if str(alg)=="Wavelets":
-                #newSegments=self.mergeSeg(newSegments)
-                if len(newSegments)>0:
-                    for seg in newSegments:
+                 if len(out.annotation)>0:
+                    for seg in out.annotation:
                         self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
                                         species.title() + "?")
             else:
                 if len(newSegments)>0:
                     for seg in newSegments:
                         self.addSegment(float(seg[0]),float(seg[1]))
-
-            # Save the excel file
-            self.exportSegments(newSegments,species=species)
 
             self.lenNewSegments = len(newSegments)
             self.segmentDialog.undo.setEnabled(True)
@@ -2897,101 +2909,10 @@ class AviaNZ(QMainWindow):
             self.deleteSegment(seg)
         self.segmentDialog.undo.setEnabled(False)
 
-    def exportSegments(self, annotation=None, species='all'):
-        """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence
-        in an excel workbook. It makes the workbook if necessary.
-        TODO: Ask for what species if not specified
-        TODO: Add a presence/absence at minute (or 5 minute) resolution
-        """
-        def makeNewWorkbook():
-            wb = Workbook()
-            wb.create_sheet(title='Time Stamps', index=1)
-            wb.create_sheet(title='Presence Absence', index=1)
-            wb.create_sheet(title='Per Second', index=2)
-
-            ws = wb.get_sheet_by_name('Time Stamps')
-            ws.cell(row=1, column=1, value="File Name")
-            ws.cell(row=1, column=2, value="start (hh:mm:ss)")
-            ws.cell(row=1, column=3, value="end (hh:mm:ss)")
-
-            # Second sheet
-            ws = wb.get_sheet_by_name('Presence Absence')
-            ws.cell(row=1, column=1, value="File Name")
-            ws.cell(row=1, column=2, value="Presence/Absence")
-
-            # Third sheet
-            ws = wb.get_sheet_by_name('Per Second')
-            ws.cell(row=1, column=1, value="File Name")
-            ws.cell(row=1, column=2, value="Presence=1, Absence=0")
-
-            # TODO: Per minute sheet?
-
-            # Hack to delete original sheet
-            wb.remove_sheet(wb.get_sheet_by_name('Sheet'))
-            return wb
-
-        def writeToExcelp1():
-            ws = wb.get_sheet_by_name('Time Stamps')
-            r = ws.max_row + 1
-            # Print the filename
-            ws.cell(row=r, column=1, value=str(relfname))
-            # Loop over the annotation
-            for seg in annotation:
-                ws.cell(row=r, column=2, value=str(QTime().addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
-                ws.cell(row=r, column=3, value=str(QTime().addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
-                r += 1
-
-        def writeToExcelp2():
-            ws = wb.get_sheet_by_name('Presence Absence')
-            r = ws.max_row + 1
-            ws.cell(row=r, column=1, value=str(relfname))
-            if annotation:
-                ws.cell(row=r, column=2, value='Yes')
-            else:
-                ws.cell(row=r, column=2, value='_')
-
-        def writeToExcelp3():
-            ws = wb.get_sheet_by_name('Per Second')
-            r = ws.max_row + 1
-            ws.cell(row=r, column=1, value=str(relfname))
-            c = 2
-            for seg in detected:
-                ws.cell(row=r, column=c, value=int(seg))
-                c += 1
-
-        if annotation is None:
-            annotation = self.segments
-
-        # method=self.algs.currentText()
-        eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
-        relfname = os.path.relpath(str(self.filename), str(self.dirName))
-        #print eFile, relfname
-
-        if os.path.isfile(eFile):
-            try:
-                wb = load_workbook(str(eFile))
-            except:
-                print "Unable to open file"  # Does not exist OR no read permissions
-                return
-        else:
-            wb = makeNewWorkbook()
-
-        # Now write the data out
-        writeToExcelp1()
-        writeToExcelp2()
-
-        # Generate per second binary output
-        import math
-        n = math.ceil(float(self.datalength) / self.sampleRate)
-        detected = np.zeros(int(n))
-        for seg in annotation:
-            for a in range(len(detected)):
-                if math.floor(seg[0]) <= a and a < math.ceil(seg[1]):
-                    detected[a] = 1
-        writeToExcelp3()
-
-        # Save the file
-        wb.save(str(eFile))
+    def exportSeg(self, annotation=None, species='all'):
+        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename,
+                                               datalength=self.datalength, sampleRate=self.sampleRate)
+        out.saveSegments()
 
     def findMatches(self,thr=0.4):
         """ Calls the cross-correlation function to find matches like the currently highlighted box.
