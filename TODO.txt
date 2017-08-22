@@ -15,10 +15,14 @@ NP Good training set
 NP Work out how not to mistake kiwi
 NP Sort out 1 version of code for excel exporting with 1 minute presence/absence
     Move from AviaNZ to SupportClasses
+    #Done
     Add the 1 min workflow (see below)
 NP Check manual
 
 BOTH: Decide that v1.0 is ready -- check stability, tidy the segmenters and denoisers options
+# denoisers are done, there are two versions (DOC and ALL)
+# do we need "show inverted spec"? anyway it is in ALL version and works only one direction
+
 
 We should start to decide what makes a specialised filter
     Mingap, minlength

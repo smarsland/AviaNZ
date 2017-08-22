@@ -2617,7 +2617,7 @@ class AviaNZ(QMainWindow):
     def denoiseDialog(self):
         """ Create the denoising dialog when the relevant button is pressed.
         """
-        self.denoiseDialog = Dialogs.Denoise()
+        self.denoiseDialog = Dialogs.Denoise(DOC=self.DOC,sampleRate=self.sampleRate)
         self.denoiseDialog.show()
         self.denoiseDialog.activateWindow()
         self.denoiseDialog.activate.clicked.connect(self.denoise)
@@ -2646,13 +2646,16 @@ class AviaNZ(QMainWindow):
         """
         # TODO: should it be saved automatically, or a button added?
         with pg.BusyCursor():
-            [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width,trimaxis] = self.denoiseDialog.getValues()
+            if self.DOC==False:
+                [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width,trimaxis] = self.denoiseDialog.getValues()
+            else:
+                [alg, start, end, width, trimaxis] = self.denoiseDialog.getValues()
             self.backup()
             self.statusLeft.setText("Denoising...")
             if not hasattr(self, 'waveletDenoiser'):
                 self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata,wavelet=None,maxLevel=self.config['maxSearchDepth'])
 
-            if str(alg) == "Wavelets":
+            if str(alg) == "Wavelets" and self.DOC==False:
                 if thrType is True:
                     type = 'Soft'
                 else:
@@ -2662,7 +2665,10 @@ class AviaNZ(QMainWindow):
                 else:
                     depth = int(str(depth))
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
-            elif str(alg) == "Bandpass --> Wavelets":
+            elif str(alg) == "Wavelets" and self.DOC==True:
+                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata)
+
+            elif str(alg) == "Bandpass --> Wavelets" and self.DOC==False:
                 if thrType is True:
                     type = 'soft'
                 else:
@@ -2673,7 +2679,7 @@ class AviaNZ(QMainWindow):
                     depth = int(str(depth))
                 self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
-            elif str(alg) == "Wavelets --> Bandpass":
+            elif str(alg) == "Wavelets --> Bandpass" and self.DOC==False:
                 if thrType is True:
                     type = 'soft'
                 else:
@@ -2684,6 +2690,7 @@ class AviaNZ(QMainWindow):
                     depth = int(str(depth))
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
                 self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
+
             elif str(alg) == "Bandpass":
                 self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
                 #self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
@@ -3415,7 +3422,7 @@ class AviaNZ(QMainWindow):
 # Start the application
 app = QApplication(sys.argv)
 
-DOC=False    # DOC features or all
+DOC=True    # DOC features or all
 
 # This screen asks what you want to do, then processes the response
 first = Dialogs.StartScreen(DOC=DOC)
