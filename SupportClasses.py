@@ -9,10 +9,158 @@ from PyQt4.QtGui import *
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
-import pyqtgraph.parametertree.parameterTypes as pTypes
-from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 
-# import pyqtgraph.exporters as pge
+from openpyxl import load_workbook, Workbook
+import math
+import numpy as np
+import os, json
+
+class exportSegments:
+    """ This class saves the batch detection results(Find Species) and also current annotations (AviaNZ interface)
+        in three different formats: time stamps, presence/absence, and per second presence/absence
+        in an excel workbook. It makes the workbook if necessary.
+
+        TODO: Ask for what species if not specified
+        TODO: Add a presence/absence at minute (or 5 minute) resolution
+        TODO: Save the annotation files for batch processing
+    """
+
+    def __init__(self,annotation=None, species='all', startTime=0, segments=[], dirName='', filename='',datalength=0,sampleRate=0, method="Default"):
+        if annotation is None:
+            self.annotation = segments
+        else:
+            self.annotation=annotation
+        self.species=species
+        self.startTime=startTime
+        self.dirName=dirName
+        self.filename=filename
+        self.datalength=datalength
+        self.sampleRate=sampleRate
+        self.method=method
+
+    def excel(self):
+        """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence
+        in an excel workbook. It makes the workbook if necessary.
+        TODO: Ask for what species if not specified
+        TODO: Add a presence/absence at minute (or 5 minute) resolution
+        """
+        def makeNewWorkbook():
+            wb = Workbook()
+            wb.create_sheet(title='Time Stamps', index=1)
+            wb.create_sheet(title='Presence Absence', index=2)
+            wb.create_sheet(title='Per Second', index=3)
+
+            ws = wb.get_sheet_by_name('Time Stamps')
+            ws.cell(row=1, column=1, value="File Name")
+            ws.cell(row=1, column=2, value="start (hh:mm:ss)")
+            ws.cell(row=1, column=3, value="end (hh:mm:ss)")
+
+            # Second sheet
+            ws = wb.get_sheet_by_name('Presence Absence')
+            ws.cell(row=1, column=1, value="File Name")
+            ws.cell(row=1, column=2, value="Presence/Absence")
+
+            # Third sheet
+            ws = wb.get_sheet_by_name('Per Second')
+            ws.cell(row=1, column=1, value="File Name")
+            ws.cell(row=1, column=2, value="Presence=1, Absence=0")
+
+            # TODO: Per minute sheet?
+
+            # Hack to delete original sheet
+            wb.remove_sheet(wb.get_sheet_by_name('Sheet'))
+            return wb
+
+        def writeToExcelp1():
+            ws = wb.get_sheet_by_name('Time Stamps')
+            r = ws.max_row + 1
+            # Print the filename
+            ws.cell(row=r, column=1, value=str(relfname))
+            # Loop over the annotation
+            for seg in self.annotation:
+                ws.cell(row=r, column=2, value=str(QTime().addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
+                ws.cell(row=r, column=3, value=str(QTime().addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
+                r += 1
+
+        def writeToExcelp2():
+            ws = wb.get_sheet_by_name('Presence Absence')
+            r = ws.max_row + 1
+            ws.cell(row=r, column=1, value=str(relfname))
+            if self.annotation:
+                ws.cell(row=r, column=2, value='Yes')
+            else:
+                ws.cell(row=r, column=2, value='_')
+
+        def writeToExcelp3():
+            ws = wb.get_sheet_by_name('Per Second')
+            r = ws.max_row + 1
+            ws.cell(row=r, column=1, value=str(relfname))
+            c = 2
+            for seg in detected:
+                ws.cell(row=r, column=c, value=int(seg))
+                c += 1
+
+        # method=self.algs.currentText()
+        eFile = self.dirName + '/DetectionSummary_' + self.species + '.xlsx'
+        relfname = os.path.relpath(str(self.filename), str(self.dirName))
+        #print eFile, relfname
+
+        if os.path.isfile(eFile):
+            try:
+                wb = load_workbook(str(eFile))
+            except:
+                print "Unable to open file"  # Does not exist OR no read permissions
+                return
+        else:
+            wb = makeNewWorkbook()
+
+        # Now write the data out
+        if self.method=="Wavelets":
+            self.mergeSeg()
+        writeToExcelp1()
+        writeToExcelp2()
+
+        # Generate per second binary output
+        n = math.ceil(float(self.datalength) / self.sampleRate)
+        detected = np.zeros(int(n))
+        for seg in self.annotation:
+            for a in range(len(detected)):
+                if math.floor(seg[0]) <= a and a < math.ceil(seg[1]):
+                    detected[a] = 1
+        writeToExcelp3()
+
+        # Save the file
+        wb.save(str(eFile))
+
+    def mergeSeg(self):
+        # Merge the neighbours, for now wavelet segments
+        indx = []
+        for i in range(len(self.annotation) - 1):
+            if self.annotation[i][1] == self.annotation[i + 1][0]:
+                indx.append(i)
+        indx.reverse()
+        for i in indx:
+            self.annotation[i][1] = self.annotation[i + 1][1]
+            del (self.annotation[i + 1])
+            # return self.annotation
+
+    def saveAnnotation(self):
+        # Save annotations - batch processing
+        if len(self.annotation) > 0:
+            annotation = []
+            if self.method == "Wavelets":
+                annotation = []
+                for seg in self.annotation:
+                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
+            else:
+                for seg in self.annotation:
+                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, "Don't know"])
+
+            if isinstance(self.filename, str):
+                file = open(self.filename + '.data', 'w')
+            else:
+                file = open(str(self.filename) + '.data', 'w')
+            json.dump(annotation, file)
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)

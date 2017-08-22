@@ -328,7 +328,7 @@ class Segmentation(QDialog):
         self.species=QComboBox()
         # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
         self.species.addItems(["Choose species...","Kiwi","Ruru"])
-        self.species.currentIndexChanged[QString].connect(self.changeBoxes)
+        # self.species.currentIndexChanged[QString].connect(self.changeBoxes)
 
         Box.addWidget(self.specieslabel)
         self.specieslabel.hide()
@@ -418,6 +418,7 @@ class Segmentation(QDialog):
         else:
             self.specieslabel.hide()
             self.species.hide()
+            self.species.setCurrentIndex(0)
             #self.depthlabel.hide()
             #self.depth.hide()
             ##self.depthchoice.hide()
