@@ -183,7 +183,7 @@ class WaveletFunctions:
             level = int(np.floor(np.log2(working[0] + 1)))
         return new_wp
 
-    def waveletDenoise(self,data=None,thresholdType='soft',threshold=4.5,maxLevel=None,bandpass=False,wavelet='dmey2',costfn='threshold'):
+    def waveletDenoise(self,data=None,thresholdType='soft',threshold=4.5,maxLevel=5,bandpass=False,wavelet='dmey2',costfn='threshold'):
         """ Perform wavelet denoising.
         Constructs the wavelet tree to max depth (either specified or found), constructs the best tree, and then
         thresholds the coefficients (soft or hard thresholding), reconstructs the data and returns the data at the
