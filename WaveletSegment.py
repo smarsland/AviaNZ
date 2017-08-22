@@ -364,7 +364,7 @@ class WaveletSegment:
 
         # These nodes refer to the unrooted tree, so add 1 to get the real indices
         nodes = [n + 1 for n in nodes]
-        print nodes
+        #print nodes
 
         # Generate a full 5 level wavelet packet decomposition
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
@@ -395,18 +395,21 @@ class WaveletSegment:
         # TODO: json.dump('species.data', open('species.data', 'wb'))
         return listnodes
 
-    def waveletSegment_test(self,fName=None, data=None, sampleRate=None, species='Kiwi', trainTest=False):
+    def waveletSegment_test(self,fName=None, data=None, sampleRate=None, listnodes = None, species='Kiwi', trainTest=False):
         # Was findCalls_test
 
         # Load the relevant list of nodes
         # TODO: Put these into a file along with other relevant parameters (frequency, length, etc.)
-        if species.title() == 'Kiwi':
-            nodes = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55]
-        elif species.title() == 'Ruru':
-            nodes = [33, 37, 38]
-        elif species.title() == 'Sipo':
-            nodes = [61, 59, 54, 51, 60, 58, 49, 47]
-        # print nodes
+        if listnodes is None:
+            if species.title() == 'Kiwi':
+                nodes = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55]
+            elif species.title() == 'Ruru':
+                nodes = [33, 37, 38]
+            elif species.title() == 'Sipo':
+                nodes = [61, 59, 54, 51, 60, 58, 49, 47]
+        else:
+            nodes = listnodes
+
         if fName != None:
             self.loadData(fName, trainTest)
         else:
@@ -453,8 +456,50 @@ class WaveletSegment:
 
 def test():
     ws=WaveletSegment()
-    listnodes = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train1')
-    print listnodes
+    listnodes1 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train1')
+    print "***", listnodes1
+    listnodes2 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train2')
+    print "***", listnodes2
+    listnodes3 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train3')
+    print "***", listnodes3
+    listnodes4 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train4')
+    print "***", listnodes4
+    listnodes5 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train5')
+    print "***", listnodes5
+
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test1',listnodes=listnodes1,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test1',listnodes=listnodes2,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test1',listnodes=listnodes3,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test1',listnodes=listnodes4,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test1',listnodes=listnodes5,trainTest=True)
+
+
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test2',listnodes=listnodes1,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test2',listnodes=listnodes2,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test2',listnodes=listnodes3,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test2',listnodes=listnodes4,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test2',listnodes=listnodes5,trainTest=True)
+
+
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test3',listnodes=listnodes1,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test3',listnodes=listnodes2,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test3',listnodes=listnodes3,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test3',listnodes=listnodes4,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test3',listnodes=listnodes5,trainTest=True)
+
+
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test4',listnodes=listnodes1,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test4',listnodes=listnodes2,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test4',listnodes=listnodes3,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test4',listnodes=listnodes4,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test4',listnodes=listnodes5,trainTest=True)
+
+
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes1,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes2,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes3,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes4,trainTest=True)
+    dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes5,trainTest=True)
 
 def waveletSegment_train_learning(fName,species='Kiwi'):
     ws=WaveletSegment()

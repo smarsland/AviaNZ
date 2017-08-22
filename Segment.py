@@ -655,13 +655,14 @@ def showSegs():
     # Energy: Not great, but thr 1.0
     ts = time()
     s1=s.checkSegmentLength(s.segmentByFIR(0.1))
-    s2=s.checkSegmentLength(s.segmentByFIR(1.0))
+    s2=s.checkSegmentLength(s.segmentByFIR(0.01))
     s3= s.checkSegmentLength(s.medianClip(3.0))
     s4,p,t=s.yin(100, thr=0.5,returnSegs=True)
     s4 = s.checkSegmentLength(s4)
     s5=s.mergeSegments(s1,s3)
     s6=s.mergeSegments(s1,s4)
-    s7=WaveletSegment.findCalls_test(None, data, fs,'Kiwi', False)
+    ws = WaveletSegment.WaveletSegment()
+    s7= ws.waveletSegment_test(None, data, fs,'Kiwi', False)
     print('Took {}s'.format(time() - ts))
     #s7 = s.mergeSegments(s1,s.mergeSegments(s3,s4))
 
