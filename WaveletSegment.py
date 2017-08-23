@@ -454,19 +454,7 @@ class WaveletSegment:
                 count += 1
         #return self.data, self.sampleRate, self.annotation
 
-def test():
-    ws=WaveletSegment()
-    listnodes1 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train1')
-    print "***", listnodes1
-    listnodes2 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train2')
-    print "***", listnodes2
-    listnodes3 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train3')
-    print "***", listnodes3
-    listnodes4 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train4')
-    print "***", listnodes4
-    listnodes5 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train5')
-    print "***", listnodes5
-
+def batch(ws,listnodes1,listnodes2,listnodes3,listnodes4,listnodes5):
     dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test1',listnodes=listnodes1,trainTest=True)
     dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test1',listnodes=listnodes2,trainTest=True)
     dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test1',listnodes=listnodes3,trainTest=True)
@@ -500,6 +488,45 @@ def test():
     dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes3,trainTest=True)
     dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes4,trainTest=True)
     dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes5,trainTest=True)
+
+def test2():
+    ws=WaveletSegment(wavelet='dmey')
+    listnodes1 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train1')
+    print listnodes1
+
+def test():
+    ws=WaveletSegment()
+    listnodes1 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train1')
+    print "***", listnodes1
+    listnodes2 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train2')
+    print "***", listnodes2
+    listnodes3 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train3')
+    print "***", listnodes3
+    listnodes4 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train4')
+    print "***", listnodes4
+    listnodes5 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train5')
+    print "***", listnodes5
+
+    batch(ws, listnodes1, listnodes2, listnodes3, listnodes4, listnodes5)
+
+def test_listmerge():
+    l1 = [35, 36, 43, 44, 45, 46, 55, 41]
+    l2 = [35, 36, 17, 43, 40, 20]
+    l3 = [43, 44, 35, 36, 55]
+    l4 = [45, 46, 42, 50]
+    l5 = [45, 43, 44, 42, 36]
+
+    listnodes1 = np.union1d(l1,np.union1d(l2,np.union1d(l3,np.union1d(l4,l5))))
+    # Note no l4 below -> empty set
+    listnodes2 = np.intersect1d(l1,np.intersect1d(l2,np.intersect1d(l3,l5)))
+    listnodes3 = np.union1d(l1,np.union1d(l2,l3))
+    listnodes4 = np.intersect1d(l1,np.intersect1d(l2,l3))
+    a = np.arange(35,55)
+    np.random.shuffle(a)
+    listnodes5 = a[:6]
+
+    ws = WaveletSegment()
+    batch(ws, listnodes1, listnodes2, listnodes3, listnodes4, listnodes5)
 
 def waveletSegment_train_learning(fName,species='Kiwi'):
     ws=WaveletSegment()
