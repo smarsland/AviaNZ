@@ -626,8 +626,9 @@ class AviaNZ(QMainWindow):
 
         # Delete segment button
         deleteButton = QPushButton("&Delete Current Segment")
-        #self.connect(deleteButton, SIGNAL('clicked()'), self.deleteSegment)
-        deleteButton.clicked.connect(self.deleteSegment)
+        self.connect(deleteButton, SIGNAL('clicked()'), self.deleteSegment)
+        # The next line introduces a bug since False gets passed as an argument
+        #deleteButton.clicked.connect(self.deleteSegment)
 
         # Place all these widgets in the Controls dock
         self.w_controls.addWidget(self.playButton,row=0,col=0)
@@ -1684,6 +1685,7 @@ class AviaNZ(QMainWindow):
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
                     self.addSegment(self.start_location, mousePoint.x(),species=self.lastSpecies)
+                    self.box1id = len(self.segments) - 1
                 elif modifiers == QtCore.Qt.ControlModifier:
                     self.addSegment(self.start_location,mousePoint.x())
                     # Context menu
@@ -1696,7 +1698,6 @@ class AviaNZ(QMainWindow):
                     self.box1id = len(self.segments) - 1
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-
                 self.playSegButton.setEnabled(True)
                 self.playBandLimitedSegButton.setEnabled(True)
 
@@ -1811,6 +1812,7 @@ class AviaNZ(QMainWindow):
                     modifiers = QtGui.QApplication.keyboardModifiers()
                     if modifiers == QtCore.Qt.ShiftModifier:
                         self.addSegment(self.start_location, self.convertSpectoAmpl(mousePoint.x()), species=self.lastSpecies)
+                        self.box1id = len(self.segments) - 1
                     elif modifiers == QtCore.Qt.ControlModifier:
                         self.addSegment(self.start_location, self.convertSpectoAmpl(mousePoint.x()))
                         # Context menu
@@ -1922,6 +1924,7 @@ class AviaNZ(QMainWindow):
             modifiers = QtGui.QApplication.keyboardModifiers()
             if modifiers == QtCore.Qt.ShiftModifier:
                 self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1],self.lastSpecies)
+                self.box1id = len(self.segments) - 1
             elif modifiers == QtCore.Qt.ControlModifier:
                 self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1])
                 # Context menu
@@ -2204,8 +2207,6 @@ class AviaNZ(QMainWindow):
         # After the HumanClassify dialogs have closed, need to show the correct data on the screen
         # Returns to the page user started with
         if self.config['maxFileShow']<self.datalength/self.sampleRate:
-            #print self.datalength, self.sampleRate
-            #print self.config['maxFileShow']
             self.currentFileSection = self.currentPage
             self.prepare5minMove()
             self.next5mins.setEnabled(True)
@@ -2227,6 +2228,7 @@ class AviaNZ(QMainWindow):
                     self.box1id += 1
         else:
             self.box1id = 0
+
         if (self.config['showAllPages'] and len(self.segments)==0) or (not self.config['showAllPages'] and (self.box1id == len(self.segments) or len(self.listRectanglesa2)==0)):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -2326,7 +2328,6 @@ class AviaNZ(QMainWindow):
                                                    self.segments[self.box1id][4])
 
         else:
-            print "Last image"
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -2577,13 +2578,10 @@ class AviaNZ(QMainWindow):
                         x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
                         x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
                         if type(self.listRectanglesa2[s]) == self.ROItype:
-                            #print self.listRectanglesa2[s].pos().y(), self.listRectanglesa2[s].size().y()
                             y1 = self.listRectanglesa2[s].pos().y()/oldSpecy
                             y2 = self.listRectanglesa2[s].size().y()/oldSpecy
-                            #print y1, y2
                             self.listRectanglesa2[s].setPos(pg.Point(x1, y1*np.shape(self.sg)[1]))
                             self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, y2*np.shape(self.sg)[1]))
-                            #print self.listRectanglesa2[s].pos().y(), self.listRectanglesa2[s].size().y()
                         else:
                             self.listRectanglesa2[s].setRegion([x1, x2])
                         self.listLabels[s].setPos(x1,self.textpos)
@@ -2609,7 +2607,6 @@ class AviaNZ(QMainWindow):
                     self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'],
                                         self.config['incr'])
 
-            #if minFreq != self.minFreq or maxFreq!=self.maxFreq:
             self.redoFreqAxis(minFreq,maxFreq)
 
             self.statusLeft.setText("Ready")
@@ -2962,7 +2959,6 @@ class AviaNZ(QMainWindow):
         # TODO: Finish this
         # Note that this still works on 1 second -- species-specific parameter eventually (here twice: as 1 and in sec loop)
         if self.segments is None or len(self.segments) == 0:
-            # print "No segments to recognise"
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to recognise")
@@ -3067,12 +3063,9 @@ class AviaNZ(QMainWindow):
         """ Listener for the play slider that is for inside a segment.
         """
         if not self.playSlider.isSliderDown():
-            #print time
             self.playSlider.setValue(time)
         if time > min(self.playSlider.maximum(),self.segmentStop):
             self.media_obj2.stop()
-        #print self.convertAmpltoSpec(self.playSlider.value()/1000.0)
-        #print self.playSlider.value()/1000.0, self.convertAmpltoSpec(self.playSlider.value() / 1000.0)
         self.bar2.setValue(self.convertAmpltoSpec(time / 1000.0)  + self.bandLimitedStart)
 
     def playFinished2(self):
@@ -3114,7 +3107,6 @@ class AviaNZ(QMainWindow):
                 self.media_obj2.setTickInterval(20)
                 self.media_obj2.tick.connect(self.movePlaySlider2)
                 self.media_obj2.finished.connect(self.playFinished2)
-            #print "*", self.listRectanglesa1[self.box1id].getRegion()[0], self.bandLimitedStart
             self.bar2.setValue(self.bandLimitedStart)
             self.p_spec.addItem(self.bar2, ignoreBounds=True)
 
@@ -3148,7 +3140,6 @@ class AviaNZ(QMainWindow):
         # exporter = SupportClasses.FixedImageExporter(self.p_spec)
         #exporter.export(filename)
         if platform.system() == 'Darwin':
-            #import pyqtgraph.exporters as pge
             import ImageExporter as pge
             filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
             exporter = pge.ImageExporter(self.p_spec)
@@ -3162,13 +3153,12 @@ class AviaNZ(QMainWindow):
         # the following works for Windows.
         else:
             filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.jpeg *.jpg *.png)");
-            # print str(filename)
             from scipy.misc import imsave
             try:
                 imsave(str(filename), np.flip(np.transpose(self.sg), 0))
                 # imsave(str(filename), self.p_spec)
             except:
-                print "here"
+                print "Failed to save image"
 
     def changeSettings(self):
         """ Create the parameter tree when the Interface settings menu is pressed.
@@ -3309,6 +3299,7 @@ class AviaNZ(QMainWindow):
         """
         if id<0:
             id = self.box1id
+
         if id>-1:
             # Work out which overview segment this segment is in (could be more than one) and update it
             inds = int(float(self.convertAmpltoSpec(self.segments[id][0]-self.startRead))/self.widthOverviewSegment)

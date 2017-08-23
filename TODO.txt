@@ -4,7 +4,8 @@
 SM:
 
 Try to replicate bug in loading /Users/srmarsla/Tier 1/CC18_BIRP_150111_024258.wav
-Bug in WaveletSegment training? What has changed?
+
+Operator/Reviewer -> where to set?
 
 SM Choose best sets of nodes and evaluate
 SM Make the general segmentation more sensitive
