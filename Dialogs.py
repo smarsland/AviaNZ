@@ -234,6 +234,11 @@ class Segmentation(QDialog):
         self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
         self.prevAlg = "Default"
         self.undo = QPushButton("Undo")
+        self.resLabel = QLabel("Output Resolution (secs)")
+        self.res = QSpinBox()
+        self.res.setRange(1, 600)
+        self.res.setSingleStep(5)
+        self.res.setValue(60)
         self.activate = QPushButton("Segment")
         #self.save = QPushButton("Save segments")
 
@@ -374,6 +379,8 @@ class Segmentation(QDialog):
         Box.addWidget(self.CCThr1)
         self.CCThr1.hide()
 
+        Box.addWidget(self.resLabel)
+        Box.addWidget(self.res)
         Box.addWidget(self.undo)
         self.undo.setEnabled(False)
         Box.addWidget(self.activate)
@@ -482,7 +489,7 @@ class Segmentation(QDialog):
         self.end.setEnabled(not self.end.isEnabled())
 
     def getValues(self):
-        return [self.algs.currentText(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText()]
+        return [self.algs.currentText(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value()]
         #return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text(),self.species.currentText()]
 
 #======

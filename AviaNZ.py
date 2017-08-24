@@ -2815,7 +2815,7 @@ class AviaNZ(QMainWindow):
         """
         # TODO: Currently just gives them all the label "Don't Know"
         seglen = len(self.segments)
-        [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species] = self.segmentDialog.getValues()
+        [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution] = self.segmentDialog.getValues()
 
         #[alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,depth,thrType,thr,wavelet,bandchoice,start,end,species] = self.segmentDialog.getValues()
         with pg.BusyCursor():
@@ -2856,7 +2856,7 @@ class AviaNZ(QMainWindow):
                 self.findMatches(float(str(CCThr1)))
                 newSegments = []
 
-            print "to excel", newSegments
+            # print "to excel", newSegments
                 # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
                 # # but ML is extremely slow and crappy. So I decided to use just the wavelets
                 # newSegmentsML = WaveletSegment.findCalls_learn(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
@@ -2885,7 +2885,7 @@ class AviaNZ(QMainWindow):
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
             # Save the excel file
-            out = SupportClasses.exportSegments(annotation=newSegments, species=species, startTime=self.startTime, segments=self.segments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg))
+            out = SupportClasses.exportSegments(annotation=newSegments, species=species, startTime=self.startTime, segments=self.segments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
             out.excel()
             # self.exportSegments(newSegments,species=species)
 
