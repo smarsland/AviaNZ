@@ -101,13 +101,13 @@ class exportSegments:
         def writeToExcelp3():
             ws = wb.get_sheet_by_name('Per Second')
             r = ws.max_row + 1
-            ws.cell(row=r, column=1, value='*Resolution: ' + str(self.resolution) + ' (secs)', )
+            ws.cell(row=r, column=1, value= str(self.resolution) + ' secs resolution')
             ft = Font(color=colors.DARKBLUE)
             ws.cell(row=r, column=1).font=ft
             c = 2
             for i in range(0,len(detected), self.resolution):
-                if i+self.resolution>self.datalength/self.sampleRate:
-                    ws.cell(row=r, column=c, value=str(i) + '-' + str(self.datalength/self.sampleRate))
+                if i+self.resolution > self.datalength/self.sampleRate:
+                    ws.cell(row=r, column=c, value=str(i) + '-' + str(int(math.ceil(float(self.datalength)/self.sampleRate))))
                     ws.cell(row=r, column=c).font = ft
                 else:
                     ws.cell(row=r, column=c, value=str(i) + '-' + str(i+self.resolution))
