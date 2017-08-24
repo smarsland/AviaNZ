@@ -11,6 +11,9 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
 
 from openpyxl import load_workbook, Workbook
+from openpyxl.styles import colors
+from openpyxl.styles import Font, Color
+
 import math
 import numpy as np
 import os, json
@@ -25,7 +28,7 @@ class exportSegments:
         TODO: Save the annotation files for batch processing
     """
 
-    def __init__(self,annotation=None, species='all', startTime=0, segments=[], dirName='', filename='',datalength=0,sampleRate=0, method="Default"):
+    def __init__(self,annotation=None, species='all', startTime=0, segments=[], dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1):
         if annotation is None:
             self.annotation = segments
         else:
@@ -37,6 +40,10 @@ class exportSegments:
         self.datalength=datalength
         self.sampleRate=sampleRate
         self.method=method
+        if resolution>math.ceil(float(self.datalength)/self.sampleRate):
+            self.resolution=int(math.ceil(float(self.datalength)/self.sampleRate))
+        else:
+            self.resolution=resolution
 
     def excel(self):
         """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence
@@ -94,10 +101,24 @@ class exportSegments:
         def writeToExcelp3():
             ws = wb.get_sheet_by_name('Per Second')
             r = ws.max_row + 1
+            ws.cell(row=r, column=1, value='*Resolution: ' + str(self.resolution) + ' (secs)', )
+            ft = Font(color=colors.DARKBLUE)
+            ws.cell(row=r, column=1).font=ft
+            c = 2
+            for i in range(0,len(detected), self.resolution):
+                if i+self.resolution>self.datalength/self.sampleRate:
+                    ws.cell(row=r, column=c, value=str(i) + '-' + str(self.datalength/self.sampleRate))
+                    ws.cell(row=r, column=c).font = ft
+                else:
+                    ws.cell(row=r, column=c, value=str(i) + '-' + str(i+self.resolution))
+                    ws.cell(row=r, column=c).font = ft
+                c += 1
+            r += 1
             ws.cell(row=r, column=1, value=str(relfname))
             c = 2
-            for seg in detected:
-                ws.cell(row=r, column=c, value=int(seg))
+            for i in range(0, len(detected), self.resolution):
+                j=1 if np.sum(detected[i:i+self.resolution])>0 else 0
+                ws.cell(row=r, column=c, value=j)
                 c += 1
 
         # method=self.algs.currentText()

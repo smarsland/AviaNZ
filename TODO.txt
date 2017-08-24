@@ -18,6 +18,7 @@ NP Sort out 1 version of code for excel exporting with 1 minute presence/absence
     Move from AviaNZ to SupportClasses
     #Done
     Add the 1 min workflow (see below)
+    #Done the first version - arrange output without changing the detectors
 NP Check manual
 
 BOTH: Decide that v1.0 is ready -- check stability, tidy the segmenters and denoisers options

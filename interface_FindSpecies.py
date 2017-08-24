@@ -79,9 +79,17 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.w_spe.addItems(["Kiwi", "Ruru","all"])
         self.d_detection.addWidget(self.w_spe,row=1,col=1,colspan=2)
 
+        self.w_resLabel = QLabel("  Output Resolution (secs)")
+        self.d_detection.addWidget(self.w_resLabel, row=2, col=0)
+        self.w_res = QSpinBox()
+        self.w_res.setRange(1,600)
+        self.w_res.setSingleStep(5)
+        self.w_res.setValue(60)
+        self.d_detection.addWidget(self.w_res, row=2, col=1, colspan=2)
+
         self.w_processButton = QPushButton("&Process Folder")
         self.connect(self.w_processButton, SIGNAL('clicked()'), self.detect)
-        self.d_detection.addWidget(self.w_processButton,row=10,col=2)
+        self.d_detection.addWidget(self.w_processButton,row=11,col=2)
         self.w_processButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
 
         self.statusLeft.setText("Ready")
@@ -161,7 +169,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                             # Save the excel file
                             out = SupportClasses.exportSegments(annotation=newSegments, species=self.species,
                                                                 dirName=self.dirName, filename=self.filename,
-                                                                datalength=self.datalength, sampleRate=self.sampleRate,method=self.method)
+                                                                datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
                             out.excel()
                             # Save the annotation
                             out.saveAnnotation()
