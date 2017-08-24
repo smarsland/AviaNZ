@@ -1113,6 +1113,7 @@ class AviaNZ(QMainWindow):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("You've finished processing the folder")
+            msg.setIconPixmap(QPixmap("img/Owl_done.png"))
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
             msg.setWindowTitle("Last file")
             msg.setStandardButtons(QMessageBox.Ok)
