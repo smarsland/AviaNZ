@@ -275,3 +275,15 @@ class SignalProc:
             mData[i] = np.median(data[i - wid:i + wid])
 
         return mData
+
+    def spectralDerivatives(self):
+        # Easy version -- compute horizontal and vertical derivatives
+        sg = self.spectrogram(self.data)
+        sgderivh = np.roll(sg,-1,axis=0)-sg
+        sgderivh -= np.min(sgderivh)
+        sgderivv = np.roll(sg,-1,axis=1)-sg
+        sgderivv -= np.min(sgderivv)
+        sgderivb = np.sqrt(sgderivh**2 + sgderivv**2)
+
+        return sgderivh, sgderivv, sgderivb
+
