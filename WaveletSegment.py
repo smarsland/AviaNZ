@@ -323,7 +323,7 @@ class WaveletSegment:
     def preprocess(self,species):
         if species == 'boom':
             fs = 1000
-        elif species.title() == 'Sipo':
+        elif species == 'Sipo':
             fs = 8000
         else:
             fs = 16000
@@ -341,8 +341,10 @@ class WaveletSegment:
             filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=1100, high=7000)
         elif species == 'Ruru':
             filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=500, high=7000)
-        elif species.title() == 'Sipo':
+        elif species == 'Sipo':
             filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=1200, high=3800)
+        else:
+            print species
 
         return filteredDenoisedData
 
@@ -397,7 +399,6 @@ class WaveletSegment:
 
     def waveletSegment_test(self,fName=None, data=None, sampleRate=None, listnodes = None, species='Kiwi', trainTest=False):
         # Was findCalls_test
-
         # Load the relevant list of nodes
         # TODO: Put these into a file along with other relevant parameters (frequency, length, etc.)
         if listnodes is None:

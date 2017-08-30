@@ -3382,13 +3382,13 @@ class AviaNZ(QMainWindow):
     def saveSegments(self):
         """ Save the segmentation data as a json file.
         Name of the file is the name of the wave file + .data"""
-        if len(self.segments)>0 or self.hasSegments:
-            print("Saving segments to "+self.filename)
-            if isinstance(self.filename, str):
-                file = open(self.filename + '.data', 'w')
-            else:
-                file = open(str(self.filename) + '.data', 'w')
-            json.dump(self.segments,file)
+        #if len(self.segments)>0 or self.hasSegments:
+        print("Saving segments to "+self.filename)
+        if isinstance(self.filename, str):
+            file = open(self.filename + '.data', 'w')
+        else:
+            file = open(str(self.filename) + '.data', 'w')
+        json.dump(self.segments,file)
 
     def closeEvent(self, event):
         """ Catch the user closing the window by clicking the Close button instead of quitting. """

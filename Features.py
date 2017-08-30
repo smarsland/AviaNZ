@@ -27,6 +27,8 @@ import librosa
     #Max Bearing Time 95%
     #Max Frequency
 
+# Wavelet energy
+
 # Add chroma features and Tonnetz
 # Vibrato
 # Prosodic features (pitch, duration, intensity)
@@ -75,7 +77,7 @@ class Features:
         # CQT is constant-Q
         cstft = librosa.feature.chroma_stft(self.data,self.sampleRate)
         ccqt = librosa.feature.chroma_cqt(self.data,self.sampleRate)
-        return[cstsft,ccqt]
+        return[cstft,ccqt]
 
     def get_tonnetz(self):
         # Use librosa to get the tonnetz coefficients
@@ -275,10 +277,13 @@ def raven():
 #test()
 
 def mfcc():
+    import dtw
+    import editdistance
+
     # Convert the data to mfcc:
-    mfcc1 = librosa.feature.mfcc(y1, sr1)
-    mfcc2 = librosa.feature.mfcc(y2, sr2)
-    mfcc3 = librosa.feature.mfcc(y3, sr3)
+    mfcc1 = librosa.feature.mfcc(y1, sr1,n_mfcc=20)
+    mfcc2 = librosa.feature.mfcc(y2, sr2,n_mfcc=20)
+    mfcc3 = librosa.feature.mfcc(y3, sr3,n_mfcc=20)
     mfccTest = librosa.feature.mfcc(yTest, srTest)
 
     # Remove mean and normalize each column of MFCC
@@ -317,3 +322,6 @@ def mfcc():
 
     # Command to embed audio in IPython notebook :)
     #IPython.display.Audio(data=word, rate=sr1)
+
+#def filters():
+    # dct, mel, chroma, constant_q
