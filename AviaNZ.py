@@ -237,7 +237,7 @@ class AviaNZ(QMainWindow):
         if platform.system() == 'Darwin':
             fileMenu.addAction("&Quit",self.quit,"Ctrl+Q")
 
-        specMenu = self.menuBar().addMenu("&Interface")
+        specMenu = self.menuBar().addMenu("&Appearance")
 
         self.useAmplitudeTick = specMenu.addAction("Show amplitude plot", self.useAmplitudeCheck)
         self.useAmplitudeTick.setCheckable(True)
@@ -305,8 +305,6 @@ class AviaNZ(QMainWindow):
         self.readonly.setCheckable(True)
         self.readonly.setChecked(self.config['readOnly'])
 
-        specMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
-
         specMenu.addSeparator()
         specMenu.addAction("Interface settings", self.changeSettings)
 
@@ -329,6 +327,8 @@ class AviaNZ(QMainWindow):
         actionMenu.addAction("Check segments [Choose species]",self.humanClassifyDialog2,"Ctrl+2")
         actionMenu.addSeparator()
         actionMenu.addAction("Export segments to Excel",self.exportSeg)
+        actionMenu.addSeparator()
+        actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
         actionMenu.addSeparator()
         actionMenu.addAction("Put docks back",self.dockReplace)
 
