@@ -725,7 +725,6 @@ class AviaNZ(QMainWindow):
 
         # Set the message in the status bar
         self.statusLeft.setText("Ready")
-        self.statusRight.setText("Operator: " + str(self.config['operator']) + ", Reviewer: " + str(self.config['reviewer']))
 
         # Plot everything
         self.show()
@@ -876,12 +875,12 @@ class AviaNZ(QMainWindow):
                 if len(self.previousFile)>0:
                     self.previousFile = self.previousFile[0]
 
-            if self.segments != [] or self.hasSegments:
+            if len(self.segments) > 0 or self.hasSegments:
                 if len(self.segments)>0:
                     if self.segments[0][0] > -1:
-                        self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
+                        self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
                 else:
-                    self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
+                    self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
                 self.saveSegments()
                 self.previousFile.setTextColor(Qt.red)
         self.previousFile = current
@@ -1041,10 +1040,14 @@ class AviaNZ(QMainWindow):
                 file.close()
                 if len(self.segments) > 0:
                     if self.segments[0][0] == -1:
-                        self.config['operator'] = self.segments[0][2]
-                        self.config['reviewer'] = self.segments[0][3]
+                        self.operator = self.segments[0][2]
+                        self.reviewer = self.segments[0][3]
                         del self.segments[0]
-                if len(self.segments) > 1:
+                    else:
+                        self.operator = self.config['operator']
+                        self.reviewer = self.config['reviewer']
+                self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
+                if len(self.segments) > 0:
                     if self.segments[0][2] > 1.5 and self.segments[1][2] > 1.5:
                         # Legacy version didn't normalise the segment data for dragged boxes
                         # This fixes it, assuming that the spectrogram was 128 pixels high (256 width window)
@@ -1526,6 +1529,7 @@ class AviaNZ(QMainWindow):
             else:
                 show = False
         else:
+            self.hasSegments = True
             show = True
 
         if show:
@@ -2123,12 +2127,12 @@ class AviaNZ(QMainWindow):
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
 
     def prepare5minMove(self):
-        if self.segments != [] or self.hasSegments:
+        if len(self.segments) > 0 or self.hasSegments:
             if len(self.segments)>0:
                 if self.segments[0][0] > -1:
-                    self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
+                    self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
             else:
-                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
+                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
             self.saveSegments()
         self.resetStorageArrays()
         # Reset the media player
@@ -3123,7 +3127,7 @@ class AviaNZ(QMainWindow):
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
         """
-        self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.config['operator'],reviewer=self.config['reviewer'])
+        self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.operator,reviewer=self.reviewer)
         self.setOperatorReviewerDialog.show()
         self.setOperatorReviewerDialog.activateWindow()
         self.setOperatorReviewerDialog.activate.clicked.connect(self.changeOperator)
@@ -3132,9 +3136,9 @@ class AviaNZ(QMainWindow):
         """ Listener for the operator/reviewer dialog.
         """
         name1, name2 = self.setOperatorReviewerDialog.getValues()
-        self.config['operator'] = str(name1)
-        self.config['reviewer'] = str(name2)
-        self.statusRight.setText("Operator: " + self.config['operator'] + ", Reviewer: "+self.config['reviewer'])
+        self.operator = str(name1)
+        self.reviewer = str(name2)
+        self.statusRight.setText("Operator: " + self.operator + ", Reviewer: "+self.reviewer)
 
     def saveImage(self): # ??? it doesn't save the image
         # filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
@@ -3203,6 +3207,14 @@ class AviaNZ(QMainWindow):
             {'name': 'Human classify', 'type': 'group', 'children': [
                 {'name': 'Save corrections', 'type': 'bool', 'value': self.config['saveCorrections'],
                  'tip': "This helps the developers"},
+            ]},
+
+            {'name': 'User', 'type': 'group', 'children': [
+                {'name': 'Operator', 'type': 'str', 'value': self.config['operator'],
+                 'tip': "Person name"},
+
+                {'name': 'Reviewer', 'type': 'str', 'value': self.config['reviewer'],
+                 'tip': "Person name"},
             ]},
 
             {'name': 'Bird List', 'type': 'group', 'children': [
@@ -3281,6 +3293,10 @@ class AviaNZ(QMainWindow):
                                                    self.config['ColourSelected'][2], self.config['ColourSelected'][3])
                 self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1],
                                                    self.config['ColourSelected'][2], 255)
+            elif childName=='User.Operator':
+                self.config['operator'] = data
+            elif childName == 'User.Reviewer':
+                self.config['reviewer'] = data
 
         # Reload the file to make these changes take effect
         self.resetStorageArrays()
@@ -3401,9 +3417,9 @@ class AviaNZ(QMainWindow):
         print("Quitting")
         if len(self.segments) > 0:
             if self.segments[0][0] > -1:
-                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
+                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
         else:
-            self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.config['operator'],self.config['reviewer'], -1])
+            self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
         self.saveSegments()
         if self.saveConfig == True:
             print "Saving config file"
