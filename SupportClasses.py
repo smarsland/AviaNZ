@@ -28,7 +28,7 @@ class exportSegments:
         TODO: Save the annotation files for batch processing
     """
 
-    def __init__(self,annotation=None, species='all', startTime=0, segments=[], dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1):
+    def __init__(self,annotation=None, species='all', startTime=0, segments=[], dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False):
         if annotation is None:
             self.annotation = segments
         else:
@@ -44,6 +44,7 @@ class exportSegments:
             self.resolution=int(math.ceil(float(self.datalength)/self.sampleRate))
         else:
             self.resolution=resolution
+        self.trainTest = trainTest
 
     def excel(self):
         """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence
@@ -136,7 +137,7 @@ class exportSegments:
             wb = makeNewWorkbook()
 
         # Now write the data out
-        if self.method=="Wavelets":
+        if self.method == "Wavelets" and self.trainTest == False:
             self.mergeSeg()
         writeToExcelp1()
         writeToExcelp2()

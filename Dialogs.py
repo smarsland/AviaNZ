@@ -591,13 +591,13 @@ class Denoise(QDialog):
             Box.addWidget(self.waveletlabel)
             Box.addWidget(self.wavelet)
 
-        # Median: width of filter
-        Box.addWidget(self.medlabel)
-        self.medlabel.hide()
-        Box.addWidget(self.widthlabel)
-        self.widthlabel.hide()
-        Box.addWidget(self.width)
-        self.width.hide()
+            # Median: width of filter
+            Box.addWidget(self.medlabel)
+            self.medlabel.hide()
+            Box.addWidget(self.widthlabel)
+            self.widthlabel.hide()
+            Box.addWidget(self.width)
+            self.width.hide()
 
         # Bandpass: start and end
         Box.addWidget(self.bandlabel)
@@ -746,11 +746,11 @@ class Denoise(QDialog):
             self.end.show()
             self.trimlabel.show()
             self.trimaxis.show()
-        else:
-            #"Median filter"
-            self.medlabel.show()
-            self.widthlabel.show()
-            self.width.show()
+        # else:
+        #     #"Median filter"
+        #     self.medlabel.show()
+        #     self.widthlabel.show()
+        #     self.width.show()
 
     def depthclicked(self):
         self.depth.setEnabled(not self.depth.isEnabled())

@@ -228,14 +228,14 @@ class Features:
             i += 1
 
         # Check that the centre time/freq are in the middle (look good)
-        print np.sum(sg[f1:f2,t1:timeindices[2]]), np.sum(sg[f1:f2,timeindices[2]:t2])
-        print np.sum(sg[f1:freqindices[2], t1:t2]), np.sum(sg[freqindices[2]:f2, t1:t2])
+        print np.sum(sg[f1:int(f2),t1:int(timeindices[2])]), np.sum(sg[f1:f2,int(timeindices[2]):int(t2)])
+        print np.sum(sg[f1:int(freqindices[2]), t1:int(t2)]), np.sum(sg[int(freqindices[2]):int(f2), t1:int(t2)])
 
         freqindices = (freqindices+f1) * float(fs)/np.shape(sg)[0]
         timeindices = (timeindices+t1)/np.shape(sg)[1] * length
         return (freqindices, freqindices[3] - freqindices[1], freqindices[4] - freqindices[0], timeindices, timeindices[3] - timeindices[1], timeindices[4] - timeindices[0])
 
-    def get_waveform_measurements(self,data,fs,t1,t2):
+    def get_waveform_measurements(self,sg,data,fs,t1,t2):
         # The third set of Raven features
         # Min, max, peak, RMS, filtered RMS amplitude (and times for the first 3), high, low, delta frequency, length of time
 
@@ -243,14 +243,14 @@ class Features:
         t1 = float(t1) / np.shape(sg)[1] * len(data)
         t2 = float(t2) / np.shape(sg)[1] * len(data)
 
-        mina = np.min(data[t1:t2])
-        mint = float(np.argmin(data[t1:t2])+t1) / fs
-        maxa = np.max(data[t1:t2])
-        maxt = float(np.argmax(data[t1:t2])+t1) / fs
-        peaka = np.max(np.abs(data[t1:t2]))
-        peakt = float(np.argmax(np.abs(data[t1:t2]))+t1) / fs
+        mina = np.min(data[int(t1):int(t2)])
+        mint = float(np.argmin(data[int(t1):int(t2)])+int(t1)) / fs
+        maxa = np.max(data[int(t1):int(t2)])
+        maxt = float(np.argmax(data[int(t1):int(t2)])+int(t1)) / fs
+        peaka = np.max(np.abs(data[int(t1):int(t2)]))
+        peakt = float(np.argmax(np.abs(data[int(t1):int(t2)]))+int(t1)) / fs
         # TODO: check
-        rmsa = np.sqrt(np.sum(data[t1:t2]**2)/len(data[t1:t2]))
+        rmsa = np.sqrt(np.sum(data[int(t1):int(t2)]**2)/len(data[int(t1):int(t2)]))
         # Filtered rmsa (bandpass filtered first)
         # Also? max bearing, peak correlation, peak lag
         return (mina, mint, maxa, maxt, peaka, peakt,rmsa)
@@ -261,18 +261,21 @@ class Features:
 def raven():
     #data, fs = librosa.load('Sound Files/tril1.wav',sr=None)
     #data, fs = librosa.load('Sound Files/kiwi.wav',sr=None)
-    data, sampleRate = librosa.load('Sound Files/male1.wav',sr=None)
+    data, fs = librosa.load('Sound Files/male1.wav',sr=None)
+    # wavobj = wavio.read(self.filename, self.lenRead, self.startRead)
 
     import SignalProc
     sp = SignalProc.SignalProc()
-    sg = sp.spectrogram(data,fs,multitaper=False)
+    # sg = sp.spectrogram(data,fs,multitaper=False) # spectrogram(self,data,window_width=None,incr=None,window='Hann',mean_normalise=True,onesided=True,multitaper=False,need_even=False)
+    sg = sp.spectrogram(data, multitaper=False)
     print np.shape(sg)
     f = Features()
-    a = f.get_spectrogram_measurements(sg,fs,256,0,np.shape(sg)[0],0,np.shape(sg)[1])
+    a = f.get_spectrogram_measurements(sg=sg,fs=fs,window_width=256,f1=0,f2=np.shape(sg)[0],t1=0,t2=np.shape(sg)[1])
+    #get_spectrogram_measurements(self,sg,fs,window_width,f1,f2,t1,t2)
     b = f.get_robust_measurements(sg,len(data)/fs,fs,0,np.shape(sg)[0],0,np.shape(sg)[1])
-    c = f.get_waveform_measurements(data,fs,0,len(data))
+    c = f.get_waveform_measurements(sg,data,fs,0,len(data))
     return a, b, c
-#test()
+raven()
 
 def mfcc():
     # Convert the data to mfcc:
