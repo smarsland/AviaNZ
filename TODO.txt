@@ -13,7 +13,11 @@ SM:
 
 Try to replicate bug in loading /Users/srmarsla/Tier 1/CC18_BIRP_150111_024258.wav
 
-Operator/Reviewer -> where to set?
+Deal with segments that are in the overlap between sections of a file
+
+Check the parameters for the clicks
+    And where to use -- current idea is to remove them during/after detection
+And can we use the same idea for wind?
 
 SM Choose best sets of nodes and evaluate
 SM Make the general segmentation more sensitive
