@@ -861,3 +861,59 @@ def showSpecDerivs():
         a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
         vb4.addItem(a, ignoreBounds=True)
     QtGui.QApplication.instance().exec_()
+
+def detectClicks():
+    import SignalProc
+    reload(SignalProc)
+    import pyqtgraph as pg
+    from pyqtgraph.Qt import QtCore, QtGui
+    import wavio
+    from scipy.signal import medfilt
+
+    #wavobj = wavio.read('Sound Files/tril1.wav')
+    #wavobj = wavio.read('Sound Files/010816_202935_p1.wav')
+    #wavobj = wavio.read('Sound Files/20170515_223004 piping.wav')
+    wavobj = wavio.read('/Users/srmarsla/CL78_BIRD_141120_212934_wb.wav')
+    #wavobj = wavio.read('/Users/srmarsla/DE66_BIRD_141011_005829_wb.wav')
+    #wavobj = wavio.read('/Users/srmarsla/ex1.wav')
+    #wavobj = wavio.read('/Users/srmarsla/ex2.wav')
+    fs = wavobj.rate
+    data = wavobj.data #[:20*fs]
+
+    if data.dtype is not 'float':
+        data = data.astype('float') # / 32768.0
+
+    if np.shape(np.shape(data))[0] > 1:
+        data = data[:, 0]
+
+    import SignalProc
+    sp = SignalProc.SignalProc(data,fs,256,128)
+    sg = sp.spectrogram(data,multitaper=False)
+    #s = Segment(data, sg, sp, fs, 50)
+
+    energy = np.sum(sg,axis=1)
+    energy = medfilt(energy,15)
+    e2 = np.percentile(energy,95)*2
+    # Step 1: clicks have high energy
+    clicks = np.squeeze(np.where(energy>e2))
+    clicks = s.identifySegments(clicks, minlength=1)
+
+    app = QtGui.QApplication([])
+
+    mw = QtGui.QMainWindow()
+    mw.show()
+    mw.resize(800, 600)
+
+    win = pg.GraphicsLayoutWidget()
+    mw.setCentralWidget(win)
+    vb1 = win.addViewBox(enableMouse=False, enableMenu=False, row=0, col=0)
+    im1 = pg.ImageItem(enableMouse=False)
+    vb1.addItem(im1)
+    im1.setImage(10.*np.log10(sg))
+
+    for seg in clicks:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        vb1.addItem(a, ignoreBounds=True)
+
+    QtGui.QApplication.instance().exec_()

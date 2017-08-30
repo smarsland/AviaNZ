@@ -46,7 +46,7 @@ class WaveletSegment:
         self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=data, wavelet=wavelet,maxLevel=20)
         self.segmenter = Segment.Segment(data, None, self.sp, sampleRate, window_width=256, incr=128, mingap=mingap, minlength=minlength)
 
-    def computeWaveletEnergy(self,data=None,sampleRate=0,nlevels=6):
+    def computeWaveletEnergy(self,data=None,sampleRate=0,nlevels=5):
         """ Computes the energy of the nodes in the wavelet packet decomposition
         # There are 62 coefficients up to level 5 of the wavelet tree (without root), and 300 seconds in 5 mins
         # Hence coefs would then be a 62*300 matrix
@@ -58,10 +58,10 @@ class WaveletSegment:
             sampleRate = self.sampleRate
 
         n=len(data)/sampleRate
-        coefs = np.zeros((2**nlevels-2, n))
+        coefs = np.zeros((2**(nlevels+1)-2, n))
         for t in range(n):
             E = []
-            for level in range(1,nlevels):
+            for level in range(1,nlevels+1):
                 wp = pywt.WaveletPacket(data=data[t * sampleRate:(t + 1) * sampleRate], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=level)
                 e = np.array([np.sum(n.data**2) for n in wp.get_level(level, "natural")])
                 if np.sum(e)>0:

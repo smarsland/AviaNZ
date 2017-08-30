@@ -270,4 +270,3 @@ class WaveletFunctions:
             mat[j]=leafNodes[0][leaf].data
             j=j+1
         return mat
-
