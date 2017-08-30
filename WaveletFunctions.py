@@ -9,7 +9,7 @@ class WaveletFunctions:
     It is based on pywavelets (pywt), but has extra functions that are required
     to work with the wavelet packet tree.
     As far as possible it matches Matlab.
-    dmey2 is in a file, and is an exact match for the Matlab dmeyer wavelet.
+    dmey2 is in a file, and is an exact match for the Matlab dmeyer wavelet. It's the one to use.
 
     Implements:
         waveletDenoise
@@ -35,7 +35,6 @@ class WaveletFunctions:
             self.wavelet.orthogonal=True
         else:
             self.wavelet = wavelet
-
 
     def ShannonEntropy(self,s):
         """ Compute the Shannon entropy of data
@@ -214,7 +213,7 @@ class WaveletFunctions:
         sigma = np.median(np.abs(det1)) / 0.6745
         threshold = self.thresholdMultiplier * sigma
 
-        bestleaves = self.BestTree(wp,threshold)
+        bestleaves = self.BestTree(wp,threshold,costfn)
 
         # Make a new tree with these in
         new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='zero', maxlevel=wp.maxlevel)
@@ -271,4 +270,3 @@ class WaveletFunctions:
             mat[j]=leafNodes[0][leaf].data
             j=j+1
         return mat
-
