@@ -1,6 +1,14 @@
 
 # TODO for AviaNZ
 
+Tier 1 annotation - labels to use so that we can evaluate results in detail
+quality     male            female          cannot decide
+v close     'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'
+close       'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'
+faded       'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'
+v faded     'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'
+v v faded   'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'
+
 SM:
 
 Try to replicate bug in loading /Users/srmarsla/Tier 1/CC18_BIRP_150111_024258.wav

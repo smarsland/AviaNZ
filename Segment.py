@@ -659,12 +659,12 @@ def showSegs():
     s1=s.checkSegmentLength(s.segmentByFIR(0.1))
     s2=s.checkSegmentLength(s.segmentByFIR(0.01))
     s3= s.checkSegmentLength(s.medianClip(3.0))
-    s4,p,t=s.yin(100, thr=0.5,returnSegs=True)
-    s4 = s.checkSegmentLength(s4)
-    s5=s.mergeSegments(s1,s3)
-    s6=s.mergeSegments(s1,s4)
+    s4= s.checkSegmentLength(s.medianClip(2.0))
+    s5,p,t=s.yin(100, thr=0.5,returnSegs=True)
+    s5 = s.checkSegmentLength(s5)
+    s6=s.mergeSegments(s2,s4)
     ws = WaveletSegment.WaveletSegment()
-    s7= ws.waveletSegment_test(None, data, fs,'Kiwi', False)
+    s7= ws.waveletSegment_test(None, data, fs, None, 'Kiwi', False)
     print('Took {}s'.format(time() - ts))
     #s7 = s.mergeSegments(s1,s.mergeSegments(s3,s4))
 
@@ -777,3 +777,87 @@ def showSegs():
 
     QtGui.QApplication.instance().exec_()
 
+def showSpecDerivs():
+    import SignalProc
+    reload(SignalProc)
+    import pyqtgraph as pg
+    from pyqtgraph.Qt import QtCore, QtGui
+    import wavio
+
+    #wavobj = wavio.read('Sound Files/tril1.wav')
+    #wavobj = wavio.read('Sound Files/010816_202935_p1.wav')
+    #wavobj = wavio.read('Sound Files/20170515_223004 piping.wav')
+    wavobj = wavio.read('Sound Files/kiwi_1min.wav')
+    fs = wavobj.rate
+    data = wavobj.data[:20*fs]
+
+    if data.dtype is not 'float':
+        data = data.astype('float') # / 32768.0
+
+    if np.shape(np.shape(data))[0] > 1:
+        data = data[:, 0]
+
+    import SignalProc
+    sp = SignalProc.SignalProc(data,fs,256,128)
+    sg = sp.spectrogram(data,multitaper=False)
+
+    h,v,b = sp.spectralDerivatives()
+    h = np.abs(np.where(h == 0, 0.0, 10.0 * np.log10(h)))
+    v = np.abs(np.where(v == 0, 0.0, 10.0 * np.log10(v)))
+    b = np.abs(np.where(b == 0, 0.0, 10.0 * np.log10(b)))
+    s = Segment(data, sg, sp, fs, 50)
+
+    hm = np.max(h[:,10:],axis=1)
+    segs = np.squeeze(np.where(hm>(np.mean(h[:,10:]+2.5*np.std(h[:,10:])))))
+    segmentsh = s.identifySegments(segs,minlength=10)
+
+    vm = np.max(v[:,10:],axis=1)
+    segs = np.squeeze(np.where(vm>(np.mean(v[:,10:]+2.5*np.std(v[:,10:])))))
+    segmentsv = s.identifySegments(segs,minlength=10)
+
+    bm = np.max(b[:,10:],axis=1)
+    segs = np.squeeze(np.where(bm>(np.mean(b[:,10:]+2.5*np.std(b[:,10:])))))
+    segmentsb = s.identifySegments(segs,minlength=10)
+    #print np.mean(h), np.max(h)
+    #print np.where(h>np.mean(h)+np.std(h))
+
+    app = QtGui.QApplication([])
+
+    mw = QtGui.QMainWindow()
+    mw.show()
+    mw.resize(800, 600)
+
+    win = pg.GraphicsLayoutWidget()
+    mw.setCentralWidget(win)
+    vb1 = win.addViewBox(enableMouse=False, enableMenu=False, row=0, col=0)
+    im1 = pg.ImageItem(enableMouse=False)
+    vb1.addItem(im1)
+    im1.setImage(10.*np.log10(sg))
+
+    vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=1, col=0)
+    im2 = pg.ImageItem(enableMouse=False)
+    vb2.addItem(im2)
+    im2.setImage(h)
+    for seg in segmentsh:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        vb2.addItem(a, ignoreBounds=True)
+
+    vb3 = win.addViewBox(enableMouse=False, enableMenu=False, row=2, col=0)
+    im3 = pg.ImageItem(enableMouse=False)
+    vb3.addItem(im3)
+    im3.setImage(v)
+    for seg in segmentsv:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        vb3.addItem(a, ignoreBounds=True)
+
+    vb4 = win.addViewBox(enableMouse=False, enableMenu=False, row=3, col=0)
+    im4 = pg.ImageItem(enableMouse=False)
+    vb4.addItem(im4)
+    im4.setImage(b)
+    for seg in segmentsb:
+        a = pg.LinearRegionItem()
+        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        vb4.addItem(a, ignoreBounds=True)
+    QtGui.QApplication.instance().exec_()
