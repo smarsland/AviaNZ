@@ -1385,6 +1385,7 @@ class AviaNZ(QMainWindow):
         # widthOverviewSegment is in seconds
         numSegments = int(np.ceil(np.shape(self.sg)[0]/self.convertAmpltoSpec(self.config['widthOverviewSegment'])))
         self.widthOverviewSegment = int(float(np.shape(self.sg)[0])/numSegments)
+        print "Segs:", numSegments, self.config['widthOverviewSegment'], self.widthOverviewSegment
 
         self.overviewSegments = np.zeros((numSegments,3))
         for i in range(numSegments):
@@ -1443,7 +1444,7 @@ class AviaNZ(QMainWindow):
 
         # If there are segments, show them
         for count in range(len(self.segments)):
-            self.addSegment(self.segments[count][0], self.segments[count][1],self.segments[count][2],self.segments[count][3],self.segments[count][4],False)
+            self.addSegment(self.segments[count][0], self.segments[count][1],self.segments[count][2],self.segments[count][3],self.segments[count][4],False,count)
 
         # This is the moving bar for the playback
         if not hasattr(self,'bar'):
@@ -1511,12 +1512,13 @@ class AviaNZ(QMainWindow):
                 self.segments[i][0] = sender.getRegion()[0] + self.startRead
                 self.segments[i][1] = sender.getRegion()[1] + self.startRead
 
-    def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=None,saveSeg=True):
+    def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=None,saveSeg=True,index=-1):
         """ When a new segment is created, does the work of creating it and connecting its
         listeners. Also updates the relevant overview segment.
         startpoint, endpoint are in amplitude coordinates, while y1, y2 should be between 0 and 1, meaning 0 and np.shape(sg)[1].
         saveSeg means that we are drawing the saved ones. Need to check that those ones fit into
         the current window, can assume the other do, but have to save their times correctly.
+        If a segment is too long for the current section, truncates it.
         """
         if not saveSeg:
             timeRangeStart = self.startRead
@@ -1526,6 +1528,18 @@ class AviaNZ(QMainWindow):
                 # Put the startpoint and endpoint in the right range
                 startpoint = startpoint - timeRangeStart
                 endpoint = endpoint - timeRangeStart
+            elif startpoint >= timeRangeStart and endpoint > timeRangeEnd:
+                # TODO: check this
+                #print "Segment that overlaps two sections of file 1"
+                startpoint = startpoint - timeRangeStart
+                endpoint = timeRangeEnd - timeRangeStart
+                show = True
+            elif startpoint < timeRangeStart and endpoint >= timeRangeEnd:
+                # TODO: check this
+                #print "Segment that overlaps two sections of file 2"
+                startpoint = 0
+                endpoint = endpoint - timeRangeStart
+                show = True
             else:
                 show = False
         else:
@@ -1541,7 +1555,9 @@ class AviaNZ(QMainWindow):
             if species != "Don't Know":
                 # Work out which overview segment this segment is in (could be more than one)
                 inds = int(float(self.convertAmpltoSpec(startpoint))/self.widthOverviewSegment)
-                inde = int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment)
+                # min is to remove possible rounding error
+                #print min(int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment),len(self.overviewSegments)), int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment), len(self.overviewSegments)-1
+                inde = min(int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment),len(self.overviewSegments)-1)
                 if species[-1] == '?':
                     brush = self.ColourPossible
                     self.overviewSegments[inds:inde + 1, 2] += 1
@@ -1550,7 +1566,9 @@ class AviaNZ(QMainWindow):
                     self.overviewSegments[inds:inde + 1, 1] += 1
                 self.prevBoxCol = brush
 
+                #print len(self.segments), inds, inde, startpoint, self.convertAmpltoSpec(startpoint), len(self.overviewSegments)
                 for box in range(inds, inde + 1):
+                    print "box = ", box
                     if self.overviewSegments[box,0] > 0:
                         self.SegmentRects[box].setBrush(self.ColourNone)
                     elif self.overviewSegments[box,2] > 0:
@@ -1564,7 +1582,7 @@ class AviaNZ(QMainWindow):
                 self.prevBoxCol = brush
                 # Work out which overview segment this segment is in (could be more than one)
                 inds = int(float(self.convertAmpltoSpec(startpoint)) / self.widthOverviewSegment)
-                inde = int(float(self.convertAmpltoSpec(endpoint)) / self.widthOverviewSegment)
+                inde = min(int(float(self.convertAmpltoSpec(endpoint)) / self.widthOverviewSegment),len(self.overviewSegments)-1)
                 self.overviewSegments[inds:inde+1,0] += 1
                 # Turn the colour of these segments in the overview
                 for box in range(inds, inde + 1):
@@ -1985,7 +2003,8 @@ class AviaNZ(QMainWindow):
         oldname = self.segments[self.box1id][4]
         # Work out which overview segment this segment is in (could be more than one)
         inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0]-self.startRead)) / self.widthOverviewSegment)
-        inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead)) / self.widthOverviewSegment)
+        inde = min(int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead)) / self.widthOverviewSegment),len(self.overviewSegments) - 1)
+
         if oldname == "Don't Know":
             if birdname != "Don't Know":
                 if birdname[-1] == '?':
@@ -2053,6 +2072,7 @@ class AviaNZ(QMainWindow):
         """ When the user sets or changes the name in a segment, update the text and the colour. """
         if segID is None:
             segID = self.box1id
+        print segID, len(self.segments), len(self.listRectanglesa1)
         self.segments[segID][4] = text
         self.listLabels[segID].setText(text,'k')
 
@@ -2899,7 +2919,7 @@ class AviaNZ(QMainWindow):
                  if len(out.annotation)>0:
                     for seg in out.annotation:
                         self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
-                                        species.title() + "?")
+                                        species.title() + "?",index=-1)
             else:
                 if len(newSegments)>0:
                     for seg in newSegments:
