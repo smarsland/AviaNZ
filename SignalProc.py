@@ -80,6 +80,8 @@ class SignalProc:
             a2 = 0.14128
             a3 = 0.01168
             window = a0 - a1*np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)) + a2*np.cos(4 * np.pi * np.arange(window_width) / (window_width - 1)) - a3*np.cos(6 * np.pi * np.arange(window_width) / (window_width - 1))
+        elif window=='Ones':
+            window = np.ones(window_width)
         else:
             print "unknown window, using Hann"
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)))

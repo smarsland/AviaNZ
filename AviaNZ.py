@@ -1568,7 +1568,6 @@ class AviaNZ(QMainWindow):
 
                 #print len(self.segments), inds, inde, startpoint, self.convertAmpltoSpec(startpoint), len(self.overviewSegments)
                 for box in range(inds, inde + 1):
-                    print "box = ", box
                     if self.overviewSegments[box,0] > 0:
                         self.SegmentRects[box].setBrush(self.ColourNone)
                     elif self.overviewSegments[box,2] > 0:
