@@ -4,16 +4,18 @@
 Tier 1 annotation - labels to use so that we can evaluate results in detail
 quality     male            female          cannot decide
 v close     'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'
-close       'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'
-faded       'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'
-v faded     'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'
-v v faded   'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'
+close       'Kiwi(M)2'      'Kiwi(F)2'      'Kiwi2'
+faded       'Kiwi(M)3'      'Kiwi(F)3'      'Kiwi3'
+v faded     'Kiwi(M)4'      'Kiwi(F)4'      'Kiwi4'
+v v faded   'Kiwi(M)5'      'Kiwi(F)5'      'Kiwi5'
 
 SM:
 
 Try to replicate bug in loading /Users/srmarsla/Tier 1/CC18_BIRP_150111_024258.wav
 
 Deal with segments that are in the overlap between sections of a file
+
+operator/reviewer updating is not clear
 
 Check the parameters for the clicks
     And where to use -- current idea is to remove them during/after detection

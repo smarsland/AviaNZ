@@ -295,17 +295,18 @@ class WaveletSegment:
             count += 1
 
         detected= np.max(detected,axis=1)
-        if trainTest==True:
-            return detected
-        else:
-            detected=np.where(detected>0)
-            # print "det",detected
-            if np.shape(detected)[1]>1:
-                return self.identifySegments(np.squeeze(detected))
-            elif np.shape(detected)[1]==1:
-                return self.identifySegments(detected)
-            else:
-                return []
+        return detected
+        # if trainTest==True:
+        #     return detected
+        # else:
+        #     detected=np.where(detected>0)
+        #     # print "det",detected
+        #     if np.shape(detected)[1]>1:
+        #         return self.identifySegments(np.squeeze(detected))
+        #     elif np.shape(detected)[1]==1:
+        #         return self.identifySegments(detected)
+        #     else:
+        #         return []
 
     def identifySegments(self, seg): #, maxgap=1, minlength=1):
     # TODO: *** Replace with segmenter.checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0)
@@ -437,9 +438,19 @@ class WaveletSegment:
 
         detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, species=species, trainTest=trainTest)
 
+        # Todo: remove clicks
+
         if trainTest == True:
-            #print fName
+            # print fName
             self.fBetaScore(self.annotation, detected)
+            detected=np.where(detected>0)
+            # print "det",detected
+            if np.shape(detected)[1]>1:
+                detected = self.identifySegments(np.squeeze(detected))
+            elif np.shape(detected)[1]==1:
+                detected = self.identifySegments(detected)
+            else:
+                return []
         return detected
 
     def loadData(self,fName,trainTest=True):
@@ -687,3 +698,51 @@ def moretest():
 #         segs.append(int(clf.predict(E)[0]))
 #     print segs
 #     return segs
+###########
+def detectClicks(audioData,sampleRate):
+    from scipy.signal import medfilt
+    fs = sampleRate
+    data = audioData
+
+    if data.dtype is not 'float':
+        data = data.astype('float') # / 32768.0
+
+    if np.shape(np.shape(data))[0] > 1:
+        data = data[:, 0]
+
+    sp = SignalProc.SignalProc(data,fs,256,128)
+    sg = sp.spectrogram(data,multitaper=False)
+    # s = Segment(data, sg, sp, fs, 50)
+
+    energy = np.sum(sg,axis=1)
+    energy = medfilt(energy,15)
+    e2 = np.percentile(energy,95)*2
+    # Step 1: clicks have high energy
+    clicks = np.squeeze(np.where(energy>e2))
+    # clicks = s.identifySegments(clicks, minlength=1)
+    return clicks,sg
+
+import Segment
+# fName='Sound Files/test/DE66_BIRD_141011_005829'
+fName='Sound Files/Tril1'
+ws=WaveletSegment()
+ws.loadData(fName, trainTest=False)
+newSegments = ws.waveletSegment_test(fName=None, data=ws.data, sampleRate=ws.sampleRate, species=ws.species,
+                                     trainTest=False)
+clicks, sg = detectClicks(ws.data,ws.sampleRate)
+#remove clicks
+
+detected = np.where(newSegments > 0)
+# print "det",detected
+if np.shape(detected)[1] > 1:
+    detected = ws.identifySegments(np.squeeze(detected))
+elif np.shape(detected)[1] == 1:
+    detected = ws.identifySegments(detected)
+else:
+    detected=[]
+
+for seg in detected:
+    e = np.sum(sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, :]) / (seg[1] - seg[0])
+    e1 = np.sum(sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, 1100 * 128 / (ws.sampleRate / 2):7000 * 128 / (ws.sampleRate / 2)])
+    r = e1/e
+    print r
