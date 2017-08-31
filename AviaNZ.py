@@ -3340,7 +3340,7 @@ class AviaNZ(QMainWindow):
         if id>-1:
             # Work out which overview segment this segment is in (could be more than one) and update it
             inds = int(float(self.convertAmpltoSpec(self.segments[id][0]-self.startRead))/self.widthOverviewSegment)
-            inde = int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment)
+            inde = min(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment),len(self.overviewSegments) - 1)
 
             if self.segments[id][4] == "Don't Know":
                 self.overviewSegments[inds:inde+1,0] -= 1
