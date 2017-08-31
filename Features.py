@@ -1,4 +1,4 @@
-# Version 0.1 30/5/16
+# Version 0.2 31/8/17
 # Author: Stephen Marsland
 
 import numpy as np
@@ -9,8 +9,21 @@ import pylab as pl
 import librosa
 
 # TODO:
-# (1) Raven features, (2) MFCC, (3) LPC, (4) Random stuff from sounds, (5) Anything else
-# Geometric distance and other metrics should go somewhere
+# Check Raven features more
+# Get MFCC and LPC working -> per second?
+# Assemble the other features
+# Put all into a vector, save
+
+# Get smoothed fundamental freq
+# Compute L1, L2, geometric and SRVF distances
+# And cross-correlation
+
+# Get DTW, LCS and edit distance alignment going
+
+# (1) Raven features, (2) MFCC, (3) LPC, (4) Random stuff from sounds, (5) Wavelets, (6) Anything else, (7) Fundamental freq
+# Distances: L1, L2, Geometric
+# Alignment: DTW, LCS, Edit
+
 # **FINISH!!*** List from Raven:
     #1st Quartile Frequency Max Power
     #1st Quartile Time Max Time
@@ -35,7 +48,6 @@ import librosa
 # Spectral statistics
 # Frequency modulation
 # Linear Predictive Coding -> from scikits.talkbox import lpc (see also audiolazy) Librosa?
-# Compute the spectral derivatives??
 
 # Fundamental frequency -- yin? (de Cheveigne and Kawahara 2002)
 # Add something that plots some of these to help playing, so that I can understand the librosa things, etc.
@@ -50,15 +62,22 @@ class Features:
     # Currently it's just MFCC, Raven, some playing.
     # TODO: test what there is so far!
 
-    def __init__(self,data=[],sampleRate=0):
+    def __init__(self,data=[],sampleRate=0,window_width=256,incr=128):
         self.data = data
         self.sampleRate = sampleRate
+        self.window_width=window_width
+        self.incr = incr
+        import SignalProc
+        sp = SignalProc.SignalProc(sampleRate=self.sampleRate,window_width=self.window_width,incr=self.incr,)
+        # The next lines are to get a spectrogram that *should* precisely match the Raven one
+        self.sg = sp.spectrogram(data, multitaper=False,window_width=self.window_width,incr=self.incr,window='Ones')
+        self.sg = self.sg**2
 
-    def setNewData(self,data,sg,fs):
+    def setNewData(self,data,sampleRate):
         # To be called when a new sound file is loaded
         self.data = data
-        self.sg = sg
-        self.fs = fs
+        self.sampleRate = sampleRate
+        self.sg = sp.spectrogram(data, multitaper=False,window_width=self.window_width,incr=self.incr,window='Ones')
 
     def get_mfcc(self):
         # Use librosa to get the MFCC coefficients
@@ -111,7 +130,8 @@ class Features:
     def get_lpc(self,data,order=44):
         # Use talkbox to get the linear predictive coding
         from scikits.talkbox import lpc
-        return lpc(data,order)
+        coefs = lpc(data,order)
+        return coefs[0]
 
     def entropy(self,s):
         # Compute the Shannon entropy
@@ -138,8 +158,8 @@ class Features:
         features[6, whichfile] = np.mean(pitches)
 
         # Power in decibels
-        sgd = 10.0 * np.log10(sg)
-        sgd[np.isinf(sgd)] = 0
+        sgd = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg)))
+
         features[7, whichfile] = np.sum(sgd) / (np.shape(sgd)[0] * np.shape(sgd)[1])
         features[8, whichfile] = np.max(sgd)
         index = np.argmax(sgd)
@@ -166,25 +186,26 @@ class Features:
 
         # t1, t2, f1, f2 are in pixels
 
-        # Compute the energy before changing into decibels
-        energy = 10.*np.log10(np.sum(sg[f1:f2,t1:t2])*fs/window_width)
-        Ebin = np.sum(sg[f1:f2,t1:t2],axis=1)
+        # Compute the energy
+        # This is a little bit unclear. Eq (6.1) of Raven is the calculation below, but then it says it is in decibels, which this is not!
+        energy = np.sum(sg[f1:f2,t1:t2])*float(fs)/window_width
+
         # Energy in each frequency bin over whole time
+        # Aggregate entropy is based on energy in a selection
+        Ebin = np.sum(sg[f1:f2,t1:t2],axis=1)
         Ebin /= np.sum(Ebin)
-        # Entropy for each time slice
-        # TODO: Unconvinced about this next one
-        Fbin = 0
-        for t in range(t2-t1):
-            Fbin += self.entropy(sg[f1:f2,t+t1])
-        aggEntropy = np.sum(self.entropy(Ebin))
-        avgEntropy = Fbin/(t2-t1)
+        aggEntropy = np.sum(-Ebin.*np.log2(Ebin))
+
+        # Average entropy is based on time slices
+        newsg = sg/np.sum(sg,axis=0)
+        avgEntropy = np.sum(-newsg.*np.log2(newsg),axis=1)
+        avgEntropy = np.mean(avgEntropy)
 
         # Convert spectrogram into decibels
-        sg = -10.0*np.log10(sg)
-        sg[np.isinf(sg)] = 0
+        sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg)))
 
         avgPower = np.sum(sg[f1:f2,t1:t2])/((f2-f1)*(t2-t1))
-        # Should this have the sums in?
+        # This is defined as the power at the max minus power at min. Unclear how it deals with the fact that there isn't one time in there!
         deltaPower = (np.sum(sg[f2-1,:]) - np.sum(sg[f1,:]))/np.shape(sg)[1]
 
         maxPower = np.max(sg[f1:f2,t1:t2])
@@ -199,8 +220,7 @@ class Features:
         # Cumulative sums to get the quartile points for freq and time
 
         # t1, t2, f1, f2 are in pixels
-        sg = -10.0*np.log10(sg)
-        sg[np.isinf(sg)] = 0
+        sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg)))
 
         sgt = np.sum(sg[f1:f2,t1:t2], axis=0)
         cst = np.cumsum(sgt)
@@ -254,6 +274,7 @@ class Features:
         # TODO: check
         rmsa = np.sqrt(np.sum(data[int(t1):int(t2)]**2)/len(data[int(t1):int(t2)]))
         # Filtered rmsa (bandpass filtered first)
+        # TODO
         # Also? max bearing, peak correlation, peak lag
         return (mina, mint, maxa, maxt, peaka, peakt,rmsa)
 
@@ -261,23 +282,23 @@ class Features:
         scipy.signal.fftconvolve(a, b, mode='same')
 
 def raven():
-    #data, fs = librosa.load('Sound Files/tril1.wav',sr=None)
+    data, fs = librosa.load('Sound Files/tril1.wav',sr=None)
     #data, fs = librosa.load('Sound Files/kiwi.wav',sr=None)
-    data, fs = librosa.load('Sound Files/male1.wav',sr=None)
+    #data, fs = librosa.load('Sound Files/male1.wav',sr=None)
     # wavobj = wavio.read(self.filename, self.lenRead, self.startRead)
 
     import SignalProc
     sp = SignalProc.SignalProc()
     # sg = sp.spectrogram(data,fs,multitaper=False) # spectrogram(self,data,window_width=None,incr=None,window='Hann',mean_normalise=True,onesided=True,multitaper=False,need_even=False)
     sg = sp.spectrogram(data, multitaper=False)
-    print np.shape(sg)
+    #print np.shape(sg)
     f = Features()
     a = f.get_spectrogram_measurements(sg=sg,fs=fs,window_width=256,f1=0,f2=np.shape(sg)[0],t1=0,t2=np.shape(sg)[1])
     #get_spectrogram_measurements(self,sg,fs,window_width,f1,f2,t1,t2)
     b = f.get_robust_measurements(sg,len(data)/fs,fs,0,np.shape(sg)[0],0,np.shape(sg)[1])
     c = f.get_waveform_measurements(sg,data,fs,0,len(data))
     return a, b, c
-raven()
+#raven()
 
 def mfcc():
     import dtw
