@@ -92,7 +92,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.d_detection.addWidget(self.w_processButton,row=11,col=2)
         self.w_processButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
 
-        self.statusLeft.setText("Ready")
+        # self.statusLeft.setText("Ready")
 
         # Plot everything
         self.show()
@@ -162,9 +162,11 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                                 self.method = "Wavelets"
                                 ws = WaveletSegment.WaveletSegment(species=self.species)
                                 newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
+                                # print newSegments
                             else:
                                 self.method = "Default"
                                 newSegments=self.seg.bestSegments()
+                                # print newSegments
 
                             # Save the excel file
                             out = SupportClasses.exportSegments(annotation=newSegments, species=self.species,

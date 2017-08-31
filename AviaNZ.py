@@ -318,7 +318,8 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
         actionMenu.addSeparator()
         actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
-        actionMenu.addAction("Classify segments",self.classifySegments,"Ctrl+C")
+        if self.DOC == False:
+            actionMenu.addAction("Classify segments",self.classifySegments,"Ctrl+C")
         actionMenu.addSeparator()
         self.showAllTick = actionMenu.addAction("Show all pages", self.showAllCheck)
         self.showAllTick.setCheckable(True)
@@ -711,7 +712,7 @@ class AviaNZ(QMainWindow):
         self.statusLeft.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
         self.statusMid = QLabel("????")
         self.statusMid.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
-        self.statusRight = QLabel("Right")
+        self.statusRight = QLabel("Set Operator and Reviewer")
         self.statusRight.setAlignment(Qt.AlignRight)
         self.statusRight.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
         # Style
@@ -1043,10 +1044,11 @@ class AviaNZ(QMainWindow):
                         self.operator = self.segments[0][2]
                         self.reviewer = self.segments[0][3]
                         del self.segments[0]
-                    else:
-                        self.operator = self.config['operator']
-                        self.reviewer = self.config['reviewer']
-                self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
+                        self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
+                # elif self.config['operator'] and self.config['reviewer']:
+                #     self.operator = self.config['operator']
+                #     self.reviewer = self.config['reviewer']
+                # self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
                 if len(self.segments) > 0:
                     if self.segments[0][2] > 1.5 and self.segments[1][2] > 1.5:
                         # Legacy version didn't normalise the segment data for dragged boxes
@@ -3147,7 +3149,10 @@ class AviaNZ(QMainWindow):
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
         """
-        self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.operator,reviewer=self.reviewer)
+        if hasattr(self, 'operator') and hasattr(self, 'reviewer') :
+            self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.operator,reviewer=self.reviewer)
+        else:
+            self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator='', reviewer='')
         self.setOperatorReviewerDialog.show()
         self.setOperatorReviewerDialog.activateWindow()
         self.setOperatorReviewerDialog.activate.clicked.connect(self.changeOperator)

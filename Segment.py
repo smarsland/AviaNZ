@@ -873,10 +873,10 @@ def detectClicks():
     #wavobj = wavio.read('Sound Files/tril1.wav')
     #wavobj = wavio.read('Sound Files/010816_202935_p1.wav')
     #wavobj = wavio.read('Sound Files/20170515_223004 piping.wav')
-    #wavobj = wavio.read('/Users/srmarsla/CL78_BIRD_141120_212934_wb.wav')
+    wavobj = wavio.read('Sound Files/test/DE66_BIRD_141011_005829.wav')
     #wavobj = wavio.read('/Users/srmarsla/DE66_BIRD_141011_005829_wb.wav')
     #wavobj = wavio.read('/Users/srmarsla/ex1.wav')
-    wavobj = wavio.read('/Users/srmarsla/ex2.wav')
+    #wavobj = wavio.read('/Users/srmarsla/ex2.wav')
     fs = wavobj.rate
     data = wavobj.data #[:20*fs]
 
@@ -893,7 +893,7 @@ def detectClicks():
 
     energy = np.sum(sg,axis=1)
     energy = medfilt(energy,15)
-    e2 = np.percentile(energy,95)*2.0
+    e2 = np.percentile(energy,95)*2
     # Step 1: clicks have high energy
     clicks = np.squeeze(np.where(energy>e2))
     clicks = s.identifySegments(clicks, minlength=1)
