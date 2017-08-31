@@ -138,6 +138,14 @@ class exportSegments:
 
         # Now write the data out
         if self.method == "Wavelets" and self.trainTest == False:
+            detected = np.where(self.annotation > 0)
+            # print "det",detected
+            if np.shape(detected)[1] > 1:
+                self.annotation = self.identifySegments(np.squeeze(detected))
+            elif np.shape(detected)[1] == 1:
+                self.annotation = self.identifySegments(detected)
+            else:
+                self.annotation = []
             self.mergeSeg()
         writeToExcelp1()
         writeToExcelp2()
@@ -158,6 +166,9 @@ class exportSegments:
         # Merge the neighbours, for now wavelet segments
         indx = []
         for i in range(len(self.annotation) - 1):
+            print "index:", i
+            print np.shape(self.annotation)
+            print self.annotation
             if self.annotation[i][1] == self.annotation[i + 1][0]:
                 indx.append(i)
         indx.reverse()
@@ -165,6 +176,15 @@ class exportSegments:
             self.annotation[i][1] = self.annotation[i + 1][1]
             del (self.annotation[i + 1])
             # return self.annotation
+
+    def identifySegments(self, seg): #, maxgap=1, minlength=1):
+    # TODO: *** Replace with segmenter.checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0)
+        segments = []
+        # print seg, type(seg)
+        if len(seg)>0:
+            for s in seg:
+                segments.append([s, s+1])
+        return segments
 
     def saveAnnotation(self):
         # Save annotations - batch processing

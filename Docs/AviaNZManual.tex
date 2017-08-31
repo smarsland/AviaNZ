@@ -10,6 +10,11 @@
 
 \usepackage[usenames, dvipsnames]{color}
 
+%Revise with track changes
+\usepackage[markup=default]{changes}
+%\usepackage[final]{changes}
+\usepackage{soulutf8}
+
 \begin{document}
 \maketitle
 
@@ -21,11 +26,13 @@ We really want feedback on it, particularly what works and what doesn't, how you
 
 %If you haven't done any birdsong processing before, make sure that you read Section~\ref{labelling}, which works through an example. 
 
-When the program loads, you are presented with two options \textcolor{blue}{as shown} in the following screen:
+When the program loads, you are presented with two options \added{as shown} in the following screen:
 
 \begin{figure}[h!]
 \centering
 \includegraphics[width=.3\textwidth]{Figs/splashscreen}
+\caption{\added{Starting window of the program.}}
+\label{welcome}
 \end{figure}
 
 The first option (described more in Section~\ref{sec:manual}) enables you to see and manually process audio files, while the second option (see Section~\ref{sec:auto}) takes whole directories (and subdirectories) of audio files and automatically segments the bird calls of a particular species. You can then view the output of this using the first option; the software also produces an excel file showing the results (see Section~\ref{sec:outputs}).  
@@ -33,21 +40,23 @@ The first option (described more in Section~\ref{sec:manual}) enables you to see
 \section{Manual Segmentation}
 \label{sec:manual}
 
-When you select manual segmentation, you should see a dialog box asking you to select a file to view. Use this in the normal way to select a sound file from a directory. Once you have selected one, you should see a screen like the one below. This is the main program for manually labelling birdcalls, or reviewing the processing of automatic processes.
+When you select manual segmentation, \deleted{you should see a dialog box asking you to select a file to view. Use this in the normal way to select a sound file from a directory. Once you have selected one,} you should see a screen like the one below \added{(Figure~\ref{main})}. This is the main program for manually labelling birdcalls, or reviewing the processing of automatic processes.
 The program automatically loads the first 5 minutes of a file. 
 
 \begin{figure}[h!]
 \centering
 \includegraphics[width=.8\textwidth]{Figs/avianzinterface.pdf}
+\caption{\added{The interface for manual birdsong annotation and analysis.}}
+\label{main}
 \end{figure}
 
 \begin{itemize}
 \item There are five separate areas of the screen (each has its name in a blue bar). They are:
 	\begin{description}
-	\item[Overview] This shows you a picture of the 5 minutes of the file (labelled 2 in the figure). The part you are looking at in the main plots is shown in blue (it's actually the whole file in the example figure). Below it there is a coloured bar (labelled 3 in the figure, and in yellow). There are left and right arrow buttons (labelled 4) and double arrow buttons (labelled 5) on the left of this area. The single arrow buttons move the view in the main area along, while the double arrow buttons move to \textcolor{blue}{the previous 5 minutes or to} the next 5 minutes of the file (if it exists). 
+	\item[Overview] This shows you a picture of the 5 minutes of the file (labelled 2 in the figure). The part you are looking at in the main plots is shown in blue (it's actually the whole file in the example figure). Below it there is a coloured bar (labelled 3 in the figure, and in yellow). There are left and right arrow buttons (labelled 4) and double arrow buttons (labelled 5) on the left of this area. The single arrow buttons move the view in the main area along, while the double arrow buttons move to \added{the previous 5 minutes or to} the next 5 minutes of the file (if it exists). 
 	\item [Files (12)] This is a list of files in your current directory. You can double-click on one to select it and open it. Files in red have been annotated, files in black have not. The double arrow button on the top right of this area (labelled 11) moves on to the next file.
 	\item[Amplitude plot (6)] This shows a picture of the sound file. It's one of the two parts of the interface that you can use to label the birdcalls. 
-	\item[Spectrogram plot (7)] This is the second picture of the sound file, and the one that has more information and is most useful \textcolor{red}{for experts}. There is a display showing the value of the sounds at the location of the mouse (8 in the figure), and also a scroll bar to move through the file (9). \textcolor{cyan}{**I would move operator from here and label 18 from the next as they are not a part of docks**} The selected operator is shown at the bottom of the window (10).
+	\item[Spectrogram plot (7)] This is the second picture of the sound file, and the one that has more information and is most useful \deleted{for experts}. There is a display showing the value of the sounds at the location of the mouse (8 in the figure), and also a scroll bar to move through the file (9). \textcolor{cyan}{**I would move operator from here and label 18 from the next as they are not a part of docks**} The selected operator is shown at the bottom of the window (10).
 	\item[Controls] These play the sound file, and modify the appearance of the plots (13--18 in the figure).
 	\item[Menu] There is also a menu at the top of the screen. The name of the current file is shown in the title of the window (1).
 	\end{description}
@@ -56,17 +65,17 @@ The program automatically loads the first 5 minutes of a file.
 
 \item To load a new file, either choose `Open sound file' in the File menu, or just double click one in the Files screen area (double clicking on a folder will open that folder), or click on the button labelled 11 to move to the next file. 
 
-\item If you want to move to a new directory, either use the `..' option at the top of the list of files to navigate around your computer's file system, \textcolor{red}{or use the  `Open sound file' in the File menu.} 
+\item If you want to move to a new directory, either use the `..' option at the top of the list of files to navigate around your computer's file system, \deleted{or use the  `Open sound file' in the File menu.} 
 
 \item To quit, choose `Quit' from the File menu. 
 
-\item The program will tell you if it is doing anything by putting text in the area labelled 18. \textcolor{blue}{The selected operator is shown at the bottom of the window (10).}
+\item The program will tell you if it is doing anything by putting text in the area labelled 18. \added{The selected operator is shown at the bottom of the window (10).}
 
 \subsection{Spectrogram and Amplitude}
 
 \item The two main plots (Amplitude and Spectrogram; 6 and 7) show a section of a sound file. The part you are looking at is highlighted in blue in the top (Overview: 2) picture. Sometimes people only want to look at the spectrogram. If you are one of these people, in the Interface menu there is an option `Show amplitude plot', which is initially ticked. Click on it to remove the tick and the amplitude plot will vanish. If you change your mind, choose the option again. You can also hide the list of files (12) in the same way. 
 
-\item Sometimes spectrograms don't look good initially, for example because of high noise. You can modify the brightness and contrast of the spectrogram using the two sliders marked 15 in the figure. You can also use a different colour scheme, and invert the colour map (swap black and white), by choosing the relevant options in the \textcolor{red}{Appearance }\textcolor{blue}{Interface} menu. 
+\item Sometimes spectrograms don't look good initially, for example because of high noise. You can modify the brightness and contrast of the spectrogram using the two sliders marked 15 in the figure. You can also use a different colour scheme, and invert the colour map (swap black and white), by choosing the relevant options in the Appearance menu. 
 
 \subsection{Zooming and Scrolling}
 
@@ -80,12 +89,12 @@ The program automatically loads the first 5 minutes of a file.
 	The amount of the file that you can see (the visible width) can be changed by either: 
 	\begin{itemize}
 	\item dragging the ends of that blue highlight in (2)
-	\item changing the `Visible \textcolor{blue}{window width (seconds)}' in the Controls dock (labelled 17) by clicking on the up and down arrows, or typing in a new number.
+	\item changing the `Visible \added{window width (seconds)}' in the Controls dock (labelled 17) by clicking on the up and down arrows, or typing in a new number.
 	\end{itemize}
 
 \subsection{Moving Through Long Files}
 
-\item If files are longer than 5 minutes, use the double arrows labelled (5) to move to the next or previous sections. Note that there is a 10 second overlap between the files. \textcolor{blue}{You can also change the page size and the amount of page overlap by choosing the relevant options in the `Interface Settings' in the Interface menu.} The times on the axis below the spectrogram show locations in the full file.
+\item If files are longer than 5 minutes, use the double arrows labelled (5) to move to the next or previous sections. Note that there is a 10 second overlap between the files. \added{You can also change the page size and the amount of page overlap by choosing the relevant options in the `Interface Settings' in the Interface menu.} The times on the axis below the spectrogram show locations in the full file.
 
 \subsection{Playing the Sounds}
 
@@ -94,9 +103,9 @@ You can also play a segment of sound, assuming that a segment is selected. We wi
 
 \subsection{Performing Segmentation}
 
-\item To segment a birdcall, click the left mouse button once on either the Amplitude or Spectrogram plot. Then, as you move the mouse (within the same plot) a blue box will follow the mouse. Click again to \textcolor{red}{stop the segmentation} \textcolor{blue}{finish the segment}. The box will turn green, and a drop-down menu will then appear asking you to label the segment. 
+\item To segment a birdcall, click the left mouse button once on either the Amplitude or Spectrogram plot. Then, as you move the mouse (within the same plot) a blue box will follow the mouse. Click again to \deleted{stop the segmentation} \added{finish the segment}. The box will turn green, and a drop-down menu will then appear asking you to label the segment. 
 
-\item Sometimes people prefer to drag boxes instead of clicking to start and stop. There is a tick box in the \textcolor{red}{Appearance} menu labelled `Drag boxes in spectrogram'. If selected, this enables you to drag a box over a frequency range {\em in the spectrogram only}. The boxes it draws are just the same as the ones by clicking, except that they highlight a particular frequency range. 
+\item Sometimes people prefer to drag boxes instead of clicking to start and stop. There is a tick box in the Appearance menu labelled `Drag boxes in spectrogram'. If selected, this enables you to drag a box over a frequency range {\em in the spectrogram only}. The boxes it draws are just the same as the ones by clicking, except that they highlight a particular frequency range. 
 
 If you do this, you can use the `Make dragged boxes transparent' option to do what it says if you find the colour makes it hard to see the data.
 
@@ -118,23 +127,23 @@ If you do this, you can use the `Make dragged boxes transparent' option to do wh
 	\item[Blue] This segment has been labelled as `Don't Know'.
 	\end{description}
 
-\item These colours match the rectangles underneath the overview (labelled 3). \textcolor{blue}{By default, f}or each 10 second segment of the file, these boxes are white if there are no segments, blue if there are don't know segments, yellow if there are question marked segments, or red if all the segments in that section are labelled with definite species. \textcolor{red}{To move to a particular box,} click on it and the amplitude and spectrogram plots will show that section. 
+\item These colours match the rectangles underneath the overview (labelled 3). \added{By default, f}or each 10 second segment of the file, these boxes are white if there are no segments, blue if there are don't know segments, yellow if there are question marked segments, or red if all the segments in that section are labelled with definite species. To move to a particular box, click on it and the amplitude and spectrogram plots will show that section. 
 
-\item Segments can be moved by dragging them, or opened out by dragging the left and right ends, just like the Overview highlight. \textcolor{blue}{For the boxes, click on the top right corner of the box and then drag to resize.}
+\item Segments can be moved by dragging them, or opened out by dragging the left and right ends, just like the Overview highlight. \added{For the boxes, click on the top right corner of the box and then drag to resize.}
 
-\item Segments can be deleted by selecting them (so that they turn green) and then clicking on the `Delete Current Segment' in the Controls (16). You can also just press the \textcolor{red}{delete} key on the keyboard. 
+\item Segments can be deleted by selecting them (so that they turn green) and then clicking on the `Delete Current Segment' in the Controls (16). You can also just press the \deleted{delete}\added{backspace} key on the keyboard. 
 
 \item To delete all of the segments, use the `Delete all segments' option in the Actions menu. 
 
 \item Segments are saved automatically. 
 
-\item \textcolor{blue}{You also have the flexibility to set the colors for different types of the segments as you wish. To do so navigate to `Interface settings' in the Interface menu}
+\item \added{You also have the flexibility to set the colors for different types of the segments as you wish. To do so navigate to `Interface settings' in the Interface menu}
 \end{itemize}
 
 \subsection{Playing a Segment}
 
 \begin{itemize}
-\item When a segment is selected (so it is green \textcolor{blue}{by default}) you can use the play button on the left of 14 in the picture to play just that small segment. You can also use the play button on the right. The difference is that the one on the right will play only the frequencies highlighted if you have dragged a limited box on the spectrogram, so that you can isolate particular frequencies of a call. \textcolor{blue}{This is particularly helpful when there is high level of background noise overlapped temporally with the sound of interest but not overlapped in the frequency domain.} 
+\item When a segment is selected (so it is green \added{by default}) you can use the play button on the left of 14 in the picture to play just that small segment. You can also use the play button on the right. The difference is that the one on the right will play only the frequencies highlighted if you have dragged a limited box on the spectrogram, so that you can isolate particular frequencies of a call. \added{This is particularly helpful when there is high level of background noise overlapped temporally with the sound of interest but not overlapped in the frequency domain.} 
 \end{itemize}
 
 \subsection{Menu Options}	
@@ -145,12 +154,17 @@ If you do this, you can use the `Make dragged boxes transparent' option to do wh
 \item [Changing appearance] The first three options in the menu hide or reveal the amplitude plot (6), list of files (12), or annotation overview (3). 
 \item [Drag boxes] This option enables the user to select if they wish to perform segmentation by clicking on the start and end of a segment, or dragging a box. The boxes can be made transparent, when only their edge shows the colour code of what kind of label they have been given.
 %\item[Invert Spectrogram] This is currently a play feature that shows that it is possibly to invert a spectrogram to get a new wave file. The spectrogram picture will update to be a bit blurred. 
-\item [\textcolor{blue}{Choose c}olour map] This enables the user to select a colour map they prefer to the standard grey one. There is also an option to swap black and white (inverting the colour map). 
+\item [\added{Choose c}olour map] This enables the user to select a colour map they prefer to the standard grey one. There is also an option to swap black and white (inverting the colour map). 
 %\item [Make frequency axis tight] After bandpass filtering, this updates the spectrogram plot to stop showing the empty bands.
 \item [Change spectrogram parameters] A set of `expert' options to modify the spectrogram. Enables changes of the windowing function, width and increment of the FFT, and the option to not subtract off the mean. The `Multitapering' option can make very noisy spectrograms look better, but it takes a lot of computer time. 
 \item [Show fundamental frequency] Plots an estimate of the fundamental frequency for each call as a red line on the spectrogram.
 \item [Make read only] When reviewing a segmentation it is possible to click on the plots by mistake, adding further segments. This option avoids this problem. It can be turned off by selecting it again. 
-\item [Interface settings] \textcolor{blue}{This option enables the user to customise the annotation color scheme, cell size of the annotation overview, and auto save frequency. The user can also choose a page size. There is a tick box under `Human classify`, this option is used when reviewing the automated segmentation results  (see Section \ref{sec:action}).  There are situations that the automated detector add false positives (false alarms), then the user can delete them during the review. Here the user can save those segsments in a temporary folder for us, then we can use this information to improve the detectors. The user can add bird names to the list when annotating, but if someone wants to remove specific names from the list there is an option under Bird List. Here the user can alter the bird list by adding/deleting/changing the bird names as preferred. } 
+\item [Interface settings] \added{This option enables the user to customise the annotation color scheme, cell size of the annotation overview, and auto save frequency. The user can also choose a page size. There is a tick box under `Human classify`, this option is used when reviewing the automated segmentation results  (Section \ref{sec:action} and Sections \ref{sec:auto}--\ref{sec:outputs}).  There are situations that the automated detector outputs false positives (false alarms), then the user can delete them during the review. Here the user can set  the program to automatically save those segments in a temporary folder for us, then we can use this information to improve the detectors. 
+\\
+The user can add bird names to the list when annotating, but if someone wants to remove a name from the list there is an option under Bird List. Here the user can alter the bird list by adding/deleting/changing the bird names as preferred. 
+\\
+There is an option to set the operator and reviewer, this facility can also be found under File menu.
+} 
 \end{description}
 
 \subsubsection{{\em Actions Menu}}
@@ -160,7 +174,7 @@ These options will mostly provide dialog boxes that ask you to make choices.
 
 \begin{description}
 \item [Delete all segments] Does what it says. 
-\item [Denoise] Runs some programs that try to get rid of the noise in the sound file so that the birdcalls are easier to see. \textcolor{red}{You need to choose parameters for the algorithms.
+\item [Denoise] Runs some programs that try to get rid of the noise in the sound file so that the birdcalls are easier to see. \deleted{You need to choose parameters for the algorithms.
 **** We recommend using the default option, which is Bandpass plus wavelets.(?) This assumes that you know approximately the frequency range of your species of interest. ***}
 \item [Segment] You can ask the computer to segment the calls automatically. 
 For most users, just try the default option, and then review the output to see if you are happy with it. There are a variety of other options available, so it the default method doesn't work well, try some of those. 
@@ -169,19 +183,24 @@ For most users, just try the default option, and then review the output to see i
 %\item [Filter Spectrogram] This tries to clean the spectrogram for easier viewing.
 \item [Check Segments] These two options provide two different ways to view the segments and their labels for easier checking. The option to Show all pages decides on whether to view segments in an entire file, or just the current 5 minutes of it. 
 	\begin{description}
-	\item [Check segments (All segments)] This option shows the segments one-by-one in time order. 
+	\item [Check segments [All segments]] This option shows the segments one-by-one in time order \added{(Figure~\ref{check1}).} 
 	\begin{figure}
 	\centering
 	\includegraphics[width=.6\textwidth]{Figs/Check1}
+	\caption{\added{Check segments [All segments].}}
+	\label{check1}
 	\end{figure}
 	To play the segment, click on the play button. If the label is correct, click on the green tick, when the next image will load. If not, select the correct label before clicking the tick button. To delete a segment, click on the red dustbin button. 
-	\item [Check segments (Choose species)] This option asks you to choose a bird from those found in the current file. For each segment that is wrongly labelled, click on its picture (the colour map will change). These segments will be deleted. 
+	\item [Check segments [Choose species]] This option asks you to choose a bird from those found in the current file. For each segment that is wrongly labelled, click on its picture (the colour map will change). These segments will be deleted \added{(Figure~\ref{check2}).} 
 	\begin{figure}
 	\centering
 	\includegraphics[width=.4\textwidth]{Figs/Check2}
+	\caption{\added{Check segments [Choose species].}}
+	\label{check2}
 	\end{figure}
 	\end{description}
 
+\item [Export segments to Excel] \added{This enables the user to save a summary of the manual annotation or automatic detections of the currently opened file into an excel. The excel is automatically creates in the same location where the sound file resides. This outputs the detections in three different forms: start and end of each segment, presence/absence of the target species within the file, and the presence/absence of the target species in each time interval that the user specify in automatic segmentation (or by default 1 second resolution).}
 \item [Save as image] Saves the spectrogram currently visible on the screen as an image.
 \end{description}
 
@@ -195,14 +214,20 @@ For most users, just try the default option, and then review the output to see i
 
 \section{Automatic Segmentation of a Folder}
 \label{sec:auto}
+\added{When you select `Find a Species' from the starting window, you will see a screen like the one below (Figure~\ref{batch}). You can navigate to the parent folder with recordings to process, this means that the folder may or may not have sub folders to process. There is an option to choose the target species (e.g. Kiwi), then the automatic detector will be customised accordingly. If someone wants to detect any sound that stands out from the background, the option is to select `all' from the drop-down list. \\
+When the user hits the `Process Folder' button the detector will start go through each file in the given folder and the cursor will turn into busy mode. It will take a considerable amount of time depending on the size of the dataset. The output resolution will be covered in next section.}
 
 \begin{figure}[h!]
 \centering
 \includegraphics[width=.5\textwidth]{Figs/proc_folder}
+\caption{\added{The interface for batch processing.}}
+\label{batch}
 \end{figure}
 
 \section{Outputs}
 \label{sec:outputs}
+\added{The program is dedicated to provide a detailed and easy to review output. An excel file (with the name `DetectionSummary' followed by species selected) will be generated with three sheets of outputs in the parent directory. If you already have such a file there, the new results will be appended to the end of each sheet. The first sheet provides a detailed output -- the start and end of each detection in each recording. The second sheet indicates the presence/absence of the target species in each recording. The third sheet presents the presence/absence of the target species with a preferred resolution specified in the detection window (Output Resolution). This gives the user the flexibility to adopt their own output. \\
+In addition to the excel output, AviaNZ generates an annotation file of the automated detections. Then the user can open and review them in the main interface.}
 
 %\section{A Walkthrough}\label{labelling}
 %
