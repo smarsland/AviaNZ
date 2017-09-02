@@ -418,7 +418,6 @@ class WaveletSegment:
             if species.title() == 'Kiwi':
                 # nodes = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55]
                 nodes = [17, 20, 22, 35, 36, 38, 40, 42, 43, 44, 45, 46, 48, 50, 55, 56]
-                print "here"
             elif species.title() == 'Ruru':
                 nodes = [33, 37, 38]
             elif species.title() == 'Sipo':
