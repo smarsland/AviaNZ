@@ -344,9 +344,21 @@ class WaveletSegment:
             self.sampleRate = fs
 
         # Get the five level wavelet decomposition
-        denoisedData = self.WaveletFunctions.waveletDenoise(self.data, thresholdType='soft', wavelet=self.WaveletFunctions.wavelet,maxLevel=5)
+        # denoisedData = self.WaveletFunctions.waveletDenoise(self.data, thresholdType='soft', wavelet=self.WaveletFunctions.wavelet,maxLevel=5)
+        denoisedData=self.data
 
-        # librosa.output.write_wav('train/kiwi/D/', waveletData, sampleRate, norm=False)
+        # # Denoise each 10 secs and merge
+        # denoisedData = []
+        # n = len(self.data)
+        # dLen=10*self.sampleRate
+        # for i in range(0,n,dLen):
+        #     temp = self.WaveletFunctions.waveletDenoise(self.data[i:i+dLen], thresholdType='soft', wavelet=self.WaveletFunctions.wavelet,maxLevel=5)
+        #     denoisedData.append(temp)
+        # import itertools
+        # denoisedData = list(itertools.chain(*denoisedData))
+        # denoisedData = np.asarray(denoisedData)
+        # wavio.write('../Sound Files/Kiwi/test/Tier1/test/test/test/test_whole.wav', denoisedData, self.sampleRate, sampwidth=2)
+        # librosa.output.write_wav('Sound Files/Kiwi/test/Tier1/test/test/test', denoisedData, self.sampleRate, norm=False)
 
         if species == 'Kiwi':
             filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=1100, high=7000)
@@ -724,13 +736,15 @@ def detectClicks(audioData,sampleRate):
 
 import Segment
 # fName='Sound Files/test/DE66_BIRD_141011_005829'
-fName='Sound Files/Tril1'
+fName='Sound Files/kiwi_1min'
 ws=WaveletSegment()
 ws.loadData(fName, trainTest=False)
 newSegments = ws.waveletSegment_test(fName=None, data=ws.data, sampleRate=ws.sampleRate, species=ws.species,
                                      trainTest=False)
 clicks, sg = detectClicks(ws.data,ws.sampleRate)
 #remove clicks
+# maxsg = np.min(sgRaw)
+# sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
 
 detected = np.where(newSegments > 0)
 # print "det",detected
@@ -740,9 +754,15 @@ elif np.shape(detected)[1] == 1:
     detected = ws.identifySegments(detected)
 else:
     detected=[]
-
+f1 = 1000
+f2 = 4000
 for seg in detected:
-    e = np.sum(sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, :]) / (seg[1] - seg[0])
-    e1 = np.sum(sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, 1100 * 128 / (ws.sampleRate / 2):7000 * 128 / (ws.sampleRate / 2)])
-    r = e1/e
+    # e = np.sum(sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, :]) /128
+    e = np.sum(sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, f2 * 128 / (ws.sampleRate / 2):])
+    nBand = 128 - f1 * 128 / (ws.sampleRate / 2)
+    e=e/nBand
+    eBand = np.sum(sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, f1 * 128 / (ws.sampleRate / 2):f2 * 128 / (ws.sampleRate / 2)])
+    nBand = f2 * 128 / (ws.sampleRate / 2) - f1 * 128 / (ws.sampleRate / 2)
+    eBand = eBand / nBand
+    r = eBand/e
     print r
