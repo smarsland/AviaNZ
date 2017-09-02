@@ -204,6 +204,11 @@ class AviaNZ(QMainWindow):
         self.createMenu()
         self.createFrame()
 
+        self.operator = self.config['operator']
+        self.reviewer = self.config['reviewer']
+        if self.DOC:
+            self.setOperatorReviewerDialog()
+
         # Some safety checking for paths and files
         if not os.path.isdir(self.dirName):
             print("Directory doesn't exist: making it")
@@ -229,7 +234,7 @@ class AviaNZ(QMainWindow):
         fileMenu = self.menuBar().addMenu("&File")
         fileMenu.addAction("&Open sound file", self.openFile, "Ctrl+O")
         # fileMenu.addAction("&Change Directory", self.chDir)
-        fileMenu.addAction("&Set Operator/Reviewer", self.setOperatorReviewerDialog)
+        fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
         fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
@@ -321,9 +326,9 @@ class AviaNZ(QMainWindow):
         if self.DOC == False:
             actionMenu.addAction("Classify segments",self.classifySegments,"Ctrl+C")
         actionMenu.addSeparator()
-        self.showAllTick = actionMenu.addAction("Show all pages", self.showAllCheck)
-        self.showAllTick.setCheckable(True)
-        self.showAllTick.setChecked(self.config['showAllPages'])
+        #self.showAllTick = actionMenu.addAction("Show all pages", self.showAllCheck)
+        #self.showAllTick.setCheckable(True)
+        #self.showAllTick.setChecked(self.config['showAllPages'])
         actionMenu.addAction("Check segments [All segments]",self.humanClassifyDialog1,"Ctrl+1")
         actionMenu.addAction("Check segments [Choose species]",self.humanClassifyDialog2,"Ctrl+2")
         actionMenu.addSeparator()
@@ -434,7 +439,7 @@ class AviaNZ(QMainWindow):
             'saveCorrections': True,
 
             'operator': 'Stephen',
-            'reviewer': 'Stephen',
+            'reviewer': 'Nirosha',
 
             'fs_start':0,
             'fs_end':0,
@@ -712,7 +717,7 @@ class AviaNZ(QMainWindow):
         self.statusLeft.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
         self.statusMid = QLabel("????")
         self.statusMid.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
-        self.statusRight = QLabel("Set Operator and Reviewer")
+        self.statusRight = QLabel("")
         self.statusRight.setAlignment(Qt.AlignRight)
         self.statusRight.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
         # Style
@@ -838,6 +843,7 @@ class AviaNZ(QMainWindow):
         self.playPosition = self.windowStart
         self.prevBoxCol = self.config['ColourNone']
         self.bar.setValue(0)
+        self.currentFileSection = 0
 
         # Delete the overview segments
         for r in self.SegmentRects:
@@ -892,7 +898,7 @@ class AviaNZ(QMainWindow):
             self.media_obj.pause()
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
 
-        if type(current) is QString:
+        if type(current) is QString or type(current) is unicode:
             pass
         else:
             current = current.text()
@@ -939,7 +945,7 @@ class AviaNZ(QMainWindow):
             dlg.setWindowIcon(QIcon('img/Avianz.ico'))
             dlg.setWindowTitle('AviaNZ')
             if name is not None:
-                if isinstance(name,str):
+                if isinstance(name,str) or isinstance(name,unicode):
                     self.filename = self.dirName+'/'+name
                 elif isinstance(name,QString):
                     name = os.path.basename(str(name))
@@ -1044,13 +1050,8 @@ class AviaNZ(QMainWindow):
                         self.operator = self.segments[0][2]
                         self.reviewer = self.segments[0][3]
                         del self.segments[0]
-                        self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
-                # elif self.config['operator'] and self.config['reviewer']:
-                #     self.operator = self.config['operator']
-                #     self.reviewer = self.config['reviewer']
-                # self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
                 if len(self.segments) > 0:
-                    if self.segments[0][2] > 1.5 and self.segments[1][2] > 1.5:
+                    if self.segments[0][2] > 1.5 and self.segments[0][3] > 1.5:
                         # Legacy version didn't normalise the segment data for dragged boxes
                         # This fixes it, assuming that the spectrogram was 128 pixels high (256 width window)
                         # The .5 is to take care of rounding errors
@@ -1063,6 +1064,8 @@ class AviaNZ(QMainWindow):
                     self.hasSegments = False
             else:
                 self.hasSegments = False
+
+            self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
             # Update the data that is seen by the other classes
             if hasattr(self,'seg'):
@@ -1188,10 +1191,6 @@ class AviaNZ(QMainWindow):
             self.d_files.hide()
         self.config['showListofFiles'] = self.useFilesTick.isChecked()
 
-    def showAllCheck(self):
-        """ Listener to process if the user swaps the check menu item to see the file list. """
-        self.config['showAllPages'] = self.showAllTick.isChecked()
-
     def showOverviewSegsCheck(self):
         """ Listener to process if the user swaps the check menu item to see the overview segment boxes. """
         if self.showOverviewSegsTick.isChecked():
@@ -1271,10 +1270,8 @@ class AviaNZ(QMainWindow):
                 ind = ind*W/(self.config['window_width'])
                 x = (pitch*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
 
-                # TODO: Fit a spline and draw that instead
-                #from scipy.interpolate import interp1d
-                #f = interp1d(x, ind, kind='cubic')
-                #self.sg[ind,x] = 1
+                from scipy.signal import medfilt
+                x = medfilt(x,15)
 
                 # Get the individual pieces
                 segs = self.seg.identifySegments(ind,maxgap=10,minlength=5)
@@ -1286,7 +1283,7 @@ class AviaNZ(QMainWindow):
                     s[1] = s[1] * self.sampleRate / float(self.config['incr'])
                     i = np.where((ind>s[0]) & (ind<s[1]))
                     self.segmentPlots.append(pg.PlotDataItem())
-                    self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=1))
+                    self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=2))
                     self.p_spec.addItem(self.segmentPlots[-1])
             else:
                 self.statusLeft.setText("Removing fundamental frequency...")
@@ -1387,7 +1384,7 @@ class AviaNZ(QMainWindow):
         # widthOverviewSegment is in seconds
         numSegments = int(np.ceil(np.shape(self.sg)[0]/self.convertAmpltoSpec(self.config['widthOverviewSegment'])))
         self.widthOverviewSegment = int(float(np.shape(self.sg)[0])/numSegments)
-        print "Segs:", numSegments, self.config['widthOverviewSegment'], self.widthOverviewSegment
+        #print "Segs:", numSegments, self.config['widthOverviewSegment'], self.widthOverviewSegment
 
         self.overviewSegments = np.zeros((numSegments,3))
         for i in range(numSegments):
@@ -1531,14 +1528,10 @@ class AviaNZ(QMainWindow):
                 startpoint = startpoint - timeRangeStart
                 endpoint = endpoint - timeRangeStart
             elif startpoint >= timeRangeStart and endpoint > timeRangeEnd:
-                # TODO: check this
-                #print "Segment that overlaps two sections of file 1"
                 startpoint = startpoint - timeRangeStart
                 endpoint = timeRangeEnd - timeRangeStart
                 show = True
             elif startpoint < timeRangeStart and endpoint >= timeRangeEnd:
-                # TODO: check this
-                #print "Segment that overlaps two sections of file 2"
                 startpoint = 0
                 endpoint = endpoint - timeRangeStart
                 show = True
@@ -1570,7 +1563,6 @@ class AviaNZ(QMainWindow):
 
                 #print len(self.segments), inds, inde, startpoint, self.convertAmpltoSpec(startpoint), len(self.overviewSegments)
                 for box in range(inds, inde + 1):
-                    print "box = ", box
                     if self.overviewSegments[box,0] > 0:
                         self.SegmentRects[box].setBrush(self.ColourNone)
                     elif self.overviewSegments[box,2] > 0:
@@ -1655,9 +1647,14 @@ class AviaNZ(QMainWindow):
             indexx = int(mousePoint.x())
             indexy = int(mousePoint.y())
             if indexx > 0 and indexx < np.shape(self.sg)[0] and indexy > 0 and indexy < np.shape(self.sg)[1]:
-                seconds = (self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] - (self.currentFileSection>0)*self.config['fileOverlap']) % 60
-                minutes = int(((self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] - (self.currentFileSection>0)*self.config['fileOverlap'])/ 60) % 60)
-                self.pointData.setText('time=%d:%0.2f (m:s), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
+                time = self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] - (self.currentFileSection>0)*self.config['fileOverlap'] + self.startTime
+                seconds = time % 60
+                minutes = int((time/60) % 60)
+                hours = int((time/3600) % 24)
+                if hours>0:
+                    self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (hours,minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
+                else:
+                    self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
 
     def mouseClicked_ampl(self,evt):
         """ Listener for if the user clicks on the amplitude plot.
@@ -2074,7 +2071,7 @@ class AviaNZ(QMainWindow):
         """ When the user sets or changes the name in a segment, update the text and the colour. """
         if segID is None:
             segID = self.box1id
-        print segID, len(self.segments), len(self.listRectanglesa1)
+        #print segID, len(self.segments), len(self.listRectanglesa1)
         self.segments[segID][4] = text
         self.listLabels[segID].setText(text,'k')
 
@@ -3164,6 +3161,7 @@ class AviaNZ(QMainWindow):
         self.operator = str(name1)
         self.reviewer = str(name2)
         self.statusRight.setText("Operator: " + self.operator + ", Reviewer: "+self.reviewer)
+        self.setOperatorReviewerDialog.close()
 
     def saveImage(self): # ??? it doesn't save the image
         # filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
@@ -3232,6 +3230,11 @@ class AviaNZ(QMainWindow):
             {'name': 'Human classify', 'type': 'group', 'children': [
                 {'name': 'Save corrections', 'type': 'bool', 'value': self.config['saveCorrections'],
                  'tip': "This helps the developers"},
+            ]},
+
+            {'name': 'Output parameters', 'type': 'group', 'children': [
+                {'name': 'Show all pages', 'type': 'bool', 'value': self.config['showAllPages'],
+                 'tip': "Where to show segments from when looking at outputs"},
             ]},
 
             {'name': 'User', 'type': 'group', 'children': [
@@ -3318,18 +3321,34 @@ class AviaNZ(QMainWindow):
                                                    self.config['ColourSelected'][2], self.config['ColourSelected'][3])
                 self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1],
                                                    self.config['ColourSelected'][2], 255)
+            elif childName=='Output parameters.Show all pages':
+                self.config['showAllPages'] = data
             elif childName=='User.Operator':
                 self.config['operator'] = data
+                self.operator = data
+                self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
+
             elif childName == 'User.Reviewer':
                 self.config['reviewer'] = data
+                self.reviewer = data
+                self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
+
 
         # Reload the file to make these changes take effect
-        self.resetStorageArrays()
+        #self.resetStorageArrays()
         # Reset the media player
-        if self.media_obj.state() == phonon.Phonon.PlayingState:
-            self.media_obj.pause()
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.loadFile()
+        #if self.media_obj.state() == phonon.Phonon.PlayingState:
+        #    self.media_obj.pause()
+        #    self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+
+        # Find the '/' in the fileName
+        i=len(self.filename)-1
+        while self.filename[i] != '/' and i>0:
+            i = i-1
+        #print self.filename[i:], type(self.filename)
+        self.listLoadFile(self.filename[i+1:])
+
+        #******self.loadFile(self.filename)
 
 # ============
 # Various actions: deleting segments, saving, quitting

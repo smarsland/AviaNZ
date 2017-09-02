@@ -1,16 +1,59 @@
-# Version 0.1 30/5/16
+# Version 0.2 31/8/17
 # Author: Stephen Marsland
 
 import numpy as np
-#import pywt
-#from scipy.io import wavfile
-import pylab as pl
-#import matplotlib
 import librosa
+import SignalProc
 
 # TODO:
-# (1) Raven features, (2) MFCC, (3) LPC, (4) Random stuff from sounds, (5) Anything else
-# Geometric distance and other metrics should go somewhere
+# First thing is to get my head around everything that is going on, which is:
+    # Transforms of the data
+        # Features extracted from those transforms
+    # None (waveform)
+        # Various amplitude measures (max, min, peak)
+    # STFT (spectrogram)
+        # Energy, entropy, power, spectral moments
+    # DCT (related to real-values of FFT)
+    # Mel
+        # MFCC
+    # Chroma and Constant-Q
+        # Tonnetz
+        # Chroma-CENS
+    # LPC
+    # Wavelets
+        # Energy
+        # Coefficients
+
+    # Alignments that can be used to match up segments
+        # DTW
+        # Edit
+        # LCS
+
+    # Feature vectors for machine learning
+
+    # Distance metrics for template matching methods (nearest neighbour, cross-correlation)
+        # L1, L2
+        # Geometric distance
+        # SRVF for curves
+        # Cross-correlation
+        # Hausdorff (too slow)
+
+# Get MFCC and LPC working -> per segment?
+# Assemble the other features
+# Put all into a vector, save
+
+# Get smoothed fundamental freq
+# Compute L1, L2, geometric and SRVF distances
+# And cross-correlation
+
+# Get DTW, LCS and edit distance alignment going
+
+# Dominant frequency (highest energy)
+
+# (1) Raven features, (2) MFCC, (3) LPC, (4) Random stuff from sounds, (5) Wavelets, (6) Anything else, (7) Fundamental freq
+# Distances: L1, L2, Geometric, Cosine
+# Alignment: DTW, LCS, Edit
+
 # **FINISH!!*** List from Raven:
     #1st Quartile Frequency Max Power
     #1st Quartile Time Max Time
@@ -35,7 +78,6 @@ import librosa
 # Spectral statistics
 # Frequency modulation
 # Linear Predictive Coding -> from scikits.talkbox import lpc (see also audiolazy) Librosa?
-# Compute the spectral derivatives??
 
 # Fundamental frequency -- yin? (de Cheveigne and Kawahara 2002)
 # Add something that plots some of these to help playing, so that I can understand the librosa things, etc.
@@ -48,22 +90,26 @@ class Features:
     # Given a segment as a region of audiodata (between start and stop points)
     # Classifiers will then be called on the features
     # Currently it's just MFCC, Raven, some playing.
-    # TODO: test what there is so far!
 
-    def __init__(self,data=[],sampleRate=0):
+    def __init__(self,data=[],sampleRate=0,window_width=256,incr=128):
         self.data = data
         self.sampleRate = sampleRate
+        self.window_width=window_width
+        self.incr = incr
+        sp = SignalProc.SignalProc(sampleRate=self.sampleRate,window_width=self.window_width,incr=self.incr)
+        # The next lines are to get a spectrogram that *should* precisely match the Raven one
+        self.sg = sp.spectrogram(data, multitaper=False,window_width=self.window_width,incr=self.incr,window='Ones')
+        self.sg = self.sg**2
 
-    def setNewData(self,data,sg,fs):
+    def setNewData(self,data,sampleRate):
         # To be called when a new sound file is loaded
         self.data = data
-        self.sg = sg
-        self.fs = fs
+        self.sampleRate = sampleRate
+        self.sg = sp.spectrogram(data, multitaper=False,window_width=self.window_width,incr=self.incr,window='Ones')
 
     def get_mfcc(self):
-        # Use librosa to get the MFCC coefficients
+        # Use librosa to get the MFCC coefficients. These seem to have a window of 512, not changeable
         mfcc = librosa.feature.mfcc(self.data, self.sampleRate)
-        librosa.display.specshow(mfcc)
 
         # Normalise
         mfcc -= np.mean(mfcc,axis=0)
@@ -75,13 +121,15 @@ class Features:
         # Use librosa to get the chroma coefficients
         # Short-time energy in the 12 pitch classes
         # CQT is constant-Q
+        # Windows size is again 512
         cstft = librosa.feature.chroma_stft(self.data,self.sampleRate)
         ccqt = librosa.feature.chroma_cqt(self.data,self.sampleRate)
-        return[cstft,ccqt]
+        cens = librosa.feature.chroma_cens(self.data,self.sampleRate)
+        return[cstft,ccqt,cens]
 
     def get_tonnetz(self):
-        # Use librosa to get the tonnetz coefficients
-        # This are an alternative pitch representation to chroma
+        # Use librosa to get the 6 tonnetz coefficients
+        # This is an alternative pitch representation to chroma
         tonnetz = librosa.feature.tonnetz(self.data,self.sampleRate)
         return tonnetz
 
@@ -94,61 +142,15 @@ class Features:
         zcr = librosa.feature.zero_crossing_rate(self.data,self.sampleRate)
         return [s1,s2,s3,s4,zcr]
 
-    def other_features(self):
-        librosa.fft_frequencies(self.sampleRate)
-        librosa.cqt_frequencies()
-        librosa.audio.get_duration()
-
-        # Estimate dominant frequency of STFT bins by parabolic interpolation
-        librosa.piptrack()
-
-        # Adaptive noise floor -> read up
-        librosa.feature.logamplitude()
-
-        librosa.onset.onset_detect()
-        librosa.onset.onset_strength()
-
     def get_lpc(self,data,order=44):
         # Use talkbox to get the linear predictive coding
         from scikits.talkbox import lpc
-        return lpc(data,order)
+        coefs = lpc(data,order)
+        return coefs[0]
 
-    def entropy(self,s):
-        # Compute the Shannon entropy
-        e = -s[np.nonzero(s)] * np.log2(s[np.nonzero(s)])
-        return np.sum(e)
-
-    def wiener_entropy(self):
+    def wiener_entropy(self,data):
         # Also known as spectral flatness, geometric mean divided by arithmetic mean of power
-        return np.exp(1.0/len(self.data) * np.sum(np.log(self.data))) / (1.0/len(self.data) * np.sum(self.data))
-
-    def morgan(self,sg):
-        # Pitch (= fundamental frequency)
-        s = source(f, sampleRate, 128)
-        ff = pitch("yin", 256, 128, sampleRate)
-        total_frames = 0
-        pitches = []
-        while True:
-            samples, read = s()
-            thispitch = ff(samples)[0]
-            # print("%f %f %f" % (total_frames / float(samplerate), pitch, confidence))
-            pitches += [thispitch]
-            total_frames += read
-            if read < 128: break
-        features[6, whichfile] = np.mean(pitches)
-
-        # Power in decibels
-        sgd = 10.0 * np.log10(sg)
-        sgd[np.isinf(sgd)] = 0
-        features[7, whichfile] = np.sum(sgd) / (np.shape(sgd)[0] * np.shape(sgd)[1])
-        features[8, whichfile] = np.max(sgd)
-        index = np.argmax(sgd)
-
-        # Energy
-        features[9, whichfile] = np.sum(sg)
-
-        # Frequency (I'm going to use freq at which max power occurs)
-        features[10, whichfile] = sg.flatten()[index]
+        return np.exp(1.0/len(data) * np.sum(np.log(data))) / (1.0/len(data) * np.sum(data))
 
     # The Raven Features (27 of them)
     # Frequency: 5%, 25%, centre, 75%, 95%, peak, max
@@ -157,127 +159,154 @@ class Features:
     # Power: average, peak, max
     # Other: peak lag, max bearing, energy, peak correlation
 
-    def get_spectrogram_measurements(self,sg,fs,window_width,f1,f2,t1,t2):
-        # The first set of Raven features:
-        # average power, delta power, energy, aggregate+average entropy, max+peak freq, max+peak power
-        # These mostly assume that you have clipped the call in time and **frequency
-        # Raven takes Fourier transform of signal and squares each coefficient to get power spectral density
-        # Except this doesn't seem to be quite true, since many of them are in decibels!
+    def get_Raven_spectrogram_measurements(self,sg,fs,window_width,f1,f2,t1,t2):
+        """ The first set of Raven features.
+        energy, aggregate+average entropy, average power, delta power, max+peak freq, max+peak power
 
-        # t1, t2, f1, f2 are in pixels
+        The function is given a spectrogram and 4 indices into it (t1, t2, f1, f2) in pixels, together with the sample rate and window width for the spectrogram.
 
-        # Compute the energy before changing into decibels
-        energy = 10.*np.log10(np.sum(sg[f1:f2,t1:t2])*fs/window_width)
-        Ebin = np.sum(sg[f1:f2,t1:t2],axis=1)
-        # Energy in each frequency bin over whole time
+        These features should match the Raven ones, but that's hard since their information is inconsistent.
+        For example, they state (p 168) that the computation are based on the PSD, which they make by taking the Fourier transform of the signal and squaring
+        each coefficient. This has no windowing function. Also, many of their computations are stated to be in decibels.
+
+        The description of each computation is in the comments.
+        """
+
+        # Compute the energy
+        # This is a little bit unclear. Eq (6.1) of Raven is the calculation below, but then it says it is in decibels, which this is not!
+        energy = np.sum(sg[t1:t2,f1:f2])*float(fs)/window_width
+
+        # Entropy of energy in each frequency bin over whole time
+        Ebin = np.sum(sg[t1:t2,f1:f2],axis=0)
         Ebin /= np.sum(Ebin)
-        # Entropy for each time slice
-        # TODO: Unconvinced about this next one
-        Fbin = 0
-        for t in range(t2-t1):
-            Fbin += self.entropy(sg[f1:f2,t+t1])
-        aggEntropy = np.sum(self.entropy(Ebin))
-        avgEntropy = Fbin/(t2-t1)
+        aggEntropy = np.sum(-Ebin*np.log2(Ebin))
+
+        # Entropy of each frame (time slice) averaged
+        newsg = (sg.T/np.sum(sg,axis=1)).T
+        avgEntropy = np.sum(-newsg*np.log2(newsg),axis=1)
+        avgEntropy = np.mean(avgEntropy)
 
         # Convert spectrogram into decibels
-        sg = -10.0*np.log10(sg)
-        sg[np.isinf(sg)] = 0
+        sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg)))
 
-        avgPower = np.sum(sg[f1:f2,t1:t2])/((f2-f1)*(t2-t1))
-        # Should this have the sums in?
-        deltaPower = (np.sum(sg[f2-1,:]) - np.sum(sg[f1,:]))/np.shape(sg)[1]
+        # Sum of PSD divided by number of pixels
+        avgPower = np.sum(sg[t1:t2,f1:f2])/((f2-f1)*(t2-t1))
 
-        maxPower = np.max(sg[f1:f2,t1:t2])
-        maxFreq = (np.argmax(sg[f1:f2,t1:t2])+f1) * float(fs)/np.shape(sg)[0]
+        # Power at the max frequency minus power at min freq. Unclear how it deals with the fact that there isn't one time in there!
+        deltaPower = (np.sum(sg[:,f2-1]) - np.sum(sg[:,f1]))/np.shape(sg)[1]
 
+        # Max power is the darkest pixel in the spectrogram
+        maxPower = np.max(sg[t1:t2,f1:f2])
+
+        # Max frequency is the frequency at which max power occurs
+        maxFreq = (np.unravel_index(np.argmax(sg[t1:t2,f1:f2]), np.shape(sg[t1:t2,f1:f2]))[1] + f1) * float(fs/2.)/np.shape(sg)[1]
         return (avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq)
 
-    def get_robust_measurements(self,sg,length,fs,f1,f2,t1,t2):
-        # The second set of Raven features
-        # 1st, 2nd (centre), 3rd quartile, 5%, 95% frequency, inter-quartile range, bandwidth 90%
-        # Ditto for time
-        # Cumulative sums to get the quartile points for freq and time
+    def get_Raven_robust_measurements(self,sg,fs,f1,f2,t1,t2):
+        """ The second set of Raven features.
+        1st, 2nd (centre), 3rd quartile, 5%, 95% frequency, inter-quartile range, bandwidth 90%
+        Ditto for time
 
-        # t1, t2, f1, f2 are in pixels
-        sg = -10.0*np.log10(sg)
-        sg[np.isinf(sg)] = 0
+        t1, t2, f1, f2 are in pixels
+        Compute the cumulative sums and then loop through looking for the 5 points where the left and right are in the correct proportion,
+        i.e., the left is some percentage of the total.
+        """
 
-        sgt = np.sum(sg[f1:f2,t1:t2], axis=0)
-        cst = np.cumsum(sgt)
+        sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg)))
 
-        sgf = np.sum(sg[f1:f2,t1:t2], axis=1)
-        csf = np.cumsum(sgf)
-
-        # List of the frequency points (5%, 25%, 50%, 75%, 95%)
+        # List of the match points (5%, 25%, 50%, 75%, 95%)
         list = [.05, .25, .5, .75, .95]
+
+        sgf = np.sum(sg[t1:t2,f1:f2], axis=0)
+        csf = np.cumsum(sgf)
 
         freqindices = np.zeros(5)
         index = 0
         i = 0
         while i < len(csf) and index < len(list):
             if csf[i] > list[index] * csf[-1]:
-                freqindices[index] = i+1
+                freqindices[index] = i
                 index += 1
             i += 1
+
+        sgt = np.sum(sg[t1:t2,f1:f2], axis=1)
+        cst = np.cumsum(sgt)
 
         timeindices = np.zeros(5)
         index = 0
         i = 0
         while i < len(cst) and index < len(list):
             if cst[i] > list[index] * cst[-1]:
-                timeindices[index] = i+1
+                timeindices[index] = i
                 index += 1
             i += 1
 
-        # Check that the centre time/freq are in the middle (look good)
-        print np.sum(sg[f1:int(f2),t1:int(timeindices[2])]), np.sum(sg[f1:f2,int(timeindices[2]):int(t2)])
-        print np.sum(sg[f1:int(freqindices[2]), t1:int(t2)]), np.sum(sg[int(freqindices[2]):int(f2), t1:int(t2)])
-
-        freqindices = (freqindices+f1) * float(fs)/np.shape(sg)[0]
-        timeindices = (timeindices+t1)/np.shape(sg)[1] * length
+        # Turn into frequencies and times
+        # Maxfreq in sg is fs/2, so float(fs/2.)/np.shape(sg)[1] is the value of 1 bin
+        freqindices = (freqindices+f1) * float(fs/2.)/np.shape(sg)[1]
+        # The time between two columns of the spectrogram is the increment divided by the sample rate
+        timeindices = (timeindices+t1) * self.incr / fs
         return (freqindices, freqindices[3] - freqindices[1], freqindices[4] - freqindices[0], timeindices, timeindices[3] - timeindices[1], timeindices[4] - timeindices[0])
 
-    def get_waveform_measurements(self,sg,data,fs,t1,t2):
-        # The third set of Raven features
-        # Min, max, peak, RMS, filtered RMS amplitude (and times for the first 3), high, low, delta frequency, length of time
+    def get_Raven_waveform_measurements(self,data,fs,t1,t2):
+        """ The third set of Raven features. These are based on the waveform instead of the spectrogram.
+
+        Min, max, peak, RMS, filtered RMS amplitude (and times for the first 3), high, low, delta frequency, length of time
+
+        t1, t2 are in spectrogram pixels
+        """
 
         # First, convert t1 and t2 into points in the amplitude plot
-        t1 = float(t1) / np.shape(sg)[1] * len(data)
-        t2 = float(t2) / np.shape(sg)[1] * len(data)
+        t1 = t1 * self.incr
+        t2 = t2 * self.incr
 
-        mina = np.min(data[int(t1):int(t2)])
-        mint = float(np.argmin(data[int(t1):int(t2)])+int(t1)) / fs
-        maxa = np.max(data[int(t1):int(t2)])
-        maxt = float(np.argmax(data[int(t1):int(t2)])+int(t1)) / fs
-        peaka = np.max(np.abs(data[int(t1):int(t2)]))
-        peakt = float(np.argmax(np.abs(data[int(t1):int(t2)]))+int(t1)) / fs
-        # TODO: check
-        rmsa = np.sqrt(np.sum(data[int(t1):int(t2)]**2)/len(data[int(t1):int(t2)]))
+        mina = np.min(data[t1:t2])
+        mint = float(np.argmin(data[t1:t2])+t1) / fs
+        maxa = np.max(data[t1:t2])
+        maxt = float(np.argmax(data[t1:t2])+t1) / fs
+        peaka = np.max(np.abs(data[t1:t2]))
+        peakt = float(np.argmax(np.abs(data[t1:t2]))+t1) / fs
+        rmsa = np.sqrt(np.sum(data[t1:t2]**2)/len(data[t1:t2]))
         # Filtered rmsa (bandpass filtered first)
+        # TODO
         # Also? max bearing, peak correlation, peak lag
         return (mina, mint, maxa, maxt, peaka, peakt,rmsa)
 
     def computeCorrelation(self):
         scipy.signal.fftconvolve(a, b, mode='same')
 
-def raven():
-    #data, fs = librosa.load('Sound Files/tril1.wav',sr=None)
-    #data, fs = librosa.load('Sound Files/kiwi.wav',sr=None)
-    data, fs = librosa.load('Sound Files/male1.wav',sr=None)
-    # wavobj = wavio.read(self.filename, self.lenRead, self.startRead)
+def testFeatures():
+    import wavio
+    wavobj = wavio.read('Sound Files/tril1.wav')
+    fs = wavobj.rate
+    data = wavobj.data
 
-    import SignalProc
-    sp = SignalProc.SignalProc()
-    # sg = sp.spectrogram(data,fs,multitaper=False) # spectrogram(self,data,window_width=None,incr=None,window='Hann',mean_normalise=True,onesided=True,multitaper=False,need_even=False)
-    sg = sp.spectrogram(data, multitaper=False)
-    print np.shape(sg)
-    f = Features()
-    a = f.get_spectrogram_measurements(sg=sg,fs=fs,window_width=256,f1=0,f2=np.shape(sg)[0],t1=0,t2=np.shape(sg)[1])
-    #get_spectrogram_measurements(self,sg,fs,window_width,f1,f2,t1,t2)
-    b = f.get_robust_measurements(sg,len(data)/fs,fs,0,np.shape(sg)[0],0,np.shape(sg)[1])
-    c = f.get_waveform_measurements(sg,data,fs,0,len(data))
-    return a, b, c
-raven()
+    if data.dtype is not 'float':
+        data = data.astype('float') # / 32768.0
+
+    if np.shape(np.shape(data))[0] > 1:
+        data = data[:, 0]
+
+    sp = SignalProc.SignalProc(sampleRate=fs, window_width=256, incr=128)
+    # The next lines are to get a spectrogram that *should* precisely match the Raven one
+    #sg = sp.spectrogram(data, multitaper=False, window_width=256, incr=128, window='Ones')
+    #sg = sg ** 2
+    sg = sp.spectrogram(data, multitaper=False, window_width=256, incr=128, window='Hann')
+
+    f = Features(data,fs,256,128)
+
+    features = []
+    # Loop over the segments (and time slices within?)
+    features.append([f.get_Raven_spectrogram_measurements(sg=sg,fs=fs,window_width=256,f1=0,f2=np.shape(sg)[1],t1=0,t2=np.shape(sg)[0]),f.get_Raven_robust_measurements(sg,fs,0,np.shape(sg)[1],0,np.shape(sg)[0]),f.get_Raven_waveform_measurements(data,fs,0,len(data)),f.weiner_entropy(data)])
+
+    # Will need to think about feature vector length for the librosa features, since they are on fixed windows
+    f.get_chroma()
+    f.get_mfcc()
+    f.get_tonnetz()
+    f.get_spectral_features()
+    f.get_lpc(data,order=44)
+    # DCT
+
 
 def mfcc():
     import dtw
@@ -323,8 +352,37 @@ def mfcc():
 
     word = yTest[word_samp_bounds[0]:word_samp_bounds[1]]
 
-    # Command to embed audio in IPython notebook :)
-    #IPython.display.Audio(data=word, rate=sr1)
 
 #def filters():
     # dct, mel, chroma, constant_q
+
+# Distance Functions
+
+def lcs(s0, s1, distmatrix=None,s0ind=None,s1ind=None):
+    if distmatrix is None:
+        distmatrix = lcsDistanceMatrix(s0,s1)
+    if s0ind is None:
+        s0ind = len(s0)
+    if s1ind is None:
+        s1ind = len(s1)
+
+    if distmatrix[s0ind][s1ind] == 0:
+        return ""
+    elif s0[s0ind-1] == s1[s1ind-1]:
+        return lcs(s0, s1, distmatrix, s0ind-1, s1ind-1) + s0[s0ind-1]
+    elif distmatrix[s0ind][s1ind-1] > distmatrix[s0ind-1][s1ind]:
+        return lcs(s0, s1, distmatrix, s0ind, s1ind-1)
+    else:
+        return lcs(s0, s1, distmatrix, s0ind-1, s1ind)
+
+def lcsDistanceMatrix(s0, s1):
+
+    distMatrix = np.zeros((len(s0)+1,len(s1)+1))
+
+    for i in range(len(s0)):
+        for j in range(len(s1)):
+            if s0[i] == s1[j]:
+                distMatrix[i+1][j+1] = 1 + distMatrix[i][j]
+            else:
+                distMatrix[i+1][j+1] = max(distMatrix[i][j+1], distMatrix[i+1][j])
+    return distMatrix
