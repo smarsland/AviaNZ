@@ -11,15 +11,14 @@ v v faded   'Kiwi(M)5'      'Kiwi(F)5'      'Kiwi5'
 
 SM:
 
-Try to replicate bug in loading /Users/srmarsla/Tier 1/CC18_BIRP_150111_024258.wav
-
-Deal with segments that are in the overlap between sections of a file
-
-operator/reviewer updating is not clear
-
 Check the parameters for the clicks
     And where to use -- current idea is to remove them during/after detection
 And can we use the same idea for wind?
+
+Adaptive noise floor/SNR
+
+Finish feature vectors
+Look into image denoising more
 
 SM Choose best sets of nodes and evaluate
 SM Make the general segmentation more sensitive
@@ -38,7 +37,6 @@ NP Check manual
 BOTH: Decide that v1.0 is ready -- check stability, tidy the segmenters and denoisers options
 # denoisers are done, there are two versions (DOC and ALL)
 # do we need "show inverted spec"? anyway it is in ALL version and works only one direction
-
 
 We should start to decide what makes a specialised filter
     Mingap, minlength
@@ -61,7 +59,6 @@ We should start to decide what makes a specialised filter
 (8) NP Parameter setting
 
 Exporter for mac but scipy.misc for Windows - it works fine, but doesn't show the segments on Windows
-
 
 # What we want from the Tier 1 output:
 Presence or absence at some time resolution (e.g., 1 min, or 5 mins)
