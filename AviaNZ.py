@@ -843,7 +843,6 @@ class AviaNZ(QMainWindow):
         self.playPosition = self.windowStart
         self.prevBoxCol = self.config['ColourNone']
         self.bar.setValue(0)
-        self.currentFileSection = 0
 
         # Delete the overview segments
         for r in self.SegmentRects:
