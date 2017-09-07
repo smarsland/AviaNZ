@@ -198,16 +198,10 @@ class AviaNZ(QMainWindow):
         self.setWindowTitle('AviaNZ')
 
         # Make life easier for now: preload a birdsong
-        firstFile = 'tril1.wav' #'male1.wav' # 'kiwi.wav'#'
+        firstFile = 'xtril1.wav' #'male1.wav' # 'kiwi.wav'#'
         #self.firstFile = 'kiwi.wav'
 
         self.createMenu()
-        self.createFrame()
-
-        self.operator = self.config['operator']
-        self.reviewer = self.config['reviewer']
-        if self.DOC:
-            self.setOperatorReviewerDialog()
 
         # Some safety checking for paths and files
         if not os.path.isdir(self.dirName):
@@ -215,11 +209,26 @@ class AviaNZ(QMainWindow):
             os.makedirs(self.dirName)
         if not os.path.isfile(self.dirName+'/'+firstFile):
             fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
-            if fileName:
+
+            if fileName != '':
+                # Find the '/' in the fileName
+                i = len(fileName) - 1
+                while fileName[i] != '/' and i > 0:
+                    i = i - 1
+                self.dirName = fileName[:i + 1]
+
                 firstFile = fileName
+
+        self.createFrame()
+
         self.fillFileList(firstFile)
         self.listLoadFile(QString(firstFile))
         #self.previousFile = firstFile
+
+        self.operator = self.config['operator']
+        self.reviewer = self.config['reviewer']
+        if self.DOC:
+            self.setOperatorReviewerDialog()
 
         # Save the segments every minute
         self.timer = QTimer()
