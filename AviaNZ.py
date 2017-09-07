@@ -201,6 +201,8 @@ class AviaNZ(QMainWindow):
         firstFile = 'xtril1.wav' #'male1.wav' # 'kiwi.wav'#'
         #self.firstFile = 'kiwi.wav'
 
+        self.operator = self.config['operator']
+        self.reviewer = self.config['reviewer']
         self.createMenu()
 
         # Some safety checking for paths and files
@@ -225,8 +227,6 @@ class AviaNZ(QMainWindow):
         self.listLoadFile(QString(firstFile))
         #self.previousFile = firstFile
 
-        self.operator = self.config['operator']
-        self.reviewer = self.config['reviewer']
         if self.DOC:
             self.setOperatorReviewerDialog()
 
