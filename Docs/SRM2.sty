@@ -1,0 +1,264 @@
+% SRM.sty
+% A collection of packages, shortcuts, and page setup stuff.
+%
+% Some mine, some Tony's, some Klas'
+% todonotes, microtype, add paths, standard fonts,
+% section numbering
+% 
+% Options
+%
+% draft - turns off todo notes
+% linenumbers - turns on line numbers
+% autopstpdf - autopstpdf instead of epstopdf.
+% inhibit loading of theorem environments, load beamer defaults
+%
+% Use   use
+% pdflatex -shell-escape "\def\makepics{1} \input{XXX.tex}"
+% to generate the pics.pdf file
+%
+\NeedsTeXFormat{LaTeX2e}[1994/06/01]
+\ProvidesPackage{SRM2}
+%
+\RequirePackage{color,psfrag,xspace,fixltx2e,ifdraft,mathtools,needspace}
+%
+% enumerate options \begin{enumerate}{{A}[1].}...
+\RequirePackage{enumerate}
+%
+% This puts the NIPS-like lines around the title
+\def\toptitlebar{\hrule height4pt\vskip .25in\vskip-\parskip}
+\def\bottomtitlebar{\vskip .1in\vskip-\parskip\hrule height1pt\vskip
+.09in} 
+
+\def\@maketitle{\vbox{\hsize\textwidth
+\linewidth\hsize \vskip 0.1in \toptitlebar \centering
+{\LARGE\bf \@title\par  }\vskip 0.1cm
+{\large \@author\par} \vskip 0.1cm\@date \bottomtitlebar 
+\vskip 0.1in minus 0.1in}}
+
+% option autopstpdf
+\newif\if@autopstpdf\@autopstpdffalse
+\DeclareOption{autopstpdf}{ \@autopstpdftrue }
+%
+% option beamer
+\newif\if@beamer\@beamerfalse
+\DeclareOption{beamer}{ \@beamertrue }
+%
+% option draft
+\newif\if@draft\@draftfalse
+\DeclareOption{draft}{ \@drafttrue }
+%
+% option linenumbers
+\newif\if@linenumbers\@linenumbersfalse
+\DeclareOption{linenumbers}{ \@linenumberstrue }
+\ProcessOptions\relax
+%
+% adds standard locations to graphics path
+\graphicspath{{./Figures/}{./Pictures/}{./Pics/}{./pdf/}}
+%
+
+\usepackage{ifpdf}
+% -- Graphics package
+\ifpdf
+\usepackage[pdftex]{graphicx}
+\else
+\usepackage{graphicx}
+\fi
+
+\usepackage[utf8]{inputenc}
+
+% -- Hyperref package
+\usepackage[
+	pdftex,
+	% pagebackref,
+	colorlinks=true,
+	pdfpagemode=none,
+	urlcolor=blue,
+	linkcolor=blue,
+	citecolor=blue,
+	pdfstartview=FitH
+]{hyperref}
+
+\usepackage{fullpage}
+\usepackage[rgb]{xcolor}
+
+% -- AMS packages
+\usepackage{amsmath,amsthm,amssymb}
+\usepackage{listings}
+
+
+%
+% fonts
+%\RequirePackage[typeface=lmodern,monotypeface=lmodern,sanstypeface=lmodern,mathtypeface=mathdesign]{typeface}
+%
+%
+% hyphenation
+\emergencystretch=0.03\hsize
+\hyphenpenalty=9000 % max value 10000
+% don't complain if horizontals are out
+\hfuzz=0.85pt
+\hbadness=900
+% don't complain if page lengths are out
+\vfuzz=10pt
+\vbadness=10000 % max value 10000
+% broken paragraphs 
+%\widowpenalty=10000 % top of page
+%\clubpenalty=0 % bottom of page
+
+% hyperref (interferes with other packages)
+%\usepackage[colorlinks=false]{hyperref}
+
+
+%
+% set depth of section numbering
+\setcounter{secnumdepth}{2}
+%\setcounter{tocdepth}{1}
+
+%
+% helps with overfull h-boxes
+\setlength{\emergencystretch}{1.5em}
+                                %
+% 300 ppi
+\ifoptiondraft{}%
+{\pdfimageresolution=300}
+%
+% option 'linenumbers' 
+\if@linenumbers
+\usepackage[modulo,right]{lineno} 
+\linenumbers
+\fi
+%
+% option 'beamer'
+\if@beamer
+  \usepackage{mybeamer}
+\else
+  % paper size
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[final]{microtype}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\fi
+%
+% provides todo notes
+\if@draft
+\usepackage[textwidth=2.5cm,backgroundcolor=yellow]{todonotes}
+\setlength{\marginparwidth}{3cm}
+\else
+\def\todo#1{}
+\fi
+%
+% better real, imaginary symbols
+\renewcommand\Re{\operatorname{Re}} %
+\renewcommand\Im{\operatorname{Im}}
+\DeclareMathOperator{\grad}{grad}
+\DeclareMathOperator{\divv}{div}
+\DeclareMathOperator{\curl}{curl}
+\DeclareMathOperator{\rot}{\curl}
+\DeclareMathOperator{\tr}{tr}
+\newcommand{\e}{\mathrm{e}}
+\renewcommand{\i}{\mathrm{i}}
+\newcommand{\pair}[1]{\langle #1 \rangle}
+\newcommand{\inner}[1]{\langle\!\langle #1 \rangle\!\rangle}
+\providecommand{\norm}[1]{\lVert#1\rVert}
+\providecommand{\abs}[1]{\lvert#1\rvert}
+
+% -- Differential operators
+\newcommand{\uud}{\, \mathrm{d}}
+\newcommand{\ud}{\mathrm{d}}
+\newcommand{\pd}{\partial}
+%
+% real, complex, integers,...
+\newcommand\real{\mathbb{R}}
+\newcommand\complex{\mathbb{C}}
+\newcommand\integers{\mathbb{Z}}
+\newcommand\naturals{\mathbb{N}}
+\newcommand{\Q}{{\mathbb Q}}
+\newcommand{\disk}{\mathbb{D}}
+%
+% transpose, imaginary i
+\newcommand\trans{\mathsf{T}}    % transpose
+%\newcommand\trans{\intercal}    % transpose
+\newcommand\ii{\mathrm{i}\mkern1mu}     %imaginary i
+%
+% iid
+\newcommand\iid{{\emph{iid}}\xspace}
+%
+% bold vectors
+\renewcommand{\vec}[1]{{\boldsymbol{#1}}} 
+%
+% operator names
+\newcommand\cov{\operatorname{Cov}}
+\newcommand\erf{\operatorname{erf}}
+\newcommand\cond{\operatorname{Cond}}
+\newcommand\erfc{\operatorname{erfc}}
+\newcommand\sinc{\operatorname{sinc}}                 
+\newcommand\trace{\operatorname{Tr}}
+\newcommand\var{\operatorname{Var}}
+%
+% distributions          
+\newcommand\Nrm{\operatorname{N}} %normal dist          
+\newcommand\Urm{\operatorname{U}} % uniform dist
+\newcommand\Brm{\operatorname{B}} % binomail
+%
+% text square root
+\newcommand{\tsqrt}[1]{{\textstyle\sqrt{\smash[b]{#1}}}}
+%
+% esssup, infsup
+\DeclareMathOperator*{\esssup}{ess\,sup}
+\DeclareMathOperator*{\infsup}{inf\,sup}
+
+\newcommand{\vol}{\mathrm{vol}}
+\newcommand{\Diff}{\mathrm{Diff}}
+\newcommand{\Xcal}{\mathfrak{X}}
+\newcommand{\Diffvol}{{\Diff_\vol}}
+\newcommand{\Xcalvol}{{\Xcal_\vol}}
+\newcommand{\Fcal}{\mathcal{F}}
+\newcommand{\LieD}{\pounds}
+\newcommand{\interior}{\mathrm{i}}
+\newcommand{\weit}{Weitzenb\"{o}ck\spacer}
+
+% -- Lie groups/algebras
+\DeclareMathOperator{\ad}{ad}
+\DeclareMathOperator{\Ad}{Ad}
+\providecommand{\GL}{\mathrm{GL}}
+\providecommand{\gl}{\mathfrak{gl}}
+\providecommand{\SL}{\mathrm{SL}}
+\providecommand{\sl}{\mathfrak{sl}}
+\providecommand{\SE}{\mathrm{SE}}
+\providecommand{\se}{\mathfrak{se}}
+\providecommand{\SO}{\mathrm{SO}}
+\providecommand{\so}{\mathrm{so}}
+
+% -- Commonly used operators
+\newcommand{\Acal}{\mathcal{A}}
+%
+% ------------------------------------------------------------------
+% 		Theorems, lemmas, etc and environments (fold)
+% ------------------------------------------------------------------
+
+%  Theorems, Lemmas and the like, should be typeset in italic
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}{Lemma}[section]
+\newtheorem{proposition}{Proposition}[section]
+\newtheorem{corollary}{Corollary}[section]
+
+%  Examples, Remarks, Definitions etc. typeset with upshape
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{remark}{Remark}[section]
+\newtheorem{example}{Example}[section]
+\newtheorem*{mthm}{Main Theorem} % The '*' makes it unnumbered
+
+
+%
+\newcommand\coloneq{\coloneqq}
+\newcommand\eqcolon{\eqqcolon}
+
+% change hyphenation mins
+\def\britishhyphenmins{{3}{4}} %set left and right hyphen mins
+\uchyph=0% prevent hyphenation of words with capitals
+
+%
+% xspace abbreviations
+
+\endinput
+
