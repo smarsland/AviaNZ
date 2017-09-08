@@ -21,6 +21,10 @@
 %Shift-click, ctrl-click
 %scroll bar, menus not buttons
 
+%Operater and reviewer
+% 5 areas bit
+% not a problem
+
 This is a brief guide to version 1.0 of the AviaNZ program. 
 We really want feedback on it, particularly what works and what doesn't, how you would like to see it improved, and what other functionality it needs. We are more than happy to talk about our plans as well. 
 
@@ -42,7 +46,8 @@ The first option (Manual Segmentation) is described more in Section~\ref{sec:man
 \section{Manual Segmentation}
 \label{sec:manual}
 
-If you select manual segmentation, you will see a dialog box asking you to select a file to view. Use this in the normal way to select a sound file from a directory. Once you have selected one, you should see a screen like the one below (Figure~\ref{main}). This is the main program for manually labelling birdcalls, or reviewing the processing of automatic processes.
+If you select manual segmentation, you will see a dialog box asking you to select a file to view. Use this in the normal way to select a sound file from a directory. Once you have selected one, the program will ask you to give names for the operator and reviewer. These are useful to keep track of who has looked at different files. Following that, you should see a screen like the one below (Figure~\ref{main}). This is the main program for manually labelling birdcalls, or reviewing the processing of automatic processes.
+
 The program automatically loads the first 5 minutes of a file. 
 
 \begin{figure}[h!]
@@ -54,18 +59,22 @@ The program automatically loads the first 5 minutes of a file.
 
 \newpage
 \begin{itemize}
-\item There are five separate areas of the screen (the first five have their names in a blue bar). They are:
+\item There are five separate areas of the screen within the AviaNZ program (each of which has its name in a blue bar). They are:
 	\begin{description}
 	\item[Overview] This shows you a picture of the 5 minutes of the file (labelled 2 in the figure). The part you are looking at in the main plots is shown in blue (it's actually the whole file in the example figure). Below it there is a coloured bar (labelled 3 in the figure, and in yellow). There are left and right arrow buttons (labelled 4) and double arrow buttons (labelled 5) on the left of this area. The single arrow buttons move the view in the main area along, while the double arrow buttons move to the previous 5 minutes or to the next 5 minutes of the file (if it exists). 
 	\item [Files (12)] This is a list of files in your current directory. You can double-click on one to select it and open it. Files in red have been annotated, files in black have not. The double arrow button on the top right of this area (labelled 11) moves on to the next file.
 	\item[Amplitude plot (6)] This shows a picture of the sound file. It's one of the two parts of the interface that you can use to label the birdcalls. 
 	\item[Spectrogram plot (7)] This is the second picture of the sound file, and the one that has more information and is most useful. There is a display showing the value of the sounds at the location of the mouse (8 in the figure), and also a scroll bar to move through the file (9). 
-		\item[Controls] These play the sound file, and modify the appearance of the plots (13--17 in the figure).
-	\item[Menu] There is also a menu at the top of the screen. The name of the current file is shown in the title of the window (1).
+	\item[Controls] These play the sound file, and modify the appearance of the plots (13--17 in the figure).
+	\end{description}
+
+In addition, there are two extra parts to the interface:
+	\begin{description}
+	\item[Menu] The menu at the top of the screen. The name of the current file is shown in the title of the window (1).
 	\item[Bar at the bottom] At the very bottom of the screen there is an area (marked 18) that gives any status updates from the program, and on the right, information about the currently selected Reviewer and Operator (marked 10).
 	\end{description}
 
-\item You can drag the four screen areas around and reorder them if you wish, by dragging the blue bar on the top or left of them. You can also make them into their own windows by double-clicking on the blue bar. If you decide that you made a mistake doing that, then there is an option in the Actions menu to `Put docks back' that returns them to the original configuration.
+\item You can drag the five screen areas around and reorder them if you wish, by dragging the blue bar on the top or left of them. You can also make them into their own windows by double-clicking on the blue bar. If you decide that you made a mistake doing that, then there is an option in the Actions menu to `Put docks back' that returns them to the original configuration.
 
 \item To load a new file, either choose `Open sound file' in the File menu, or just double click one in the Files screen area (double clicking on a folder will open that folder), or click on the button labelled 11 to move to the next file. 
 
@@ -107,13 +116,11 @@ You can also play a segment of sound, assuming that a segment is selected. We wi
 
 \subsection{Performing Segmentation}
 
-\item To segment a birdcall, click the left mouse button once on either the Amplitude or Spectrogram plot. Then, as you move the mouse (within the same plot) a blue box will follow the mouse. Click again to finish the segment. The box will turn green, and a drop-down menu will then appear asking you to label the segment. 
+\item To segment a birdcall, click the left mouse button once on either the Amplitude or Spectrogram plot. Then, as you move the mouse (within the same plot) a blue box will follow the mouse. Click again to finish the segment. The box will turn green, and a drop-down menu will then appear asking you to label the segment. If you need to add a segment on top of another one then right-click to start the segment rather than left-clicking. 
 
 \item Sometimes people prefer to drag boxes instead of clicking to start and stop. There is a tick box in the Appearance menu labelled `Drag boxes in spectrogram'. If selected, this enables you to drag a box over a frequency range {\em in the spectrogram only}. The boxes it draws are just the same as the ones by clicking, except that they highlight a particular frequency range. 
 
 If you do this, you can use the `Make dragged boxes transparent' option to do what it says if you find the colour makes it hard to see the data underneath it.
-
-\item If you need to add a segment on top of another one then right-click rather than left-click. This will start another segment. If dragging segments this is not a problem. 
 
 \item To choose the type of bird, click on the name. If the type isn't in the list, move to `Other'. If it isn't in the second list, choose `Other' in this second list. It will ask you to enter a name. From then on this name will appear in the list. If you click anywhere on the screen except on a bird name in the menu then the menu will disappear and the bird type will be labelled as `Don't Know'.
 
@@ -186,7 +193,7 @@ These options will mostly provide dialog boxes that ask you to make choices.
 \item [Delete all segments] Does what it says. 
 \item [Denoise] Runs some programs that try to get rid of the noise in the sound file so that the birdcalls are easier to see. 
 \item [Segment] You can ask the computer to segment the calls automatically. 
-For most users, just try the default option, and then review the output to see if you are happy with it. There are a variety of other options available, so it the default method doesn't work well, try some of those. 
+For most users, just try the default option, and then review the output to see if you are happy with it. There are a variety of other options available, so if the default method doesn't work well, try some of those. 
 
  
 %\item [Find Matches] If you select a segment (so that its box is green) and then press this button the program will look for others that are similar. It does not currently deal well with nosie. 
@@ -237,7 +244,7 @@ When the user hits the `Process Folder' button the detector will start go throug
 
 \section{Outputs}
 \label{sec:outputs}
-The AviaNZ program aims provide detailed and easy-to-review output. An Excel file (with the name `DetectionSummary' followed by species selected) will be generated with three sheets of outputs in the same directory as the files. If this file already exists, the new results will be appended to the end of each sheet. 
+The AviaNZ program aims to provide detailed and easy-to-review outputs. An Excel file (with the name `DetectionSummary' followed by species selected) will be generated with three sheets of outputs in the same directory as the files. If this file already exists, the new results will be appended to the end of each sheet. 
 
 The three sheets of the Excel workbook are:
 
