@@ -6,7 +6,7 @@
 
 \title{The AviaNZ Birdsong Analysis Software (v 1.0)}
 \author{Stephen Marsland (\url{s.r.marsland@massey.ac.nz})}
-\date{July 2017}
+\date{September 2017}
 
 %\usepackage[usenames, dvipsnames]{color}
 
@@ -231,7 +231,7 @@ For most users, just try the default option, and then review the output to see i
 
 \section{Automatic Segmentation of a Folder}
 \label{sec:auto}
-If you select `Find a Species' from the starting window, you will see a screen like the one below (Figure~\ref{batch}). Navigate to the parent folder with recordings to process. If you are looking for a particular species that you have a detector for, choose it from the list (currently Kiwi). This will customise the detector. Otherwise, choose `All' from this list to find all files. 
+If you select `Find a Species' from the starting window, you will see a screen like the one below (Figure~\ref{batch}). Navigate to the parent folder with recordings to process. If you are looking for a particular species that you have a detector for, choose it from the list (currently Kiwi). This will customise the detector. Otherwise, choose `All' from this list to find all sounds. 
 
 When the user hits the `Process Folder' button the detector will start go through each file in the given folder (and any subfolders) and the cursor will turn into busy mode. Processing will take a considerable amount of time depending on the size of the dataset.
 
@@ -251,10 +251,10 @@ The three sheets of the Excel workbook are:
 \begin{enumerate}
 \item start and end times of each birdcall detected
 \item presence/absence of the target species (or set of species) in each recording
-\item  presence/absence of the target species (or set of species) in each time interval that the user specifies (by default 1 second)
+\item  presence/absence of the target species (or set of species) in each time interval that the user specifies (by default 60 seconds)
 \end{enumerate}
 
-In addition to the Excel file, AviaNZ generates an annotation file of the automated detections that  the user can open and review in the main interface.
+In addition to the Excel file, for each sound file AviaNZ generates an annotation file of the automated detections that  the user can open and review in the main interface.
 
 %\section{A Walkthrough}\label{labelling}
 %

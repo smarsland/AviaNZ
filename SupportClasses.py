@@ -14,9 +14,86 @@ from openpyxl import load_workbook, Workbook
 from openpyxl.styles import colors
 from openpyxl.styles import Font, Color
 
+from scipy.signal import medfilt
+import SignalProc
+
 import math
 import numpy as np
 import os, json
+
+class postProcess:
+    """ This class implements few post processing methods to avoid false positives
+    """
+
+    def __init__(self,audioData=None, sampleRate=0, detections=[]):
+        self.audioData=audioData
+        self.sampleRate=sampleRate
+        self.detections=detections
+        self.confirmedDetections=np.zeros(len(detections))  # post processed detections
+        self.unsureDetections=np.ones(len(detections))*-1  # need more testing to confirm
+
+    def detectClicks(self):
+        '''
+        This function finds 'click' sounds that normally pick up by any detector as false positives.
+        Remove those from the output.
+        '''
+        # TODO: this also tends to detele true posoitives! Try looking back and forth to see if its longer than 1 sec
+        fs = self.sampleRate
+        data = self.audioData
+
+        sp = SignalProc.SignalProc(self.audioData, self.sampleRate, 256, 128)
+        self.sg = sp.spectrogram(self.audioData)
+        # s = Segment(data, sg, sp, fs, 50)
+
+        energy = np.sum(self.sg, axis=1)
+        energy = medfilt(energy, 15)
+        e2 = np.percentile(energy, 95) * 2
+        # Step 1: clicks have high energy
+        clicks = np.squeeze(np.where(energy > e2))
+        # clicks = s.identifySegments(clicks, minlength=1)
+        clicks = clicks * 128 / self.sampleRate  # convert frame numbers to seconds
+        c = list(set(clicks))
+        for i in c:
+            self.detections[i] = 0        # remove clicks
+
+    def eRatioConfd(self, thr=2.5):
+        '''
+        This is a post processor to introduce some confidence level
+        high ratio --> classes 1-3 'good' calls
+        low ratio --> classes 4-5 'weak' calls
+        ratio = energy in band/energy above the band
+        The problem with this simple classifier is that the ratio is relatively low when the
+        calls are having most of the harmonics (close range)
+        Mostly works
+        '''
+        import WaveletSegment
+        ws = WaveletSegment.WaveletSegment()
+        detected = np.where(self.detections > 0)
+        # print "det",detected
+        if np.shape(detected)[1] > 1:
+            detected = ws.identifySegments(np.squeeze(detected))
+        elif np.shape(detected)[1] == 1:
+            detected = ws.identifySegments(detected)
+        else:
+            detected=[]
+        f1 = 1000
+        f2 = 4000
+        sp = SignalProc.SignalProc(self.audioData, self.sampleRate, 256, 128)
+        self.sg = sp.spectrogram(self.audioData)
+        for seg in detected:
+            # e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, :]) /128     # whole frequency range
+            # nBand = 128  # number of frequency bands
+            e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f2 * 128 / (self.sampleRate / 2):])  # f2:
+            nBand = 128 - f2 * 128 / (self.sampleRate / 2)    # number of frequency bands
+            e=e/nBand   # per band power
+
+            eBand = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f1 * 128 / (self.sampleRate / 2):f2 * 128 / (self.sampleRate / 2)]) # f1:f2
+            nBand = f2 * 128 / (self.sampleRate / 2) - f1 * 128 / (self.sampleRate / 2)
+            eBand = eBand / nBand
+            r = eBand/e
+            # print seg, r
+            if r>thr:
+                self.confirmedDetections[seg[0]]=1
 
 class exportSegments:
     """ This class saves the batch detection results(Find Species) and also current annotations (AviaNZ interface)

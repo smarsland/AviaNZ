@@ -9,6 +9,14 @@ faded       'Kiwi(M)3'      'Kiwi(F)3'      'Kiwi3'
 v faded     'Kiwi(M)4'      'Kiwi(F)4'      'Kiwi4'
 v v faded   'Kiwi(M)5'      'Kiwi(F)5'      'Kiwi5'
 
+AvianZ seems to be stable now! Just minor things
+    Set Operator/Reviewer (Current File) -> does not remember if it has no annotation. Instead do we make
+    the option disable if it has no annotation?
+    Spectrogram options highest frq. 16000->4000 does it need to remember when moving to next file (currently not)
+
+NP:
+Introduce confidence using energy ratio after detection
+
 SM:
 
 from PyQt4 import QtGui
