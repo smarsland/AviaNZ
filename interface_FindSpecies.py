@@ -30,20 +30,21 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         QMainWindow.__init__(self, root)
 
         # add statusbar
-        self.statusLeft = QLabel("Ready")
-        self.statusLeft.setFrameStyle(QFrame.Panel)
-        self.statusRight = QLabel("Processing file Current/Total")
-        self.statusRight.setAlignment(Qt.AlignRight)
-        self.statusRight.setFrameStyle(QFrame.Panel)
-        statusStyle='QLabel {border:transparent}'
-        self.statusLeft.setStyleSheet(statusStyle)
-        self.statusRight.setStyleSheet(statusStyle)
-        self.statusBar().addPermanentWidget(self.statusLeft,1)
-        self.statusBar().addPermanentWidget(self.statusRight,1)
+        # self.statusLeft = QLabel("Ready")
+        # self.statusLeft.setFrameStyle(QFrame.Panel)
+        # self.statusRight = QLabel("Processing file Current/Total")
+        # self.statusRight.setAlignment(Qt.AlignRight)
+        # self.statusRight.setFrameStyle(QFrame.Panel)
+        # statusStyle='QLabel {border:transparent}'
+        # self.statusLeft.setStyleSheet(statusStyle)
+        # self.statusRight.setStyleSheet(statusStyle)
+        # self.statusBar().addPermanentWidget(self.statusLeft,1)
+        # self.statusBar().addPermanentWidget(self.statusRight,1)
 
-        # Set the message in the status bar
-        self.statusLeft.setText("Ready")
-        self.statusRight.setText("Processing file Current/Total")
+        # # Set the message in the status bar
+        # self.statusLeft.setText("Ready")
+        # # self.statusRight.setText("Processing file Current/Total")
+        self.statusBar().showMessage("Processing file Current/Total")
 
         self.setWindowTitle('AviaNZ - Automatic Detection')
         self.createFrame()
@@ -109,7 +110,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
     def detect(self):
         with pg.BusyCursor():
             if self.dirName:
-                self.statusLeft.setText("Processing...")
+                # self.statusLeft.setText("Processing...")
                 i=self.w_spe.currentIndex()
                 if i==0:
                     self.species="Kiwi"
@@ -124,7 +125,6 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                         if filename.endswith('.wav'):
                             total=total+1
                 cnt=0   # processed number of files
-                self.statusRight.setText("Processing file " + "0/" + str(total))
 
                 for root, dirs, files in os.walk(str(self.dirName)):
                     for filename in files:
@@ -132,7 +132,8 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                             # if not os.path.isfile(root+'/'+filename+'.data'): # if already processed then skip?
                             #     continue
                             cnt=cnt+1
-                            self.statusRight.setText("Processing file " + str(cnt) + "/" + str(total))
+                            # self.statusRight.setText("Processing file " + str(cnt) + "/" + str(total))
+                            self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
                             self.filename=root+'/'+filename
                             self.loadFile()
                             self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
@@ -168,6 +169,8 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                                 newSegments=self.seg.bestSegments()
                                 # print newSegments
 
+                            # Find clicks and remove them
+
                             # Save the excel file
                             out = SupportClasses.exportSegments(annotation=newSegments, species=self.species,
                                                                 dirName=self.dirName, filename=self.filename,
@@ -175,7 +178,8 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                             out.excel()
                             # Save the annotation
                             out.saveAnnotation()
-                self.statusLeft.setText("Ready")
+                # self.statusLeft.setText("Ready")
+                self.statusBar().showMessage("Processed files " + str(cnt) + "/" + str(total))
             else:
                 msg = QMessageBox()
                 msg.setIconPixmap(QPixmap("img/Owl_warning.png"))

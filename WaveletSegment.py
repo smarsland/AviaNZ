@@ -238,8 +238,8 @@ class WaveletSegment:
             if species.title() == 'Sipo':
                 thr = 0.25
             else:
-                thr = 1.0
-
+                # thr = 1.0
+                thr = 0.25
         detected = np.zeros((int(len(wp.data)/sampleRate),len(listnodes)))
         count = 0
 
@@ -715,72 +715,16 @@ def moretest():
 #     return segs
 
 ###########
-def detectClicks(audioData,sampleRate):
-    from scipy.signal import medfilt
-    fs = sampleRate
-    data = audioData
-
-    # if data.dtype is not 'float':
-    #     data = data.astype('float') # / 32768.0
-    #
-    # if np.shape(np.shape(data))[0] > 1:
-    #     data = data[:, 0]
-
-    sp = SignalProc.SignalProc(data,fs,256,128)
-    sg = sp.spectrogram(data,multitaper=False)
-    # s = Segment(data, sg, sp, fs, 50)
-
-    energy = np.sum(sg,axis=1)
-    energy = medfilt(energy,15)
-    e2 = np.percentile(energy,95)*2
-    # Step 1: clicks have high energy
-    clicks = np.squeeze(np.where(energy>e2))
-    # clicks = s.identifySegments(clicks, minlength=1)
-    return clicks,sg
-
-def eRatio(fName=None):
-    '''
-    This is a post processor to introduce some confidence level
-    high ratio --> classes 1-3 'good' calls
-    low ratio --> classes 4-5 'weak' calls
-    ratio = energy in band/energy above the band
-    The problem with this simple classifier is that the ratio is relatively low when the
-    calls are having most of the harmonics (close range)
-    '''
-    import Segment
-    fName='Sound Files/Kiwi/test/Ponui/kiwi-test6'
-    ws=WaveletSegment()
-    ws.loadData(fName, trainTest=False)
-    newSegments = ws.waveletSegment_test(fName=None, data=ws.data, sampleRate=ws.sampleRate, species=ws.species,
-                                         trainTest=False)
-    clicks, sg = detectClicks(ws.data,ws.sampleRate)
-    # maxsg = np.min(sgRaw)
-    # sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
-    c = clicks * 128 / ws.sampleRate  # convert frame numbers to seconds
-    c = list(set(c))
-    for i in c:
-        newSegments[i] = 0        # remove clicks
-
-    # maxsg = np.min(sgRaw)
-    # sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
-
-    detected = np.where(newSegments > 0)
-    # print "det",detected
-    if np.shape(detected)[1] > 1:
-        detected = ws.identifySegments(np.squeeze(detected))
-    elif np.shape(detected)[1] == 1:
-        detected = ws.identifySegments(detected)
-    else:
-        detected=[]
-    f1 = 1000
-    f2 = 4000
-    for seg in detected:
-        e = np.sum(sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, :]) /128                         # whole frquency range
-        # e = np.sum(sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, f2 * 128 / (ws.sampleRate / 2):])  # f2:
-        nBand = 128 - f1 * 128 / (ws.sampleRate / 2)    # number of frequency bands
-        e=e/nBand   # per band power
-        eBand = np.sum(sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, f1 * 128 / (ws.sampleRate / 2):f2 * 128 / (ws.sampleRate / 2)]) # f1:f2
-        nBand = f2 * 128 / (ws.sampleRate / 2) - f1 * 128 / (ws.sampleRate / 2)
-        eBand = eBand / nBand
-        r = eBand/e
-        print seg, r
+# #just testing
+# fName='Sound Files/Kiwi/test/Tier1/CL78_BIRM_141120_212934'
+# # fName='Sound Files/Kiwi/test/Ponui/kiwi-test2'
+# ws=WaveletSegment()
+# ws.loadData(fName, trainTest=False)
+# # det = ws.waveletSegment_test(fName=None, data=ws.data, sampleRate=ws.sampleRate, species=ws.species,
+# #                                          trainTest=False)
+# det = np.ones(900)
+# if sum(det)>0:
+#     import SupportClasses
+#     post=SupportClasses.postProcess(ws.data, ws.sampleRate, det)
+#     # post.detectClicks()
+#     post.eRatioConfd()
