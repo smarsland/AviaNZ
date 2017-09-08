@@ -11,6 +11,10 @@ v v faded   'Kiwi(M)5'      'Kiwi(F)5'      'Kiwi5'
 
 SM:
 
+from PyQt4 import QtGui
+QtGui.QImageReader.supportedImageFormats()
+
+
 Check the parameters for the clicks
     And where to use -- current idea is to remove them during/after detection
 And can we use the same idea for wind?
