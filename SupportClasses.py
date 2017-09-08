@@ -29,12 +29,15 @@ class postProcess:
         self.audioData=audioData
         self.sampleRate=sampleRate
         self.detections=detections
+        self.confirmedDetections=np.zeros(len(detections))  # post processed detections
+        self.unsureDetections=np.ones(len(detections))*-1  # need more testing to confirm
 
     def detectClicks(self):
         '''
-        This function finds 'click' sounds that normally pick up by any detector as false positives
-        and then remove those from the output
+        This function finds 'click' sounds that normally pick up by any detector as false positives.
+        Remove those from the output.
         '''
+        # TODO: this also tends to detele true posoitives! Try looking back and forth to see if its longer than 1 sec
         fs = self.sampleRate
         data = self.audioData
 
@@ -53,7 +56,7 @@ class postProcess:
         for i in c:
             self.detections[i] = 0        # remove clicks
 
-    def eRatio(self):
+    def eRatioConfd(self, thr=2.5):
         '''
         This is a post processor to introduce some confidence level
         high ratio --> classes 1-3 'good' calls
@@ -61,9 +64,10 @@ class postProcess:
         ratio = energy in band/energy above the band
         The problem with this simple classifier is that the ratio is relatively low when the
         calls are having most of the harmonics (close range)
+        Mostly works
         '''
         import WaveletSegment
-        ws = WaveletSegment()
+        ws = WaveletSegment.WaveletSegment()
         detected = np.where(self.detections > 0)
         # print "det",detected
         if np.shape(detected)[1] > 1:
@@ -74,16 +78,22 @@ class postProcess:
             detected=[]
         f1 = 1000
         f2 = 4000
+        sp = SignalProc.SignalProc(self.audioData, self.sampleRate, 256, 128)
+        self.sg = sp.spectrogram(self.audioData)
         for seg in detected:
-            e = np.sum(self.sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, :]) /128                         # whole frquency range
-            # e = np.sum(sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, f2 * 128 / (ws.sampleRate / 2):])  # f2:
-            nBand = 128 - f1 * 128 / (ws.sampleRate / 2)    # number of frequency bands
+            # e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, :]) /128     # whole frequency range
+            # nBand = 128  # number of frequency bands
+            e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f2 * 128 / (self.sampleRate / 2):])  # f2:
+            nBand = 128 - f2 * 128 / (self.sampleRate / 2)    # number of frequency bands
             e=e/nBand   # per band power
-            eBand = np.sum(self.sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, f1 * 128 / (ws.sampleRate / 2):f2 * 128 / (ws.sampleRate / 2)]) # f1:f2
-            nBand = f2 * 128 / (ws.sampleRate / 2) - f1 * 128 / (ws.sampleRate / 2)
+
+            eBand = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f1 * 128 / (self.sampleRate / 2):f2 * 128 / (self.sampleRate / 2)]) # f1:f2
+            nBand = f2 * 128 / (self.sampleRate / 2) - f1 * 128 / (self.sampleRate / 2)
             eBand = eBand / nBand
             r = eBand/e
-            print seg, r
+            # print seg, r
+            if r>thr:
+                self.confirmedDetections[seg[0]]=1
 
 class exportSegments:
     """ This class saves the batch detection results(Find Species) and also current annotations (AviaNZ interface)
