@@ -198,7 +198,7 @@ class AviaNZ(QMainWindow):
         self.setWindowTitle('AviaNZ')
 
         # Make life easier for now: preload a birdsong
-        firstFile = 'xtril1.wav' #'male1.wav' # 'kiwi.wav'#'
+        firstFile = 'tril1.wav' #'male1.wav' # 'kiwi.wav'#'
         #self.firstFile = 'kiwi.wav'
 
         self.operator = self.config['operator']
@@ -211,7 +211,18 @@ class AviaNZ(QMainWindow):
             os.makedirs(self.dirName)
         if not os.path.isfile(self.dirName+'/'+firstFile):
             fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
-
+            while fileName == '':
+                msg = QMessageBox()
+                msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+                msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                msg.setText("Choose a sound file to proceed.\nDo you want to continue?")
+                msg.setWindowTitle("Select Sound File")
+                msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                reply = msg.exec_()
+                if reply == QMessageBox.Yes:
+                    fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
+                else:
+                    exit (1)
             if fileName != '':
                 # Find the '/' in the fileName
                 i = len(fileName) - 1
