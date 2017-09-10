@@ -222,7 +222,7 @@ class AviaNZ(QMainWindow):
                 if reply == QMessageBox.Yes:
                     fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
                 else:
-                    exit (1)
+                    sys.exit()
             if fileName != '':
                 # Find the '/' in the fileName
                 i = len(fileName) - 1
