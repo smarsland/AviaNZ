@@ -372,7 +372,7 @@ class AviaNZ(QMainWindow):
         msg = QMessageBox()
         msg.setIconPixmap(QPixmap("img\AviaNZ.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
-        msg.setText("The AviaNZ Program, v0.10 (June 2017)")
+        msg.setText("The AviaNZ Program, v 1.0 (Sept 2017)")
         msg.setInformativeText("By Stephen Marsland, Massey University (2016--2017). With code by Nirosha Priyadarshani and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Manic Purage. \ns.r.marsland@massey.ac.nz; n.p.priyadarshani@massey.ac.nz")
         msg.setWindowTitle("About")
         msg.setStandardButtons(QMessageBox.Ok)
@@ -2375,8 +2375,8 @@ class AviaNZ(QMainWindow):
             msg.setIcon(QMessageBox.Information)
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
             msg.setIconPixmap(QPixmap("img/Owl_done.png"))
-            msg.setText("All segmentations checked")
-            msg.setWindowTitle("Finished")
+            msg.setText("All segmentats are checked")
+            msg.setWindowTitle("Done")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
             self.humanClassifyClose1()
@@ -2958,8 +2958,8 @@ class AviaNZ(QMainWindow):
 
     def exportSeg(self, annotation=None, species='all'):
         out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename,
-                                               datalength=self.datalength, sampleRate=self.sampleRate)
-        out.saveSegments()
+                                               datalength=self.datalength, sampleRate=self.sampleRate,resolution=60)
+        out.excel()
 
     def findMatches(self,thr=0.4):
         """ Calls the cross-correlation function to find matches like the currently highlighted box.
@@ -3187,8 +3187,8 @@ class AviaNZ(QMainWindow):
         # exporter = SupportClasses.FixedImageExporter(self.p_spec)
         #exporter.export(filename)
         if platform.system() == 'Darwin':
-            import ImageExporter as pge
-            filename = QFileDialog.getSaveFileName(self,"Save Image","","Images (*.png *.xpm *.jpg)");
+            import pyqtgraph.exporters as pge
+            filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
             exporter = pge.ImageExporter(self.p_spec)
             exporter.export(filename)
         # for Windows to save the image, needs to typecast line 70 of ImageExporter.py
