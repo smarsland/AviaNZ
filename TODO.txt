@@ -13,6 +13,10 @@ AvianZ seems to be stable now! Just minor things
     Set Operator/Reviewer (Current File) -> does not remember if it has no annotation. Instead do we make
     the option disable if it has no annotation?
     Spectrogram options highest frq. 16000->4000 does it need to remember when moving to next file (currently not)
+        Ask if you want to save it, then put it in the params file?
+
+Look into MFCC as a way to do template matching. Plus some others, but start there.
+So for each segment identified by the wavelets, compute the coefficients, and plot them for now :)
 
 NP:
 Introduce confidence using energy ratio after detection

@@ -42,7 +42,7 @@ import SignalProc
 import Segment
 import WaveletSegment
 import WaveletFunctions
-#import Features
+import Features
 #import Learning
 import interface_FindSpecies
 #import math
@@ -559,6 +559,28 @@ class AviaNZ(QMainWindow):
 
         self.plotPlot = pg.PlotDataItem()
         self.p_plot.addItem(self.plotPlot)
+        self.plotPlot2 = pg.PlotDataItem()
+        self.p_plot.addItem(self.plotPlot2)
+
+        self.plotPlot3 = pg.PlotDataItem()
+        self.p_plot.addItem(self.plotPlot3)
+        self.plotPlot4 = pg.PlotDataItem()
+        self.p_plot.addItem(self.plotPlot4)
+        self.plotPlot5 = pg.PlotDataItem()
+        self.p_plot.addItem(self.plotPlot5)
+        self.plotPlot6 = pg.PlotDataItem()
+        self.p_plot.addItem(self.plotPlot6)
+        self.plotPlot7 = pg.PlotDataItem()
+        self.p_plot.addItem(self.plotPlot7)
+        self.plotPlot8 = pg.PlotDataItem()
+        self.p_plot.addItem(self.plotPlot8)
+        self.plotPlot9 = pg.PlotDataItem()
+        self.p_plot.addItem(self.plotPlot9)
+        self.plotPlot10 = pg.PlotDataItem()
+        self.p_plot.addItem(self.plotPlot10)
+        self.plotPlot11 = pg.PlotDataItem()
+        self.p_plot.addItem(self.plotPlot11)
+
 
         # Connect up the listeners
         self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
@@ -1488,14 +1510,50 @@ class AviaNZ(QMainWindow):
             self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.p_spec.addItem(self.bar, ignoreBounds=True)
         self.bar.sigPositionChangeFinished.connect(self.barMoved)
-        QApplication.processEvents()
 
         # Extra stuff to show test plots
         #self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
         pproc = SupportClasses.postProcess(self.audiodata,self.sampleRate)
-        energy = pproc.detectClicks()
+        #energy, e = pproc.detectClicks()
+        #energy, e = pproc.eRatioConfd()
         #if len(clicks)>0:
-        self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),energy)
+        #self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),energy)
+        #self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),e*np.ones(np.shape(self.sg)[0]))
+        #self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),e2)
+
+        #ws = WaveletSegment.WaveletSegment(species='kiwi')
+        #e = ws.computeWaveletEnergy(self.audiodata,self.sampleRate)
+
+        # Call MFCC in Features and plot some of them :)
+        ff = Features.Features(self.audiodata,self.sampleRate)
+        e = ff.get_mfcc()
+        print np.shape(e)
+
+
+        self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),np.sum(e,axis=0))
+        self.plotPlot.setPen(fn.mkPen('r'))
+        #self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[1,:])
+        #self.plotPlot2.setPen(fn.mkPen('r'))
+        # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
+        # self.plotPlot3.setPen(fn.mkPen('r'))
+        # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[3,:])
+        # self.plotPlot4.setPen(fn.mkPen('r'))
+        # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[4,:])
+        # self.plotPlot5.setPen(fn.mkPen('r'))
+        # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[5,:])
+        # self.plotPlot6.setPen(fn.mkPen('g'))
+        # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[6,:])
+        # self.plotPlot7.setPen(fn.mkPen('g'))
+        # self.plotPlot8.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[7,:])
+        # self.plotPlot8.setPen(fn.mkPen('g'))
+        # self.plotPlot9.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[8,:])
+        # self.plotPlot9.setPen(fn.mkPen('g'))
+        # self.plotPlot10.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[9,:])
+        # self.plotPlot10.setPen(fn.mkPen('g'))
+        # self.plotPlot11.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[10,:])
+        # self.plotPlot11.setPen(fn.mkPen('g'))
+
+        QApplication.processEvents()
 
     def updateRegion_spec(self):
         """ This is the listener for when a segment box is changed in the spectrogram.
