@@ -22,7 +22,9 @@ AvianZ seems to be stable now! Just minor things
         Ask if you want to save it, then put it in the params file?
 
     Bug to fix: the very first annotation gets lost.
-    added a sub menu item 'Save selected sound': useful to extract interesting sounds from long recordings (this stops me going back to Praat)
+
+    Added a sub menu item 'Save selected sound': useful to extract interesting sounds from long recordings (this stops me going back to Praat)
+    Exaluation - GT is in .txt form now (no need to have them as .xlsx)
 
 Look into MFCC as a way to do template matching. Plus some others, but start there.
 So for each segment identified by the wavelets, compute the coefficients, and plot them for now :)

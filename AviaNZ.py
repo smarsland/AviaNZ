@@ -355,6 +355,7 @@ class AviaNZ(QMainWindow):
         actionMenu.addAction("Export segments to Excel",self.exportSeg)
         actionMenu.addSeparator()
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
+        actionMenu.addAction("Save selected sound", self.save_selected_sound)
         actionMenu.addSeparator()
         actionMenu.addAction("Put docks back",self.dockReplace)
 
@@ -990,7 +991,8 @@ class AviaNZ(QMainWindow):
                 if DOCRecording:
                     self.startTime = DOCRecording.group(2)
 
-                    if int(self.startTime[:2]) > 8 or int(self.startTime[:2]) < 8:
+                    #if int(self.startTime[:2]) > 8 or int(self.startTime[:2]) < 8:
+                    if int(self.startTime[:2]) > 18 or int(self.startTime[:2]) < 6: # 6pm to 6am
                         print "Night time DOC recording"
                     else:
                         print "Day time DOC recording"
@@ -1016,117 +1018,117 @@ class AviaNZ(QMainWindow):
                 self.lenRead = self.config['maxFileShow']+self.config['fileOverlap']
             else:
                 self.lenRead = self.config['maxFileShow'] + 2*self.config['fileOverlap']
+            if os.stat(self.filename).st_size != 0: # avoid files with no data (Tier 1 has 0Kb .wavs)
+                wavobj = wavio.read(self.filename,self.lenRead,self.startRead)
+                #wavobj = wavio.read(self.filename)
+                self.sampleRate = wavobj.rate
+                self.audiodata = wavobj.data
+                self.minFreq = 0
+                self.maxFreq = self.sampleRate / 2.
+                self.fileLength = wavobj.nframes
+                self.timeaxis.setOffset(self.startRead+self.startTime)
 
-            wavobj = wavio.read(self.filename,self.lenRead,self.startRead)
-            #wavobj = wavio.read(self.filename)
-            self.sampleRate = wavobj.rate
-            self.audiodata = wavobj.data
-            self.minFreq = 0
-            self.maxFreq = self.sampleRate / 2.
-            self.fileLength = wavobj.nframes
-            self.timeaxis.setOffset(self.startRead+self.startTime)
+                dlg += 1
 
-            dlg += 1
+                if self.audiodata.dtype is not 'float':
+                    self.audiodata = self.audiodata.astype('float')  # / 32768.0
 
-            if self.audiodata.dtype is not 'float':
-                self.audiodata = self.audiodata.astype('float')  # / 32768.0
+                if np.shape(np.shape(self.audiodata))[0] > 1:
+                    self.audiodata = self.audiodata[:, 0]
+                self.datalength = np.shape(self.audiodata)[0]
+                print "Length of file is ", float(self.datalength) / self.sampleRate, " seconds (", self.datalength, "samples) loaded from ", float(self.fileLength) / self.sampleRate, "seconds (", self.fileLength, " samples) with sample rate ",self.sampleRate, " Hz."
 
-            if np.shape(np.shape(self.audiodata))[0] > 1:
-                self.audiodata = self.audiodata[:, 0]
-            self.datalength = np.shape(self.audiodata)[0]
-            print "Length of file is ", float(self.datalength) / self.sampleRate, " seconds (", self.datalength, "samples) loaded from ", float(self.fileLength) / self.sampleRate, "seconds (", self.fileLength, " samples) with sample rate ",self.sampleRate, " Hz."
+                if name is not None:
+                    if self.datalength != self.fileLength:
+                        print "not all of file loaded"
+                        self.nFileSections = int(np.ceil(float(self.fileLength)/self.datalength))
+                        self.prev5mins.setEnabled(False)
+                        self.next5mins.setEnabled(True)
+                    else:
+                        self.nFileSections = 1
+                        self.prev5mins.setEnabled(False)
+                        self.next5mins.setEnabled(False)
 
-            if name is not None:
-                if self.datalength != self.fileLength:
-                    print "not all of file loaded"
-                    self.nFileSections = int(np.ceil(float(self.fileLength)/self.datalength))
-                    self.prev5mins.setEnabled(False)
-                    self.next5mins.setEnabled(True)
+                if self.nFileSections == 1:
+                    self.placeInFileLabel.setText('')
                 else:
-                    self.nFileSections = 1
-                    self.prev5mins.setEnabled(False)
-                    self.next5mins.setEnabled(False)
+                    self.placeInFileLabel.setText("Part "+ str(self.currentFileSection+1) + " of " + str(self.nFileSections))
 
-            if self.nFileSections == 1:
-                self.placeInFileLabel.setText('')
-            else:
-                self.placeInFileLabel.setText("Part "+ str(self.currentFileSection+1) + " of " + str(self.nFileSections))
+                # Get the data for the main spectrogram
+                sgRaw = self.sp.spectrogram(self.audiodata, self.config['window_width'],
+                                            self.config['incr'], mean_normalise=True, onesided=True,
+                                            multitaper=False)
+                maxsg = np.min(sgRaw)
+                self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
-            # Get the data for the main spectrogram
-            sgRaw = self.sp.spectrogram(self.audiodata, self.config['window_width'],
-                                        self.config['incr'], mean_normalise=True, onesided=True,
-                                        multitaper=False)
-            maxsg = np.min(sgRaw)
-            self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
-
-            # Load any previous segments stored
-            if os.path.isfile(self.filename + '.data'):
-                file = open(self.filename + '.data', 'r')
-                self.segments = json.load(file)
-                file.close()
-                if len(self.segments) > 0:
-                    if self.segments[0][0] == -1:
-                        self.operator = self.segments[0][2]
-                        self.reviewer = self.segments[0][3]
-                        del self.segments[0]
-                if len(self.segments) > 0:
-                    if self.segments[0][2] > 1.5 and self.segments[0][3] > 1.5:
-                        # Legacy version didn't normalise the segment data for dragged boxes
-                        # This fixes it, assuming that the spectrogram was 128 pixels high (256 width window)
-                        # The .5 is to take care of rounding errors
-                        print "Old segments, normalising"
-                        for s in self.segments:
-                            s[2] = s[2]/128
-                            s[3] = s[3]/128
-                    self.hasSegments = True
+                # Load any previous segments stored
+                if os.path.isfile(self.filename + '.data'):
+                    file = open(self.filename + '.data', 'r')
+                    self.segments = json.load(file)
+                    file.close()
+                    if len(self.segments) > 0:
+                        if self.segments[0][0] == -1:
+                            self.operator = self.segments[0][2]
+                            self.reviewer = self.segments[0][3]
+                            del self.segments[0]
+                    if len(self.segments) > 0:
+                        if self.segments[0][2] > 1.5 and self.segments[0][3] > 1.5:
+                            # Legacy version didn't normalise the segment data for dragged boxes
+                            # This fixes it, assuming that the spectrogram was 128 pixels high (256 width window)
+                            # The .5 is to take care of rounding errors
+                            print "Old segments, normalising"
+                            for s in self.segments:
+                                s[2] = s[2]/128
+                                s[3] = s[3]/128
+                        self.hasSegments = True
+                    else:
+                        self.hasSegments = False
                 else:
                     self.hasSegments = False
-            else:
-                self.hasSegments = False
 
-            self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
+                self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
-            # Update the data that is seen by the other classes
-            if hasattr(self,'seg'):
-                self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
-            else:
-                self.seg = Segment.Segment(self.audiodata, sgRaw, self.sp, self.sampleRate,
-                                           self.config['window_width'], self.config['incr'])
-            self.sp.setNewData(self.audiodata,self.sampleRate)
+                # Update the data that is seen by the other classes
+                if hasattr(self,'seg'):
+                    self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
+                else:
+                    self.seg = Segment.Segment(self.audiodata, sgRaw, self.sp, self.sampleRate,
+                                               self.config['window_width'], self.config['incr'])
+                self.sp.setNewData(self.audiodata,self.sampleRate)
 
-            # Delete any denoising backups from the previous file
-            if hasattr(self,'audiodata_backup'):
-                self.audiodata_backup = None
-            self.showFundamental.setChecked(False)
-            if self.DOC == False:
-                self.showInvSpec.setChecked(False)
+                # Delete any denoising backups from the previous file
+                if hasattr(self,'audiodata_backup'):
+                    self.audiodata_backup = None
+                self.showFundamental.setChecked(False)
+                if self.DOC == False:
+                    self.showInvSpec.setChecked(False)
 
-            # Set the window size
-            self.windowSize = self.config['windowWidth']
-            self.widthWindow.setRange(0.5, float(len(self.audiodata))/self.sampleRate)
+                # Set the window size
+                self.windowSize = self.config['windowWidth']
+                self.widthWindow.setRange(0.5, float(len(self.audiodata))/self.sampleRate)
 
-            # Reset it if the file is shorter than the window
-            if float(len(self.audiodata))/self.sampleRate < self.windowSize:
-                self.windowSize = float(len(self.audiodata))/self.sampleRate
-            self.widthWindow.setValue(self.windowSize)
+                # Reset it if the file is shorter than the window
+                if float(len(self.audiodata))/self.sampleRate < self.windowSize:
+                    self.windowSize = float(len(self.audiodata))/self.sampleRate
+                self.widthWindow.setValue(self.windowSize)
 
-            self.totalTime = self.convertMillisecs((float(self.datalength)/self.sampleRate)*1000)
+                self.totalTime = self.convertMillisecs((float(self.datalength)/self.sampleRate)*1000)
 
-            # Load the file for playback as well, and connect up the listeners for it
-            self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
+                # Load the file for playback as well, and connect up the listeners for it
+                self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
 
-            # Set the length of the scrollbar.
-            self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
-            self.scrollSlider.setValue(0)
+                # Set the length of the scrollbar.
+                self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
+                self.scrollSlider.setValue(0)
 
-            # Get the height of the amplitude for plotting the box
-            self.minampl = np.min(self.audiodata)+0.1*(np.max(self.audiodata)+np.abs(np.min(self.audiodata)))
-            self.drawOverview()
-            dlg += 1
-            self.drawfigMain()
-            self.setWindowTitle('AviaNZ - ' + self.filename)
-            dlg += 1
-            self.statusLeft.setText("Ready")
+                # Get the height of the amplitude for plotting the box
+                self.minampl = np.min(self.audiodata)+0.1*(np.max(self.audiodata)+np.abs(np.min(self.audiodata)))
+                self.drawOverview()
+                dlg += 1
+                self.drawfigMain()
+                self.setWindowTitle('AviaNZ - ' + self.filename)
+                dlg += 1
+                self.statusLeft.setText("Ready")
 
     def openNextFile(self):
         """ Listener for next file >> button.
@@ -2821,6 +2823,36 @@ class AviaNZ(QMainWindow):
         wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits', sampwidth=2)
         self.statusLeft.setText("Saved")
 
+    def save_selected_sound(self, id=-1):
+        """ Listener for 'Save selected sound' menu item.
+        choose destination and give it a name
+        """
+        import math
+        if self.box1id is None or self.box1id == -1:
+            print "No box selected"
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText("No sound selected to save")
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setWindowTitle("No segment")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
+            return
+        else:
+            if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                x1 = self.listRectanglesa2[self.box1id].pos().x()
+                x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
+            else:
+                x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
+            x1 = math.floor(float(x1) * self.config['incr']) #/ self.sampleRate
+            x2 = math.floor(float(x2) * self.config['incr']) #/ self.sampleRate
+            print x1, x2
+            # filename = self.filename[:-4] + '_selected' + self.filename[-4:]
+            filename = QtGui.QFileDialog.getSaveFileName(self, 'Save File as', self.dirName, selectedFilter='*.wav')
+            if filename:
+                wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
+
     def redoFreqAxis(self,start=None,end=None):
         """ This is the listener for the menu option to make the frequency axis tight (after bandpass filtering)
         """
@@ -2959,7 +2991,7 @@ class AviaNZ(QMainWindow):
     def exportSeg(self, annotation=None, species='all'):
         out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename,
                                                datalength=self.datalength, sampleRate=self.sampleRate)
-        out.saveSegments()
+        out.excel()
 
     def findMatches(self,thr=0.4):
         """ Calls the cross-correlation function to find matches like the currently highlighted box.
@@ -3278,7 +3310,7 @@ class AviaNZ(QMainWindow):
         self.t.show()
         self.t.setWindowTitle('AviaNZ - Interface Settings')
         self.t.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.t.setFixedSize(420, 485)
+        self.t.setFixedSize(420, 550)
 
     def changeParams(self,param, changes):
         """ Update the config and the interface if anything changes in the tree
@@ -3493,7 +3525,7 @@ class AviaNZ(QMainWindow):
 # Start the application
 app = QApplication(sys.argv)
 
-DOC=True    # DOC features or all
+DOC=False    # DOC features or all
 
 # This screen asks what you want to do, then processes the response
 first = Dialogs.StartScreen(DOC=DOC)
@@ -3509,7 +3541,7 @@ if task == 1:
     avianz.show()
     app.exec_()
 elif task==2:
-    avianz = interface_FindSpecies.AviaNZFindSpeciesInterface()
+    avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(DOC=DOC)
     avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
     avianz.show()
     app.exec_()
