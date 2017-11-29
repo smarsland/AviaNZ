@@ -2,12 +2,18 @@
 # TODO for AviaNZ
 
 Tier 1 annotation - labels to use so that we can evaluate results in detail
-quality     male            female          cannot decide
-v close     'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'
-close       'Kiwi(M)2'      'Kiwi(F)2'      'Kiwi2'
-faded       'Kiwi(M)3'      'Kiwi(F)3'      'Kiwi3'
-v faded     'Kiwi(M)4'      'Kiwi(F)4'      'Kiwi4'
-v v faded   'Kiwi(M)5'      'Kiwi(F)5'      'Kiwi5'
+## AviaNZ annotation ######################################## in corresponding GT (-sec.txt) #############
+quality     male            female          cannot decide   # time     presence/absence type    quality  #
+v close     'Kiwi(M)1'      'Kiwi(F)1'      'Kiwi1'         # 1        1                M/F     *****    #
+close       'Kiwi(M)2'      'Kiwi(F)2'      'Kiwi2'         #                                            #
+faded       'Kiwi(M)3'      'Kiwi(F)3'      'Kiwi3'         #                                            #
+v faded     'Kiwi(M)4'      'Kiwi(F)4'      'Kiwi4'         #                                            #
+v v faded   'Kiwi(M)5'      'Kiwi(F)5'      'Kiwi5'         # n        1                M/F     *        #
+                                                                                                         #
+Bittern annotation - same as kiwi                                                                        #
+            'Bittern(B)1' to 'Bittern(B)5' for the booms                                                 #
+            'Bittern(I)1' to 'Bittern(I)5' for the inhalations                                           #
+##########################################################################################################
 
 AvianZ seems to be stable now! Just minor things
     Set Operator/Reviewer (Current File) -> does not remember if it has no annotation. Instead do we make
@@ -15,11 +21,20 @@ AvianZ seems to be stable now! Just minor things
     Spectrogram options highest frq. 16000->4000 does it need to remember when moving to next file (currently not)
         Ask if you want to save it, then put it in the params file?
 
+    Bug to fix: the very first annotation gets lost.
+    added a sub menu item 'Save selected sound': useful to extract interesting sounds from long recordings (this stops me going back to Praat)
+
 Look into MFCC as a way to do template matching. Plus some others, but start there.
 So for each segment identified by the wavelets, compute the coefficients, and plot them for now :)
 
 NP:
 Introduce confidence using energy ratio after detection
+# done, eRatio was good at picking level 1-3 according to my testing.
+# I'm processing Tier1 data using wavelet segmentation followed by this eRatio and generating two excel
+# outputs:
+        (1) 'Possible': includes all the segments that turned out to be kiwi
+        (2) 'withCofidence':  includes only the segments confirmed with eRatio.
+# and the annotation with 'kiwi' for segments with confidence and 'kiwi?' for possibles.
 
 SM:
 
@@ -49,6 +64,7 @@ NP Sort out 1 version of code for excel exporting with 1 minute presence/absence
     Add the 1 min workflow (see below)
     #Done the first version - arrange output without changing the detectors
 NP Check manual
+    #Done
 
 BOTH: Decide that v1.0 is ready -- check stability, tidy the segmenters and denoisers options
 # denoisers are done, there are two versions (DOC and ALL)
