@@ -21,6 +21,8 @@ import math
 import numpy as np
 import os, json
 
+# import WaveletSegment
+
 class postProcess:
     """ This class implements few post processing methods to avoid false positives
     """
@@ -29,8 +31,8 @@ class postProcess:
         self.audioData=audioData
         self.sampleRate=sampleRate
         self.detections=detections
-        self.confirmedDetections=np.zeros(len(detections))  # post processed detections
-        self.unsureDetections=np.ones(len(detections))*-1  # need more testing to confirm
+        self.confirmedDetections=[]  # post processed detections
+        self.unsureDetections=[]  # need more testing to confirm
 
     def detectClicks(self,sg=None):
         '''
@@ -74,43 +76,47 @@ class postProcess:
         '''
         # TODO: Check range -- species specific of course!
         # Also recording range specific -- 16KHz will be different -- resample?
-        import WaveletSegment
-        ws = WaveletSegment.WaveletSegment()
-        detected = np.where(self.detections > 0)
-        # print "det",detected
-        if np.shape(detected)[1] > 1:
-            detected = ws.identifySegments(np.squeeze(detected))
-        elif np.shape(detected)[1] == 1:
-            detected = ws.identifySegments(detected)
-        else:
-            detected=[]
+        # import WaveletSegment
+        # ws = WaveletSegment.WaveletSegment()
+        # detected = np.where(self.detections > 0)
+        # # print "det",detected
+        # if np.shape(detected)[1] > 1:
+        #     detected = ws.identifySegments(np.squeeze(detected))
+        # elif np.shape(detected)[1] == 1:
+        #     detected = ws.identifySegments(detected)
+        # else:
+        #     detected=[]
 
         sp = SignalProc.SignalProc(self.audioData, self.sampleRate, 256, 128)
         self.sg = sp.spectrogram(self.audioData)
 
-        f1 = 1500
-        f2 = 4000
-        F1 = f1 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
-        F2 = f2 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
-
-        e = np.sum(self.sg[:,F2:],axis=1)
-        eband = np.sum(self.sg[:,F1:F2],axis=1)
-
-        return eband/e, 1
-        # for seg in detected:
-        #     # e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, :]) /128     # whole frequency range
-        #     # nBand = 128  # number of frequency bands
-        #     e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f2 * 128 / (self.sampleRate / 2):])  # f2:
-        #     nBand = 128 - f2 * 128 / (self.sampleRate / 2)    # number of frequency bands
-        #     e=e/nBand   # per band power
+        # f1 = 1500
+        # f2 = 4000
+        # F1 = f1 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
+        # F2 = f2 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
         #
-        #     eBand = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f1 * 128 / (self.sampleRate / 2):f2 * 128 / (self.sampleRate / 2)]) # f1:f2
-        #     nBand = f2 * 128 / (self.sampleRate / 2) - f1 * 128 / (self.sampleRate / 2)
-        #     eBand = eBand / nBand
-        #     r = eBand/e
+        # e = np.sum(self.sg[:,F2:],axis=1)
+        # eband = np.sum(self.sg[:,F1:F2],axis=1)
+        #
+        # return eband/e, 1
+        f1 = 1100
+        f2 = 4000
+        for seg in self.detections:
+            # e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, :]) /128     # whole frequency range
+            # nBand = 128  # number of frequency bands
+            e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f2 * 128 / (self.sampleRate / 2):])  # f2:
+            nBand = 128 - f2 * 128 / (self.sampleRate / 2)    # number of frequency bands
+            e=e/nBand   # per band power
+
+            eBand = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f1 * 128 / (self.sampleRate / 2):f2 * 128 / (self.sampleRate / 2)]) # f1:f2
+            nBand = f2 * 128 / (self.sampleRate / 2) - f1 * 128 / (self.sampleRate / 2)
+            eBand = eBand / nBand
+            r = eBand/e
             # print seg, r
-            #if r>thr:
-            #    self.confirmedDetections[seg[0]]=1
+            if r>thr:
+                self.confirmedDetections.append(seg)
+            else:
+                self.unsureDetections.append(seg)
 
 class exportSegments:
     """ This class saves the batch detection results(Find Species) and also current annotations (AviaNZ interface)
@@ -120,13 +126,26 @@ class exportSegments:
         TODO: Ask for what species if not specified
         TODO: Add a presence/absence at minute (or 5 minute) resolution
         TODO: Save the annotation files for batch processing
+
+        Inputs
+            segments:   detected segments in form of [[s1,e1], [s2,e2],...]
+            species:    e.g. 'Kiwi'. Default is 'all'
+            startTime:  start time of the recording (in DoC format). Default is 0
+            dirName:    directory name
+            filename:   file name
+            datalength: number of data points in the recording
+            sampleRate: sample rate
+            method:     e.g. 'Wavelets'. Default is 'Default'
+            resolution: output resolution on excel (sheet 3) in seconds. Default is 1
+            trainTest:  is it for training/testing (=True) or real use (=False)
+            withConf:   is it with some level of confidence? e.g. after post-processing (e ratio). Default is 'False'
+            seg_pos:    possible segments are needed apart from the segments when withConf is True. This is just to
+                        generate the annotation including the segments with conf (kiwi) and without confidence (kiwi?).
+
     """
 
-    def __init__(self,annotation=None, species='all', startTime=0, segments=[], dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False):
-        if annotation is None:
-            self.annotation = segments
-        else:
-            self.annotation=annotation
+    def __init__(self,segments=[], species='all', startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[]):
+        self.segments=segments
         self.species=species
         self.startTime=startTime
         self.dirName=dirName
@@ -139,6 +158,8 @@ class exportSegments:
         else:
             self.resolution=resolution
         self.trainTest = trainTest
+        self.withConf=withConf
+        self.seg_pos=seg_pos
 
     def excel(self):
         """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence
@@ -178,8 +199,8 @@ class exportSegments:
             r = ws.max_row + 1
             # Print the filename
             ws.cell(row=r, column=1, value=str(relfname))
-            # Loop over the annotation
-            for seg in self.annotation:
+            # Loop over the segments
+            for seg in self.segments:
                 ws.cell(row=r, column=2, value=str(QTime().addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
                 ws.cell(row=r, column=3, value=str(QTime().addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
                 r += 1
@@ -188,7 +209,7 @@ class exportSegments:
             ws = wb.get_sheet_by_name('Presence Absence')
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value=str(relfname))
-            if self.annotation:
+            if self.segments:
                 ws.cell(row=r, column=2, value='Yes')
             else:
                 ws.cell(row=r, column=2, value='_')
@@ -217,7 +238,10 @@ class exportSegments:
                 c += 1
 
         # method=self.algs.currentText()
-        eFile = self.dirName + '/DetectionSummary_' + self.species + '.xlsx'
+        if self.withConf:
+            eFile = self.dirName + '/DetectionSummary_withConf_' + self.species + '.xlsx'
+        else:
+            eFile = self.dirName + '/DetectionSummary_possible_' + self.species + '.xlsx'
         relfname = os.path.relpath(str(self.filename), str(self.dirName))
         #print eFile, relfname
 
@@ -231,23 +255,24 @@ class exportSegments:
             wb = makeNewWorkbook()
 
         # Now write the data out
-        if self.method == "Wavelets" and self.trainTest == False:
-            detected = np.where(self.annotation > 0)
-            # print "det",detected
-            if np.shape(detected)[1] > 1:
-                self.annotation = self.identifySegments(np.squeeze(detected))
-            elif np.shape(detected)[1] == 1:
-                self.annotation = self.identifySegments(detected)
-            else:
-                self.annotation = []
-            self.mergeSeg()
+
+        # if self.method == "Wavelets": # and self.trainTest == False:
+        #     detected = np.where(self.annotation > 0)
+        #     # print "det",detected
+        #     if np.shape(detected)[1] > 1:
+        #         self.annotation = self.identifySegments(np.squeeze(detected))
+        #     elif np.shape(detected)[1] == 1:
+        #         self.annotation = self.identifySegments(detected)
+        #     else:
+        #         self.annotation = []
+        #     self.mergeSeg()
         writeToExcelp1()
         writeToExcelp2()
 
         # Generate per second binary output
         n = math.ceil(float(self.datalength) / self.sampleRate)
         detected = np.zeros(int(n))
-        for seg in self.annotation:
+        for seg in self.segments:
             for a in range(len(detected)):
                 if math.floor(seg[0]) <= a and a < math.ceil(seg[1]):
                     detected[a] = 1
@@ -256,40 +281,46 @@ class exportSegments:
         # Save the file
         wb.save(str(eFile))
 
-    def mergeSeg(self):
-        # Merge the neighbours, for now wavelet segments
-        indx = []
-        for i in range(len(self.annotation) - 1):
-            print "index:", i
-            print np.shape(self.annotation)
-            print self.annotation
-            if self.annotation[i][1] == self.annotation[i + 1][0]:
-                indx.append(i)
-        indx.reverse()
-        for i in indx:
-            self.annotation[i][1] = self.annotation[i + 1][1]
-            del (self.annotation[i + 1])
-            # return self.annotation
+    # def mergeSeg(self):
+    #     # Merge the neighbours, for now wavelet segments
+    #     indx = []
+    #     for i in range(len(self.annotation) - 1):
+    #         # print "index:", i
+    #         # print np.shape(self.annotation)
+    #         # print self.annotation
+    #         if self.annotation[i][1] == self.annotation[i + 1][0]:
+    #             indx.append(i)
+    #     indx.reverse()
+    #     for i in indx:
+    #         self.annotation[i][1] = self.annotation[i + 1][1]
+    #         del (self.annotation[i + 1])
+    #         # return self.annotation
 
-    def identifySegments(self, seg): #, maxgap=1, minlength=1):
-    # TODO: *** Replace with segmenter.checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0)
-        segments = []
-        # print seg, type(seg)
-        if len(seg)>0:
-            for s in seg:
-                segments.append([s, s+1])
-        return segments
+    # def identifySegments(self, seg): #, maxgap=1, minlength=1):
+    # # TODO: *** Replace with segmenter.checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0)
+    #     segments = []
+    #     # print seg, type(seg)
+    #     if len(seg)>0:
+    #         for s in seg:
+    #             segments.append([s, s+1])
+    #     return segments
 
     def saveAnnotation(self):
         # Save annotations - batch processing
-        if len(self.annotation) > 0:
+        if len(self.segments) > 0 or len(self.seg_pos) > 0:
             annotation = []
             if self.method == "Wavelets":
-                annotation = []
-                for seg in self.annotation:
-                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
+                if self.withConf:
+                    for seg in self.seg_pos:
+                        if seg in self.segments:
+                            annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species])
+                        else:
+                            annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
+                else:
+                    for seg in self.segments:
+                        annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
             else:
-                for seg in self.annotation:
+                for seg in self.segments:
                     annotation.append([float(seg[0]), float(seg[1]), 0, 0, "Don't know"])
 
             if isinstance(self.filename, str):
@@ -562,3 +593,18 @@ def splitFile5mins(self, name):
     data = self.audiodata[(count) * lengthwanted:]
     filename = name[:-4] + '_' + str((count)) + name[-4:]
     lr.output.write_wav(filename,data,self.sampleRate)
+
+    # ###########
+    # #just testing
+    # # fName='Sound Files/Kiwi/test/Tier1/CL78_BIRM_141120_212934'
+    # fName='Sound Files/Kiwi/test/Tier1/BV21_BIRD_141206_234353'
+    # # fName='Sound Files/Kiwi/test/Ponui/kiwi-test2'
+    # ws1=WaveletSegment()
+    # ws1.loadData(fName, trainTest=False)
+    # det = ws1.waveletSegment_test(fName=None, data=ws1.data, sampleRate=ws1.sampleRate, species=ws1.species,
+    #                                          trainTest=False)
+    # # det = np.ones(900)
+    # if sum(det)>0:
+    #     post=postProcess(ws1.data, ws1.sampleRate, det)
+    #     # post.detectClicks()
+    #     post.eRatioConfd()
