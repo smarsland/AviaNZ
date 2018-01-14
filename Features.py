@@ -4,6 +4,9 @@
 import numpy as np
 import librosa
 import SignalProc
+import SupportClasses
+import wavio
+
 
 # TODO:
 # First thing is to get my head around everything that is going on, which is:
@@ -109,7 +112,7 @@ class Features:
         self.sg = sp.spectrogram(data, multitaper=False,window_width=self.window_width,incr=self.incr,window='Ones')
 
     def get_mfcc(self):
-        # Use librosa to get the MFCC coefficients. These seem to have a window of 512, not changeable
+        # Use librosa to get the MFCC coefficients. These seem to have a window of 512, not changeable (NP: can change it, n_fft=2048, hop_length=512)
         mfcc = librosa.feature.mfcc(self.data, self.sampleRate)
 
         # Normalise
@@ -309,9 +312,9 @@ def testFeatures():
     # DCT
 
 
-def mfcc():
-    import dtw
-    import editdistance
+def mfcc(y1,y2,y3,sr1,sr2,sr3,yTest,srTest):
+    # import dtw
+    # import editdistance
 
     # Convert the data to mfcc:
     mfcc1 = librosa.feature.mfcc(y1, sr1,n_mfcc=20)
@@ -338,10 +341,11 @@ def mfcc():
 
     for i in range(len(dists)):
         mfcci = mfccTest[:, i:i + window_size]
-        dist1i = dtw(mfcc1.T, mfcci.T, dist=lambda x, y: np.exp(np.linalg.norm(x - y, ord=1)))[0]
-        dist2i = dtw(mfcc2.T, mfcci.T, dist=lambda x, y: np.exp(np.linalg.norm(x - y, ord=1)))[0]
-        dist3i = dtw(mfcc3.T, mfcci.T, dist=lambda x, y: np.exp(np.linalg.norm(x - y, ord=1)))[0]
+        dist1i = librosa.dtw(mfcc1.T, mfcci.T, dist=lambda x, y: np.exp(np.linalg.norm(x - y, ord=1)))[0]
+        dist2i = librosa.dtw(mfcc2.T, mfcci.T, dist=lambda x, y: np.exp(np.linalg.norm(x - y, ord=1)))[0]
+        dist3i = librosa.dtw(mfcc3.T, mfcci.T, dist=lambda x, y: np.exp(np.linalg.norm(x - y, ord=1)))[0]
         dists[i] = (dist1i + dist2i + dist3i) / 3
+    import matplotlib.pyplot as plt
     plt.plot(dists)
 
     # select minimum distance window
@@ -353,6 +357,40 @@ def mfcc():
 
     word = yTest[word_samp_bounds[0]:word_samp_bounds[1]]
 
+def mfcc_dtw(y, sr,yTest,srTest):
+    # Convert the data to mfcc:
+    mfcc = librosa.feature.mfcc(y, sr, n_mfcc=24,n_fft=2048, hop_length=512) # n_fft=10240, hop_length=2560
+    mfccTest = librosa.feature.mfcc(yTest, srTest, n_mfcc=24, n_fft=2048, hop_length=512)
+    # get delta mfccs
+    mfcc_delta=librosa.feature.delta(mfcc)
+    mfccTest_delta=librosa.feature.delta(mfccTest)
+    # then merge
+    mfcc=np.concatenate((mfcc,mfcc_delta),axis=0)
+    mfccTest = np.concatenate((mfccTest, mfccTest_delta), axis=0)
+
+    # mfcc = mfcc1.mean(1)
+    # mfccTest = mfccTest.mean(1)
+
+    # Remove mean and normalize each column of MFCC
+    import copy
+    def preprocess_mfcc(mfcc):
+        mfcc_cp = copy.deepcopy(mfcc)
+        for i in xrange(mfcc.shape[1]):
+            mfcc_cp[:, i] = mfcc[:, i] - np.mean(mfcc[:, i])
+            mfcc_cp[:, i] = mfcc_cp[:, i] / np.max(np.abs(mfcc_cp[:, i]))
+        return mfcc_cp
+
+    mfcc = preprocess_mfcc(mfcc)
+    mfccTest = preprocess_mfcc(mfccTest)
+
+    #average MFCC over all frames
+    mfcc=mfcc.mean(1)
+    mfccTest=mfccTest.mean(1)
+
+    #Calculate the distances from the test signal
+    d, wp = librosa.dtw(mfccTest, mfcc, metric='euclidean')
+
+    return d[d.shape[0] - 1][d.shape[1] - 1]
 
 #def filters():
     # dct, mel, chroma, constant_q
@@ -387,3 +425,51 @@ def lcsDistanceMatrix(s0, s1):
             else:
                 distMatrix[i+1][j+1] = max(distMatrix[i][j+1], distMatrix[i+1][j])
     return distMatrix
+
+#--- testig
+def loadFile(filename):
+    wavobj = wavio.read(filename)
+    sampleRate = wavobj.rate
+    audiodata = wavobj.data
+
+    # None of the following should be necessary for librosa
+    if audiodata.dtype is not 'float':
+        audiodata = audiodata.astype('float') #/ 32768.0
+    if np.shape(np.shape(audiodata))[0]>1:
+        audiodata = audiodata[:,0]
+
+    # if sampleRate != 16000:
+    #     audiodata = librosa.core.audio.resample(audiodata, sampleRate, 16000)
+    #     sampleRate=16000
+
+    # pre-process
+    sc = SupportClasses.preProcess(audioData=audiodata, sampleRate=sampleRate, species='Kiwi', df=False)
+    audiodata,sampleRate = sc.denoise_filter()
+    return audiodata,sampleRate
+
+#####
+yTest,srTest=loadFile('Sound Files/dtw_mfcc/kiwifemale/bf10.wav')
+
+def isKiwi_dtw_mfcc(dirName, yTest, srTest):
+    '''
+    given the set of kiwi templates (folder) and the test file
+    :return: a binary value (kiwi or not)
+    '''
+    import os
+    dList=[]
+    for root, dirs, files in os.walk(str(dirName)):
+        for filename in files:
+            if filename.endswith('.wav'):
+                filename = root + '/' + filename #[:-4]
+                y, sr = loadFile(filename)
+                d = mfcc_dtw(y=y, sr=sr, yTest=yTest, srTest=srTest)
+                print filename, d
+                dList.append(d)
+    if sorted(dList)[1]<0.2:
+        print 'it is KIWI',sorted(dList)[1]
+    else:
+        print 'it is NOT kiwi', sorted(dList)[1]
+    return dList
+
+dList=isKiwi_dtw_mfcc("Sound Files/dtw_mfcc/kiwimale", yTest,srTest)
+#print dList
