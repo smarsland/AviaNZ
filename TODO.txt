@@ -22,12 +22,28 @@ AvianZ seems to be stable now! Just minor things
         Ask if you want to save it, then put it in the params file?
 
     Bug to fix: the very first annotation gets lost.
-
-    Added a sub menu item 'Save selected sound': useful to extract interesting sounds from long recordings (this stops me going back to Praat)
-    Exaluation - GT is in .txt form now (no need to have them as .xlsx)
+    #done
+    annotations lost after changing interface settings.
+    #done, update the overview
+    Add a sub menu item 'Save selected sound': useful to extract interesting sounds from long recordings (this stops me going back to Praat)
+    #done
+    Change spectrogram parameters is not working smooth
+        -   if someone changes window length and hop they assume it is saved (when you open a new file changes are gone), so let it remember?
+        -   low and high frequency is the same, in addition it is ugly!
+    GT format - need GT is in .txt format (no need to have them as .xlsx) then update the code
+    #done
+    Time axis is wrong when file name has more text in the begining e.g. SM recordings
+    #done
 
 Look into MFCC as a way to do template matching. Plus some others, but start there.
 So for each segment identified by the wavelets, compute the coefficients, and plot them for now :)
+# done some experiments with Ponui dataset and Tier1. MFCC + DTW could manage Ponui data but not good for Tier1, might need more examples
+Training data
+    -   needs to be less noisy and not overlapped with other species.
+    -   how long the examples should be? complete call or individual syllbles?
+    -   I choose syllables, then the problem was test sounds (AviaNZ detections) are usually complete calls/more than one syllables.
+        length/#syllables in test and templates matter, so I got the average MFCC over all frames.
+    -   how many MFCCs? tested with 12, 20, 48. 12 with delta was better.
 
 NP:
 Introduce confidence using energy ratio after detection
@@ -37,6 +53,8 @@ Introduce confidence using energy ratio after detection
         (1) 'Possible': includes all the segments that turned out to be kiwi
         (2) 'withCofidence':  includes only the segments confirmed with eRatio.
 # and the annotation with 'kiwi' for segments with confidence and 'kiwi?' for possibles.
+# Phase 1 (wavelet detection) of Tier1 data processing is completing on 15th Jan 2018. Started on 30th Oct, done mostly
+  between 3 machines (plus 6 from the undergrad lab for 1 week). Tried Azure but wan't easy and had to gave it up (needs data to be uploaded).
 
 SM:
 

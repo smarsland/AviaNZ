@@ -99,7 +99,7 @@ class WaveletSegment:
         else:
             print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%0.2f" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB)
         #print TP, int(T), int(P), recall, precision, ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
-        return fB,recall
+        return fB,recall, TP,P-TP,len(annotation)-(P+T-TP), T-TP    # fB, recall, TP, FP, TN, FN
 
     def compute_r(self,annotation,waveletCoefs,nNodes=20):
         """ Computes the point-biserial correlations for a set of labels and a set of wavelet coefficients.
@@ -230,13 +230,15 @@ class WaveletSegment:
     def detectCalls(self,wp,sampleRate, listnodes=[], species='Kiwi',trainTest=False,thr=0):
         #for test recordings given the set of nodes
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
-
+        import math
         if sampleRate==0:
             sampleRate=self.sampleRate
 
         if thr==0:
             if species.title() == 'Sipo':
                 thr = 0.25
+            elif species.title() == 'Bittern':
+                thr=0.75
             else:
                 # thr = 1.0
                 thr = 0.25
@@ -261,6 +263,8 @@ class WaveletSegment:
             # Compute the number of samples in a window -- species specific
             if species.title()=='Sipo':
                 M = int(0.2 * sampleRate / 2.0)
+            elif species.title()=='Bittern':
+                M = int(0.2 * sampleRate / 2.0)
             else:
                 M = int(0.8*sampleRate/2.0)
             #print M
@@ -280,6 +284,8 @@ class WaveletSegment:
             # elif thrLevel == 5:
             #     threshold = np.mean(C) + np.std(C) * thr/4
             threshold = np.mean(C) + np.std(C) * thr
+            # if species.title() == 'Bittern':
+            #     threshold = 0.3936 + 0.1829 * (math.log(len(C),10) / math.log(2,10));
 
             # bittern
             # TODO: test
@@ -295,8 +301,8 @@ class WaveletSegment:
             count += 1
 
         detected= np.max(detected,axis=1)
-        detected[0]=0       # to avoid two FPs usually occur at the start and end of the recording
-        detected[-1]=0
+        # detected[0]=0       # to avoid two FPs usually occur at the start and end of the recording
+        # detected[-1]=0
         return detected
         # if trainTest==True:
         #     return detected
@@ -389,12 +395,12 @@ class WaveletSegment:
 
         return filteredDenoisedData
 
-    def waveletSegment_train(self,fName, species='Kiwi'):
-        # *** was findCalls_train
+    def waveletSegment_train(self,fName, species='Kiwi', df=False):
+        # Let df=true (denoise during preprocess) for bittern, df=false for others
         # Load data and annotation
         self.loadData(fName)
 
-        filteredDenoisedData = self.preprocess(species)
+        filteredDenoisedData = self.preprocess(species,df=df)    # skip denoising
         waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
 
         # Compute point-biserial correlations and sort wrt it, return top nNodes
@@ -427,7 +433,7 @@ class WaveletSegment:
 
             # update the detections
             detections = np.maximum.reduce([detected, detected_c])
-            fB,recall = self.fBetaScore(self.annotation, detections)
+            fB,recall,tp,fp,tn,fn = self.fBetaScore(self.annotation, detections)
             if fB > bestBetaScore:
                 bestBetaScore = fB
                 bestRecall=recall
@@ -440,8 +446,7 @@ class WaveletSegment:
         # TODO: json.dump('species.data', open('species.data', 'wb'))
         return listnodes
 
-    def waveletSegment_test(self,fName=None, data=None, sampleRate=None, listnodes = None, species='Kiwi', trainTest=False):
-        # Was findCalls_test
+    def waveletSegment_test(self,fName=None, data=None, sampleRate=None, listnodes = None, species='Kiwi', trainTest=False, df=False):
         # Load the relevant list of nodes
         # TODO: Put these into a file along with other relevant parameters (frequency, length, etc.)
         if listnodes is None:
@@ -455,7 +460,7 @@ class WaveletSegment:
             elif species.title() == 'Sipo':
                 nodes = [61, 59, 54, 51, 60, 58, 49, 47]
             elif species.title() == 'Bittern':
-                nodes = [8,10,21,22,43,44,45,46] # TODO: check this
+                nodes = [10,21,22,43,44,45,46] # TODO: check this
         else:
             nodes = listnodes
 
@@ -465,7 +470,7 @@ class WaveletSegment:
             self.data = data
             self.sampleRate = sampleRate
 
-        filteredDenoisedData = self.preprocess(species)
+        filteredDenoisedData = self.preprocess(species,df=df)
 
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
 
@@ -475,7 +480,7 @@ class WaveletSegment:
 
         if trainTest == True:
             # print fName
-            self.fBetaScore(self.annotation, detected)
+            fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
 
         # merge neighbours in order to convert the detections into segments
         detected = np.where(detected > 0)
@@ -488,7 +493,11 @@ class WaveletSegment:
         else:
             detected = []
         detected = self.mergeSeg(detected)
-        return detected
+
+        if trainTest==True:
+            return detected, TP, FP, TN, FN
+        else:
+            return detected
 
     def mergeSeg(self,detected):
         # Merge the neighbours, for now wavelet segments
@@ -506,8 +515,11 @@ class WaveletSegment:
         # Load data
         filename = fName+'.wav' #'train/kiwi/train1.wav'
         filenameAnnotation = fName+'-sec.txt'#'train/kiwi/train1-sec.xlsx'
-
-        wavobj = wavio.read(filename)
+        try:
+            wavobj = wavio.read(filename)
+        except:
+            print "unsupported file: ", filename
+            pass
         self.sampleRate = wavobj.rate
         self.data = wavobj.data
         if self.data.dtype is not 'float':
@@ -528,23 +540,45 @@ class WaveletSegment:
                 self.annotation[count]=d[row][1]
                 count += 1
 
-def batch(dirName,ws,listnodes,train=False):
+def batch(dirName,species,ws,listnodes,train=False,df=False):
     import os
+    nodeList=[]
+    TP=FP=TN=FN=0
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
             if filename.endswith('.wav'):
                 filename = root + '/' + filename[:-4]
                 if not train:
-                    dummy = ws.waveletSegment_test(filename, listnodes=listnodes, trainTest=True)
+                    print "***", filename
+                    det, tp, fp, tn, fn = ws.waveletSegment_test(filename, listnodes=listnodes, species=species, trainTest=True,df=df)
+                    TP+=tp
+                    FP+=fp
+                    TN+=tn
+                    FN+=fn
                 else:
                     print "***", filename
-                    nodes = ws.waveletSegment_train(filename)
+                    nodes = ws.waveletSegment_train(filename, species=species,df=df)
                     print nodes
+                    nodeList=np.union1d(nodeList, nodes)
+    if train:
+        print '----- wavelet nodes for the species', nodeList
+    else:
+        print "-----TP   FP  TN  FN"
+        print TP, FP, TN, FN
 
 ws=WaveletSegment(wavelet='dmey')
 # batch('Sound Files/test/test', ws, None)
 #train bittern
-# batch('Sound Files/Bittern/train-Hatuma',None,train=True)
+# batch('Sound Files/Bittern/thesis-Hatuma/train','Bittern',ws,listnodes=None,train=True)
+# bittern_nodes=[41,43,44,45,46]
+# bittern_nodes=[4, 21,43, 44, 45, 46]
+bittern_nodes=[10,39, 40, 41, 42, 43, 44, 45, 46]
+# batch('E:/AviaNZ/Sound Files/Bittern/kessel/KA13_Oct 17-24_down','Bittern',ws,listnodes=bittern_nodes,train=False,df=True)
+# batch('E:/Employ/Halema/Survey2/Card 1/newTrain','Kiwi',ws,listnodes=None,train=True,df=False)
+# batch('E:/Employ/Halema/Survey2/Card 1/newTrain','Kiwi',ws,listnodes=None,train=False,df=False)
+
+# detect(dirName='E:/Employ/Halema/Survey2/Card 1/rerun', trainTest=False, species='Kiwi')
+
 
 ## Testing e-ratio
 # ws=WaveletSegment(wavelet='dmey')

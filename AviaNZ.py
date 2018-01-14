@@ -236,7 +236,7 @@ class AviaNZ(QMainWindow):
 
         self.fillFileList(firstFile)
         self.listLoadFile(QString(firstFile))
-        #self.previousFile = firstFile
+        self.previousFile = firstFile
 
         if self.DOC:
             self.setOperatorReviewerDialog()
@@ -767,7 +767,7 @@ class AviaNZ(QMainWindow):
             escape to pause playback """
         if ev.key() == Qt.Key_Backspace:
             self.deleteSegment()
-        elif ev.key()==Qt.Key_Escape:
+        elif ev.key() == Qt.Key_Escape:
             if self.media_obj.state() != phonon.Phonon.PausedState or self.media_obj.state() != phonon.Phonon.StoppedState:
                 self.media_obj.pause()
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
@@ -986,7 +986,8 @@ class AviaNZ(QMainWindow):
                 # Check if the filename is in standard DOC format
                 # Which is xxxxxx_xxxxxx.wav or ccxx_cccc_xxxxxx_xxxxxx.wav (c=char, x=0-9), could have _ afterward
                 # So this checks for the 6 ints _ 6 ints part anywhere in string
-                DOCRecording = re.search('(\d{6})_(\d{6})',name)
+                print name
+                DOCRecording = re.search('(\d{6})_(\d{6})',name[-17:-4])
 
                 if DOCRecording:
                     self.startTime = DOCRecording.group(2)
@@ -3242,6 +3243,9 @@ class AviaNZ(QMainWindow):
     def changeSettings(self):
         """ Create the parameter tree when the Interface settings menu is pressed.
         """
+        # first save the annotations
+        # self.saveSegments()
+
         birdList = [str(item) for item in self.config['BirdList']]
         bl = ""
         for i in range(len(birdList)):
@@ -3315,6 +3319,9 @@ class AviaNZ(QMainWindow):
     def changeParams(self,param, changes):
         """ Update the config and the interface if anything changes in the tree
         """
+        # first save the annotations
+        self.saveSegments()
+
         for param, change, data in changes:
             path = self.p.childPath(param)
             if path is not None:
@@ -3384,11 +3391,10 @@ class AviaNZ(QMainWindow):
                 self.reviewer = data
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
-
-        # Reload the file to make these changes take effect
-        #self.resetStorageArrays()
-        # Reset the media player
-        #if self.media_obj.state() == phonon.Phonon.PlayingState:
+        # # Reload the file to make these changes take effect
+        # self.resetStorageArrays()
+        # # Reset the media player
+        # if self.media_obj.state() == phonon.Phonon.PlayingState:
         #    self.media_obj.pause()
         #    self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
 
@@ -3397,9 +3403,8 @@ class AviaNZ(QMainWindow):
         while self.filename[i] != '/' and i>0:
             i = i-1
         #print self.filename[i:], type(self.filename)
-        self.listLoadFile(self.filename[i+1:])
-
-        #******self.loadFile(self.filename)
+        # self.listLoadFile(self.filename[i+1:])
+        self.loadFile(self.filename[i+1:])
 
 # ============
 # Various actions: deleting segments, saving, quitting
@@ -3495,6 +3500,16 @@ class AviaNZ(QMainWindow):
         Name of the file is the name of the wave file + .data"""
         if len(self.segments)>0 or self.hasSegments:
             print("Saving segments to "+self.filename)
+            # TODO: add operator/reviewer details?
+            if len(self.segments) > 0:
+                if self.segments[0][0] > -1:
+                    self.segments.insert(0,
+                                         [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+                                          self.reviewer, -1])
+            else:
+                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+                                         self.reviewer, -1])
+
             if isinstance(self.filename, str):
                 file = open(self.filename + '.data', 'w')
             else:
@@ -3525,7 +3540,7 @@ class AviaNZ(QMainWindow):
 # Start the application
 app = QApplication(sys.argv)
 
-DOC=False    # DOC features or all
+DOC=False    # only DOC features or all
 
 # This screen asks what you want to do, then processes the response
 first = Dialogs.StartScreen(DOC=DOC)

@@ -16,12 +16,92 @@ from openpyxl.styles import Font, Color
 
 from scipy.signal import medfilt
 import SignalProc
+import WaveletFunctions
+
+import librosa
 
 import math
 import numpy as np
 import os, json
 
+import pywt
+
 # import WaveletSegment
+
+class preProcess:
+    """ This class implements few pre processing methods to avoid noise
+    """
+    # todo: remove duplicate preprocess in 'Wavelet Segments'
+
+    def __init__(self,audioData=None, sampleRate=0, species='Kiwi', df=False, wavelet='dmey2'):
+        self.audioData=audioData
+        self.sampleRate=sampleRate
+        self.species=species
+        self.df=df
+        if wavelet == 'dmey2':
+            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
+            self.wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
+            self.wavelet.orthogonal=True
+        else:
+            self.wavelet = wavelet
+        self.sp = SignalProc.SignalProc([], 0, 256, 128)
+        self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet=self.wavelet, maxLevel=20)
+
+    def denoise_filter(self):
+        # set df=True to perform both denoise and filter
+        # df=False to skip denoise
+        if self.species == 'Kiwi':
+            f1 = 1100
+            f2 = 7000
+            fs = 16000
+        elif self.species == 'Ruru':
+            f1 = 500
+            f2 = 7000
+            fs = 16000
+        elif self.species == 'Bittern':
+            f1 = 100
+            f2 = 200
+            fs = 1000
+        elif self.species == 'Sipo':
+            f1 = 1200
+            f2 = 3800
+            fs = 8000
+        else:
+            fs = 16000
+
+        if self.sampleRate != fs:
+            self.audioData = librosa.core.audio.resample(self.audioData, self.sampleRate, fs)
+            self.sampleRate = fs
+
+        # Get the five level wavelet decomposition
+        if self.df == True:
+            denoisedData = self.WaveletFunctions.waveletDenoise(self.audioData, thresholdType='soft', wavelet=self.wavelet,maxLevel=5)
+        else:
+            denoisedData=self.audioData  # this is to avoid washing out very fade calls during the denoising
+
+        # # Denoise each 10 secs and merge
+        # denoisedData = []
+        # n = len(self.data)
+        # dLen=10*self.sampleRate
+        # for i in range(0,n,dLen):
+        #     temp = self.WaveletFunctions.waveletDenoise(self.data[i:i+dLen], thresholdType='soft', wavelet=self.WaveletFunctions.wavelet,maxLevel=5)
+        #     denoisedData.append(temp)
+        # import itertools
+        # denoisedData = list(itertools.chain(*denoisedData))
+        # denoisedData = np.asarray(denoisedData)
+        # wavio.write('../Sound Files/Kiwi/test/Tier1/test/test/test/test_whole.wav', denoisedData, self.sampleRate, sampwidth=2)
+        # librosa.output.write_wav('Sound Files/Kiwi/test/Tier1/test/test/test', denoisedData, self.sampleRate, norm=False)
+
+        if self.species in ['Kiwi', 'Ruru', 'Bittern', 'Sipo']:
+            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=f2)
+        # elif species == 'Ruru':
+        #     filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=7000)
+        # elif species == 'Sipo':
+        #     filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=1200, high=3800)
+        # else:
+        #     print species
+
+        return filteredDenoisedData, self.sampleRate
 
 class postProcess:
     """ This class implements few post processing methods to avoid false positives
