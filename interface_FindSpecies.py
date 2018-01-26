@@ -102,12 +102,12 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         if not self.DOC:
             self.d_denoise = Dock("Denoising", size=(350, 100))
             self.area.addDock(self.d_denoise, 'right')
-            self.w_denoiseButton = QPushButton("&Denoise (d+f)")
+            self.w_denoiseButton = QPushButton("&Wavelet Denoise (d+f)")
             self.connect(self.w_denoiseButton, SIGNAL('clicked()'), self.denoise_df)
             self.d_denoise.addWidget(self.w_denoiseButton,row=12,col=2)
             #self.w_denoiseButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
 
-            self.w_filterButton = QPushButton("&Denoise (f)")
+            self.w_filterButton = QPushButton("&Filter (f)")
             self.connect(self.w_filterButton, SIGNAL('clicked()'), self.denoise_f)
             self.d_denoise.addWidget(self.w_filterButton, row=13, col=2)
 
@@ -165,7 +165,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         else:
             self.w_dir2.setPlainText(self.dirName)
 
-    def detect(self):
+    def detect(self, minLen=5):
         with pg.BusyCursor():
             if self.dirName:
                 # self.statusLeft.setText("Processing...")
@@ -200,59 +200,63 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                             else:
                                 sTime=0
 
-                        if DOCRecording and self.species in ['Kiwi', 'Ruru'] and not Night:
-                            continue
-                        else:
-                            # if not os.path.isfile(root+'/'+filename+'.data'): # if already processed then skip?
-                            #     continue
-                            cnt=cnt+1
-                            # self.statusRight.setText("Processing file " + str(cnt) + "/" + str(total))
-                            self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
-                            self.filename=root+'/'+filename
-                            self.loadFile()
-                            # self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
-                            # print self.algs.itemText(self.algs.currentIndex())
-                            # if self.algs.currentText() == "Amplitude":
-                            #     newSegments = self.seg.segmentByAmplitude(float(str(self.ampThr.text())))
-                            # elif self.algs.currentText() == "Median Clipping":
-                            #     newSegments = self.seg.medianClip(float(str(self.medThr.text())))
-                            #     #print newSegments
-                            # elif self.algs.currentText() == "Harma":
-                            #     newSegments = self.seg.Harma(float(str(self.HarmaThr1.text())),float(str(self.HarmaThr2.text())))
-                            # elif self.algs.currentText() == "Power":
-                            #     newSegments = self.seg.segmentByPower(float(str(self.PowerThr.text())))
-                            # elif self.algs.currentText() == "Onsets":
-                            #     newSegments = self.seg.onsets()
-                            #     #print newSegments
-                            # elif self.algs.currentText() == "Fundamental Frequency":
-                            #     newSegments, pitch, times = self.seg.yin(int(str(self.Fundminfreq.text())),int(str(self.Fundminperiods.text())),float(str(self.Fundthr.text())),int(str(self.Fundwindow.text())),returnSegs=True)
-                            #     print newSegments
-                            # elif self.algs.currentText() == "FIR":
-                            #     print float(str(self.FIRThr1.text()))
-                            #     # newSegments = self.seg.segmentByFIR(0.1)
-                            #     newSegments = self.seg.segmentByFIR(float(str(self.FIRThr1.text())))
-                            #     # print newSegments
-                            # elif self.algs.currentText()=='Wavelets':
-                            if self.species!='all':
-                                self.method = "Wavelets"
-                                ws = WaveletSegment.WaveletSegment(species=self.species)
-                                newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
-                                print "in batch", newSegments
+                            if DOCRecording and self.species in ['Kiwi', 'Ruru'] and not Night:
+                                continue
                             else:
-                                self.method = "Default"
-                                self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
-                                newSegments=self.seg.bestSegments()
-                                # print newSegments
+                                # if not os.path.isfile(root+'/'+filename+'.data'): # if already processed then skip?
+                                #     continue
+                                cnt=cnt+1
+                                # self.statusRight.setText("Processing file " + str(cnt) + "/" + str(total))
+                                self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
+                                self.filename=root+'/'+filename
+                                self.loadFile()
+                                # self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
+                                # print self.algs.itemText(self.algs.currentIndex())
+                                # if self.algs.currentText() == "Amplitude":
+                                #     newSegments = self.seg.segmentByAmplitude(float(str(self.ampThr.text())))
+                                # elif self.algs.currentText() == "Median Clipping":
+                                #     newSegments = self.seg.medianClip(float(str(self.medThr.text())))
+                                #     #print newSegments
+                                # elif self.algs.currentText() == "Harma":
+                                #     newSegments = self.seg.Harma(float(str(self.HarmaThr1.text())),float(str(self.HarmaThr2.text())))
+                                # elif self.algs.currentText() == "Power":
+                                #     newSegments = self.seg.segmentByPower(float(str(self.PowerThr.text())))
+                                # elif self.algs.currentText() == "Onsets":
+                                #     newSegments = self.seg.onsets()
+                                #     #print newSegments
+                                # elif self.algs.currentText() == "Fundamental Frequency":
+                                #     newSegments, pitch, times = self.seg.yin(int(str(self.Fundminfreq.text())),int(str(self.Fundminperiods.text())),float(str(self.Fundthr.text())),int(str(self.Fundwindow.text())),returnSegs=True)
+                                #     print newSegments
+                                # elif self.algs.currentText() == "FIR":
+                                #     print float(str(self.FIRThr1.text()))
+                                #     # newSegments = self.seg.segmentByFIR(0.1)
+                                #     newSegments = self.seg.segmentByFIR(float(str(self.FIRThr1.text())))
+                                #     # print newSegments
+                                # elif self.algs.currentText()=='Wavelets':
+                                if self.species!='all':
+                                    self.method = "Wavelets"
+                                    ws = WaveletSegment.WaveletSegment(species=self.species)
+                                    newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
+                                    print "in batch", newSegments
+                                else:
+                                    self.method = "Default"
+                                    self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
+                                    newSegments=self.seg.bestSegments()
+                                    # print newSegments
 
-                            # Find clicks and remove them
-
-                            # Save the excel file
-                            out = SupportClasses.exportSegments(segments=newSegments, species=self.species, startTime=sTime,
-                                                                dirName=self.dirName, filename=self.filename,
-                                                                datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
-                            out.excel()
-                            # Save the annotation
-                            out.saveAnnotation()
+                                # Postprocess to remove FPs
+                                # delete short segments
+                                postProc = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, species=self.species)
+                                postProc.deleteShort()
+                                # postProc.deleteWindRain(windTest=True, rainTest=False, T_ERatio=1.5)
+                                # print "after postProc", postProc.segmentstoCheck
+                                # Save the excel file
+                                out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=postProc.confirmedSegments, segmentstoCheck=postProc.segmentstoCheck, species=self.species, startTime=sTime,
+                                                                    dirName=self.dirName, filename=self.filename,
+                                                                    datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
+                                out.excel()
+                                # Save the annotation
+                                out.saveAnnotation()
                 # self.statusLeft.setText("Ready")
                 self.statusBar().showMessage("Processed files " + str(cnt) + "/" + str(total))
             else:

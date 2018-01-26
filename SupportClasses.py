@@ -14,6 +14,7 @@ from openpyxl import load_workbook, Workbook
 from openpyxl.styles import colors
 from openpyxl.styles import Font, Color
 
+from scipy import signal
 from scipy.signal import medfilt
 import SignalProc
 import WaveletFunctions
@@ -94,6 +95,7 @@ class preProcess:
 
         if self.species in ['Kiwi', 'Ruru', 'Bittern', 'Sipo']:
             filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=f2)
+            # filteredDenoisedData = self.sp.bandpassFilter(denoisedData, start=f1, end=f2, sampleRate=self.sampleRate)
         # elif species == 'Ruru':
         #     filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=7000)
         # elif species == 'Sipo':
@@ -105,14 +107,182 @@ class preProcess:
 
 class postProcess:
     """ This class implements few post processing methods to avoid false positives
+
+    segments:   detected segments in form of [[s1,e1], [s2,e2],...]
+    species:    species to consider
+    minLen:     minimum length for the species # min length for kiwi is 5 secs
     """
 
-    def __init__(self,audioData=None, sampleRate=0, detections=[]):
-        self.audioData=audioData
-        self.sampleRate=sampleRate
-        self.detections=detections
-        self.confirmedDetections=[]  # post processed detections
-        self.unsureDetections=[]  # need more testing to confirm
+    def __init__(self,audioData=None, sampleRate=0, segments=[], species='Kiwi', minLen=0):
+        self.audioData = audioData
+        self.sampleRate = sampleRate
+        self.segments = segments
+        self.species = species
+        self.minLen = minLen
+        if self.minLen == 0 and self.species =='Kiwi':
+            self.minLen = 5
+        self.confirmedSegments = []  # post processed detections with confidence TP
+        self.segmentstoCheck = []  # need more testing to confirm
+
+    def deleteShort(self):
+        """
+        This will delete segments < minLen-2 secs
+                 add segments >=minLen-2 but <minLen to segmentstoCheck
+                 add segments >minLen to segmentstoCheck (still need further testing)
+        """
+        import copy
+        newSegments = copy.deepcopy(self.segments)
+        for seg in self.segments:
+            if seg[0] == -1:
+                self.confirmedSegments.append(seg)
+                self.segmentstoCheck.append(seg)
+                newSegments.append(seg)
+            elif seg[1] - seg[0] < self.minLen:
+                if seg[1] - seg[0] >= self.minLen-2:
+                    self.segmentstoCheck.append(seg)
+                    newSegments.append(seg)
+                else:
+                    continue
+            else:
+                self.segmentstoCheck.append(seg)
+                newSegments.append(seg)
+        self.segments = newSegments
+
+    def deleteWindRain(self, windTest=True, rainTest=False, Tmean_wind = 1e-9, T_ERatio=2.5):
+        """
+        delete wind/rain corrupted segments (targeting moderate wind and above) if no sign of kiwi (check the kiwi freq.)
+        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
+        """
+        # Todo: find thrs
+        import copy
+        Tmean_rain = 1e-8  # Mean threshold
+        Tsnr_rain = 10  # SNR threshold
+
+        # Tmean_wind = 1e-9  # Mean threshold
+        # Tsnr_wind = 0.5     # SNR threshold
+
+        newSegmentstoCheck = []
+        newSegmentstoCheck = copy.deepcopy(self.segmentstoCheck)
+
+        for seg in self.segmentstoCheck:
+            if seg[0] == -1:
+                continue
+            else:
+                # read the sound segment and check for wind
+                # secs = seg[1] - seg[0]
+                # wavobj = wavio.read(file[:-5], nseconds=secs, offset=seg[0])
+                # sampleRate = wavobj.rate
+                data =  self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate]
+                if data is not 'float':
+                    data = data / 32768.0
+                data = data[:].squeeze()
+
+                wind_lower = 2.0 * 100 / self.sampleRate
+                wind_upper = 2.0 * 250 / self.sampleRate
+                rain_lower = 2.0 * 600 / self.sampleRate
+                rain_upper = 2.0 * 1200 / self.sampleRate
+
+                f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
+
+                if windTest:
+                    limite_inf = int(round(len(p) * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in
+                    # normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
+                    limite_sup = int(round(len(p) * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in
+                    # normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
+                    a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
+
+                    mean_a_wind = np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
+                    std_a_wind = np.std(a_wind)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
+
+                    # c_wind = mean_a_wind / std_a_wind  # signal to noise ratio of the analysed recording. step 3 in Algorithm 2.1
+                    #
+                    # meanPSD_wind.append(mean_a_wind)
+                    # snrPSD_wind.append(c_wind)
+
+                    if mean_a_wind > Tmean_wind:
+                        # check if it is not kiwi
+                        potentialCall = self.eRatioConfd(seg, thr=T_ERatio)
+                        if not potentialCall:
+                            newSegmentstoCheck.remove(seg)
+                            print "wind ", mean_a_wind
+
+                if rainTest:
+                    limite_inf = int(round(len(p) * rain_lower))  # minimum frequency of the rainfall frequency band 0.0272 (in
+                    # normalized frequency); in Hz=0.0272*(44100/2)=599.8  Hz
+                    limite_sup = int(round(len(p) * rain_upper))  # maximum frequency of the rainfall frequency band 0.0544 (in
+                    # normalized frequency); in Hz=0.0544*(44100/2)=1199.5 Hz
+                    a_rain = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
+
+                    mean_a_rain = np.mean(a_rain)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
+                    std_a_rain = np.std(a_rain)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
+
+                    c_rain = mean_a_rain / std_a_rain  # signal to noise ratio of the analysed recording. step 3 in Algorithm 2.1
+
+                    # meanPSD_rain.append(mean_a_rain)
+                    # snrPSD_rain.append(c_rain)
+
+                    if mean_a_rain > Tmean_rain and c_rain > Tsnr_rain:
+                        newSegmentstoCheck.remove(seg)
+                        # rainy.append(mean_a_rain)
+        self.segmentstoCheck = newSegmentstoCheck
+
+    def eRatioConfd(self, seg, thr=2.5):
+        '''
+        This is a post processor to introduce some confidence level
+        high ratio --> classes 1-3 'good' calls
+        low ratio --> classes 4-5 'weak' calls
+        ratio = energy in band/energy above the band
+        The problem with this simple classifier is that the ratio is relatively low when the
+        calls are having most of the harmonics (close range)
+        Mostly works
+        '''
+        # TODO: Check range -- species specific of course!
+        # Also recording range specific -- 16KHz will be different -- resample?
+        # import WaveletSegment
+        # ws = WaveletSegment.WaveletSegment()
+        # detected = np.where(self.detections > 0)
+        # # print "det",detected
+        # if np.shape(detected)[1] > 1:
+        #     detected = ws.identifySegments(np.squeeze(detected))
+        # elif np.shape(detected)[1] == 1:
+        #     detected = ws.identifySegments(detected)
+        # else:
+        #     detected=[]
+
+        sp = SignalProc.SignalProc(self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate], self.sampleRate, 256, 128)
+        self.sg = sp.spectrogram(self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate])
+
+        # f1 = 1500
+        # f2 = 4000
+        # F1 = f1 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
+        # F2 = f2 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
+        #
+        # e = np.sum(self.sg[:,F2:],axis=1)
+        # eband = np.sum(self.sg[:,F1:F2],axis=1)
+        #
+        # return eband/e, 1
+        f1 = 1100
+        f2 = 4000
+        # for seg in self.detections:
+        # e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, :]) /128     # whole frequency range
+        # nBand = 128  # number of frequency bands
+        # e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f2 * 128 / (self.sampleRate / 2):])  # f2:
+        e = np.sum(self.sg[:, f2 * 128 / (self.sampleRate / 2):])  # f2:
+        nBand = 128 - f2 * 128 / (self.sampleRate / 2)    # number of frequency bands
+        e=e/nBand   # per band power
+
+        # eBand = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f1 * 128 / (self.sampleRate / 2):f2 * 128 / (self.sampleRate / 2)]) # f1:f2
+        eBand = np.sum(self.sg[:, f1 * 128 / (self.sampleRate / 2):f2 * 128 / (self.sampleRate / 2)])  # f1:f2
+        nBand = f2 * 128 / (self.sampleRate / 2) - f1 * 128 / (self.sampleRate / 2)
+        eBand = eBand / nBand
+        r = eBand/e
+        print seg, r
+        if r>thr:
+            # self.confirmedSegments.append(seg)
+            return True
+        else:
+            # self.segmentstoCheck.append(seg)
+            return False
 
     def detectClicks(self,sg=None):
         '''
@@ -144,60 +314,6 @@ class postProcess:
         #    self.detections[i] = 0        # remove clicks
         return energy, e2
 
-    def eRatioConfd(self, thr=2.5):
-        '''
-        This is a post processor to introduce some confidence level
-        high ratio --> classes 1-3 'good' calls
-        low ratio --> classes 4-5 'weak' calls
-        ratio = energy in band/energy above the band
-        The problem with this simple classifier is that the ratio is relatively low when the
-        calls are having most of the harmonics (close range)
-        Mostly works
-        '''
-        # TODO: Check range -- species specific of course!
-        # Also recording range specific -- 16KHz will be different -- resample?
-        # import WaveletSegment
-        # ws = WaveletSegment.WaveletSegment()
-        # detected = np.where(self.detections > 0)
-        # # print "det",detected
-        # if np.shape(detected)[1] > 1:
-        #     detected = ws.identifySegments(np.squeeze(detected))
-        # elif np.shape(detected)[1] == 1:
-        #     detected = ws.identifySegments(detected)
-        # else:
-        #     detected=[]
-
-        sp = SignalProc.SignalProc(self.audioData, self.sampleRate, 256, 128)
-        self.sg = sp.spectrogram(self.audioData)
-
-        # f1 = 1500
-        # f2 = 4000
-        # F1 = f1 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
-        # F2 = f2 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
-        #
-        # e = np.sum(self.sg[:,F2:],axis=1)
-        # eband = np.sum(self.sg[:,F1:F2],axis=1)
-        #
-        # return eband/e, 1
-        f1 = 1100
-        f2 = 4000
-        for seg in self.detections:
-            # e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, :]) /128     # whole frequency range
-            # nBand = 128  # number of frequency bands
-            e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f2 * 128 / (self.sampleRate / 2):])  # f2:
-            nBand = 128 - f2 * 128 / (self.sampleRate / 2)    # number of frequency bands
-            e=e/nBand   # per band power
-
-            eBand = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f1 * 128 / (self.sampleRate / 2):f2 * 128 / (self.sampleRate / 2)]) # f1:f2
-            nBand = f2 * 128 / (self.sampleRate / 2) - f1 * 128 / (self.sampleRate / 2)
-            eBand = eBand / nBand
-            r = eBand/e
-            # print seg, r
-            if r>thr:
-                self.confirmedDetections.append(seg)
-            else:
-                self.unsureDetections.append(seg)
-
 class exportSegments:
     """ This class saves the batch detection results(Find Species) and also current annotations (AviaNZ interface)
         in three different formats: time stamps, presence/absence, and per second presence/absence
@@ -208,11 +324,13 @@ class exportSegments:
         TODO: Save the annotation files for batch processing
 
         Inputs
-            segments:   detected segments in form of [[s1,e1], [s2,e2],...]
+            segments:   detected segments in form of [[s1,e1], [s2,e2],...] # excel is still based on this, to be fixed later using next two.
+                segmentstoCheck     : segments without confidence in form of [[s1,e1], [s2,e2],...]
+                confirmedSegments   : segments with confidence
             species:    e.g. 'Kiwi'. Default is 'all'
             startTime:  start time of the recording (in DoC format). Default is 0
             dirName:    directory name
-            filename:   file name
+            filename:   file name e.g.
             datalength: number of data points in the recording
             sampleRate: sample rate
             method:     e.g. 'Wavelets'. Default is 'Default'
@@ -221,11 +339,14 @@ class exportSegments:
             withConf:   is it with some level of confidence? e.g. after post-processing (e ratio). Default is 'False'
             seg_pos:    possible segments are needed apart from the segments when withConf is True. This is just to
                         generate the annotation including the segments with conf (kiwi) and without confidence (kiwi?).
+            minLen: minimum length of a segment
 
     """
 
-    def __init__(self,segments=[], species='all', startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[]):
+    def __init__(self, segments=[], confirmedSegments=[], segmentstoCheck=[], species='all', startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0):
         self.segments=segments
+        self.confirmedSegments = confirmedSegments
+        self.segmentstoCheck = segmentstoCheck
         self.species=species
         self.startTime=startTime
         self.dirName=dirName
@@ -238,8 +359,11 @@ class exportSegments:
         else:
             self.resolution=resolution
         self.trainTest = trainTest
-        self.withConf=withConf
-        self.seg_pos=seg_pos
+        self.withConf=withConf  # todo: remove
+        self.seg_pos=seg_pos #segmentstoCheck
+        self.operator = operator
+        self.reviewer = reviewer
+        self.minLen = minLen
 
     def excel(self):
         """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence
@@ -281,6 +405,8 @@ class exportSegments:
             ws.cell(row=r, column=1, value=str(relfname))
             # Loop over the segments
             for seg in self.segments:
+                if seg[1]-seg[0] < self.minLen: # skip very short segments
+                    continue
                 ws.cell(row=r, column=2, value=str(QTime().addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
                 ws.cell(row=r, column=3, value=str(QTime().addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
                 r += 1
@@ -289,12 +415,14 @@ class exportSegments:
             ws = wb.get_sheet_by_name('Presence Absence')
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value=str(relfname))
-            if self.segments:
-                ws.cell(row=r, column=2, value='Yes')
-            else:
-                ws.cell(row=r, column=2, value='_')
+            ws.cell(row=r, column=2, value='_')
+            for seg in self.segments:
+                if seg[1]-seg[0] > self.minLen: # skip very short segments
+                    ws.cell(row=r, column=2, value='Yes')
+                    break
 
         def writeToExcelp3():
+            # todo: use minLen
             ws = wb.get_sheet_by_name('Per Second')
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value= str(self.resolution) + ' secs resolution')
@@ -387,27 +515,29 @@ class exportSegments:
 
     def saveAnnotation(self):
         # Save annotations - batch processing
-        if len(self.segments) > 0 or len(self.seg_pos) > 0:
-            annotation = []
+        annotation = []
+        annotation.append([-1, str(QTime().addSecs(0+self.startTime).toString('hh:mm:ss')), "Nirosha", "Stephen", -1])
+        # if len(self.segments) > 0 or len(self.seg_pos) > 0:
+        if len(self.confirmedSegments) > 0 or len(self.segmentstoCheck) > 0:
             if self.method == "Wavelets":
-                if self.withConf:
-                    for seg in self.seg_pos:
-                        if seg in self.segments:
-                            annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species])
-                        else:
-                            annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
-                else:
-                    for seg in self.segments:
-                        annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
+                # if self.withConf:
+                for seg in self.confirmedSegments:
+                    # if seg in self.segments:
+                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species])
+                for seg in self.segmentstoCheck:
+                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
+                # else:
+                #     for seg in self.segments:
+                #         annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
             else:
                 for seg in self.segments:
                     annotation.append([float(seg[0]), float(seg[1]), 0, 0, "Don't know"])
 
-            if isinstance(self.filename, str):
-                file = open(self.filename + '.data', 'w')
-            else:
-                file = open(str(self.filename) + '.data', 'w')
-            json.dump(annotation, file)
+        if isinstance(self.filename, str):
+            file = open(self.filename + '.data', 'w')
+        else:
+            file = open(str(self.filename) + '.data', 'w')
+        json.dump(annotation, file)
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
