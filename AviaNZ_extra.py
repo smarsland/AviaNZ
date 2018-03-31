@@ -1524,34 +1524,94 @@ class AviaNZ(QMainWindow):
         #ws = WaveletSegment.WaveletSegment(species='kiwi')
         #e = ws.computeWaveletEnergy(self.audiodata,self.sampleRate)
 
-        # Call MFCC in Features and plot some of them :)
-        ff = Features.Features(self.audiodata,self.sampleRate)
-        e = ff.get_mfcc()
-        print np.shape(e)
+        # # Call MFCC in Features and plot some of them :)
+        # ff = Features.Features(self.audiodata,self.sampleRate)
+        # e = ff.get_mfcc()
+        # print np.shape(e)
+        # print np.sum(e, axis=0)
+        # print e[0,:]
+        #
+        # # self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),np.sum(e,axis=0))
+        # # self.plotPlot.setPen(fn.mkPen('k'))
+        # # self.plotPlot2.setData(np.linspace(0.0, float(self.datalength) / self.sampleRate, num=np.shape(e)[1], endpoint=True), e[0,:])
+        # # self.plotPlot2.setPen(fn.mkPen('c'))
+        # e1 = e[1,:]
+        # e1 = (e[1,:]- np.mean(e[1,:]))/np.std(e[1,:])
+        # self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e1)
+        # self.plotPlot2.setPen(fn.mkPen('r'))
+        # mean = np.mean(e1)
+        # std = np.std(e1)
+        # thr = mean - 2 * std
+        # thr = np.ones((1, 100)) * thr
+        # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100, endpoint=True), thr[0,:])
+        # self.plotPlot7.setPen(fn.mkPen('c'))
+        # # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
+        # # self.plotPlot3.setPen(fn.mkPen('c'))
+        # # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[3,:])
+        # # self.plotPlot4.setPen(fn.mkPen('r'))
+        # # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[4,:])
+        # # self.plotPlot5.setPen(fn.mkPen('g'))
+        # # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[5,:])
+        # # self.plotPlot6.setPen(fn.mkPen('g'))
+        # # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[6,:])
+        # # self.plotPlot7.setPen(fn.mkPen('g'))
+        # # self.plotPlot8.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[7,:])
+        # # self.plotPlot8.setPen(fn.mkPen('g'))
+        # # self.plotPlot9.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[8,:])
+        # # self.plotPlot9.setPen(fn.mkPen('g'))
+        # # self.plotPlot10.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[9,:])
+        # # self.plotPlot10.setPen(fn.mkPen('g'))
+        # # self.plotPlot11.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[10,:])
+        # # self.plotPlot11.setPen(fn.mkPen('c'))
 
+        # # plot eRatio
+        post = SupportClasses.postProcess(self.audiodata, self.sampleRate, [])
+        # e = post.eRatioConfd([], AviaNZ_extra=True)
+        # # print np.shape(e)
+        # # print e[0]
+        # # print np.shape(e[0])[0]
+        # self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e[0])[0],endpoint=True),e[0])
+        # self.plotPlot.setPen(fn.mkPen('b'))
 
-        self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),np.sum(e,axis=0))
-        self.plotPlot.setPen(fn.mkPen('r'))
-        #self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[1,:])
-        #self.plotPlot2.setPen(fn.mkPen('r'))
-        # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
-        # self.plotPlot3.setPen(fn.mkPen('r'))
-        # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[3,:])
-        # self.plotPlot4.setPen(fn.mkPen('r'))
-        # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[4,:])
-        # self.plotPlot5.setPen(fn.mkPen('r'))
-        # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[5,:])
+        # plot wind/rain
+        wind, rain, mean_rain = post.WindRain(windTest=False, rainTest=True)
+        wind = np.ones((1,100))*wind
+        # rain = np.ones((1,100))*rain    # rain is SNR
+        # thr = np.ones((1,100))*3.5      # rain SNR thr is 3.5
+        # mean_rain = np.ones((1, 100)) * mean_rain
+        # mean_rain_thr = np.ones((1,100)) * 1e-6     # rain mean thr is 1e-6
+        wind_thr = np.ones((1, 100)) * 1e-8
+        # print np.shape(wind)
+        # print rain[0,:]
+        self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind[0,:])
+        self.plotPlot3.setPen(fn.mkPen('r'))
+        self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind_thr[0,:])
+        self.plotPlot4.setPen(fn.mkPen('k'))
+        # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain[0,:])
+        # self.plotPlot5.setPen(fn.mkPen('b'))
+        # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain_thr[0,:])
         # self.plotPlot6.setPen(fn.mkPen('g'))
-        # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[6,:])
-        # self.plotPlot7.setPen(fn.mkPen('g'))
-        # self.plotPlot8.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[7,:])
-        # self.plotPlot8.setPen(fn.mkPen('g'))
-        # self.plotPlot9.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[8,:])
-        # self.plotPlot9.setPen(fn.mkPen('g'))
-        # self.plotPlot10.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[9,:])
-        # self.plotPlot10.setPen(fn.mkPen('g'))
-        # self.plotPlot11.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[10,:])
-        # self.plotPlot11.setPen(fn.mkPen('g'))
+
+        # # plot wavelet
+        # ws = WaveletSegment.WaveletSegment(self.audiodata, self.sampleRate)
+        # e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
+        # print np.shape(e)
+        # print np.shape(e)[1]
+        # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[1,:])
+        # self.plotPlot3.setPen(fn.mkPen('r'))
+        # mean = np.mean(e[1,:])
+        # std = np.std(e[1,:])
+        # thr = mean + 2.5 * std
+        # thr = np.ones((1, 100)) * thr
+        # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100, endpoint=True), thr[0,:])
+        # self.plotPlot7.setPen(fn.mkPen('c'))
+        #
+        # # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
+        # # self.plotPlot4.setPen(fn.mkPen('g'))
+        # # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[0,:])
+        # # self.plotPlot5.setPen(fn.mkPen('b'))
+        # # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[14,:])
+        # # self.plotPlot6.setPen(fn.mkPen('k'))
 
         QApplication.processEvents()
 

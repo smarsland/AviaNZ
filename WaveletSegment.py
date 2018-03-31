@@ -59,6 +59,7 @@ class WaveletSegment:
             sampleRate = self.sampleRate
 
         n=len(data)/sampleRate
+
         coefs = np.zeros((2**(nlevels+1)-2, n))
         for t in range(n):
             E = []
@@ -256,8 +257,13 @@ class WaveletSegment:
             bin = self.WaveletFunctions.ConvertWaveletNodeName(index)
             new_wp[bin] = wp[bin].data
 
-            # Get the coefficients
-            C = np.abs(new_wp.reconstruct(update=True))
+            # # Get the coefficients
+            # C = np.abs(new_wp.reconstruct(update=True))
+            # get the coefficients
+            C = new_wp.reconstruct(update=True)
+            # filter
+            C = self.sp.ButterworthBandpass(C, self.sampleRate, low=1100,high=7000,order=10)
+            C = np.abs(C)
             N = len(C)
 
             # Compute the number of samples in a window -- species specific
@@ -266,7 +272,7 @@ class WaveletSegment:
             elif species.title()=='Bittern':
                 M = int(0.2 * sampleRate / 2.0)
             else:
-                M = int(0.8*sampleRate/2.0)
+                M = int(0.6*sampleRate/2.0) #  M = int(0.8*sampleRate/2.0)
             #print M
 
             # Compute the energy curve (a la Jinnai et al. 2012)
@@ -446,7 +452,7 @@ class WaveletSegment:
         # TODO: json.dump('species.data', open('species.data', 'wb'))
         return listnodes
 
-    def waveletSegment_test(self,fName=None, data=None, sampleRate=None, listnodes = None, species='Kiwi', trainTest=False, df=False):
+    def waveletSegment_test(self,fName=None, data=None, sampleRate=None, listnodes = None, species='Kiwi', trainTest=False, df=False, thr=0):
         # Load the relevant list of nodes
         # TODO: Put these into a file along with other relevant parameters (frequency, length, etc.)
         if listnodes is None:
@@ -474,7 +480,7 @@ class WaveletSegment:
 
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
 
-        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, species=species, trainTest=trainTest)
+        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, species=species, trainTest=trainTest, thr=thr)
 
         # Todo: remove clicks
 

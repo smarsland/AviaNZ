@@ -1575,6 +1575,7 @@ class AviaNZ(QMainWindow):
                 # min is to remove possible rounding error
                 #print min(int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment),len(self.overviewSegments)), int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment), len(self.overviewSegments)-1
                 inde = min(int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment),len(self.overviewSegments)-1)
+                # print species
                 if species[-1] == '?':
                     brush = self.ColourPossible
                     self.overviewSegments[inds:inde + 1, 2] += 1
@@ -1817,6 +1818,7 @@ class AviaNZ(QMainWindow):
         pos = evt.scenePos()
 
         if self.box1id>-1:
+            # print '***', self.box1id, len(self.listRectanglesa1)
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
             if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
@@ -2024,6 +2026,7 @@ class AviaNZ(QMainWindow):
         oldname = self.segments[self.box1id][4]
         # Work out which overview segment this segment is in (could be more than one)
         inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0]-self.startRead)) / self.widthOverviewSegment)
+        # inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1])) / self.widthOverviewSegment)
         inde = min(int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead)) / self.widthOverviewSegment),len(self.overviewSegments) - 1)
 
         if oldname == "Don't Know":
@@ -3420,7 +3423,9 @@ class AviaNZ(QMainWindow):
         if id>-1:
             # Work out which overview segment this segment is in (could be more than one) and update it
             inds = int(float(self.convertAmpltoSpec(self.segments[id][0]-self.startRead))/self.widthOverviewSegment)
+            # print type(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment)), type(len(self.overviewSegments) - 1)
             inde = min(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment),len(self.overviewSegments) - 1)
+            # print "inde", inde
 
             if self.segments[id][4] == "Don't Know":
                 self.overviewSegments[inds:inde+1,0] -= 1

@@ -448,7 +448,7 @@ def loadFile(filename):
     return audiodata,sampleRate
 
 #####
-yTest,srTest=loadFile('Sound Files/dtw_mfcc/kiwifemale/bf10.wav')
+# yTest,srTest=loadFile('Sound Files/dtw_mfcc/kiwi/kiwifemale/bf10.wav')
 
 def isKiwi_dtw_mfcc(dirName, yTest, srTest):
     '''
@@ -471,5 +471,5 @@ def isKiwi_dtw_mfcc(dirName, yTest, srTest):
         print 'it is NOT kiwi', sorted(dList)[1]
     return dList
 
-dList=isKiwi_dtw_mfcc("Sound Files/dtw_mfcc/kiwimale", yTest,srTest)
+# dList=isKiwi_dtw_mfcc("Sound Files/dtw_mfcc/kiwi/kiwimale", yTest,srTest)
 #print dList

@@ -521,7 +521,7 @@ class Denoise(QDialog):
             #self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
             self.depthchoice.clicked.connect(self.depthclicked)
             self.depth = QSpinBox()
-            self.depth.setRange(1,10)
+            self.depth.setRange(1,12)
             self.depth.setSingleStep(1)
             self.depth.setValue(5)
 
@@ -537,7 +537,7 @@ class Denoise(QDialog):
 
             self.waveletlabel = QLabel("Type of wavelet")
             self.wavelet = QComboBox()
-            self.wavelet.addItems(["dmey2","db2","db5","haar"])
+            self.wavelet.addItems(["dmey2","db2","db5","db10","haar"])
             self.wavelet.setCurrentIndex(0)
 
         # Median: width of filter

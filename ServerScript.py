@@ -1,13 +1,16 @@
 import WaveletSegment
+import WaveletFunctions
 import SupportClasses
 import SignalProc
 import Segment
+import Features
 import wavio
 import numpy as np
 import os, re, json
 import math
 import librosa
 from scipy import signal
+import copy
 
 # ------ wavelet detection - Filter 0
 def detect(dirName='',trainTest=False, species=''):
@@ -40,15 +43,15 @@ def detect(dirName='',trainTest=False, species=''):
                         # ws = WaveletSegment.WaveletSegment(species=species, annotation=annotation)
                         segments_possible = wSeg.waveletSegment_test(fName=None, data=wSeg.data,
                                                              sampleRate=wSeg.sampleRate, species=species,
-                                                             trainTest=trainTest)
+                                                             trainTest=trainTest, thr=0.5)
                         if type(segments_possible) == tuple:
                             segments_possible = segments_possible[0]
                         # detected=np.ones(900)
-                        if len(segments_possible) > 0:
-                            post = SupportClasses.postProcess(wSeg.data, wSeg.sampleRate, segments_possible)
-                            # post.detectClicks()
-                            post.eRatioConfd2()
-                            segments_withConf = post.confirmedSegments
+                        # if len(segments_possible) > 0:
+                        #     post = SupportClasses.postProcess(wSeg.data, wSeg.sampleRate, segments_possible)
+                        #     # post.detectClicks()
+                        #     post.eRatioConfd2()
+                        #     segments_withConf = post.confirmedSegments
 
                     else:
                         sp = SignalProc.SignalProc()
@@ -75,17 +78,20 @@ def detect(dirName='',trainTest=False, species=''):
                                                         datalength=datalength, sampleRate=wSeg.sampleRate,
                                                         method='Wavelets', resolution=60, trainTest=trainTest,
                                                         withConf=False,operator="Nirosha",reviewer="Nirosha", minLen=3)
-                        out.excel() # all possible segments
-                        # out.saveAnnotation()
-                        out.withConf = True
-                        out.segments = segments_withConf
-                        out.confirmedSegments = segments_withConf
+                        # out.excel() # all possible segments
+                        # # out.saveAnnotation()
+                        # out.withConf = True
+                        # out.segments = segments_withConf
+                        # out.confirmedSegments = segments_withConf
+                        out.confirmedSegments = []
                         out.segmentstoCheck = segments_possible
-                        out.excel() # only the segments those passed eRatio test
+                        # out.excel() # only the segments those passed eRatio test
                         # Save the annotation
                         out.saveAnnotation()
                         cnt=cnt+1
                         print "current: ", cnt
+
+# detect('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset\positive',trainTest=False, species='Kiwi')
 
 #----- Utility function. Given the annotation, this code generates the excel.
 def annotation2excel(dirName='', species=''):
@@ -170,7 +176,7 @@ def emptyData(dirName='',trainTest=False, species=''):
                     cnt=cnt+1
                     print "current: ", cnt
 
-# ----- Remove segments < 4 seconds long from the annotations (.data) - Filter 1
+# ----- Remove segments < 5 seconds long from the annotations (.data) - Filter 1
 def deleteShort(dirName='', minLen=4):
     """
     This will delete short segments from the annotation
@@ -187,18 +193,18 @@ def deleteShort(dirName='', minLen=4):
                     for seg in segments:
                         if seg[0] == -1:
                             newSegments.append(seg)
-                        elif seg[1]-seg[0] < minLen:
+                        elif seg[1]-seg[0] > minLen:
+                            newSegments.append(seg)
+                        else:
                             chg = True
                             continue
-                        else:
-                            newSegments.append(seg)
                 if chg:
                     file = open(file, 'w')
                     json.dump(newSegments, file)
                 cnt += 1
                 print file, cnt
 
-def eRatio(dirName, thr=2.5):
+def eRatio(dirName):
     for root, dirs, files in os.walk(str(dirName)):
         for file in files:
             if file.endswith('.wav'):
@@ -210,21 +216,20 @@ def eRatio(dirName, thr=2.5):
                 if np.shape(np.shape(data))[0] > 1:
                     data = data[:, 0]
                 post = SupportClasses.postProcess(data, sampleRate, [])
-                post.eRatioConfd(seg=None, thr=2.5)
+                print file, post.eRatioConfd(seg=None)
 
-# eRatio('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1-TP and FP segments', thr=2.5)
+# eRatio('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1-TP and FP segments\FP')
 
 # ----- Delete wind/rain corrupted segments - Filter 2
-def deleteWindRain(dirName, windTest=True, rainTest=False, Tmean_wind = 1e-9, T_ERatio=1.5):
+def deleteWindRain(dirName, windTest=True, rainTest=False, Tmean_wind = 1e-8):
     """
     Given the directory of sounds this deletes the annotation segments with wind/rain corrupted files.
     Targeting moderate wind and above. Check to make sure the segment to delete has no sign of kiwi
     Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
     """
     #Todo: find thrs
-    import copy
     Tmean_rain = 1e-8   # Mean threshold
-    Tsnr_rain = 10     # SNR threshold
+    Tsnr_rain = 3.5     # SNR threshold
 
     # Tmean_wind = 1e-9   # Mean threshold
     # Tsnr_wind = 0.5     # SNR threshold
@@ -238,6 +243,27 @@ def deleteWindRain(dirName, windTest=True, rainTest=False, Tmean_wind = 1e-9, T_
                 with open(file) as f:
                     segments = json.load(f)
                     newSegments=copy.deepcopy(segments)
+                    wavobj = wavio.read(file[:-5])
+                    audioData = wavobj.data
+                    # # ***
+                    # if audioData.dtype is not 'float':
+                    #     audioData = audioData.astype('float')  # / 32768.0
+                    # if np.shape(np.shape(audioData))[0] > 1:
+                    #     audioData = np.squeeze(audioData[:, 0])
+                    # import librosa
+                    # if wavobj.rate != 16000:
+                    #     audioData = librosa.core.audio.resample(audioData, wavobj.rate, 16000)
+                    #     sampleRate = 16000
+                    # # ****
+                    if audioData is not 'float':
+                        audioData = audioData / 32768.0
+                    audioData = audioData[:, 0].squeeze()
+                    sampleRate = wavobj.rate
+
+                    # Find T_ERatio based on first 5 secs as it varies accorss the recordings
+                    post = SupportClasses.postProcess(audioData, sampleRate, [])
+                    # T_ERatio = post.eRatioConfd([1, 6, "", ""])
+
                     chg = False
                     for seg in segments:
                         if seg[0] == -1:
@@ -246,8 +272,15 @@ def deleteWindRain(dirName, windTest=True, rainTest=False, Tmean_wind = 1e-9, T_
                             # read the sound segment and check for wind
                             secs = seg[1]-seg[0]
                             wavobj = wavio.read(file[:-5], nseconds=secs, offset=seg[0])
-                            sampleRate = wavobj.rate
                             data = wavobj.data
+                            # # ***
+                            # if data.dtype is not 'float':
+                            #     data = data.astype('float')  # / 32768.0
+                            # if np.shape(np.shape(data))[0] > 1:
+                            #     data = np.squeeze(data[:, 0])
+                            # if wavobj.rate != 16000:
+                            #     data = librosa.core.audio.resample(data, wavobj.rate, 16000)
+
                             if data is not 'float':
                                 data = data / 32768.0
                             data = data[:,0].squeeze()
@@ -271,14 +304,44 @@ def deleteWindRain(dirName, windTest=True, rainTest=False, Tmean_wind = 1e-9, T_
 
                                 # c_wind = mean_a_wind / std_a_wind  # signal to noise ratio of the analysed recording. step 3 in Algorithm 2.1
 
-
                                 if mean_a_wind > Tmean_wind:
-                                    # check if it is not kiwi
-                                    if '?' in str(seg[4]):  # 'Kiwi?' segments didn't pass eRatio
-                                        # x = eRatioConfd(file[:-5], seg, thr=T_ERatio)
-                                        potentialCall = False
-                                    else:
+                                    # eRatio = post.eRatioConfd(seg) #eRatio(file[:-5], seg, thr=T_ERatio)
+                                    # eRatioBefore = post.eRatioConfd([seg[0]-10, seg[0], "", ""])
+                                    # if eRatio > eRatioBefore*1.05: # or eRatio > eRatioAfter:  #it was 10 secs Before eratio
+                                    # #version2
+                                    # eRatio = post.eRatioConfdV2(seg)
+                                    # if eRatio > 1.0:
+                                    #     potentialCall = True
+
+                                    # # now check f. frq.
+                                    # # down sample will helkp to avoid higher frq noise
+                                    # if sampleRate != 16000:
+                                    #     data = librosa.core.audio.resample(data, sampleRate, 16000)
+                                    #     sampleRate = 16000
+                                    # # denoise prior to f. frq. detection
+                                    # waveletDenoiser = WaveletFunctions.WaveletFunctions(data=data, wavelet=None,
+                                    #                                                     maxLevel=12)
+                                    # data = waveletDenoiser.waveletDenoise(data, thresholdType='soft', wavelet='dmey2',
+                                    #                                       maxLevel=12)
+                                    # sp = SignalProc.SignalProc([], 0, 512, 256)
+                                    # sgRaw = sp.spectrogram(data, 512, 256, mean_normalise=True, onesided=True,
+                                    #                        multitaper=False)
+                                    # segment = Segment.Segment(data, sgRaw, sp, sampleRate, 512, 256)
+                                    # pitch, y, minfreq, W = segment.yin(minfreq=600)
+                                    # ind = np.squeeze(np.where(pitch > minfreq))
+                                    # pitch = pitch[ind]
+                                    # ff = np.mean(pitch)
+                                    # if ff > 500 and ff < 5000:
+                                    #     potentialCall = True
+
+                                    # else:
+                                    #     potentialCall = False
+
+                                    # just check duration>10 sec
+                                    if secs>10:
                                         potentialCall = True
+                                    else:
+                                        potentialCall = False
                                     if not potentialCall:
                                         print file, seg, "--> windy"
                                         newSegments.remove(seg)
@@ -297,9 +360,20 @@ def deleteWindRain(dirName, windTest=True, rainTest=False, Tmean_wind = 1e-9, T_
 
                                 c_rain = mean_a_rain / std_a_rain   # signal to noise ratio of the analysed recording. step 3 in Algorithm 2.1
 
-                                if mean_a_rain > Tmean_rain and c_rain > Tsnr_rain:
-                                    print file, "--> rainy"
-                                    # rainy.append(mean_a_rain)
+                                if c_rain > Tsnr_rain:
+                                    # check if it is not kiwi
+                                    eRatio = post.eRatioConfd(seg)  # eRatio(file[:-5], seg, thr=T_ERatio)
+                                    eRatioBefore = post.eRatioConfd([seg[0] - 10, seg[0], "", ""])
+                                    # eRatioAfter = post.eRatioConfd([seg[1], seg[1] + 5, "", ""])
+                                    # T_ERatio = (eRatioBefore + eRatioAfter) / 2
+                                    if eRatio > eRatioBefore:  # or eRatio > eRatioAfter:  #it was 10 secs Before eratio
+                                        potentialCall = True
+                                    else:
+                                        potentialCall = False
+                                    if not potentialCall:
+                                        print file, seg, "--> windy"
+                                        newSegments.remove(seg)
+                                        chg = True
                                 else:
                                     # rainy.append(0)
                                     print file, "--> not rainy"
@@ -310,7 +384,240 @@ def deleteWindRain(dirName, windTest=True, rainTest=False, Tmean_wind = 1e-9, T_
                 cnt += 1
                 print file, cnt
 
-# deleteWindRain('E:\AviaNZ\Sound Files\\tier1-test\\notWindy', windTest=True, rainTest=False)
+# ----- Delete wind/rain corrupted segments - Filter 2
+# def deleteWindRain(dirName, Tmean_wind = 1e-8, Tsnr_rain = 3.5, windTest=True, rainTest=False):
+#     """
+#     Given the directory of sounds this deletes the annotation segments with wind/rain corrupted files.
+#     Targeting moderate wind and above. Check to make sure the segment to delete has no sign of kiwi
+#     Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
+#     """
+#     cnt = 0
+#     for root, dirs, files in os.walk(str(dirName)):
+#         for file in files:
+#             if file.endswith('.data') and file[:-5] in files:
+#                 # go through each segment
+#                 file = root + '/' + file
+#                 with open(file) as f:
+#                     segments = json.load(f)
+#                     newSegments=copy.deepcopy(segments)
+#                     wavobj = wavio.read(file[:-5])
+#                     audioData = wavobj.data
+#                     if audioData is not 'float':
+#                         audioData = audioData / 32768.0
+#                     audioData = audioData[:, 0].squeeze()
+#                     sampleRate = wavobj.rate
+#                     # Find T_ERatio based on first 5 secs as it varies accorss the recordings
+#                     post = SupportClasses.postProcess(audioData, sampleRate, [])
+#                     # T_ERatio = post.eRatioConfd([1, 6, "", ""])
+#
+#                     chg = False
+#                     for seg in segments:
+#                         if seg[0] == -1:
+#                             continue
+#                         else:
+#                             # read the sound segment and check for wind
+#                             secs = seg[1]-seg[0]
+#                             wavobj = wavio.read(file[:-5], nseconds=secs, offset=seg[0])
+#                             data = wavobj.data
+#                             # if data is not 'float':
+#                             #     data = data / 32768.0
+#                             # data = data[:,0].squeeze()
+#                             post1 = SupportClasses.postProcess(data, sampleRate, [])
+#
+#                             # wind_lower = 2.0 * 100 / sampleRate
+#                             # wind_upper = 2.0 * 250 / sampleRate
+#                             # rain_lower = 2.0 * 600 / sampleRate
+#                             # rain_upper = 2.0 * 1200 / sampleRate
+#                             #
+#                             # f, p = signal.welch(data, fs=sampleRate, window='hamming', nperseg=512, detrend=False)
+#                             wind, snr_rain, mean_rain = post1.WindRain(windTest=windTest, rainTest=rainTest)
+#
+#                             # if wind > Tmean_wind and snr_rain > Tsnr_rain:
+#                             #     # windy and rainy, so delete it
+#                             #     print file, seg, "--> windy and rainy"
+#                             #     newSegments.remove(seg)
+#                             #     chg = True
+#                             if wind > Tmean_wind: # or snr_rain > Tsnr_rain:
+#                                 # check if it is not kiwi
+#                                 # if '?' in str(seg[4]):  # 'Kiwi?' segments didn't pass eRatio
+#                                 # post = SupportClasses.postProcess(audioData, sampleRate, [])
+#                                 eRatio = post.eRatioConfd(seg)  # eRatio(file[:-5], seg, thr=T_ERatio)
+#                                 eRatioBefore = post.eRatioConfd([seg[0] - 10, seg[0], "", ""])
+#                                 # eRatioAfter = post.eRatioConfd([seg[1], seg[1] + 5, "", ""])
+#                                 # T_ERatio = (eRatioBefore + eRatioAfter) / 2
+#                                 # print "--", file, seg, wind, snr_rain, eRatioBefore, eRatio
+#                                 # if eRatio < eRatioBefore* 1.1: # or eRatio > eRatioAfter:  #it was 10 secs Before eratio
+#                                 if eRatio < eRatioBefore:
+#                                     print file, seg, "--> Windy/Rainy"
+#                                     newSegments.remove(seg)
+#                                     chg = True
+#                                 else:
+#                                     print file, seg, " NOT windy/rainy"
+#                     if chg:
+#                         file = open(file, 'w')
+#                         json.dump(newSegments, file)
+#                 # cnt += 1
+#                 # print file, cnt
+
+
+# ----- Delete random click segments - Filter 3
+def deleteClick(dirName):
+    """
+    Given the directory of sounds this deletes the annotation segments with wind/rain corrupted files.
+    Targeting moderate wind and above. Check to make sure the segment to delete has no sign of kiwi
+    """
+    for root, dirs, files in os.walk(str(dirName)):
+        for file in files:
+            if file.endswith('.data') and file[:-5] in files:
+                # go through each segment
+                file = root + '/' + file
+                with open(file) as f:
+                    segments = json.load(f)
+                    newSegments = copy.deepcopy(segments)
+                    wavobj = wavio.read(file[:-5])
+                    audioData = wavobj.data
+                    if audioData is not 'float':
+                        audioData = audioData / 32768.0
+                    audioData = audioData[:, 0].squeeze()
+                    sampleRate = wavobj.rate
+                    # Find T_ERatio based on first 5 secs as it varies accorss the recordings
+                    post = SupportClasses.postProcess(audioData, sampleRate, [])
+                    # T_ERatio = post.eRatioConfd([1, 6, "", ""])
+                    print file
+                    chg = False
+                    for seg in segments:
+                        if seg[0] == -1:
+                            continue
+                        else:
+                            # read the sound segment and check for wind
+                            secs = seg[1] - seg[0]
+                            wavobj = wavio.read(file[:-5], nseconds=secs, offset=seg[0])
+                            data = wavobj.data
+                            if data is not 'float':
+                                data = data / 32768.0
+                            data = data[:, 0].squeeze()
+
+                            # check for clicks
+                            ff = Features.Features(data, sampleRate)
+                            mfcc = ff.get_mfcc()
+                            mfcc1 = mfcc[1, :]  # mfcc1 of the segment
+
+                            ff = Features.Features(audioData, sampleRate)
+                            mfcc = ff.get_mfcc()
+                            mean = np.mean(mfcc[1,:])
+                            std = np.std(mfcc[1,:])
+                            thr = mean - 2 * std    # mfcc1 thr for the file
+
+                            if np.min(mfcc1) < thr:
+                                # # # now check eRatio
+                                # eRatio = post.eRatioConfdV2(seg)
+                                # if eRatio > 1.0:
+                                #     continue
+
+                                # just check duration>10 sec
+                                if secs > 10:
+                                    continue
+                                else:
+                                    print seg
+                                    newSegments.remove(seg)
+                                    chg = True
+                    if chg:
+                        file = open(file, 'w')
+                        json.dump(newSegments, file)
+
+def deleteClick2(dirName):
+    """
+    Given the directory of sounds this deletes the annotation segments with rain corrupted.
+    Check to make sure the segment to delete has no sign of kiwi - use fundamental frq rather than eRatio in 'deleteClick'
+    """
+    for root, dirs, files in os.walk(str(dirName)):
+        for file in files:
+            if file.endswith('.data') and file[:-5] in files:
+                # go through each segment
+                file = root + '/' + file
+                with open(file) as f:
+                    segments = json.load(f)
+                    newSegments = copy.deepcopy(segments)
+                    wavobj = wavio.read(file[:-5])
+                    audioData = wavobj.data
+                    if audioData is not 'float':
+                        audioData = audioData / 32768.0
+                    audioData = audioData[:, 0].squeeze()
+                    sampleRate = wavobj.rate
+                    if sampleRate != 16000:
+                        audioData = librosa.core.audio.resample(audioData, sampleRate, 16000)
+                        sampleRate = 16000
+                    # Find T_ERatio based on first 5 secs as it varies accorss the recordings
+                    post = SupportClasses.postProcess(audioData, sampleRate, [])
+                    # T_ERatio = post.eRatioConfd([1, 6, "", ""])
+                    print file
+                    if len(segments)>2:
+                        ff = Features.Features(audioData, sampleRate)
+                        mfcc = ff.get_mfcc()
+                        mean = np.mean(mfcc[1, :])
+                        std = np.std(mfcc[1, :])
+                        thr = mean - 2 * std  # mfcc1 thr for the file
+                    else:
+                        thr = 0
+
+                    chg = False
+                    for seg in segments:
+                        if seg[0] == -1:
+                            continue
+                        else:
+                            # read the sound segment and check for wind
+                            secs = seg[1] - seg[0]
+                            wavobj = wavio.read(file[:-5], nseconds=secs, offset=seg[0])
+                            data = wavobj.data
+                            sampleRate =wavobj.rate
+                            if data is not 'float':
+                                data = data / 32768.0
+                            data = data[:, 0].squeeze()
+
+                            # check for clicks
+                            ff = Features.Features(data, sampleRate)
+                            mfcc = ff.get_mfcc()
+                            mfcc1 = mfcc[1, :]  # mfcc1 of the segment
+
+                            if thr == 0:
+                                ff = Features.Features(audioData, sampleRate)
+                                mfcc = ff.get_mfcc()
+                                mean = np.mean(mfcc[1,:])
+                                std = np.std(mfcc[1,:])
+                                thr = mean - 2 * std    # mfcc1 thr for the file
+
+                            if np.min(mfcc1) < thr:
+                                # # now check eRatio
+                                # eRatio = post.eRatioConfd(seg)  # eRatio(file[:-5], seg, thr=T_ERatio)
+                                # eRatioBefore = post.eRatioConfd([seg[0] - 10, seg[0], "", ""])
+                                # eRatioAfter = post.eRatioConfd([seg[1], seg[1] + 10, "", ""])
+                                # if eRatio > eRatioBefore*1.05 or eRatio > eRatioAfter*1.05:
+                                #     continue
+
+                                # now check f. frq.
+                                # down sample to avoid higher frq noise
+                                if sampleRate != 16000:
+                                    data = librosa.core.audio.resample(data, sampleRate, 16000)
+                                    sampleRate = 16000
+                                # denoise prior to f frq detection
+                                waveletDenoiser = WaveletFunctions.WaveletFunctions(data=data, wavelet=None, maxLevel=12)
+                                data = waveletDenoiser.waveletDenoise(data, thresholdType='soft', wavelet='dmey2', maxLevel=12)
+                                sp = SignalProc.SignalProc([], 0, 512, 256)
+                                sgRaw = sp.spectrogram(data, 512,256, mean_normalise=True, onesided=True, multitaper=False)
+                                segment = Segment.Segment(data, sgRaw, sp, sampleRate,512, 256)
+                                pitch, y, minfreq, W = segment.yin()
+                                ind = np.squeeze(np.where(pitch > minfreq))
+                                pitch = pitch[ind]
+                                ff = np.mean(pitch)
+                                if ff>500 and ff<5000:
+                                    continue
+                                else:
+                                    print seg
+                                    newSegments.remove(seg)
+                                    chg = True
+                    if chg:
+                        file = open(file, 'w')
+                        json.dump(newSegments, file)
 
 #----- after each filter assess the accuracy against the ground truth
 def accuracy(dirName):
@@ -346,11 +653,45 @@ def accuracy(dirName):
     print '------SUMMARY TP, FP, TN, FN, recall, precision, specificity, accuracy-------'
     print int(TP), int(FP), int(TN), int(FN), TP/(TP+FN), TP/(TP+FP), TN/(TN+FP), (TP + TN)/ (TP + TN + FP + FN) # TP, FP, TN, FN, recall, precision, specificity, accuracy
 
-# filter 1
-# deleteShort(dirName='E:\AviaNZ\Sound Files\Kiwi\\test\Tier1', minLen=4)
+# # filter 0
 # accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1')
-# filter 2
+# # filter 1 - short segs
+# deleteShort(dirName='E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset', minLen=4)
+# deleteShort(dirName='E:\AviaNZ\Sound Files\Kiwi\\test\Tier1\\test', minLen=4)
+# accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset')
+# filter 2 - windy segs
+# deleteWindRain('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset')
+# deleteWindRain('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1\\test', windTest=True, rainTest=False )
+# accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset')
+# filter 3 - click (rain) segs
+# accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1')
+# deleteClick('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset')
+# accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset')
 
+# Resample to 16,000 Hz
+def resample(dirName):
+    """
+    Resample to avoid high frq noise
+    """
+    for root, dirs, files in os.walk(str(dirName)):
+        for file in files:
+            if file.endswith('.wav'):
+                # go through each segment
+                file = root + '/' + file
+                wavobj = wavio.read(file)
+                audioData = wavobj.data
+                if audioData.dtype is not 'float':
+                    audioData = audioData.astype('float')  # / 32768.0
+                if np.shape(np.shape(audioData))[0] > 1:
+                    audioData = np.squeeze(audioData[:, 0])
+                sampleRate = wavobj.rate
+                import librosa
+                if sampleRate != 16000:
+                    audioData = librosa.core.audio.resample(audioData, sampleRate, 16000)
+                    sampleRate = 16000
+                    wavio.write(file[:-4] + '_down.wav', audioData.astype('int16'), sampleRate, scale='dtype-limits', sampwidth=2)
+
+# resample('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1-TP and FP segments\TP')
 
 #----- post process with DTW and MFCC
 def loadFile(filename):
