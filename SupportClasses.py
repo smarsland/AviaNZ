@@ -201,7 +201,11 @@ class postProcess:
 
                     if mean_a_wind > Tmean_wind:
                         # check if it is not kiwi
-                        potentialCall = self.eRatioConfd(seg, thr=T_ERatio)
+                        eRatio = self.eRatioConfd(seg, thr=T_ERatio)
+                        if eRatio > T_ERatio:
+                            potentialCall = True
+                        else:
+                            potentialCall = False
                         if not potentialCall:
                             newSegmentstoCheck.remove(seg)
                             print "wind ", mean_a_wind
@@ -226,7 +230,56 @@ class postProcess:
                         # rainy.append(mean_a_rain)
         self.segmentstoCheck = newSegmentstoCheck
 
-    def eRatioConfd(self, seg, thr=2.5):
+    def WindRain(self, windTest=True, rainTest=False):
+        """
+        detect wind/rain corrupted segments (targeting moderate wind and above) if no sign of kiwi (check the kiwi freq.)
+        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
+        """
+        data = self.audioData
+        if data is not 'float':
+            data = data / 32768.0
+        data = data[:].squeeze()
+
+        f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
+
+        wind_lower = 2.0 * 100 / self.sampleRate     # 100
+        wind_upper = 2.0 * 250 / self.sampleRate    #250
+        rain_lower = 2.0 * 600 / self.sampleRate
+        rain_upper = 2.0 * 1200 / self.sampleRate
+
+        mean_a_wind =0
+        snr_rain = 0
+        mean_a_rain = 0
+        if windTest:
+            limite_inf = int(round(len(p) * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in
+            # normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
+            limite_sup = int(round(len(p) * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in
+            # normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
+            a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
+            # wind = np.sum(a_wind, axis = 1)
+            mean_a_wind = np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
+            # std_a_wind = np.std(a_wind)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
+        if rainTest:
+            # print len(p)
+            limite_inf = int(
+                round(len(p) * rain_lower))  # minimum frequency of the rainfall frequency band 0.0272 (in
+            # normalized frequency); in Hz=0.0272*(44100/2)=599.8  Hz
+            limite_sup = int(
+                round(len(p) * rain_upper))  # maximum frequency of the rainfall frequency band 0.0544 (in
+            # normalized frequency); in Hz=0.0544*(44100/2)=1199.5 Hz
+            a_rain = p[
+                     limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
+
+            mean_a_rain = np.mean(
+                a_rain)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
+            std_a_rain = np.std(
+                a_rain)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
+
+            snr_rain = mean_a_rain / std_a_rain  # signal to noise ratio of the analysed recording. step 3 in Algorithm 2.1
+            # return a_rain
+        return mean_a_wind, snr_rain, mean_a_rain
+
+    def eRatioConfd(self, seg, AviaNZ_extra = False):
         '''
         This is a post processor to introduce some confidence level
         high ratio --> classes 1-3 'good' calls
@@ -248,9 +301,84 @@ class postProcess:
         #     detected = ws.identifySegments(detected)
         # else:
         #     detected=[]
+        if seg: # going through segments
+            sp = SignalProc.SignalProc(self.audioData[int(seg[0])*self.sampleRate:int(seg[1])*self.sampleRate], self.sampleRate, 256, 128)
+            self.sg = sp.spectrogram(self.audioData[int(seg[0])*self.sampleRate:int(seg[1])*self.sampleRate])
+        else: # eRatio of the whole file e.g. the extracted segments
+            sp = SignalProc.SignalProc(self.audioData, self.sampleRate, 256, 128)
+            self.sg = sp.spectrogram(self.audioData)
 
-        sp = SignalProc.SignalProc(self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate], self.sampleRate, 256, 128)
-        self.sg = sp.spectrogram(self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate])
+        f1 = 1500
+        f2 = 4000
+        F1 = f1 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
+        F2 = f2 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
+
+        e = np.sum(self.sg[:,int(F2):],axis=1)
+        eband = np.sum(self.sg[:,int(F1):int(F2)],axis=1)
+        if AviaNZ_extra:
+            return eband/e, 1
+        else:
+            return np.mean(eband/e)
+
+    def eRatioConfdV2(self, seg):
+            '''
+            This is a post processor to introduce some confidence level
+            testing a variation of eratio = energy in band within segment/energy in band 10sec before or after the segment
+            '''
+            # TODO: Check range -- species specific of course!
+            # Also recording range specific -- 16KHz will be different -- resample?
+            if seg:  # going through segments
+                sp = SignalProc.SignalProc(self.audioData[int(seg[0]) * self.sampleRate:int(seg[1]) * self.sampleRate],
+                                           self.sampleRate, 256, 128)
+                self.sg = sp.spectrogram(self.audioData[int(seg[0]) * self.sampleRate:int(seg[1]) * self.sampleRate])
+                # get neighbour
+                if seg[0] >= 0: #10 sec before
+                    sp_nbr = SignalProc.SignalProc(self.audioData[int(seg[0]-10) * self.sampleRate:int(seg[0]) * self.sampleRate],
+                                           self.sampleRate, 256, 128)
+                    sg_nbr = sp_nbr.spectrogram(self.audioData[int(seg[0]-10) * self.sampleRate:int(seg[0]) * self.sampleRate])
+                else: # 10 sec after
+                    sp_nbr = SignalProc.SignalProc(
+                        self.audioData[int(seg[1]) * self.sampleRate:int(seg[1]+10) * self.sampleRate],
+                        self.sampleRate, 256, 128)
+                    sg_nbr = sp_nbr.spectrogram(
+                        self.audioData[int(seg[1]) * self.sampleRate:int(seg[1]+10) * self.sampleRate])
+
+            f1 = 1500
+            f2 = 7000
+            F1 = f1 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
+            F2 = f2 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
+
+            # e = np.sum(self.sg[:, int(F2):], axis=1)
+            eband = np.sum(self.sg[:, int(F1):int(F2)], axis=1)
+            enbr = np.sum(sg_nbr[:, int(F1):int(F2)], axis=1)
+            return (np.mean(eband) / np.mean(enbr))
+
+    def eRatioConfd2(self, thr=2.5):
+        '''
+        Same as above but it checks all segments (delete after Tier1)
+        This is a post processor to introduce some confidence level
+        high ratio --> classes 1-3 'good' calls
+        low ratio --> classes 4-5 'weak' calls
+        ratio = energy in band/energy above the band
+        The problem with this simple classifier is that the ratio is relatively low when the
+        calls are having most of the harmonics (close range)
+        Mostly works
+        '''
+        # TODO: Check range -- species specific of course!
+        # Also recording range specific -- 16KHz will be different -- resample?
+        # import WaveletSegment
+        # ws = WaveletSegment.WaveletSegment()
+        # detected = np.where(self.detections > 0)
+        # # print "det",detected
+        # if np.shape(detected)[1] > 1:
+        #     detected = ws.identifySegments(np.squeeze(detected))
+        # elif np.shape(detected)[1] == 1:
+        #     detected = ws.identifySegments(detected)
+        # else:
+        #     detected=[]
+
+        sp = SignalProc.SignalProc(self.audioData, self.sampleRate, 256, 128)
+        self.sg = sp.spectrogram(self.audioData)
 
         # f1 = 1500
         # f2 = 4000
@@ -263,26 +391,22 @@ class postProcess:
         # return eband/e, 1
         f1 = 1100
         f2 = 4000
-        # for seg in self.detections:
-        # e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, :]) /128     # whole frequency range
-        # nBand = 128  # number of frequency bands
-        # e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f2 * 128 / (self.sampleRate / 2):])  # f2:
-        e = np.sum(self.sg[:, f2 * 128 / (self.sampleRate / 2):])  # f2:
-        nBand = 128 - f2 * 128 / (self.sampleRate / 2)    # number of frequency bands
-        e=e/nBand   # per band power
+        for seg in self.segments:
+            # e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, :]) /128     # whole frequency range
+            # nBand = 128  # number of frequency bands
+            e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f2 * 128 / (self.sampleRate / 2):])  # f2:
+            nBand = 128 - f2 * 128 / (self.sampleRate / 2)    # number of frequency bands
+            e=e/nBand   # per band power
 
-        # eBand = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f1 * 128 / (self.sampleRate / 2):f2 * 128 / (self.sampleRate / 2)]) # f1:f2
-        eBand = np.sum(self.sg[:, f1 * 128 / (self.sampleRate / 2):f2 * 128 / (self.sampleRate / 2)])  # f1:f2
-        nBand = f2 * 128 / (self.sampleRate / 2) - f1 * 128 / (self.sampleRate / 2)
-        eBand = eBand / nBand
-        r = eBand/e
-        print seg, r
-        if r>thr:
-            # self.confirmedSegments.append(seg)
-            return True
-        else:
-            # self.segmentstoCheck.append(seg)
-            return False
+            eBand = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f1 * 128 / (self.sampleRate / 2):f2 * 128 / (self.sampleRate / 2)]) # f1:f2
+            nBand = f2 * 128 / (self.sampleRate / 2) - f1 * 128 / (self.sampleRate / 2)
+            eBand = eBand / nBand
+            r = eBand/e
+            # print seg, r
+            if r>thr:
+                self.confirmedSegments.append(seg)
+            else:
+                self.segmentstoCheck.append(seg)
 
     def detectClicks(self,sg=None):
         '''
@@ -405,7 +529,7 @@ class exportSegments:
             ws.cell(row=r, column=1, value=str(relfname))
             # Loop over the segments
             for seg in self.segments:
-                if seg[1]-seg[0] < self.minLen: # skip very short segments
+                if int(seg[1]-seg[0]) < self.minLen: # skip very short segments
                     continue
                 ws.cell(row=r, column=2, value=str(QTime().addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
                 ws.cell(row=r, column=3, value=str(QTime().addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
