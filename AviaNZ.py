@@ -160,6 +160,7 @@ class AviaNZ(QMainWindow):
         One interesting configuration point is the DOC setting, which hides the more 'research' functions."""
         super(AviaNZ, self).__init__()
         self.root = root
+        self.extra=True
         if configfile is not None:
             try:
                 self.config = json.load(open(configfile))
@@ -488,12 +489,16 @@ class AviaNZ(QMainWindow):
         self.d_spec = Dock("Spectrogram",size=(1200,300))
         self.d_controls = Dock("Controls",size=(40,100))
         self.d_files = Dock("Files",size=(40,200))
+        if self.extra:
+            self.d_plot = Dock("Plots",size=(1200,150))
 
         self.area.addDock(self.d_files,'left')
         self.area.addDock(self.d_overview,'right',self.d_files)
         self.area.addDock(self.d_ampl,'bottom',self.d_overview)
         self.area.addDock(self.d_spec,'bottom',self.d_ampl)
         self.area.addDock(self.d_controls,'bottom',self.d_files)
+        if self.extra:
+            self.area.addDock(self.d_plot,'bottom',self.d_spec)
 
         # Put content widgets in the docks
         self.w_overview = pg.LayoutWidget()
@@ -517,6 +522,12 @@ class AviaNZ(QMainWindow):
         self.w_spec.addItem(self.p_spec,row=0,col=1)
         self.d_spec.addWidget(self.w_spec)
 
+        if self.extra:
+            self.w_plot = pg.GraphicsLayoutWidget()
+            self.p_plot = self.w_plot.addViewBox(enableMouse=False,enableMenu=False)
+            self.w_plot.addItem(self.p_plot,row=0,col=1)
+            self.d_plot.addWidget(self.w_plot)
+
         # The axes
         # Time axis has to go separately in loadFile
 
@@ -531,6 +542,14 @@ class AviaNZ(QMainWindow):
         self.specaxis.linkToView(self.p_spec)
         self.specaxis.setWidth(w=65)
 
+        if self.extra:
+            # Plot window also needs an axis to make them line up
+            self.plotaxis = pg.AxisItem(orientation='left')
+            self.w_plot.addItem(self.plotaxis,row=0,col=0)
+            self.plotaxis.linkToView(self.p_plot)
+            self.plotaxis.setWidth(w=65)
+            self.plotaxis.setLabel('')
+
         # The print out at the bottom of the spectrogram with data in
         self.pointData = pg.TextItem(color=(255,0,0),anchor=(0,0))
         self.p_spec.addItem(self.pointData)
@@ -542,6 +561,30 @@ class AviaNZ(QMainWindow):
         self.p_ampl.addItem(self.amplPlot)
         self.specPlot = pg.ImageItem()
         self.p_spec.addItem(self.specPlot)
+
+        if self.extra:
+            self.plotPlot = pg.PlotDataItem()
+            self.p_plot.addItem(self.plotPlot)
+            self.plotPlot2 = pg.PlotDataItem()
+            self.p_plot.addItem(self.plotPlot2)
+            self.plotPlot3 = pg.PlotDataItem()
+            self.p_plot.addItem(self.plotPlot3)
+            self.plotPlot4 = pg.PlotDataItem()
+            self.p_plot.addItem(self.plotPlot4)
+            self.plotPlot5 = pg.PlotDataItem()
+            self.p_plot.addItem(self.plotPlot5)
+            self.plotPlot6 = pg.PlotDataItem()
+            self.p_plot.addItem(self.plotPlot6)
+            self.plotPlot7 = pg.PlotDataItem()
+            self.p_plot.addItem(self.plotPlot7)
+            self.plotPlot8 = pg.PlotDataItem()
+            self.p_plot.addItem(self.plotPlot8)
+            self.plotPlot9 = pg.PlotDataItem()
+            self.p_plot.addItem(self.plotPlot9)
+            self.plotPlot10 = pg.PlotDataItem()
+            self.p_plot.addItem(self.plotPlot10)
+            self.plotPlot11 = pg.PlotDataItem()
+            self.p_plot.addItem(self.plotPlot11)
 
         # Connect up the listeners
         self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
@@ -1430,12 +1473,28 @@ class AviaNZ(QMainWindow):
         Does the work of keeping all the plots in the right place as the overview moves.
         It sometimes updates a bit slowly. """
 
+        #3/4/18: Want to stop it moving past either end
         minX, maxX = self.overviewImageRegion.getRegion()
+        #print minX, maxX
+        if minX<0:
+            l = maxX-minX
+            minX=0
+            maxX=minX+l
+            self.overviewImageRegion.setRegion([minX,maxX])
+        if maxX>len(self.sg):
+            l = maxX-minX
+            maxX=len(self.sg)
+            minX=maxX-l
+            self.overviewImageRegion.setRegion([minX,maxX])
+
         self.widthWindow.setValue(self.convertSpectoAmpl(maxX-minX))
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.p_spec.setXRange(minX, maxX, padding=0)
+        # I know the next two lines SHOULD be unnecessary. But they aren't!
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.p_spec.setXRange(minX, maxX, padding=0)
+        if self.extra:
+            self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
         self.pointData.setPos(minX,0)
@@ -1472,6 +1531,110 @@ class AviaNZ(QMainWindow):
             self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.p_spec.addItem(self.bar, ignoreBounds=True)
         self.bar.sigPositionChangeFinished.connect(self.barMoved)
+
+        if self.extra:
+            # Extra stuff to show test plots
+            #self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
+            pproc = SupportClasses.postProcess(self.audiodata,self.sampleRate)
+            #energy, e = pproc.detectClicks()
+            #energy, e = pproc.eRatioConfd()
+            #if len(clicks)>0:
+            #self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),energy)
+            #self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),e*np.ones(np.shape(self.sg)[0]))
+            #self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),e2)
+
+            #ws = WaveletSegment.WaveletSegment(species='kiwi')
+            #e = ws.computeWaveletEnergy(self.audiodata,self.sampleRate)
+
+            # # Call MFCC in Features and plot some of them :)
+            # ff = Features.Features(self.audiodata,self.sampleRate)
+            # e = ff.get_mfcc()
+            # print np.shape(e)
+            # print np.sum(e, axis=0)
+            # print e[0,:]
+            #
+            # # self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),np.sum(e,axis=0))
+            # # self.plotPlot.setPen(fn.mkPen('k'))
+            # # self.plotPlot2.setData(np.linspace(0.0, float(self.datalength) / self.sampleRate, num=np.shape(e)[1], endpoint=True), e[0,:])
+            # # self.plotPlot2.setPen(fn.mkPen('c'))
+            # e1 = e[1,:]
+            # e1 = (e[1,:]- np.mean(e[1,:]))/np.std(e[1,:])
+            # self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e1)
+            # self.plotPlot2.setPen(fn.mkPen('r'))
+            # mean = np.mean(e1)
+            # std = np.std(e1)
+            # thr = mean - 2 * std
+            # thr = np.ones((1, 100)) * thr
+            # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100, endpoint=True), thr[0,:])
+            # self.plotPlot7.setPen(fn.mkPen('c'))
+            # # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
+            # # self.plotPlot3.setPen(fn.mkPen('c'))
+            # # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[3,:])
+            # # self.plotPlot4.setPen(fn.mkPen('r'))
+            # # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[4,:])
+            # # self.plotPlot5.setPen(fn.mkPen('g'))
+            # # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[5,:])
+            # # self.plotPlot6.setPen(fn.mkPen('g'))
+            # # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[6,:])
+            # # self.plotPlot7.setPen(fn.mkPen('g'))
+            # # self.plotPlot8.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[7,:])
+            # # self.plotPlot8.setPen(fn.mkPen('g'))
+            # # self.plotPlot9.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[8,:])
+            # # self.plotPlot9.setPen(fn.mkPen('g'))
+            # # self.plotPlot10.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[9,:])
+            # # self.plotPlot10.setPen(fn.mkPen('g'))
+            # # self.plotPlot11.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[10,:])
+            # # self.plotPlot11.setPen(fn.mkPen('c'))
+
+            # # plot eRatio
+            post = SupportClasses.postProcess(self.audiodata, self.sampleRate, [])
+            # e = post.eRatioConfd([], AviaNZ_extra=True)
+            # # print np.shape(e)
+            # # print e[0]
+            # # print np.shape(e[0])[0]
+            # self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e[0])[0],endpoint=True),e[0])
+            # self.plotPlot.setPen(fn.mkPen('b'))
+
+            # plot wind/rain
+            wind, rain, mean_rain = post.WindRain(windTest=False, rainTest=True)
+            wind = np.ones((1,100))*wind
+            # rain = np.ones((1,100))*rain    # rain is SNR
+            # thr = np.ones((1,100))*3.5      # rain SNR thr is 3.5
+            # mean_rain = np.ones((1, 100)) * mean_rain
+            # mean_rain_thr = np.ones((1,100)) * 1e-6     # rain mean thr is 1e-6
+            wind_thr = np.ones((1, 100)) * 1e-8
+            # print np.shape(wind)
+            # print rain[0,:]
+            self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind[0,:])
+            self.plotPlot3.setPen(fn.mkPen('r'))
+            self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind_thr[0,:])
+            self.plotPlot4.setPen(fn.mkPen('k'))
+            # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain[0,:])
+            # self.plotPlot5.setPen(fn.mkPen('b'))
+            # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain_thr[0,:])
+            # self.plotPlot6.setPen(fn.mkPen('g'))
+
+            # # plot wavelet
+            # ws = WaveletSegment.WaveletSegment(self.audiodata, self.sampleRate)
+            # e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
+            # print np.shape(e)
+            # print np.shape(e)[1]
+            # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[1,:])
+            # self.plotPlot3.setPen(fn.mkPen('r'))
+            # mean = np.mean(e[1,:])
+            # std = np.std(e[1,:])
+            # thr = mean + 2.5 * std
+            # thr = np.ones((1, 100)) * thr
+            # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100, endpoint=True), thr[0,:])
+            # self.plotPlot7.setPen(fn.mkPen('c'))
+            #
+            # # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
+            # # self.plotPlot4.setPen(fn.mkPen('g'))
+            # # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[0,:])
+            # # self.plotPlot5.setPen(fn.mkPen('b'))
+            # # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[14,:])
+            # # self.plotPlot6.setPen(fn.mkPen('k'))
+
         QApplication.processEvents()
 
     def updateRegion_spec(self):
@@ -1544,6 +1707,7 @@ class AviaNZ(QMainWindow):
         if not saveSeg:
             timeRangeStart = self.startRead
             timeRangeEnd = min(self.startRead + self.lenRead, float(self.fileLength) / self.sampleRate)
+
             if startpoint >= timeRangeStart and endpoint <= timeRangeEnd:
                 show = True
                 # Put the startpoint and endpoint in the right range
@@ -1729,16 +1893,16 @@ class AviaNZ(QMainWindow):
                 # If they pressed Control, add ? to the names
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
-                    self.addSegment(self.start_location, mousePoint.x(),species=self.lastSpecies)
+                    self.addSegment(self.start_location, max(mousePoint.x(),0.0),species=self.lastSpecies)
                     self.box1id = len(self.segments) - 1
                 elif modifiers == QtCore.Qt.ControlModifier:
-                    self.addSegment(self.start_location,mousePoint.x())
+                    self.addSegment(self.start_location,max(mousePoint.x(),0.0))
                     # Context menu
                     self.box1id = len(self.segments) - 1
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
-                    self.addSegment(self.start_location,mousePoint.x())
+                    self.addSegment(self.start_location,max(mousePoint.x(),0.0))
                     # Context menu
                     self.box1id = len(self.segments) - 1
                     self.fillBirdList()
@@ -1818,7 +1982,6 @@ class AviaNZ(QMainWindow):
         pos = evt.scenePos()
 
         if self.box1id>-1:
-            # print '***', self.box1id, len(self.listRectanglesa1)
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
             if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
@@ -1857,16 +2020,16 @@ class AviaNZ(QMainWindow):
                     # If the user has pressed shift, copy the last species and don't use the context menu
                     modifiers = QtGui.QApplication.keyboardModifiers()
                     if modifiers == QtCore.Qt.ShiftModifier:
-                        self.addSegment(self.start_location, self.convertSpectoAmpl(mousePoint.x()), species=self.lastSpecies)
+                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(),0.0)), species=self.lastSpecies)
                         self.box1id = len(self.segments) - 1
                     elif modifiers == QtCore.Qt.ControlModifier:
-                        self.addSegment(self.start_location, self.convertSpectoAmpl(mousePoint.x()))
+                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(),0.0)))
                         # Context menu
                         self.box1id = len(self.segments) - 1
                         self.fillBirdList(unsure=True)
                         self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                     else:
-                        self.addSegment(self.start_location, self.convertSpectoAmpl(mousePoint.x()))
+                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(),0.0)))
                         # Context menu
                         self.box1id = len(self.segments) - 1
                         self.fillBirdList()
@@ -1966,19 +2129,22 @@ class AviaNZ(QMainWindow):
             evt1 = self.p_spec.mapSceneToView(evt1)
             evt2 = self.p_spec.mapSceneToView(evt2)
 
+            startx = max(min(evt1.x(), evt2.x()),0)
+            endx = min(max(evt1.x(),evt2.x()),np.shape(self.sg)[0]+1)
+
             # If the user has pressed shift, copy the last species and don't use the context menu
             modifiers = QtGui.QApplication.keyboardModifiers()
             if modifiers == QtCore.Qt.ShiftModifier:
-                self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1],self.lastSpecies)
+                self.addSegment(self.convertSpectoAmpl(startx), self.convertSpectoAmpl(endx), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1],self.lastSpecies)
                 self.box1id = len(self.segments) - 1
             elif modifiers == QtCore.Qt.ControlModifier:
-                self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1])
+                self.addSegment(self.convertSpectoAmpl(startx), self.convertSpectoAmpl(endx), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1])
                 # Context menu
                 self.box1id = len(self.segments) - 1
                 self.fillBirdList(unsure=True)
                 self.menuBirdList.popup(QPoint(evt3.x(), evt3.y()))
             else:
-                self.addSegment(self.convertSpectoAmpl(evt1.x()), self.convertSpectoAmpl(evt2.x()), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1])
+                self.addSegment(self.convertSpectoAmpl(startx), self.convertSpectoAmpl(endx), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1])
                 # Context menu
                 self.box1id = len(self.segments) - 1
                 self.fillBirdList()
@@ -3406,8 +3572,8 @@ class AviaNZ(QMainWindow):
         while self.filename[i] != '/' and i>0:
             i = i-1
         #print self.filename[i:], type(self.filename)
-        # self.listLoadFile(self.filename[i+1:])
-        self.loadFile(self.filename[i+1:])
+        self.listLoadFile(self.filename[i+1:])
+        #self.loadFile(self.filename[i+1:])
 
 # ============
 # Various actions: deleting segments, saving, quitting
