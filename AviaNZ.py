@@ -3572,6 +3572,7 @@ class AviaNZ(QMainWindow):
         while self.filename[i] != '/' and i>0:
             i = i-1
         #print self.filename[i:], type(self.filename)
+        # TODO: This next one does a bit too much, but just loadFile isn't enough. Could make more efficient by taking the bits of listLoadFile we need.
         self.listLoadFile(self.filename[i+1:])
         #self.loadFile(self.filename[i+1:])
 
