@@ -1475,17 +1475,18 @@ class AviaNZ(QMainWindow):
 
         #3/4/18: Want to stop it moving past either end
         minX, maxX = self.overviewImageRegion.getRegion()
+        # TODO: The next bit is recursive!
         #print minX, maxX
         if minX<0:
             l = maxX-minX
             minX=0
             maxX=minX+l
-            self.overviewImageRegion.setRegion([minX,maxX])
+            #self.overviewImageRegion.setRegion([minX,maxX])
         if maxX>len(self.sg):
             l = maxX-minX
             maxX=len(self.sg)
             minX=maxX-l
-            self.overviewImageRegion.setRegion([minX,maxX])
+            #self.overviewImageRegion.setRegion([minX,maxX])
 
         self.widthWindow.setValue(self.convertSpectoAmpl(maxX-minX))
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
@@ -1730,7 +1731,7 @@ class AviaNZ(QMainWindow):
         if show:
             # This is one we want to show
             # Get the name and colour sorted
-            if species is None or not isinstance(species,str):
+            if species is None: # or not isinstance(species,str):
                 species = "Don't Know"
 
             if species != "Don't Know":
