@@ -3572,9 +3572,18 @@ class AviaNZ(QMainWindow):
         while self.filename[i] != '/' and i>0:
             i = i-1
         #print self.filename[i:], type(self.filename)
-        # TODO: This next one does a bit too much, but just loadFile isn't enough. Could make more efficient by taking the bits of listLoadFile we need.
-        self.listLoadFile(self.filename[i+1:])
-        #self.loadFile(self.filename[i+1:])
+
+
+        if len(self.segments) > 0 or self.hasSegments:
+            if len(self.segments)>0:
+                if self.segments[0][0] > -1:
+                    self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
+            else:
+                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
+            self.saveSegments()
+
+        self.resetStorageArrays()
+        self.loadFile(self.filename[i+1:])
 
 # ============
 # Various actions: deleting segments, saving, quitting
