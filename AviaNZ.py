@@ -1730,7 +1730,7 @@ class AviaNZ(QMainWindow):
         if show:
             # This is one we want to show
             # Get the name and colour sorted
-            if species is None:
+            if species is None or not isinstance(species,str):
                 species = "Don't Know"
 
             if species != "Don't Know":
