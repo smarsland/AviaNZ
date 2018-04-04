@@ -1474,19 +1474,21 @@ class AviaNZ(QMainWindow):
         It sometimes updates a bit slowly. """
 
         #3/4/18: Want to stop it moving past either end
+        # Need to disconnect the listener and reconnect it to avoid a recursive call
+        self.overviewImageRegion.sigRegionChangeFinished.disconnect()
         minX, maxX = self.overviewImageRegion.getRegion()
-        # TODO: The next bit is recursive!
         #print minX, maxX
         if minX<0:
             l = maxX-minX
             minX=0
             maxX=minX+l
-            #self.overviewImageRegion.setRegion([minX,maxX])
+            self.overviewImageRegion.setRegion([minX,maxX])
         if maxX>len(self.sg):
             l = maxX-minX
             maxX=len(self.sg)
             minX=maxX-l
-            #self.overviewImageRegion.setRegion([minX,maxX])
+            self.overviewImageRegion.setRegion([minX,maxX])
+        self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
 
         self.widthWindow.setValue(self.convertSpectoAmpl(maxX-minX))
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
