@@ -1423,11 +1423,11 @@ class AviaNZ(QMainWindow):
 
     def convertAmpltoSpec(self,x):
         """ Unit conversion """
-        return x*self.sampleRate/self.config['incr']
+        return x*self.sampleRate/float(self.config['incr'])
 
     def convertSpectoAmpl(self,x):
         """ Unit conversion """
-        return x*self.config['incr']/self.sampleRate
+        return x*self.config['incr']/float(self.sampleRate)
 
     def convertMillisecs(self,millisecs):
         """ Unit conversion """
@@ -1475,27 +1475,32 @@ class AviaNZ(QMainWindow):
 
         #3/4/18: Want to stop it moving past either end
         # Need to disconnect the listener and reconnect it to avoid a recursive call
-        self.overviewImageRegion.sigRegionChangeFinished.disconnect()
         minX, maxX = self.overviewImageRegion.getRegion()
-        #print minX, maxX
+        print minX, maxX
         if minX<0:
             l = maxX-minX
-            minX=0
+            minX=0.0
             maxX=minX+l
+            self.overviewImageRegion.sigRegionChangeFinished.disconnect()
             self.overviewImageRegion.setRegion([minX,maxX])
+            self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
         if maxX>len(self.sg):
             l = maxX-minX
-            maxX=len(self.sg)
+            maxX=float(len(self.sg))
             minX=maxX-l
+            self.overviewImageRegion.sigRegionChangeFinished.disconnect()
             self.overviewImageRegion.setRegion([minX,maxX])
-        self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
+            self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
 
         self.widthWindow.setValue(self.convertSpectoAmpl(maxX-minX))
-        self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
-        self.p_spec.setXRange(minX, maxX, padding=0)
+        self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), update=True, padding=0)
+        self.p_spec.setXRange(minX, maxX, update=True, padding=0)
+
         # I know the next two lines SHOULD be unnecessary. But they aren't!
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.p_spec.setXRange(minX, maxX, padding=0)
+
+        print self.p_spec.viewRange()[0], self.convertAmpltoSpec(self.convertSpectoAmpl(self.p_spec.viewRange()[0][0])), self.p_ampl.viewRange()[0], self.convertSpectoAmpl(self.p_spec.viewRange()[0][0]), self.convertSpectoAmpl(self.p_spec.viewRange()[0][1]), self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX)
         if self.extra:
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
@@ -3193,13 +3198,13 @@ class AviaNZ(QMainWindow):
             # Get the data for the spectrogram
             sgRaw = self.sp.spectrogram(self.audiodata,mean_normalise=True,onesided=True,multitaper=False)
             segment = sgRaw[int(x1):int(x2),:]
-            len_seg = (x2-x1) * self.config['incr'] / self.sampleRate
+            len_seg = (x2-x1) * self.config['incr'] / float(self.sampleRate)
             indices = self.seg.findCCMatches(segment,sgRaw,thr)
             # indices are in spectrogram pixels, need to turn into times
             for i in indices:
                 # Miss out the one selected: note the hack parameter
                 if np.abs(i-x1) > self.config['overlap_allowed']:
-                    time = float(i)*self.config['incr'] / self.sampleRate
+                    time = float(i)*self.config['incr'] / float(self.sampleRate)
                     self.addSegment(time, time+len_seg,0,0,self.segments[self.box1id][4])
             self.statusLeft.setText("Ready")
 
