@@ -4,8 +4,8 @@
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
 import sys,os
-from PyQt4.QtCore import *
-from PyQt4.QtGui import *
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
@@ -196,10 +196,10 @@ class OperatorReviewer(QDialog):
 
         self.operatorlabel = QLabel("Operator")
         self.name1 = QLineEdit(self)
-        self.name1.setText(QString(operator))
+        self.name1.setText(operator)
         self.reviewerlabel = QLabel("Reviewer")
         self.name2 = QLineEdit(self)
-        self.name2.setText(QString(reviewer))
+        self.name2.setText(reviewer)
         self.activate = QPushButton("Set")
 
         Box = QVBoxLayout()
