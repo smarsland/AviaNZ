@@ -197,6 +197,7 @@ class AviaNZ(QMainWindow):
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
         self.setWindowTitle('AviaNZ')
+        keyPressed = QtCore.Signal(int)
 
         # Make life easier for now: preload a birdsong
         firstFile = 'tril1.wav' #'male1.wav' # 'kiwi.wav'#'
@@ -763,8 +764,8 @@ class AviaNZ(QMainWindow):
         self.ROItype = type(p_spec_r)
 
         # Listener for key presses
-        self.connect(self.p_spec, SIGNAL("keyPressed"),self.handleKey)
-        #self.p_spec.keyPressed.connect(self.handleKey)
+        #self.connect(self.p_spec, SIGNAL("keyPressed"),self.handleKey)
+        self.p_spec.keyPressed.connect(self.handleKey)
 
         # Store the state of the docks in case the user wants to reset it
         self.state = self.area.saveState()
@@ -799,18 +800,23 @@ class AviaNZ(QMainWindow):
         # Plot everything
         self.show()
 
-    def keyPressEvent(self,ev):
-        """ Listener to handle keypresses and emit a keypress event, which is dealt with by handleKey()"""
-        self.emit(SIGNAL("keyPressed"),ev)
+    #def keyPressEvent(self,ev):
+    #    """ Listener to handle keypresses and emit a keypress event, which is dealt with by handleKey()"""
+    #    #self.emit(SIGNAL("keyPressed"),ev)
+    #    print "here"
+    #    print ev.key()
+    #    self.keyPressed.emit(ev)
 
     def handleKey(self,ev):
         """ Handle keys pressed during program use.
         These are:
             backspace to delete a segment
             escape to pause playback """
-        if ev.key() == Qt.Key_Backspace:
+        #if ev.key() == Qt.Key_Backspace:
+        if ev == Qt.Key_Backspace:
             self.deleteSegment()
-        elif ev.key() == Qt.Key_Escape:
+        #elif ev.key() == Qt.Key_Escape:
+        elif ev == Qt.Key_Escape:
             if self.media_obj.state() != phonon.Phonon.PausedState or self.media_obj.state() != phonon.Phonon.StoppedState:
                 self.media_obj.pause()
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
@@ -3137,7 +3143,7 @@ class AviaNZ(QMainWindow):
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
             # Save the excel file
-            out = SupportClasses.exportSegments(annotation=newSegments, species=species, startTime=self.startTime, segments=self.segments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
+            out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=self.segments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
             out.excel()
             # self.exportSegments(newSegments,species=species)
 
@@ -3718,6 +3724,7 @@ class AviaNZ(QMainWindow):
             if self.segments[0][0] > -1:
                 self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
         else:
+            # TODO: This means that a file is always created. Is that a bug? Option: ask user -> wording?
             self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
         self.saveSegments()
         if self.saveConfig == True:

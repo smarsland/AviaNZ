@@ -835,7 +835,8 @@ class HumanClassify1(QDialog):
         # Explicitly add "Other" option in
         self.birds3.insertItem(0, 'Other')
 
-        self.connect(self.birds3, SIGNAL("itemClicked(QListWidgetItem*)"), self.listBirdsClicked)
+        #self.connect(self.birds3, SIGNAL("itemClicked(QListWidgetItem*)"), self.listBirdsClicked)
+        self.birds3.itemClicked.connect(self.listBirdsClicked)
         self.birds3.setEnabled(False)
 
         # This is the text box for missing birds
@@ -1277,10 +1278,10 @@ class HumanClassify2a(QDialog):
 
         ok = QPushButton('OK')
         cancel = QPushButton('Cancel')
-        self.connect(ok, SIGNAL('clicked()'), self.ok)
-        self.connect(cancel,SIGNAL('clicked()'), self.cancel)
-        #self.ok.clicked.connect(self.ok)
-        #self.cancel.clicked.connect(self.cancel)
+        #self.connect(ok, SIGNAL('clicked()'), self.ok)
+        #self.connect(cancel,SIGNAL('clicked()'), self.cancel)
+        ok.clicked.connect(self.ok)
+        cancel.clicked.connect(self.cancel)
 
         layout = QVBoxLayout()
         layout.addWidget(QLabel('Choose the bird you wish to see classification of:'))
