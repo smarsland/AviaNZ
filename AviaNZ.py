@@ -184,6 +184,7 @@ class AviaNZ(QMainWindow):
         self.box1id = -1
         self.DOC=DOC
         self.started=False
+        self.segmentsToSave=False
         self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.startTime = 0
 
@@ -883,6 +884,7 @@ class AviaNZ(QMainWindow):
 
         # Remove the segments
         self.removeSegments()
+        self.segmentsToSave = False
         if hasattr(self, 'overviewImageRegion'):
             self.p_overview.removeItem(self.overviewImageRegion)
 
@@ -951,12 +953,7 @@ class AviaNZ(QMainWindow):
                 if len(self.previousFile)>0:
                     self.previousFile = self.previousFile[0]
 
-            if len(self.segments) > 0 or self.hasSegments:
-                if len(self.segments)>0:
-                    if self.segments[0][0] > -1:
-                        self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
-                else:
-                    self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
+            if self.segmentsToSave:
                 self.saveSegments()
                 self.previousFile.setTextColor(Qt.red)
         self.previousFile = current
@@ -1121,6 +1118,7 @@ class AviaNZ(QMainWindow):
                             self.operator = self.segments[0][2]
                             self.reviewer = self.segments[0][3]
                             del self.segments[0]
+                            self.segmentsToSave=True
                     if len(self.segments) > 0:
                         if self.segments[0][2] > 1.5 and self.segments[0][3] > 1.5:
                             # Legacy version didn't normalise the segment data for dragged boxes
@@ -1130,11 +1128,7 @@ class AviaNZ(QMainWindow):
                             for s in self.segments:
                                 s[2] = s[2]/128
                                 s[3] = s[3]/128
-                        self.hasSegments = True
-                    else:
-                        self.hasSegments = False
-                else:
-                    self.hasSegments = False
+                        self.segmentsToSave = True
 
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
@@ -1738,7 +1732,7 @@ class AviaNZ(QMainWindow):
             else:
                 show = False
         else:
-            self.hasSegments = True
+            self.segmentsToSave = True
             show = True
 
         if show:
@@ -2291,6 +2285,7 @@ class AviaNZ(QMainWindow):
 
         # Store the species in case the user wants it for the next segment
         self.lastSpecies = text
+        self.segmentsToSave = True
 
     def setColourMap(self,cmap):
         """ Listener for the menu item that chooses a colour map.
@@ -2351,12 +2346,7 @@ class AviaNZ(QMainWindow):
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
 
     def prepare5minMove(self):
-        if len(self.segments) > 0 or self.hasSegments:
-            if len(self.segments)>0:
-                if self.segments[0][0] > -1:
-                    self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
-            else:
-                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
+        if self.segmentsToSave:
             self.saveSegments()
         self.resetStorageArrays()
         # Reset the media player
@@ -3397,6 +3387,7 @@ class AviaNZ(QMainWindow):
         self.reviewer = str(name2)
         self.statusRight.setText("Operator: " + self.operator + ", Reviewer: "+self.reviewer)
         self.setOperatorReviewerDialog.close()
+        self.segmentsToSave = True
 
     def saveImage(self): # ??? it doesn't save the image
         # filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
@@ -3588,12 +3579,7 @@ class AviaNZ(QMainWindow):
         #print self.filename[i:], type(self.filename)
 
 
-        if len(self.segments) > 0 or self.hasSegments:
-            if len(self.segments)>0:
-                if self.segments[0][0] > -1:
-                    self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
-            else:
-                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
+        if self.segmentsToSave:
             self.saveSegments()
 
         self.resetStorageArrays()
@@ -3641,6 +3627,7 @@ class AviaNZ(QMainWindow):
             del self.segments[id]
             del self.listRectanglesa1[id]
             del self.listRectanglesa2[id]
+            self.segmentsToSave = True
             self.box1id = -1
 
     def deleteAll(self):
@@ -3667,6 +3654,7 @@ class AviaNZ(QMainWindow):
             reply = msg.exec_()
             if reply == QMessageBox.Yes:
                 self.removeSegments()
+                self.segmentsToSave = True
 
     def removeSegments(self,delete=True):
         """ Remove all the segments in response to the menu selection, or when a new file is loaded. """
@@ -3706,18 +3694,10 @@ class AviaNZ(QMainWindow):
             print "value of pressed message box button:", retval
             return retval
 
-        if len(self.segments) > 0 or self.hasSegments:
+        if self.segmentsToSave:
             print("Saving segments to " + self.filename)
-            if len(self.segments) > 0:
-                if self.segments[0][0] > -1:
-                    self.segments.insert(0,
-                                         [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')),
-                                          self.operator,
-                                          self.reviewer, -1])
-            else:
-                self.segments.insert(0,
-                                     [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
-                                      self.reviewer, -1])
+            if self.segments[0][0] > -1:
+                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')),self.operator,self.reviewer, -1])
         # if len(self.segments)>0 or self.hasSegments:
         #     print("Saving segments to "+self.filename)
         #     # TODO: add operator/reviewer details?
@@ -3735,6 +3715,7 @@ class AviaNZ(QMainWindow):
             else:
                 file = open(str(self.filename) + '.data', 'w')
             json.dump(self.segments,file)
+            self.segmentsToSave = False
 
     def closeEvent(self, event):
         """ Catch the user closing the window by clicking the Close button instead of quitting. """
@@ -3745,18 +3726,7 @@ class AviaNZ(QMainWindow):
         Add in the operator and reviewer at the top, and then save the segments and the config file.
         """
 
-
         print("Quitting")
-        if len(self.segments) > 0:
-            if self.segments[0][0] > -1:
-                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
-            else:
-                retval = checkSave()
-        else:
-            # TODO: This means that a file is always created. Is that a bug? Option: ask user -> wording?
-            retval = checkSave()
-
-            self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
         self.saveSegments()
         if self.saveConfig == True:
             print "Saving config file"
