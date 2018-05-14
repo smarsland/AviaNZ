@@ -21,18 +21,19 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys, os, json, platform, re
-from PyQt5.QtCore import Qt, QDir
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame
+from PyQt5.QtCore import Qt, QDir, QTime, QTimer, QPoint, QPointF
+from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox
+from PyQt5.QtMultimedia import QAudio, QAudioOutput
 #import PyQt4.phonon as phonon
 
 import wavio
 import numpy as np
 
 import pyqtgraph as pg
-pg.setConfigOption('background','w')
-pg.setConfigOption('foreground','k')
-pg.setConfigOption('antialias',True)
+pg.setConfigOption('background', 'w')
+pg.setConfigOption('foreground', 'k')
+pg.setConfigOption('antialias', True)
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.dockarea import *
 import pyqtgraph.functions as fn
@@ -52,7 +53,7 @@ from openpyxl import load_workbook, Workbook
 
 from pyqtgraph.parametertree import Parameter, ParameterTree #, ParameterItem, registerParameterType
 
-# ==============
+# == == == == == == ==
 # TODO
 
 # (4) pysox
@@ -118,7 +119,7 @@ from pyqtgraph.parametertree import Parameter, ParameterTree #, ParameterItem, r
 
 # Given files > 5 mins, split them into 5 mins versions anyway (code is there, make it part of workflow)
 # Don't really want to load the whole thing, just 5 mins, and then move through with arrows -> how?
-# This is sometimes called paging, I think. (y, sr = librosa.load(filename, offset=15.0, duration=5.0) might help. Doesn't do much for the overview through)
+# This is sometimes called paging, I think. (y, sr = librosa.load(filename, offset = 15.0, duration = 5.0) might help. Doesn't do much for the overview through)
 # I tried saving a figure of the overview, but they are too big in general
 
 # Things to remember
@@ -148,32 +149,32 @@ from pyqtgraph.parametertree import Parameter, ParameterTree #, ParameterItem, r
     # Look up David Bryden (kokako data) looking at male, female, juvenile
     # Get all calls of a species
     # Look up freebird and raven and also BatSearch
-# ===============
+# == == == == == == == =
 
 class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
 
-    def __init__(self,root=None,configfile=None,DOC=True):
+    def __init__(self, root=None, configfile=None, DOC=True):
         """Initialisation of the class. Load a configuration file, or create a new one if it doesn't
         exist. Also initialises the data structures and loads an initial file (specified explicitly)
         and sets up the window.
         One interesting configuration point is the DOC setting, which hides the more 'research' functions."""
         super(AviaNZ, self).__init__()
         self.root = root
-        self.extra=True
+        self.extra = True
         if configfile is not None:
             try:
                 self.config = json.load(open(configfile))
                 self.saveConfig = False
             except:
-                print("Failed to load config file")
+                print "Failed to load config file"
                 self.genConfigFile()
                 self.saveConfig = True
             self.configfile = configfile
         else:
             self.genConfigFile()
-            self.saveConfig=True
+            self.saveConfig = True
             # self.configfile = 'AviaNZconfig.txt'
 
         # The data structures for the segments
@@ -181,11 +182,11 @@ class AviaNZ(QMainWindow):
         self.listRectanglesa1 = []
         self.listRectanglesa2 = []
         self.SegmentRects = []
-        self.segmentPlots=[]
+        self.segmentPlots = []
         self.box1id = -1
-        self.DOC=DOC
-        self.started=False
-        self.segmentsToSave=False
+        self.DOC = DOC
+        self.started = False
+        self.segmentsToSave = False
         self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.startTime = 0
 
@@ -211,7 +212,7 @@ class AviaNZ(QMainWindow):
 
         # Some safety checking for paths and files
         if not os.path.isdir(self.dirName):
-            print("Directory doesn't exist: making it")
+            print "Directory doesn't exist: making it"
             os.makedirs(self.dirName)
         if not os.path.isfile(self.dirName+'/'+firstFile):
             fileName, _ = QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
@@ -236,8 +237,8 @@ class AviaNZ(QMainWindow):
                     i = i - 1
                 self.dirName = fileName[:i + 1]
 
-                firstFile = fileName
-            print self.dirName, firstFile
+                firstFile = fileName[i+1:]
+	    print self.dirName, firstFile
 
         self.createFrame()
 
@@ -263,11 +264,11 @@ class AviaNZ(QMainWindow):
         # fileMenu.addAction("&Change Directory", self.chDir)
         fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
-        fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
+        fileMenu.addAction("Quit", self.quit, "Ctrl+Q")
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
         # Add it a second time, then it appears!
         if platform.system() == 'Darwin':
-            fileMenu.addAction("&Quit",self.quit,"Ctrl+Q")
+            fileMenu.addAction("&Quit", self.quit, "Ctrl+Q")
 
         specMenu = self.menuBar().addMenu("&Appearance")
 
@@ -302,38 +303,38 @@ class AviaNZ(QMainWindow):
         for colour in self.config['ColourList']:
             cm = colMenu.addAction(colour)
             cm.setCheckable(True)
-            if colour==self.config['cmap']:
+            if colour == self.config['cmap']:
                 cm.setChecked(True)
             receiver = lambda checked, cmap=colour: self.setColourMap(cmap)
             #self.connect(cm, SIGNAL("triggered()"), receiver)
             cm.triggered.connect(receiver)
             colGroup.addAction(cm)
-        self.invertcm = specMenu.addAction("Invert colour map",self.invertColourMap)
+        self.invertcm = specMenu.addAction("Invert colour map", self.invertColourMap)
         self.invertcm.setCheckable(True)
         self.invertcm.setChecked(self.config['invertColourMap'])
 
-        #if self.DOC==False:
+        #if self.DOC == False:
         #    self.showFundamental2 = specMenu.addAction("Show fundamental frequency2", self.showFundamentalFreq2)
         #    self.showFundamental2.setCheckable(True)
         #    self.showFundamental2.setChecked(False)
 
-        if self.DOC==False:
+        if not self.DOC:
             self.showInvSpec = specMenu.addAction("Show inverted spectrogram", self.showInvertedSpectrogram)
             self.showInvSpec.setCheckable(True)
             self.showInvSpec.setChecked(False)
 
-        # if self.DOC==False:
+        # if self.DOC == False:
         # self.redoaxis = specMenu.addAction("Make frequency axis tight", self.redoFreqAxis)
 
         # specMenu.addSeparator()
-        specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
+        specMenu.addAction("Change spectrogram parameters", self.showSpectrogramDialog)
 
-        self.showFundamental = specMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
+        self.showFundamental = specMenu.addAction("Show fundamental frequency", self.showFundamentalFreq, "Ctrl+F")
         self.showFundamental.setCheckable(True)
         self.showFundamental.setChecked(False)
 
         specMenu.addSeparator()
-        self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
+        self.readonly = specMenu.addAction("Make read only", self.makeReadOnly, "Ctrl+R")
         self.readonly.setCheckable(True)
         self.readonly.setChecked(self.config['readOnly'])
 
@@ -343,42 +344,42 @@ class AviaNZ(QMainWindow):
         actionMenu = self.menuBar().addMenu("&Actions")
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
         actionMenu.addSeparator()
-        actionMenu.addAction("Denoise",self.denoiseDialog,"Ctrl+N")
-        #actionMenu.addAction("Find matches",self.findMatches)
-        if self.DOC==False:
-            actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
-            actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
+        actionMenu.addAction("Denoise", self.denoiseDialog, "Ctrl+N")
+        #actionMenu.addAction("Find matches", self.findMatches)
+        if not self.DOC:
+            actionMenu.addAction("Filter spectrogram", self.medianFilterSpec)
+            actionMenu.addAction("Denoise spectrogram", self.denoiseImage)
         actionMenu.addSeparator()
-        actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
-        if self.DOC == False:
-            actionMenu.addAction("Classify segments",self.classifySegments,"Ctrl+C")
+        actionMenu.addAction("Segment", self.segmentationDialog, "Ctrl+S")
+        if not self.DOC:
+            actionMenu.addAction("Classify segments", self.classifySegments, "Ctrl+C")
         actionMenu.addSeparator()
         #self.showAllTick = actionMenu.addAction("Show all pages", self.showAllCheck)
         #self.showAllTick.setCheckable(True)
         #self.showAllTick.setChecked(self.config['showAllPages'])
-        actionMenu.addAction("Check segments [All segments]",self.humanClassifyDialog1,"Ctrl+1")
-        actionMenu.addAction("Check segments [Choose species]",self.humanClassifyDialog2,"Ctrl+2")
+        actionMenu.addAction("Check segments [All segments]", self.humanClassifyDialog1, "Ctrl+1")
+        actionMenu.addAction("Check segments [Choose species]", self.humanClassifyDialog2, "Ctrl+2")
         actionMenu.addSeparator()
-        actionMenu.addAction("Export segments to Excel",self.exportSeg)
+        actionMenu.addAction("Export segments to Excel", self.exportSeg)
         actionMenu.addSeparator()
-        actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
+        actionMenu.addAction("Save as image", self.saveImage, "Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
         actionMenu.addSeparator()
-        actionMenu.addAction("Put docks back",self.dockReplace)
+        actionMenu.addAction("Put docks back", self.dockReplace)
 
         helpMenu = self.menuBar().addMenu("&Help")
         #aboutAction = QAction("About")
-        helpMenu.addAction("Help",self.showHelp,"Ctrl+H")
+        helpMenu.addAction("Help", self.showHelp, "Ctrl+H")
         helpMenu.addAction("Cheat Sheet", self.showCheatSheet)
         helpMenu.addSeparator()
-        helpMenu.addAction("About",self.showAbout,"Ctrl+A")
+        helpMenu.addAction("About", self.showAbout, "Ctrl+A")
         if platform.system() == 'Darwin':
-            helpMenu.addAction("About",self.showAbout,"Ctrl+A")
+            helpMenu.addAction("About", self.showAbout, "Ctrl+A")
 
     def showAbout(self):
         """ Create the About Message Box"""
         msg = QMessageBox()
-        msg.setIconPixmap(QPixmap("img\AviaNZ.png"))
+        msg.setIconPixmap(QPixmap("img/AviaNZ.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
         msg.setText("The AviaNZ Program, v0.10 (June 2017)")
         msg.setInformativeText("By Stephen Marsland, Massey University (2016--2017). With code by Nirosha Priyadarshani and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Manic Purage. \ns.r.marsland@massey.ac.nz; n.p.priyadarshani@massey.ac.nz")
@@ -399,7 +400,7 @@ class AviaNZ(QMainWindow):
 
     def genConfigFile(self):
         """ If the configuration does exists, this generates one with default values for parameters. """
-        print("Generating new config file")
+        print "Generating new config file"
         self.config = {
             # Params for spectrogram
             'window_width': 256,
@@ -443,9 +444,9 @@ class AviaNZ(QMainWindow):
             #'ListBirdsEntries': ['Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit',
             #                     'Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover',
             #                     'Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
-            'BirdList': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)", "Kiwi", "Petrel","Rifleman", "Ruru", "Saddleback", "Silvereye", "Tomtit", "Tui", "Warbler", "Not Bird", "Don't Know",'Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit','Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover','Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
+            'BirdList': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)", "Kiwi", "Petrel", "Rifleman", "Ruru", "Saddleback", "Silvereye", "Tomtit", "Tui", "Warbler", "Not Bird", "Don't Know", 'Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit', 'Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover', 'Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
 
-            'ColourList': ['Grey','Viridis', 'Inferno', 'Plasma', 'Autumn', 'Cool', 'Bone', 'Copper', 'Hot', 'Jet','Thermal','Flame','Yellowy','Bipolar','Spectrum'],
+            'ColourList': ['Grey', 'Viridis', 'Inferno', 'Plasma', 'Autumn', 'Cool', 'Bone', 'Copper', 'Hot', 'Jet', 'Thermal', 'Flame', 'Yellowy', 'Bipolar', 'Spectrum'],
             # The colours for the segment boxes
             'ColourNone': (0, 0, 255, 100), # Blue
             'ColourSelected': (0, 255, 0, 100), # Green
@@ -486,78 +487,78 @@ class AviaNZ(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.resize(1240,600)
-        self.move(100,50)
+        self.resize(1240, 600)
+        self.move(100, 50)
 
         # Make the docks and lay them out
-        self.d_overview = Dock("Overview",size = (1200,150))
-        self.d_ampl = Dock("Amplitude",size=(1200,150))
-        self.d_spec = Dock("Spectrogram",size=(1200,300))
-        self.d_controls = Dock("Controls",size=(40,100))
-        self.d_files = Dock("Files",size=(40,200))
+        self.d_overview = Dock("Overview", size=(1200, 150))
+        self.d_ampl = Dock("Amplitude", size=(1200, 150))
+        self.d_spec = Dock("Spectrogram", size=(1200, 300))
+        self.d_controls = Dock("Controls", size=(40, 100))
+        self.d_files = Dock("Files", size=(40, 200))
         if self.extra:
-            self.d_plot = Dock("Plots",size=(1200,150))
+            self.d_plot = Dock("Plots", size=(1200, 150))
 
-        self.area.addDock(self.d_files,'left')
-        self.area.addDock(self.d_overview,'right',self.d_files)
-        self.area.addDock(self.d_ampl,'bottom',self.d_overview)
-        self.area.addDock(self.d_spec,'bottom',self.d_ampl)
-        self.area.addDock(self.d_controls,'bottom',self.d_files)
+        self.area.addDock(self.d_files, 'left')
+        self.area.addDock(self.d_overview, 'right', self.d_files)
+        self.area.addDock(self.d_ampl, 'bottom', self.d_overview)
+        self.area.addDock(self.d_spec, 'bottom', self.d_ampl)
+        self.area.addDock(self.d_controls, 'bottom', self.d_files)
         if self.extra:
-            self.area.addDock(self.d_plot,'bottom',self.d_spec)
+            self.area.addDock(self.d_plot, 'bottom', self.d_spec)
 
         # Put content widgets in the docks
         self.w_overview = pg.LayoutWidget()
         self.d_overview.addWidget(self.w_overview)
         self.w_overview1 = pg.GraphicsLayoutWidget()
         self.w_overview1.ci.layout.setContentsMargins(0.5, 1, 0.5, 1)
-        self.w_overview.addWidget(self.w_overview1,row=0, col=2,rowspan=3)
+        self.w_overview.addWidget(self.w_overview1, row=0, col=2, rowspan=3)
 
-        self.p_overview = self.w_overview1.addViewBox(enableMouse=False,enableMenu=False,row=0,col=0)
+        self.p_overview = self.w_overview1.addViewBox(enableMouse=False, enableMenu=False, row=0, col=0)
         self.p_overview2 = SupportClasses.ChildInfoViewBox(enableMouse=False, enableMenu=False)
-        self.w_overview1.addItem(self.p_overview2,row=1,col=0)
+        self.w_overview1.addItem(self.p_overview2, row=1, col=0)
         self.p_overview2.setXLink(self.p_overview)
 
         self.w_ampl = pg.GraphicsLayoutWidget()
-        self.p_ampl = self.w_ampl.addViewBox(enableMouse=False,enableMenu=False)
-        self.w_ampl.addItem(self.p_ampl,row=0,col=1)
+        self.p_ampl = self.w_ampl.addViewBox(enableMouse=False, enableMenu=False)
+        self.w_ampl.addItem(self.p_ampl, row=0, col=1)
         self.d_ampl.addWidget(self.w_ampl)
 
         self.w_spec = pg.GraphicsLayoutWidget()
-        self.p_spec = SupportClasses.DragViewBox(enableMouse=False,enableMenu=False)
-        self.w_spec.addItem(self.p_spec,row=0,col=1)
+        self.p_spec = SupportClasses.DragViewBox(enableMouse=False, enableMenu=False)
+        self.w_spec.addItem(self.p_spec, row=0, col=1)
         self.d_spec.addWidget(self.w_spec)
 
         if self.extra:
             self.w_plot = pg.GraphicsLayoutWidget()
-            self.p_plot = self.w_plot.addViewBox(enableMouse=False,enableMenu=False)
-            self.w_plot.addItem(self.p_plot,row=0,col=1)
+            self.p_plot = self.w_plot.addViewBox(enableMouse=False, enableMenu=False)
+            self.w_plot.addItem(self.p_plot, row=0, col=1)
             self.d_plot.addWidget(self.w_plot)
 
         # The axes
         # Time axis has to go separately in loadFile
 
         self.ampaxis = pg.AxisItem(orientation='left')
-        self.w_ampl.addItem(self.ampaxis,row=0,col=0)
+        self.w_ampl.addItem(self.ampaxis, row=0, col=0)
         self.ampaxis.linkToView(self.p_ampl)
         self.ampaxis.setWidth(w=65)
         self.ampaxis.setLabel('')
 
         self.specaxis = pg.AxisItem(orientation='left')
-        self.w_spec.addItem(self.specaxis,row=0,col=0)
+        self.w_spec.addItem(self.specaxis, row=0, col=0)
         self.specaxis.linkToView(self.p_spec)
         self.specaxis.setWidth(w=65)
 
         if self.extra:
             # Plot window also needs an axis to make them line up
             self.plotaxis = pg.AxisItem(orientation='left')
-            self.w_plot.addItem(self.plotaxis,row=0,col=0)
+            self.w_plot.addItem(self.plotaxis, row=0, col=0)
             self.plotaxis.linkToView(self.p_plot)
             self.plotaxis.setWidth(w=65)
             self.plotaxis.setLabel('')
 
         # The print out at the bottom of the spectrogram with data in
-        self.pointData = pg.TextItem(color=(255,0,0),anchor=(0,0))
+        self.pointData = pg.TextItem(color=(255, 0, 0), anchor=(0, 0))
         self.p_spec.addItem(self.pointData)
 
         # The various plots
@@ -609,37 +610,37 @@ class AviaNZ(QMainWindow):
         self.leftBtn.setArrowType(Qt.LeftArrow)
         #self.connect(self.leftBtn, SIGNAL('clicked()'), self.moveLeft)
         self.leftBtn.clicked.connect(self.moveLeft)
-        self.w_overview.addWidget(self.leftBtn,row=0,col=0)
+        self.w_overview.addWidget(self.leftBtn, row=0, col=0)
         self.rightBtn = QToolButton()
         self.rightBtn.setArrowType(Qt.RightArrow)
         #self.connect(self.rightBtn, SIGNAL('clicked()'), self.moveRight)
         self.rightBtn.clicked.connect(self.moveRight)
-        self.w_overview.addWidget(self.rightBtn,row=0,col=1)
+        self.w_overview.addWidget(self.rightBtn, row=0, col=1)
 
         # Button to move to the next file in the list
-        self.nextFileBtn=QToolButton()
+        self.nextFileBtn = QToolButton()
         self.nextFileBtn.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSkipForward))
         #self.connect(self.nextFileBtn, SIGNAL('clicked()'), self.openNextFile)
         self.nextFileBtn.clicked.connect(self.openNextFile)
         self.nextFileBtn.setToolTip("Open next file")
-        self.w_files.addWidget(self.nextFileBtn,row=0,col=1)
-        #self.w_overview.addWidget(self.nextFileBtn,row=1,colspan=2)
+        self.w_files.addWidget(self.nextFileBtn, row=0, col=1)
+        #self.w_overview.addWidget(self.nextFileBtn, row=1, colspan=2)
 
         # Buttons to move to next/previous five minutes
-        self.prev5mins=QToolButton()
+        self.prev5mins = QToolButton()
         self.prev5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekBackward))
         self.prev5mins.setToolTip("Previous page")
         #self.connect(self.prev5mins, SIGNAL('clicked()'), self.movePrev5mins)
         self.prev5mins.clicked.connect(self.movePrev5mins)
-        self.w_overview.addWidget(self.prev5mins,row=2,col=0)
-        self.next5mins=QToolButton()
+        self.w_overview.addWidget(self.prev5mins, row=2, col=0)
+        self.next5mins = QToolButton()
         self.next5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekForward))
         self.next5mins.setToolTip("Next page")
         #self.connect(self.next5mins, SIGNAL('clicked()'), self.moveNext5mins)
         self.next5mins.clicked.connect(self.moveNext5mins)
-        self.w_overview.addWidget(self.next5mins,row=2,col=1)
+        self.w_overview.addWidget(self.next5mins, row=2, col=1)
         self.placeInFileLabel = QLabel('')
-        self.w_overview.addWidget(self.placeInFileLabel,row=1,colspan=2)
+        self.w_overview.addWidget(self.placeInFileLabel, row=1, colspan=2)
 
         # The buttons inside the controls dock
         self.playButton = QtGui.QToolButton()
@@ -667,7 +668,7 @@ class AviaNZ(QMainWindow):
         # The slider to show playback position
         # This is hidden, but controls the moving bar
         self.playSlider = QSlider(Qt.Horizontal)
-        #self.connect(self.playSlider,SIGNAL('sliderReleased()'),self.playSliderMoved)
+        #self.connect(self.playSlider, SIGNAL('sliderReleased()'), self.playSliderMoved)
         self.playSlider.sliderReleased.connect(self.playSliderMoved)
         self.playSlider.setVisible(False)
         self.d_spec.addWidget(self.playSlider)
@@ -708,17 +709,17 @@ class AviaNZ(QMainWindow):
         deleteButton.clicked.connect(self.deleteSegment)
 
         # Place all these widgets in the Controls dock
-        self.w_controls.addWidget(self.playButton,row=0,col=0)
-        self.w_controls.addWidget(self.playSegButton,row=0,col=1)
-        self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=2)
-        self.w_controls.addWidget(self.timePlayed,row=1,col=0)
-        self.w_controls.addWidget(QLabel("Brightness"),row=2,col=0,colspan=3)
-        self.w_controls.addWidget(self.brightnessSlider,row=3,col=0,colspan=3)
-        self.w_controls.addWidget(QLabel("Contrast"),row=4,col=0,colspan=3)
-        self.w_controls.addWidget(self.contrastSlider,row=5,col=0,colspan=3)
-        self.w_controls.addWidget(deleteButton,row=6,col=0,colspan=3)
-        self.w_controls.addWidget(QLabel('Visible window width (seconds)'),row=7,col=0,colspan=3)
-        self.w_controls.addWidget(self.widthWindow,row=8,col=0,colspan=3)#,colspan=2)
+        self.w_controls.addWidget(self.playButton, row=0, col=0)
+        self.w_controls.addWidget(self.playSegButton, row=0, col=1)
+        self.w_controls.addWidget(self.playBandLimitedSegButton, row=0, col=2)
+        self.w_controls.addWidget(self.timePlayed, row=1, col=0)
+        self.w_controls.addWidget(QLabel("Brightness"), row=2, col=0, colspan=3)
+        self.w_controls.addWidget(self.brightnessSlider, row=3, col=0, colspan=3)
+        self.w_controls.addWidget(QLabel("Contrast"), row=4, col=0, colspan=3)
+        self.w_controls.addWidget(self.contrastSlider, row=5, col=0, colspan=3)
+        self.w_controls.addWidget(deleteButton, row=6, col=0, colspan=3)
+        self.w_controls.addWidget(QLabel('Visible window width (seconds)'), row=7, col=0, colspan=3)
+        self.w_controls.addWidget(self.widthWindow, row=8, col=0, colspan=3)#, colspan=2)
 
         # List to hold the list of files
         self.listFiles = QListWidget(self)
@@ -726,9 +727,9 @@ class AviaNZ(QMainWindow):
         #self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
-        self.w_files.addWidget(QLabel('Double click to open'),row=0,col=0)
-        self.w_files.addWidget(QLabel('Red names have segments'),row=1,col=0)
-        self.w_files.addWidget(self.listFiles,row=2,colspan=2)
+        self.w_files.addWidget(QLabel('Double click to open'), row=0, col=0)
+        self.w_files.addWidget(QLabel('Red names have segments'), row=1, col=0)
+        self.w_files.addWidget(self.listFiles, row=2, colspan=2)
 
         # The context menu (drops down on mouse click) to select birds
         self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -739,20 +740,22 @@ class AviaNZ(QMainWindow):
         # Audio playback
         # TODO: QtMultimedia version
         # Instantiate a Qt media object and prepare it
+	self.media_obj = QAudioOutput()
         #self.media_obj = phonon.Phonon.MediaObject(self)
         #self.audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
         #phonon.Phonon.createPath(self.media_obj, self.audio_output)
-        #self.media_obj.setTickInterval(20)
-        #self.media_obj.finished.connect(self.playFinished)
-        #self.media_obj.tick.connect(self.movePlaySlider)
+        self.media_obj.setNotifyInterval(20)
+        self.media_obj.stateChanged.connect(self.playFinished)
+        self.media_obj.notify.connect(self.movePlaySlider)
 
+	# TODO: Probably have to do this with a QSlider
         #self.volSlider = phonon.Phonon.VolumeSlider()
         #self.volSlider.setOrientation(Qt.Horizontal)
         #self.volSlider.setGeometry(QtCore.QRect(50, 50, 150, 40))
         #self.volSlider.setFixedWidth(150)
         #self.volSlider.setMaximumVolume(1.0)
         #self.volSlider.setAudioOutput(self.audio_output)
-        #self.w_controls.addWidget(self.volSlider,row=1,col=1,colspan=2)
+        #self.w_controls.addWidget(self.volSlider, row=1, col=1, colspan= 2)
 
         # Make the colours that are used in the interface
         # The dark ones are to draw lines instead of boxes
@@ -771,7 +774,7 @@ class AviaNZ(QMainWindow):
         self.ROItype = type(p_spec_r)
 
         # Listener for key presses
-        #self.connect(self.p_spec, SIGNAL("keyPressed"),self.handleKey)
+        #self.connect(self.p_spec, SIGNAL("keyPressed"), self.handleKey)
         self.p_spec.keyPressed.connect(self.handleKey)
 
         # Store the state of the docks in case the user wants to reset it
@@ -786,20 +789,20 @@ class AviaNZ(QMainWindow):
 
         # add statusbar
         self.statusLeft = QLabel("Left")
-        self.statusLeft.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
+        self.statusLeft.setFrameStyle(QFrame.Panel) #, QFrame.Sunken)
         self.statusMid = QLabel("????")
-        self.statusMid.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
+        self.statusMid.setFrameStyle(QFrame.Panel) #, QFrame.Sunken)
         self.statusRight = QLabel("")
         self.statusRight.setAlignment(Qt.AlignRight)
-        self.statusRight.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
+        self.statusRight.setFrameStyle(QFrame.Panel) #, QFrame.Sunken)
         # Style
-        statusStyle='QLabel {border:transparent}'
+        statusStyle = 'QLabel {border:transparent}'
         self.statusLeft.setStyleSheet(statusStyle)
         # self.statusMid.setStyleSheet(statusStyle)
         self.statusRight.setStyleSheet(statusStyle)
-        self.statusBar().addPermanentWidget(self.statusLeft,1)
-        # self.statusBar().addPermanentWidget(self.statusMid,1)
-        self.statusBar().addPermanentWidget(self.statusRight,1)
+        self.statusBar().addPermanentWidget(self.statusLeft, 1)
+        # self.statusBar().addPermanentWidget(self.statusMid, 1)
+        self.statusBar().addPermanentWidget(self.statusRight, 1)
 
         # Set the message in the status bar
         self.statusLeft.setText("Ready")
@@ -807,14 +810,14 @@ class AviaNZ(QMainWindow):
         # Plot everything
         self.show()
 
-    #def keyPressEvent(self,ev):
+    #def keyPressEvent(self, ev):
     #    """ Listener to handle keypresses and emit a keypress event, which is dealt with by handleKey()"""
-    #    #self.emit(SIGNAL("keyPressed"),ev)
+    #    #self.emit(SIGNAL("keyPressed"), ev)
     #    print "here"
     #    print ev.key()
     #    self.keyPressed.emit(ev)
 
-    def handleKey(self,ev):
+    def handleKey(self, ev):
         """ Handle keys pressed during program use.
         These are:
             backspace to delete a segment
@@ -826,11 +829,11 @@ class AviaNZ(QMainWindow):
         elif ev == Qt.Key_Escape:
             # TODO: QtMultimedia
             print "Not currently implemented"
-            #if self.media_obj.state() != phonon.Phonon.PausedState or self.media_obj.state() != phonon.Phonon.StoppedState:
-                #self.media_obj.pause()
-                #self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+            if self.media_obj.state() != QMediaPlayer.PausedState or self.media_obj.state() != QMediaPlayer.StoppedState:
+                self.media_obj.pause()
+                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
 
-    def fillBirdList(self,unsure=False):
+    def fillBirdList(self, unsure=False):
         """ Sets the contents of the context menu.
         The first 20 items are in the first menu, the next in a second menu.
         This is called a lot because the order of birds in the list changes since the last choice
@@ -855,17 +858,17 @@ class AviaNZ(QMainWindow):
             bird.triggered.connect(receiver)
             self.menuBird2.addAction(bird)
 
-    def fillFileList(self,fileName):
+    def fillFileList(self, fileName):
         """ Generates the list of files for the file listbox.
         Most of the work is to deal with directories in that list.
         It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
         red in the list, and the second to know if the files are long."""
         print self.dirName
         if not os.path.isdir(self.dirName):
-            print("Directory doesn't exist: making it")
+            print "Directory doesn't exist: making it"
             os.makedirs(self.dirName)
 
-        self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
+        self.listOfFiles = QDir(self.dirName).entryInfoList(['..', '*.wav'], filters=QDir.AllDirs|QDir.NoDot|QDir.Files, sort=QDir.DirsFirst)
         listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
         listOfLongFiles = QDir(self.dirName).entryList(['*_1.wav'])
         for file in self.listOfFiles:
@@ -881,11 +884,11 @@ class AviaNZ(QMainWindow):
                 #if file.fileName()+'.data' in listOfDataFiles:
                     #item.setTextColor(Qt.red)
         if fileName:
-            index = self.listFiles.findItems(fileName,Qt.MatchExactly)
-            if len(index)>0:
+            index = self.listFiles.findItems(fileName, Qt.MatchExactly)
+            if index:
                 self.listFiles.setCurrentItem(index[0])
             else:
-                index = self.listFiles.findItems(self.listOfFiles[0].fileName(),Qt.MatchExactly)
+                index = self.listFiles.findItems(self.listOfFiles[0].fileName(), Qt.MatchExactly)
                 self.listFiles.setCurrentItem(index[0])
 
     def resetStorageArrays(self):
@@ -902,7 +905,7 @@ class AviaNZ(QMainWindow):
         if self.started:
             # This is the second click, so should pay attention and close the segment
             # Stop the mouse motion connection, remove the drawing boxes
-            if self.started_window=='a':
+            if self.started_window == 'a':
                 try:
                     self.p_ampl.scene().sigMouseMoved.disconnect()
                 except Exception:
@@ -934,25 +937,25 @@ class AviaNZ(QMainWindow):
         # Remove any fundamental frequencies drawn
         for r in self.segmentPlots:
             self.p_spec.removeItem(r)
-        self.segmentPlots=[]
+        self.segmentPlots = []
 
     def openFile(self):
         """ This handles the menu item for opening a file.
         Splits the directory name and filename out, and then passes the filename to the loader."""
-        fileName, _ = QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
+        fileName, _ = QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
         print fileName
-        #fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
+        #fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
 
-        if fileName!='':
+        if fileName != '':
             # Find the '/' in the fileName
-            i=len(fileName)-1
-            while fileName[i] != '/' and i>0:
+            i = len(fileName)-1
+            while fileName[i] != '/' and i > 0:
                 i = i-1
             self.dirName = fileName[:i+1]
 
             self.listLoadFile(fileName)
 
-    def listLoadFile(self,current):
+    def listLoadFile(self, current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
         Prepares the program for a new file.
         Saves the segments of the current file, resets flags and calls loadFile() """
@@ -962,7 +965,7 @@ class AviaNZ(QMainWindow):
         if self.previousFile is not None:
             if type(self.previousFile) is not self.listitemtype:
                 self.previousFile = self.listFiles.findItems(os.path.basename(str(self.previousFile)), Qt.MatchExactly)
-                if len(self.previousFile)>0:
+                if self.previousFile:
                     self.previousFile = self.previousFile[0]
 
             if self.segmentsToSave:
@@ -974,9 +977,9 @@ class AviaNZ(QMainWindow):
 
         # Reset the media player
         # TODO
-        #if self.media_obj.state() == phonon.Phonon.PlayingState:
-            #self.media_obj.pause()
-            #self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        if self.media_obj.state() == QAudioOutput.PlayingState:
+            self.media_obj.pause()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
 
 	## TODO
         #if type(current) is QString or type(current) is unicode:
@@ -985,14 +988,14 @@ class AviaNZ(QMainWindow):
             #current = current.text()
 
         # Update the file list to show the right one
-        i=0
-        while self.listOfFiles[i].fileName() != current and i<len(self.listOfFiles)-1:
-            i+=1
+        i = 0
+        while self.listOfFiles[i].fileName() != current and i < len(self.listOfFiles)-1:
+            i += 1
         if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
             dir = QDir(self.dirName)
             dir.cd(self.listOfFiles[i].fileName())
             # Now repopulate the listbox
-            self.dirName=str(dir.absolutePath())
+            self.dirName = str(dir.absolutePath())
             self.listFiles.clearSelection()
             self.listFiles.clearFocus()
             self.listFiles.clear()
@@ -1002,12 +1005,12 @@ class AviaNZ(QMainWindow):
             self.fillFileList(current)
             # Show the selected file
             index = self.listFiles.findItems(os.path.basename(str(current)), Qt.MatchExactly)
-            if len(index) > 0:
+            if index:
                 self.listFiles.setCurrentItem(index[0])
         else:
             self.loadFile(current)
 
-    def loadFile(self,name=None):
+    def loadFile(self, name=None):
         """ This does the work of loading a file.
         We are using wavio to do the reading. We turn the data into a float, but do not normalise it (/2^(15)).
         For 2 channels, just take the first one.
@@ -1026,9 +1029,10 @@ class AviaNZ(QMainWindow):
             dlg.setWindowIcon(QIcon('img/Avianz.ico'))
             dlg.setWindowTitle('AviaNZ')
             if name is not None:
-                if isinstance(name,str) or isinstance(name,unicode):
+                #if isinstance(name, str) or isinstance(name, unicode):
+                if type(name) is str or type(name) is unicode:
                     self.filename = self.dirName+'/'+name
-                #elif isinstance(name,QString):
+                #elif isinstance(name, QString):
                     #name = os.path.basename(str(name))
                     #self.filename = self.dirName+'/'+ name
                 else:
@@ -1037,7 +1041,7 @@ class AviaNZ(QMainWindow):
 
                 # Create an instance of the Signal Processing class
                 if not hasattr(self, 'sp'):
-                    self.sp = SignalProc.SignalProc([],0,self.config['window_width'],self.config['incr'])
+                    self.sp = SignalProc.SignalProc([], 0, self.config['window_width'], self.config['incr'])
 
                 self.currentFileSection = 0
 
@@ -1045,10 +1049,10 @@ class AviaNZ(QMainWindow):
                     self.w_spec.removeItem(self.timeaxis)
 
                 # Check if the filename is in standard DOC format
-                # Which is xxxxxx_xxxxxx.wav or ccxx_cccc_xxxxxx_xxxxxx.wav (c=char, x=0-9), could have _ afterward
+                # Which is xxxxxx_xxxxxx.wav or ccxx_cccc_xxxxxx_xxxxxx.wav (c = char, x = 0-9), could have _ afterward
                 # So this checks for the 6 ints _ 6 ints part anywhere in string
                 print name
-                DOCRecording = re.search('(\d{6})_(\d{6})',name[-17:-4])
+                DOCRecording = re.search('(\d{6})_(\d{6})', name[-17:-4])
 
                 if DOCRecording:
                     self.startTime = DOCRecording.group(2)
@@ -1060,11 +1064,11 @@ class AviaNZ(QMainWindow):
                         print "Day time DOC recording"
                         # TODO: And modify the order of the bird list
                     self.startTime = int(self.startTime[:2]) * 3600 + int(self.startTime[2:4]) * 60 + int(self.startTime[4:6])
-                    self.timeaxis = SupportClasses.TimeAxisHour(orientation='bottom',linkView=self.p_ampl)
+                    self.timeaxis = SupportClasses.TimeAxisHour(orientation='bottom', linkView=self.p_ampl)
                     self.timeaxis.setLabel('Time', units='hh:mm:ss')
                 else:
                     self.startTime = 0
-                    self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
+                    self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom', linkView=self.p_ampl)
                     self.timeaxis.setLabel('Time', units='mm:ss')
 
                 self.w_spec.addItem(self.timeaxis, row=1, col=1)
@@ -1075,13 +1079,13 @@ class AviaNZ(QMainWindow):
                 dlg += 2
 
             # Read in the file and make the spectrogram
-            self.startRead = max(0,self.currentFileSection*self.config['maxFileShow']-self.config['fileOverlap'])
+            self.startRead = max(0, self.currentFileSection*self.config['maxFileShow']-self.config['fileOverlap'])
             if self.startRead == 0:
                 self.lenRead = self.config['maxFileShow']+self.config['fileOverlap']
             else:
                 self.lenRead = self.config['maxFileShow'] + 2*self.config['fileOverlap']
             if os.stat(self.filename).st_size != 0: # avoid files with no data (Tier 1 has 0Kb .wavs)
-                wavobj = wavio.read(self.filename,self.lenRead,self.startRead)
+                wavobj = wavio.read(self.filename, self.lenRead, self.startRead)
                 #wavobj = wavio.read(self.filename)
                 self.sampleRate = wavobj.rate
                 self.audiodata = wavobj.data
@@ -1098,7 +1102,7 @@ class AviaNZ(QMainWindow):
                 if np.shape(np.shape(self.audiodata))[0] > 1:
                     self.audiodata = self.audiodata[:, 0]
                 self.datalength = np.shape(self.audiodata)[0]
-                print "Length of file is ", float(self.datalength) / self.sampleRate, " seconds (", self.datalength, "samples) loaded from ", float(self.fileLength) / self.sampleRate, "seconds (", self.fileLength, " samples) with sample rate ",self.sampleRate, " Hz."
+                print "Length of file is ", float(self.datalength) / self.sampleRate, " seconds (", self.datalength, "samples) loaded from ", float(self.fileLength) / self.sampleRate, "seconds (", self.fileLength, " samples) with sample rate ", self.sampleRate, " Hz."
 
                 if name is not None:
                     if self.datalength != self.fileLength:
@@ -1128,13 +1132,13 @@ class AviaNZ(QMainWindow):
                     file = open(self.filename + '.data', 'r')
                     self.segments = json.load(file)
                     file.close()
-                    if len(self.segments) > 0:
+                    if self.segments:
                         if self.segments[0][0] == -1:
                             self.operator = self.segments[0][2]
                             self.reviewer = self.segments[0][3]
                             del self.segments[0]
-                            self.segmentsToSave=True
-                    if len(self.segments) > 0:
+                            self.segmentsToSave = True
+                    if self.segments:
                         if self.segments[0][2] > 1.5 and self.segments[0][3] > 1.5:
                             # Legacy version didn't normalise the segment data for dragged boxes
                             # This fixes it, assuming that the spectrogram was 128 pixels high (256 width window)
@@ -1148,18 +1152,18 @@ class AviaNZ(QMainWindow):
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
                 # Update the data that is seen by the other classes
-                if hasattr(self,'seg'):
-                    self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
+                if hasattr(self, 'seg'):
+                    self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'], self.config['incr'])
                 else:
                     self.seg = Segment.Segment(self.audiodata, sgRaw, self.sp, self.sampleRate,
                                                self.config['window_width'], self.config['incr'])
-                self.sp.setNewData(self.audiodata,self.sampleRate)
+                self.sp.setNewData(self.audiodata, self.sampleRate)
 
                 # Delete any denoising backups from the previous file
-                if hasattr(self,'audiodata_backup'):
+                if hasattr(self, 'audiodata_backup'):
                     self.audiodata_backup = None
                 self.showFundamental.setChecked(False)
-                if self.DOC == False:
+                if not self.DOC:
                     self.showInvSpec.setChecked(False)
 
                 # Set the window size
@@ -1178,7 +1182,7 @@ class AviaNZ(QMainWindow):
                 #self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
 
                 # Set the length of the scrollbar.
-                self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
+                self.scrollSlider.setRange(0, np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
                 self.scrollSlider.setValue(0)
 
                 # Get the height of the amplitude for plotting the box
@@ -1193,8 +1197,8 @@ class AviaNZ(QMainWindow):
     def openNextFile(self):
         """ Listener for next file >> button.
         Get the next file in the list and call the loader. """
-        i=self.listFiles.currentRow()
-        if i+1<len(self.listFiles):
+        i = self.listFiles.currentRow()
+        if i+1 < len(self.listFiles):
             self.listFiles.setCurrentRow(i+1)
             self.listLoadFile(self.listFiles.currentItem())
         else:
@@ -1240,7 +1244,7 @@ class AviaNZ(QMainWindow):
                     col = box.brush.color()
                     col.setAlpha(255)
                     box.setBrush(pg.mkBrush(None))
-                    box.setPen(pg.mkPen(col,width=1))
+                    box.setPen(pg.mkPen(col, width=1))
                     box.update()
         else:
             for box in self.listRectanglesa2:
@@ -1285,7 +1289,7 @@ class AviaNZ(QMainWindow):
         Turns off the listeners for the amplitude and spectrogram plots.
         Also has to go through all of the segments, turn off the listeners, and make them unmovable.
         """
-        self.config['readOnly']=self.readonly.isChecked()
+        self.config['readOnly'] = self.readonly.isChecked()
         if self.readonly.isChecked():
             try:
                 self.p_ampl.scene().sigMouseClicked.disconnect()
@@ -1346,23 +1350,23 @@ class AviaNZ(QMainWindow):
             if self.showFundamental.isChecked():
                 self.statusLeft.setText("Drawing fundamental frequency...")
                 pitch, y, minfreq, W = self.seg.yin()
-                ind = np.squeeze(np.where(pitch>minfreq))
+                ind = np.squeeze(np.where(pitch > minfreq))
                 pitch = pitch[ind]
                 ind = ind*W/(self.config['window_width'])
                 x = (pitch*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
 
                 from scipy.signal import medfilt
-                x = medfilt(x,15)
+                x = medfilt(x, 15)
 
                 # Get the individual pieces
-                segs = self.seg.identifySegments(ind,maxgap=10,minlength=5)
+                segs = self.seg.identifySegments(ind, maxgap=10, minlength=5)
                 count = 0
                 self.segmentPlots = []
                 for s in segs:
                     count += 1
                     s[0] = s[0] * self.sampleRate / float(self.config['incr'])
                     s[1] = s[1] * self.sampleRate / float(self.config['incr'])
-                    i = np.where((ind>s[0]) & (ind<s[1]))
+                    i = np.where((ind > s[0]) & (ind < s[1]))
                     self.segmentPlots.append(pg.PlotDataItem())
                     self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=2))
                     self.p_spec.addItem(self.segmentPlots[-1])
@@ -1382,7 +1386,7 @@ class AviaNZ(QMainWindow):
     #         x = pYAAPT.yaapt(y)
     #         self.yinRois = []
     #         for r in range(len(x)):
-    #             self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
+    #             self.yinRois.append(pg.CircleROI([ind[r], x[r]], [2, 2], pen = (4, 9), movable = False))
     #         for r in self.yinRois:
     #             self.p_spec.addItem(r)
     #     else:
@@ -1393,13 +1397,13 @@ class AviaNZ(QMainWindow):
     #     # Harvest
     #     import audio_tools
     #     if self.showFundamental2.isChecked():
-    #         p, f, t, fa = audio_tools.harvest(self.audiodata,self.sampleRate)
+    #         p, f, t, fa = audio_tools.harvest(self.audiodata, self.sampleRate)
     #         ind = f/self.config['window_width']
     #         x = (p*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
     #
     #         self.yinRois = []
     #         for r in range(len(x)):
-    #             self.yinRois.append(pg.CircleROI([ind[r],x[r]], [2,2], pen=(4, 9),movable=False))
+    #             self.yinRois.append(pg.CircleROI([ind[r], x[r]], [2, 2], pen = (4, 9), movable = False))
     #         for r in self.yinRois:
     #             self.p_spec.addItem(r)
     #     else:
@@ -1411,8 +1415,7 @@ class AviaNZ(QMainWindow):
         if self.showInvSpec.isChecked():
             sgRaw = self.sp.show_invS()
         else:
-            sgRaw = self.sp.spectrogram(self.audiodata, mean_normalise=True, onesided=True,
-                                         multitaper=False)
+            sgRaw = self.sp.spectrogram(self.audiodata, mean_normalise=True, onesided=True, multitaper=False)
         maxsg = np.min(sgRaw)
         self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
         self.overviewImage.setImage(self.sg)
@@ -1424,28 +1427,28 @@ class AviaNZ(QMainWindow):
         with pg.BusyCursor():
             self.statusLeft.setText("Filtering...")
             from scipy.ndimage.filters import median_filter
-            median_filter(self.sg,size=(100,20))
+            median_filter(self.sg, size=(100, 20))
             self.specPlot.setImage(self.sg)
             self.statusLeft.setText("Ready")
 
     def denoiseImage(self):
         """ Denoise the spectrogram. To be used in conjunction with spectrogram inversion. """
         #from cv2 import fastNlMeansDenoising
-        #sg = np.array(self.sg/np.max(self.sg)*255,dtype = np.uint8)
-        #sg = fastNlMeansDenoising(sg,10,7,21)
+        #sg = np.array(self.sg/np.max(self.sg)*255, dtype=np.uint8)
+        #sg = fastNlMeansDenoising(sg, 10, 7, 21)
         #self.specPlot.setImage(sg)
-# ==============
+# == == == == == == ==
 # Code for drawing and using the main figure
 
-    def convertAmpltoSpec(self,x):
+    def convertAmpltoSpec(self, x):
         """ Unit conversion """
         return x*self.sampleRate/float(self.config['incr'])
 
-    def convertSpectoAmpl(self,x):
+    def convertSpectoAmpl(self, x):
         """ Unit conversion """
         return x*self.config['incr']/float(self.sampleRate)
 
-    def convertMillisecs(self,millisecs):
+    def convertMillisecs(self, millisecs):
         """ Unit conversion """
         seconds = (millisecs / 1000) % 60
         minutes = (millisecs / (1000 * 60)) % 60
@@ -1467,7 +1470,7 @@ class AviaNZ(QMainWindow):
         self.widthOverviewSegment = int(float(np.shape(self.sg)[0])/numSegments)
         #print "Segs:", numSegments, self.config['widthOverviewSegment'], self.widthOverviewSegment
 
-        self.overviewSegments = np.zeros((numSegments,3))
+        self.overviewSegments = np.zeros((numSegments, 3))
         for i in range(numSegments):
             r = SupportClasses.ClickableRectItem(i*self.widthOverviewSegment, 0, self.widthOverviewSegment, 0.5)
             r.setPen(pg.mkPen('k'))
@@ -1476,7 +1479,7 @@ class AviaNZ(QMainWindow):
             self.p_overview2.addItem(r)
         self.p_overview2.sigChildMessage.connect(self.overviewSegmentClicked)
 
-    def overviewSegmentClicked(self,x):
+    def overviewSegmentClicked(self, x):
         """ Listener for an overview segment being clicked on.
         Work out which one, and move the region appropriately. Calls updateOverview to do the work. """
         minX, maxX = self.overviewImageRegion.getRegion()
@@ -1493,19 +1496,19 @@ class AviaNZ(QMainWindow):
         # Need to disconnect the listener and reconnect it to avoid a recursive call
         minX, maxX = self.overviewImageRegion.getRegion()
         print minX, maxX
-        if minX<0:
+        if minX < 0:
             l = maxX-minX
-            minX=0.0
-            maxX=minX+l
+            minX = 0.0
+            maxX = minX+l
             self.overviewImageRegion.sigRegionChangeFinished.disconnect()
-            self.overviewImageRegion.setRegion([minX,maxX])
+            self.overviewImageRegion.setRegion([minX, maxX])
             self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
-        if maxX>len(self.sg):
+        if maxX > len(self.sg):
             l = maxX-minX
-            maxX=float(len(self.sg))
-            minX=maxX-l
+            maxX = float(len(self.sg))
+            minX = maxX-l
             self.overviewImageRegion.sigRegionChangeFinished.disconnect()
-            self.overviewImageRegion.setRegion([minX,maxX])
+            self.overviewImageRegion.setRegion([minX, maxX])
             self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
 
         self.widthWindow.setValue(self.convertSpectoAmpl(maxX-minX))
@@ -1519,9 +1522,9 @@ class AviaNZ(QMainWindow):
         print self.p_spec.viewRange()[0], self.convertAmpltoSpec(self.convertSpectoAmpl(self.p_spec.viewRange()[0][0])), self.p_ampl.viewRange()[0], self.convertSpectoAmpl(self.p_spec.viewRange()[0][0]), self.convertSpectoAmpl(self.p_spec.viewRange()[0][1]), self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX)
         if self.extra:
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
-        self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
+        self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX), 1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
-        self.pointData.setPos(minX,0)
+        self.pointData.setPos(minX, 0)
         self.config['windowWidth'] = self.convertSpectoAmpl(maxX-minX)
         self.saveConfig = True
         self.timeaxis.update()
@@ -1531,7 +1534,7 @@ class AviaNZ(QMainWindow):
         """ Draws the main amplitude and spectrogram plots and any segments on them.
         Has to do some work to get the axis labels correct.
         """
-        self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
+        self.amplPlot.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num=self.datalength, endpoint=True), self.audiodata)
         self.timeaxis.setLabel('')
         self.specPlot.setImage(self.sg)
         self.setColourMap(self.config['cmap'])
@@ -1540,7 +1543,7 @@ class AviaNZ(QMainWindow):
         # Sort out the spectrogram frequency axis
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
         FreqRange = (self.maxFreq-self.minFreq)/1000.
-        self.specaxis.setTicks([[(0,self.minFreq/1000.),(np.shape(self.sg)[1]/4,self.minFreq/1000.+FreqRange/4.),(np.shape(self.sg)[1]/2,self.minFreq/1000.+FreqRange/2.),(3*np.shape(self.sg)[1]/4,self.minFreq/1000.+3*FreqRange/4.),(np.shape(self.sg)[1],self.minFreq/1000.+FreqRange)]])
+        self.specaxis.setTicks([[(0, self.minFreq/1000.), (np.shape(self.sg)[1]/4, self.minFreq/1000.+FreqRange/4.), (np.shape(self.sg)[1]/2, self.minFreq/1000.+FreqRange/2.), (3*np.shape(self.sg)[1]/4, self.minFreq/1000.+3*FreqRange/4.), (np.shape(self.sg)[1], self.minFreq/1000.+FreqRange)]])
         self.specaxis.setLabel('kHz')
 
         self.updateOverview()
@@ -1548,94 +1551,94 @@ class AviaNZ(QMainWindow):
 
         # If there are segments, show them
         for count in range(len(self.segments)):
-            self.addSegment(self.segments[count][0], self.segments[count][1],self.segments[count][2],self.segments[count][3],self.segments[count][4],False,count)
+            self.addSegment(self.segments[count][0], self.segments[count][1], self.segments[count][2], self.segments[count][3], self.segments[count][4], False, count)
 
         # This is the moving bar for the playback
-        if not hasattr(self,'bar'):
+        if not hasattr(self, 'bar'):
             self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.p_spec.addItem(self.bar, ignoreBounds=True)
         self.bar.sigPositionChangeFinished.connect(self.barMoved)
 
         if self.extra:
             # Extra stuff to show test plots
-            #self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
-            pproc = SupportClasses.postProcess(self.audiodata,self.sampleRate)
+            #self.plotPlot.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num=self.datalength, endpoint=True), self.audiodata)
+            pproc = SupportClasses.postProcess(self.audiodata, self.sampleRate)
             #energy, e = pproc.detectClicks()
             #energy, e = pproc.eRatioConfd()
             #if len(clicks)>0:
-            #self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),energy)
-            #self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),e*np.ones(np.shape(self.sg)[0]))
-            #self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),e2)
+            #self.plotPlot.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(self.sg)[0], endpoint=True), energy)
+            #self.plotPlot2.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(self.sg)[0], endpoint = True), e*np.ones(np.shape(self.sg)[0]))
+            #self.plotPlot2.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(self.sg)[0], endpoint = True), e2)
 
-            #ws = WaveletSegment.WaveletSegment(species='kiwi')
-            #e = ws.computeWaveletEnergy(self.audiodata,self.sampleRate)
+            #ws = WaveletSegment.WaveletSegment(species = 'kiwi')
+            #e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
 
             # # Call MFCC in Features and plot some of them :)
-            # ff = Features.Features(self.audiodata,self.sampleRate)
+            # ff = Features.Features(self.audiodata, self.sampleRate)
             # e = ff.get_mfcc()
             # print np.shape(e)
-            # print np.sum(e, axis=0)
-            # print e[0,:]
+            # print np.sum(e, axis = 0)
+            # print e[0, :]
             #
-            # # self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),np.sum(e,axis=0))
+            # # self.plotPlot.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), np.sum(e, axis = 0))
             # # self.plotPlot.setPen(fn.mkPen('k'))
-            # # self.plotPlot2.setData(np.linspace(0.0, float(self.datalength) / self.sampleRate, num=np.shape(e)[1], endpoint=True), e[0,:])
+            # # self.plotPlot2.setData(np.linspace(0.0, float(self.datalength) / self.sampleRate, num = np.shape(e)[1], endpoint = True), e[0, :])
             # # self.plotPlot2.setPen(fn.mkPen('c'))
-            # e1 = e[1,:]
-            # e1 = (e[1,:]- np.mean(e[1,:]))/np.std(e[1,:])
-            # self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e1)
+            # e1 = e[1, :]
+            # e1 = (e[1, :]- np.mean(e[1, :]))/np.std(e[1, :])
+            # self.plotPlot2.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e1)
             # self.plotPlot2.setPen(fn.mkPen('r'))
             # mean = np.mean(e1)
             # std = np.std(e1)
             # thr = mean - 2 * std
             # thr = np.ones((1, 100)) * thr
-            # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100, endpoint=True), thr[0,:])
+            # self.plotPlot7.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = 100, endpoint = True), thr[0, :])
             # self.plotPlot7.setPen(fn.mkPen('c'))
-            # # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
+            # # self.plotPlot3.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[2, :])
             # # self.plotPlot3.setPen(fn.mkPen('c'))
-            # # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[3,:])
+            # # self.plotPlot4.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[3, :])
             # # self.plotPlot4.setPen(fn.mkPen('r'))
-            # # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[4,:])
+            # # self.plotPlot5.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[4, :])
             # # self.plotPlot5.setPen(fn.mkPen('g'))
-            # # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[5,:])
+            # # self.plotPlot6.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[5, :])
             # # self.plotPlot6.setPen(fn.mkPen('g'))
-            # # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[6,:])
+            # # self.plotPlot7.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[6, :])
             # # self.plotPlot7.setPen(fn.mkPen('g'))
-            # # self.plotPlot8.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[7,:])
+            # # self.plotPlot8.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[7, :])
             # # self.plotPlot8.setPen(fn.mkPen('g'))
-            # # self.plotPlot9.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[8,:])
+            # # self.plotPlot9.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[8, :])
             # # self.plotPlot9.setPen(fn.mkPen('g'))
-            # # self.plotPlot10.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[9,:])
+            # # self.plotPlot10.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[9, :])
             # # self.plotPlot10.setPen(fn.mkPen('g'))
-            # # self.plotPlot11.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[10,:])
+            # # self.plotPlot11.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[10, :])
             # # self.plotPlot11.setPen(fn.mkPen('c'))
 
             # # plot eRatio
             post = SupportClasses.postProcess(self.audiodata, self.sampleRate, [])
-            # e = post.eRatioConfd([], AviaNZ_extra=True)
+            # e = post.eRatioConfd([], AviaNZ_extra = True)
             # # print np.shape(e)
             # # print e[0]
             # # print np.shape(e[0])[0]
-            # self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e[0])[0],endpoint=True),e[0])
+            # self.plotPlot.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e[0])[0], endpoint = True), e[0])
             # self.plotPlot.setPen(fn.mkPen('b'))
 
             # plot wind/rain
             wind, rain, mean_rain = post.WindRain(windTest=False, rainTest=True)
-            wind = np.ones((1,100))*wind
-            # rain = np.ones((1,100))*rain    # rain is SNR
-            # thr = np.ones((1,100))*3.5      # rain SNR thr is 3.5
+            wind = np.ones((1, 100))*wind
+            # rain = np.ones((1, 100))*rain    # rain is SNR
+            # thr = np.ones((1, 100))*3.5      # rain SNR thr is 3.5
             # mean_rain = np.ones((1, 100)) * mean_rain
-            # mean_rain_thr = np.ones((1,100)) * 1e-6     # rain mean thr is 1e-6
+            # mean_rain_thr = np.ones((1, 100)) * 1e-6     # rain mean thr is 1e-6
             wind_thr = np.ones((1, 100)) * 1e-8
             # print np.shape(wind)
-            # print rain[0,:]
-            self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind[0,:])
+            # print rain[0, :]
+            self.plotPlot3.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num=100, endpoint=True), wind[0, :])
             self.plotPlot3.setPen(fn.mkPen('r'))
-            self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind_thr[0,:])
+            self.plotPlot4.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num=100, endpoint=True), wind_thr[0, :])
             self.plotPlot4.setPen(fn.mkPen('k'))
-            # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain[0,:])
+            # self.plotPlot5.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num=100, endpoint=True), mean_rain[0, :])
             # self.plotPlot5.setPen(fn.mkPen('b'))
-            # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain_thr[0,:])
+            # self.plotPlot6.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num=100, endpoint=True), mean_rain_thr[0, :])
             # self.plotPlot6.setPen(fn.mkPen('g'))
 
             # # plot wavelet
@@ -1643,20 +1646,20 @@ class AviaNZ(QMainWindow):
             # e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
             # print np.shape(e)
             # print np.shape(e)[1]
-            # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[1,:])
+            # self.plotPlot3.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[1, :])
             # self.plotPlot3.setPen(fn.mkPen('r'))
-            # mean = np.mean(e[1,:])
-            # std = np.std(e[1,:])
+            # mean = np.mean(e[1, :])
+            # std = np.std(e[1, :])
             # thr = mean + 2.5 * std
             # thr = np.ones((1, 100)) * thr
-            # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100, endpoint=True), thr[0,:])
+            # self.plotPlot7.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = 100, endpoint = True), thr[0, :])
             # self.plotPlot7.setPen(fn.mkPen('c'))
             #
-            # # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
+            # # self.plotPlot4.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[2, :])
             # # self.plotPlot4.setPen(fn.mkPen('g'))
-            # # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[0,:])
+            # # self.plotPlot5.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[0, :])
             # # self.plotPlot5.setPen(fn.mkPen('b'))
-            # # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[14,:])
+            # # self.plotPlot6.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num = np.shape(e)[1], endpoint = True), e[14, :])
             # # self.plotPlot6.setPen(fn.mkPen('k'))
 
         QApplication.processEvents()
@@ -1667,9 +1670,9 @@ class AviaNZ(QMainWindow):
         """
         sender = self.sender()
         i = 0
-        while self.listRectanglesa2[i] != sender and i<len(self.listRectanglesa2):
+        while self.listRectanglesa2[i] != sender and i < len(self.listRectanglesa2):
             i = i+1
-        if i==len(self.listRectanglesa2):
+        if i == len(self.listRectanglesa2):
             print "segment not found!"
         else:
             if type(sender) == self.ROItype:
@@ -1682,15 +1685,15 @@ class AviaNZ(QMainWindow):
                 x1 = self.convertSpectoAmpl(sender.getRegion()[0])
                 x2 = self.convertSpectoAmpl(sender.getRegion()[1])
                 self.listLabels[i].setPos(sender.getRegion()[0], self.textpos)
-            self.listRectanglesa1[i].setRegion([x1,x2])
+            self.listRectanglesa1[i].setRegion([x1, x2])
 
             self.segments[i][0] = x1 + self.startRead
-            #self.segments[i][0] = max(0.0,x1 + self.startRead)
-            #self.segments[i][0] = min(x1 + self.startRead,float(self.fileLength) / self.sampleRate)
+            #self.segments[i][0] = max(0.0, x1 + self.startRead)
+            #self.segments[i][0] = min(x1 + self.startRead, float(self.fileLength) / self.sampleRate)
 
             self.segments[i][1] = x2 + self.startRead
-            #self.segments[i][1] = max(0.0,x2 + self.startRead)
-            #self.segments[i][1] = min(x2 + self.startRead,float(self.fileLength) / self.sampleRate)
+            #self.segments[i][1] = max(0.0, x2 + self.startRead)
+            #self.segments[i][1] = min(x2 + self.startRead, float(self.fileLength) / self.sampleRate)
             #print x1 + self.startRead, float(self.fileLength) / self.sampleRate, self.segments[i]
 
     def updateRegion_ampl(self):
@@ -1699,9 +1702,9 @@ class AviaNZ(QMainWindow):
         """
         sender = self.sender()
         i = 0
-        while self.listRectanglesa1[i] != sender and i<len(self.listRectanglesa1):
+        while self.listRectanglesa1[i] != sender and i < len(self.listRectanglesa1):
             i = i+1
-        if i>len(self.listRectanglesa1):
+        if i > len(self.listRectanglesa1):
             print "segment not found!"
         else:
             x1 = self.convertAmpltoSpec(sender.getRegion()[0])
@@ -1711,16 +1714,16 @@ class AviaNZ(QMainWindow):
                 if type(self.listRectanglesa2[i]) == self.ROItype:
                     y1 = self.listRectanglesa2[i].pos().y()
                     y2 = self.listRectanglesa2[i].size().y()
-                    self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
-                    self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2))
+                    self.listRectanglesa2[i].setPos(pg.Point(x1, y1))
+                    self.listRectanglesa2[i].setSize(pg.Point(x2-x1, y2))
                 else:
-                    self.listRectanglesa2[i].setRegion([x1,x2])
-                self.listLabels[i].setPos(x1,self.textpos)
+                    self.listRectanglesa2[i].setRegion([x1, x2])
+                self.listLabels[i].setPos(x1, self.textpos)
 
                 self.segments[i][0] = sender.getRegion()[0] + self.startRead
                 self.segments[i][1] = sender.getRegion()[1] + self.startRead
 
-    def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=None,saveSeg=True,index=-1):
+    def addSegment(self, startpoint, endpoint, y1=0, y2=0, species=None, saveSeg=True, index=-1):
         """ When a new segment is created, does the work of creating it and connecting its
         listeners. Also updates the relevant overview segment.
         startpoint, endpoint are in amplitude coordinates, while y1, y2 should be between 0 and 1, meaning 0 and np.shape(sg)[1].
@@ -1754,15 +1757,15 @@ class AviaNZ(QMainWindow):
         if show:
             # This is one we want to show
             # Get the name and colour sorted
-            if species is None: # or not isinstance(species,str):
+            if species is None: # or not isinstance(species, str):
                 species = "Don't Know"
 
             if species != "Don't Know":
                 # Work out which overview segment this segment is in (could be more than one)
                 inds = int(float(self.convertAmpltoSpec(startpoint))/self.widthOverviewSegment)
                 # min is to remove possible rounding error
-                #print min(int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment),len(self.overviewSegments)), int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment), len(self.overviewSegments)-1
-                inde = min(int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment),len(self.overviewSegments)-1)
+                #print min(int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment), len(self.overviewSegments)), int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment), len(self.overviewSegments)-1
+                inde = min(int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment), len(self.overviewSegments)-1)
                 # print species
                 if species[-1] == '?':
                     brush = self.ColourPossible
@@ -1774,11 +1777,11 @@ class AviaNZ(QMainWindow):
 
                 #print len(self.segments), inds, inde, startpoint, self.convertAmpltoSpec(startpoint), len(self.overviewSegments)
                 for box in range(inds, inde + 1):
-                    if self.overviewSegments[box,0] > 0:
+                    if self.overviewSegments[box, 0] > 0:
                         self.SegmentRects[box].setBrush(self.ColourNone)
-                    elif self.overviewSegments[box,2] > 0:
+                    elif self.overviewSegments[box, 2] > 0:
                         self.SegmentRects[box].setBrush(self.ColourPossible)
-                    elif self.overviewSegments[box,1] > 0:
+                    elif self.overviewSegments[box, 1] > 0:
                         self.SegmentRects[box].setBrush(self.ColourNamed)
                     else:
                         self.SegmentRects[box].setBrush(pg.mkBrush('w'))
@@ -1787,8 +1790,8 @@ class AviaNZ(QMainWindow):
                 self.prevBoxCol = brush
                 # Work out which overview segment this segment is in (could be more than one)
                 inds = int(float(self.convertAmpltoSpec(startpoint)) / self.widthOverviewSegment)
-                inde = min(int(float(self.convertAmpltoSpec(endpoint)) / self.widthOverviewSegment),len(self.overviewSegments)-1)
-                self.overviewSegments[inds:inde+1,0] += 1
+                inde = min(int(float(self.convertAmpltoSpec(endpoint)) / self.widthOverviewSegment), len(self.overviewSegments)-1)
+                self.overviewSegments[inds:inde+1, 0] += 1
                 # Turn the colour of these segments in the overview
                 for box in range(inds, inde + 1):
                     self.SegmentRects[box].setBrush(pg.mkBrush('w'))
@@ -1811,19 +1814,19 @@ class AviaNZ(QMainWindow):
             p_ampl_r.setRegion([startpoint, endpoint])
             p_ampl_r.sigRegionChangeFinished.connect(self.updateRegion_ampl)
 
-            if y1==0 and y2==0:
-                p_spec_r = pg.LinearRegionItem(brush = brush)
+            if y1 == 0 and y2 == 0:
+                p_spec_r = pg.LinearRegionItem(brush=brush)
                 p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
             else:
-                startpointS = QPointF(self.convertAmpltoSpec(startpoint),y1*np.shape(self.sg)[1])
-                endpointS = QPointF(self.convertAmpltoSpec(endpoint),y2*np.shape(self.sg)[1])
+                startpointS = QPointF(self.convertAmpltoSpec(startpoint), y1*np.shape(self.sg)[1])
+                endpointS = QPointF(self.convertAmpltoSpec(endpoint), y2*np.shape(self.sg)[1])
                 p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS)
                 if self.dragRectTransparent.isChecked():
                     col = self.prevBoxCol.rgb()
                     col = QtGui.QColor(col)
                     col.setAlpha(255)
                     p_spec_r.setBrush(None)
-                    p_spec_r.setPen(pg.mkPen(col,width=1))
+                    p_spec_r.setPen(pg.mkPen(col, width=1))
                 else:
                     p_spec_r.setBrush(pg.mkBrush(self.prevBoxCol))
                     p_spec_r.setPen(pg.mkPen(None))
@@ -1850,7 +1853,7 @@ class AviaNZ(QMainWindow):
             self.listRectanglesa2.append(None)
             self.listLabels.append(None)
 
-    def mouseMoved(self,evt):
+    def mouseMoved(self, evt):
         """ Listener for mouse moves.
         If the user moves the mouse in the spectrogram, print the time, frequency, power for the mouse location. """
         if self.p_spec.sceneBoundingRect().contains(evt):
@@ -1858,16 +1861,16 @@ class AviaNZ(QMainWindow):
             indexx = int(mousePoint.x())
             indexy = int(mousePoint.y())
             if indexx > 0 and indexx < np.shape(self.sg)[0] and indexy > 0 and indexy < np.shape(self.sg)[1]:
-                time = self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] - (self.currentFileSection>0)*self.config['fileOverlap'] + self.startTime
+                time = self.convertSpectoAmpl(mousePoint.x()) + self.currentFileSection * self.config['maxFileShow'] - (self.currentFileSection > 0)*self.config['fileOverlap'] + self.startTime
                 seconds = time % 60
                 minutes = int((time/60) % 60)
                 hours = int((time/3600) % 24)
-                if hours>0:
-                    self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (hours,minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
+                if hours > 0:
+                    self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (hours, minutes, seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
                 else:
-                    self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
+                    self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (minutes, seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
 
-    def mouseClicked_ampl(self,evt):
+    def mouseClicked_ampl(self, evt):
         """ Listener for if the user clicks on the amplitude plot.
         If there is a box selected, get its colour.
         If the user has clicked inside the scene, they could be
@@ -1877,14 +1880,14 @@ class AviaNZ(QMainWindow):
         """
         pos = evt.scenePos()
 
-        if self.box1id>-1:
+        if self.box1id > -1:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
-            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+            if self.dragRectTransparent.isChecked() and isinstance(self.listRectanglesa2[self.box1id], self.ROItype):
                 col = self.prevBoxCol.rgb()
                 col = QtGui.QColor(col)
                 col.setAlpha(255)
-                self.listRectanglesa2[self.box1id].setPen(col,width=1)
+                self.listRectanglesa2[self.box1id].setPen(col, width=1)
             else:
                 self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
 
@@ -1896,7 +1899,7 @@ class AviaNZ(QMainWindow):
             if self.started:
                 # This is the second click, so should pay attention and close the segment
                 # Stop the mouse motion connection, remove the drawing boxes
-                if self.started_window=='a':
+                if self.started_window == 'a':
                     try:
                         self.p_ampl.scene().sigMouseMoved.disconnect()
                     except Exception:
@@ -1917,16 +1920,16 @@ class AviaNZ(QMainWindow):
                 # If they pressed Control, add ? to the names
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
-                    self.addSegment(self.start_location, max(mousePoint.x(),0.0),species=self.lastSpecies)
+                    self.addSegment(self.start_location, max(mousePoint.x(), 0.0), species=self.lastSpecies)
                     self.box1id = len(self.segments) - 1
                 elif modifiers == QtCore.Qt.ControlModifier:
-                    self.addSegment(self.start_location,max(mousePoint.x(),0.0))
+                    self.addSegment(self.start_location, max(mousePoint.x(), 0.0))
                     # Context menu
                     self.box1id = len(self.segments) - 1
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
-                    self.addSegment(self.start_location,max(mousePoint.x(),0.0))
+                    self.addSegment(self.start_location, max(mousePoint.x(), 0.0))
                     # Context menu
                     self.box1id = len(self.segments) - 1
                     self.fillBirdList()
@@ -1937,14 +1940,14 @@ class AviaNZ(QMainWindow):
                 self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
                 self.listRectanglesa1[self.box1id].update()
 
-                if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                    self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
+                if self.dragRectTransparent.isChecked() and isinstance(self.listRectanglesa2[self.box1id], self.ROItype):
+                    self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark, width=1))
                 else:
                     self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
                 self.listRectanglesa2[self.box1id].update()
 
-                self.started = not(self.started)
+                self.started = not self.started
             else:
                 # Check if the user has clicked in a box
                 # Note: Returns the first one it finds
@@ -1964,8 +1967,8 @@ class AviaNZ(QMainWindow):
                     self.listRectanglesa1[box1id].update()
                     self.playSegButton.setEnabled(True)
                     self.playBandLimitedSegButton.setEnabled(True)
-                    if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[box1id]) == self.ROItype:
-                        self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
+                    if self.dragRectTransparent.isChecked() and isinstance(self.listRectanglesa2[box1id], self.ROItype):
+                        self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark, width=1))
                     else:
                         self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
@@ -1980,7 +1983,7 @@ class AviaNZ(QMainWindow):
                 else:
                     # User hasn't clicked in a box (or used the right button), so start a new segment
                     self.start_location = mousePoint.x()
-                    self.vLine_a = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
+                    self.vLine_a = pg.InfiniteLine(angle=90, movable=False, pen={'color': 'r', 'width': 3})
                     self.p_ampl.addItem(self.vLine_a, ignoreBounds=True)
                     self.vLine_a.setPos(self.start_location)
 
@@ -1996,23 +1999,23 @@ class AviaNZ(QMainWindow):
                     self.p_ampl.scene().sigMouseMoved.connect(self.GrowBox_ampl)
                     self.started_window = 'a'
 
-                    self.started = not (self.started)
+                    self.started = not self.started
 
-    def mouseClicked_spec(self,evt):
+    def mouseClicked_spec(self, evt):
         """ Listener for if the user clicks on the spectrogram plot.
         See the amplitude version (mouseClicked_ampl()) for details. Although much of the code is a repeat,
         it is separated for clarity.
         """
         pos = evt.scenePos()
 
-        if self.box1id>-1:
+        if self.box1id > -1:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
-            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+            if self.dragRectTransparent.isChecked() and isinstance(self.listRectanglesa2[self.box1id], self.ROItype):
                 col = self.prevBoxCol.rgb()
                 col = QtGui.QColor(col)
                 col.setAlpha(255)
-                self.listRectanglesa2[self.box1id].setPen(col,width=1)
+                self.listRectanglesa2[self.box1id].setPen(col, width=1)
             else:
                 self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa2[self.box1id].update()
@@ -2044,16 +2047,16 @@ class AviaNZ(QMainWindow):
                     # If the user has pressed shift, copy the last species and don't use the context menu
                     modifiers = QtGui.QApplication.keyboardModifiers()
                     if modifiers == QtCore.Qt.ShiftModifier:
-                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(),0.0)), species=self.lastSpecies)
+                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(), 0.0)), species=self.lastSpecies)
                         self.box1id = len(self.segments) - 1
                     elif modifiers == QtCore.Qt.ControlModifier:
-                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(),0.0)))
+                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(), 0.0)))
                         # Context menu
                         self.box1id = len(self.segments) - 1
                         self.fillBirdList(unsure=True)
                         self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                     else:
-                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(),0.0)))
+                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(), 0.0)))
                         # Context menu
                         self.box1id = len(self.segments) - 1
                         self.fillBirdList()
@@ -2064,19 +2067,19 @@ class AviaNZ(QMainWindow):
 
                     self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
                     self.listRectanglesa1[self.box1id].update()
-                    if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                        self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
+                    if self.dragRectTransparent.isChecked() and isinstance(self.listRectanglesa2[self.box1id], self.ROItype):
+                        self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark, width=1))
                     else:
                         self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
                     self.listRectanglesa2[self.box1id].update()
-                    self.started = not(self.started)
+                    self.started = not self.started
             else:
                 # Check if the user has clicked in a box
                 # Note: Returns the first one it finds
                 box1id = -1
                 for count in range(len(self.listRectanglesa2)):
-                    if type(self.listRectanglesa2[count]) == self.ROItype:
+                    if isinstance(self.listRectanglesa2[count], self.ROItype):
                         x1 = self.listRectanglesa2[count].pos().x()
                         y1 = self.listRectanglesa2[count].pos().y()
                         x2 = x1 + self.listRectanglesa2[count].size().x()
@@ -2096,8 +2099,8 @@ class AviaNZ(QMainWindow):
                     self.listRectanglesa1[box1id].update()
                     self.playSegButton.setEnabled(True)
                     self.playBandLimitedSegButton.setEnabled(True)
-                    if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[box1id]) == self.ROItype:
-                        self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
+                    if self.dragRectTransparent.isChecked() and isinstance(self.listRectanglesa2[box1id], self.ROItype):
+                        self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark, width=1))
                     else:
                         self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
@@ -2115,7 +2118,7 @@ class AviaNZ(QMainWindow):
                         return
                     else:
                         self.start_location = self.convertSpectoAmpl(mousePoint.x())
-                        self.vLine_s = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
+                        self.vLine_s = pg.InfiniteLine(angle=90, movable=False, pen={'color': 'r', 'width': 3})
                         self.p_spec.addItem(self.vLine_s, ignoreBounds=True)
                         self.vLine_s.setPos(mousePoint.x())
                         self.playSegButton.setEnabled(False)
@@ -2127,24 +2130,24 @@ class AviaNZ(QMainWindow):
                         self.drawingBox_ampl.setRegion([self.start_location, self.start_location])
                         self.drawingBox_spec = pg.LinearRegionItem(brush=brush)
                         self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
-                        self.drawingBox_spec.setRegion([mousePoint.x(),mousePoint.x()])
+                        self.drawingBox_spec.setRegion([mousePoint.x(), mousePoint.x()])
                         self.p_spec.scene().sigMouseMoved.connect(self.GrowBox_spec)
                         self.started_window = 's'
 
-                        self.started = not (self.started)
+                        self.started = not self.started
 
     def mouseDragged_spec(self, evt1, evt2, evt3):
         """ Listener for if the user drags in the spectrogram plot.
         It's a bit simpler than the click ones, since there is less ambiguity.
         Again, some of the code is a repeat, but kept self-contained for ease. """
-        if self.box1id>-1:
+        if self.box1id > -1:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
-            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+            if self.dragRectTransparent.isChecked() and isinstance(self.listRectanglesa2[self.box1id], self.ROItype):
                 col = self.prevBoxCol.rgb()
                 col = QtGui.QColor(col)
                 col.setAlpha(255)
-                self.listRectanglesa2[self.box1id].setPen(pg.mkPen(col,width=1))
+                self.listRectanglesa2[self.box1id].setPen(pg.mkPen(col, width=1))
             else:
                 self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa2[self.box1id].update()
@@ -2153,13 +2156,13 @@ class AviaNZ(QMainWindow):
             evt1 = self.p_spec.mapSceneToView(evt1)
             evt2 = self.p_spec.mapSceneToView(evt2)
 
-            startx = max(min(evt1.x(), evt2.x()),0)
-            endx = min(max(evt1.x(),evt2.x()),np.shape(self.sg)[0]+1)
+            startx = max(min(evt1.x(), evt2.x()), 0)
+            endx = min(max(evt1.x(), evt2.x()), np.shape(self.sg)[0]+1)
 
             # If the user has pressed shift, copy the last species and don't use the context menu
             modifiers = QtGui.QApplication.keyboardModifiers()
             if modifiers == QtCore.Qt.ShiftModifier:
-                self.addSegment(self.convertSpectoAmpl(startx), self.convertSpectoAmpl(endx), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1],self.lastSpecies)
+                self.addSegment(self.convertSpectoAmpl(startx), self.convertSpectoAmpl(endx), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1], self.lastSpecies)
                 self.box1id = len(self.segments) - 1
             elif modifiers == QtCore.Qt.ControlModifier:
                 self.addSegment(self.convertSpectoAmpl(startx), self.convertSpectoAmpl(endx), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1])
@@ -2179,9 +2182,9 @@ class AviaNZ(QMainWindow):
 
             self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
             self.listRectanglesa1[self.box1id].update()
-            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+            if self.dragRectTransparent.isChecked() and isinstance(self.listRectanglesa2[self.box1id], self.ROItype):
                 self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(None))
-                self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
+                self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark, width=1))
             else:
                 self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
                 #self.listRectanglesa2[self.box1id].setPen(None)
@@ -2190,7 +2193,7 @@ class AviaNZ(QMainWindow):
         else:
             return
 
-    def GrowBox_ampl(self,evt):
+    def GrowBox_ampl(self, evt):
         """ Listener for when a segment is being made in the amplitude plot.
         Makes the blue box that follows the mouse change size. """
         pos = evt
@@ -2208,7 +2211,7 @@ class AviaNZ(QMainWindow):
             self.drawingBox_ampl.setRegion([self.start_location, self.convertSpectoAmpl(mousePoint.x())])
             self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_location), mousePoint.x()])
 
-    def birdSelected(self,birdname,update=True):
+    def birdSelected(self, birdname, update=True):
         """ Collects the label for a bird from the context menu and processes it.
         Has to update the overview segments in case their colour should change.
         Also handles getting the name through a message box if necessary.
@@ -2217,7 +2220,7 @@ class AviaNZ(QMainWindow):
         # Work out which overview segment this segment is in (could be more than one)
         inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0]-self.startRead)) / self.widthOverviewSegment)
         # inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1])) / self.widthOverviewSegment)
-        inde = min(int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead)) / self.widthOverviewSegment),len(self.overviewSegments) - 1)
+        inde = min(int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead)) / self.widthOverviewSegment), len(self.overviewSegments) - 1)
 
         if oldname == "Don't Know":
             if birdname != "Don't Know":
@@ -2265,7 +2268,7 @@ class AviaNZ(QMainWindow):
                 if birdname[-1] == '?':
                     birdname = birdname[:-1]
                 self.config['BirdList'].remove(birdname)
-                self.config['BirdList'].insert(0,birdname)
+                self.config['BirdList'].insert(0, birdname)
         else:
             text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
             if ok:
@@ -2277,18 +2280,18 @@ class AviaNZ(QMainWindow):
                 else:
                     # Add the new bird name.
                     if update:
-                        self.config['BirdList'].insert(0,text)
+                        self.config['BirdList'].insert(0, text)
                     else:
                         self.config['BirdList'].append(text)
                     self.saveConfig = True
 
-    def updateText(self, text,segID=None):
+    def updateText(self, text, segID=None):
         """ When the user sets or changes the name in a segment, update the text and the colour. """
         if segID is None:
             segID = self.box1id
         #print segID, len(self.segments), len(self.listRectanglesa1)
         self.segments[segID][4] = text
-        self.listLabels[segID].setText(text,'k')
+        self.listLabels[segID].setText(text, 'k')
 
         # Update the colour
         if text != "Don't Know":
@@ -2303,7 +2306,7 @@ class AviaNZ(QMainWindow):
         self.lastSpecies = text
         self.segmentsToSave = True
 
-    def setColourMap(self,cmap):
+    def setColourMap(self, cmap):
         """ Listener for the menu item that chooses a colour map.
         Loads them from the file as appropriate and sets the lookup table.
         """
@@ -2312,7 +2315,7 @@ class AviaNZ(QMainWindow):
         import colourMaps
         pos, colour, mode = colourMaps.colourMaps(cmap)
 
-        cmap = pg.ColorMap(pos, colour,mode)
+        cmap = pg.ColorMap(pos, colour, mode)
         self.lut = cmap.getLookupTable(0.0, 1.0, 256)
 
         self.specPlot.setLookupTable(self.lut)
@@ -2347,7 +2350,7 @@ class AviaNZ(QMainWindow):
         """ When the left button is pressed (next to the overview plot), move everything along
         Allows a 10% overlap """
         minX, maxX = self.overviewImageRegion.getRegion()
-        newminX = max(0,minX-(maxX-minX)*0.9)
+        newminX = max(0, minX-(maxX-minX)*0.9)
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
         self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
@@ -2356,7 +2359,7 @@ class AviaNZ(QMainWindow):
         """ When the right button is pressed (next to the overview plot), move everything along
         Allows a 10% overlap """
         minX, maxX = self.overviewImageRegion.getRegion()
-        newminX = min(np.shape(self.sg)[0]-(maxX-minX),minX+(maxX-minX)*0.9)
+        newminX = min(np.shape(self.sg)[0]-(maxX-minX), minX+(maxX-minX)*0.9)
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
         self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
@@ -2367,7 +2370,7 @@ class AviaNZ(QMainWindow):
         self.resetStorageArrays()
         # Reset the media player
         # TODO
-        #if self.media_obj.state() == phonon.Phonon.PlayingState:
+        #if self.media_obj.state() == QMediaPlayer.PlayingState:
             #self.media_obj.pause()
             #self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.loadFile()
@@ -2407,7 +2410,7 @@ class AviaNZ(QMainWindow):
         """ Listener for the spinbox that decides the width of the main window.
         It updates the top figure plots as the window width is changed.
         Slightly annoyingly, it gets called when the value gets reset, hence the first line. """
-        if not hasattr(self,'overviewImageRegion'):
+        if not hasattr(self, 'overviewImageRegion'):
             return
         self.windowSize = value
 
@@ -2418,7 +2421,7 @@ class AviaNZ(QMainWindow):
         self.scrollSlider.setMaximum(np.shape(self.sg)[0]-self.convertAmpltoSpec(self.widthWindow.value()))
         self.updateOverview()
 
-# ===============
+# == == == == == == == =
 # Generate the various dialogs that match the menu items
 
     def loadSegment(self):
@@ -2442,7 +2445,7 @@ class AviaNZ(QMainWindow):
     def showFirstPage(self):
         # After the HumanClassify dialogs have closed, need to show the correct data on the screen
         # Returns to the page user started with
-        if self.config['maxFileShow']<self.datalength/self.sampleRate:
+        if self.config['maxFileShow'] < self.datalength/self.sampleRate:
             self.currentFileSection = self.currentPage
             self.prepare5minMove()
             self.next5mins.setEnabled(True)
@@ -2458,14 +2461,14 @@ class AviaNZ(QMainWindow):
         self.currentPage = self.currentFileSection
         # Check there are segments to show on this page
         if not self.config['showAllPages']:
-            if len(self.segments)>0:
+            if self.segments:
                 self.box1id = 0
-                while self.box1id<len(self.segments) and self.listRectanglesa2[self.box1id] is None:
+                while self.box1id < len(self.segments) and self.listRectanglesa2[self.box1id] is None:
                     self.box1id += 1
         else:
             self.box1id = 0
 
-        if (self.config['showAllPages'] and len(self.segments)==0) or (not self.config['showAllPages'] and (self.box1id == len(self.segments) or len(self.listRectanglesa2)==0)):
+        if (self.config['showAllPages'] and not self.segments) or (not self.config['showAllPages'] and (self.box1id == len(self.segments) or not self.listRectanglesa2)):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to check")
@@ -2478,7 +2481,7 @@ class AviaNZ(QMainWindow):
         else:
             if not self.config['showAllPages']:
                 # Different calls for the two types of region
-                if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                if isinstance(self.listRectanglesa2[self.box1id], self.ROItype):
                     x1 = self.listRectanglesa2[self.box1id].pos()[0]
                     x2 = x1 + self.listRectanglesa2[self.box1id].size()[0]
                 else:
@@ -2511,7 +2514,7 @@ class AviaNZ(QMainWindow):
                 x3 = int((self.segments[self.box1id][0]-self.startRead)*self.sampleRate)
                 x4 = int((self.segments[self.box1id][1]-self.startRead)*self.sampleRate)
 
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'])
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.segments[self.box1id][4], self.lut, self.colourStart, self.colourEnd, self.config['invertColourMap'], self.config['BirdList'])
             self.humanClassifyDialog1.show()
             self.humanClassifyDialog1.activateWindow()
             #self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
@@ -2534,7 +2537,7 @@ class AviaNZ(QMainWindow):
             if not self.config['showAllPages']:
                 # Different calls for the two types of region
                 if self.listRectanglesa2[self.box1id] is not None:
-                    if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                    if isinstance(self.listRectanglesa2[self.box1id], self.ROItype):
                         x1 = self.listRectanglesa2[self.box1id].pos()[0]
                         x2 = x1 + self.listRectanglesa2[self.box1id].size()[0]
                     else:
@@ -2574,7 +2577,7 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             self.humanClassifyClose1()
 
-    def updateLabel(self,label):
+    def updateLabel(self, label):
         """ Update the label on a segment that is currently shown in the display. """
         self.segments[self.box1id][4] = label
         if self.listRectanglesa2[self.box1id] is not None:
@@ -2582,7 +2585,7 @@ class AviaNZ(QMainWindow):
 
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
-            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+            if self.dragRectTransparent.isChecked() and isinstance(self.listRectanglesa2[self.box1id], self.ROItype):
                 col = self.prevBoxCol.rgb()
                 col = QtGui.QColor(col)
                 col.setAlpha(255)
@@ -2595,7 +2598,7 @@ class AviaNZ(QMainWindow):
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
-        if len(checkText) > 0:
+        if checkText:
             if label != checkText:
                 label = str(checkText)
                 self.humanClassifyDialog1.birdTextEntered()
@@ -2614,7 +2617,7 @@ class AviaNZ(QMainWindow):
             # Update the label on the box if it is in the current page
             self.updateLabel(label)
             # if self.listRectanglesa2[self.box1id] is not None:
-            #     self.birdSelected(label,update=False)
+            #     self.birdSelected(label, update = False)
             #
             #     self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             #     self.listRectanglesa1[self.box1id].update()
@@ -2622,7 +2625,7 @@ class AviaNZ(QMainWindow):
             #         col = self.prevBoxCol.rgb()
             #         col = QtGui.QColor(col)
             #         col.setAlpha(255)
-            #         self.listRectanglesa2[self.box1id].setPen(col,width=1)
+            #         self.listRectanglesa2[self.box1id].setPen(col, width = 1)
             #     else:
             #         self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
             #
@@ -2653,11 +2656,11 @@ class AviaNZ(QMainWindow):
         """
         # Check there are segments to show on this page
         if not self.config['showAllPages']:
-            if len(self.segments)>0:
+            if self.segments:
                 self.box1id = 0
-                while self.box1id<len(self.segments) and self.listRectanglesa2[self.box1id] is None:
+                while self.box1id < len(self.segments) and self.listRectanglesa2[self.box1id] is None:
                     self.box1id += 1
-        if (self.config['showAllPages'] and len(self.segments)==0) or (not self.config['showAllPages'] and (self.box1id == len(self.segments) or len(self.listRectanglesa2)==0)):
+        if (self.config['showAllPages'] and not self.segments) or (not self.config['showAllPages'] and (self.box1id == len(self.segments) or not self.listRectanglesa2)):
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to check")
@@ -2675,7 +2678,7 @@ class AviaNZ(QMainWindow):
             indices = []
             for i in range(len(self.segments)):
                 if self.listRectanglesa2[i] is not None:
-                    segs.append([self.segments[i][0]-self.startRead,self.segments[i][1]-self.startRead,-1,-1,self.segments[i][4]])
+                    segs.append([self.segments[i][0]-self.startRead, self.segments[i][1]-self.startRead, -1, -1, self.segments[i][4]])
                     indices.append(i)
             names = [item[4] for item in segs]
             names = [n if n[-1] != '?' else n[:-1] for n in names]
@@ -2699,15 +2702,14 @@ class AviaNZ(QMainWindow):
                 for ind in range(len(segs)):
                     if self.segments[ind][4] == label or self.segments[ind][4][:-1] == label:
                         self.indices.append(ind)
-                        segments.append([segs[ind][0] - self.startRead, segs[i][1] - self.startRead, -1, -1,
-                                     segs[i][4]])
+                        segments.append([segs[ind][0] - self.startRead, segs[i][1] - self.startRead, -1, -1, segs[i][4]])
 
                 # Pass those segments to the dialog
-                self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,segments,label,1,1,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'])
+                self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, segments, label, 1, 1, self.sampleRate, self.config['incr'], self.lut, self.colourStart, self.colourEnd, self.config['invertColourMap'])
                 self.humanClassifyDialog2.exec_()
                 errors = self.humanClassifyDialog2.getValues()
                 # If there are errors, get their correct indices and process them
-                if len(errors) > 0:
+                if errors:
                     # Turn these numbers back into indices into self.segments
                     # The worst naming ever, sorry. There are two sets of indices -- self.indices keeps track of those with the chosen label, while indices is those on the current page!
                     inderr = []
@@ -2742,18 +2744,18 @@ class AviaNZ(QMainWindow):
                     self.indices = []
                     segments = []
                     # Loop over the segments on this page and find those with the correct label
-                    for ind in range(firstSeg,lastSeg):
+                    for ind in range(firstSeg, lastSeg):
                         if self.segments[ind][4] == label or self.segments[ind][4][:-1] == label:
                             self.indices.append(ind)
-                            segments.append([self.segments[ind][0]-self.startRead,self.segments[ind][1]-self.startRead,-1,-1,self.segments[ind][4]])
+                            segments.append([self.segments[ind][0]-self.startRead, self.segments[ind][1]-self.startRead, -1, -1, self.segments[ind][4]])
                     errors = []
                     # if there are segments on the next page, load it
-                    if len(segments)>0:
+                    if segments:
                         self.loadSegment()
-                        self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,segments,label,self.currentFileSection,self.nFileSections,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'])
+                        self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, segments, label, self.currentFileSection, self.nFileSections, self.sampleRate, self.config['incr'], self.lut, self.colourStart, self.colourEnd, self.config['invertColourMap'])
                         self.humanClassifyDialog2.exec_()
                         errors = self.humanClassifyDialog2.getValues()
-                        if len(errors)>0:
+                        if errors:
                             inderr = []
                             for error in errors:
                                 inderr.append(self.indices[error])
@@ -2773,8 +2775,8 @@ class AviaNZ(QMainWindow):
     def showSpectrogramDialog(self):
         """ Create the spectrogram dialog when the button is pressed.
         """
-        if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq, self.sampleRate)
+        if not hasattr(self, 'spectrogramDialog'):
+            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'], self.config['incr'], self.minFreq, self.maxFreq, self.sampleRate)
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
@@ -2785,7 +2787,7 @@ class AviaNZ(QMainWindow):
         """ Listener for the spectrogram dialog.
         Has to do quite a bit of work to make sure segments are in the correct place, etc."""
         [windowType, mean_normalise, multitaper, window_width, incr, minFreq, maxFreq] = self.spectrogramDialog.getValues()
-        if (minFreq >= maxFreq):
+        if minFreq >= maxFreq:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("Incorrect frequency range")
@@ -2798,9 +2800,9 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText("Updating the spectrogram...")
             self.sp.setWidth(int(str(window_width)), int(str(incr)))
             oldSpecy = np.shape(self.sg)[1]
-            sgRaw = self.sp.spectrogram(self.audiodata,window=str(windowType),mean_normalise=mean_normalise,onesided=True,multitaper=False)
+            sgRaw = self.sp.spectrogram(self.audiodata, window=str(windowType), mean_normalise=mean_normalise, onesided=True, multitaper=False)
             maxsg = np.min(sgRaw)
-            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+            self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw/maxsg)))
 
             # If the size of the spectrogram has changed, need to update the positions of things
             if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
@@ -2813,14 +2815,14 @@ class AviaNZ(QMainWindow):
                     if self.listRectanglesa1[s] is not None:
                         x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
                         x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
-                        if type(self.listRectanglesa2[s]) == self.ROItype:
+                        if isinstance(self.listRectanglesa2[s], self.ROItype):
                             y1 = self.listRectanglesa2[s].pos().y()/oldSpecy
                             y2 = self.listRectanglesa2[s].size().y()/oldSpecy
                             self.listRectanglesa2[s].setPos(pg.Point(x1, y1*np.shape(self.sg)[1]))
                             self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, y2*np.shape(self.sg)[1]))
                         else:
                             self.listRectanglesa2[s].setRegion([x1, x2])
-                        self.listLabels[s].setPos(x1,self.textpos)
+                        self.listLabels[s].setPos(x1, self.textpos)
 
                 # Update the axis
                 #FreqRange = (self.maxFreq - self.minFreq)/1000.
@@ -2843,14 +2845,14 @@ class AviaNZ(QMainWindow):
                     self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'],
                                         self.config['incr'])
 
-            self.redoFreqAxis(minFreq,maxFreq)
+            self.redoFreqAxis(minFreq, maxFreq)
 
             self.statusLeft.setText("Ready")
 
     def denoiseDialog(self):
         """ Create the denoising dialog when the relevant button is pressed.
         """
-        self.denoiseDialog = Dialogs.Denoise(DOC=self.DOC,sampleRate=self.sampleRate)
+        self.denoiseDialog = Dialogs.Denoise(DOC=self.DOC, sampleRate=self.sampleRate)
         self.denoiseDialog.show()
         self.denoiseDialog.activateWindow()
         self.denoiseDialog.activate.clicked.connect(self.denoise)
@@ -2879,16 +2881,16 @@ class AviaNZ(QMainWindow):
         """
         # TODO: should it be saved automatically, or a button added?
         with pg.BusyCursor():
-            if self.DOC==False:
-                [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width,trimaxis] = self.denoiseDialog.getValues()
+            if not self.DOC:
+                [alg, depthchoice, depth, thrType, thr, wavelet, start, end, width, trimaxis] = self.denoiseDialog.getValues()
             else:
                 [alg, start, end, width, trimaxis] = self.denoiseDialog.getValues()
             self.backup()
             self.statusLeft.setText("Denoising...")
             if not hasattr(self, 'waveletDenoiser'):
-                self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata,wavelet=None,maxLevel=self.config['maxSearchDepth'])
+                self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata, wavelet=None, maxLevel=self.config['maxSearchDepth'])
 
-            if str(alg) == "Wavelets" and self.DOC==False:
+            if str(alg) == "Wavelets" and not self.DOC:
                 if thrType is True:
                     type = 'Soft'
                 else:
@@ -2897,11 +2899,11 @@ class AviaNZ(QMainWindow):
                     depth = None
                 else:
                     depth = int(str(depth))
-                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
-            elif str(alg) == "Wavelets" and self.DOC==True:
+                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata, type, float(str(thr)), depth, wavelet=str(wavelet))
+            elif str(alg) == "Wavelets" and self.DOC:
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata)
 
-            elif str(alg) == "Bandpass --> Wavelets" and self.DOC==False:
+            elif str(alg) == "Bandpass --> Wavelets" and not self.DOC:
                 if thrType is True:
                     type = 'soft'
                 else:
@@ -2910,9 +2912,9 @@ class AviaNZ(QMainWindow):
                     depth = None
                 else:
                     depth = int(str(depth))
-                self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
-                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
-            elif str(alg) == "Wavelets --> Bandpass" and self.DOC==False:
+                self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
+                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata, type, float(str(thr)), depth, wavelet=str(wavelet))
+            elif str(alg) == "Wavelets --> Bandpass" and not self.DOC:
                 if thrType is True:
                     type = 'soft'
                 else:
@@ -2921,8 +2923,8 @@ class AviaNZ(QMainWindow):
                     depth = None
                 else:
                     depth = int(str(depth))
-                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
-                self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
+                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata, type, float(str(thr)), depth, wavelet=str(wavelet))
+                self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
 
             elif str(alg) == "Bandpass":
                 self.audiodata = self.sp.bandpassFilter(self.audiodata, int(str(start)), int(str(end)))
@@ -2933,7 +2935,7 @@ class AviaNZ(QMainWindow):
                 self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
             else:
                 #"Median Filter"
-                self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
+                self.audiodata = self.sp.medianFilter(self.audiodata, int(str(width)))
 
             # The temp files work properly on a Mac, not on Windows
             if platform.system() == 'Darwin':
@@ -2943,7 +2945,7 @@ class AviaNZ(QMainWindow):
                 f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
                 filename = f.name
 
-            wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits',sampwidth=2)
+            wavio.write(filename, self.audiodata.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
 
             #open the temp file
             wavobj = wavio.read(filename)
@@ -2952,15 +2954,15 @@ class AviaNZ(QMainWindow):
             if self.audiodata.dtype is not 'float':
                 self.audiodata = self.audiodata.astype('float') #/ 32768.0
 
-            self.audiodata=self.audiodata[:,0]
+            self.audiodata = self.audiodata[:, 0]
 
-            sgRaw = self.sp.spectrogram(self.audiodata,mean_normalise=True,onesided=True,multitaper=False)
+            sgRaw = self.sp.spectrogram(self.audiodata, mean_normalise=True, onesided=True, multitaper=False)
             maxsg = np.min(sgRaw)
-            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+            self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw/maxsg)))
             self.overviewImage.setImage(self.sg)
 
             self.specPlot.setImage(self.sg)
-            self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
+            self.amplPlot.setData(np.linspace(0.0, float(self.datalength)/self.sampleRate, num=self.datalength, endpoint=True), self.audiodata)
             self.minFreq = int(str(start))
             self.maxFreq = int(str(end))
 
@@ -2976,23 +2978,23 @@ class AviaNZ(QMainWindow):
         # self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
         # audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
         # phonon.Phonon.createPath(self.media_obj, audio_output)
+        #self.media_obj.setNotifyInterval(20)
+        #self.media_obj.notify.connect(self.movePlaySlider)
         # self.media_obj.tick.connect(self.movePlaySlider)
-        # self.media_obj.setTickInterval(20)
-        # self.media_obj.tick.connect(self.movePlaySlider)
-        # self.media_obj.finished.connect(self.playFinished)
+        #self.media_obj.finished.connect(self.playFinished)
 
     def denoise_undo(self):
         """ Listener for undo button in denoising dialog.
         """
         # TODO: Can I actually delete something from an object?
-        print("Undoing",np.shape(self.audiodata_backup))
-        if hasattr(self,'audiodata_backup'):
+        print "Undoing", np.shape(self.audiodata_backup)
+        if hasattr(self, 'audiodata_backup'):
             if self.audiodata_backup is not None:
-                if np.shape(self.audiodata_backup)[1]>0:
-                    self.audiodata = np.copy(self.audiodata_backup[:,-1])
-                    self.audiodata_backup = self.audiodata_backup[:,:-1]
-                    self.sp.setNewData(self.audiodata,self.sampleRate)
-                    sgRaw = self.sp.spectrogram(self.audiodata,mean_normalise=True,onesided=True,multitaper=False)
+                if np.shape(self.audiodata_backup)[1] > 0:
+                    self.audiodata = np.copy(self.audiodata_backup[:, -1])
+                    self.audiodata_backup = self.audiodata_backup[:, :-1]
+                    self.sp.setNewData(self.audiodata, self.sampleRate)
+                    sgRaw = self.sp.spectrogram(self.audiodata, mean_normalise=True, onesided=True, multitaper=False)
                     maxsg = np.min(sgRaw)
                     self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
                     self.overviewImage.setImage(self.sg)
@@ -3000,10 +3002,10 @@ class AviaNZ(QMainWindow):
                     self.amplPlot.setData(
                         np.linspace(0.0, float(self.datalength) / self.sampleRate, num=self.datalength, endpoint=True),
                         self.audiodata)
-                    if hasattr(self,'seg'):
-                        self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
+                    if hasattr(self, 'seg'):
+                        self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'], self.config['incr'])
 
-                    self.redoFreqAxis(0,self.sampleRate/2)
+                    self.redoFreqAxis(0, self.sampleRate/2)
                     self.setColourLevels()
 
     def denoise_save(self):
@@ -3011,7 +3013,7 @@ class AviaNZ(QMainWindow):
         Adds _d to the filename and saves it as a new sound file.
         """
         filename = self.filename[:-4] + '_d' + self.filename[-4:]
-        wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits', sampwidth=2)
+        wavio.write(filename, self.audiodata.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
         self.statusLeft.setText("Saved")
 
     def save_selected_sound(self, id=-1):
@@ -3031,7 +3033,7 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             return
         else:
-            if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+            if isinstance(self.listRectanglesa2[self.box1id], self.ROItype):
                 x1 = self.listRectanglesa2[self.box1id].pos().x()
                 x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
             else:
@@ -3044,7 +3046,7 @@ class AviaNZ(QMainWindow):
             if filename:
                 wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
 
-    def redoFreqAxis(self,start=None,end=None):
+    def redoFreqAxis(self, start=None, end=None):
         """ This is the listener for the menu option to make the frequency axis tight (after bandpass filtering)
         """
         if start is None:
@@ -3054,12 +3056,12 @@ class AviaNZ(QMainWindow):
 
         height = self.sampleRate / 2. / np.shape(self.sg)[1]
 
-        self.overviewImage.setImage(self.sg[:,int(float(start)/height):int(float(end)/height)])
-        self.specPlot.setImage(self.sg[:,int(float(start)/height):int(float(end)/height)])
+        self.overviewImage.setImage(self.sg[:, int(float(start)/height):int(float(end)/height)])
+        self.specPlot.setImage(self.sg[:, int(float(start)/height):int(float(end)/height)])
 
         FreqRange = end - start
         SpecRange = FreqRange/height
-        self.specaxis.setTicks([[(0,(start/1000.)),(SpecRange/4,(start/1000.+FreqRange/4000.)),(SpecRange/2,(start/1000.+FreqRange/2000.)),(3*SpecRange/4,(start/1000.+3*FreqRange/4000.)),(SpecRange,(start/1000.+FreqRange/1000.))]])
+        self.specaxis.setTicks([[(0, (start/1000.)), (SpecRange/4, (start/1000.+FreqRange/4000.)), (SpecRange/2, (start/1000.+FreqRange/2000.)), (3*SpecRange/4, (start/1000.+3*FreqRange/4000.)), (SpecRange, (start/1000.+FreqRange/1000.))]])
 
         self.textpos = int(float(end-start)/height) + self.config['textoffset']
         for i in range(len(self.segments)):
@@ -3080,31 +3082,31 @@ class AviaNZ(QMainWindow):
         """
         # TODO: Currently just gives them all the label "Don't Know"
         seglen = len(self.segments)
-        [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution] = self.segmentDialog.getValues()
+        [alg, medThr, HarmaThr1, HarmaThr2, PowerThr, minfreq, minperiods, Yinthr, window, FIRThr1, CCThr1, species, resolution] = self.segmentDialog.getValues()
 
-        #[alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,depth,thrType,thr,wavelet,bandchoice,start,end,species] = self.segmentDialog.getValues()
+        #[alg, ampThr, medThr, HarmaThr1, HarmaThr2, PowerThr, minfreq, minperiods, Yinthr, window, FIRThr1, depth, thrType, thr, wavelet, bandchoice, start, end, species] = self.segmentDialog.getValues()
         with pg.BusyCursor():
             species = str(species)
-            if species=='Choose species...':
-                species='all'
-            #if not hasattr(self,'seg'):
-            #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
+            if species == 'Choose species...':
+                species = 'all'
+            #if not hasattr(self, 'seg'):
+            #    self.seg = Segment.Segment(self.audiodata, sgRaw, self.sp, self.sampleRate, self.config['minSegment'], self.config['window_width'], self.config['incr'])
             self.statusLeft.setText("Segmenting...")
             if str(alg) == "Default":
                 newSegments = self.seg.bestSegments()
             elif str(alg) == "Median Clipping":
-                newSegments = self.seg.medianClip(float(str(medThr)),self.config['minSegment'])
+                newSegments = self.seg.medianClip(float(str(medThr)), self.config['minSegment'])
             elif str(alg) == "Harma":
-                newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),self.config['minSegment'])
+                newSegments = self.seg.Harma(float(str(HarmaThr1)), float(str(HarmaThr2)), self.config['minSegment'])
             elif str(alg) == "Power":
                 newSegments = self.seg.segmentByPower(float(str(PowerThr)))
             elif str(alg) == "Onsets":
                 newSegments = self.seg.onsets()
             elif str(alg) == "Fundamental Frequency":
-                newSegments, pitch, times = self.seg.yin(int(str(minfreq)),int(str(minperiods)),float(str(Yinthr)),int(str(window)),returnSegs=True)
+                newSegments, pitch, times = self.seg.yin(int(str(minfreq)), int(str(minperiods)), float(str(Yinthr)), int(str(window)), returnSegs=True)
             elif str(alg) == "FIR":
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
-            elif str(alg)=="Wavelets":
+            elif str(alg) == "Wavelets":
                 if species == 'all':    # Ask the species
                     msg = QMessageBox()
                     msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
@@ -3116,55 +3118,55 @@ class AviaNZ(QMainWindow):
                     return
                 else:
                     ws = WaveletSegment.WaveletSegment(species=str(species))
-                    newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
-            elif str(alg)=="Cross-Correlation":
+                    newSegments = ws.waveletSegment_test(fName=None, data=self.audiodata, sampleRate=self.sampleRate, species=species, trainTest=False)
+            elif str(alg) == "Cross-Correlation":
                 self.findMatches(float(str(CCThr1)))
                 newSegments = []
 
             # print "to excel", newSegments
                 # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
                 # # but ML is extremely slow and crappy. So I decided to use just the wavelets
-                # newSegmentsML = WaveletSegment.findCalls_learn(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
-                # print np.shape(newSegmentsML),type(newSegmentsML), newSegmentsML
+                # newSegmentsML = WaveletSegment.findCalls_learn(fName=None, data=self.audiodata, sampleRate=self.sampleRate, species=species, trainTest=False)
+                # print np.shape(newSegmentsML), type(newSegmentsML), newSegmentsML
                 #
-                # newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species='kiwi',trainTest=False)
-                # # print type(newSegments),newSegments
+                # newSegments = WaveletSegment.findCalls_test(fName = None, data = self.audiodata, sampleRate = self.sampleRate, species = 'kiwi', trainTest = False)
+                # # print type(newSegments), newSegments
                 # import itertools
-                # newSegments=list(itertools.chain.from_iterable(newSegments))
-                # temp=np.zeros(len(newSegmentsML))
+                # newSegments = list(itertools.chain.from_iterable(newSegments))
+                # temp = np.zeros(len(newSegmentsML))
                 # for i in newSegments:
-                #     temp[i]=1
-                # newSegments=temp.astype(int)
-                # newSegments=newSegments.tolist()
+                #     temp[i] = 1
+                # newSegments = temp.astype(int)
+                # newSegments = newSegments.tolist()
                 # print np.shape(newSegments), type(newSegments), newSegments
                 #
-                # newSegmentsDef=np.minimum.reduce([newSegmentsML,newSegments])
-                # newSegmentsDef=newSegmentsDef.tolist()
+                # newSegmentsDef = np.minimum.reduce([newSegmentsML, newSegments])
+                # newSegmentsDef = newSegmentsDef.tolist()
                 # print "newSegmentsDef:", np.shape(newSegmentsDef), type(newSegmentsDef), newSegmentsDef
-                # C=[(a and not b) or (not a and b) for a,b in zip(newSegmentsML,newSegments)]
-                # newSegmentsPb=[int(c) for c in C]
+                # C = [(a and not b) or (not a and b) for a, b in zip(newSegmentsML, newSegments)]
+                # newSegmentsPb = [int(c) for c in C]
                 # print "newSegmentsPosi:", np.shape(newSegmentsPb), type(newSegmentsPb), newSegmentsPb
                 #
-                # # convert these segments to [start,end] format
-                # newSegmentsDef=self.binary2seg(newSegmentsDef)
-                # newSegmentsPb=self.binary2seg(newSegmentsPb)
+                # # convert these segments to [start, end] format
+                # newSegmentsDef = self.binary2seg(newSegmentsDef)
+                # newSegmentsPb = self.binary2seg(newSegmentsPb)
 
             # Save the excel file
-            out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=self.segments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
+            out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, method=str(alg), resolution=resolution)
             out.excel()
-            # self.exportSegments(newSegments,species=species)
+            # self.exportSegments(newSegments, species=species)
 
             # Generate annotation friendly output.
             # Merge neighbours for wavelet seg
-            if str(alg)=="Wavelets":
-                 if len(out.annotation)>0:
+            if str(alg) == "Wavelets":
+                 if out.annotation:
                     for seg in out.annotation:
                         self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
-                                        species.title() + "?",index=-1)
+                                        species.title() + "?", index=-1)
             else:
-                if len(newSegments)>0:
+                if newSegments:
                     for seg in newSegments:
-                        self.addSegment(float(seg[0]),float(seg[1]))
+                        self.addSegment(float(seg[0]), float(seg[1]))
 
             self.lenNewSegments = len(newSegments)
             self.segmentDialog.undo.setEnabled(True)
@@ -3175,16 +3177,15 @@ class AviaNZ(QMainWindow):
         This is very cheap: the segments were appended, so delete the last len of them (from the end)
         """
         end = len(self.segments)
-        for seg in range(end-1,end-self.lenNewSegments-1,-1):
+        for seg in range(end-1, end-self.lenNewSegments-1, -1):
             self.deleteSegment(seg)
         self.segmentDialog.undo.setEnabled(False)
 
     def exportSeg(self, annotation=None, species='all'):
-        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename,
-                                               datalength=self.datalength, sampleRate=self.sampleRate)
-        out.excel()
+        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate) 
+	out.excel()
 
-    def findMatches(self,thr=0.4):
+    def findMatches(self, thr=0.4):
         """ Calls the cross-correlation function to find matches like the currently highlighted box.
         """
         if self.box1id is None or self.box1id == -1:
@@ -3203,28 +3204,28 @@ class AviaNZ(QMainWindow):
             # Only want to draw new segments, so find out how many there are now
             seglen = len(self.segments)
             # Get the segment -- note that takes the full y range
-            if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+            if isinstance(self.listRectanglesa2[self.box1id], self.ROItype):
                 x1 = self.listRectanglesa2[self.box1id].pos().x()
                 x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
             else:
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             # Get the data for the spectrogram
-            sgRaw = self.sp.spectrogram(self.audiodata,mean_normalise=True,onesided=True,multitaper=False)
-            segment = sgRaw[int(x1):int(x2),:]
+            sgRaw = self.sp.spectrogram(self.audiodata, mean_normalise=True, onesided=True, multitaper=False)
+            segment = sgRaw[int(x1):int(x2), :]
             len_seg = (x2-x1) * self.config['incr'] / float(self.sampleRate)
-            indices = self.seg.findCCMatches(segment,sgRaw,thr)
+            indices = self.seg.findCCMatches(segment, sgRaw, thr)
             # indices are in spectrogram pixels, need to turn into times
             for i in indices:
                 # Miss out the one selected: note the hack parameter
                 if np.abs(i-x1) > self.config['overlap_allowed']:
                     time = float(i)*self.config['incr'] / float(self.sampleRate)
-                    self.addSegment(time, time+len_seg,0,0,self.segments[self.box1id][4])
+                    self.addSegment(time, time+len_seg, 0, 0, self.segments[self.box1id][4])
             self.statusLeft.setText("Ready")
 
     def classifySegments(self):
         # TODO: Finish this
         # Note that this still works on 1 second -- species-specific parameter eventually (here twice: as 1 and in sec loop)
-        if self.segments is None or len(self.segments) == 0:
+        if self.segments is None or not self.segments:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to recognise")
@@ -3242,13 +3243,13 @@ class AviaNZ(QMainWindow):
                     seglength = np.abs(self.segments[i][1] - self.segments[i][0])
                     if seglength <= 1:
                         # Recognise as is
-                        label = WaveletSegment.computeWaveletEnergy(self.audiodata[self.segments[i][0]:self.segments[i][1]],wavelet='dmey2')
-                        self.updateText(label,i)
+                        label = WaveletSegment.computeWaveletEnergy(self.audiodata[self.segments[i][0]:self.segments[i][1]], wavelet='dmey2')
+                        self.updateText(label, i)
                     else:
                         for sec in range(np.ceil(seglength)):
-                            label = WaveletSegment.computeWaveletEnergy(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]],wavelet='dmey2')
+                            label = WaveletSegment.computeWaveletEnergy(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]], wavelet='dmey2')
                             # TODO: Check if the labels match, decide what to do if not
-                        self.updateText(label,i)
+                        self.updateText(label, i)
 
     def recognise(self):
         # This will eventually call methods to do automatic recognition
@@ -3256,26 +3257,27 @@ class AviaNZ(QMainWindow):
         # TODO
         pass
 
-# ===============
+# == == == == == == == =
 # Code for playing sounds
     # These functions are the phonon playing code
     def playVisible(self):
         # TODO
         """ Listener for button to play the visible area."""
         self.segmentStop = self.playSlider.maximum()
-        #if self.media_obj.state() == phonon.Phonon.PlayingState:
-            #self.media_obj.pause()
-            #self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        #elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
-            #self.media_obj.play()
-            #self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
+        if self.media_obj.state() == QMediaPlayer.PlayingState:
+            self.media_obj.pause()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        elif self.media_obj.state() == QMediaPlayer.PausedState or self.media_obj.state() == QMediaPlayer.StoppedState:
+            self.media_obj.play()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
 
     def playFinished(self):
         # TODO
         """ Listener for when playback stops. """
+	# TODO Actually get here when state changes -> trap
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        #self.media_obj.stop()
-        #self.media_obj.seek(self.playSlider.value()-self.widthWindow.value()*1000)
+        self.media_obj.stop()
+        self.media_obj.seek(self.playSlider.value()-self.widthWindow.value()*1000)
         self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0-self.widthWindow.value()))
 
     def playSliderMoved(self):
@@ -3283,16 +3285,16 @@ class AviaNZ(QMainWindow):
         Changes the position of the bar.
         """
         # TODO
-        #self.media_obj.seek(self.playSlider.value())
+        self.media_obj.seek(self.playSlider.value())
         # playSlider.value() is in ms, need to convert this into spectrogram pixels
         self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0 + self.startRead))
 
-    def barMoved(self,evt):
+    def barMoved(self, evt):
         """ Listener for when the bar showing playback position moves.
         """
         self.playSlider.setValue(self.convertSpectoAmpl(evt.x())*1000 + self.startRead*1000)
         # TODO
-        #self.media_obj.seek(self.convertSpectoAmpl(evt.x())*1000 + self.startRead*1000)
+        self.media_obj.seek(self.convertSpectoAmpl(evt.x())*1000 + self.startRead*1000)
 
     def movePlaySlider(self, time):
         """ Listener for when the position of the play slider (which is connected to the play ticks) moves.
@@ -3301,21 +3303,21 @@ class AviaNZ(QMainWindow):
         if not self.playSlider.isSliderDown():
             self.playSlider.setValue(time)
         self.timePlayed.setText(self.convertMillisecs(time)+"/"+self.totalTime)
-        if time > min(self.playSlider.maximum(),self.segmentStop):
+        if time > min(self.playSlider.maximum(), self.segmentStop):
             # TODO
-            #self.media_obj.stop()
+            self.media_obj.stop()
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-            #self.media_obj.seek(self.playSlider.minimum())
+            self.media_obj.seek(self.playSlider.minimum())
         self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0-self.startRead))
 
-    def setPlaySliderLimits(self, start,end):
+    def setPlaySliderLimits(self, start, end):
         """ Does what it says.
         """
         self.playSlider.setRange(start+1000.0*self.startRead, end+1000.0*self.startRead)
         self.playSlider.setValue(start+1000.0*self.startRead)
         self.segmentStop = self.playSlider.maximum()
         # TODO
-        #self.media_obj.seek(start+1000.0*self.startRead)
+        self.media_obj.seek(start+1000.0*self.startRead)
 
     def playSelectedSegment(self):
         """ Listener for PlaySegment button.
@@ -3326,19 +3328,19 @@ class AviaNZ(QMainWindow):
             start = self.listRectanglesa1[self.box1id].getRegion()[0]*1000+self.startRead*1000
             self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1]*1000+self.startRead*1000
             # TODO
-            #self.media_obj.seek(start)
-            #if self.media_obj.state() == phonon.Phonon.PlayingState:
+            self.media_obj.seek(start)
+            #if self.media_obj.state() == QMediaPlayer.PlayingState:
                 #self.media_obj.pause()
-            #elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
+            #elif self.media_obj.state() == QMediaPlayer.PausedState or self.media_obj.state() == QMediaPlayer.StoppedState:
                 #self.media_obj.play()
 
-    def movePlaySlider2(self,time):
+    def movePlaySlider2(self, time):
         """ Listener for the play slider that is for inside a segment.
         """
         # TODO
         if not self.playSlider.isSliderDown():
             self.playSlider.setValue(time)
-        if time > min(self.playSlider.maximum(),self.segmentStop):
+        if time > min(self.playSlider.maximum(), self.segmentStop):
             print "here"
             #self.media_obj2.stop()
         self.bar2.setValue(self.convertAmpltoSpec(time / 1000.0)  + self.bandLimitedStart)
@@ -3357,14 +3359,14 @@ class AviaNZ(QMainWindow):
         """
         start = int((self.listRectanglesa1[self.box1id].getRegion()[0])*self.sampleRate)+self.startRead
         stop = int((self.listRectanglesa1[self.box1id].getRegion()[1])*self.sampleRate)+self.startRead
-        bottom = max(self.minFreq,int(self.segments[self.box1id][2]*self.sampleRate/2.))
-        top = min(int(self.segments[self.box1id][3]*self.sampleRate/2.),self.maxFreq)
+        bottom = max(self.minFreq, int(self.segments[self.box1id][2]*self.sampleRate/2.))
+        top = min(int(self.segments[self.box1id][3]*self.sampleRate/2.), self.maxFreq)
 
         if bottom > 0 and top > 0:
-            self.bandLimitedStart=self.convertAmpltoSpec(self.listRectanglesa1[self.box1id].getRegion()[0])
+            self.bandLimitedStart = self.convertAmpltoSpec(self.listRectanglesa1[self.box1id].getRegion()[0])
             data = self.audiodata[start:stop]
-            data = self.sp.bandpassFilter(data,bottom,top)
-            # data = self.sp.ButterworthBandpass(data, self.sampleRate, bottom, top,order=5)
+            data = self.sp.bandpassFilter(data, bottom, top)
+            # data = self.sp.ButterworthBandpass(data, self.sampleRate, bottom, top, order=5)
 
             if platform.system() == 'Darwin':
                 filename = 'temp.wav'
@@ -3373,7 +3375,7 @@ class AviaNZ(QMainWindow):
                 f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
                 filename = f.name
             data = data.astype('int16')
-            wavio.write(filename,data,self.sampleRate,scale='dtype-limits',sampwidth=2)
+            wavio.write(filename, data, self.sampleRate, scale='dtype-limits', sampwidth=2)
 
             if not hasattr(self, 'bar2'):
                 self.bar2 = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'r', 'width': 2})
@@ -3399,8 +3401,8 @@ class AviaNZ(QMainWindow):
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
         """
-        if hasattr(self, 'operator') and hasattr(self, 'reviewer') :
-            self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.operator,reviewer=self.reviewer)
+        if hasattr(self, 'operator') and hasattr(self, 'reviewer'):
+            self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.operator, reviewer=self.reviewer)
         else:
             self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator='', reviewer='')
         self.setOperatorReviewerDialog.show()
@@ -3418,12 +3420,12 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = True
 
     def saveImage(self): # ??? it doesn't save the image
-        # filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
+        # filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)")
         # exporter = SupportClasses.FixedImageExporter(self.p_spec)
         #exporter.export(filename)
         if platform.system() == 'Darwin':
             import pyqtgraph.exporters as pge
-            filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
+            filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)")
             exporter = pge.ImageExporter(self.p_spec)
             exporter.export(filename)
         # for Windows to save the image, needs to typecast line 70 of ImageExporter.py
@@ -3434,7 +3436,7 @@ class AviaNZ(QMainWindow):
         # but its not an independent file to be added to the project!
         # the following works for Windows.
         else:
-            filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.jpeg *.jpg *.png)");
+            filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.jpeg *.jpg *.png)")
             from scipy.misc import imsave
             try:
                 imsave(str(filename), np.flip(np.transpose(self.sg), 0))
@@ -3518,7 +3520,7 @@ class AviaNZ(QMainWindow):
         self.t.setWindowIcon(QIcon('img/Avianz.ico'))
         self.t.setFixedSize(420, 550)
 
-    def changeParams(self,param, changes):
+    def changeParams(self, param, changes):
         """ Update the config and the interface if anything changes in the tree
         """
         # first save the annotations
@@ -3531,19 +3533,19 @@ class AviaNZ(QMainWindow):
             else:
                 childName = param.name()
 
-            if childName=='Annotation.Auto save segments every':
-                self.config['secsSave']=data
-            elif childName=='Annotation.Annotation overview cell length':
-                self.config['widthOverviewSegment']=data
+            if childName == 'Annotation.Auto save segments every':
+                self.config['secsSave'] = data
+            elif childName == 'Annotation.Annotation overview cell length':
+                self.config['widthOverviewSegment'] = data
             elif childName == 'Paging.Page size':
                 self.config['maxFileShow'] = data
-            elif childName=='Paging.Page overlap':
-                self.config['fileOverlap']=data
-            elif childName=='Human classify.Save corrections':
+            elif childName == 'Paging.Page overlap':
+                self.config['fileOverlap'] = data
+            elif childName == 'Human classify.Save corrections':
                 self.config['saveCorrections'] = data
-            elif childName=='Bird List.Add/Remove/Modify':
+            elif childName == 'Bird List.Add/Remove/Modify':
                 self.config['BirdList'] = data.split('\n')
-            elif childName=='Annotation.Segment colours.Confirmed segments':
+            elif childName == 'Annotation.Segment colours.Confirmed segments':
                 rgbaNamed = list(data.getRgb())
                 if rgbaNamed[3] > 100:
                     rgbaNamed[3] = 100
@@ -3552,7 +3554,7 @@ class AviaNZ(QMainWindow):
                                                 self.config['ColourNamed'][2], self.config['ColourNamed'][3])
                 self.ColourNamedDark = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1],
                                                     self.config['ColourNamed'][2], 255)
-            elif childName=='Annotation.Segment colours.Possible':
+            elif childName == 'Annotation.Segment colours.Possible':
                 rgbaVal = list(data.getRgb())
                 if rgbaVal[3] > 100:
                     rgbaVal[3] = 100
@@ -3562,7 +3564,7 @@ class AviaNZ(QMainWindow):
                 self.ColourPossibleDark = QtGui.QColor(self.config['ColourPossible'][0],
                                                        self.config['ColourPossible'][1],
                                                        self.config['ColourPossible'][2], 255)
-            elif childName=="Annotation.Segment colours.Don't know":
+            elif childName == "Annotation.Segment colours.Don't know":
                 rgbaVal = list(data.getRgb())
                 if rgbaVal[3] > 100:
                     rgbaVal[3] = 100
@@ -3571,7 +3573,7 @@ class AviaNZ(QMainWindow):
                                                self.config['ColourNone'][2], self.config['ColourNone'][3])
                 self.ColourNoneDark = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1],
                                                    self.config['ColourNone'][2], 255)
-            elif childName=='Annotation.Segment colours.Currently selected':
+            elif childName == 'Annotation.Segment colours.Currently selected':
                 rgbaVal = list(data.getRgb())
                 if rgbaVal[3] > 100:
                     rgbaVal[3] = 100
@@ -3581,9 +3583,9 @@ class AviaNZ(QMainWindow):
                                                    self.config['ColourSelected'][2], self.config['ColourSelected'][3])
                 self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1],
                                                    self.config['ColourSelected'][2], 255)
-            elif childName=='Output parameters.Show all pages':
+            elif childName == 'Output parameters.Show all pages':
                 self.config['showAllPages'] = data
-            elif childName=='User.Operator':
+            elif childName == 'User.Operator':
                 self.config['operator'] = data
                 self.operator = data
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
@@ -3596,13 +3598,13 @@ class AviaNZ(QMainWindow):
         # # Reload the file to make these changes take effect
         # self.resetStorageArrays()
         # # Reset the media player
-        # if self.media_obj.state() == phonon.Phonon.PlayingState:
+        # if self.media_obj.state() == QMediaPlayer.PlayingState:
         #    self.media_obj.pause()
         #    self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
 
         # Find the '/' in the fileName
-        i=len(self.filename)-1
-        while self.filename[i] != '/' and i>0:
+        i = len(self.filename)-1
+        while self.filename[i] != '/' and i > 0:
             i = i-1
         #print self.filename[i:], type(self.filename)
 
@@ -3613,36 +3615,36 @@ class AviaNZ(QMainWindow):
         self.resetStorageArrays()
         self.loadFile(self.filename[i+1:])
 
-# ============
+# == == == == == ==
 # Various actions: deleting segments, saving, quitting
-    def deleteSegment(self,id=-1):
+    def deleteSegment(self, id=-1):
         """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
         human classify dialogs.
         Deletes the segment that is selected, otherwise does nothing.
         Updates the overview segments as well.
         """
-        if id<0:
+        if id < 0:
             id = self.box1id
 
-        if id>-1:
+        if id > -1:
             # Work out which overview segment this segment is in (could be more than one) and update it
             inds = int(float(self.convertAmpltoSpec(self.segments[id][0]-self.startRead))/self.widthOverviewSegment)
             # print type(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment)), type(len(self.overviewSegments) - 1)
-            inde = min(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment),len(self.overviewSegments) - 1)
+            inde = min(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment), len(self.overviewSegments) - 1)
             # print "inde", inde
 
             if self.segments[id][4] == "Don't Know":
-                self.overviewSegments[inds:inde+1,0] -= 1
+                self.overviewSegments[inds:inde+1, 0] -= 1
             elif self.segments[id][4][-1] == '?':
                 self.overviewSegments[inds:inde + 1, 2] -= 1
             else:
                 self.overviewSegments[inds:inde + 1, 1] -= 1
             for box in range(inds, inde + 1):
-                if self.overviewSegments[box,0] > 0:
+                if self.overviewSegments[box, 0] > 0:
                     self.SegmentRects[box].setBrush(self.ColourNone)
-                elif self.overviewSegments[box,2] > 0:
+                elif self.overviewSegments[box, 2] > 0:
                     self.SegmentRects[box].setBrush(self.ColourPossible)
-                elif self.overviewSegments[box,1] > 0:
+                elif self.overviewSegments[box, 1] > 0:
                     self.SegmentRects[box].setBrush(self.ColourNamed)
                 else:
                     self.SegmentRects[box].setBrush(pg.mkBrush('w'))
@@ -3662,7 +3664,7 @@ class AviaNZ(QMainWindow):
         """ Listener for delete all button.
         Checks if the user meant to do it, then calls removeSegments()
         """
-        if len(self.segments) == 0:
+        if not self.segments:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("No segments to delete")
@@ -3684,7 +3686,7 @@ class AviaNZ(QMainWindow):
                 self.removeSegments()
                 self.segmentsToSave = True
 
-    def removeSegments(self,delete=True):
+    def removeSegments(self, delete=True):
         """ Remove all the segments in response to the menu selection, or when a new file is loaded. """
         for r in self.listLabels:
             if r is not None:
@@ -3700,7 +3702,7 @@ class AviaNZ(QMainWindow):
             r.update()
 
         if delete:
-            self.segments=[]
+            self.segments = []
             self.listRectanglesa1 = []
             self.listRectanglesa2 = []
             self.listLabels = []
@@ -3723,9 +3725,9 @@ class AviaNZ(QMainWindow):
             return retval
 
         if self.segmentsToSave:
-            print("Saving segments to " + self.filename)
+            print "Saving segments to " + self.filename
             if self.segments[0][0] > -1:
-                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')),self.operator,self.reviewer, -1])
+                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator, self.reviewer, -1])
         # if len(self.segments)>0 or self.hasSegments:
         #     print("Saving segments to "+self.filename)
         #     # TODO: add operator/reviewer details?
@@ -3738,11 +3740,12 @@ class AviaNZ(QMainWindow):
         #         self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
         #                                  self.reviewer, -1])
 
+            #if isinstance(self.filename, str):
             if isinstance(self.filename, str):
                 file = open(self.filename + '.data', 'w')
             else:
                 file = open(str(self.filename) + '.data', 'w')
-            json.dump(self.segments,file)
+            json.dump(self.segments, file)
             self.segmentsToSave = False
 
     def closeEvent(self, event):
@@ -3754,18 +3757,18 @@ class AviaNZ(QMainWindow):
         Add in the operator and reviewer at the top, and then save the segments and the config file.
         """
 
-        print("Quitting")
+        print "Quitting"
         self.saveSegments()
-        if self.saveConfig == True:
+        if self.saveConfig:
             print "Saving config file"
             json.dump(self.config, open(self.configfile, 'wb'))
         QApplication.quit()
 
-# =============
+# == == == == == == =
 # Start the application
 app = QApplication(sys.argv)
 
-DOC=False    # only DOC features or all
+DOC = False    # only DOC features or all
 
 # This screen asks what you want to do, then processes the response
 first = Dialogs.StartScreen(DOC=DOC)
@@ -3776,11 +3779,11 @@ app.exec_()
 task = first.getValues()
 
 if task == 1:
-    avianz = AviaNZ(configfile='AviaNZconfig.txt',DOC=DOC)
+    avianz = AviaNZ(configfile='AviaNZconfig.txt', DOC=DOC)
     avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
     avianz.show()
     app.exec_()
-elif task==2:
+elif task == 2:
     avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(DOC=DOC)
     avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
     avianz.show()
