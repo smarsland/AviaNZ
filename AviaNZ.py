@@ -3691,19 +3691,44 @@ class AviaNZ(QMainWindow):
             self.box1id = -1
 
     def saveSegments(self):
+        # TODO: Fix this up to include quitting stuff
         """ Save the segmentation data as a json file.
         Name of the file is the name of the wave file + .data"""
-        if len(self.segments)>0 or self.hasSegments:
-            print("Saving segments to "+self.filename)
-            # TODO: add operator/reviewer details?
+        def checkSave():
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText("Do you want to save?")
+            msg.setInformativeText("You didn't identify any segments, are you sure you want to save this annotation?")
+            msg.setWindowTitle("No segments")
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            msg.buttonClicked.connect(msgbtn)
+            retval = msg.exec_()
+            print "value of pressed message box button:", retval
+            return retval
+
+        if len(self.segments) > 0 or self.hasSegments:
+            print("Saving segments to " + self.filename)
             if len(self.segments) > 0:
                 if self.segments[0][0] > -1:
                     self.segments.insert(0,
-                                         [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+                                         [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')),
+                                          self.operator,
                                           self.reviewer, -1])
             else:
-                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
-                                         self.reviewer, -1])
+                self.segments.insert(0,
+                                     [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+                                      self.reviewer, -1])
+        # if len(self.segments)>0 or self.hasSegments:
+        #     print("Saving segments to "+self.filename)
+        #     # TODO: add operator/reviewer details?
+        #     if len(self.segments) > 0:
+        #         if self.segments[0][0] > -1:
+        #             self.segments.insert(0,
+        #                                  [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+        #                                   self.reviewer, -1])
+        #     else:
+        #         self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+        #                                  self.reviewer, -1])
 
             if isinstance(self.filename, str):
                 file = open(self.filename + '.data', 'w')
@@ -3719,12 +3744,18 @@ class AviaNZ(QMainWindow):
         """ Listener for the quit button, also called by closeEvent().
         Add in the operator and reviewer at the top, and then save the segments and the config file.
         """
+
+
         print("Quitting")
         if len(self.segments) > 0:
             if self.segments[0][0] > -1:
                 self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
+            else:
+                retval = checkSave()
         else:
             # TODO: This means that a file is always created. Is that a bug? Option: ask user -> wording?
+            retval = checkSave()
+
             self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,self.reviewer, -1])
         self.saveSegments()
         if self.saveConfig == True:
