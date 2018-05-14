@@ -84,7 +84,8 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.w_spe1 = QComboBox()
         self.w_spe1.addItems(["Kiwi", "Ruru", "Bittern", "all"])
         self.d_detection.addWidget(self.w_spe1,row=1,col=1,colspan=2)
-        self.connect(self.w_spe1, SIGNAL('selected()'), self.cleanStatus)
+        self.w_spe1.selected.connect(self.cleanStatus)
+        #self.connect(self.w_spe1, SIGNAL('selected()'), self.cleanStatus)
 
         self.w_resLabel = QLabel("  Output Resolution (secs)")
         self.d_detection.addWidget(self.w_resLabel, row=2, col=0)
@@ -95,7 +96,8 @@ class AviaNZFindSpeciesInterface(QMainWindow):
         self.d_detection.addWidget(self.w_res, row=2, col=1, colspan=2)
 
         self.w_processButton = QPushButton("&Process Folder")
-        self.connect(self.w_processButton, SIGNAL('clicked()'), self.detect)
+        self.w_processButton.clicked.connect(self.detect)
+        #self.connect(self.w_processButton, SIGNAL('clicked()'), self.detect)
         self.d_detection.addWidget(self.w_processButton,row=11,col=2)
         self.w_processButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
 
@@ -103,16 +105,19 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             self.d_denoise = Dock("Denoising", size=(350, 100))
             self.area.addDock(self.d_denoise, 'right')
             self.w_denoiseButton = QPushButton("&Wavelet Denoise (d+f)")
-            self.connect(self.w_denoiseButton, SIGNAL('clicked()'), self.denoise_df)
+            self.w_denoiseButton.clicked.connect(self.denoise_df)
+            #self.connect(self.w_denoiseButton, SIGNAL('clicked()'), self.denoise_df)
             self.d_denoise.addWidget(self.w_denoiseButton,row=12,col=2)
             #self.w_denoiseButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
 
             self.w_filterButton = QPushButton("&Filter (f)")
-            self.connect(self.w_filterButton, SIGNAL('clicked()'), self.denoise_f)
+            self.w_filterButton.clicked.connect(self.denoise_f)
+            #self.connect(self.w_filterButton, SIGNAL('clicked()'), self.denoise_f)
             self.d_denoise.addWidget(self.w_filterButton, row=13, col=2)
 
             self.w_downButton = QPushButton("&DownSample)")
-            self.connect(self.w_downButton, SIGNAL('clicked()'), self.downSample)
+            self.w_downButton.clickedconnect(self.downSample)
+            #self.connect(self.w_downButton, SIGNAL('clicked()'), self.downSample)
             self.d_denoise.addWidget(self.w_downButton, row=14, col=2)
 
             self.w_browse2 = QPushButton("  &Browse Folder")
@@ -131,14 +136,17 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             self.d_detection.addWidget(self.w_speLabel2, row=1, col=0)
             self.w_spe2 = QComboBox()
             self.w_spe2.addItems(["Kiwi", "Ruru", "Bittern", "all"])
-            self.connect(self.w_spe2, SIGNAL('selected()'),self.cleanStatus)
+            self.w_spe2.selected.connect(self.cleanStatus)
+            #self.connect(self.w_spe2, SIGNAL('selected()'),self.cleanStatus)
             self.d_denoise.addWidget(self.w_spe2, row=1, col=1, colspan=2)
 
             self.d_detection.showTitleBar()
         # self.statusLeft.setText("Ready")
 
-        self.connect(self.w_browse1, SIGNAL('clicked()'), self.browse_detect)
-        self.connect(self.w_browse2, SIGNAL('clicked()'), self.browse_denoise)
+        self.w_browse1.clicked.connect(self.browse_detect)
+        #self.connect(self.w_browse1, SIGNAL('clicked()'), self.browse_detect)
+        self.w_browse2.clicked.connect(self.browse_denoise)
+        #self.connect(self.w_browse2, SIGNAL('clicked()'), self.browse_denoise)
 
 
         # Plot everything

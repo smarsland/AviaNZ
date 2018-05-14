@@ -3,6 +3,7 @@
 
 import numpy as np
 import scipy.ndimage as spi
+import skimage
 
 class Segment:
     """ This class implements six forms of segmentation for the AviaNZ interface:

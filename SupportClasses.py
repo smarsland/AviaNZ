@@ -745,6 +745,8 @@ class ShadedRectROI(ShadedROI):
 class DragViewBox(pg.ViewBox):
     # A normal ViewBox, but with ability to drag the segments
     sigMouseDragged = QtCore.Signal(object,object,object)
+    keyPressed = QtCore.Signal(int)
+    #keyPressed = QtCore.pyqtSignal(int)
 
     def __init__(self, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
@@ -764,7 +766,9 @@ class DragViewBox(pg.ViewBox):
 
     def keyPressEvent(self,ev):
         # This catches the keypresses and sends out a signal
-        self.emit(SIGNAL("keyPressed"),ev)
+        #self.emit(SIGNAL("keyPressed"),ev)
+        super(DragViewBox, self).keyPressEvent(ev)
+        self.keyPressed.emit(ev.key())
 
 class ChildInfoViewBox(pg.ViewBox):
     # Normal ViewBox, but with ability to pass a message back from a child
