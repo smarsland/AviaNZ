@@ -21,10 +21,9 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys, os, json, platform, re
-from PyQt5.QtCore import Qt, QDir
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame
-#import PyQt4.phonon as phonon
+from PyQt4.QtCore import *
+from PyQt4.QtGui import *
+import PyQt4.phonon as phonon
 
 import wavio
 import numpy as np
@@ -185,9 +184,9 @@ class AviaNZ(QMainWindow):
         self.box1id = -1
         self.DOC=DOC
         self.started=False
-        self.segmentsToSave=False
         self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.startTime = 0
+        self.segmentsToSave = False
 
         self.lastSpecies = "Don't Know"
         self.resetStorageArrays()
@@ -214,9 +213,7 @@ class AviaNZ(QMainWindow):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
         if not os.path.isfile(self.dirName+'/'+firstFile):
-            fileName, _ = QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
-	    print "here"
-	    print fileName
+            fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
             while fileName == '':
                 msg = QMessageBox()
                 msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
@@ -242,7 +239,7 @@ class AviaNZ(QMainWindow):
         self.createFrame()
 
         self.fillFileList(firstFile)
-        self.listLoadFile(firstFile)
+        self.listLoadFile(QString(firstFile))
         self.previousFile = firstFile
 
         if self.DOC:
@@ -703,8 +700,9 @@ class AviaNZ(QMainWindow):
         # Delete segment button
         deleteButton = QPushButton("&Delete Current Segment")
         #self.connect(deleteButton, SIGNAL('clicked()'), self.deleteSegment)
-	# TODO: CHECK THIS!!!
+	    # TODO: CHECK THIS!!!
         # The next line introduces a bug since False gets passed as an argument
+        # 23/5/18: Should be fixed
         deleteButton.clicked.connect(self.deleteSegment)
 
         # Place all these widgets in the Controls dock
@@ -739,20 +737,20 @@ class AviaNZ(QMainWindow):
         # Audio playback
         # TODO: QtMultimedia version
         # Instantiate a Qt media object and prepare it
-        #self.media_obj = phonon.Phonon.MediaObject(self)
-        #self.audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
-        #phonon.Phonon.createPath(self.media_obj, self.audio_output)
-        #self.media_obj.setTickInterval(20)
-        #self.media_obj.finished.connect(self.playFinished)
-        #self.media_obj.tick.connect(self.movePlaySlider)
+        self.media_obj = phonon.Phonon.MediaObject(self)
+        self.audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
+        phonon.Phonon.createPath(self.media_obj, self.audio_output)
+        self.media_obj.setTickInterval(20)
+        self.media_obj.finished.connect(self.playFinished)
+        self.media_obj.tick.connect(self.movePlaySlider)
 
-        #self.volSlider = phonon.Phonon.VolumeSlider()
-        #self.volSlider.setOrientation(Qt.Horizontal)
-        #self.volSlider.setGeometry(QtCore.QRect(50, 50, 150, 40))
-        #self.volSlider.setFixedWidth(150)
-        #self.volSlider.setMaximumVolume(1.0)
-        #self.volSlider.setAudioOutput(self.audio_output)
-        #self.w_controls.addWidget(self.volSlider,row=1,col=1,colspan=2)
+        self.volSlider = phonon.Phonon.VolumeSlider()
+        self.volSlider.setOrientation(Qt.Horizontal)
+        self.volSlider.setGeometry(QtCore.QRect(50, 50, 150, 40))
+        self.volSlider.setFixedWidth(150)
+        self.volSlider.setMaximumVolume(1.0)
+        self.volSlider.setAudioOutput(self.audio_output)
+        self.w_controls.addWidget(self.volSlider,row=1,col=1,colspan=2)
 
         # Make the colours that are used in the interface
         # The dark ones are to draw lines instead of boxes
@@ -824,11 +822,9 @@ class AviaNZ(QMainWindow):
             self.deleteSegment()
         #elif ev.key() == Qt.Key_Escape:
         elif ev == Qt.Key_Escape:
-            # TODO: QtMultimedia
-            print "Not currently implemented"
-            #if self.media_obj.state() != phonon.Phonon.PausedState or self.media_obj.state() != phonon.Phonon.StoppedState:
-                #self.media_obj.pause()
-                #self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+            if self.media_obj.state() != phonon.Phonon.PausedState or self.media_obj.state() != phonon.Phonon.StoppedState:
+                self.media_obj.pause()
+                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
 
     def fillBirdList(self,unsure=False):
         """ Sets the contents of the context menu.
@@ -860,7 +856,6 @@ class AviaNZ(QMainWindow):
         Most of the work is to deal with directories in that list.
         It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
         red in the list, and the second to know if the files are long."""
-        print self.dirName
         if not os.path.isdir(self.dirName):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
@@ -877,9 +872,8 @@ class AviaNZ(QMainWindow):
                 item = QListWidgetItem(self.listFiles)
                 self.listitemtype = type(item)
                 item.setText(file.fileName())
-		# TODO
-                #if file.fileName()+'.data' in listOfDataFiles:
-                    #item.setTextColor(Qt.red)
+                if file.fileName()+'.data' in listOfDataFiles:
+                    item.setTextColor(Qt.red)
         if fileName:
             index = self.listFiles.findItems(fileName,Qt.MatchExactly)
             if len(index)>0:
@@ -894,7 +888,6 @@ class AviaNZ(QMainWindow):
 
         # Remove the segments
         self.removeSegments()
-        self.segmentsToSave = False
         if hasattr(self, 'overviewImageRegion'):
             self.p_overview.removeItem(self.overviewImageRegion)
 
@@ -919,6 +912,7 @@ class AviaNZ(QMainWindow):
             self.p_ampl.removeItem(self.drawingBox_ampl)
             self.p_spec.removeItem(self.drawingBox_spec)
         self.started = False
+        self.segmentsToSave = False
 
         # Keep track of start points and selected buttons
         self.windowStart = 0
@@ -939,8 +933,7 @@ class AviaNZ(QMainWindow):
     def openFile(self):
         """ This handles the menu item for opening a file.
         Splits the directory name and filename out, and then passes the filename to the loader."""
-        fileName, _ = QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
-        print fileName
+        fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
         #fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
 
         if fileName!='':
@@ -965,24 +958,29 @@ class AviaNZ(QMainWindow):
                 if len(self.previousFile)>0:
                     self.previousFile = self.previousFile[0]
 
-            if self.segmentsToSave:
-                self.saveSegments()
-		# TODO
-                #self.previousFile.setTextColor(Qt.red)
+            # if len(self.segments) > 0 or self.hasSegments:
+            #     if len(self.segments) > 0:
+            #         if self.segments[0][0] > -1:
+            #             self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')),
+            #                                      self.operator, self.reviewer, -1])
+            #     else:
+            #         self.segments.insert(0,
+            #                              [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+            #                               self.reviewer, -1])
+            self.saveSegments()
+            self.previousFile.setTextColor(Qt.red)
         self.previousFile = current
         self.resetStorageArrays()
 
         # Reset the media player
-        # TODO
-        #if self.media_obj.state() == phonon.Phonon.PlayingState:
-            #self.media_obj.pause()
-            #self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        if self.media_obj.state() == phonon.Phonon.PlayingState:
+            self.media_obj.pause()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
 
-	## TODO
-        #if type(current) is QString or type(current) is unicode:
-            #pass
-        #else:
-            #current = current.text()
+        if type(current) is QString or type(current) is unicode:
+            pass
+        else:
+            current = current.text()
 
         # Update the file list to show the right one
         i=0
@@ -1028,9 +1026,9 @@ class AviaNZ(QMainWindow):
             if name is not None:
                 if isinstance(name,str) or isinstance(name,unicode):
                     self.filename = self.dirName+'/'+name
-                #elif isinstance(name,QString):
-                    #name = os.path.basename(str(name))
-                    #self.filename = self.dirName+'/'+ name
+                elif isinstance(name,QString):
+                    name = os.path.basename(str(name))
+                    self.filename = self.dirName+'/'+ name
                 else:
                     self.filename = str(self.dirName+'/'+name.text())
                 dlg += 1
@@ -1133,7 +1131,6 @@ class AviaNZ(QMainWindow):
                             self.operator = self.segments[0][2]
                             self.reviewer = self.segments[0][3]
                             del self.segments[0]
-                            self.segmentsToSave=True
                     if len(self.segments) > 0:
                         if self.segments[0][2] > 1.5 and self.segments[0][3] > 1.5:
                             # Legacy version didn't normalise the segment data for dragged boxes
@@ -1174,8 +1171,7 @@ class AviaNZ(QMainWindow):
                 self.totalTime = self.convertMillisecs((float(self.datalength)/self.sampleRate)*1000)
 
                 # Load the file for playback as well, and connect up the listeners for it
-                # TODO
-                #self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
+                self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
 
                 # Set the length of the scrollbar.
                 self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
@@ -1492,7 +1488,7 @@ class AviaNZ(QMainWindow):
         #3/4/18: Want to stop it moving past either end
         # Need to disconnect the listener and reconnect it to avoid a recursive call
         minX, maxX = self.overviewImageRegion.getRegion()
-        print minX, maxX
+        #print minX, maxX
         if minX<0:
             l = maxX-minX
             minX=0.0
@@ -1516,7 +1512,7 @@ class AviaNZ(QMainWindow):
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.p_spec.setXRange(minX, maxX, padding=0)
 
-        print self.p_spec.viewRange()[0], self.convertAmpltoSpec(self.convertSpectoAmpl(self.p_spec.viewRange()[0][0])), self.p_ampl.viewRange()[0], self.convertSpectoAmpl(self.p_spec.viewRange()[0][0]), self.convertSpectoAmpl(self.p_spec.viewRange()[0][1]), self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX)
+        #print self.p_spec.viewRange()[0], self.convertAmpltoSpec(self.convertSpectoAmpl(self.p_spec.viewRange()[0][0])), self.p_ampl.viewRange()[0], self.convertSpectoAmpl(self.p_spec.viewRange()[0][0]), self.convertSpectoAmpl(self.p_spec.viewRange()[0][1]), self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX)
         if self.extra:
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
@@ -1548,6 +1544,7 @@ class AviaNZ(QMainWindow):
 
         # If there are segments, show them
         for count in range(len(self.segments)):
+            #print self.segments[count][0], self.segments[count][1],self.segments[count][2],self.segments[count][3],self.segments[count][4]
             self.addSegment(self.segments[count][0], self.segments[count][1],self.segments[count][2],self.segments[count][3],self.segments[count][4],False,count)
 
         # This is the moving bar for the playback
@@ -1683,6 +1680,7 @@ class AviaNZ(QMainWindow):
                 x2 = self.convertSpectoAmpl(sender.getRegion()[1])
                 self.listLabels[i].setPos(sender.getRegion()[0], self.textpos)
             self.listRectanglesa1[i].setRegion([x1,x2])
+            self.segmentsToSave = True
 
             self.segments[i][0] = x1 + self.startRead
             #self.segments[i][0] = max(0.0,x1 + self.startRead)
@@ -1716,6 +1714,7 @@ class AviaNZ(QMainWindow):
                 else:
                     self.listRectanglesa2[i].setRegion([x1,x2])
                 self.listLabels[i].setPos(x1,self.textpos)
+                self.segmentsToSave = True
 
                 self.segments[i][0] = sender.getRegion()[0] + self.startRead
                 self.segments[i][1] = sender.getRegion()[1] + self.startRead
@@ -1743,6 +1742,7 @@ class AviaNZ(QMainWindow):
                 show = True
             elif startpoint < timeRangeStart and endpoint >= timeRangeEnd:
                 startpoint = 0
+                print endpoint, timeRangeStart
                 endpoint = endpoint - timeRangeStart
                 show = True
             else:
@@ -1754,10 +1754,10 @@ class AviaNZ(QMainWindow):
         if show:
             # This is one we want to show
             # Get the name and colour sorted
-            if species is None: # or not isinstance(species,str):
+            if species is None: # TODO: Use this: or not isinstance(species,str):
                 species = "Don't Know"
 
-            if species != "Don't Know":
+            if species != "Don't Know" and type(species) is not int:
                 # Work out which overview segment this segment is in (could be more than one)
                 inds = int(float(self.convertAmpltoSpec(startpoint))/self.widthOverviewSegment)
                 # min is to remove possible rounding error
@@ -2004,6 +2004,7 @@ class AviaNZ(QMainWindow):
         it is separated for clarity.
         """
         pos = evt.scenePos()
+        print self.box1id, len(self.listRectanglesa1)
 
         if self.box1id>-1:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
@@ -2288,6 +2289,7 @@ class AviaNZ(QMainWindow):
             segID = self.box1id
         #print segID, len(self.segments), len(self.listRectanglesa1)
         self.segments[segID][4] = text
+        print segID, len(self.listLabels)
         self.listLabels[segID].setText(text,'k')
 
         # Update the colour
@@ -2362,14 +2364,21 @@ class AviaNZ(QMainWindow):
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
 
     def prepare5minMove(self):
-        if self.segmentsToSave:
-            self.saveSegments()
+        #if len(self.segments) > 0 or self.hasSegments:
+            # if len(self.segments) > 0:
+            #     if self.segments[0][0] > -1:
+            #         self.segments.insert(0,
+            #                              [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+            #                               self.reviewer, -1])
+            # else:
+            #     self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+            #                              self.reviewer, -1])
+        self.saveSegments()
         self.resetStorageArrays()
         # Reset the media player
-        # TODO
-        #if self.media_obj.state() == phonon.Phonon.PlayingState:
-            #self.media_obj.pause()
-            #self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        if self.media_obj.state() == phonon.Phonon.PlayingState:
+            self.media_obj.pause()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.loadFile()
 
     def movePrev5mins(self):
@@ -2591,6 +2600,7 @@ class AviaNZ(QMainWindow):
                 self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
 
             self.listRectanglesa2[self.box1id].update()
+            self.segmentsToSave = True
 
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
@@ -2644,6 +2654,7 @@ class AviaNZ(QMainWindow):
         id = self.box1id
         self.deleteSegment(self.box1id)
         self.box1id = id-1
+        self.segmentsToSave = True
         self.humanClassifyNextImage1()
 
     def humanClassifyDialog2(self):
@@ -2717,6 +2728,7 @@ class AviaNZ(QMainWindow):
                     for error in inderr[-1::-1]:
                         outputErrors.append(self.segments[error])
                         self.deleteSegment(error)
+                    self.segmentsToSave = True
                     if self.config['saveCorrections']:
                         # Save the errors in a file
                         file = open(self.filename + '.corrections_' + str(label), 'a')
@@ -2761,6 +2773,7 @@ class AviaNZ(QMainWindow):
                             for error in inderr[-1::-1]:
                                 outputErrors.append(self.segments[error])
                                 self.deleteSegment(error)
+                            self.segmentsToSave = True
                             if self.config['saveCorrections']:
                                 # Save the errors in a file
                                 file = open(self.filename + '.corrections_' + str(label), 'a')
@@ -3038,7 +3051,7 @@ class AviaNZ(QMainWindow):
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             x1 = math.floor(float(x1) * self.config['incr']) #/ self.sampleRate
             x2 = math.floor(float(x2) * self.config['incr']) #/ self.sampleRate
-            print x1, x2
+            #print x1, x2
             # filename = self.filename[:-4] + '_selected' + self.filename[-4:]
             filename = QtGui.QFileDialog.getSaveFileName(self, 'Save File as', self.dirName, selectedFilter='*.wav')
             if filename:
@@ -3161,10 +3174,13 @@ class AviaNZ(QMainWindow):
                     for seg in out.annotation:
                         self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
                                         species.title() + "?",index=-1)
+                        self.segmentsToSave = True
+
             else:
                 if len(newSegments)>0:
                     for seg in newSegments:
                         self.addSegment(float(seg[0]),float(seg[1]))
+                        self.segmentsToSave = True
 
             self.lenNewSegments = len(newSegments)
             self.segmentDialog.undo.setEnabled(True)
@@ -3260,39 +3276,35 @@ class AviaNZ(QMainWindow):
 # Code for playing sounds
     # These functions are the phonon playing code
     def playVisible(self):
-        # TODO
         """ Listener for button to play the visible area."""
         self.segmentStop = self.playSlider.maximum()
-        #if self.media_obj.state() == phonon.Phonon.PlayingState:
-            #self.media_obj.pause()
-            #self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        #elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
-            #self.media_obj.play()
-            #self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
+        if self.media_obj.state() == phonon.Phonon.PlayingState:
+            self.media_obj.pause()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
+            self.media_obj.play()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
 
     def playFinished(self):
-        # TODO
         """ Listener for when playback stops. """
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        #self.media_obj.stop()
-        #self.media_obj.seek(self.playSlider.value()-self.widthWindow.value()*1000)
-        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0-self.widthWindow.value()))
+        self.media_obj.stop()
+        self.media_obj.seek(self.playSlider.value() - self.widthWindow.value() * 1000)
+        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value() / 1000.0 - self.widthWindow.value()))
 
     def playSliderMoved(self):
         """ Listener for when the (hidden) sound slider moves.
         Changes the position of the bar.
         """
-        # TODO
-        #self.media_obj.seek(self.playSlider.value())
+        self.media_obj.seek(self.playSlider.value())
         # playSlider.value() is in ms, need to convert this into spectrogram pixels
-        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0 + self.startRead))
+        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value() / 1000.0 + self.startRead))
 
-    def barMoved(self,evt):
+    def barMoved(self, evt):
         """ Listener for when the bar showing playback position moves.
         """
-        self.playSlider.setValue(self.convertSpectoAmpl(evt.x())*1000 + self.startRead*1000)
-        # TODO
-        #self.media_obj.seek(self.convertSpectoAmpl(evt.x())*1000 + self.startRead*1000)
+        self.playSlider.setValue(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
+        self.media_obj.seek(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
 
     def movePlaySlider(self, time):
         """ Listener for when the position of the play slider (which is connected to the play ticks) moves.
@@ -3300,22 +3312,20 @@ class AviaNZ(QMainWindow):
         """
         if not self.playSlider.isSliderDown():
             self.playSlider.setValue(time)
-        self.timePlayed.setText(self.convertMillisecs(time)+"/"+self.totalTime)
-        if time > min(self.playSlider.maximum(),self.segmentStop):
-            # TODO
-            #self.media_obj.stop()
+        self.timePlayed.setText(self.convertMillisecs(time) + "/" + self.totalTime)
+        if time > min(self.playSlider.maximum(), self.segmentStop):
+            self.media_obj.stop()
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-            #self.media_obj.seek(self.playSlider.minimum())
-        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value()/1000.0-self.startRead))
+            self.media_obj.seek(self.playSlider.minimum())
+        self.bar.setValue(self.convertAmpltoSpec(self.playSlider.value() / 1000.0 - self.startRead))
 
-    def setPlaySliderLimits(self, start,end):
+    def setPlaySliderLimits(self, start, end):
         """ Does what it says.
         """
-        self.playSlider.setRange(start+1000.0*self.startRead, end+1000.0*self.startRead)
-        self.playSlider.setValue(start+1000.0*self.startRead)
+        self.playSlider.setRange(start + 1000.0 * self.startRead, end + 1000.0 * self.startRead)
+        self.playSlider.setValue(start + 1000.0 * self.startRead)
         self.segmentStop = self.playSlider.maximum()
-        # TODO
-        #self.media_obj.seek(start+1000.0*self.startRead)
+        self.media_obj.seek(start + 1000.0 * self.startRead)
 
     def playSelectedSegment(self):
         """ Listener for PlaySegment button.
@@ -3323,31 +3333,27 @@ class AviaNZ(QMainWindow):
         This isn't pausable, since it goes back to the beginning. I think it's OK though -- they should be short?
         """
         if self.box1id > -1:
-            start = self.listRectanglesa1[self.box1id].getRegion()[0]*1000+self.startRead*1000
-            self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1]*1000+self.startRead*1000
-            # TODO
-            #self.media_obj.seek(start)
-            #if self.media_obj.state() == phonon.Phonon.PlayingState:
-                #self.media_obj.pause()
-            #elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
-                #self.media_obj.play()
+            start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000 + self.startRead * 1000
+            self.segmentStop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000 + self.startRead * 1000
+            self.media_obj.seek(start)
+            if self.media_obj.state() == phonon.Phonon.PlayingState:
+                self.media_obj.pause()
+            elif self.media_obj.state() == phonon.Phonon.PausedState or self.media_obj.state() == phonon.Phonon.StoppedState:
+                self.media_obj.play()
 
-    def movePlaySlider2(self,time):
+    def movePlaySlider2(self, time):
         """ Listener for the play slider that is for inside a segment.
         """
-        # TODO
         if not self.playSlider.isSliderDown():
             self.playSlider.setValue(time)
-        if time > min(self.playSlider.maximum(),self.segmentStop):
-            print "here"
-            #self.media_obj2.stop()
-        self.bar2.setValue(self.convertAmpltoSpec(time / 1000.0)  + self.bandLimitedStart)
+        if time > min(self.playSlider.maximum(), self.segmentStop):
+            self.media_obj2.stop()
+        self.bar2.setValue(self.convertAmpltoSpec(time / 1000.0) + self.bandLimitedStart)
 
     def playFinished2(self):
         """ Listener for when playback inside a segment stops.
         """
-        # TODO
-        #self.media_obj2.stop()
+        self.media_obj2.stop()
         self.p_spec.removeItem(self.bar2)
 
     def playBandLimitedSegment(self):
@@ -3355,15 +3361,15 @@ class AviaNZ(QMainWindow):
         Gets the band limits of the segment, bandpass filters, then plays that.
         Currently uses FIR bandpass filter -- Butterworth is commented out.
         """
-        start = int((self.listRectanglesa1[self.box1id].getRegion()[0])*self.sampleRate)+self.startRead
-        stop = int((self.listRectanglesa1[self.box1id].getRegion()[1])*self.sampleRate)+self.startRead
-        bottom = max(self.minFreq,int(self.segments[self.box1id][2]*self.sampleRate/2.))
-        top = min(int(self.segments[self.box1id][3]*self.sampleRate/2.),self.maxFreq)
+        start = int((self.listRectanglesa1[self.box1id].getRegion()[0]) * self.sampleRate) + self.startRead
+        stop = int((self.listRectanglesa1[self.box1id].getRegion()[1]) * self.sampleRate) + self.startRead
+        bottom = max(self.minFreq, int(self.segments[self.box1id][2] * self.sampleRate / 2.))
+        top = min(int(self.segments[self.box1id][3] * self.sampleRate / 2.), self.maxFreq)
 
         if bottom > 0 and top > 0:
-            self.bandLimitedStart=self.convertAmpltoSpec(self.listRectanglesa1[self.box1id].getRegion()[0])
+            self.bandLimitedStart = self.convertAmpltoSpec(self.listRectanglesa1[self.box1id].getRegion()[0])
             data = self.audiodata[start:stop]
-            data = self.sp.bandpassFilter(data,bottom,top)
+            data = self.sp.bandpassFilter(data, bottom, top)
             # data = self.sp.ButterworthBandpass(data, self.sampleRate, bottom, top,order=5)
 
             if platform.system() == 'Darwin':
@@ -3373,25 +3379,24 @@ class AviaNZ(QMainWindow):
                 f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
                 filename = f.name
             data = data.astype('int16')
-            wavio.write(filename,data,self.sampleRate,scale='dtype-limits',sampwidth=2)
+            wavio.write(filename, data, self.sampleRate, scale='dtype-limits', sampwidth=2)
 
             if not hasattr(self, 'bar2'):
                 self.bar2 = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'r', 'width': 2})
-                # TODO
-                #self.media_obj2 = phonon.Phonon.MediaObject(self)
-                #audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
-                #phonon.Phonon.createPath(self.media_obj2, audio_output)
-                #self.media_obj2.setTickInterval(20)
-                #self.media_obj2.tick.connect(self.movePlaySlider2)
-                #self.media_obj2.finished.connect(self.playFinished2)
+                self.media_obj2 = phonon.Phonon.MediaObject(self)
+                audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
+                phonon.Phonon.createPath(self.media_obj2, audio_output)
+                self.media_obj2.setTickInterval(20)
+                self.media_obj2.tick.connect(self.movePlaySlider2)
+                self.media_obj2.finished.connect(self.playFinished2)
             self.bar2.setValue(self.bandLimitedStart)
             self.p_spec.addItem(self.bar2, ignoreBounds=True)
 
             # Instantiate a Qt media object and prepare it (for audio playback)
-            #self.media_obj2.setCurrentSource(phonon.Phonon.MediaSource(filename))
-            #self.media_obj2.seek(0)
-            #self.media_obj2.play()
-            ##f.close()
+            self.media_obj2.setCurrentSource(phonon.Phonon.MediaSource(filename))
+            self.media_obj2.seek(0)
+            self.media_obj2.play()
+            # f.close()
             return
         else:
             self.playSelectedSegment()
@@ -3415,7 +3420,7 @@ class AviaNZ(QMainWindow):
         self.reviewer = str(name2)
         self.statusRight.setText("Operator: " + self.operator + ", Reviewer: "+self.reviewer)
         self.setOperatorReviewerDialog.close()
-        self.segmentsToSave = True
+        #self.segmentsToSave = True
 
     def saveImage(self): # ??? it doesn't save the image
         # filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
@@ -3606,9 +3611,16 @@ class AviaNZ(QMainWindow):
             i = i-1
         #print self.filename[i:], type(self.filename)
 
-
-        if self.segmentsToSave:
-            self.saveSegments()
+        #if len(self.segments) > 0 or self.hasSegments:
+            # if len(self.segments) > 0:
+            #     if self.segments[0][0] > -1:
+            #         self.segments.insert(0,
+            #                              [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+            #                               self.reviewer, -1])
+            # else:
+            #     self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+            #                              self.reviewer, -1])
+        self.saveSegments()
 
         self.resetStorageArrays()
         self.loadFile(self.filename[i+1:])
@@ -3621,7 +3633,8 @@ class AviaNZ(QMainWindow):
         Deletes the segment that is selected, otherwise does nothing.
         Updates the overview segments as well.
         """
-        if id<0:
+        #print id, self.box1id, not id
+        if id<0 or not id:
             id = self.box1id
 
         if id>-1:
@@ -3656,6 +3669,7 @@ class AviaNZ(QMainWindow):
             del self.listRectanglesa1[id]
             del self.listRectanglesa2[id]
             self.segmentsToSave = True
+            print self.segmentsToSave
             self.box1id = -1
 
     def deleteAll(self):
@@ -3710,33 +3724,31 @@ class AviaNZ(QMainWindow):
         # TODO: Fix this up to include quitting stuff
         """ Save the segmentation data as a json file.
         Name of the file is the name of the wave file + .data"""
-        def checkSave():
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
-            msg.setText("Do you want to save?")
-            msg.setInformativeText("You didn't identify any segments, are you sure you want to save this annotation?")
-            msg.setWindowTitle("No segments")
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            msg.buttonClicked.connect(msgbtn)
-            retval = msg.exec_()
-            print "value of pressed message box button:", retval
-            return retval
+
+        # def checkSave():
+        #     msg = QMessageBox()
+        #     msg.setIcon(QMessageBox.Information)
+        #     msg.setText("Do you want to save?")
+        #     msg.setInformativeText("You didn't identify any segments, are you sure you want to save this annotation?")
+        #     msg.setWindowTitle("No segments")
+        #     msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        #     msg.buttonClicked.connect(msgbtn)
+        #     retval = msg.exec_()
+        #     print "value of pressed message box button:", retval
+        #     return retval
 
         if self.segmentsToSave:
             print("Saving segments to " + self.filename)
-            if self.segments[0][0] > -1:
-                self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')),self.operator,self.reviewer, -1])
-        # if len(self.segments)>0 or self.hasSegments:
-        #     print("Saving segments to "+self.filename)
-        #     # TODO: add operator/reviewer details?
-        #     if len(self.segments) > 0:
-        #         if self.segments[0][0] > -1:
-        #             self.segments.insert(0,
-        #                                  [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
-        #                                   self.reviewer, -1])
-        #     else:
-        #         self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
-        #                                  self.reviewer, -1])
+            if len(self.segments) > 0:
+                if self.segments[0][0] > -1:
+                    self.segments.insert(0,
+                                         [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')),
+                                          self.operator,
+                                          self.reviewer, -1])
+            else:
+                self.segments.insert(0,
+                                     [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+                                      self.reviewer, -1])
 
             if isinstance(self.filename, str):
                 file = open(self.filename + '.data', 'w')
@@ -3744,6 +3756,9 @@ class AviaNZ(QMainWindow):
                 file = open(str(self.filename) + '.data', 'w')
             json.dump(self.segments,file)
             self.segmentsToSave = False
+            del self.segments[0]
+        else:
+            print "Nothing to save"
 
     def closeEvent(self, event):
         """ Catch the user closing the window by clicking the Close button instead of quitting. """
@@ -3755,6 +3770,18 @@ class AviaNZ(QMainWindow):
         """
 
         print("Quitting")
+        # if len(self.segments) > 0:
+        #     if self.segments[0][0] > -1:
+        #         self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+        #                                  self.reviewer, -1])
+        #     #else:
+        #     #    retval = checkSave()
+        # else:
+        #     # TODO: This means that a file is always created. Is that a bug? Option: ask user -> wording?
+        #     #retval = checkSave()
+        #     if self.segments[0][0] > -1:
+        #         self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
+        #                              self.reviewer, -1])
         self.saveSegments()
         if self.saveConfig == True:
             print "Saving config file"
