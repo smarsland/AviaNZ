@@ -21,9 +21,22 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys, os, json, platform, re
-from PyQt4.QtCore import *
-from PyQt4.QtGui import *
-import PyQt4.phonon as phonon
+try:
+    from PyQt4.QtCore import *
+    print "Using PyQt4"
+    pyqt4 = True
+except ImportError as e:
+    print "Using PyQt5"
+    pyqt4 = False
+
+if pyqt4:
+    from PyQt4.QtCore import *
+    from PyQt4.QtGui import *
+    import PyQt4.phonon as phonon
+else:
+    from PyQt5.QtGui import *
+    from PyQt5.QtWidgets import *
+    from PyQt5.QtCore import *
 
 import wavio
 import numpy as np
@@ -159,6 +172,7 @@ class AviaNZ(QMainWindow):
         and sets up the window.
         One interesting configuration point is the DOC setting, which hides the more 'research' functions."""
         super(AviaNZ, self).__init__()
+        self.pyqt4 = pyqt4
         self.root = root
         self.extra=True
         if configfile is not None:

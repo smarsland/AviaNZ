@@ -4,8 +4,26 @@
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
 import sys,os
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
+
+try:
+    from PyQt4.QtCore import *
+    print "Using PyQt4"
+    pyqt4 = True
+except ImportError as e:
+    print "Using PyQt5"
+    pyqt4 = False
+
+if pyqt4:
+    from PyQt4.QtCore import *
+    from PyQt4.QtGui import *
+    #import PyQt4.phonon as phonon
+else:
+    from PyQt5.QtGui import *
+    from PyQt5.QtWidgets import *
+    from PyQt5.QtCore import *
+
+#from PyQt4.QtCore import *
+#from PyQt4.QtGui import *
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
