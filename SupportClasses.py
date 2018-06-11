@@ -3,8 +3,8 @@
 
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
+from PyQt4.QtCore import *
+from PyQt4.QtGui import *
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
