@@ -48,7 +48,7 @@ class preProcess:
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
         self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet=self.wavelet, maxLevel=20)
 
-    def denoise_filter(self):
+    def denoise_filter(self, level=5):
         # set df=True to perform both denoise and filter
         # df=False to skip denoise
         if self.species == 'Kiwi':
@@ -68,7 +68,7 @@ class preProcess:
             f2 = 3800
             fs = 8000
         else:
-            fs = 16000
+            fs = 8000
 
         if self.sampleRate != fs:
             self.audioData = librosa.core.audio.resample(self.audioData, self.sampleRate, fs)
@@ -76,7 +76,7 @@ class preProcess:
 
         # Get the five level wavelet decomposition
         if self.df == True:
-            denoisedData = self.WaveletFunctions.waveletDenoise(self.audioData, thresholdType='soft', wavelet=self.wavelet,maxLevel=5)
+            denoisedData = self.WaveletFunctions.waveletDenoise(self.audioData, thresholdType='soft', wavelet=self.wavelet,maxLevel=level)
         else:
             denoisedData=self.audioData  # this is to avoid washing out very fade calls during the denoising
 
@@ -100,8 +100,8 @@ class preProcess:
         #     filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=7000)
         # elif species == 'Sipo':
         #     filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=1200, high=3800)
-        # else:
-        #     print species
+        else:
+            filteredDenoisedData = denoisedData
 
         return filteredDenoisedData, self.sampleRate
 
@@ -463,7 +463,7 @@ class exportSegments:
             withConf:   is it with some level of confidence? e.g. after post-processing (e ratio). Default is 'False'
             seg_pos:    possible segments are needed apart from the segments when withConf is True. This is just to
                         generate the annotation including the segments with conf (kiwi) and without confidence (kiwi?).
-            minLen: minimum length of a segment
+            minLen: minimum length of a segment in secs
 
     """
 
@@ -499,7 +499,7 @@ class exportSegments:
             wb = Workbook()
             wb.create_sheet(title='Time Stamps', index=1)
             wb.create_sheet(title='Presence Absence', index=2)
-            wb.create_sheet(title='Per Second', index=3)
+            wb.create_sheet(title='Per' + str(self.resolution) + ' second', index=3)
 
             ws = wb.get_sheet_by_name('Time Stamps')
             ws.cell(row=1, column=1, value="File Name")
@@ -512,7 +512,7 @@ class exportSegments:
             ws.cell(row=1, column=2, value="Presence/Absence")
 
             # Third sheet
-            ws = wb.get_sheet_by_name('Per Second')
+            ws = wb.get_sheet_by_name('Per' + str(self.resolution) + ' second')
             ws.cell(row=1, column=1, value="File Name")
             ws.cell(row=1, column=2, value="Presence=1, Absence=0")
 
@@ -547,10 +547,10 @@ class exportSegments:
 
         def writeToExcelp3():
             # todo: use minLen
-            ws = wb.get_sheet_by_name('Per Second')
+            ws = wb.get_sheet_by_name('Per' + str(self.resolution) + ' second')
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value= str(self.resolution) + ' secs resolution')
-            ft = Font(color=colors.DARKBLUE)
+            ft = Font(color=colors.DARKYELLOW)
             ws.cell(row=r, column=1).font=ft
             c = 2
             for i in range(0,len(detected), self.resolution):
@@ -573,7 +573,7 @@ class exportSegments:
         if self.withConf:
             eFile = self.dirName + '/DetectionSummary_withConf_' + self.species + '.xlsx'
         else:
-            eFile = self.dirName + '/DetectionSummary_possible_' + self.species + '.xlsx'
+            eFile = self.dirName + '/DetectionSummary_' + self.species + '.xlsx'
         relfname = os.path.relpath(str(self.filename), str(self.dirName))
         #print eFile, relfname
 
@@ -640,7 +640,8 @@ class exportSegments:
     def saveAnnotation(self):
         # Save annotations - batch processing
         annotation = []
-        annotation.append([-1, str(QTime().addSecs(0+self.startTime).toString('hh:mm:ss')), "Nirosha", "Stephen", -1])
+        # self.startTime = int(self.startTime[:2]) * 3600 + int(self.startTime[2:4]) * 60 + int(self.startTime[4:6])
+        annotation.append([-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), "Nirosha", "Stephen", -1])
         # if len(self.segments) > 0 or len(self.seg_pos) > 0:
         if len(self.confirmedSegments) > 0 or len(self.segmentstoCheck) > 0:
             if self.method == "Wavelets":
