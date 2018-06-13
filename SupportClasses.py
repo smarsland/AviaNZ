@@ -18,12 +18,14 @@ from scipy import signal
 from scipy.signal import medfilt
 import SignalProc
 import WaveletFunctions
+import Segment
 
 import librosa
 
 import math
 import numpy as np
 import os, json
+import copy
 
 import pywt
 
@@ -120,165 +122,168 @@ class postProcess:
         self.species = species
         self.minLen = minLen
         if self.minLen == 0 and self.species =='Kiwi':
-            self.minLen = 5
-        self.confirmedSegments = []  # post processed detections with confidence TP
-        self.segmentstoCheck = []  # need more testing to confirm
+            self.minLen = 10
+        # self.confirmedSegments = []  # post processed detections with confidence TP
+        # self.segmentstoCheck = []  # need more testing to confirm
 
-    def deleteShort(self):
+    def short(self):
         """
-        This will delete segments < minLen-2 secs
-                 add segments >=minLen-2 but <minLen to segmentstoCheck
-                 add segments >minLen to segmentstoCheck (still need further testing)
+        This will delete segments < minLen/2 secs
         """
-        import copy
+        newSegments = []
+        for seg in self.segments:
+            if seg[0] == -1:
+                newSegments.append(seg)
+            elif seg[1] - seg[0] >= self.minLen/2:
+                newSegments.append(seg)
+            else:
+                continue
+        self.segments = newSegments
+
+    def wind(self, Tmean_wind = 1e-8):
+        """
+        delete wind corrupted segments (targeting moderate wind and above) if no sign of kiwi (check len)
+        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
+        """
         newSegments = copy.deepcopy(self.segments)
         for seg in self.segments:
             if seg[0] == -1:
-                self.confirmedSegments.append(seg)
-                self.segmentstoCheck.append(seg)
-                newSegments.append(seg)
-            elif seg[1] - seg[0] < self.minLen:
-                if seg[1] - seg[0] >= self.minLen-2:
-                    self.segmentstoCheck.append(seg)
-                    newSegments.append(seg)
-                else:
-                    continue
-            else:
-                self.segmentstoCheck.append(seg)
-                newSegments.append(seg)
-        self.segments = newSegments
-
-    def deleteWindRain(self, windTest=True, rainTest=False, Tmean_wind = 1e-9, T_ERatio=2.5):
-        """
-        delete wind/rain corrupted segments (targeting moderate wind and above) if no sign of kiwi (check the kiwi freq.)
-        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
-        """
-        # Todo: find thrs
-        import copy
-        Tmean_rain = 1e-8  # Mean threshold
-        Tsnr_rain = 10  # SNR threshold
-
-        # Tmean_wind = 1e-9  # Mean threshold
-        # Tsnr_wind = 0.5     # SNR threshold
-
-        newSegmentstoCheck = []
-        newSegmentstoCheck = copy.deepcopy(self.segmentstoCheck)
-
-        for seg in self.segmentstoCheck:
-            if seg[0] == -1:
                 continue
-            else:
-                # read the sound segment and check for wind
-                # secs = seg[1] - seg[0]
-                # wavobj = wavio.read(file[:-5], nseconds=secs, offset=seg[0])
-                # sampleRate = wavobj.rate
-                data =  self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate]
-                if data is not 'float':
-                    data = data / 32768.0
-                data = data[:].squeeze()
+            else:  # read the sound segment and check for wind
+                secs = seg[1] - seg[0]
+                data = self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate]
 
                 wind_lower = 2.0 * 100 / self.sampleRate
                 wind_upper = 2.0 * 250 / self.sampleRate
-                rain_lower = 2.0 * 600 / self.sampleRate
-                rain_upper = 2.0 * 1200 / self.sampleRate
 
                 f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
 
-                if windTest:
-                    limite_inf = int(round(len(p) * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in
-                    # normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
-                    limite_sup = int(round(len(p) * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in
-                    # normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
-                    a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
+                # check wind
+                limite_inf = int(
+                    round(p.__len__() * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in
+                # normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
+                limite_sup = int(
+                    round(p.__len__() * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in
+                # normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
+                a_wind = p[
+                         limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
 
-                    mean_a_wind = np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
-                    std_a_wind = np.std(a_wind)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
+                mean_a_wind = np.mean(
+                    a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
+                # std_a_wind = np.std(a_wind)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
+                if mean_a_wind > Tmean_wind:
+                    if secs > self.minLen:  # just check duration
+                        continue
+                    else:
+                        print file, seg, "--> windy"
+                        newSegments.remove(seg)
+        self.segments = newSegments
 
-                    # c_wind = mean_a_wind / std_a_wind  # signal to noise ratio of the analysed recording. step 3 in Algorithm 2.1
-                    #
-                    # meanPSD_wind.append(mean_a_wind)
-                    # snrPSD_wind.append(c_wind)
+    def rainClick(self):
+        """
+        delete random clicks e.g. rain. Check for sign of kiwi (len)
+        """
+        newSegments = copy.deepcopy(self.segments)
+        if newSegments.__len__() > 1:
+            mfcc = librosa.feature.mfcc(self.audioData, self.sampleRate)
+            # Normalise
+            mfcc -= np.mean(mfcc, axis=0)
+            mfcc /= np.max(np.abs(mfcc), axis=0)
+            mean = np.mean(mfcc[1, :])
+            std = np.std(mfcc[1, :])
+            thr = mean - 2 * std  # mfcc1 thr for the recording
 
-                    if mean_a_wind > Tmean_wind:
-                        # check if it is not kiwi
-                        eRatio = self.eRatioConfd(seg, thr=T_ERatio)
-                        if eRatio > T_ERatio:
-                            potentialCall = True
+            for seg in self.segments:
+                if seg[0] == -1:
+                    continue
+                else:
+                    secs = seg[1] - seg[0]
+                    data = self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate]
+                mfcc = librosa.feature.mfcc(data, self.sampleRate)
+                # Normalise
+                mfcc -= np.mean(mfcc, axis=0)
+                mfcc /= np.max(np.abs(mfcc), axis=0)
+                mfcc1 = mfcc[1, :]  # mfcc1 of the segment
+                if np.min(mfcc1) < thr:
+                    if secs > self.minLen:  # just check duration>10 sec
+                        continue
+                    else:
+                        newSegments.remove(seg)
+        self.segments = newSegments
+
+    def fundamentalFrq(self ):
+        '''
+        Check for fundamental frequency of the segments, discard the segments that does not indicate the species.
+        '''
+        newSegments = copy.deepcopy(self.segments)
+        for seg in self.segments:
+            if seg[0] == -1:
+                continue
+            else:
+                # read the sound segment and check fundamental frq.
+                secs = seg[1] - seg[0]
+                data = self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate]
+
+                # bring the segment into 16000
+                if self.sampleRate != 16000:
+                    data = librosa.core.audio.resample(data, self.sampleRate, 16000)
+                    sampleRate = 16000
+                else:
+                    sampleRate = self.sampleRate
+                # denoise before fundamental frq. extraction
+                sc = preProcess(audioData=data, sampleRate=sampleRate, species='', df=True)  # species left empty to avoid bandpass filter
+                data, sampleRate = sc.denoise_filter(level=10)
+
+                sp = SignalProc.SignalProc([], 0, 512, 256)
+                sgRaw = sp.spectrogram(data, 512, 256, mean_normalise=True, onesided=True, multitaper=False)
+                segment = Segment.Segment(data, sgRaw, sp, sampleRate, 512, 256)
+                pitch, y, minfreq, W = segment.yin(minfreq=100)
+                ind = np.squeeze(np.where(pitch > minfreq))
+                pitch = pitch[ind]
+                if pitch.size == 0:
+                    print file, 'segment ', seg, ' *++ no fundamental freq detected, could be faded kiwi or noise'
+                    newSegments.remove(seg)
+                    continue
+                ind = ind * W / 512
+                x = (pitch * 2. / sampleRate * np.shape(sgRaw)[1]).astype('int')
+
+                from scipy.signal import medfilt
+                x = medfilt(pitch, 15)
+
+                if ind.size < 2:
+                    if pitch > 1200 and pitch < 4200:
+                        print file, 'segment ', seg, round(pitch), ' *##kiwi found'
+                    else:
+                        print file, 'segment ', seg, round(
+                            pitch), ' *-- fundamental freq is out of kiwi region, could be noise'
+                        newSegments.remove(seg)
+                else:
+                    # Get the individual pieces
+                    segs = segment.identifySegments(ind, maxgap=10, minlength=5)
+                    count = 0
+                    if segs == []:
+                        if np.mean(pitch) > 1200 and np.mean(pitch) < 4000:
+                            print file, 'segment ', seg, round(np.mean(pitch)), ' *## kiwi found '
                         else:
-                            potentialCall = False
-                        if not potentialCall:
-                            newSegmentstoCheck.remove(seg)
-                            print "wind ", mean_a_wind
+                            print file, 'segment ', seg, round(
+                                np.mean(pitch)), ' *-- fundamental freq is out of kiwi region, could be noise'
+                            newSegments.remove(seg)
+                            continue
+                    flag = False
+                    for s in segs:
+                        count += 1
+                        s[0] = s[0] * sampleRate / float(256)
+                        s[1] = s[1] * sampleRate / float(256)
+                        i = np.where((ind > s[0]) & (ind < s[1]))
+                        if np.mean(x[i]) > 1200 and np.mean(x[i]) < 4000:
+                            print file, 'segment ', seg, round(np.mean(x[i])), ' *## kiwi found ##'
+                            flag = True
+                            break
+                    if not flag:
+                        newSegments.remove(seg)
+        self.segments = newSegments
 
-                if rainTest:
-                    limite_inf = int(round(len(p) * rain_lower))  # minimum frequency of the rainfall frequency band 0.0272 (in
-                    # normalized frequency); in Hz=0.0272*(44100/2)=599.8  Hz
-                    limite_sup = int(round(len(p) * rain_upper))  # maximum frequency of the rainfall frequency band 0.0544 (in
-                    # normalized frequency); in Hz=0.0544*(44100/2)=1199.5 Hz
-                    a_rain = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
-
-                    mean_a_rain = np.mean(a_rain)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
-                    std_a_rain = np.std(a_rain)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
-
-                    c_rain = mean_a_rain / std_a_rain  # signal to noise ratio of the analysed recording. step 3 in Algorithm 2.1
-
-                    # meanPSD_rain.append(mean_a_rain)
-                    # snrPSD_rain.append(c_rain)
-
-                    if mean_a_rain > Tmean_rain and c_rain > Tsnr_rain:
-                        newSegmentstoCheck.remove(seg)
-                        # rainy.append(mean_a_rain)
-        self.segmentstoCheck = newSegmentstoCheck
-
-    def WindRain(self, windTest=True, rainTest=False):
-        """
-        detect wind/rain corrupted segments (targeting moderate wind and above) if no sign of kiwi (check the kiwi freq.)
-        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
-        """
-        data = self.audioData
-        if data is not 'float':
-            data = data / 32768.0
-        data = data[:].squeeze()
-
-        f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
-
-        wind_lower = 2.0 * 100 / self.sampleRate     # 100
-        wind_upper = 2.0 * 250 / self.sampleRate    #250
-        rain_lower = 2.0 * 600 / self.sampleRate
-        rain_upper = 2.0 * 1200 / self.sampleRate
-
-        mean_a_wind =0
-        snr_rain = 0
-        mean_a_rain = 0
-        if windTest:
-            limite_inf = int(round(len(p) * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in
-            # normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
-            limite_sup = int(round(len(p) * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in
-            # normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
-            a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
-            # wind = np.sum(a_wind, axis = 1)
-            mean_a_wind = np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
-            # std_a_wind = np.std(a_wind)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
-        if rainTest:
-            # print len(p)
-            limite_inf = int(
-                round(len(p) * rain_lower))  # minimum frequency of the rainfall frequency band 0.0272 (in
-            # normalized frequency); in Hz=0.0272*(44100/2)=599.8  Hz
-            limite_sup = int(
-                round(len(p) * rain_upper))  # maximum frequency of the rainfall frequency band 0.0544 (in
-            # normalized frequency); in Hz=0.0544*(44100/2)=1199.5 Hz
-            a_rain = p[
-                     limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
-
-            mean_a_rain = np.mean(
-                a_rain)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
-            std_a_rain = np.std(
-                a_rain)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
-
-            snr_rain = mean_a_rain / std_a_rain  # signal to noise ratio of the analysed recording. step 3 in Algorithm 2.1
-            # return a_rain
-        return mean_a_wind, snr_rain, mean_a_rain
-
+    # ***no use of the rest of the functions in this class for the moment.
     def eRatioConfd(self, seg, AviaNZ_extra = False):
         '''
         This is a post processor to introduce some confidence level
@@ -499,7 +504,7 @@ class exportSegments:
             wb = Workbook()
             wb.create_sheet(title='Time Stamps', index=1)
             wb.create_sheet(title='Presence Absence', index=2)
-            wb.create_sheet(title='Per' + str(self.resolution) + ' second', index=3)
+            wb.create_sheet(title='Per second', index=3)
 
             ws = wb.get_sheet_by_name('Time Stamps')
             ws.cell(row=1, column=1, value="File Name")
@@ -512,7 +517,7 @@ class exportSegments:
             ws.cell(row=1, column=2, value="Presence/Absence")
 
             # Third sheet
-            ws = wb.get_sheet_by_name('Per' + str(self.resolution) + ' second')
+            ws = wb.get_sheet_by_name('Per second')
             ws.cell(row=1, column=1, value="File Name")
             ws.cell(row=1, column=2, value="Presence=1, Absence=0")
 
@@ -547,7 +552,7 @@ class exportSegments:
 
         def writeToExcelp3():
             # todo: use minLen
-            ws = wb.get_sheet_by_name('Per' + str(self.resolution) + ' second')
+            ws = wb.get_sheet_by_name('Per second')
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value= str(self.resolution) + ' secs resolution')
             ft = Font(color=colors.DARKYELLOW)
