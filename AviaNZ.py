@@ -1630,24 +1630,24 @@ class AviaNZ(QMainWindow):
             # self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e[0])[0],endpoint=True),e[0])
             # self.plotPlot.setPen(fn.mkPen('b'))
 
-            # plot wind/rain
-            wind, rain, mean_rain = post.WindRain(windTest=False, rainTest=True)
-            wind = np.ones((1,100))*wind
-            # rain = np.ones((1,100))*rain    # rain is SNR
-            # thr = np.ones((1,100))*3.5      # rain SNR thr is 3.5
-            # mean_rain = np.ones((1, 100)) * mean_rain
-            # mean_rain_thr = np.ones((1,100)) * 1e-6     # rain mean thr is 1e-6
-            wind_thr = np.ones((1, 100)) * 1e-8
-            # print np.shape(wind)
-            # print rain[0,:]
-            self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind[0,:])
-            self.plotPlot3.setPen(fn.mkPen('r'))
-            self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind_thr[0,:])
-            self.plotPlot4.setPen(fn.mkPen('k'))
-            # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain[0,:])
-            # self.plotPlot5.setPen(fn.mkPen('b'))
-            # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain_thr[0,:])
-            # self.plotPlot6.setPen(fn.mkPen('g'))
+            # # plot wind/rain
+            # wind, rain, mean_rain = post.wind()
+            # wind = np.ones((1,100))*wind
+            # # rain = np.ones((1,100))*rain    # rain is SNR
+            # # thr = np.ones((1,100))*3.5      # rain SNR thr is 3.5
+            # # mean_rain = np.ones((1, 100)) * mean_rain
+            # # mean_rain_thr = np.ones((1,100)) * 1e-6     # rain mean thr is 1e-6
+            # wind_thr = np.ones((1, 100)) * 1e-8
+            # # print np.shape(wind)
+            # # print rain[0,:]
+            # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind[0,:])
+            # self.plotPlot3.setPen(fn.mkPen('r'))
+            # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind_thr[0,:])
+            # self.plotPlot4.setPen(fn.mkPen('k'))
+            # # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain[0,:])
+            # # self.plotPlot5.setPen(fn.mkPen('b'))
+            # # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain_thr[0,:])
+            # # self.plotPlot6.setPen(fn.mkPen('g'))
 
             # # plot wavelet
             # ws = WaveletSegment.WaveletSegment(self.audiodata, self.sampleRate)
@@ -3176,16 +3176,24 @@ class AviaNZ(QMainWindow):
                 # newSegmentsDef=self.binary2seg(newSegmentsDef)
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
+            # post process for 'Kiwi' to remove short segments, wind, rain, and use F0 check.
+            if species != "all":
+                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, species=species)
+                post.short()
+                post.wind()
+                post.rainClick()
+                post.fundamentalFrq()
+                newSegments = post.segments
+
             # Save the excel file
-            out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=self.segments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
+            out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=newSegments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
             out.excel()
             # self.exportSegments(newSegments,species=species)
 
             # Generate annotation friendly output.
-            # Merge neighbours for wavelet seg
             if str(alg)=="Wavelets":
-                 if len(out.annotation)>0:
-                    for seg in out.annotation:
+                 if len(out.segments)>0:
+                    for seg in newSegments:
                         self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
                                         species.title() + "?",index=-1)
                         self.segmentsToSave = True
