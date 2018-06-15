@@ -506,29 +506,29 @@ class exportSegments:
             wb.create_sheet(title='Presence Absence', index=2)
             wb.create_sheet(title='Per second', index=3)
 
-            ws = wb.get_sheet_by_name('Time Stamps')
+            ws = wb['Time Stamps']
             ws.cell(row=1, column=1, value="File Name")
             ws.cell(row=1, column=2, value="start (hh:mm:ss)")
             ws.cell(row=1, column=3, value="end (hh:mm:ss)")
 
             # Second sheet
-            ws = wb.get_sheet_by_name('Presence Absence')
+            ws = wb['Presence Absence']
             ws.cell(row=1, column=1, value="File Name")
             ws.cell(row=1, column=2, value="Presence/Absence")
 
             # Third sheet
-            ws = wb.get_sheet_by_name('Per second')
+            ws = wb['Per second']
             ws.cell(row=1, column=1, value="File Name")
             ws.cell(row=1, column=2, value="Presence=1, Absence=0")
 
             # TODO: Per minute sheet?
 
             # Hack to delete original sheet
-            wb.remove_sheet(wb.get_sheet_by_name('Sheet'))
+            wb.remove_sheet(wb['Sheet'])
             return wb
 
         def writeToExcelp1():
-            ws = wb.get_sheet_by_name('Time Stamps')
+            ws = wb['Time Stamps']
             r = ws.max_row + 1
             # Print the filename
             ws.cell(row=r, column=1, value=str(relfname))
@@ -541,7 +541,7 @@ class exportSegments:
                 r += 1
 
         def writeToExcelp2():
-            ws = wb.get_sheet_by_name('Presence Absence')
+            ws = wb['Presence Absence']
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value=str(relfname))
             ws.cell(row=r, column=2, value='_')
@@ -552,7 +552,7 @@ class exportSegments:
 
         def writeToExcelp3():
             # todo: use minLen
-            ws = wb.get_sheet_by_name('Per second')
+            ws = wb['Per second']
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value= str(self.resolution) + ' secs resolution')
             ft = Font(color=colors.DARKYELLOW)
