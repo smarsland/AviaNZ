@@ -3177,7 +3177,7 @@ class AviaNZ(QMainWindow):
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
             # post process for 'Kiwi' to remove short segments, wind, rain, and use F0 check.
-            if species != "all":
+            if species == "Kiwi":
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, species=species)
                 post.short()
                 post.wind()
