@@ -64,6 +64,8 @@ from openpyxl import load_workbook, Workbook
 
 from pyqtgraph.parametertree import Parameter, ParameterTree #, ParameterItem, registerParameterType
 
+import locale, time
+
 # ==============
 # TODO
 
@@ -171,6 +173,7 @@ class AviaNZ(QMainWindow):
         exist. Also initialises the data structures and loads an initial file (specified explicitly)
         and sets up the window.
         One interesting configuration point is the DOC setting, which hides the more 'research' functions."""
+	print("Starting AviaNZ...")
         super(AviaNZ, self).__init__()
         self.pyqt4 = pyqt4
         self.root = root
@@ -188,6 +191,10 @@ class AviaNZ(QMainWindow):
             self.genConfigFile()
             self.saveConfig=True
             # self.configfile = 'AviaNZconfig.txt'
+
+	# avoid comma/point problem in number parsing
+	QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
+	print('Locale is set to ' + QLocale().name())
 
         # The data structures for the segments
         self.listLabels = []
@@ -347,7 +354,7 @@ class AviaNZ(QMainWindow):
         self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
         self.readonly.setCheckable(True)
         self.readonly.setChecked(self.config['readOnly'])
-
+	
         specMenu.addSeparator()
         specMenu.addAction("Interface settings", self.changeSettings)
 
@@ -2906,12 +2913,14 @@ class AviaNZ(QMainWindow):
         """
         # TODO: should it be saved automatically, or a button added?
         with pg.BusyCursor():
+            opstartingtime = time.time()
+            print("Denoising requested at %s" % opstartingtime)
+            self.statusLeft.setText("Denoising...")
             if self.DOC==False:
                 [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width,trimaxis] = self.denoiseDialog.getValues()
             else:
                 [alg, start, end, width, trimaxis] = self.denoiseDialog.getValues()
             self.backup()
-            self.statusLeft.setText("Denoising...")
             if not hasattr(self, 'waveletDenoiser'):
                 self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata,wavelet=None,maxLevel=self.config['maxSearchDepth'])
 
@@ -2962,6 +2971,9 @@ class AviaNZ(QMainWindow):
                 #"Median Filter"
                 self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
 
+            print("Denoising w/o temp file completed in %.4f seconds" % (time.time() - opstartingtime))
+
+            ## Creating temp files
             # The temp files work properly on a Mac, not on Windows
             if platform.system() == 'Darwin':
                 filename = 'temp.wav'
@@ -2996,6 +3008,7 @@ class AviaNZ(QMainWindow):
 
             self.setColourLevels()
 
+            print("Denoising completed in %s seconds" % round(time.time() - opstartingtime, 4))
             self.statusLeft.setText("Ready")
 
         # TODO: Make the temp file playable
