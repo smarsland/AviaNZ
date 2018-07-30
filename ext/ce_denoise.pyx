@@ -24,7 +24,7 @@ def BestTree(wp,threshold,costfn='threshold'):
 	count = 0
 	opstartingtime = time.time()
 
-	timer2 = time.time()
+	print("Checkpoint 1ba, %.5f" % (time.time() - opstartingtime))
 	for level in range(wp.maxlevel + 1):
 		for n in wp.get_level(level, 'natural'):
 			if costfn == 'threshold':
@@ -38,8 +38,7 @@ def BestTree(wp,threshold,costfn='threshold'):
 
 			count += 1
 	print(cost[0])
-	print(time.time() - timer2)
-	print("Checkpoint 1ba, %.5f" % (time.time() - opstartingtime))
+	print("Checkpoint 1bb, %.5f" % (time.time() - opstartingtime))
 
 	# Compute the best tree using those cost values
 	flags = 2 * np.ones(nnodes)
