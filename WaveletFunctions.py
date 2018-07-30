@@ -203,7 +203,7 @@ class WaveletFunctions:
 
         if maxLevel is None:
             self.maxLevel = self.BestLevel(wavelet)
-            print "Best level is ", self.maxLevel
+            print("Best level is %d" % self.maxLevel)
         else:
             self.maxLevel = maxLevel
 
@@ -229,24 +229,14 @@ class WaveletFunctions:
         # new_wp = pywt.WaveletPacket(data=np.zeros(len(wp.data)), wavelet=wp.wavelet, mode='zero', maxlevel=wp.maxlevel)
 
         # for level in range(wp.maxlevel + 1):
-        #     print(level)
-        #     numpoints = len(wp.get_level(level, 'natural')[0].data)
-        #     print(numpoints)
-        #     for n in new_wp.get_level(level, 'natural'):
-        #         n.data = np.zeros(numpoints)
+        #      print(level)
+        #      numpoints = len(wp.get_level(level, 'natural')[0].data)
+        #      print(numpoints)
+        #      for n in new_wp.get_level(level, 'natural'):
+        #          n.data = np.zeros(numpoints)
 
         # Copy thresholded versions of the leaves into the new wpt
         new_wp = ce.ThresholdNodes(self, wp, bestleaves, threshold, thresholdType)
-
-#             if thresholdType == 'hard':
-#                 # Hard thresholding
-#                 new_wp[ind].data = np.where(np.abs(wp[ind].data) < threshold, 0.0, wp[ind].data)
-#             else:
-#                 # Soft thresholding
-#                 # n.data = np.sign(n.data) * np.maximum((np.abs(n.data) - threshold), 0.0)
-#                 tmp = np.abs(wp[ind].data) - threshold
-#                 tmp = (tmp + np.abs(tmp)) / 2.
-#                 new_wp[ind].data = np.sign(wp[ind].data) * tmp
 
         # Reconstruct the internal nodes and the data
         # print("Checkpoint 3, %.5f" % (time.time() - opstartingtime))

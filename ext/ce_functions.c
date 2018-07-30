@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <math.h>
+#include <stdio.h>
 
 // given array, calculates its cost as
 // sum of elements above threshold,
@@ -55,9 +56,13 @@ void ce_thresnode(double *in_array, double *out_array, int size, double threshol
 		// Soft thresholding
 		for(int i=0; i<size; i++){
 			double tmp = abs(in_array[i]) - threshold;
-			tmp = (tmp + abs(tmp)) / 2;
-			int sign = (in_array[i]>0) - (in_array[i]<0);
-			out_array[i] = sign * tmp;
+			if(tmp<0){
+				out_array[i] = 0.0;
+			} else if(in_array[i]<0){
+				out_array[i] = -tmp;
+			} else {
+				out_array[i] = tmp;
+			}
 		}
 	}
 }
