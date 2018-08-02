@@ -85,9 +85,6 @@ print("Package import complete.")
 # Integrate the wavelet segmentation
     # Remove the code that is in SignalProc and use that one
 
-# The image saving doesn't work under windows due to a bug in pyqtgraph exporter. It's a simple fix, but we can't seem to subclass in order to avoid changing their code.
-# Need to look into the subclassing init problem
-
 # At times the program does not respond and ask to repair/close (e.g. when move the overview slider fast or something like that).
 # Need to work on memory management!
 
@@ -172,7 +169,7 @@ class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
 
-    def __init__(self,root=None,configfile=None,DOC=True,CLI=False,firstFile='', command=''):
+    def __init__(self,root=None,configfile=None,DOC=True,CLI=False,firstFile='', imageFile='', command=''):
         """Initialisation of the class. Load a configuration file, or create a new one if it doesn't
         exist. Also initialises the data structures and loads an initial file (specified explicitly)
         and sets up the window.
@@ -279,6 +276,8 @@ class AviaNZ(QMainWindow):
                 else:
                     print("ERROR: %s is not a valid command" % c)
                     sys.exit()
+            if imageFile!='':
+                self.saveImage(imageFile)
         else:
             # Make the window and associated widgets
             self.setWindowTitle('AviaNZ')
@@ -3501,30 +3500,17 @@ class AviaNZ(QMainWindow):
         self.setOperatorReviewerDialog.close()
         #self.segmentsToSave = True
 
-    def saveImage(self): # ??? it doesn't save the image
-        # filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
-        # exporter = SupportClasses.FixedImageExporter(self.p_spec)
-        #exporter.export(filename)
-        if platform.system() == 'Darwin':
-            import pyqtgraph.exporters as pge
-            filename = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
-            exporter = pge.ImageExporter(self.p_spec)
-            exporter.export(filename)
-        # for Windows to save the image, needs to typecast line 70 of ImageExporter.py
-        # from
-        # bg = np.empty((self.params['width'], self.params['height'], 4), dtype=np.ubyte)
-        # to
-        # bg = np.empty((int(self.params['width']), int(self.params['height']), 4), dtype=np.ubyte)
-        # but its not an independent file to be added to the project!
-        # the following works for Windows.
-        else:
-            filename = QFileDialog.getSaveFileName(self, "Save Image","", "Images (*.jpeg *.jpg *.png)");
-            from scipy.misc import imsave
-            try:
-                imsave(str(filename), np.flip(np.transpose(self.sg), 0))
-                # imsave(str(filename), self.p_spec)
-            except:
-                print "Failed to save image"
+    def saveImage(self, imageFile=''):
+        import pyqtgraph.exporters as pge
+        exporter = pge.ImageExporter(self.p_spec)
+        if imageFile=='':
+            imageFile = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
+        try:
+            # works but requires devel (>=0.11) version of pyqtgraph:
+            exporter.export(imageFile)
+            print("Exporting spectrogram to file %s" % imageFile)
+        except:
+            print("Failed to save image")
 
     def changeSettings(self):
         """ Create the parameter tree when the Interface settings menu is pressed.
@@ -3871,15 +3857,16 @@ class AviaNZ(QMainWindow):
 
 @click.command()
 @click.option('-c', '--cli', is_flag=True, help='Run in command-line mode')
-@click.option('-f', '--infile', type=click.Path(), help='Input wav file')
+@click.option('-f', '--infile', type=click.Path(), help='Input wav file (mandatory in CLI mode)')
+@click.option('-o', '--imagefile', type=click.Path(), help='If specified, a spectrogram will be saved to this file')
 @click.argument('command', nargs=-1)
-def mainlauncher(cli, infile, command):
+def mainlauncher(cli, infile, imagefile, command):
     if cli:
         print("Starting AviaNZ in CLI mode")
         if not isinstance(infile, str):
             print("ERROR: valid input file (-f) is mandatory in CLI mode!")
             sys.exit()
-        avianz = AviaNZ(configfile='AviaNZconfig.txt',DOC=DOC,CLI=True,firstFile=infile, command=command)
+        avianz = AviaNZ(configfile='AviaNZconfig.txt',DOC=DOC,CLI=True,firstFile=infile, imageFile=imagefile, command=command)
         print("Analysis complete, closing AviaNZ")
     else:
         print("Starting AviaNZ in GUI mode")
