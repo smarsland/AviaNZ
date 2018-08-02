@@ -555,7 +555,7 @@ class Denoise(QDialog):
 
             self.waveletlabel = QLabel("Type of wavelet")
             self.wavelet = QComboBox()
-            self.wavelet.addItems(["dmey2","db2","db5","db10","haar"])
+            self.wavelet.addItems(["dmey2","db2","db5","db10","haar","coif5","coif15", "sym2","sym8","sym18"])
             self.wavelet.setCurrentIndex(0)
 
         # Median: width of filter

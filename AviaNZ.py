@@ -66,6 +66,10 @@ from pyqtgraph.parametertree import Parameter, ParameterTree #, ParameterItem, r
 
 import locale, time
 
+import click
+
+print("Package import complete.")
+
 # ==============
 # TODO
 
@@ -168,7 +172,7 @@ class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
 
-    def __init__(self,root=None,configfile=None,DOC=True):
+    def __init__(self,root=None,configfile=None,DOC=True,CLI=False,firstFile='', command=''):
         """Initialisation of the class. Load a configuration file, or create a new one if it doesn't
         exist. Also initialises the data structures and loads an initial file (specified explicitly)
         and sets up the window.
@@ -178,6 +182,8 @@ class AviaNZ(QMainWindow):
         self.pyqt4 = pyqt4
         self.root = root
         self.extra=True
+
+        self.CLI = CLI
         if configfile is not None:
             try:
                 self.config = json.load(open(configfile))
@@ -203,74 +209,96 @@ class AviaNZ(QMainWindow):
         self.SegmentRects = []
         self.segmentPlots=[]
         self.box1id = -1
-        self.DOC=DOC
-        self.started=False
-        self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
+        self.DOC = DOC
+        self.started = False
         self.startTime = 0
         self.segmentsToSave = False
 
         self.lastSpecies = "Don't Know"
-        self.resetStorageArrays()
 
         self.dirName = self.config['dirpath']
         self.previousFile = None
         self.focusRegion = None
-
-        # Make the window and associated widgets
-        QMainWindow.__init__(self, root)
-        self.setWindowTitle('AviaNZ')
-        keyPressed = QtCore.Signal(int)
-
-        # Make life easier for now: preload a birdsong
-        firstFile = 'tril1.wav' #'male1.wav' # 'kiwi.wav'#'
-        #self.firstFile = 'kiwi.wav'
-
         self.operator = self.config['operator']
         self.reviewer = self.config['reviewer']
-        self.createMenu()
 
-        # Some safety checking for paths and files
+        # working directory
         if not os.path.isdir(self.dirName):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
-        if not os.path.isfile(self.dirName+'/'+firstFile):
-            fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
-            while fileName == '':
-                msg = QMessageBox()
-                msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
-                msg.setWindowIcon(QIcon('img/Avianz.ico'))
-                msg.setText("Choose a sound file to proceed.\nDo you want to continue?")
-                msg.setWindowTitle("Select Sound File")
-                msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-                reply = msg.exec_()
-                if reply == QMessageBox.Yes:
-                    fileName = QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
-                else:
-                    sys.exit()
-            if fileName != '':
-                # Find the '/' in the fileName
-                i = len(fileName) - 1
-                while fileName[i] != '/' and i > 0:
-                    i = i - 1
-                self.dirName = fileName[:i + 1]
 
-                firstFile = fileName
-            print self.dirName, firstFile
+        # INPUT FILE LOADING
+        # search order: infile -> firstFile -> dialog
+        # Make life easier for now: preload a birdsong
+        if not os.path.isfile(firstFile):
+            firstFile = self.dirName + '/' + 'tril1.wav' #'male1.wav' # 'kiwi.wav'
 
+        if not os.path.isfile(firstFile):
+            if self.CLI:
+                print("file %s not found, exiting" % firstFile)
+                sys.exit()
+            else:
+                # pop up a dialog to select file
+                firstFile = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
+                while firstFile == '':
+                    msg = QMessageBox()
+                    msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+                    msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                    msg.setText("Choose a sound file to proceed.\nDo you want to continue?")
+                    msg.setWindowTitle("Select Sound File")
+                    msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                    reply = msg.exec_()
+                    if reply == QMessageBox.Yes:
+                        firstFile = QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
+                    else:
+                        sys.exit()
+
+        # parse firstFile to dir and file parts
+        self.dirName = os.path.dirname(str(firstFile))
+        firstFile = os.path.basename(str(firstFile))
+        print("Working dir set to %s" % self.dirName)
+        print("Opening file %s" % firstFile)
+
+        # to keep code simpler, graphic options are created even in CLI mode
+        # they're just not shown because QMainWindow.__init__ is skipped
+        if not self.CLI:
+            QMainWindow.__init__(self, root)
+
+        self.createMenu()
         self.createFrame()
+        if self.CLI:
+            self.loadFile(firstFile)
+            while command!=():
+                c = command[0]
+                command = command[1:]
+                print("next command to execute is %s" % c)
+                if c=="denoise":
+                    self.denoise()
+                elif c=="segment":
+                    self.segment()
+                else:
+                    print("ERROR: %s is not a valid command" % c)
+                    sys.exit()
+        else:
+            # Make the window and associated widgets
+            self.setWindowTitle('AviaNZ')
+            self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
+            self.resetStorageArrays()
+            keyPressed = QtCore.Signal(int)
 
-        self.fillFileList(firstFile)
-        self.listLoadFile(QString(firstFile))
-        self.previousFile = firstFile
+            if self.DOC:
+                self.setOperatorReviewerDialog()
 
-        if self.DOC:
-            self.setOperatorReviewerDialog()
+            # Save the segments every minute
+            self.timer = QTimer()
+            #QObject.connect(self.timer, SIGNAL("timeout()"), self.saveSegments)
+            self.timer.timeout.connect(self.saveSegments)
+            self.timer.start(self.config['secsSave']*1000)
+            
+            self.fillFileList(firstFile)
+            self.listLoadFile(QString(firstFile))
+            self.previousFile = firstFile
 
-        # Save the segments every minute
-        self.timer = QTimer()
-        #QObject.connect(self.timer, SIGNAL("timeout()"), self.saveSegments)
-        self.timer.timeout.connect(self.saveSegments)
-        self.timer.start(self.config['secsSave']*1000)
 
     def createMenu(self):
         """ Create the menu entries at the top of the screen and link them as appropriate.
@@ -824,7 +852,8 @@ class AviaNZ(QMainWindow):
         self.statusLeft.setText("Ready")
 
         # Plot everything
-        self.show()
+        if not self.CLI:
+            self.show()
 
     #def keyPressEvent(self,ev):
     #    """ Listener to handle keypresses and emit a keypress event, which is dealt with by handleKey()"""
@@ -1066,7 +1095,6 @@ class AviaNZ(QMainWindow):
                 # Check if the filename is in standard DOC format
                 # Which is xxxxxx_xxxxxx.wav or ccxx_cccc_xxxxxx_xxxxxx.wav (c=char, x=0-9), could have _ afterward
                 # So this checks for the 6 ints _ 6 ints part anywhere in string
-                print name
                 DOCRecording = re.search('(\d{6})_(\d{6})',name[-17:-4])
 
                 if DOCRecording:
@@ -1079,16 +1107,17 @@ class AviaNZ(QMainWindow):
                         print "Day time DOC recording"
                         # TODO: And modify the order of the bird list
                     self.startTime = int(self.startTime[:2]) * 3600 + int(self.startTime[2:4]) * 60 + int(self.startTime[4:6])
-                    self.timeaxis = SupportClasses.TimeAxisHour(orientation='bottom',linkView=self.p_ampl)
-                    self.timeaxis.setLabel('Time', units='hh:mm:ss')
+                    timeaxislabel='hh:mm:ss'
                 else:
                     self.startTime = 0
-                    self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
-                    self.timeaxis.setLabel('Time', units='mm:ss')
+                    timeaxislabel='mm:ss'
 
+                self.timeaxis = SupportClasses.TimeAxisHour(orientation='bottom',linkView=self.p_ampl)
+                self.timeaxis.setLabel('Time', units=timeaxislabel)
                 self.w_spec.addItem(self.timeaxis, row=1, col=1)
                 # This next line is a hack to make the axis update
                 self.changeWidth(self.widthWindow.value())
+
                 dlg += 1
             else:
                 dlg += 2
@@ -1107,7 +1136,6 @@ class AviaNZ(QMainWindow):
                 self.minFreq = 0
                 self.maxFreq = self.sampleRate / 2.
                 self.fileLength = wavobj.nframes
-                self.timeaxis.setOffset(self.startRead+self.startTime)
 
                 dlg += 1
 
@@ -1119,7 +1147,7 @@ class AviaNZ(QMainWindow):
                 self.datalength = np.shape(self.audiodata)[0]
                 print "Length of file is ", float(self.datalength) / self.sampleRate, " seconds (", self.datalength, "samples) loaded from ", float(self.fileLength) / self.sampleRate, "seconds (", self.fileLength, " samples) with sample rate ",self.sampleRate, " Hz."
 
-                if name is not None:
+                if name is not None: # i.e. starting a new file, not next section
                     if self.datalength != self.fileLength:
                         print "not all of file loaded"
                         self.nFileSections = int(np.ceil(float(self.fileLength)/self.datalength))
@@ -1180,24 +1208,26 @@ class AviaNZ(QMainWindow):
                 if self.DOC == False:
                     self.showInvSpec.setChecked(False)
 
+                self.timeaxis.setOffset(self.startRead+self.startTime)
+
                 # Set the window size
                 self.windowSize = self.config['windowWidth']
                 self.widthWindow.setRange(0.5, float(len(self.audiodata))/self.sampleRate)
-
+    
                 # Reset it if the file is shorter than the window
                 if float(len(self.audiodata))/self.sampleRate < self.windowSize:
                     self.windowSize = float(len(self.audiodata))/self.sampleRate
                 self.widthWindow.setValue(self.windowSize)
-
+    
                 self.totalTime = self.convertMillisecs((float(self.datalength)/self.sampleRate)*1000)
-
+    
                 # Load the file for playback as well, and connect up the listeners for it
                 self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
-
+    
                 # Set the length of the scrollbar.
                 self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
                 self.scrollSlider.setValue(0)
-
+    
                 # Get the height of the amplitude for plotting the box
                 self.minampl = np.min(self.audiodata)+0.1*(np.max(self.audiodata)+np.abs(np.min(self.audiodata)))
                 self.drawOverview()
@@ -2912,9 +2942,16 @@ class AviaNZ(QMainWindow):
         Calls the denoiser and then plots the updated data.
         """
         # TODO: should it be saved automatically, or a button added?
+        if self.CLI:
+            # in CLI mode, default values will be retrieved from dialogs.
+            self.denoiseDialog = Dialogs.Denoise(DOC=self.DOC,sampleRate=self.sampleRate)
+            # values can be passed here explicitly, e.g.:
+            # self.denoiseDialog.depth.setValue(10)
+            # or could add an argument to pass custom defaults, e.g.:
+            # self.denoiseDialog = Dialogs.Denoise(defaults=("wt", 1, 2, 'a')
         with pg.BusyCursor():
             opstartingtime = time.time()
-            print("Denoising requested at %s" % opstartingtime)
+            print("Denoising requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
             self.statusLeft.setText("Denoising...")
             if self.DOC==False:
                 [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width,trimaxis] = self.denoiseDialog.getValues()
@@ -3118,6 +3155,12 @@ class AviaNZ(QMainWindow):
     def segment(self):
         """ Listener for the segmentation dialog. Calls the relevant segmenter.
         """
+        if self.CLI:
+            self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata))
+
+        opstartingtime = time.time()
+        print("Segmenting requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
+
         # TODO: Currently just gives them all the label "Don't Know"
         seglen = len(self.segments)
         [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution] = self.segmentDialog.getValues()
@@ -3200,7 +3243,8 @@ class AviaNZ(QMainWindow):
 
             # Save the excel file
             out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=newSegments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
-            out.excel()
+            if generateExcel:
+                out.excel()
             # self.exportSegments(newSegments,species=species)
 
             # Generate annotation friendly output.
@@ -3824,26 +3868,44 @@ class AviaNZ(QMainWindow):
         QApplication.quit()
 
 # =============
-# Start the application
-app = QApplication(sys.argv)
+
+@click.command()
+@click.option('-c', '--cli', is_flag=True, help='Run in command-line mode')
+@click.option('-f', '--infile', type=click.Path(), help='Input wav file')
+@click.argument('command', nargs=-1)
+def mainlauncher(cli, infile, command):
+    if cli:
+        print("Starting AviaNZ in CLI mode")
+        if not isinstance(infile, str):
+            print("ERROR: valid input file (-f) is mandatory in CLI mode!")
+            sys.exit()
+        avianz = AviaNZ(configfile='AviaNZconfig.txt',DOC=DOC,CLI=True,firstFile=infile, command=command)
+        print("Analysis complete, closing AviaNZ")
+    else:
+        print("Starting AviaNZ in GUI mode")
+        # This screen asks what you want to do, then processes the response
+        first = Dialogs.StartScreen(DOC=DOC)
+        first.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+        first.show()
+        app.exec_()
+        
+        task = first.getValues()
+
+        if task == 1:
+            avianz = AviaNZ(configfile='AviaNZconfig.txt',DOC=DOC)
+            avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+        elif task==2:
+            avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(DOC=DOC)
+            avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+            avianz.show()
+            app.exec_()
+
+        avianz.show()
+        app.exec_()
 
 DOC=False    # only DOC features or all
+generateExcel=False
 
-# This screen asks what you want to do, then processes the response
-first = Dialogs.StartScreen(DOC=DOC)
-first.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
-first.show()
-app.exec_()
-
-task = first.getValues()
-
-if task == 1:
-    avianz = AviaNZ(configfile='AviaNZconfig.txt',DOC=DOC)
-    avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
-    avianz.show()
-    app.exec_()
-elif task==2:
-    avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(DOC=DOC)
-    avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
-    avianz.show()
-    app.exec_()
+# Start the application
+app = QApplication(sys.argv)
+mainlauncher()

@@ -37,7 +37,6 @@ def BestTree(wp,threshold,costfn='threshold'):
 				cost[count] = ce_getcost(<double*> np.PyArray_DATA(n.data), n.data.shape[0], threshold, '*')
 
 			count += 1
-	print(cost[0])
 	print("Checkpoint 1bb, %.5f" % (time.time() - opstartingtime))
 
 	# Compute the best tree using those cost values

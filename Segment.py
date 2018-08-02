@@ -452,6 +452,7 @@ class Segment:
             # Compute cumulative mean of normalised diff
             d = np.zeros(W)
             d[0] = 1
+            # TODO: sometimes all np.cumsum(sd[1;]) == 0 ??
             d[1:] = sd[1:] * ints / np.cumsum(sd[1:])
 
             tau = 1
