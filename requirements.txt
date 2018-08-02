@@ -1,5 +1,5 @@
 numpy==1.15.0
-pyqtgraph==0.10.0
+#pyqtgraph==0.10.0
 openpyxl==2.5.4
 scipy==1.1.0
 #PyQt4==4.11.4
@@ -22,3 +22,4 @@ xgboost==0.72.1
 # sudo apt install libgstreamer1.0-dev - not sure??
 # sudo apt install python-qt4-phonon
 # pip uninstall joblib; pip install -Iv joblib=0.11.0
+# pip install git+https://github.com/pyqtgraph/pyqtgraph
