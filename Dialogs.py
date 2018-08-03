@@ -783,7 +783,6 @@ class Denoise(QDialog):
 class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
-    # TODO: Delete segment button
 
     def __init__(self, sg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
         QDialog.__init__(self, parent)
@@ -805,6 +804,7 @@ class HumanClassify1(QDialog):
         self.plot = pg.ImageItem()
         self.pPlot.addItem(self.plot)
 
+        self.speciesTop = QLabel("Currently:")
         self.species = QLabel(self.label)
         font = self.species.font()
         font.setPointSize(24)
@@ -837,11 +837,9 @@ class HumanClassify1(QDialog):
 
         for i in xrange(len(self.birds1)):
             self.birds1[i].setEnabled(True)
-            #self.connect(self.birds1[i], SIGNAL("clicked()"), self.radioBirdsClicked)
             self.birds1[i].clicked.connect(self.radioBirdsClicked)
         for i in xrange(len(self.birds2)):
             self.birds2[i].setEnabled(True)
-            #self.connect(self.birds2[i], SIGNAL("clicked()"), self.radioBirdsClicked)
             self.birds2[i].clicked.connect(self.radioBirdsClicked)
 
         # The list of less common birds
@@ -853,14 +851,12 @@ class HumanClassify1(QDialog):
         # Explicitly add "Other" option in
         self.birds3.insertItem(0, 'Other')
 
-        #self.connect(self.birds3, SIGNAL("itemClicked(QListWidgetItem*)"), self.listBirdsClicked)
         self.birds3.itemClicked.connect(self.listBirdsClicked)
         self.birds3.setEnabled(False)
 
         # This is the text box for missing birds
         self.tbox = QLineEdit(self)
         self.tbox.setMaximumWidth(150)
-        #self.connect(self.tbox, SIGNAL('returnPressed()'), self.birdTextEntered)
         self.tbox.returnPressed.connect(self.birdTextEntered)
         #self.connect(self.tbox, SIGNAL('textChanged(QString*)'), self.birdTextEntered)
         self.tbox.setEnabled(False)
@@ -889,9 +885,9 @@ class HumanClassify1(QDialog):
         hboxBirds.addLayout(birdListLayout)
 
         # The layouts
-        vboxButtons = QVBoxLayout()
-        vboxButtons.addWidget(self.correct)
-        vboxButtons.addWidget(self.delete)
+        hboxNextPrev = QHBoxLayout()
+        hboxNextPrev.addWidget(self.correct)
+        hboxNextPrev.addWidget(self.delete)
         # hboxButtons.addWidget(self.wrong)
         #hboxButtons.addWidget(self.close)
 
@@ -899,18 +895,27 @@ class HumanClassify1(QDialog):
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.setIconSize(iconSize)
 
-        vboxLabel = QVBoxLayout()
-        vboxLabel.addWidget(self.species)
-        vboxLabel.addWidget(self.playButton)
-        #self.connect(self.playButton, SIGNAL('clicked()'), self.playSeg)
+        ## TODO connect activities to volume contrs
         self.playButton.clicked.connect(self.playSeg)
+        ## TODO make sure playing also stops, not loops
 
-        vboxFull = QHBoxLayout()
-        vboxFull.addWidget(self.wPlot)
-        vboxFull.addLayout(vboxLabel)
-        vboxFull.addLayout(hboxBirds)
-        vboxFull.addLayout(vboxButtons)
-        #vboxFull.addWidget(self.close)
+        vboxBirds = QVBoxLayout()
+        vboxBirds.addWidget(self.speciesTop)
+        vboxBirds.addWidget(self.species)
+        vboxBirds.addLayout(hboxBirds)
+
+        vboxSpecContr = QVBoxLayout()
+        vboxSpecContr.addWidget(self.wPlot)
+        vboxSpecContr.addWidget(self.playButton)
+        ## TODO add other volume contrs here
+
+        hboxSpecContrBirds = QHBoxLayout()
+        hboxSpecContrBirds.addLayout(vboxSpecContr)
+        hboxSpecContrBirds.addLayout(vboxBirds)
+
+        vboxFull = QVBoxLayout()
+        vboxFull.addLayout(hboxSpecContrBirds)
+        vboxFull.addLayout(hboxNextPrev)
 
         self.setLayout(vboxFull)
         # print seg
