@@ -277,6 +277,10 @@ class AviaNZ(QMainWindow):
                     print("ERROR: %s is not a valid command" % c)
                     sys.exit()
             if imageFile!='':
+                # reset images to show full width if in CLI:
+                self.widthWindow.setValue(self.datalengthSec)
+                # looks unnecessary:
+                # self.p_spec.setXRange(0, self.convertAmpltoSpec(self.datalengthSec), update=True, padding=0)
                 self.saveImage(imageFile)
         else:
             # Make the window and associated widgets
@@ -1109,7 +1113,7 @@ class AviaNZ(QMainWindow):
                     timeaxislabel='hh:mm:ss'
                 else:
                     self.startTime = 0
-                    timeaxislabel='mm:ss'
+                    timeaxislabel='hh:mm:ss' ## was mm:ss for some reason?
 
                 self.timeaxis = SupportClasses.TimeAxisHour(orientation='bottom',linkView=self.p_ampl)
                 self.timeaxis.setLabel('Time', units=timeaxislabel)
@@ -1144,7 +1148,8 @@ class AviaNZ(QMainWindow):
                 if np.shape(np.shape(self.audiodata))[0] > 1:
                     self.audiodata = self.audiodata[:, 0]
                 self.datalength = np.shape(self.audiodata)[0]
-                print "Length of file is ", float(self.datalength) / self.sampleRate, " seconds (", self.datalength, "samples) loaded from ", float(self.fileLength) / self.sampleRate, "seconds (", self.fileLength, " samples) with sample rate ",self.sampleRate, " Hz."
+                self.datalengthSec = float(self.datalength) / self.sampleRate
+                print "Length of file is ", self.datalengthSec, " seconds (", self.datalength, "samples) loaded from ", float(self.fileLength) / self.sampleRate, "seconds (", self.fileLength, " samples) with sample rate ",self.sampleRate, " Hz."
 
                 if name is not None: # i.e. starting a new file, not next section
                     if self.datalength != self.fileLength:
@@ -1211,14 +1216,14 @@ class AviaNZ(QMainWindow):
 
                 # Set the window size
                 self.windowSize = self.config['windowWidth']
-                self.widthWindow.setRange(0.5, float(len(self.audiodata))/self.sampleRate)
+                self.widthWindow.setRange(0.5, self.datalengthSec)
     
                 # Reset it if the file is shorter than the window
-                if float(len(self.audiodata))/self.sampleRate < self.windowSize:
-                    self.windowSize = float(len(self.audiodata))/self.sampleRate
+                if self.datalengthSec < self.windowSize:
+                    self.windowSize = self.datalengthSec
                 self.widthWindow.setValue(self.windowSize)
     
-                self.totalTime = self.convertMillisecs((float(self.datalength)/self.sampleRate)*1000)
+                self.totalTime = self.convertMillisecs(1000*self.datalengthSec)
     
                 # Load the file for playback as well, and connect up the listeners for it
                 self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(self.filename))
@@ -1577,7 +1582,7 @@ class AviaNZ(QMainWindow):
         """ Draws the main amplitude and spectrogram plots and any segments on them.
         Has to do some work to get the axis labels correct.
         """
-        self.amplPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
+        self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=self.datalength,endpoint=True),self.audiodata)
         self.timeaxis.setLabel('')
         self.specPlot.setImage(self.sg)
         self.setColourMap(self.config['cmap'])
@@ -2501,7 +2506,7 @@ class AviaNZ(QMainWindow):
     def showFirstPage(self):
         # After the HumanClassify dialogs have closed, need to show the correct data on the screen
         # Returns to the page user started with
-        if self.config['maxFileShow']<self.datalength/self.sampleRate:
+        if self.config['maxFileShow']<self.datalengthSec:
             self.currentFileSection = self.currentPage
             self.prepare5minMove()
             self.next5mins.setEnabled(True)
@@ -3074,7 +3079,7 @@ class AviaNZ(QMainWindow):
                     self.overviewImage.setImage(self.sg)
                     self.specPlot.setImage(self.sg)
                     self.amplPlot.setData(
-                        np.linspace(0.0, float(self.datalength) / self.sampleRate, num=self.datalength, endpoint=True),
+                        np.linspace(0.0, self.datalengthSec, num=self.datalength, endpoint=True),
                         self.audiodata)
                     if hasattr(self,'seg'):
                         self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
@@ -3502,7 +3507,8 @@ class AviaNZ(QMainWindow):
 
     def saveImage(self, imageFile=''):
         import pyqtgraph.exporters as pge
-        exporter = pge.ImageExporter(self.p_spec)
+        exporter = pge.ImageExporter(self.w_spec.scene())
+
         if imageFile=='':
             imageFile = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
         try:
