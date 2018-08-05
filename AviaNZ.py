@@ -369,6 +369,7 @@ class AviaNZ(QMainWindow):
         #self.showAllTick.setChecked(self.config['showAllPages'])
         actionMenu.addAction("Check segments [All segments]",self.humanClassifyDialog1,"Ctrl+1")
         actionMenu.addAction("Check segments [Choose species]",self.humanClassifyDialog2,"Ctrl+2")
+        actionMenu.addAction("Human Review [Choose species]", self.humanReview2)
         actionMenu.addSeparator()
         actionMenu.addAction("Export segments to Excel",self.exportSeg)
         actionMenu.addSeparator()
@@ -2618,6 +2619,7 @@ class AviaNZ(QMainWindow):
 
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
+        print "Correct button"
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
         if len(checkText) > 0:
             if label != checkText:
@@ -2670,6 +2672,133 @@ class AviaNZ(QMainWindow):
         self.box1id = id-1
         self.segmentsToSave = True
         self.humanClassifyNextImage1()
+
+    def humanReview2(self):
+        """ Create the dialog that shows sets of calls to the user for verification.
+        """
+        # Check there are segments to show on this page
+        if not self.config['showAllPages']:
+            if len(self.segments)>0:
+                self.box1id = 0
+                while self.box1id<len(self.segments) and self.listRectanglesa2[self.box1id] is None:
+                    self.box1id += 1
+        if (self.config['showAllPages'] and len(self.segments)==0) or (not self.config['showAllPages'] and (self.box1id == len(self.segments) or len(self.listRectanglesa2)==0)):
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setText("No segments to check")
+            msg.setIconPixmap(QPixmap('img/Owl_warning.png'))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setWindowTitle("No segment")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
+            return
+        self.statusLeft.setText("Checking...")
+
+        if not self.config['showAllPages']:
+            # Get the segments that are in the current page
+            segs = []
+            indices = []
+            for i in range(len(self.segments)):
+                if self.listRectanglesa2[i] is not None:
+                    segs.append([self.segments[i][0]-self.startRead,self.segments[i][1]-self.startRead,-1,-1,self.segments[i][4]])
+                    indices.append(i)
+            names = [item[4] for item in segs]
+            names = [n if n[-1] != '?' else n[:-1] for n in names]
+        else:
+            # Get all of them
+            names = [item[4] for item in self.segments]
+            names = [n if n[-1] != '?' else n[:-1] for n in names]
+        # Make them unique
+        keys = {}
+        for n in names:
+            keys[n] = 1
+        names = keys.keys()
+        self.humanClassifyDialog2a = Dialogs.HumanClassify2a(names)
+
+        if self.humanClassifyDialog2a.exec_() == 1:
+            label = self.humanClassifyDialog2a.getValues()
+            self.indices = []
+            segments = []
+            if not self.config['showAllPages']:
+                # Find the segments that have the right label
+                for ind in range(len(segs)):
+                    if self.segments[ind][4] == label or self.segments[ind][4][:-1] == label:
+                        self.indices.append(ind)
+                        segments.append([segs[ind][0] - self.startRead, segs[i][1] - self.startRead, -1, -1,
+                                     segs[i][4]])
+
+                # Pass those segments to the dialog
+                self.humanReviewDialog2 = Dialogs.HumanReview2Tab(label=label)
+                self.humanReviewDialog2.show()
+                errors = self.humanReviewDialog2.getValues()
+                # If there are errors, get their correct indices and process them
+                if len(errors) > 0:
+                    # Turn these numbers back into indices into self.segments
+                    # The worst naming ever, sorry. There are two sets of indices -- self.indices keeps track of those with the chosen label, while indices is those on the current page!
+                    inderr = []
+                    for error in errors:
+                        inderr.append(indices[self.indices[error]])
+                    outputErrors = []
+                    for error in inderr[-1::-1]:
+                        outputErrors.append(self.segments[error])
+                        self.deleteSegment(error)
+                    self.segmentsToSave = True
+                    if self.config['saveCorrections']:
+                        # Save the errors in a file
+                        file = open(self.filename + '.corrections_' + str(label), 'a')
+                        json.dump(outputErrors, file)
+                        file.close()
+            else:
+                # Sort everything into order
+                sortOrder = sorted(range(len(self.segments)), key=self.segments.__getitem__)
+                self.segments = [self.segments[i] for i in sortOrder]
+                self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
+                self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
+                self.listLabels = [self.listLabels[i] for i in sortOrder]
+                # Loop over the pages of the file
+                for self.currentFileSection in range(self.nFileSections):
+                    self.startRead = self.currentFileSection * self.config['maxFileShow']
+                    # Get the index of the first and last segments on this page
+                    firstSeg = 0
+                    while firstSeg < len(self.segments) and self.segments[firstSeg][0] < self.startRead:
+                        firstSeg += 1
+                    lastSeg = firstSeg
+                    while lastSeg < len(self.segments) and self.segments[lastSeg][0] < (self.currentFileSection + 1) * self.config['maxFileShow']:
+                        lastSeg += 1
+                    self.indices = []
+                    segments = []
+                    # Loop over the segments on this page and find those with the correct label
+                    for ind in range(firstSeg,lastSeg):
+                        if self.segments[ind][4] == label or self.segments[ind][4][:-1] == label:
+                            self.indices.append(ind)
+                            segments.append([self.segments[ind][0]-self.startRead,self.segments[ind][1]-self.startRead,-1,-1,self.segments[ind][4]])
+                    errors = []
+                    # if there are segments on the next page, load it
+                    if len(segments)>0:
+                        self.loadSegment()
+                        self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg,segments,label,self.currentFileSection,self.nFileSections,self.sampleRate, self.config['incr'], self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'])
+                        self.humanClassifyDialog2.exec_()
+                        errors = self.humanClassifyDialog2.getValues()
+                        if len(errors)>0:
+                            inderr = []
+                            for error in errors:
+                                inderr.append(self.indices[error])
+                            outputErrors = []
+                            print "about to delete... ", error, self.segments[error]
+                            print "inderr ", inderr
+                            for error in inderr[-1::-1]:
+                                print error, self.segments[error]
+                                outputErrors.append(self.segments[error])
+                                self.deleteSegment(id=error)
+                            self.segmentsToSave = True
+                            if self.config['saveCorrections']:
+                                # Save the errors in a file
+                                file = open(self.filename + '.corrections_' + str(label), 'a')
+                                json.dump(outputErrors, file)
+                                file.close()
+        # Want to show a page at the end, so make it the first one
+        # self.showFirstPage()
+        self.statusLeft.setText("Ready") #Todo: why updated segments doesn't save when no paging? (short files)
 
     def humanClassifyDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
@@ -2741,7 +2870,7 @@ class AviaNZ(QMainWindow):
                     outputErrors = []
                     for error in inderr[-1::-1]:
                         outputErrors.append(self.segments[error])
-                        self.deleteSegment(error)
+                        self.deleteSegment(error,hr=True)
                     self.segmentsToSave = True
                     if self.config['saveCorrections']:
                         # Save the errors in a file
@@ -2784,9 +2913,12 @@ class AviaNZ(QMainWindow):
                             for error in errors:
                                 inderr.append(self.indices[error])
                             outputErrors = []
+                            print "about to delete... ", error, self.segments[error]
+                            print "inderr ", inderr
                             for error in inderr[-1::-1]:
+                                print error, self.segments[error]
                                 outputErrors.append(self.segments[error])
-                                self.deleteSegment(error)
+                                self.deleteSegment(id=error)
                             self.segmentsToSave = True
                             if self.config['saveCorrections']:
                                 # Save the errors in a file
@@ -2794,7 +2926,7 @@ class AviaNZ(QMainWindow):
                                 json.dump(outputErrors, file)
                                 file.close()
         # Want to show a page at the end, so make it the first one
-        self.showFirstPage()
+        # self.showFirstPage()
         self.statusLeft.setText("Ready") #Todo: why updated segments doesn't save when no paging? (short files)
 
     def showSpectrogramDialog(self):
@@ -3176,15 +3308,18 @@ class AviaNZ(QMainWindow):
                 # newSegmentsDef=self.binary2seg(newSegmentsDef)
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
-            # post process for 'Kiwi' to remove short segments, wind, rain, and use F0 check.
+            # post process to remove short segments, wind, rain, and use F0 check.
+            post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                                              segments=newSegments, species=species)
             if species == "Kiwi":
-                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, species=species)
-                post.short()
+                post.short()    # species specific
                 post.wind()
                 post.rainClick()
-                post.fundamentalFrq()
-                newSegments = post.segments
-
+                post.fundamentalFrq()   # species specific
+            else: # do
+                post.wind()
+                post.rainClick()
+            newSegments = post.segments
             # Save the excel file
             out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=newSegments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
             out.excel()
@@ -3649,14 +3784,14 @@ class AviaNZ(QMainWindow):
 
 # ============
 # Various actions: deleting segments, saving, quitting
-    def deleteSegment(self,id=-1):
+    def deleteSegment(self,id=-1,hr=False):
         """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
         human classify dialogs.
         Deletes the segment that is selected, otherwise does nothing.
         Updates the overview segments as well.
         """
-        #print id, self.box1id, not id
-        if id<0 or not id:
+        # print id, self.box1id, not id
+        if not hr and (id<0 or not id):
             id = self.box1id
 
         if id>-1:
@@ -3691,7 +3826,6 @@ class AviaNZ(QMainWindow):
             del self.listRectanglesa1[id]
             del self.listRectanglesa2[id]
             self.segmentsToSave = True
-            print self.segmentsToSave
             self.box1id = -1
 
     def deleteAll(self):
