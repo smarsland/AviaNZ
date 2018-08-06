@@ -90,15 +90,15 @@ class WaveletSegment:
         else:
             fB=None
         if recall==None and precision==None:
-            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%s \tPrecision=%s \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB)
+            print("TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%s \tPrecision=%s \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB))
         elif recall==None:
-            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%s \tPrecision=%0.2f \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB)
+            print("TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%s \tPrecision=%0.2f \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB))
         elif precision==None:
-            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%s \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB)
+            print("TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%s \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB))
         elif fB==None:
-            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB)
+            print("TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB))
         else:
-            print "TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%0.2f" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB)
+            print("TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%0.2f" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB))
         #print TP, int(T), int(P), recall, precision, ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
         return fB,recall, TP,P-TP,len(annotation)-(P+T-TP), T-TP    # fB, recall, TP, FP, TN, FN
 
@@ -434,7 +434,7 @@ class WaveletSegment:
         for node in nodes:
             testlist = listnodes[:]
             testlist.append(node)
-            print testlist
+            print(testlist)
             detected_c = self.detectCalls(wpFull, self.sampleRate, listnodes=testlist, species=species,trainTest=True)
 
             # update the detections
@@ -524,7 +524,7 @@ class WaveletSegment:
         try:
             wavobj = wavio.read(filename)
         except:
-            print "unsupported file: ", filename
+            print("unsupported file: ", filename)
             pass
         self.sampleRate = wavobj.rate
         self.data = wavobj.data
@@ -555,22 +555,22 @@ def batch(dirName,species,ws,listnodes,train=False,df=False):
             if filename.endswith('.wav'):
                 filename = root + '/' + filename[:-4]
                 if not train:
-                    print "***", filename
+                    print("***", filename)
                     det, tp, fp, tn, fn = ws.waveletSegment_test(filename, listnodes=listnodes, species=species, trainTest=True,df=df)
                     TP+=tp
                     FP+=fp
                     TN+=tn
                     FN+=fn
                 else:
-                    print "***", filename
+                    print("***", filename)
                     nodes = ws.waveletSegment_train(filename, species=species,df=df)
-                    print nodes
+                    print(nodes)
                     nodeList=np.union1d(nodeList, nodes)
     if train:
-        print '----- wavelet nodes for the species', nodeList
+        print('----- wavelet nodes for the species', nodeList)
     else:
-        print "-----TP   FP  TN  FN"
-        print TP, FP, TN, FN
+        print("-----TP   FP  TN  FN")
+        print(TP, FP, TN, FN)
 
 ws=WaveletSegment(wavelet='dmey')
 # batch('Sound Files/test/test', ws, None)
@@ -657,7 +657,7 @@ bittern_nodes=[10,39, 40, 41, 42, 43, 44, 45, 46]
 def test2():
     ws=WaveletSegment(wavelet='dmey')
     listnodes1 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train1')
-    print listnodes1
+    print(listnodes1)
 
 def test():
     ws=WaveletSegment()
@@ -794,7 +794,7 @@ def moretest():
     for node in nodes:
         testlist = listnodes[:]
         testlist.append(node)
-        print testlist
+        print(testlist)
         detected_c = ws.detectCalls(wpFull,node,16000,n=len(data))
         #update the detections
         det=np.maximum.reduce([detected,detected_c])

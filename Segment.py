@@ -422,7 +422,7 @@ class Segment:
         # A sample rate of 16000 and a min fundamental frequency of 100Hz would then therefore suggest reasonably short windows
         minwin = float(self.fs) / minfreq * minperiods
         if minwin > W:
-            print "Extending window width to ", minwin
+            print("Extending window width to ", minwin)
             W = minwin
         # Make life easier, and make W be a function of the spectrogram window width
         W = int(round(W/self.window_width)*self.window_width)
@@ -485,13 +485,13 @@ class Segment:
         if returnSegs:
             ind = np.squeeze(np.where(pitch > minfreq))
             segs = self.identifySegments(ind,notSpec=True)
-            print segs, len(ind), len(pitch)
+            print(segs, len(ind), len(pitch))
             #print segs
-            print W, self.window_width
+            print(W, self.window_width)
             for s in segs:
                s[0] = float(s[0])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr#W / self.window_width
                s[1] = float(s[1])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr#W / self.window_width
-            print segs
+            print(segs)
             return segs, pitch, np.array(starts)
         else:
             return pitch, np.array(starts), minfreq, W
@@ -734,44 +734,44 @@ def showSegs():
     vb7.addItem(im7)
     im7.setImage(10.*np.log10(sg))
 
-    print "===="
-    print s1
+    print("====")
+    print(s1)
     for seg in s1:
         a = pg.LinearRegionItem()
         a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
         vb1.addItem(a, ignoreBounds=True)
 
-    print s2
+    print(s2)
     for seg in s2:
         a = pg.LinearRegionItem()
         a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
         vb2.addItem(a, ignoreBounds=True)
 
-    print s3
+    print(s3)
     for seg in s3:
         a = pg.LinearRegionItem()
         a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
         vb3.addItem(a, ignoreBounds=True)
 
-    print s4
+    print(s4)
     for seg in s4:
         a = pg.LinearRegionItem()
         a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
         vb4.addItem(a, ignoreBounds=True)
 
-    print s5
+    print(s5)
     for seg in s5:
         a = pg.LinearRegionItem()
         a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
         vb5.addItem(a, ignoreBounds=True)
 
-    print s6
+    print(s6)
     for seg in s6:
         a = pg.LinearRegionItem()
         a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
         vb6.addItem(a, ignoreBounds=True)
 
-    print s7
+    print(s7)
     for seg in s7:
         a = pg.LinearRegionItem()
         a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])

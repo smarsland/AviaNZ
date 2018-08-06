@@ -3,8 +3,20 @@
 
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
-from PyQt4.QtCore import *
-from PyQt4.QtGui import *
+try:
+    from PyQt4.QtCore import *
+    pyqt4 = True
+except ImportError as e:
+    pyqt4 = False
+
+if pyqt4:
+    from PyQt4.QtCore import *
+    from PyQt4.QtGui import *
+else:
+#     from PyQt5.QtGui import QIcon, QPixmap
+    from PyQt5.QtWidgets import QAbstractButton
+    from PyQt5.QtCore import QTime, QFile, QIODevice
+    from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat, QAudioDeviceInfo
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -175,7 +187,7 @@ class postProcess:
                     if secs > self.minLen:  # just check duration
                         continue
                     else:
-                        print file, seg, "--> windy"
+                        print(file, seg, "--> windy")
                         newSegments.remove(seg)
         self.segments = newSegments
 
@@ -241,7 +253,7 @@ class postProcess:
                 ind = np.squeeze(np.where(pitch > minfreq))
                 pitch = pitch[ind]
                 if pitch.size == 0:
-                    print file, 'segment ', seg, ' *++ no fundamental freq detected, could be faded kiwi or noise'
+                    print(file, 'segment ', seg, ' *++ no fundamental freq detected, could be faded kiwi or noise')
                     newSegments.remove(seg)
                     continue
                 ind = ind * W / 512
@@ -252,10 +264,10 @@ class postProcess:
 
                 if ind.size < 2:
                     if pitch > 1200 and pitch < 4200:
-                        print file, 'segment ', seg, round(pitch), ' *##kiwi found'
+                        print(file, 'segment ', seg, round(pitch), ' *##kiwi found')
                     else:
-                        print file, 'segment ', seg, round(
-                            pitch), ' *-- fundamental freq is out of kiwi region, could be noise'
+                        print(file, 'segment ', seg, round(
+                            pitch), ' *-- fundamental freq is out of kiwi region, could be noise')
                         newSegments.remove(seg)
                 else:
                     # Get the individual pieces
@@ -263,10 +275,10 @@ class postProcess:
                     count = 0
                     if segs == []:
                         if np.mean(pitch) > 1200 and np.mean(pitch) < 4000:
-                            print file, 'segment ', seg, round(np.mean(pitch)), ' *## kiwi found '
+                            print(file, 'segment ', seg, round(np.mean(pitch)), ' *## kiwi found ')
                         else:
-                            print file, 'segment ', seg, round(
-                                np.mean(pitch)), ' *-- fundamental freq is out of kiwi region, could be noise'
+                            print(file, 'segment ', seg, round(
+                                np.mean(pitch)), ' *-- fundamental freq is out of kiwi region, could be noise')
                             newSegments.remove(seg)
                             continue
                     flag = False
@@ -276,7 +288,7 @@ class postProcess:
                         s[1] = s[1] * sampleRate / float(256)
                         i = np.where((ind > s[0]) & (ind < s[1]))
                         if np.mean(x[i]) > 1200 and np.mean(x[i]) < 4000:
-                            print file, 'segment ', seg, round(np.mean(x[i])), ' *## kiwi found ##'
+                            print(file, 'segment ', seg, round(np.mean(x[i])), ' *## kiwi found ##')
                             flag = True
                             break
                     if not flag:
@@ -586,7 +598,7 @@ class exportSegments:
             try:
                 wb = load_workbook(str(eFile))
             except:
-                print "Unable to open file"  # Does not exist OR no read permissions
+                print("Unable to open file")  # Does not exist OR no read permissions
                 return
         else:
             wb = makeNewWorkbook()
@@ -819,6 +831,60 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
     def mousePressEvent(self, ev):
         super(ClickableRectItem, self).mousePressEvent(ev)
         self.parentWidget().resend(self.mapRectToParent(self.boundingRect()).x())
+
+class ControllableAudio(QAudioOutput):
+    # This links all the PyQt5 audio playback things -
+    # QAudioOutput, QFile, and playback controls
+    format = QAudioFormat()
+    format.setChannelCount(2)
+    format.setSampleRate(48000)
+    format.setSampleSize(16)
+    format.setCodec("audio/pcm")
+    format.setByteOrder(QAudioFormat.LittleEndian)
+    format.setSampleType(QAudioFormat.SignedInt)
+
+    def __init__(self):
+        super(ControllableAudio, self).__init__(self.format)
+        # on this notify, move slider (connected in main file)
+        self.setNotifyInterval(20)
+        self.stateChanged.connect(self.endListener)
+        self.soundFile = QFile()
+
+    def load(self, soundFileName):
+        self.soundFile.setFileName(soundFileName)
+        try:
+            self.soundFile.open(QIODevice.ReadOnly)
+        except Exception as e:
+            print("ERROR opening file: %s" % e)
+
+    def isPlaying(self):
+        return(self.state() == QAudio.ActiveState)
+
+    def endListener(self):
+        if self.state() == QAudio.IdleState:
+            self.stop()
+
+    def pressedPlay(self):
+        if self.state() == QAudio.SuspendedState:
+            self.resume()
+        else:
+            # save starting position in bytes
+            self.startpos = self.soundFile.pos()
+            self.start(self.soundFile)
+
+    def pressedStop(self):
+        self.stop()
+        self.soundFile.seek(self.startpos)
+
+    def playSegmentVer(self):
+        print("TODO")
+
+    def playSegmentHor(self):
+        print("TODO")
+
+    def seekToMs(self, ms):
+        # note: important to specify format correctly!
+        self.soundFile.seek(self.format.bytesForDuration(ms*1000))
 
 class FlowLayout(QtGui.QLayout):
     # This is the flow layout which lays out a set of spectrogram pictures on buttons (for HumanClassify2) as
