@@ -7,10 +7,8 @@ import sys,os
 
 try:
     from PyQt4.QtCore import *
-    print "Using PyQt4"
     pyqt4 = True
 except ImportError as e:
-    print "Using PyQt5"
     pyqt4 = False
 
 if pyqt4:
@@ -231,7 +229,7 @@ class OperatorReviewer(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        print self.name1.text(),self.name2.text()
+        print(self.name1.text(),self.name2.text())
         return [self.name1.text(),self.name2.text()]
 
 #======
@@ -1134,7 +1132,7 @@ class HumanClassify2(QDialog):
         for i in range(len(self.buttons)):
             if self.buttons[i].buttonClicked:
                 self.errors.append(i+self.firstSegment)
-        print self.errors
+        print(self.errors)
 
         # Now find out if there are more segments to check, and remake the buttons, otherwise close
         if len(self.segments) > 0:

@@ -190,8 +190,8 @@ class WaveletFunctions:
         root.
         """
 
-	print("Wavelet Denoising requested, with the following parameters: type %s, threshold %f, maxLevel %d, bandpass %s, wavelet %s, costfn %s" % (thresholdType, threshold, maxLevel, bandpass, wavelet, costfn))
-	import time
+        print("Wavelet Denoising requested, with the following parameters: type %s, threshold %f, maxLevel %d, bandpass %s, wavelet %s, costfn %s" % (thresholdType, threshold, maxLevel, bandpass, wavelet, costfn))
+        import time
         opstartingtime = time.time()
         if data is None:
             data = self.data
@@ -258,7 +258,7 @@ class WaveletFunctions:
 
         if maxLevel is None:
             maxLevel = self.BestLevel(wavelet)
-            print "Best level is ", self.maxLevel
+            print("Best level is ", self.maxLevel)
         else:
             maxLevel = maxLevel
 
