@@ -3391,28 +3391,18 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
         else:
             if self.box1id > -1:
-                # check frequency limits
-                bottom = max(self.minFreq-0.1, self.segments[self.box1id][2] * self.sampleRate / 2.)
+                # check frequency limits, + small buffer bands
+                bottom = max(self.minFreq+0.1, self.segments[self.box1id][2] * self.sampleRate / 2.)
                 top = min(self.segments[self.box1id][3] * self.sampleRate / 2., self.maxFreq-0.1)
 
-                if bottom > 0 and top > 0:
-                    # set segment limits as usual, in ms
-                    start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
-                    stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
-                    self.setPlaySliderLimits(start, stop)
+                print("extracting samples between %d-%d Hz" % (bottom, top))
+                # set segment limits as usual, in ms
+                start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
+                stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
+                self.setPlaySliderLimits(start, stop)
 
-                    # filter the data into a temporary file
-                    self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top, self.audiodata, self.sp)
-
-                    # if platform.system() == 'Darwin':
-                    #     filename = 'temp.wav'
-                    # else:
-                    #     import tempfile
-                    #     f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
-                    #     filename = f.name
-                    # wavio.write(filename, segment, self.sampleRate, scale='dtype-limits', sampwidth=2)
-                else:
-                    self.playSelectedSegment()
+                # filter the data into a temporary file or buffer
+                self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top, self.audiodata, self.sp)
             else:
                 print("Can't play, no segment selected")
 
