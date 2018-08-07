@@ -32,6 +32,8 @@ import SignalProc
 import WaveletFunctions
 import Segment
 
+from time import sleep
+
 import librosa
 
 import math
@@ -40,6 +42,7 @@ import os, json
 import copy
 
 import pywt
+import wavio
 
 # import WaveletSegment
 
@@ -834,7 +837,7 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
 
 class ControllableAudio(QAudioOutput):
     # This links all the PyQt5 audio playback things -
-    # QAudioOutput, QFile, and playback controls
+    # QAudioOutput, QFile, and accepts input from main interfaces
     format = QAudioFormat()
     format.setChannelCount(2)
     format.setSampleRate(48000)
@@ -849,8 +852,15 @@ class ControllableAudio(QAudioOutput):
         self.setNotifyInterval(20)
         self.stateChanged.connect(self.endListener)
         self.soundFile = QFile()
+        self.soundFileTemp = QFile('temp.wav')
+        self.soundFileTemp.open(QIODevice.ReadOnly)
+        self.setBufferSize(1000000)
 
     def load(self, soundFileName):
+        if self.soundFile.isOpen():
+            self.soundFile.close()
+        self.startpos = 0
+
         self.soundFile.setFileName(soundFileName)
         try:
             self.soundFile.open(QIODevice.ReadOnly)
@@ -862,25 +872,35 @@ class ControllableAudio(QAudioOutput):
 
     def endListener(self):
         if self.state() == QAudio.IdleState:
+            # give some time for GUI to catch up and stop
+            sleep(0.2)
+            self.notify.emit()
             self.stop()
 
     def pressedPlay(self):
-        if self.state() == QAudio.SuspendedState:
-            self.resume()
-        else:
-            # save starting position in bytes
-            self.startpos = self.soundFile.pos()
-            self.start(self.soundFile)
+        # save starting position in bytes
+        self.startpos = self.soundFile.pos()
+        self.start(self.soundFile)
 
     def pressedStop(self):
         self.stop()
         self.soundFile.seek(self.startpos)
 
-    def playSegmentVer(self):
-        print("TODO")
+    def filterBand(self, start, stop, lo, hi, audiodata, sp):
+        # takes start-end in ms
+        start = start * self.format.sampleRate() // 1000
+        stop = stop * self.format.sampleRate() // 1000
+        segment = audiodata[start:stop]
+        print("saving samples %d-%d to temp.wav" % (start, stop))
+        segment = sp.bandpassFilter(segment, lo, hi)
+        # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
+        segment = segment.astype('int16') # 16 corresponds to sampwidth=2
+        segment = np.column_stack((segment, segment))
 
-    def playSegmentHor(self):
-        print("TODO")
+        filename = 'temp.wav'
+        print(len(segment) / 48000)
+        wavio.write(filename, segment, self.format.sampleRate(), scale='dtype-limits', sampwidth=2)
+        self.start(self.soundFileTemp)
 
     def seekToMs(self, ms):
         # note: important to specify format correctly!

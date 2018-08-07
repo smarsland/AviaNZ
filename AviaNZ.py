@@ -1216,7 +1216,6 @@ class AviaNZ(QMainWindow):
                 self.totalTime = self.convertMillisecs(1000*self.datalengthSec)
     
                 # Load the file for playback
-                # TODO: this will probably not work with segmented files
                 self.media_obj.load(self.filename)
     
                 # Set the length of the scrollbar.
@@ -1561,7 +1560,7 @@ class AviaNZ(QMainWindow):
         #print self.p_spec.viewRange()[0], self.convertAmpltoSpec(self.convertSpectoAmpl(self.p_spec.viewRange()[0][0])), self.p_ampl.viewRange()[0], self.convertSpectoAmpl(self.p_spec.viewRange()[0][0]), self.convertSpectoAmpl(self.p_spec.viewRange()[0][1]), self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX)
         if self.extra:
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
-        self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
+        # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
         self.pointData.setPos(minX,0)
         self.config['windowWidth'] = self.convertSpectoAmpl(maxX-minX)
@@ -3349,20 +3348,79 @@ class AviaNZ(QMainWindow):
 # ===============
 # Code for playing sounds
     def playVisible(self):
-        """ Listener for button to play the visible area."""
+        """ Listener for button to play the visible area.
+        On PLAY, all three buttons turn to STOPs.
+        """
         if self.media_obj.isPlaying():
             self.stopPlayback()
         else:
-            self.segmentStart = self.playSlider.minimum()
-            self.segmentStop = self.playSlider.maximum()
+            range = self.p_ampl.viewRange()[0]
+            self.setPlaySliderLimits(range[0]*1000, range[1]*1000)
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.media_obj.pressedPlay()
 
+    def playSelectedSegment(self):
+        """ Listener for PlaySegment button.
+        Get selected segment start and end (or return if no segment selected).
+        On PLAY, all three buttons turn to STOPs.
+        """
+        if self.media_obj.isPlaying():
+            self.stopPlayback()
+        else:
+            if self.box1id > -1:
+                start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000 + self.startRead * 1000
+                stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000 + self.startRead * 1000
+
+                self.setPlaySliderLimits(start, stop)
+                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+                self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+                self.media_obj.pressedPlay()
+            else:
+                print("Can't play, no segment selected")
+
+    def playBandLimitedSegment(self):
+        """ Listener for PlayBandlimitedSegment button.
+        Gets the band limits of the segment, bandpass filters, then plays that.
+        Currently uses FIR bandpass filter -- Butterworth is commented out.
+        On PLAY, all three buttons turn to STOPs.
+        """
+        if self.media_obj.isPlaying():
+            self.stopPlayback()
+        else:
+            if self.box1id > -1:
+                # check frequency limits
+                bottom = max(self.minFreq-0.1, self.segments[self.box1id][2] * self.sampleRate / 2.)
+                top = min(self.segments[self.box1id][3] * self.sampleRate / 2., self.maxFreq-0.1)
+
+                if bottom > 0 and top > 0:
+                    # set segment limits as usual, in ms
+                    start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
+                    stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
+                    self.setPlaySliderLimits(start, stop)
+
+                    # filter the data into a temporary file
+                    self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top, self.audiodata, self.sp)
+
+                    # if platform.system() == 'Darwin':
+                    #     filename = 'temp.wav'
+                    # else:
+                    #     import tempfile
+                    #     f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
+                    #     filename = f.name
+                    # wavio.write(filename, segment, self.sampleRate, scale='dtype-limits', sampwidth=2)
+                else:
+                    self.playSelectedSegment()
+            else:
+                print("Can't play, no segment selected")
+
     def stopPlayback(self):
-        """ Controls the play/stop button and calls media_obj to stop playing."""
+        """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
         self.media_obj.pressedStop()
         self.playSlider.setValue(self.segmentStart)
-        self.bar.setValue(self.convertAmpltoSpec(0))
+        self.bar.setValue(self.convertAmpltoSpec(self.segmentStart))
         self.timePlayed.setText(self.convertMillisecs(self.segmentStart) + "/" + self.totalTime)
 
         # Reset all button icons:
@@ -3376,8 +3434,9 @@ class AviaNZ(QMainWindow):
         """
         time = self.media_obj.elapsedUSecs() // 1000 + self.segmentStart # in ms
 
-        # listener for playback finish:
-        if time > min(self.playSlider.maximum(), self.segmentStop):
+        # listener for playback finish. Note small buffer for rounding errors etc
+        if time > (self.segmentStop-10):
+            print("stopped at %d" % self.segmentStop)
             self.stopPlayback()
         else:
             self.playSlider.setValue(time)
@@ -3385,91 +3444,19 @@ class AviaNZ(QMainWindow):
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
             self.bar.setValue(self.convertAmpltoSpec(time / 1000.0 - self.startRead))
 
-    # def barMoved(self, evt):
-    #     "" Listener for when the bar showing playback position moves.
-    #     ""
-    #     self.playSlider.setValue(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
-    #     self.media_obj.seek(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
-
     def setPlaySliderLimits(self, start, end):
-        """ Does what it says.
+        """ Uses start/end in ms, does what it says, and also seeks file position marker.
         """
         self.playSlider.setRange(start + 1000.0 * self.startRead, end + 1000.0 * self.startRead)
         self.segmentStart = self.playSlider.minimum()
         self.segmentStop = self.playSlider.maximum()
         self.media_obj.seekToMs(self.playSlider.minimum())
 
-    def playSelectedSegment(self):
-        """ Listener for PlaySegment button.
-        Get selected segment start and end (or return if no segment selected)
-        This isn't pausable, since it goes back to the beginning. I think it's OK though -- they should be short?
-        """
-        if self.media_obj.isPlaying():
-            # ideally, should stop other playback and start this one
-            # or become a stop button for all.
-            # right now it just stops any other
-            self.stopPlayback()
-        else:
-            if self.box1id > -1:
-                start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000 + self.startRead * 1000
-                stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000 + self.startRead * 1000
-                self.setPlaySliderLimits(start, stop)
-                self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-                self.media_obj.seekToMs(start)
-                self.media_obj.pressedPlay()
-            else:
-                print("Can't play, no segment selected")
-
-    def playFinished2(self):
-        """ Listener for when playback inside a segment stops.
-        """
-        self.media_obj2.stop()
-        self.p_spec.removeItem(self.bar2)
-
-    def playBandLimitedSegment(self):
-        """ Listener for PlayBandlimitedSegment button.
-        Gets the band limits of the segment, bandpass filters, then plays that.
-        Currently uses FIR bandpass filter -- Butterworth is commented out.
-        """
-        start = int((self.listRectanglesa1[self.box1id].getRegion()[0]) * self.sampleRate) + self.startRead
-        stop = int((self.listRectanglesa1[self.box1id].getRegion()[1]) * self.sampleRate) + self.startRead
-        bottom = max(self.minFreq, int(self.segments[self.box1id][2] * self.sampleRate / 2.))
-        top = min(int(self.segments[self.box1id][3] * self.sampleRate / 2.), self.maxFreq)
-
-        if bottom > 0 and top > 0:
-            self.bandLimitedStart = self.convertAmpltoSpec(self.listRectanglesa1[self.box1id].getRegion()[0])
-            data = self.audiodata[start:stop]
-            data = self.sp.bandpassFilter(data, bottom, top)
-            # data = self.sp.ButterworthBandpass(data, self.sampleRate, bottom, top,order=5)
-
-            if platform.system() == 'Darwin':
-                filename = 'temp.wav'
-            else:
-                import tempfile
-                f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
-                filename = f.name
-            data = data.astype('int16')
-            wavio.write(filename, data, self.sampleRate, scale='dtype-limits', sampwidth=2)
-
-            if not hasattr(self, 'bar2'):
-                self.bar2 = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'r', 'width': 2})
-                self.media_obj2 = phonon.Phonon.MediaObject(self)
-                audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
-                phonon.Phonon.createPath(self.media_obj2, audio_output)
-                self.media_obj2.setTickInterval(20)
-                self.media_obj2.tick.connect(self.movePlaySlider2)
-                self.media_obj2.finished.connect(self.playFinished2)
-            self.bar2.setValue(self.bandLimitedStart)
-            self.p_spec.addItem(self.bar2, ignoreBounds=True)
-
-            # Instantiate a Qt media object and prepare it (for audio playback)
-            self.media_obj2.setCurrentSource(phonon.Phonon.MediaSource(filename))
-            self.media_obj2.seek(0)
-            self.media_obj2.play()
-            # f.close()
-            return
-        else:
-            self.playSelectedSegment()
+    # def barMoved(self, evt):
+    #     "" Listener for when the bar showing playback position moves.
+    #     ""
+    #     self.playSlider.setValue(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
+    #     self.media_obj.seek(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
 
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
