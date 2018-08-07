@@ -9,6 +9,7 @@ Sound Files/Noise examples/Noise_10s/*.data
 
 # auto-generated cython sources have to be listed manually here:
 ext/ce_denoise.c
+ext/build/
 
 # Some main config ??
 AviaNZconfig.txt

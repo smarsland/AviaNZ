@@ -15,8 +15,8 @@ if pyqt4:
 else:
 #     from PyQt5.QtGui import QIcon, QPixmap
     from PyQt5.QtWidgets import QAbstractButton
-    from PyQt5.QtCore import QTime, QFile, QIODevice, QBuffer, QDataStream, QByteArray
-    from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat, QAudioDeviceInfo
+    from PyQt5.QtCore import QTime, QFile, QIODevice, QBuffer, QByteArray
+    from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -919,6 +919,13 @@ class ControllableAudio(QAudioOutput):
     def seekToMs(self, ms):
         # note: important to specify format correctly!
         self.soundFile.seek(self.format.bytesForDuration(ms*1000))
+
+    def applyVolSlider(self, value):
+        # passes UI volume nonlinearly
+        # value = QAudio.convertVolume(value / 100, QAudio.LogarithmicVolumeScale, QAudio.LinearVolumeScale)
+        value = (math.exp(value/100)-1)/(math.exp(1)-1)
+        print("setting volume to nonl %s" % value)
+        self.setVolume(value)
 
 class FlowLayout(QtGui.QLayout):
     # This is the flow layout which lays out a set of spectrogram pictures on buttons (for HumanClassify2) as
