@@ -15,7 +15,7 @@ if pyqt4:
 else:
 #     from PyQt5.QtGui import QIcon, QPixmap
     from PyQt5.QtWidgets import QAbstractButton
-    from PyQt5.QtCore import QTime, QFile, QIODevice
+    from PyQt5.QtCore import QTime, QFile, QIODevice, QBuffer, QDataStream, QByteArray
     from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat, QAudioDeviceInfo
 
 import pyqtgraph as pg
@@ -43,6 +43,8 @@ import copy
 
 import pywt
 import wavio
+
+import io
 
 # import WaveletSegment
 
@@ -837,7 +839,7 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
 
 class ControllableAudio(QAudioOutput):
     # This links all the PyQt5 audio playback things -
-    # QAudioOutput, QFile, and accepts input from main interfaces
+    # QAudioOutput, QFile, and input from main interfaces
     format = QAudioFormat()
     format.setChannelCount(2)
     format.setSampleRate(48000)
@@ -852,8 +854,7 @@ class ControllableAudio(QAudioOutput):
         self.setNotifyInterval(20)
         self.stateChanged.connect(self.endListener)
         self.soundFile = QFile()
-        self.soundFileTemp = QFile('temp.wav')
-        self.soundFileTemp.open(QIODevice.ReadOnly)
+        self.tempin = QBuffer()
         self.setBufferSize(1000000)
 
     def load(self, soundFileName):
@@ -884,6 +885,8 @@ class ControllableAudio(QAudioOutput):
 
     def pressedStop(self):
         self.stop()
+        if self.tempin.isOpen():
+            self.tempin.close()
         self.soundFile.seek(self.startpos)
 
     def filterBand(self, start, stop, lo, hi, audiodata, sp):
@@ -891,16 +894,27 @@ class ControllableAudio(QAudioOutput):
         start = start * self.format.sampleRate() // 1000
         stop = stop * self.format.sampleRate() // 1000
         segment = audiodata[start:stop]
-        print("saving samples %d-%d to temp.wav" % (start, stop))
         segment = sp.bandpassFilter(segment, lo, hi)
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
         segment = segment.astype('int16') # 16 corresponds to sampwidth=2
+
+        # double mono sound to get two channels - simplifies reading
         segment = np.column_stack((segment, segment))
 
-        filename = 'temp.wav'
-        print(len(segment) / 48000)
-        wavio.write(filename, segment, self.format.sampleRate(), scale='dtype-limits', sampwidth=2)
-        self.start(self.soundFileTemp)
+        # write filtered output to a BytesIO buffer
+        self.tempout = io.BytesIO()
+        wavio.write(self.tempout, segment, self.format.sampleRate(), scale='dtype-limits', sampwidth=2)
+
+        # copy BytesIO@write to QBuffer@read for playing
+        self.temparr = QByteArray(self.tempout.getvalue())
+        # self.tempout.close()
+        if self.tempin.isOpen():
+            self.tempin.close()
+        self.tempin.setBuffer(self.temparr)
+        self.tempin.open(QIODevice.ReadOnly)
+
+        sleep(0.1)
+        self.start(self.tempin)
 
     def seekToMs(self, ms):
         # note: important to specify format correctly!
