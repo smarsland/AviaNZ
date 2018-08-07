@@ -760,19 +760,6 @@ class AviaNZ(QMainWindow):
         # 23/5/18: Should be fixed
         deleteButton.clicked.connect(self.deleteSegment)
 
-        # Place all these widgets in the Controls dock
-        self.w_controls.addWidget(self.playButton,row=0,col=0)
-        self.w_controls.addWidget(self.playSegButton,row=0,col=1)
-        self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=2)
-        self.w_controls.addWidget(self.timePlayed,row=1,col=0)
-        self.w_controls.addWidget(QLabel("Brightness"),row=2,col=0,colspan=3)
-        self.w_controls.addWidget(self.brightnessSlider,row=3,col=0,colspan=3)
-        self.w_controls.addWidget(QLabel("Contrast"),row=4,col=0,colspan=3)
-        self.w_controls.addWidget(self.contrastSlider,row=5,col=0,colspan=3)
-        self.w_controls.addWidget(deleteButton,row=6,col=0,colspan=3)
-        self.w_controls.addWidget(QLabel('Visible window width (seconds)'),row=7,col=0,colspan=3)
-        self.w_controls.addWidget(self.widthWindow,row=8,col=0,colspan=3)#,colspan=2)
-
         # List to hold the list of files
         self.listFiles = QListWidget(self)
         self.listFiles.setMinimumWidth(150)
@@ -789,17 +776,29 @@ class AviaNZ(QMainWindow):
         self.menuBird2 = self.menuBirdList.addMenu('Other')
         self.fillBirdList()
 
-        # Audio playback
+        # Place all these widgets in the Controls dock
+        self.w_controls.addWidget(self.playButton,row=0,col=0)
+        self.w_controls.addWidget(self.playSegButton,row=0,col=1)
+        self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=2)
+        self.w_controls.addWidget(self.timePlayed,row=1,col=0)
+        self.w_controls.addWidget(QLabel("Brightness"),row=2,col=0,colspan=3)
+        self.w_controls.addWidget(self.brightnessSlider,row=3,col=0,colspan=3)
+        self.w_controls.addWidget(QLabel("Contrast"),row=4,col=0,colspan=3)
+        self.w_controls.addWidget(self.contrastSlider,row=5,col=0,colspan=3)
+        self.w_controls.addWidget(deleteButton,row=6,col=0,colspan=3)
+        self.w_controls.addWidget(QLabel('Visible window width (seconds)'),row=7,col=0,colspan=3)
+        self.w_controls.addWidget(self.widthWindow,row=8,col=0,colspan=3)#,colspan=2)
+
+        # Audio playback - this responds to audio output timer
         self.media_obj.notify.connect(self.movePlaySlider)
 
-        # TODO: Probably have to do this with a QSlider
-        # self.volSlider = phonon.Phonon.VolumeSlider()
-        # self.volSlider.setOrientation(Qt.Horizontal)
+        self.volSlider = QSlider(Qt.Horizontal)
+        self.volSlider.sliderMoved.connect(self.volSliderMoved)
+        self.volSlider.setRange(0,100)
+        self.volSlider.setValue(50)
         # self.volSlider.setGeometry(QtCore.QRect(50, 50, 150, 40))
         # self.volSlider.setFixedWidth(150)
-        # self.volSlider.setMaximumVolume(1.0)
-        # self.volSlider.setAudioOutput(self.audio_output)
-        # self.w_controls.addWidget(self.volSlider,row=1,col=1,colspan=2)
+        self.w_controls.addWidget(self.volSlider,row=1,col=1,colspan=2)
 
         # Make the colours that are used in the interface
         # The dark ones are to draw lines instead of boxes
@@ -3441,6 +3440,10 @@ class AviaNZ(QMainWindow):
         self.segmentStart = self.playSlider.minimum()
         self.segmentStop = self.playSlider.maximum()
         self.media_obj.seekToMs(self.playSlider.minimum())
+
+    def volSliderMoved(self, value):
+        print("setting volume to %d" % value)
+        self.media_obj.applyVolSlider(value)
 
     # def barMoved(self, evt):
     #     "" Listener for when the bar showing playback position moves.

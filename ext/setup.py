@@ -10,3 +10,5 @@ setup(
 		sources=["ce_denoise.pyx", "ce_functions.c"],
 		include_dirs=[numpy.get_include()])]
 )
+
+# installation: python setup.py build_ext -i
