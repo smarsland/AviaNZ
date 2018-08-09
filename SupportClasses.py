@@ -757,6 +757,10 @@ class ShadedRectROI(ShadedROI):
             self.addScaleHandle([1, 0.5], [center[0], 0.5])
             self.addScaleHandle([0.5, 1], [0.5, center[1]])
 
+    # this allows compatibility with LinearRegions:
+    def setHoverBrush(self, *br, **args):
+        pass
+
 class DragViewBox(pg.ViewBox):
     # A normal ViewBox, but with ability to drag the segments
     sigMouseDragged = QtCore.Signal(object,object,object)

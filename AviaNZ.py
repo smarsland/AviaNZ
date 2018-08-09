@@ -1234,21 +1234,6 @@ class AviaNZ(QMainWindow):
         changed state.
         Changes the pyqtgraph MouseMode.
         Also swaps the listeners. """
-        if self.dragRectangles.isChecked():
-            self.p_spec.setMouseMode(pg.ViewBox.RectMode)
-            #try:
-            #    self.p_spec.scene().sigMouseClicked.disconnect()
-            #except Exception:
-            #    pass
-            self.p_spec.sigMouseDragged.connect(self.mouseDragged_spec)
-        else:
-            self.p_spec.setMouseMode(pg.ViewBox.PanMode)
-            try:
-                self.p_spec.sigMouseDragged.disconnect()
-            except Exception:
-                pass
-            #self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
-
         self.config['dragBoxes'] = self.dragRectangles.isChecked()
 
     def dragRectsTransparent(self):
@@ -1342,10 +1327,7 @@ class AviaNZ(QMainWindow):
                     rect.setMovable(False)
         else:
             self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
-            if self.dragRectangles.isChecked():
-                self.p_spec.sigMouseDragged.connect(self.mouseDragged_spec)
-            else:
-                self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
+            self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
             self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
             for rect in self.listRectanglesa1:
                 if rect is not None:
@@ -1537,7 +1519,6 @@ class AviaNZ(QMainWindow):
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.p_spec.setXRange(minX, maxX, padding=0)
 
-        #print self.p_spec.viewRange()[0], self.convertAmpltoSpec(self.convertSpectoAmpl(self.p_spec.viewRange()[0][0])), self.p_ampl.viewRange()[0], self.convertSpectoAmpl(self.p_spec.viewRange()[0][0]), self.convertSpectoAmpl(self.p_spec.viewRange()[0][1]), self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX)
         if self.extra:
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
@@ -1904,7 +1885,6 @@ class AviaNZ(QMainWindow):
 
         # if any box is selected, deselect (wherever clicked)
         if self.box1id>-1:
-            print("deselecting")
             self.deselectSegment(self.box1id)
 
         # if clicked inside scene:
@@ -1912,13 +1892,11 @@ class AviaNZ(QMainWindow):
             mousePoint = self.p_ampl.mapSceneToView(pos)
 
             # if this is the second click and not a box, close the segment
-            # note: can finish segment with either left or right click
             if self.started:
                 # can't finish boxes in ampl plot
                 if self.dragRectangles.isChecked():
                     return
 
-                print("finishing to draw")
                 # remove the drawing box:
                 self.p_spec.removeItem(self.vLine_s)
                 self.p_ampl.removeItem(self.vLine_a)
@@ -1953,7 +1931,6 @@ class AviaNZ(QMainWindow):
             else:
                 # if this is right click (drawing mode):
                 if evt.button() == QtCore.Qt.RightButton:
-                    print("starting to draw")
                     nonebrush = self.ColourNone
                     self.start_ampl_loc = mousePoint.x()
 
@@ -1993,7 +1970,6 @@ class AviaNZ(QMainWindow):
 
                     # User clicked in a segment:
                     if box1id > -1:
-                        print("selecting")
                         # select the segment:
                         self.box1id = box1id
                         self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
@@ -2014,15 +1990,17 @@ class AviaNZ(QMainWindow):
         """ Changes the segment colors and enables playback buttons."""
         self.playSegButton.setEnabled(True)
 
-        self.listRectanglesa1[boxid].setBrush(fn.mkBrush(self.ColourSelected))
-        self.listRectanglesa1[boxid].update()
+        brush = fn.mkBrush(self.ColourSelected)
+        self.listRectanglesa1[boxid].setBrush(brush)
+        self.listRectanglesa2[boxid].setBrush(brush)
+        self.listRectanglesa1[boxid].setHoverBrush(brush)
+        self.listRectanglesa2[boxid].setHoverBrush(brush)
+        # self.listRectanglesa2[boxid].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
         # if it's a rectangle:
         if type(self.listRectanglesa2[boxid]) == self.ROItype:
             self.playBandLimitedSegButton.setEnabled(True)
-            self.listRectanglesa2[boxid].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
-        else:
-            self.listRectanglesa2[boxid].setBrush(fn.mkBrush(self.ColourSelected))
 
+        self.listRectanglesa1[boxid].update()
         self.listRectanglesa2[boxid].update()
 
     def deselectSegment(self, boxid):
@@ -2030,15 +2008,20 @@ class AviaNZ(QMainWindow):
         self.playSegButton.setEnabled(False)
         self.playBandLimitedSegButton.setEnabled(False)
 
-        self.listRectanglesa1[boxid].setBrush(self.prevBoxCol)
-        self.listRectanglesa1[boxid].update()
+        col = self.prevBoxCol
+        col.setAlpha(100)
+        self.listRectanglesa1[boxid].setBrush(fn.mkBrush(col))
+        self.listRectanglesa2[boxid].setBrush(fn.mkBrush(col))
+        col.setAlpha(200)
+        self.listRectanglesa1[boxid].setHoverBrush(fn.mkBrush(col))
+        self.listRectanglesa2[boxid].setHoverBrush(fn.mkBrush(col))
         if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[boxid]) == self.ROItype:
             col = self.prevBoxCol.rgb()
             col = QtGui.QColor(col)
             col.setAlpha(255)
             self.listRectanglesa2[boxid].setPen(col,width=1)
-        else:
-            self.listRectanglesa2[boxid].setBrush(self.prevBoxCol)
+
+        self.listRectanglesa1[boxid].update()
         self.listRectanglesa2[boxid].update()
 
     def mouseClicked_spec(self,evt):
@@ -2050,7 +2033,6 @@ class AviaNZ(QMainWindow):
 
         # if any box is selected, deselect (wherever clicked)
         if self.box1id>-1:
-            print("deselecting")
             self.deselectSegment(self.box1id)
 
         # if clicked inside scene:
@@ -2060,28 +2042,43 @@ class AviaNZ(QMainWindow):
             # if this is the second click, close the segment/box
             # note: can finish segment with either left or right click
             if self.started:
-                print("finishing to draw")
                 # remove the drawing box:
-                self.p_spec.removeItem(self.vLine_s)
+                if not self.dragRectangles.isChecked():
+                    self.p_spec.removeItem(self.vLine_s)
+                    self.p_ampl.scene().sigMouseMoved.disconnect()
                 self.p_ampl.removeItem(self.vLine_a)
                 self.p_ampl.removeItem(self.drawingBox_ampl)
                 self.p_spec.removeItem(self.drawingBox_spec)
+                # disconnect GrowBox listeners, leave the position listener
+                self.p_spec.scene().sigMouseMoved.disconnect()
+                self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
 
+                # Pass either default y coords or box limits:
+                x1 = self.start_ampl_loc
+                x2 = self.convertSpectoAmpl(max(mousePoint.x(), 0.0))
+                # Could add this check if right edge seems dangerous:
+                # endx = min(x2, np.shape(self.sg)[0]+1)
+                if self.dragRectangles.isChecked():
+                    y1 = self.start_spec_y
+                    y2 = mousePoint.y() / np.shape(self.sg)[1]
+                else:
+                    y1 = 0
+                    y2 = 0
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
                 # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
-                    self.addSegment(self.start_ampl_loc, self.convertSpectoAmpl(max(mousePoint.x(),0.0)), species=self.lastSpecies)
+                    self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
                     self.box1id = len(self.segments) - 1
                 elif modifiers == QtCore.Qt.ControlModifier:
-                    self.addSegment(self.start_ampl_loc, self.convertSpectoAmpl(max(mousePoint.x(),0.0)))
+                    self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.box1id = len(self.segments) - 1
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
-                    self.addSegment(self.start_ampl_loc, self.convertSpectoAmpl(max(mousePoint.x(),0.0)))
+                    self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.box1id = len(self.segments) - 1
                     self.fillBirdList()
@@ -2095,17 +2092,23 @@ class AviaNZ(QMainWindow):
             else:
                 # if this is right click (drawing mode):
                 if evt.button() == QtCore.Qt.RightButton:
-                    print("starting to draw")
                     nonebrush = self.ColourNone
                     self.start_ampl_loc = self.convertSpectoAmpl(mousePoint.x())
+                    self.start_spec_y = mousePoint.y() / np.shape(self.sg)[1]
 
                     # start a new box:
                     if self.dragRectangles.isChecked():
-                        # make a box following mouse
-                        pass
+                        # spectrogram mouse follower box:
+                        startpointS = QPointF(mousePoint.x(), mousePoint.y())
+                        endpointS = QPointF(mousePoint.x(), mousePoint.y())
+                        # endpointS = QPointF(self.convertAmpltoSpec(endpoint),y2*np.shape(self.sg)[1])
+
+                        self.drawingBox_spec = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, invertible=True)
+                        self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
+                        self.p_spec.scene().sigMouseMoved.connect(self.GrowBox_spec)
                     # start a new segment:
                     else:
-                        # make a starting red bar
+                        # spectrogram bar and mouse follower:
                         self.vLine_s = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
                         self.p_spec.addItem(self.vLine_s, ignoreBounds=True)
                         self.vLine_s.setPos(mousePoint.x())
@@ -2114,8 +2117,10 @@ class AviaNZ(QMainWindow):
                         self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
                         self.drawingBox_spec.setRegion([mousePoint.x(),mousePoint.x()])
                         self.p_spec.scene().sigMouseMoved.connect(self.GrowBox_spec)
+                        # note - only in segment mode react to movement over ampl plot:
+                        self.p_ampl.scene().sigMouseMoved.connect(self.GrowBox_ampl)
 
-                    # for both - amplitude plot segment:
+                    # for box and segment - amplitude plot bar:
                     self.vLine_a = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
                     self.p_ampl.addItem(self.vLine_a, ignoreBounds=True)
                     self.vLine_a.setPos(self.start_ampl_loc)
@@ -2123,7 +2128,6 @@ class AviaNZ(QMainWindow):
                     self.drawingBox_ampl = pg.LinearRegionItem(brush=nonebrush)
                     self.p_ampl.addItem(self.drawingBox_ampl, ignoreBounds=True)
                     self.drawingBox_ampl.setRegion([self.start_ampl_loc, self.start_ampl_loc])
-                    self.p_ampl.scene().sigMouseMoved.connect(self.GrowBox_ampl)
 
                     self.started = not (self.started)
 
@@ -2149,7 +2153,6 @@ class AviaNZ(QMainWindow):
 
                     # User clicked in a segment:
                     if box1id > -1:
-                        print("selecting")
                         # select the segment:
                         self.box1id = box1id
                         self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
@@ -2165,84 +2168,26 @@ class AviaNZ(QMainWindow):
                         # TODO: pan the view
                         pass
 
+# TODO: if in rect mode you start in ampl plot -> get undefined ys
 
-    def mouseDragged_spec(self, evt1, evt2, evt3):
-        """ Listener for if the user drags in the spectrogram plot.
-        It's a bit simpler than the click ones, since there is less ambiguity.
-        Again, some of the code is a repeat, but kept self-contained for ease. """
-        if self.box1id>-1:
-            # a box is selected
-            self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
-            self.listRectanglesa1[self.box1id].update()
-            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                col = self.prevBoxCol.rgb()
-                col = QtGui.QColor(col)
-                col.setAlpha(255)
-                self.listRectanglesa2[self.box1id].setPen(pg.mkPen(col,width=1))
-            else:
-                self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
-            self.listRectanglesa2[self.box1id].update()
-
-        if self.dragRectangles.isChecked():
-            evt1 = self.p_spec.mapSceneToView(evt1)
-            evt2 = self.p_spec.mapSceneToView(evt2)
-
-            startx = max(min(evt1.x(), evt2.x()),0)
-            endx = min(max(evt1.x(),evt2.x()),np.shape(self.sg)[0]+1)
-
-            # If the user has pressed shift, copy the last species and don't use the context menu
-            modifiers = QtGui.QApplication.keyboardModifiers()
-            if modifiers == QtCore.Qt.ShiftModifier:
-                self.addSegment(self.convertSpectoAmpl(startx), self.convertSpectoAmpl(endx), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1],self.lastSpecies)
-                self.box1id = len(self.segments) - 1
-            elif modifiers == QtCore.Qt.ControlModifier:
-                self.addSegment(self.convertSpectoAmpl(startx), self.convertSpectoAmpl(endx), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1])
-                # Context menu
-                self.box1id = len(self.segments) - 1
-                self.fillBirdList(unsure=True)
-                self.menuBirdList.popup(QPoint(evt3.x(), evt3.y()))
-            else:
-                self.addSegment(self.convertSpectoAmpl(startx), self.convertSpectoAmpl(endx), evt1.y()/np.shape(self.sg)[1], evt2.y()/np.shape(self.sg)[1])
-                # Context menu
-                self.box1id = len(self.segments) - 1
-                self.fillBirdList()
-                self.menuBirdList.popup(QPoint(evt3.x(), evt3.y()))
-
-            self.playSegButton.setEnabled(True)
-            self.playBandLimitedSegButton.setEnabled(True)
-
-            self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
-            self.listRectanglesa1[self.box1id].update()
-            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(None))
-                self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
-            else:
-                self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
-                #self.listRectanglesa2[self.box1id].setPen(None)
-
-            self.listRectanglesa2[self.box1id].update()
-        else:
-            return
-
-    def GrowBox_ampl(self,evt):
+    def GrowBox_ampl(self,pos):
         """ Listener for when a segment is being made in the amplitude plot.
         Makes the blue box that follows the mouse change size. """
-        pos = evt
         if self.p_ampl.sceneBoundingRect().contains(pos):
             mousePoint = self.p_ampl.mapSceneToView(pos)
             self.drawingBox_ampl.setRegion([self.start_ampl_loc, mousePoint.x()])
             self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_ampl_loc), self.convertAmpltoSpec(mousePoint.x())])
 
-    def GrowBox_spec(self, evt):
+    def GrowBox_spec(self, pos):
         """ Listener for when a segment is being made in the spectrogram plot.
         Makes the blue box that follows the mouse change size. """
-        pos = evt
         if self.p_spec.sceneBoundingRect().contains(pos):
             mousePoint = self.p_spec.mapSceneToView(pos)
             self.drawingBox_ampl.setRegion([self.start_ampl_loc, self.convertSpectoAmpl(mousePoint.x())])
             if self.dragRectangles.isChecked():
-                # TODO: making a box
-                pass
+                # making a box
+                posY = mousePoint.y() - self.start_spec_y * np.shape(self.sg)[1]
+                self.drawingBox_spec.setSize([mousePoint.x()-self.convertAmpltoSpec(self.start_ampl_loc), posY])
             else:
                 # making a segment
                 self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_ampl_loc), mousePoint.x()])
