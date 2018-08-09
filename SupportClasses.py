@@ -3,20 +3,10 @@
 
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
-try:
-    from PyQt4.QtCore import *
-    pyqt4 = True
-except ImportError as e:
-    pyqt4 = False
-
-if pyqt4:
-    from PyQt4.QtCore import *
-    from PyQt4.QtGui import *
-else:
 #     from PyQt5.QtGui import QIcon, QPixmap
-    from PyQt5.QtWidgets import QAbstractButton
-    from PyQt5.QtCore import QTime, QFile, QIODevice, QBuffer, QByteArray
-    from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
+from PyQt5.QtWidgets import QAbstractButton
+from PyQt5.QtCore import QTime, QFile, QIODevice, QBuffer, QByteArray
+from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -692,10 +682,11 @@ class TimeAxisHour(pg.AxisItem):
     def __init__(self, *args, **kwargs):
         super(TimeAxisHour, self).__init__(*args, **kwargs)
         self.offset = 0
+        self.setLabel('Time', units='hh:mm:ss')
 
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
-        return [QTime().addSecs(value+self.offset).toString('hh:mm:ss') for value in values]
+        return [QTime(0,0,0).addSecs(value+self.offset).toString('hh:mm:ss') for value in values]
 
     def setOffset(self,offset):
         self.offset = offset
@@ -707,10 +698,11 @@ class TimeAxisMin(pg.AxisItem):
     def __init__(self, *args, **kwargs):
         super(TimeAxisMin, self).__init__(*args, **kwargs)
         self.offset = 0
+        self.setLabel('Time', units='mm:ss')
 
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
-        return [QTime().addSecs(value+self.offset).toString('mm:ss') for value in values]
+        return [QTime(0,0,0).addSecs(value+self.offset).toString('mm:ss') for value in values]
 
     def setOffset(self,offset):
         self.offset = offset
@@ -879,6 +871,7 @@ class ControllableAudio(QAudioOutput):
             self.stop()
 
     def pressedPlay(self):
+        sleep(0.1)
         # save starting position in bytes
         self.startpos = self.soundFile.pos()
         self.start(self.soundFile)
@@ -923,8 +916,7 @@ class ControllableAudio(QAudioOutput):
     def applyVolSlider(self, value):
         # passes UI volume nonlinearly
         # value = QAudio.convertVolume(value / 100, QAudio.LogarithmicVolumeScale, QAudio.LinearVolumeScale)
-        value = (math.exp(value/100)-1)/(math.exp(1)-1)
-        print("setting volume to nonl %s" % value)
+        value = (math.exp(value/50)-1)/(math.exp(2)-1)
         self.setVolume(value)
 
 class FlowLayout(QtGui.QLayout):

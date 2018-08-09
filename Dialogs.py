@@ -5,23 +5,10 @@
 # Since most of them just get user selections, they are mostly just a mess of UI things
 import sys,os
 
-try:
-    from PyQt4.QtCore import *
-    pyqt4 = True
-except ImportError as e:
-    pyqt4 = False
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
 
-if pyqt4:
-    from PyQt4.QtCore import *
-    from PyQt4.QtGui import *
-    #import PyQt4.phonon as phonon
-else:
-    from PyQt5.QtGui import *
-    from PyQt5.QtWidgets import *
-    from PyQt5.QtCore import *
-
-#from PyQt4.QtCore import *
-#from PyQt4.QtGui import *
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
@@ -247,7 +234,7 @@ class Segmentation(QDialog):
         self.algs = QComboBox()
         #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
         self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
-        self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
+        self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.prevAlg = "Default"
         self.undo = QPushButton("Undo")
         self.resLabel = QLabel("Output Resolution (secs)")
@@ -526,7 +513,7 @@ class Denoise(QDialog):
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass", "Median Filter"])
         else:
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass"])
-        self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
+        self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.prevAlg = "Wavelets"
 
         # Wavelet: Depth of tree, threshold type, threshold multiplier, wavelet
@@ -856,7 +843,6 @@ class HumanClassify1(QDialog):
         self.tbox = QLineEdit(self)
         self.tbox.setMaximumWidth(150)
         self.tbox.returnPressed.connect(self.birdTextEntered)
-        #self.connect(self.tbox, SIGNAL('textChanged(QString*)'), self.birdTextEntered)
         self.tbox.setEnabled(False)
 
         #self.close = QPushButton("Done")
@@ -921,24 +907,23 @@ class HumanClassify1(QDialog):
 
     def playSeg(self):  #This is not the right place though
         import wavio
-        import platform
-        if platform.system() == 'Darwin':
-            filename = 'temp.wav'
-        else:
-            import tempfile
-            f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
-            filename = f.name
-        self.audiodata = self.audiodata.astype('int16')
-        wavio.write(filename,self.audiodata,self.sampleRate,scale='dtype-limits',sampwidth=2)
-        import PyQt4.phonon as phonon
-        # Create a media object
-        media_obj = phonon.Phonon.MediaObject(self)
-        audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
-        phonon.Phonon.createPath(media_obj, audio_output)
-        media_obj.setTickInterval(20)
-        media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
-        media_obj.seek(0)
-        media_obj.play()
+        # import platform
+        # if platform.system() == 'Darwin':
+        #     filename = 'temp.wav'
+        # else:
+        #     import tempfile
+        #     f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
+        #     filename = f.name
+        # self.audiodata = self.audiodata.astype('int16')
+        # wavio.write(filename,self.audiodata,self.sampleRate,scale='dtype-limits',sampwidth=2)
+        # # Create a media object
+        # media_obj = phonon.Phonon.MediaObject(self)
+        # audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
+        # phonon.Phonon.createPath(media_obj, audio_output)
+        # media_obj.setTickInterval(20)
+        # media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
+        # media_obj.seek(0)
+        # media_obj.play()
 
     def setImage(self, sg, audiodata, sampleRate, label):
 

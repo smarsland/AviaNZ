@@ -21,23 +21,11 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import sys, os, json, platform, re
-try:
-    from PyQt4.QtCore import *
-    print("Using PyQt4")
-    pyqt4 = True
-except ImportError as e:
-    print("Using PyQt5")
-    pyqt4 = False
 
-if pyqt4:
-    from PyQt4.QtCore import *
-    from PyQt4.QtGui import *
-    import PyQt4.phonon as phonon
-else:
-    from PyQt5.QtGui import QIcon, QPixmap
-    from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox
-    from PyQt5.QtCore import Qt, QDir, QTime, QTimer, QPoint, QPointF, QLocale, QFile, QIODevice
-    from PyQt5.QtMultimedia import QAudio, QAudioOutput
+from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox
+from PyQt5.QtCore import Qt, QDir, QTime, QTimer, QPoint, QPointF, QLocale, QFile, QIODevice
+from PyQt5.QtMultimedia import QAudio, QAudioOutput
 
 import wavio
 import numpy as np
@@ -177,7 +165,6 @@ class AviaNZ(QMainWindow):
         One interesting configuration point is the DOC setting, which hides the more 'research' functions."""
         print("Starting AviaNZ...")
         super(AviaNZ, self).__init__()
-        self.pyqt4 = pyqt4
         self.root = root
         self.extra=True
 
@@ -268,7 +255,6 @@ class AviaNZ(QMainWindow):
 
         self.createMenu()
         self.createFrame()
-        self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.resetStorageArrays()
         if self.CLI:
             self.loadFile(firstFile)
@@ -705,37 +691,25 @@ class AviaNZ(QMainWindow):
         self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
         self.playSegButton.setIconSize(QtCore.QSize(20, 20))
         self.playSegButton.setToolTip("Play selected")
-        #self.connect(self.playSegButton, SIGNAL('clicked()'), self.playSelectedSegment)
         self.playSegButton.clicked.connect(self.playSelectedSegment)
         self.playSegButton.setEnabled(False)
 
         self.playBandLimitedSegButton = QtGui.QToolButton()
         self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
-        self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.setIconSize(QtCore.QSize(20, 20))
-        #self.connect(self.playBandLimitedSegButton, SIGNAL('clicked()'), self.playBandLimitedSegment)
+        self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.clicked.connect(self.playBandLimitedSegment)
         self.playBandLimitedSegButton.setEnabled(False)
 
-        # The slider to show playback position
-        # This is hidden, but controls the moving bar
-        self.playSlider = QSlider(Qt.Horizontal)
-        # self.playSlider.sliderReleased.connect(self.playSliderMoved)
-        self.playSlider.setVisible(False)
-        self.d_spec.addWidget(self.playSlider)
         self.timePlayed = QLabel()
 
-        # A slider to move through the file easily
-        self.scrollSlider = QScrollBar(Qt.Horizontal)
-        self.scrollSlider.valueChanged.connect(self.scroll)
-        self.d_spec.addWidget(self.scrollSlider)
-
-        # The spinbox for changing the width shown in the controls dock
-        self.widthWindow = QDoubleSpinBox()
-        self.widthWindow.setSingleStep(1.0)
-        self.widthWindow.setDecimals(2)
-        self.widthWindow.setValue(self.config['windowWidth'])
-        self.widthWindow.valueChanged[float].connect(self.changeWidth)
+        # Volume control
+        self.volSlider = QSlider(Qt.Horizontal)
+        self.volSlider.sliderMoved.connect(self.volSliderMoved)
+        self.volSlider.setRange(0,100)
+        self.volSlider.setValue(50)
+        self.volIcon = QLabel()
+        self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
 
         # Brightness, and contrast sliders
         self.brightnessSlider = QSlider(Qt.Horizontal)
@@ -754,11 +728,46 @@ class AviaNZ(QMainWindow):
 
         # Delete segment button
         deleteButton = QPushButton("&Delete Current Segment")
-        #self.connect(deleteButton, SIGNAL('clicked()'), self.deleteSegment)
-            # TODO: CHECK THIS!!!
-        # The next line introduces a bug since False gets passed as an argument
-        # 23/5/18: Should be fixed
         deleteButton.clicked.connect(self.deleteSegment)
+
+        # The spinbox for changing the width shown in the controls dock
+        self.widthWindow = QDoubleSpinBox()
+        self.widthWindow.setSingleStep(1.0)
+        self.widthWindow.setDecimals(2)
+        self.widthWindow.setValue(self.config['windowWidth'])
+        self.widthWindow.valueChanged[float].connect(self.changeWidth)
+
+        # Place all these widgets in the Controls dock
+        self.w_controls.addWidget(self.playButton,row=0,col=0)
+        self.w_controls.addWidget(self.playSegButton,row=0,col=1)
+        self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=2)
+        self.w_controls.addWidget(self.timePlayed,row=1,col=0, colspan=3)
+        self.w_controls.addWidget(self.volIcon, row=2, col=0)
+        self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=2)
+        self.w_controls.addWidget(QLabel("Brightness"),row=3,col=0,colspan=3)
+        self.w_controls.addWidget(self.brightnessSlider,row=4,col=0,colspan=3)
+        self.w_controls.addWidget(QLabel("Contrast"),row=5,col=0,colspan=3)
+        self.w_controls.addWidget(self.contrastSlider,row=6,col=0,colspan=3)
+        self.w_controls.addWidget(deleteButton,row=7,col=0,colspan=3)
+        self.w_controls.addWidget(QLabel('Visible window (seconds)'),row=8,col=0,colspan=3)
+        self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=3)
+
+        # Audio playback - this responds to audio output timer
+        self.media_obj.notify.connect(self.movePlaySlider)
+
+
+        # The slider to show playback position
+        # This is hidden, but controls the moving bar
+        self.playSlider = QSlider(Qt.Horizontal)
+        # self.playSlider.sliderReleased.connect(self.playSliderMoved)
+        self.playSlider.setVisible(False)
+        self.d_spec.addWidget(self.playSlider)
+        self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
+
+        # A slider to move through the file easily
+        self.scrollSlider = QScrollBar(Qt.Horizontal)
+        self.scrollSlider.valueChanged.connect(self.scroll)
+        self.d_spec.addWidget(self.scrollSlider)
 
         # List to hold the list of files
         self.listFiles = QListWidget(self)
@@ -775,30 +784,6 @@ class AviaNZ(QMainWindow):
         self.menuBirdList = QMenu()
         self.menuBird2 = self.menuBirdList.addMenu('Other')
         self.fillBirdList()
-
-        # Place all these widgets in the Controls dock
-        self.w_controls.addWidget(self.playButton,row=0,col=0)
-        self.w_controls.addWidget(self.playSegButton,row=0,col=1)
-        self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=2)
-        self.w_controls.addWidget(self.timePlayed,row=1,col=0)
-        self.w_controls.addWidget(QLabel("Brightness"),row=2,col=0,colspan=3)
-        self.w_controls.addWidget(self.brightnessSlider,row=3,col=0,colspan=3)
-        self.w_controls.addWidget(QLabel("Contrast"),row=4,col=0,colspan=3)
-        self.w_controls.addWidget(self.contrastSlider,row=5,col=0,colspan=3)
-        self.w_controls.addWidget(deleteButton,row=6,col=0,colspan=3)
-        self.w_controls.addWidget(QLabel('Visible window width (seconds)'),row=7,col=0,colspan=3)
-        self.w_controls.addWidget(self.widthWindow,row=8,col=0,colspan=3)#,colspan=2)
-
-        # Audio playback - this responds to audio output timer
-        self.media_obj.notify.connect(self.movePlaySlider)
-
-        self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.sliderMoved.connect(self.volSliderMoved)
-        self.volSlider.setRange(0,100)
-        self.volSlider.setValue(50)
-        # self.volSlider.setGeometry(QtCore.QRect(50, 50, 150, 40))
-        # self.volSlider.setFixedWidth(150)
-        self.w_controls.addWidget(self.volSlider,row=1,col=1,colspan=2)
 
         # Make the colours that are used in the interface
         # The dark ones are to draw lines instead of boxes
@@ -1068,9 +1053,6 @@ class AviaNZ(QMainWindow):
             if name is not None:
                 if isinstance(name,str) or isinstance(name,unicode):
                     self.filename = self.dirName+'/'+name
-                elif isinstance(name,QString):
-                    name = os.path.basename(str(name))
-                    self.filename = self.dirName+'/'+ name
                 else:
                     self.filename = str(self.dirName+'/'+name.text())
                 dlg += 1
@@ -1099,13 +1081,11 @@ class AviaNZ(QMainWindow):
                         print("Day time DOC recording")
                         # TODO: And modify the order of the bird list
                     self.startTime = int(self.startTime[:2]) * 3600 + int(self.startTime[2:4]) * 60 + int(self.startTime[4:6])
-                    timeaxislabel='hh:mm:ss'
+                    self.timeaxis = SupportClasses.TimeAxisHour(orientation='bottom',linkView=self.p_ampl)
                 else:
                     self.startTime = 0
-                    timeaxislabel='hh:mm:ss' ## was mm:ss for some reason?
 
-                self.timeaxis = SupportClasses.TimeAxisHour(orientation='bottom',linkView=self.p_ampl)
-                self.timeaxis.setLabel('Time', units=timeaxislabel)
+                self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
                 self.w_spec.addItem(self.timeaxis, row=1, col=1)
                 # This next line is a hack to make the axis update
                 self.changeWidth(self.widthWindow.value())
@@ -1213,6 +1193,7 @@ class AviaNZ(QMainWindow):
                 self.widthWindow.setValue(self.windowSize)
     
                 self.totalTime = self.convertMillisecs(1000*self.datalengthSec)
+                self.timePlayed.setText(self.convertMillisecs(0) + "/" + self.totalTime)
     
                 # Load the file for playback
                 self.media_obj.load(self.filename)
@@ -1975,13 +1956,14 @@ class AviaNZ(QMainWindow):
                     self.box1id = len(self.segments) - 1
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                self.playSegButton.setEnabled(True)
-                self.playBandLimitedSegButton.setEnabled(True)
 
                 self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
                 self.listRectanglesa1[self.box1id].update()
 
+                self.playSegButton.setEnabled(True)
+                # if this is a rectangle box:
                 if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                    self.playBandLimitedSegButton.setEnabled(True)
                     self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
                 else:
                     self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
@@ -2007,10 +1989,12 @@ class AviaNZ(QMainWindow):
                     self.listRectanglesa1[box1id].setBrush(fn.mkBrush(self.ColourSelected))
                     self.listRectanglesa1[box1id].update()
                     self.playSegButton.setEnabled(True)
-                    self.playBandLimitedSegButton.setEnabled(True)
+                    # check if rectangles are enabled:
                     if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[box1id]) == self.ROItype:
+                        self.playBandLimitedSegButton.setEnabled(True)
                         self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
                     else:
+                        self.playBandLimitedSegButton.setEnabled(False)
                         self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
                     self.listRectanglesa2[box1id].update()
@@ -2029,7 +2013,7 @@ class AviaNZ(QMainWindow):
                     self.vLine_a.setPos(self.start_location)
 
                     self.playSegButton.setEnabled(False)
-                    self.playBandLimitedSegButton.setEnabled(True)
+                    self.playBandLimitedSegButton.setEnabled(False)
                     brush = self.ColourNone
                     self.drawingBox_ampl = pg.LinearRegionItem(brush=brush)
                     self.p_ampl.addItem(self.drawingBox_ampl, ignoreBounds=True)
@@ -2105,11 +2089,11 @@ class AviaNZ(QMainWindow):
                         self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
 
                     self.playSegButton.setEnabled(True)
-                    self.playBandLimitedSegButton.setEnabled(True)
 
                     self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
                     self.listRectanglesa1[self.box1id].update()
                     if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                        self.playBandLimitedSegButton.setEnabled(True)
                         self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
                     else:
                         self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
@@ -2963,7 +2947,9 @@ class AviaNZ(QMainWindow):
                     depth = None
                 else:
                     depth = int(str(depth))
+                print(self.audiodata)
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
+                print(self.audiodata)
             elif str(alg) == "Wavelets" and self.DOC==True:
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata)
 
@@ -3357,7 +3343,7 @@ class AviaNZ(QMainWindow):
             self.setPlaySliderLimits(range[0]*1000, range[1]*1000)
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.media_obj.pressedPlay()
 
     def playSelectedSegment(self):
@@ -3375,7 +3361,7 @@ class AviaNZ(QMainWindow):
                 self.setPlaySliderLimits(start, stop)
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+                self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.media_obj.pressedPlay()
             else:
                 print("Can't play, no segment selected")
@@ -3391,7 +3377,7 @@ class AviaNZ(QMainWindow):
         else:
             if self.box1id > -1:
                 # check frequency limits, + small buffer bands
-                bottom = max(self.minFreq+0.1, self.segments[self.box1id][2] * self.sampleRate / 2.)
+                bottom = max(0.1, self.minFreq, self.segments[self.box1id][2] * self.sampleRate / 2.)
                 top = min(self.segments[self.box1id][3] * self.sampleRate / 2., self.maxFreq-0.1)
 
                 print("extracting samples between %d-%d Hz" % (bottom, top))
@@ -3399,6 +3385,9 @@ class AviaNZ(QMainWindow):
                 start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
                 stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
                 self.setPlaySliderLimits(start, stop)
+                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+                self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+                self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
 
                 # filter the data into a temporary file or buffer
                 self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top, self.audiodata, self.sp)
@@ -3442,7 +3431,6 @@ class AviaNZ(QMainWindow):
         self.media_obj.seekToMs(self.playSlider.minimum())
 
     def volSliderMoved(self, value):
-        print("setting volume to %d" % value)
         self.media_obj.applyVolSlider(value)
 
     # def barMoved(self, evt):
@@ -3707,6 +3695,11 @@ class AviaNZ(QMainWindow):
             del self.listRectanglesa1[id]
             del self.listRectanglesa2[id]
             self.segmentsToSave = True
+
+            # reset segment playback buttons
+            self.playSegButton.setEnabled(False)
+            self.playBandLimitedSegButton.setEnabled(False)
+            print("saving these segments: ")
             print(self.segmentsToSave)
             self.box1id = -1
 
@@ -3735,6 +3728,11 @@ class AviaNZ(QMainWindow):
             if reply == QMessageBox.Yes:
                 self.removeSegments()
                 self.segmentsToSave = True
+
+            # reset segment playback buttons
+            self.playSegButton.setEnabled(False)
+            self.playBandLimitedSegButton.setEnabled(False)
+            print("saving these segments: ")
 
     def removeSegments(self,delete=True):
         """ Remove all the segments in response to the menu selection, or when a new file is loaded. """

@@ -100,6 +100,6 @@ def ThresholdNodes(self, oldtree, bestleaves, threshold, type):
 			else:
 				ce_thresnode(<double*> np.PyArray_DATA(oldtree[ind].data), <double*> np.PyArray_DATA(newtree[ind].data), length, threshold, 's')
 		else:
-			newtree[ind] = np.zeros(len(oldtree[ind].data))
+			newtree[ind].data = np.zeros(len(oldtree[ind].data))
 
 	return newtree
