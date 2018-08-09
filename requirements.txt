@@ -25,7 +25,6 @@ scikit_learn==0.19.2
 # sudo apt install python3-pyqt5.qtmultimedia
 ## sudo apt install python-qt4
 ## sudo apt install libgstreamer1.0-dev - not sure??
-## sudo apt install python-qt4-phonon
 ## pip uninstall joblib; pip install -Iv joblib=0.11.0
 # pip install git+https://github.com/pyqtgraph/pyqtgraph
 

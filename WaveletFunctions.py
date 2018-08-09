@@ -67,15 +67,14 @@ class WaveletFunctions:
         """ Convert from an integer to the 'ad' representations of the wavelet packets
         The root is 0 (''), the next level are 1 and 2 ('a' and 'd'), the next 3, 4, 5, 6 ('aa','ad','da','dd) and so on
         """
-        import string
         level = int(np.floor(np.log2(i + 1)))
         first = 2 ** level - 1
         if i == 0:
             b = ''
         else:
-            b = np.binary_repr(i - first, width=int(level))
-            b = string.replace(b, '0', 'a', maxreplace=-1)
-            b = string.replace(b, '1', 'd', maxreplace=-1)
+            b = np.binary_repr(int(i) - first, width=int(level))
+            b = b.replace('0', 'a')
+            b = b.replace('1', 'd')
         return b
 
     def BestTree(self,wp,threshold,costfn='threshold'):
@@ -165,11 +164,12 @@ class WaveletFunctions:
         while level > 0:
             first = 2 ** level - 1
             while working[0] >= first:
-                # Note this is Python2!
-                # And also that it assumes that the whole list is backwards
-                parent = (working[0] - 1) / 2
+                # Note that it assumes that the whole list is backwards
+                parent = (working[0] - 1) // 2
                 p = self.ConvertWaveletNodeName(parent)
+
                 new_wp[p].data = pywt.idwt(new_wp[self.ConvertWaveletNodeName(working[1])].data,new_wp[self.ConvertWaveletNodeName(working[0])].data, wavelet)[:len(new_wp[p].data)]
+
                 # Delete these two nodes from working
                 working = np.delete(working, 1)
                 working = np.delete(working, 0)
@@ -225,23 +225,12 @@ class WaveletFunctions:
         # pywavelet makes the whole tree. So if you don't give it blanks from places where you don't want the values in
         # the original tree, it copies the details from wp even though it wasn't asked for them.
         # Reconstruction with the zeros is different to not reconstructing.
-        # print("Checkpoint 2, %.5f" % (time.time() - opstartingtime)) 
-        # new_wp = pywt.WaveletPacket(data=np.zeros(len(wp.data)), wavelet=wp.wavelet, mode='zero', maxlevel=wp.maxlevel)
-
-        # for level in range(wp.maxlevel + 1):
-        #      print(level)
-        #      numpoints = len(wp.get_level(level, 'natural')[0].data)
-        #      print(numpoints)
-        #      for n in new_wp.get_level(level, 'natural'):
-        #          n.data = np.zeros(numpoints)
 
         # Copy thresholded versions of the leaves into the new wpt
         new_wp = ce.ThresholdNodes(self, wp, bestleaves, threshold, thresholdType)
 
         # Reconstruct the internal nodes and the data
-        # print("Checkpoint 3, %.5f" % (time.time() - opstartingtime))
         new_wp = self.reconstructWPT(new_wp,wp.wavelet,bestleaves)
-        # print("Checkpoint 4, %.5f" % (time.time() - opstartingtime))
 
         return new_wp[''].data
 
