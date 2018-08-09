@@ -1897,29 +1897,33 @@ class AviaNZ(QMainWindow):
         If there is a box selected, get its colour.
         If the user has clicked inside the scene, they could be
         (1) clicking in an already existing box -> select it
-        (2) clicking anywhere else, or right-clicking in a box without having started a box -> start a box
+        (2) clicking anywhere else -> start a box
         (3) clicking a second time to finish a box -> create the segment
         """
         pos = evt.scenePos()
 
+        # if any box is selected, deselect (wherever clicked) - or???
         if self.box1id>-1:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
+            self.playSegButton.setEnabled(False)
             if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
                 col = self.prevBoxCol.rgb()
                 col = QtGui.QColor(col)
                 col.setAlpha(255)
                 self.listRectanglesa2[self.box1id].setPen(col,width=1)
+                self.playBandLimitedSegButton.setEnabled(False)
             else:
                 self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
 
             self.listRectanglesa2[self.box1id].update()
 
+        # if clicked inside scene:
         if self.p_ampl.sceneBoundingRect().contains(pos):
             mousePoint = self.p_ampl.mapSceneToView(pos)
 
+            # if this is the second click, close the segment
             if self.started:
-                # This is the second click, so should pay attention and close the segment
                 # Stop the mouse motion connection, remove the drawing boxes
                 if self.started_window=='a':
                     try:
@@ -1940,27 +1944,29 @@ class AviaNZ(QMainWindow):
                 self.p_spec.removeItem(self.drawingBox_spec)
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
+                # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
-                    self.addSegment(self.start_location, max(mousePoint.x(),0.0),species=self.lastSpecies)
+                    self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                     self.box1id = len(self.segments) - 1
                 elif modifiers == QtCore.Qt.ControlModifier:
-                    self.addSegment(self.start_location,max(mousePoint.x(),0.0))
+                    self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
                     self.box1id = len(self.segments) - 1
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
-                    self.addSegment(self.start_location,max(mousePoint.x(),0.0))
+                    self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
                     self.box1id = len(self.segments) - 1
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
 
+                # the new segment is now selected and can be played
                 self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
                 self.listRectanglesa1[self.box1id].update()
-
                 self.playSegButton.setEnabled(True)
+
                 # if this is a rectangle box:
                 if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
                     self.playBandLimitedSegButton.setEnabled(True)
@@ -1971,9 +1977,10 @@ class AviaNZ(QMainWindow):
                 self.listRectanglesa2[self.box1id].update()
 
                 self.started = not(self.started)
+            # if this isn't the second click:
             else:
                 # Check if the user has clicked in a box
-                # Note: Returns the first one it finds
+                # Note: Returns the first one it finds, i.e. the newest
                 box1id = -1
                 for count in range(len(self.listRectanglesa1)):
                     if self.listRectanglesa1[count] is not None:
@@ -1981,8 +1988,8 @@ class AviaNZ(QMainWindow):
                         if x1 <= mousePoint.x() and x2 >= mousePoint.x():
                             box1id = count
 
+                # User clicked in a box (with the left button):
                 if box1id > -1 and not evt.button() == QtCore.Qt.RightButton:
-                    # User clicked in a box (with the left button)
                     # Change colour, store the old colour
                     self.box1id = box1id
                     self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
@@ -1994,37 +2001,51 @@ class AviaNZ(QMainWindow):
                         self.playBandLimitedSegButton.setEnabled(True)
                         self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
                     else:
-                        self.playBandLimitedSegButton.setEnabled(False)
                         self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
 
                     self.listRectanglesa2[box1id].update()
 
+                    # popup dialog
                     modifiers = QtGui.QApplication.keyboardModifiers()
                     if modifiers == QtCore.Qt.ControlModifier:
                         self.fillBirdList(unsure=True)
                     else:
                         self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                # User hasn't clicked in a box (or used the right button), so start a new segment
                 else:
-                    # User hasn't clicked in a box (or used the right button), so start a new segment
-                    self.start_location = mousePoint.x()
+                    self.start_ampl_loc = mousePoint.x()
                     self.vLine_a = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
                     self.p_ampl.addItem(self.vLine_a, ignoreBounds=True)
-                    self.vLine_a.setPos(self.start_location)
+                    self.vLine_a.setPos(self.start_ampl_loc)
 
-                    self.playSegButton.setEnabled(False)
-                    self.playBandLimitedSegButton.setEnabled(False)
                     brush = self.ColourNone
                     self.drawingBox_ampl = pg.LinearRegionItem(brush=brush)
                     self.p_ampl.addItem(self.drawingBox_ampl, ignoreBounds=True)
-                    self.drawingBox_ampl.setRegion([self.start_location, self.start_location])
+                    self.drawingBox_ampl.setRegion([self.start_ampl_loc, self.start_ampl_loc])
                     self.drawingBox_spec = pg.LinearRegionItem(brush=brush)
                     self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
-                    self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_location), self.convertAmpltoSpec(self.start_location)])
+                    self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_ampl_loc), self.convertAmpltoSpec(self.start_ampl_loc)])
                     self.p_ampl.scene().sigMouseMoved.connect(self.GrowBox_ampl)
                     self.started_window = 'a'
 
                     self.started = not (self.started)
+
+    def selectSegment(self, boxid):
+        """ Changes the segment colors and enables playback buttons."""
+        self.playSegButton.setEnabled(True)
+
+        self.listRectanglesa1[boxid].setBrush(fn.mkBrush(self.ColourSelected))
+        self.listRectanglesa1[boxid].update()
+        # if it's a rectangle:
+        if type(self.listRectanglesa2[boxid]) == self.ROItype:
+            self.playBandLimitedSegButton.setEnabled(True)
+            self.listRectanglesa2[boxid].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
+        else:
+            self.listRectanglesa2[boxid].setBrush(fn.mkBrush(self.ColourSelected))
+
+        self.listRectanglesa2[boxid].update()
+
 
     def mouseClicked_spec(self,evt):
         """ Listener for if the user clicks on the spectrogram plot.
@@ -2032,9 +2053,13 @@ class AviaNZ(QMainWindow):
         it is separated for clarity.
         """
         pos = evt.scenePos()
-        print(self.box1id, len(self.listRectanglesa1))
 
+        # if any box is selected, deselect (wherever clicked) - or???
         if self.box1id>-1:
+            print("deselecting")
+            self.playSegButton.setEnabled(False)
+            self.playBandLimitedSegButton.setEnabled(False)
+
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
             if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
@@ -2046,121 +2071,118 @@ class AviaNZ(QMainWindow):
                 self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa2[self.box1id].update()
 
+        # if clicked inside scene:
         if self.p_spec.sceneBoundingRect().contains(pos):
             mousePoint = self.p_spec.mapSceneToView(pos)
 
-            if self.started and not self.dragRectangles.isChecked():
-                # This is the second click, so should pay attention and close the segment
-                # Stop the mouse motion connection, remove the drawing boxes
-                if self.dragRectangles.isChecked():
-                    return
-                else:
-                    if self.started_window == 's':
-                        try:
-                            self.p_spec.scene().sigMouseMoved.disconnect()
-                        except Exception:
-                            pass
-                        self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
-                        self.p_spec.removeItem(self.vLine_s)
-                    else:
-                        try:
-                            self.p_ampl.scene().sigMouseMoved.disconnect()
-                        except Exception:
-                            pass
-                        self.p_ampl.removeItem(self.vLine_a)
-                    self.p_ampl.removeItem(self.drawingBox_ampl)
-                    self.p_spec.removeItem(self.drawingBox_spec)
-                    # If the user has pressed shift, copy the last species and don't use the context menu
-                    modifiers = QtGui.QApplication.keyboardModifiers()
-                    if modifiers == QtCore.Qt.ShiftModifier:
-                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(),0.0)), species=self.lastSpecies)
-                        self.box1id = len(self.segments) - 1
-                    elif modifiers == QtCore.Qt.ControlModifier:
-                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(),0.0)))
-                        # Context menu
-                        self.box1id = len(self.segments) - 1
-                        self.fillBirdList(unsure=True)
-                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                    else:
-                        self.addSegment(self.start_location, self.convertSpectoAmpl(max(mousePoint.x(),0.0)))
-                        # Context menu
-                        self.box1id = len(self.segments) - 1
-                        self.fillBirdList()
-                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+            # if this is the second click, close the segment
+            # note: can finish segment with either left or right click
+            if self.started:
+                print("finishing to draw")
+                # remove the drawing box:
+                self.p_spec.removeItem(self.vLine_s)
+                self.p_ampl.removeItem(self.vLine_a)
+                self.p_ampl.removeItem(self.drawingBox_ampl)
+                self.p_spec.removeItem(self.drawingBox_spec)
 
-                    self.playSegButton.setEnabled(True)
-
-                    self.listRectanglesa1[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
-                    self.listRectanglesa1[self.box1id].update()
-                    if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                        self.playBandLimitedSegButton.setEnabled(True)
-                        self.listRectanglesa2[self.box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
-                    else:
-                        self.listRectanglesa2[self.box1id].setBrush(fn.mkBrush(self.ColourSelected))
-
-                    self.listRectanglesa2[self.box1id].update()
-                    self.started = not(self.started)
-            else:
-                # Check if the user has clicked in a box
-                # Note: Returns the first one it finds
-                box1id = -1
-                for count in range(len(self.listRectanglesa2)):
-                    if type(self.listRectanglesa2[count]) == self.ROItype:
-                        x1 = self.listRectanglesa2[count].pos().x()
-                        y1 = self.listRectanglesa2[count].pos().y()
-                        x2 = x1 + self.listRectanglesa2[count].size().x()
-                        y2 = y1 + self.listRectanglesa2[count].size().y()
-                        if x1 <= mousePoint.x() and x2 >= mousePoint.x() and y1 <= mousePoint.y() and y2 >= mousePoint.y():
-                            box1id = count
-                    elif self.listRectanglesa2[count] is not None:
-                        x1, x2 = self.listRectanglesa2[count].getRegion()
-                        if x1 <= mousePoint.x() and x2 >= mousePoint.x():
-                            box1id = count
-
-                if box1id > -1 and not evt.button() == QtCore.Qt.RightButton:
-                    # User clicked in a box (with the left button)
-                    self.box1id = box1id
-                    self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
-                    self.listRectanglesa1[box1id].setBrush(fn.mkBrush(self.ColourSelected))
-                    self.listRectanglesa1[box1id].update()
-                    self.playSegButton.setEnabled(True)
-                    self.playBandLimitedSegButton.setEnabled(True)
-                    if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[box1id]) == self.ROItype:
-                        self.listRectanglesa2[box1id].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
-                    else:
-                        self.listRectanglesa2[box1id].setBrush(fn.mkBrush(self.ColourSelected))
-
-                    self.listRectanglesa2[box1id].update()
-                    modifiers = QtGui.QApplication.keyboardModifiers()
-                    if modifiers == QtCore.Qt.ControlModifier:
-                        self.fillBirdList(unsure=True)
-                    else:
-                        self.fillBirdList()
+                # If the user has pressed shift, copy the last species and don't use the context menu
+                # If they pressed Control, add ? to the names
+                # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
+                modifiers = QtGui.QApplication.keyboardModifiers()
+                if modifiers == QtCore.Qt.ShiftModifier:
+                    self.addSegment(self.start_ampl_loc, self.convertSpectoAmpl(max(mousePoint.x(),0.0)), species=self.lastSpecies)
+                    self.box1id = len(self.segments) - 1
+                elif modifiers == QtCore.Qt.ControlModifier:
+                    self.addSegment(self.start_ampl_loc, self.convertSpectoAmpl(max(mousePoint.x(),0.0)))
+                    # Context menu
+                    self.box1id = len(self.segments) - 1
+                    self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
-                    # User hasn't clicked in a box (or used the right button), so start a new segment
-                    # Note that need to click in the same plot both times.
+                    self.addSegment(self.start_ampl_loc, self.convertSpectoAmpl(max(mousePoint.x(),0.0)))
+                    # Context menu
+                    self.box1id = len(self.segments) - 1
+                    self.fillBirdList()
+                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+
+                # select the new segment/box
+                self.selectSegment(self.box1id)
+                self.started = not(self.started)
+
+            # if this is the first click:
+            else:
+                # if this is right click (drawing mode):
+                if evt.button() == QtCore.Qt.RightButton:
+                    print("starting to draw")
+                    nonebrush = self.ColourNone
+                    # start a new box:
                     if self.dragRectangles.isChecked():
-                        return
+                        # make a box following mouse
+                        pass
+                    # start a new segment:
                     else:
-                        self.start_location = self.convertSpectoAmpl(mousePoint.x())
+                        # make a segment following mouse
                         self.vLine_s = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
                         self.p_spec.addItem(self.vLine_s, ignoreBounds=True)
                         self.vLine_s.setPos(mousePoint.x())
-                        self.playSegButton.setEnabled(False)
-                        self.playBandLimitedSegButton.setEnabled(True)
 
-                        brush = self.ColourNone
-                        self.drawingBox_ampl = pg.LinearRegionItem(brush=brush)
-                        self.p_ampl.addItem(self.drawingBox_ampl, ignoreBounds=True)
-                        self.drawingBox_ampl.setRegion([self.start_location, self.start_location])
-                        self.drawingBox_spec = pg.LinearRegionItem(brush=brush)
+                        self.drawingBox_spec = pg.LinearRegionItem(brush=nonebrush)
                         self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
                         self.drawingBox_spec.setRegion([mousePoint.x(),mousePoint.x()])
                         self.p_spec.scene().sigMouseMoved.connect(self.GrowBox_spec)
-                        self.started_window = 's'
 
-                        self.started = not (self.started)
+                    # for both - amplitude plot segment:
+                    self.start_ampl_loc = self.convertSpectoAmpl(mousePoint.x())
+                    self.vLine_a = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
+                    self.p_ampl.addItem(self.vLine_a, ignoreBounds=True)
+                    self.vLine_a.setPos(self.start_ampl_loc)
+
+                    self.drawingBox_ampl = pg.LinearRegionItem(brush=nonebrush)
+                    self.p_ampl.addItem(self.drawingBox_ampl, ignoreBounds=True)
+                    self.drawingBox_ampl.setRegion([self.start_ampl_loc, self.start_ampl_loc])
+                    self.p_ampl.scene().sigMouseMoved.connect(self.GrowBox_ampl)
+
+                    self.started_window = 's'
+                    self.started = not (self.started)
+
+                # if this is left click (selection mode):
+                else:
+                    # Check if the user has clicked in a box
+                    # Note: Returns the first one it finds, i.e. the newest
+                    box1id = -1
+                    for count in range(len(self.listRectanglesa2)):
+                        if type(self.listRectanglesa2[count]) == self.ROItype:
+                            x1 = self.listRectanglesa2[count].pos().x()
+                            y1 = self.listRectanglesa2[count].pos().y()
+                            x2 = x1 + self.listRectanglesa2[count].size().x()
+                            y2 = y1 + self.listRectanglesa2[count].size().y()
+                            if x1 <= mousePoint.x() and x2 >= mousePoint.x() and y1 <= mousePoint.y() and y2 >= mousePoint.y():
+                                box1id = count
+                                break
+                        elif self.listRectanglesa2[count] is not None:
+                            x1, x2 = self.listRectanglesa2[count].getRegion()
+                            if x1 <= mousePoint.x() and x2 >= mousePoint.x():
+                                box1id = count
+                                break
+
+                    # User clicked in a segment:
+                    if box1id > -1:
+                        print("selecting")
+                        # select the segment:
+                        self.box1id = box1id
+                        self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
+                        self.selectSegment(self.box1id)
+
+                        modifiers = QtGui.QApplication.keyboardModifiers()
+                        if modifiers == QtCore.Qt.ControlModifier:
+                            self.fillBirdList(unsure=True)
+                        else:
+                            self.fillBirdList()
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                    else:
+                        # TODO: pan the view
+                        pass
+
 
     def mouseDragged_spec(self, evt1, evt2, evt3):
         """ Listener for if the user drags in the spectrogram plot.
@@ -2225,8 +2247,8 @@ class AviaNZ(QMainWindow):
         pos = evt
         if self.p_ampl.sceneBoundingRect().contains(pos):
             mousePoint = self.p_ampl.mapSceneToView(pos)
-            self.drawingBox_ampl.setRegion([self.start_location, mousePoint.x()])
-            self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_location), self.convertAmpltoSpec(mousePoint.x())])
+            self.drawingBox_ampl.setRegion([self.start_ampl_loc, mousePoint.x()])
+            self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_ampl_loc), self.convertAmpltoSpec(mousePoint.x())])
 
     def GrowBox_spec(self, evt):
         """ Listener for when a segment is being made in the spectrogram plot.
@@ -2234,8 +2256,8 @@ class AviaNZ(QMainWindow):
         pos = evt
         if self.p_spec.sceneBoundingRect().contains(pos):
             mousePoint = self.p_spec.mapSceneToView(pos)
-            self.drawingBox_ampl.setRegion([self.start_location, self.convertSpectoAmpl(mousePoint.x())])
-            self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_location), mousePoint.x()])
+            self.drawingBox_ampl.setRegion([self.start_ampl_loc, self.convertSpectoAmpl(mousePoint.x())])
+            self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_ampl_loc), mousePoint.x()])
 
     def birdSelected(self,birdname,update=True):
         """ Collects the label for a bird from the context menu and processes it.
@@ -2947,9 +2969,7 @@ class AviaNZ(QMainWindow):
                     depth = None
                 else:
                     depth = int(str(depth))
-                print(self.audiodata)
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
-                print(self.audiodata)
             elif str(alg) == "Wavelets" and self.DOC==True:
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata)
 
