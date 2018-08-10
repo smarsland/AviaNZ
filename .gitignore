@@ -14,5 +14,5 @@ Sound Files/Noise examples/Noise_10s/*.data
 ext/ce_denoise.c
 ext/build/
 
-# Some main config ??
-AviaNZconfig.txt
+# default configs - if this is not distributed
+# AviaNZconfig.txt

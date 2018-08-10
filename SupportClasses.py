@@ -763,25 +763,29 @@ class ShadedRectROI(ShadedROI):
 
 class DragViewBox(pg.ViewBox):
     # A normal ViewBox, but with ability to drag the segments
+    # and also processes keypress events
     sigMouseDragged = QtCore.Signal(object,object,object)
     keyPressed = QtCore.Signal(int)
-    #keyPressed = QtCore.pyqtSignal(int)
 
-    def __init__(self, *args, **kwds):
+    def __init__(self, enableDrag, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
+        self.enableDrag = enableDrag
 
     def mouseDragEvent(self, ev):
-        ## if axis is specified, event will only affect that axis.
-        ev.accept()
-        if self.state['mouseMode'] != pg.ViewBox.RectMode or ev.button() == QtCore.Qt.RightButton:
-            ev.ignore()
+        if self.enableDrag:
+            ## if axis is specified, event will only affect that axis.
+            ev.accept()
+            if self.state['mouseMode'] != pg.ViewBox.RectMode or ev.button() == QtCore.Qt.RightButton:
+                ev.ignore()
 
-        if ev.isFinish():  ## This is the final move in the drag; draw the actual box
-            self.rbScaleBox.hide()
-            self.sigMouseDragged.emit(ev.buttonDownScenePos(ev.button()),ev.scenePos(),ev.screenPos())
+            if ev.isFinish():  ## This is the final move in the drag; draw the actual box
+                self.rbScaleBox.hide()
+                self.sigMouseDragged.emit(ev.buttonDownScenePos(ev.button()),ev.scenePos(),ev.screenPos())
+            else:
+                ## update shape of scale box
+                self.updateScaleBox(ev.buttonDownPos(), ev.pos())
         else:
-            ## update shape of scale box
-            self.updateScaleBox(ev.buttonDownPos(), ev.pos())
+            pass
 
     def keyPressEvent(self,ev):
         # This catches the keypresses and sends out a signal
@@ -1055,3 +1059,4 @@ def splitFile5mins(self, name):
     #     post=postProcess(ws1.data, ws1.sampleRate, det)
     #     # post.detectClicks()
     #     post.eRatioConfd()
+

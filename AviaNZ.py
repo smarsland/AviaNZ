@@ -169,19 +169,16 @@ class AviaNZ(QMainWindow):
         self.extra=True
 
         self.CLI = CLI
-        if configfile is not None:
-            try:
-                self.config = json.load(open(configfile))
-                self.saveConfig = False
-            except:
-                print("Failed to load config file")
-                self.genConfigFile()
-                self.saveConfig = True
-            self.configfile = configfile
-        else:
-            self.genConfigFile()
-            self.saveConfig=True
-            # self.configfile = 'AviaNZconfig.txt'
+        try:
+            print("loading configs from file %s" % configfile)
+            self.config = json.load(open(configfile))
+            self.saveConfig = True
+        except:
+            print("Failed to load config file, using defaults")
+            configfile = 'AviaNZconfig.txt'
+            self.config = json.load(open(configfile))
+            self.saveConfig = False # TODO: revise this with user permissions in mind
+        self.configfile = configfile
 
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
@@ -433,95 +430,15 @@ class AviaNZ(QMainWindow):
 
     def showHelp(self):
         """ Show the user manual (a pdf file)"""
+        # TODO: manual is not distributed as pdf now
         import webbrowser
-        webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
+        # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
     def showCheatSheet(self):
         """ Show the cheat sheet of sample spectrograms (a pdf file)"""
         import webbrowser
         webbrowser.open_new(r'file://' + os.path.realpath('./Docs/CheatSheet.pdf'))
-
-    def genConfigFile(self):
-        """ If the configuration does exists, this generates one with default values for parameters. """
-        print("Generating new config file")
-        self.config = {
-            # Params for spectrogram
-            'window_width': 256,
-            'incr': 128,
-
-            # Params for denoising
-            'maxSearchDepth': 20,
-
-            # Params for segmentation
-            'minSegment': 50,
-            'dirpath': './Sound Files',
-            'secsSave': 60,
-
-            # Param for width in seconds of the main representation
-            'windowWidth': 10.0,
-
-            # Text offset for labels
-            'textoffset': 9,
-
-            # Width of the segment markers in the overview plot (in seconds)
-            'widthOverviewSegment': 10.0,
-
-            # Max length of file to load at one time (in seconds), and overlap with next file
-            'maxFileShow': 300,
-            'fileOverlap': 10,
-
-            # These are the contrast parameters for the spectrogram
-            #'colourStart': 0.25,
-            #'colourEnd': 0.75,
-            'brightness': 50,
-            'contrast': 50,
-
-            # Amount of overlap for 2 segments to be counted as the same
-            # TODO: use this?
-            'overlap_allowed': 5,
-
-            #'BirdButtons1': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)",
-            #                 "Petrel"],
-            #'BirdButtons2': ["Rifleman", "Ruru", "Saddleback", "Silvereye", "Tomtit", "Tui", "Warbler", "Not Bird",
-            #                 "Don't Know", "Other"],
-            #'ListBirdsEntries': ['Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit',
-            #                     'Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover',
-            #                     'Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
-            'BirdList': ["Bellbird", "Bittern", "Cuckoo", "Fantail", "Hihi", "Kakapo", "Kereru", "Kiwi (F)", "Kiwi (M)", "Kiwi", "Petrel","Rifleman", "Ruru", "Saddleback", "Silvereye", "Tomtit", "Tui", "Warbler", "Not Bird", "Don't Know",'Albatross', 'Avocet', 'Blackbird', 'Bunting', 'Chaffinch', 'Egret', 'Gannet', 'Godwit','Gull', 'Kahu', 'Kaka', 'Kea', 'Kingfisher', 'Kokako', 'Lark', 'Magpie', 'Plover','Pukeko', "Rooster" 'Rook', 'Thrush', 'Warbler', 'Whio'],
-
-            'ColourList': ['Grey','Viridis', 'Inferno', 'Plasma', 'Autumn', 'Cool', 'Bone', 'Copper', 'Hot', 'Jet','Thermal','Flame','Yellowy','Bipolar','Spectrum'],
-            # The colours for the segment boxes
-            'ColourSelected': (0, 0, 255, 100), # Blue
-            'ColourNamed': (0, 255, 0, 100), # Green
-            'ColourNone': (255, 0, 0, 100), # Red
-            'ColourPossible': (255, 255, 0, 100), # Yellow
-
-            'cmap': 'Grey',
-
-            # User interface parameters
-            'showAmplitudePlot': True,
-            'showAnnotationOverview': True,
-            'showPointerDetails': True,
-            'readOnly': False,
-            'dragBoxes': False,
-            'transparentBoxes': False,
-            'showListofFiles': True,
-            'invertColourMap': False,
-
-            'showAllPages': True,
-            'saveCorrections': True,
-
-            'operator': 'Stephen',
-            'reviewer': 'Nirosha',
-
-            'fs_start':0,
-            'fs_end':0,
-
-            'window':'Hann'
-        }
-        self.configfile = 'AviaNZconfig.txt'
-        print("Saving config file")
-        json.dump(self.config, open(self.configfile, 'w'))
 
     def createFrame(self):
         """ Creates the main window.
@@ -564,12 +481,12 @@ class AviaNZ(QMainWindow):
         self.p_overview2.setXLink(self.p_overview)
 
         self.w_ampl = pg.GraphicsLayoutWidget()
-        self.p_ampl = self.w_ampl.addViewBox(enableMouse=False,enableMenu=False)
+        self.p_ampl = SupportClasses.DragViewBox(enableMouse=False,enableMenu=False,enableDrag=False)
         self.w_ampl.addItem(self.p_ampl,row=0,col=1)
         self.d_ampl.addWidget(self.w_ampl)
 
         self.w_spec = pg.GraphicsLayoutWidget()
-        self.p_spec = SupportClasses.DragViewBox(enableMouse=False,enableMenu=False)
+        self.p_spec = SupportClasses.DragViewBox(enableMouse=False,enableMenu=False,enableDrag=True)
         self.w_spec.addItem(self.p_spec,row=0,col=1)
         self.d_spec.addWidget(self.w_spec)
 
@@ -807,7 +724,7 @@ class AviaNZ(QMainWindow):
         self.ROItype = type(p_spec_r)
 
         # Listener for key presses
-        #self.connect(self.p_spec, SIGNAL("keyPressed"),self.handleKey)
+        self.p_ampl.keyPressed.connect(self.handleKey)
         self.p_spec.keyPressed.connect(self.handleKey)
 
         # Store the state of the docks in case the user wants to reset it
@@ -860,9 +777,7 @@ class AviaNZ(QMainWindow):
         if ev == Qt.Key_Backspace:
             self.deleteSegment()
         elif ev == Qt.Key_Escape:
-            if self.media_obj.isPlaying():
-                self.media_obj.stop()
-                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+            self.stopPlayback()
 
     def fillBirdList(self,unsure=False):
         """ Sets the contents of the context menu.
@@ -1481,7 +1396,6 @@ class AviaNZ(QMainWindow):
         # widthOverviewSegment is in seconds
         numSegments = int(np.ceil(np.shape(self.sg)[0]/self.convertAmpltoSpec(self.config['widthOverviewSegment'])))
         self.widthOverviewSegment = int(float(np.shape(self.sg)[0])/numSegments)
-        #print "Segs:", numSegments, self.config['widthOverviewSegment'], self.widthOverviewSegment
 
         self.overviewSegments = np.zeros((numSegments,3))
         for i in range(numSegments):
@@ -1538,7 +1452,7 @@ class AviaNZ(QMainWindow):
         self.scrollSlider.setValue(minX)
         self.pointData.setPos(minX,0)
         self.config['windowWidth'] = self.convertSpectoAmpl(maxX-minX)
-        self.saveConfig = True
+        # self.saveConfig = True
         self.timeaxis.update()
         pg.QtGui.QApplication.processEvents()
 
@@ -1563,7 +1477,6 @@ class AviaNZ(QMainWindow):
 
         # If there are segments, show them
         for count in range(len(self.segments)):
-            #print self.segments[count][0], self.segments[count][1],self.segments[count][2],self.segments[count][3],self.segments[count][4]
             self.addSegment(self.segments[count][0], self.segments[count][1],self.segments[count][2],self.segments[count][3],self.segments[count][4],False,count)
 
         # This is the moving bar for the playback
@@ -1755,7 +1668,7 @@ class AviaNZ(QMainWindow):
     def refreshOverviewWith(self, startpoint, endpoint, species, delete=False):
         """Recalculates the overview box colors and refreshes their display.
         To be used when segments are added, deleted or moved."""
-
+        print("refreshing")
         # Work out which overview segment this segment is in (could be more than one)
         # min is to remove possible rounding error
         inds = int(float(self.convertAmpltoSpec(startpoint)) / self.widthOverviewSegment)
@@ -1830,7 +1743,7 @@ class AviaNZ(QMainWindow):
         if show:
             # This is one we want to show
             # Get the name and colour sorted
-            if species is None: # TODO: Use this: or not isinstance(species,str):
+            if species is None or species=="Don't Know":
                 species = "Don't Know"
                 brush = self.ColourNone
             elif species[-1]=='?':
@@ -1890,6 +1803,8 @@ class AviaNZ(QMainWindow):
                 # Add the segment to the data
                 # Increment the time to be correct for the current section of the file
                 self.segments.append([startpoint+self.startRead, endpoint+self.startRead, y1, y2, species])
+            # mark this as the current segment
+            self.box1id = len(self.segments) - 1
         else:
             # Add a None element into the array so that the correct boxids work
             self.listRectanglesa1.append(None)
@@ -1903,6 +1818,7 @@ class AviaNZ(QMainWindow):
         Updates the overview segments as well.
         """
         if id<0 or not id:
+            # delete selected
             id = self.box1id
 
         if id>-1:
@@ -1933,6 +1849,8 @@ class AviaNZ(QMainWindow):
     def selectSegment(self, boxid):
         """ Changes the segment colors and enables playback buttons."""
         self.playSegButton.setEnabled(True)
+        self.box1id = boxid
+        print("selected %d" % self.box1id)
 
         brush = fn.mkBrush(self.ColourSelected)
         self.listRectanglesa1[boxid].setBrush(brush)
@@ -1951,6 +1869,7 @@ class AviaNZ(QMainWindow):
         """ Restores the segment colors and disables playback buttons."""
         self.playSegButton.setEnabled(False)
         self.playBandLimitedSegButton.setEnabled(False)
+        self.box1id = -1
 
         col = self.prevBoxCol
         col.setAlpha(100)
@@ -1959,6 +1878,7 @@ class AviaNZ(QMainWindow):
         col.setAlpha(200)
         self.listRectanglesa1[boxid].setHoverBrush(fn.mkBrush(col))
         self.listRectanglesa2[boxid].setHoverBrush(fn.mkBrush(col))
+        col.setAlpha(100)
         if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[boxid]) == self.ROItype:
             col = self.prevBoxCol.rgb()
             col = QtGui.QColor(col)
@@ -2025,17 +1945,14 @@ class AviaNZ(QMainWindow):
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
-                    self.box1id = len(self.segments) - 1
                 elif modifiers == QtCore.Qt.ControlModifier:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
-                    self.box1id = len(self.segments) - 1
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
-                    self.box1id = len(self.segments) - 1
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
 
@@ -2047,6 +1964,10 @@ class AviaNZ(QMainWindow):
             else:
                 # if this is right click (drawing mode):
                 if evt.button() == QtCore.Qt.RightButton:
+                    # can't finish boxes in ampl plot
+                    if self.dragRectangles.isChecked():
+                        return
+
                     nonebrush = self.ColourNone
                     self.start_ampl_loc = mousePoint.x()
 
@@ -2087,9 +2008,8 @@ class AviaNZ(QMainWindow):
                     # User clicked in a segment:
                     if box1id > -1:
                         # select the segment:
-                        self.box1id = box1id
                         self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
-                        self.selectSegment(self.box1id)
+                        self.selectSegment(box1id)
 
                         # popup dialog
                         modifiers = QtGui.QApplication.keyboardModifiers()
@@ -2148,17 +2068,14 @@ class AviaNZ(QMainWindow):
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
                     self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
-                    self.box1id = len(self.segments) - 1
                 elif modifiers == QtCore.Qt.ControlModifier:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
-                    self.box1id = len(self.segments) - 1
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
-                    self.box1id = len(self.segments) - 1
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
 
@@ -2179,9 +2096,9 @@ class AviaNZ(QMainWindow):
                         # spectrogram mouse follower box:
                         startpointS = QPointF(mousePoint.x(), mousePoint.y())
                         endpointS = QPointF(mousePoint.x(), mousePoint.y())
-                        # endpointS = QPointF(self.convertAmpltoSpec(endpoint),y2*np.shape(self.sg)[1])
 
                         self.drawingBox_spec = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, invertible=True)
+                        self.drawingBox_spec.setBrush(nonebrush)
                         self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
                         self.p_spec.scene().sigMouseMoved.connect(self.GrowBox_spec)
                     # start a new segment:
@@ -2232,9 +2149,8 @@ class AviaNZ(QMainWindow):
                     # User clicked in a segment:
                     if box1id > -1:
                         # select the segment:
-                        self.box1id = box1id
                         self.prevBoxCol = self.listRectanglesa1[box1id].brush.color()
-                        self.selectSegment(self.box1id)
+                        self.selectSegment(box1id)
 
                         modifiers = QtGui.QApplication.keyboardModifiers()
                         if modifiers == QtCore.Qt.ControlModifier:
@@ -2305,7 +2221,7 @@ class AviaNZ(QMainWindow):
                         self.config['BirdList'].insert(0,text)
                     else:
                         self.config['BirdList'].append(text)
-                    self.saveConfig = True
+                    # self.saveConfig = True
 
     def updateText(self, text,segID=None):
         """ When the user sets or changes the name in a segment, update the text and the colour. """
@@ -2633,7 +2549,7 @@ class AviaNZ(QMainWindow):
             if label != checkText:
                 label = str(checkText)
                 self.humanClassifyDialog1.birdTextEntered()
-                self.saveConfig = True
+                # self.saveConfig = True
             #self.humanClassifyDialog1.tbox.setText('')
 
         if label != self.segments[self.box1id][4]:
@@ -3676,7 +3592,6 @@ class AviaNZ(QMainWindow):
             # reset segment playback buttons
             self.playSegButton.setEnabled(False)
             self.playBandLimitedSegButton.setEnabled(False)
-            print("saving these segments: ")
 
     def removeSegments(self,delete=True):
         """ Remove all the segments in response to the menu selection, or when a new file is loaded. """
@@ -3794,7 +3709,7 @@ def mainlauncher(cli, infile, imagefile, command):
         task = first.getValues()
 
         if task == 1:
-            avianz = AviaNZ(configfile='AviaNZconfig.txt',DOC=DOC)
+            avianz = AviaNZ(DOC=DOC)
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==2:
             avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(DOC=DOC)
