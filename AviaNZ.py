@@ -325,6 +325,10 @@ class AviaNZ(QMainWindow):
         self.showOverviewSegsTick.setCheckable(True)
         self.showOverviewSegsTick.setChecked(self.config['showAnnotationOverview'])
 
+        self.showPointerDetails = specMenu.addAction("Show pointer details in spectrogram", self.showPointerDetailsCheck)
+        self.showPointerDetails.setCheckable(True)
+        self.showPointerDetails.setChecked(self.config['showPointerDetails'])
+
         specMenu.addSeparator()
 
         self.dragRectangles = specMenu.addAction("Drag boxes in spectrogram", self.dragRectanglesCheck)
@@ -487,9 +491,9 @@ class AviaNZ(QMainWindow):
 
             'ColourList': ['Grey','Viridis', 'Inferno', 'Plasma', 'Autumn', 'Cool', 'Bone', 'Copper', 'Hot', 'Jet','Thermal','Flame','Yellowy','Bipolar','Spectrum'],
             # The colours for the segment boxes
-            'ColourNone': (0, 0, 255, 100), # Blue
-            'ColourSelected': (0, 255, 0, 100), # Green
-            'ColourNamed': (255, 0, 0, 100), # Red
+            'ColourSelected': (0, 0, 255, 100), # Blue
+            'ColourNamed': (0, 255, 0, 100), # Green
+            'ColourNone': (255, 0, 0, 100), # Red
             'ColourPossible': (255, 255, 0, 100), # Yellow
 
             'cmap': 'Grey',
@@ -497,6 +501,7 @@ class AviaNZ(QMainWindow):
             # User interface parameters
             'showAmplitudePlot': True,
             'showAnnotationOverview': True,
+            'showPointerDetails': True,
             'readOnly': False,
             'dragBoxes': False,
             'transparentBoxes': False,
@@ -770,7 +775,7 @@ class AviaNZ(QMainWindow):
         self.d_spec.addWidget(self.scrollSlider)
 
         # List to hold the list of files
-        self.listFiles = QListWidget(self)
+        self.listFiles = QListWidget()
         self.listFiles.setMinimumWidth(150)
         #self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
@@ -813,6 +818,7 @@ class AviaNZ(QMainWindow):
         self.useFilesCheck()
         self.showOverviewSegsCheck()
         self.dragRectsTransparent()
+        self.showPointerDetailsCheck()
         self.dragRectanglesCheck()
 
         # add statusbar
@@ -1000,15 +1006,16 @@ class AviaNZ(QMainWindow):
             #                              [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
             #                               self.reviewer, -1])
             self.saveSegments()
-            self.previousFile.setTextColor(Qt.red)
+            self.previousFile.setForeground(Qt.red)
         self.previousFile = current
+        if type(current) is self.listitemtype:
+            current = current.text()
         self.resetStorageArrays()
 
         # Reset the media player
         if self.media_obj.isPlaying():
             self.media_obj.stop()
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-
         # Update the file list to show the right one
         i=0
         while self.listOfFiles[i].fileName() != current and i<len(self.listOfFiles)-1:
@@ -1026,7 +1033,7 @@ class AviaNZ(QMainWindow):
                 self.loadFile(current)
             self.fillFileList(current)
             # Show the selected file
-            index = self.listFiles.findItems(os.path.basename(str(current)), Qt.MatchExactly)
+            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
             if len(index) > 0:
                 self.listFiles.setCurrentItem(index[0])
         else:
@@ -1051,10 +1058,7 @@ class AviaNZ(QMainWindow):
             dlg.setWindowIcon(QIcon('img/Avianz.ico'))
             dlg.setWindowTitle('AviaNZ')
             if name is not None:
-                if isinstance(name,str) or isinstance(name,unicode):
-                    self.filename = self.dirName+'/'+name
-                else:
-                    self.filename = str(self.dirName+'/'+name.text())
+                self.filename = self.dirName+'/'+name
                 dlg += 1
 
                 # Create an instance of the Signal Processing class
@@ -1228,6 +1232,15 @@ class AviaNZ(QMainWindow):
             msg.setWindowTitle("Last file")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
+
+    def showPointerDetailsCheck(self):
+        """ Listener for the menuitem that sets if detailed info should be shown when hovering over spectrogram.
+        Turning this off saves lots of CPU performance."""
+        self.config['showPointerDetails'] = self.showPointerDetails.isChecked()
+        if self.showPointerDetails.isChecked():
+            self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
+        else:
+            self.p_spec.scene().sigMouseMoved.disconnect()
 
     def dragRectanglesCheck(self):
         """ Listener for the menuitem that says if the user is dragging rectangles or clicking on the spectrogram has
@@ -1676,26 +1689,30 @@ class AviaNZ(QMainWindow):
             print("segment not found!")
         else:
             if type(sender) == self.ROItype:
+                # update the box visual
                 x1 = self.convertSpectoAmpl(sender.pos()[0])
                 x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
                 self.segments[i][2] = sender.pos()[1]/np.shape(self.sg)[1]
                 self.segments[i][3] = (sender.pos()[1]+sender.size()[1])/np.shape(self.sg)[1]
                 self.listLabels[i].setPos(sender.pos()[0], self.textpos)
             else:
+                # update the segment visual
                 x1 = self.convertSpectoAmpl(sender.getRegion()[0])
                 x2 = self.convertSpectoAmpl(sender.getRegion()[1])
                 self.listLabels[i].setPos(sender.getRegion()[0], self.textpos)
+            # update the amplitude visual
             self.listRectanglesa1[i].setRegion([x1,x2])
             self.segmentsToSave = True
 
-            self.segments[i][0] = x1 + self.startRead
-            #self.segments[i][0] = max(0.0,x1 + self.startRead)
-            #self.segments[i][0] = min(x1 + self.startRead,float(self.fileLength) / self.sampleRate)
+            # update the actual segment list and overview boxes
+            startold = self.segments[i][0]
+            endold = self.segments[i][1]
+            species = self.segments[i][4]
+            self.refreshOverviewWith(startold, endold, species, delete=True)
 
+            self.segments[i][0] = x1 + self.startRead
             self.segments[i][1] = x2 + self.startRead
-            #self.segments[i][1] = max(0.0,x2 + self.startRead)
-            #self.segments[i][1] = min(x2 + self.startRead,float(self.fileLength) / self.sampleRate)
-            #print x1 + self.startRead, float(self.fileLength) / self.sampleRate, self.segments[i]
+            self.refreshOverviewWith(self.segments[i][0], self.segments[i][1], species)
 
     def updateRegion_ampl(self):
         """ This is the listener for when a segment box is changed in the waveform plot.
@@ -1705,25 +1722,76 @@ class AviaNZ(QMainWindow):
         i = 0
         while self.listRectanglesa1[i] != sender and i<len(self.listRectanglesa1):
             i = i+1
-        if i>len(self.listRectanglesa1):
+        if i==len(self.listRectanglesa1):
             print("segment not found!")
         else:
             x1 = self.convertAmpltoSpec(sender.getRegion()[0])
             x2 = self.convertAmpltoSpec(sender.getRegion()[1])
 
-            if self.listRectanglesa2[i] is not None:
-                if type(self.listRectanglesa2[i]) == self.ROItype:
-                    y1 = self.listRectanglesa2[i].pos().y()
-                    y2 = self.listRectanglesa2[i].size().y()
-                    self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
-                    self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2))
-                else:
-                    self.listRectanglesa2[i].setRegion([x1,x2])
-                self.listLabels[i].setPos(x1,self.textpos)
-                self.segmentsToSave = True
+            # if self.listRectanglesa2[i] is not None: - this shouldn't happen anyway
+            if type(self.listRectanglesa2[i]) == self.ROItype:
+                # update the box visual
+                y1 = self.listRectanglesa2[i].pos().y()
+                y2 = self.listRectanglesa2[i].size().y()
+                self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
+                self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2))
+            else:
+                # update the segment visual
+                self.listRectanglesa2[i].setRegion([x1,x2])
+            self.listLabels[i].setPos(x1,self.textpos)
+            self.segmentsToSave = True
+            # how does this update amplitude visual??
 
-                self.segments[i][0] = sender.getRegion()[0] + self.startRead
-                self.segments[i][1] = sender.getRegion()[1] + self.startRead
+            # update the actual segment list and overview boxes
+            startold = self.segments[i][0]
+            endold = self.segments[i][1]
+            species = self.segments[i][4]
+            self.refreshOverviewWith(startold, endold, species, delete=True)
+
+            self.segments[i][0] = sender.getRegion()[0] + self.startRead
+            self.segments[i][1] = sender.getRegion()[1] + self.startRead
+            self.refreshOverviewWith(self.segments[i][0], self.segments[i][1], species)
+
+    def refreshOverviewWith(self, startpoint, endpoint, species, delete=False):
+        """Recalculates the overview box colors and refreshes their display.
+        To be used when segments are added, deleted or moved."""
+
+        # Work out which overview segment this segment is in (could be more than one)
+        # min is to remove possible rounding error
+        inds = int(float(self.convertAmpltoSpec(startpoint)) / self.widthOverviewSegment)
+        inde = min(int(float(self.convertAmpltoSpec(endpoint)) / self.widthOverviewSegment),len(self.overviewSegments)-1)
+        if species == "Don't Know" or type(species) is int:
+            brush = self.ColourNone
+            if delete:
+                self.overviewSegments[inds:inde+1,0] -= 1
+            else:
+                self.overviewSegments[inds:inde+1,0] += 1
+
+        if species[-1] == '?':
+            brush = self.ColourPossible
+            if delete:
+                self.overviewSegments[inds:inde + 1, 2] -= 1
+            else:
+                self.overviewSegments[inds:inde + 1, 2] += 1
+        else:
+            brush = self.ColourNamed
+            if delete:
+                self.overviewSegments[inds:inde + 1, 1] -= 1
+            else:
+                self.overviewSegments[inds:inde + 1, 1] += 1
+
+        # set the colour of these boxes in the overview
+        for box in range(inds, inde + 1):
+            if self.overviewSegments[box,0] > 0:
+                self.SegmentRects[box].setBrush(self.ColourNone)
+            elif self.overviewSegments[box,2] > 0:
+                self.SegmentRects[box].setBrush(self.ColourPossible)
+            elif self.overviewSegments[box,1] > 0:
+                self.SegmentRects[box].setBrush(self.ColourNamed)
+            else:
+                # boxes w/o segments
+                self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+            self.SegmentRects[box].update()
 
     def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=None,saveSeg=True,index=-1):
         """ When a new segment is created, does the work of creating it and connecting its
@@ -1733,6 +1801,7 @@ class AviaNZ(QMainWindow):
         the current window, can assume the other do, but have to save their times correctly.
         If a segment is too long for the current section, truncates it.
         """
+        print("segment added at %d-%d" % (startpoint, endpoint))
         if not saveSeg:
             timeRangeStart = self.startRead
             timeRangeEnd = min(self.startRead + self.lenRead, float(self.fileLength) / self.sampleRate)
@@ -1748,10 +1817,11 @@ class AviaNZ(QMainWindow):
                 show = True
             elif startpoint < timeRangeStart and endpoint >= timeRangeEnd:
                 startpoint = 0
-                print(endpoint, timeRangeStart)
                 endpoint = endpoint - timeRangeStart
                 show = True
             else:
+                # not sure why these shouldn't be shown?
+                print("Warning: a segment was not shown")
                 show = False
         else:
             self.segmentsToSave = True
@@ -1762,44 +1832,14 @@ class AviaNZ(QMainWindow):
             # Get the name and colour sorted
             if species is None: # TODO: Use this: or not isinstance(species,str):
                 species = "Don't Know"
-
-            if species != "Don't Know" and type(species) is not int:
-                # Work out which overview segment this segment is in (could be more than one)
-                inds = int(float(self.convertAmpltoSpec(startpoint))/self.widthOverviewSegment)
-                # min is to remove possible rounding error
-                #print min(int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment),len(self.overviewSegments)), int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment), len(self.overviewSegments)-1
-                inde = min(int(float(self.convertAmpltoSpec(endpoint))/self.widthOverviewSegment),len(self.overviewSegments)-1)
-                # print species
-                if species[-1] == '?':
-                    brush = self.ColourPossible
-                    self.overviewSegments[inds:inde + 1, 2] += 1
-                else:
-                    brush = self.ColourNamed
-                    self.overviewSegments[inds:inde + 1, 1] += 1
-                self.prevBoxCol = brush
-
-                #print len(self.segments), inds, inde, startpoint, self.convertAmpltoSpec(startpoint), len(self.overviewSegments)
-                for box in range(inds, inde + 1):
-                    if self.overviewSegments[box,0] > 0:
-                        self.SegmentRects[box].setBrush(self.ColourNone)
-                    elif self.overviewSegments[box,2] > 0:
-                        self.SegmentRects[box].setBrush(self.ColourPossible)
-                    elif self.overviewSegments[box,1] > 0:
-                        self.SegmentRects[box].setBrush(self.ColourNamed)
-                    else:
-                        self.SegmentRects[box].setBrush(pg.mkBrush('w'))
-            else:
                 brush = self.ColourNone
-                self.prevBoxCol = brush
-                # Work out which overview segment this segment is in (could be more than one)
-                inds = int(float(self.convertAmpltoSpec(startpoint)) / self.widthOverviewSegment)
-                inde = min(int(float(self.convertAmpltoSpec(endpoint)) / self.widthOverviewSegment),len(self.overviewSegments)-1)
-                self.overviewSegments[inds:inde+1,0] += 1
-                # Turn the colour of these segments in the overview
-                for box in range(inds, inde + 1):
-                    self.SegmentRects[box].setBrush(pg.mkBrush('w'))
-                    self.SegmentRects[box].setBrush(self.ColourNone)
-                    self.SegmentRects[box].update()
+            elif species[-1]=='?':
+                brush = self.ColourPossible
+            else:
+                brush = self.ColourNamed
+
+            self.refreshOverviewWith(startpoint, endpoint, species)
+            self.prevBoxCol = brush
 
             # Make sure startpoint and endpoint are in the right order
             if startpoint > endpoint:
@@ -1856,6 +1896,78 @@ class AviaNZ(QMainWindow):
             self.listRectanglesa2.append(None)
             self.listLabels.append(None)
 
+    def deleteSegment(self,id=-1):
+        """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
+        human classify dialogs.
+        Deletes the segment that is selected, otherwise does nothing.
+        Updates the overview segments as well.
+        """
+        if id<0 or not id:
+            id = self.box1id
+
+        if id>-1:
+            print("segment %d deleted" % id)
+            startpoint = self.segments[id][0]-self.startRead
+            endpoint = self.segments[id][1]-self.startRead
+            species = self.segments[id][4]
+
+            self.refreshOverviewWith(startpoint, endpoint, species, delete=True)
+
+            if self.listRectanglesa1[id] is not None:
+                self.p_ampl.removeItem(self.listRectanglesa1[id])
+                self.p_spec.removeItem(self.listRectanglesa2[id])
+                self.p_spec.removeItem(self.listLabels[id])
+            del self.listLabels[id]
+            del self.segments[id]
+            del self.listRectanglesa1[id]
+            del self.listRectanglesa2[id]
+            self.segmentsToSave = True
+
+            # reset segment playback buttons
+            self.playSegButton.setEnabled(False)
+            self.playBandLimitedSegButton.setEnabled(False)
+            print("saving these segments: ")
+            print(self.segmentsToSave)
+            self.box1id = -1
+
+    def selectSegment(self, boxid):
+        """ Changes the segment colors and enables playback buttons."""
+        self.playSegButton.setEnabled(True)
+
+        brush = fn.mkBrush(self.ColourSelected)
+        self.listRectanglesa1[boxid].setBrush(brush)
+        self.listRectanglesa2[boxid].setBrush(brush)
+        self.listRectanglesa1[boxid].setHoverBrush(brush)
+        self.listRectanglesa2[boxid].setHoverBrush(brush)
+        # self.listRectanglesa2[boxid].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
+        # if it's a rectangle:
+        if type(self.listRectanglesa2[boxid]) == self.ROItype:
+            self.playBandLimitedSegButton.setEnabled(True)
+
+        self.listRectanglesa1[boxid].update()
+        self.listRectanglesa2[boxid].update()
+
+    def deselectSegment(self, boxid):
+        """ Restores the segment colors and disables playback buttons."""
+        self.playSegButton.setEnabled(False)
+        self.playBandLimitedSegButton.setEnabled(False)
+
+        col = self.prevBoxCol
+        col.setAlpha(100)
+        self.listRectanglesa1[boxid].setBrush(fn.mkBrush(col))
+        self.listRectanglesa2[boxid].setBrush(fn.mkBrush(col))
+        col.setAlpha(200)
+        self.listRectanglesa1[boxid].setHoverBrush(fn.mkBrush(col))
+        self.listRectanglesa2[boxid].setHoverBrush(fn.mkBrush(col))
+        if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[boxid]) == self.ROItype:
+            col = self.prevBoxCol.rgb()
+            col = QtGui.QColor(col)
+            col.setAlpha(255)
+            self.listRectanglesa2[boxid].setPen(col,width=1)
+
+        self.listRectanglesa1[boxid].update()
+        self.listRectanglesa2[boxid].update()
+
     def mouseMoved(self,evt):
         """ Listener for mouse moves.
         If the user moves the mouse in the spectrogram, print the time, frequency, power for the mouse location. """
@@ -1902,6 +2014,10 @@ class AviaNZ(QMainWindow):
                 self.p_ampl.removeItem(self.vLine_a)
                 self.p_ampl.removeItem(self.drawingBox_ampl)
                 self.p_spec.removeItem(self.drawingBox_spec)
+                # disconnect GrowBox listeners, leave the position listener
+                self.p_ampl.scene().sigMouseMoved.disconnect()
+                self.p_spec.scene().sigMouseMoved.disconnect()
+                self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
 
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
@@ -1985,44 +2101,6 @@ class AviaNZ(QMainWindow):
                     else:
                         # TODO: pan the view
                         pass
-
-    def selectSegment(self, boxid):
-        """ Changes the segment colors and enables playback buttons."""
-        self.playSegButton.setEnabled(True)
-
-        brush = fn.mkBrush(self.ColourSelected)
-        self.listRectanglesa1[boxid].setBrush(brush)
-        self.listRectanglesa2[boxid].setBrush(brush)
-        self.listRectanglesa1[boxid].setHoverBrush(brush)
-        self.listRectanglesa2[boxid].setHoverBrush(brush)
-        # self.listRectanglesa2[boxid].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
-        # if it's a rectangle:
-        if type(self.listRectanglesa2[boxid]) == self.ROItype:
-            self.playBandLimitedSegButton.setEnabled(True)
-
-        self.listRectanglesa1[boxid].update()
-        self.listRectanglesa2[boxid].update()
-
-    def deselectSegment(self, boxid):
-        """ Restores the segment colors and disables playback buttons."""
-        self.playSegButton.setEnabled(False)
-        self.playBandLimitedSegButton.setEnabled(False)
-
-        col = self.prevBoxCol
-        col.setAlpha(100)
-        self.listRectanglesa1[boxid].setBrush(fn.mkBrush(col))
-        self.listRectanglesa2[boxid].setBrush(fn.mkBrush(col))
-        col.setAlpha(200)
-        self.listRectanglesa1[boxid].setHoverBrush(fn.mkBrush(col))
-        self.listRectanglesa2[boxid].setHoverBrush(fn.mkBrush(col))
-        if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[boxid]) == self.ROItype:
-            col = self.prevBoxCol.rgb()
-            col = QtGui.QColor(col)
-            col.setAlpha(255)
-            self.listRectanglesa2[boxid].setPen(col,width=1)
-
-        self.listRectanglesa1[boxid].update()
-        self.listRectanglesa2[boxid].update()
 
     def mouseClicked_spec(self,evt):
         """ Listener for if the user clicks on the spectrogram plot.
@@ -2197,49 +2275,12 @@ class AviaNZ(QMainWindow):
         Has to update the overview segments in case their colour should change.
         Also handles getting the name through a message box if necessary.
         """
+        startpoint = self.segments[self.box1id][0]-self.startRead
+        endpoint = self.segments[self.box1id][1]-self.startRead
         oldname = self.segments[self.box1id][4]
-        # Work out which overview segment this segment is in (could be more than one)
-        inds = int(float(self.convertAmpltoSpec(self.segments[self.box1id][0]-self.startRead)) / self.widthOverviewSegment)
-        # inde = int(float(self.convertAmpltoSpec(self.segments[self.box1id][1])) / self.widthOverviewSegment)
-        inde = min(int(float(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead)) / self.widthOverviewSegment),len(self.overviewSegments) - 1)
 
-        if oldname == "Don't Know":
-            if birdname != "Don't Know":
-                if birdname[-1] == '?':
-                    self.overviewSegments[inds:inde + 1, 0] -= 1
-                    self.overviewSegments[inds:inde + 1, 2] += 1
-                else:
-                    self.overviewSegments[inds:inde + 1, 0] -= 1
-                    self.overviewSegments[inds:inde + 1, 1] += 1
-        elif oldname[-1] == '?':
-            if birdname[-1] != '?':
-                if birdname == "Don't Know":
-                    self.overviewSegments[inds:inde + 1, 2] -= 1
-                    self.overviewSegments[inds:inde + 1, 0] += 1
-                else:
-                    self.overviewSegments[inds:inde + 1, 2] -= 1
-                    self.overviewSegments[inds:inde + 1, 1] += 1
-        else:
-            if birdname == "Don't Know":
-                self.overviewSegments[inds:inde + 1, 1] -= 1
-                self.overviewSegments[inds:inde + 1, 0] += 1
-            elif birdname[-1] == '?':
-                self.overviewSegments[inds:inde + 1, 1] -= 1
-                self.overviewSegments[inds:inde + 1, 2] += 1
-
-        for box in range(inds, inde + 1):
-            if self.overviewSegments[box, 0] > 0:
-                self.SegmentRects[box].setBrush(pg.mkBrush('w'))
-                self.SegmentRects[box].setBrush(self.ColourNone)
-                self.SegmentRects[box].update()
-            elif self.overviewSegments[box, 2] > 0:
-                self.SegmentRects[box].setBrush(self.ColourPossible)
-            elif self.overviewSegments[box, 1] > 0:
-                self.SegmentRects[box].setBrush(pg.mkBrush('w'))
-                self.SegmentRects[box].setBrush(self.ColourNamed)
-                self.SegmentRects[box].update()
-            else:
-                self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+        self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
+        self.refreshOverviewWith(startpoint, endpoint, birdname)
 
         # Now update the text
         if birdname is not 'Other':
@@ -3606,56 +3647,6 @@ class AviaNZ(QMainWindow):
 
 # ============
 # Various actions: deleting segments, saving, quitting
-    def deleteSegment(self,id=-1):
-        """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
-        human classify dialogs.
-        Deletes the segment that is selected, otherwise does nothing.
-        Updates the overview segments as well.
-        """
-        #print id, self.box1id, not id
-        if id<0 or not id:
-            id = self.box1id
-
-        if id>-1:
-            # Work out which overview segment this segment is in (could be more than one) and update it
-            inds = int(float(self.convertAmpltoSpec(self.segments[id][0]-self.startRead))/self.widthOverviewSegment)
-            # print type(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment)), type(len(self.overviewSegments) - 1)
-            inde = min(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment),len(self.overviewSegments) - 1)
-            # print "inde", inde
-
-            if self.segments[id][4] == "Don't Know":
-                self.overviewSegments[inds:inde+1,0] -= 1
-            elif self.segments[id][4][-1] == '?':
-                self.overviewSegments[inds:inde + 1, 2] -= 1
-            else:
-                self.overviewSegments[inds:inde + 1, 1] -= 1
-            for box in range(inds, inde + 1):
-                if self.overviewSegments[box,0] > 0:
-                    self.SegmentRects[box].setBrush(self.ColourNone)
-                elif self.overviewSegments[box,2] > 0:
-                    self.SegmentRects[box].setBrush(self.ColourPossible)
-                elif self.overviewSegments[box,1] > 0:
-                    self.SegmentRects[box].setBrush(self.ColourNamed)
-                else:
-                    self.SegmentRects[box].setBrush(pg.mkBrush('w'))
-
-            if self.listRectanglesa1[id] is not None:
-                self.p_ampl.removeItem(self.listRectanglesa1[id])
-                self.p_spec.removeItem(self.listRectanglesa2[id])
-                self.p_spec.removeItem(self.listLabels[id])
-            del self.listLabels[id]
-            del self.segments[id]
-            del self.listRectanglesa1[id]
-            del self.listRectanglesa2[id]
-            self.segmentsToSave = True
-
-            # reset segment playback buttons
-            self.playSegButton.setEnabled(False)
-            self.playBandLimitedSegButton.setEnabled(False)
-            print("saving these segments: ")
-            print(self.segmentsToSave)
-            self.box1id = -1
-
     def deleteAll(self):
         """ Listener for delete all button.
         Checks if the user meant to do it, then calls removeSegments()
