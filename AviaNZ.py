@@ -328,7 +328,7 @@ class AviaNZ(QMainWindow):
 
         specMenu.addSeparator()
 
-        self.dragRectangles = specMenu.addAction("Drag boxes in spectrogram", self.dragRectanglesCheck)
+        self.dragRectangles = specMenu.addAction("Mark boxes in spectrogram", self.dragRectanglesCheck)
         self.dragRectangles.setCheckable(True)
         self.dragRectangles.setChecked(self.config['dragBoxes'])
 
@@ -776,7 +776,7 @@ class AviaNZ(QMainWindow):
             escape to pause playback """
         if ev == Qt.Key_Backspace:
             self.deleteSegment()
-        elif ev == Qt.Key_Escape:
+        elif ev == Qt.Key_Escape and self.media_obj.isPlaying():
             self.stopPlayback()
 
     def fillBirdList(self,unsure=False):
@@ -3323,7 +3323,7 @@ class AviaNZ(QMainWindow):
 
         # listener for playback finish. Note small buffer for catching up
         if time > (self.segmentStop-50):
-            print("stopped at %d" % time)
+            print("stopped at %d ms" % time)
             self.stopPlayback()
         else:
             self.playSlider.setValue(time)

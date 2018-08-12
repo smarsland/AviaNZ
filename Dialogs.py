@@ -850,6 +850,7 @@ class HumanClassify1(QDialog):
 
         # Audio playback object
         self.media_obj2 = SupportClasses.ControllableAudio()
+        self.media_obj2.notify.connect(self.endListener)
 
         # The layouts
         birds1Layout = QVBoxLayout()
@@ -916,10 +917,17 @@ class HumanClassify1(QDialog):
         self.media_obj2.pressedStop()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
 
+    def endListener(self):
+        time = self.media_obj2.elapsedUSecs() // 1000
+        if time > self.duration:
+            self.stopPlayback()
+
     def setImage(self, sg, audiodata, sampleRate, label):
 
         self.audiodata = audiodata
         self.sampleRate = sampleRate
+        self.duration = len(audiodata) / sampleRate * 1000 # in ms
+        print(self.duration)
 
         sg2 = sg
         if np.shape(sg)[0] < 100:
