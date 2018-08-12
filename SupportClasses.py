@@ -889,7 +889,8 @@ class ControllableAudio(QAudioOutput):
         self.stop()
         if self.tempin.isOpen():
             self.tempin.close()
-        self.soundFile.seek(self.startpos)
+        if self.soundFile.isOpen():
+            self.soundFile.seek(self.startpos)
 
     def filterBand(self, start, stop, lo, hi, audiodata, sp):
         # takes start-end in ms
