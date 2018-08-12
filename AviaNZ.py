@@ -225,7 +225,7 @@ class AviaNZ(QMainWindow):
                 sys.exit()
             else:
                 # pop up a dialog to select file
-                firstFile = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
+                firstFile, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
                 while firstFile == '':
                     msg = QMessageBox()
                     msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
@@ -240,8 +240,8 @@ class AviaNZ(QMainWindow):
                         sys.exit()
 
         # parse firstFile to dir and file parts
-        self.dirName = os.path.dirname(str(firstFile))
-        firstFile = os.path.basename(str(firstFile))
+        self.dirName = os.path.dirname(firstFile)
+        firstFile = os.path.basename(firstFile)
         print("Working dir set to %s" % self.dirName)
         print("Opening file %s" % firstFile)
 
