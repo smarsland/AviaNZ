@@ -1880,6 +1880,7 @@ class AviaNZ(QMainWindow):
             col = self.prevBoxCol.rgb()
             col = QtGui.QColor(col)
             col.setAlpha(255)
+            self.listRectanglesa2[boxid].setBrush(pg.mkBrush(None))
             self.listRectanglesa2[boxid].setPen(col,width=1)
 
         self.listRectanglesa1[boxid].update()
