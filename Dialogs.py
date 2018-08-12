@@ -820,10 +820,10 @@ class HumanClassify1(QDialog):
             self.birds2.append(QRadioButton(item))
         self.birds2.append(QRadioButton('Other'))
 
-        for i in xrange(len(self.birds1)):
+        for i in range(len(self.birds1)):
             self.birds1[i].setEnabled(True)
             self.birds1[i].clicked.connect(self.radioBirdsClicked)
-        for i in xrange(len(self.birds2)):
+        for i in range(len(self.birds2)):
             self.birds2[i].setEnabled(True)
             self.birds2[i].clicked.connect(self.radioBirdsClicked)
 
@@ -848,13 +848,16 @@ class HumanClassify1(QDialog):
         #self.close = QPushButton("Done")
         #self.connect(self.close, SIGNAL("clicked()"), self.accept)
 
+        # Audio playback object
+        self.media_obj2 = SupportClasses.ControllableAudio()
+
         # The layouts
         birds1Layout = QVBoxLayout()
-        for i in xrange(len(self.birds1)):
+        for i in range(len(self.birds1)):
             birds1Layout.addWidget(self.birds1[i])
 
         birds2Layout = QVBoxLayout()
-        for i in xrange(len(self.birds2)):
+        for i in range(len(self.birds2)):
             birds2Layout.addWidget(self.birds2[i])
 
         birdListLayout = QVBoxLayout()
@@ -878,10 +881,7 @@ class HumanClassify1(QDialog):
         self.playButton = QtGui.QToolButton()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.setIconSize(iconSize)
-
-        ## TODO connect activities to volume contrs
         self.playButton.clicked.connect(self.playSeg)
-        ## TODO make sure playing also stops, not loops
 
         vboxBirds = QVBoxLayout()
         vboxBirds.addWidget(self.speciesTop)
@@ -905,25 +905,16 @@ class HumanClassify1(QDialog):
         # print seg
         self.setImage(sg,audiodata,sampleRate,self.label)
 
-    def playSeg(self):  #This is not the right place though
-        import wavio
-        # import platform
-        # if platform.system() == 'Darwin':
-        #     filename = 'temp.wav'
-        # else:
-        #     import tempfile
-        #     f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
-        #     filename = f.name
-        # self.audiodata = self.audiodata.astype('int16')
-        # wavio.write(filename,self.audiodata,self.sampleRate,scale='dtype-limits',sampwidth=2)
-        # # Create a media object
-        # media_obj = phonon.Phonon.MediaObject(self)
-        # audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
-        # phonon.Phonon.createPath(media_obj, audio_output)
-        # media_obj.setTickInterval(20)
-        # media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
-        # media_obj.seek(0)
-        # media_obj.play()
+    def playSeg(self):
+        if self.media_obj2.isPlaying():
+            self.stopPlayback()
+        else:
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            self.media_obj2.loadArray(self.audiodata)
+
+    def stopPlayback(self):
+        self.media_obj2.pressedStop()
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
 
     def setImage(self, sg, audiodata, sampleRate, label):
 
