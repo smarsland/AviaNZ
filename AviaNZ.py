@@ -825,8 +825,8 @@ class AviaNZ(QMainWindow):
                 item = QListWidgetItem(self.listFiles)
                 self.listitemtype = type(item)
                 item.setText(file.fileName())
-                #if file.fileName()+'.data' in listOfDataFiles:
-                    #item.setTextColor(Qt.red) # TODO
+                if file.fileName()+'.data' in listOfDataFiles:
+                    item.setForeground(Qt.red)
         if fileName:
             index = self.listFiles.findItems(fileName,Qt.MatchExactly)
             if len(index)>0:
@@ -921,7 +921,7 @@ class AviaNZ(QMainWindow):
             #                              [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
             #                               self.reviewer, -1])
             self.saveSegments()
-            self.previousFile.setForeground(Qt.red)
+            # self.previousFile.setForeground(Qt.red)
         self.previousFile = current
         if type(current) is self.listitemtype:
             current = current.text()
@@ -1668,7 +1668,6 @@ class AviaNZ(QMainWindow):
     def refreshOverviewWith(self, startpoint, endpoint, species, delete=False):
         """Recalculates the overview box colors and refreshes their display.
         To be used when segments are added, deleted or moved."""
-        print("refreshing")
         # Work out which overview segment this segment is in (could be more than one)
         # min is to remove possible rounding error
         inds = int(float(self.convertAmpltoSpec(startpoint)) / self.widthOverviewSegment)
@@ -1842,8 +1841,6 @@ class AviaNZ(QMainWindow):
             # reset segment playback buttons
             self.playSegButton.setEnabled(False)
             self.playBandLimitedSegButton.setEnabled(False)
-            print("saving these segments: ")
-            print(self.segmentsToSave)
             self.box1id = -1
 
     def selectSegment(self, boxid):
@@ -3307,6 +3304,8 @@ class AviaNZ(QMainWindow):
     def stopPlayback(self):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
         self.media_obj.pressedStop()
+        if self.segmentStart is None:
+            self.segmentStart = 0
         self.playSlider.setValue(self.segmentStart)
         self.bar.setValue(self.convertAmpltoSpec(self.segmentStart))
         self.timePlayed.setText(self.convertMillisecs(self.segmentStart) + "/" + self.totalTime)
@@ -3322,9 +3321,9 @@ class AviaNZ(QMainWindow):
         """
         time = self.media_obj.elapsedUSecs() // 1000 + self.segmentStart # in ms
 
-        # listener for playback finish. Note small buffer for rounding errors etc
-        if time > (self.segmentStop-10):
-            print("stopped at %d" % self.segmentStop)
+        # listener for playback finish. Note small buffer for catching up
+        if time > (self.segmentStop-50):
+            print("stopped at %d" % time)
             self.stopPlayback()
         else:
             self.playSlider.setValue(time)

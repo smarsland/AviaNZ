@@ -856,6 +856,7 @@ class ControllableAudio(QAudioOutput):
         self.soundFile = QFile()
         self.tempin = QBuffer()
         self.setBufferSize(1000000)
+        self.startpos = 0
 
     def load(self, soundFileName):
         if self.soundFile.isOpen():
@@ -897,14 +898,18 @@ class ControllableAudio(QAudioOutput):
         segment = audiodata[start:stop]
         segment = sp.bandpassFilter(segment, lo, hi)
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
-        segment = segment.astype('int16') # 16 corresponds to sampwidth=2
+        self.loadArray(segment)
 
+    def loadArray(self, audiodata):
+        # loads an array from memory into an audio buffer
+
+        audiodata = audiodata.astype('int16') # 16 corresponds to sampwidth=2
         # double mono sound to get two channels - simplifies reading
-        segment = np.column_stack((segment, segment))
+        audiodata = np.column_stack((audiodata, audiodata))
 
         # write filtered output to a BytesIO buffer
         self.tempout = io.BytesIO()
-        wavio.write(self.tempout, segment, self.format.sampleRate(), scale='dtype-limits', sampwidth=2)
+        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale='dtype-limits', sampwidth=2)
 
         # copy BytesIO@write to QBuffer@read for playing
         self.temparr = QByteArray(self.tempout.getvalue())
