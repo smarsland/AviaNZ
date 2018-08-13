@@ -1832,15 +1832,19 @@ class AviaNZ(QMainWindow):
             self.listRectanglesa2.append(None)
             self.listLabels.append(None)
 
-    def deleteSegment(self,id=-1):
+    def deleteSegment(self,id=-1,hr=False):
         """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
         human classify dialogs.
         Deletes the segment that is selected, otherwise does nothing.
         Updates the overview segments as well.
         """
-        if id<0 or not id:
-            # delete selected
+
+        if not hr and (id<0 or not id):
             id = self.box1id
+
+        #if id<0 or not id:
+            # delete selected
+            #id = self.box1id
 
         if id>-1:
             print("segment %d deleted" % id)
@@ -2574,7 +2578,6 @@ class AviaNZ(QMainWindow):
 
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
-        print "Correct button"
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
         self.segmentsDone += 1
         if len(checkText) > 0:
@@ -2740,10 +2743,7 @@ class AviaNZ(QMainWindow):
                             for error in errors:
                                 inderr.append(self.indices[error])
                             outputErrors = []
-                            print "about to delete... ", error, self.segments[error]
-                            print "inderr ", inderr
                             for error in inderr[-1::-1]:
-                                print error, self.segments[error]
                                 outputErrors.append(self.segments[error])
                                 self.deleteSegment(id=error)
                             self.segmentsToSave = True
@@ -2869,10 +2869,7 @@ class AviaNZ(QMainWindow):
                             for error in errors:
                                 inderr.append(self.indices[error])
                             outputErrors = []
-                            print "about to delete... ", error, self.segments[error]
-                            print "inderr ", inderr
                             for error in inderr[-1::-1]:
-                                print error, self.segments[error]
                                 outputErrors.append(self.segments[error])
                                 self.deleteSegment(id=error)
                             self.segmentsToSave = True
@@ -3754,49 +3751,49 @@ class AviaNZ(QMainWindow):
 
 # ============
 # Various actions: deleting segments, saving, quitting
-    def deleteSegment(self,id=-1,hr=False):
-        """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
-        human classify dialogs.
-        Deletes the segment that is selected, otherwise does nothing.
-        Updates the overview segments as well.
-        """
-        # print id, self.box1id, not id
-        if not hr and (id<0 or not id):
-            id = self.box1id
+    #def deleteSegment(self,id=-1,hr=False):
+        #""" Listener for delete segment button, or backspace key. Also called when segments are deleted by the
+        #human classify dialogs.
+        #Deletes the segment that is selected, otherwise does nothing.
+        #Updates the overview segments as well.
+        #"""
+        ## print id, self.box1id, not id
+        #if not hr and (id<0 or not id):
+            #id = self.box1id
+#
+        #if id>-1:
+            ## Work out which overview segment this segment is in (could be more than one) and update it
+            #inds = int(float(self.convertAmpltoSpec(self.segments[id][0]-self.startRead))/self.widthOverviewSegment)
+            ## print type(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment)), type(len(self.overviewSegments) - 1)
+            #inde = min(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment),len(self.overviewSegments) - 1)
+            ## print "inde", inde
 
-        if id>-1:
-            # Work out which overview segment this segment is in (could be more than one) and update it
-            inds = int(float(self.convertAmpltoSpec(self.segments[id][0]-self.startRead))/self.widthOverviewSegment)
-            # print type(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment)), type(len(self.overviewSegments) - 1)
-            inde = min(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment),len(self.overviewSegments) - 1)
-            # print "inde", inde
-
-            if self.segments[id][4] == "Don't Know":
-                self.overviewSegments[inds:inde+1,0] -= 1
-            elif self.segments[id][4][-1] == '?':
-                self.overviewSegments[inds:inde + 1, 2] -= 1
-            else:
-                self.overviewSegments[inds:inde + 1, 1] -= 1
-            for box in range(inds, inde + 1):
-                if self.overviewSegments[box,0] > 0:
-                    self.SegmentRects[box].setBrush(self.ColourNone)
-                elif self.overviewSegments[box,2] > 0:
-                    self.SegmentRects[box].setBrush(self.ColourPossible)
-                elif self.overviewSegments[box,1] > 0:
-                    self.SegmentRects[box].setBrush(self.ColourNamed)
-                else:
-                    self.SegmentRects[box].setBrush(pg.mkBrush('w'))
-
-            if self.listRectanglesa1[id] is not None:
-                self.p_ampl.removeItem(self.listRectanglesa1[id])
-                self.p_spec.removeItem(self.listRectanglesa2[id])
-                self.p_spec.removeItem(self.listLabels[id])
-            del self.listLabels[id]
-            del self.segments[id]
-            del self.listRectanglesa1[id]
-            del self.listRectanglesa2[id]
-            self.segmentsToSave = True
-            self.box1id = -1
+            #if self.segments[id][4] == "Don't Know":
+                #self.overviewSegments[inds:inde+1,0] -= 1
+            #elif self.segments[id][4][-1] == '?':
+                #self.overviewSegments[inds:inde + 1, 2] -= 1
+            #else:
+                #self.overviewSegments[inds:inde + 1, 1] -= 1
+            #for box in range(inds, inde + 1):
+                #if self.overviewSegments[box,0] > 0:
+                    #self.SegmentRects[box].setBrush(self.ColourNone)
+                #elif self.overviewSegments[box,2] > 0:
+                    #self.SegmentRects[box].setBrush(self.ColourPossible)
+                #elif self.overviewSegments[box,1] > 0:
+                    #self.SegmentRects[box].setBrush(self.ColourNamed)
+                #else:
+                    #self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+#
+            #if self.listRectanglesa1[id] is not None:
+                #self.p_ampl.removeItem(self.listRectanglesa1[id])
+                #self.p_spec.removeItem(self.listRectanglesa2[id])
+                #self.p_spec.removeItem(self.listLabels[id])
+            #del self.listLabels[id]
+            #del self.segments[id]
+            #del self.listRectanglesa1[id]
+            #del self.listRectanglesa2[id]
+            #self.segmentsToSave = True
+            #self.box1id = -1
 
     def deleteAll(self):
         """ Listener for delete all button.

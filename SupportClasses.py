@@ -248,7 +248,7 @@ class postProcess:
                 ind = np.squeeze(np.where(pitch > minfreq))
                 pitch = pitch[ind]
                 if pitch.size == 0:
-                    print file, 'segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise'
+                    print(file, 'segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
                     newSegments.remove(seg)
                     continue
                 ind = ind * W / 512
