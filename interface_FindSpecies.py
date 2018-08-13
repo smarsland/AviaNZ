@@ -2,10 +2,8 @@ import os, json, re
 
 try:
     from PyQt4.QtCore import *
-    print "Using PyQt4"
     pyqt4 = True
 except ImportError as e:
-    print "Using PyQt5"
     pyqt4 = False
 
 if pyqt4:
@@ -185,7 +183,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
-        print "Dir:", self.dirName
+        print("Dir:", self.dirName)
         if d:
             self.w_dir1.setPlainText(self.dirName)
         else:
@@ -215,7 +213,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                     for filename in files:
                         if filename.endswith('.wav'):
                             # test day/night if it is a doc recording
-                            print filename
+                            print(filename)
                             Night = False
                             DOCRecording = re.search('(\d{6})_(\d{6})', filename)
                             if DOCRecording:
@@ -263,7 +261,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
                                     self.method = "Wavelets"
                                     ws = WaveletSegment.WaveletSegment(species=self.species)
                                     newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=self.species,trainTest=False)
-                                    print "in batch", newSegments
+                                    print("in batch", newSegments)
                                 else:
                                     self.method = "Default"
                                     self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
@@ -491,11 +489,11 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             self.w_processButton.setDisabled(False)
 
     def loadFile(self):
-        print self.filename
+        print(self.filename)
         wavobj = wavio.read(self.filename)
         self.sampleRate = wavobj.rate
         self.audiodata = wavobj.data
-        print np.shape(self.audiodata)
+        print(np.shape(self.audiodata))
 
         # None of the following should be necessary for librosa
         if self.audiodata.dtype is not 'float':
@@ -510,7 +508,7 @@ class AviaNZFindSpeciesInterface(QMainWindow):
             self.audiodata = librosa.core.audio.resample(self.audiodata,self.sampleRate,16000)
             self.sampleRate=16000
             self.datalength = np.shape(self.audiodata)[0]
-        print self.sampleRate
+        print(self.sampleRate)
 
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):

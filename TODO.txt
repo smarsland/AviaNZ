@@ -111,6 +111,7 @@ We should start to decide what makes a specialised filter
 (8) NP Parameter setting
 
 Exporter for mac but scipy.misc for Windows - it works fine, but doesn't show the segments on Windows
+# fixed by switching to dev version of pyqtgraph = using exporter always
 
 # What we want from the Tier 1 output:
 Presence or absence at some time resolution (e.g., 1 min, or 5 mins)

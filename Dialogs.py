@@ -5,25 +5,10 @@
 # Since most of them just get user selections, they are mostly just a mess of UI things
 import sys,os
 
-try:
-    from PyQt4.QtCore import *
-    print "Using PyQt4"
-    pyqt4 = True
-except ImportError as e:
-    print "Using PyQt5"
-    pyqt4 = False
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtCore import *
 
-if pyqt4:
-    from PyQt4.QtCore import *
-    from PyQt4.QtGui import *
-    #import PyQt4.phonon as phonon
-else:
-    from PyQt5.QtGui import *
-    from PyQt5.QtWidgets import *
-    from PyQt5.QtCore import *
-
-#from PyQt4.QtCore import *
-#from PyQt4.QtGui import *
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
@@ -231,7 +216,7 @@ class OperatorReviewer(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        print self.name1.text(),self.name2.text()
+        print(self.name1.text(),self.name2.text())
         return [self.name1.text(),self.name2.text()]
 
 #======
@@ -249,7 +234,7 @@ class Segmentation(QDialog):
         self.algs = QComboBox()
         #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
         self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
-        self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
+        self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.prevAlg = "Default"
         self.undo = QPushButton("Undo")
         self.resLabel = QLabel("Output Resolution (secs)")
@@ -528,7 +513,7 @@ class Denoise(QDialog):
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass", "Median Filter"])
         else:
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass"])
-        self.algs.currentIndexChanged[QString].connect(self.changeBoxes)
+        self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.prevAlg = "Wavelets"
 
         # Wavelet: Depth of tree, threshold type, threshold multiplier, wavelet
@@ -555,7 +540,7 @@ class Denoise(QDialog):
 
             self.waveletlabel = QLabel("Type of wavelet")
             self.wavelet = QComboBox()
-            self.wavelet.addItems(["dmey2","db2","db5","db10","haar"])
+            self.wavelet.addItems(["dmey2","db2","db5","db10","haar","coif5","coif15", "sym2","sym8","sym18"])
             self.wavelet.setCurrentIndex(0)
 
         # Median: width of filter
@@ -783,7 +768,6 @@ class Denoise(QDialog):
 class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
-    # TODO: Delete segment button
 
     def __init__(self, sg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
         QDialog.__init__(self, parent)
@@ -805,6 +789,7 @@ class HumanClassify1(QDialog):
         self.plot = pg.ImageItem()
         self.pPlot.addItem(self.plot)
 
+        self.speciesTop = QLabel("Currently:")
         self.species = QLabel(self.label)
         font = self.species.font()
         font.setPointSize(24)
@@ -812,6 +797,9 @@ class HumanClassify1(QDialog):
         self.species.setFont(font)
 
         # The buttons to move through the overview
+        self.numberDone = QLabel()
+        self.numberLeft = QLabel()
+
         self.correct = QtGui.QToolButton()
         self.correct.setIcon(QtGui.QIcon('img/tick.jpg'))
         iconSize = QtCore.QSize(50, 50)
@@ -835,13 +823,11 @@ class HumanClassify1(QDialog):
             self.birds2.append(QRadioButton(item))
         self.birds2.append(QRadioButton('Other'))
 
-        for i in xrange(len(self.birds1)):
+        for i in range(len(self.birds1)):
             self.birds1[i].setEnabled(True)
-            #self.connect(self.birds1[i], SIGNAL("clicked()"), self.radioBirdsClicked)
             self.birds1[i].clicked.connect(self.radioBirdsClicked)
-        for i in xrange(len(self.birds2)):
+        for i in range(len(self.birds2)):
             self.birds2[i].setEnabled(True)
-            #self.connect(self.birds2[i], SIGNAL("clicked()"), self.radioBirdsClicked)
             self.birds2[i].clicked.connect(self.radioBirdsClicked)
 
         # The list of less common birds
@@ -853,28 +839,29 @@ class HumanClassify1(QDialog):
         # Explicitly add "Other" option in
         self.birds3.insertItem(0, 'Other')
 
-        #self.connect(self.birds3, SIGNAL("itemClicked(QListWidgetItem*)"), self.listBirdsClicked)
         self.birds3.itemClicked.connect(self.listBirdsClicked)
         self.birds3.setEnabled(False)
 
         # This is the text box for missing birds
         self.tbox = QLineEdit(self)
         self.tbox.setMaximumWidth(150)
-        #self.connect(self.tbox, SIGNAL('returnPressed()'), self.birdTextEntered)
         self.tbox.returnPressed.connect(self.birdTextEntered)
-        #self.connect(self.tbox, SIGNAL('textChanged(QString*)'), self.birdTextEntered)
         self.tbox.setEnabled(False)
 
         #self.close = QPushButton("Done")
         #self.connect(self.close, SIGNAL("clicked()"), self.accept)
 
+        # Audio playback object
+        self.media_obj2 = SupportClasses.ControllableAudio()
+        self.media_obj2.notify.connect(self.endListener)
+
         # The layouts
         birds1Layout = QVBoxLayout()
-        for i in xrange(len(self.birds1)):
+        for i in range(len(self.birds1)):
             birds1Layout.addWidget(self.birds1[i])
 
         birds2Layout = QVBoxLayout()
-        for i in xrange(len(self.birds2)):
+        for i in range(len(self.birds2)):
             birds2Layout.addWidget(self.birds2[i])
 
         birdListLayout = QVBoxLayout()
@@ -889,58 +876,69 @@ class HumanClassify1(QDialog):
         hboxBirds.addLayout(birdListLayout)
 
         # The layouts
-        vboxButtons = QVBoxLayout()
-        vboxButtons.addWidget(self.correct)
-        vboxButtons.addWidget(self.delete)
+        hboxNextPrev = QHBoxLayout()
+        hboxNextPrev.addWidget(self.numberDone)
+        hboxNextPrev.addWidget(self.correct)
+        hboxNextPrev.addWidget(self.delete)
+        hboxNextPrev.addWidget(self.numberLeft)
         # hboxButtons.addWidget(self.wrong)
         #hboxButtons.addWidget(self.close)
 
         self.playButton = QtGui.QToolButton()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.setIconSize(iconSize)
-
-        vboxLabel = QVBoxLayout()
-        vboxLabel.addWidget(self.species)
-        vboxLabel.addWidget(self.playButton)
-        #self.connect(self.playButton, SIGNAL('clicked()'), self.playSeg)
         self.playButton.clicked.connect(self.playSeg)
 
-        vboxFull = QHBoxLayout()
-        vboxFull.addWidget(self.wPlot)
-        vboxFull.addLayout(vboxLabel)
-        vboxFull.addLayout(hboxBirds)
-        vboxFull.addLayout(vboxButtons)
-        #vboxFull.addWidget(self.close)
+        vboxBirds = QVBoxLayout()
+        vboxBirds.addWidget(self.speciesTop)
+        vboxBirds.addWidget(self.species)
+        vboxBirds.addLayout(hboxBirds)
+
+        vboxSpecContr = QVBoxLayout()
+        vboxSpecContr.addWidget(self.wPlot)
+        vboxSpecContr.addWidget(self.playButton)
+        ## TODO add other volume contrs here
+
+        hboxSpecContrBirds = QHBoxLayout()
+        hboxSpecContrBirds.addLayout(vboxSpecContr)
+        hboxSpecContrBirds.addLayout(vboxBirds)
+
+        vboxFull = QVBoxLayout()
+        vboxFull.addLayout(hboxSpecContrBirds)
+        vboxFull.addLayout(hboxNextPrev)
 
         self.setLayout(vboxFull)
         # print seg
         self.setImage(sg,audiodata,sampleRate,self.label)
 
-    def playSeg(self):  #This is not the right place though
-        import wavio
-        import platform
-        if platform.system() == 'Darwin':
-            filename = 'temp.wav'
+    def playSeg(self):
+        if self.media_obj2.isPlaying():
+            self.stopPlayback()
         else:
-            import tempfile
-            f = tempfile.NamedTemporaryFile(mode='w+t', delete=False)
-            filename = f.name
-        self.audiodata = self.audiodata.astype('int16')
-        wavio.write(filename,self.audiodata,self.sampleRate,scale='dtype-limits',sampwidth=2)
-        import PyQt4.phonon as phonon
-        # Create a media object
-        media_obj = phonon.Phonon.MediaObject(self)
-        audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
-        phonon.Phonon.createPath(media_obj, audio_output)
-        media_obj.setTickInterval(20)
-        media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
-        media_obj.seek(0)
-        media_obj.play()
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            self.media_obj2.loadArray(self.audiodata)
+
+    def stopPlayback(self):
+        self.media_obj2.pressedStop()
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+
+    def endListener(self):
+        time = self.media_obj2.elapsedUSecs() // 1000
+        if time > self.duration:
+            self.stopPlayback()
+
+    def setSegNumbers(self, done, total):
+        text1 = "calls reviewed: " + str(done)
+        text2 = str(total - done) + " to go"
+        self.numberDone.setText(text1)
+        self.numberLeft.setText(text2)
 
     def setImage(self, sg, audiodata, sampleRate, label):
 
         self.audiodata = audiodata
         self.sampleRate = sampleRate
+        self.duration = len(audiodata) / sampleRate * 1000 # in ms
+        print(self.duration)
 
         sg2 = sg
         if np.shape(sg)[0] < 100:
@@ -1129,7 +1127,7 @@ class HumanClassify2(QDialog):
         for i in range(len(self.buttons)):
             if self.buttons[i].buttonClicked:
                 self.errors.append(i+self.firstSegment)
-        print self.errors
+        print(self.errors)
 
         # Now find out if there are more segments to check, and remake the buttons, otherwise close
         if len(self.segments) > 0:

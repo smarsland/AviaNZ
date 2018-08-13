@@ -3,8 +3,10 @@
 
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
-from PyQt4.QtCore import *
-from PyQt4.QtGui import *
+#     from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtWidgets import QAbstractButton
+from PyQt5.QtCore import QTime, QFile, QIODevice, QBuffer, QByteArray
+from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -20,6 +22,8 @@ import SignalProc
 import WaveletFunctions
 import Segment
 
+from time import sleep
+
 import librosa
 
 import math
@@ -28,6 +32,9 @@ import os, json
 import copy
 
 import pywt
+import wavio
+
+import io
 
 # import WaveletSegment
 
@@ -175,7 +182,7 @@ class postProcess:
                     if secs > self.minLen:  # just check duration
                         continue
                     else:
-                        print file, seg, "--> windy"
+                        print(file, seg, "--> windy")
                         newSegments.remove(seg)
         self.segments = newSegments
 
@@ -251,6 +258,7 @@ class postProcess:
                 x = medfilt(pitch, 15)
 
                 if ind.size < 2:
+
                     if pitch > 1200 and pitch < 4200:   # todo: scale to other birds, save and import fund frq range from another config file
                         continue #print file, 'segment ', seg, round(pitch), ' *##kiwi found'
                     else:
@@ -587,7 +595,7 @@ class exportSegments:
             try:
                 wb = load_workbook(str(eFile))
             except:
-                print "Unable to open file"  # Does not exist OR no read permissions
+                print("Unable to open file")  # Does not exist OR no read permissions
                 return
         else:
             wb = makeNewWorkbook()
@@ -676,10 +684,11 @@ class TimeAxisHour(pg.AxisItem):
     def __init__(self, *args, **kwargs):
         super(TimeAxisHour, self).__init__(*args, **kwargs)
         self.offset = 0
+        self.setLabel('Time', units='hh:mm:ss')
 
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
-        return [QTime().addSecs(value+self.offset).toString('hh:mm:ss') for value in values]
+        return [QTime(0,0,0).addSecs(value+self.offset).toString('hh:mm:ss') for value in values]
 
     def setOffset(self,offset):
         self.offset = offset
@@ -691,10 +700,11 @@ class TimeAxisMin(pg.AxisItem):
     def __init__(self, *args, **kwargs):
         super(TimeAxisMin, self).__init__(*args, **kwargs)
         self.offset = 0
+        self.setLabel('Time', units='mm:ss')
 
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
-        return [QTime().addSecs(value+self.offset).toString('mm:ss') for value in values]
+        return [QTime(0,0,0).addSecs(value+self.offset).toString('mm:ss') for value in values]
 
     def setOffset(self,offset):
         self.offset = offset
@@ -749,27 +759,56 @@ class ShadedRectROI(ShadedROI):
             self.addScaleHandle([1, 0.5], [center[0], 0.5])
             self.addScaleHandle([0.5, 1], [0.5, center[1]])
 
+    # this allows compatibility with LinearRegions:
+    def setHoverBrush(self, *br, **args):
+        pass
+
 class DragViewBox(pg.ViewBox):
     # A normal ViewBox, but with ability to drag the segments
+    # and also processes keypress events
     sigMouseDragged = QtCore.Signal(object,object,object)
     keyPressed = QtCore.Signal(int)
-    #keyPressed = QtCore.pyqtSignal(int)
 
-    def __init__(self, *args, **kwds):
+    def __init__(self, parent, enableDrag, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
+        self.enableDrag = enableDrag
+        self.parent = parent
 
     def mouseDragEvent(self, ev):
-        ## if axis is specified, event will only affect that axis.
-        ev.accept()
-        if self.state['mouseMode'] != pg.ViewBox.RectMode or ev.button() == QtCore.Qt.RightButton:
+        print("uncaptured drag event")
+        # if self.enableDrag:
+        #     ## if axis is specified, event will only affect that axis.
+        #     ev.accept()
+        #     if self.state['mouseMode'] != pg.ViewBox.RectMode or ev.button() == QtCore.Qt.RightButton:
+        #         ev.ignore()
+
+        #     if ev.isFinish():  ## This is the final move in the drag; draw the actual box
+        #         print("dragging done")
+        #         self.rbScaleBox.hide()
+        #         self.sigMouseDragged.emit(ev.buttonDownScenePos(ev.button()),ev.scenePos(),ev.screenPos())
+        #     else:
+        #         ## update shape of scale box
+        #         self.updateScaleBox(ev.buttonDownPos(), ev.pos())
+        # else:
+        #     pass
+
+    def mousePressEvent(self, ev):
+        if self.enableDrag and ev.button() == self.parent.MouseDrawingButton:
+            print("mousepressevent")
+            self.parent.mouseClicked_ampl(ev)
+            self.parent.mouseClicked_spec(ev)
+            ev.accept()
+        else:
             ev.ignore()
 
-        if ev.isFinish():  ## This is the final move in the drag; draw the actual box
-            self.rbScaleBox.hide()
-            self.sigMouseDragged.emit(ev.buttonDownScenePos(ev.button()),ev.scenePos(),ev.screenPos())
+    def mouseReleaseEvent(self, ev):
+        if self.enableDrag and ev.button() == self.parent.MouseDrawingButton:
+            print("mousereleaseevent")
+            self.parent.mouseClicked_ampl(ev)
+            self.parent.mouseClicked_spec(ev)
+            ev.accept()
         else:
-            ## update shape of scale box
-            self.updateScaleBox(ev.buttonDownPos(), ev.pos())
+            ev.ignore()
 
     def keyPressEvent(self,ev):
         # This catches the keypresses and sends out a signal
@@ -820,6 +859,119 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
     def mousePressEvent(self, ev):
         super(ClickableRectItem, self).mousePressEvent(ev)
         self.parentWidget().resend(self.mapRectToParent(self.boundingRect()).x())
+
+class ControllableAudio(QAudioOutput):
+    # This links all the PyQt5 audio playback things -
+    # QAudioOutput, QFile, and input from main interfaces
+    format = QAudioFormat()
+    format.setChannelCount(2)
+    format.setSampleRate(48000)
+    format.setSampleSize(16)
+    format.setCodec("audio/pcm")
+    format.setByteOrder(QAudioFormat.LittleEndian)
+    format.setSampleType(QAudioFormat.SignedInt)
+
+    def __init__(self):
+        super(ControllableAudio, self).__init__(self.format)
+        # on this notify, move slider (connected in main file)
+        self.setNotifyInterval(20)
+        self.stateChanged.connect(self.endListener)
+        self.soundFile = QFile()
+        self.tempin = QBuffer()
+        self.setBufferSize(1000000)
+        self.startpos = 0
+        self.keepSlider = False
+
+    def load(self, soundFileName):
+        if self.soundFile.isOpen():
+            self.soundFile.close()
+        self.startpos = 0
+
+        self.soundFile.setFileName(soundFileName)
+        try:
+            self.soundFile.open(QIODevice.ReadOnly)
+        except Exception as e:
+            print("ERROR opening file: %s" % e)
+
+    def isPlaying(self):
+        return(self.state() == QAudio.ActiveState)
+
+    def endListener(self):
+        # this should only be called if there's some misalignment between GUI and Audio
+        print("state changed to %d" % self.state())
+        if self.state() == QAudio.IdleState:
+            # give some time for GUI to catch up and stop
+            sleep(0.2)
+            self.notify.emit()
+            self.keepSlider=False
+            self.stop()
+
+    def pressedPlay(self, resetPause=False):
+        print("starting at: %d" % self.time)
+        if not resetPause and self.state() == QAudio.SuspendedState:
+            self.resume()
+        else:
+            if not self.keepSlider:
+                self.pressedStop()
+            sleep(0.1)
+            self.start(self.soundFile)
+
+    def pressedPause(self):
+        self.keepSlider=True # a flag to avoid jumping the slider back to 0
+        self.suspend()
+
+    def pressedStop(self):
+        # stop and reset to window/segment start
+        self.keepSlider=False
+        self.stop()
+        if self.tempin.isOpen():
+            self.tempin.close()
+        if self.soundFile.isOpen():
+            self.soundFile.seek(self.startpos)
+
+    def filterBand(self, start, stop, lo, hi, audiodata, sp):
+        # takes start-end in ms
+        start = start * self.format.sampleRate() // 1000
+        stop = stop * self.format.sampleRate() // 1000
+        segment = audiodata[start:stop]
+        segment = sp.bandpassFilter(segment, lo, hi)
+        # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
+        self.loadArray(segment)
+
+    def loadArray(self, audiodata):
+        # loads an array from memory into an audio buffer
+
+        audiodata = audiodata.astype('int16') # 16 corresponds to sampwidth=2
+        # double mono sound to get two channels - simplifies reading
+        audiodata = np.column_stack((audiodata, audiodata))
+
+        # write filtered output to a BytesIO buffer
+        self.tempout = io.BytesIO()
+        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale='dtype-limits', sampwidth=2)
+
+        # copy BytesIO@write to QBuffer@read for playing
+        self.temparr = QByteArray(self.tempout.getvalue())
+        # self.tempout.close()
+        if self.tempin.isOpen():
+            self.tempin.close()
+        self.tempin.setBuffer(self.temparr)
+        self.tempin.open(QIODevice.ReadOnly)
+
+        sleep(0.1)
+        self.start(self.tempin)
+
+    def seekToMs(self, ms):
+        # note: important to specify format correctly!
+        self.soundFile.seek(self.format.bytesForDuration(ms*1000))
+        self.time = ms
+        self.startpos = self.soundFile.pos()
+        self.reset()
+
+    def applyVolSlider(self, value):
+        # passes UI volume nonlinearly
+        # value = QAudio.convertVolume(value / 100, QAudio.LogarithmicVolumeScale, QAudio.LinearVolumeScale)
+        value = (math.exp(value/50)-1)/(math.exp(2)-1)
+        self.setVolume(value)
 
 class FlowLayout(QtGui.QLayout):
     # This is the flow layout which lays out a set of spectrogram pictures on buttons (for HumanClassify2) as
@@ -953,3 +1105,4 @@ def splitFile5mins(self, name):
     #     post=postProcess(ws1.data, ws1.sampleRate, det)
     #     # post.detectClicks()
     #     post.eRatioConfd()
+

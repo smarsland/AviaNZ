@@ -83,7 +83,7 @@ class SignalProc:
         elif window=='Ones':
             window = np.ones(window_width)
         else:
-            print "unknown window, using Hann"
+            print("unknown window, using Hann")
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)))
 
         if mean_normalise:
@@ -106,10 +106,10 @@ class SignalProc:
 
             ft = np.zeros((len(starts), window_width))
             for i in starts:
-                ft[i / incr, :] = window * data[i:i + window_width]
+                ft[i // incr, :] = window * data[i:i + window_width]
             ft = np.fft.fft(ft)
             if onesided:
-                sg = np.absolute(ft[:, :window_width / 2])
+                sg = np.absolute(ft[:, :window_width // 2])
             else:
                 sg = np.absolute(ft)
             #sg = (ft*np.conj(ft))[:,window_width / 2:].T
@@ -154,7 +154,7 @@ class SignalProc:
     # The next functions perform spectrogram inversion
 
     def show_invS(self):
-        print "Inverting spectrogam with window ", self.window_width, " and increment ", int(self.window_width/4.)
+        print("Inverting spectrogam with window ", self.window_width, " and increment ", int(self.window_width/4.))
         oldIncr = self.incr
         self.incr = int(self.window_width/4.)
         sg = self.spectrogram(self.data)

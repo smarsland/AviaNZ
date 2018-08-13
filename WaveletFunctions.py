@@ -3,6 +3,7 @@
 
 import numpy as np
 import pywt
+from ext import ce_denoise as ce
 
 class WaveletFunctions:
     """ This class contains the wavelet specific methods.
@@ -66,15 +67,14 @@ class WaveletFunctions:
         """ Convert from an integer to the 'ad' representations of the wavelet packets
         The root is 0 (''), the next level are 1 and 2 ('a' and 'd'), the next 3, 4, 5, 6 ('aa','ad','da','dd) and so on
         """
-        import string
         level = int(np.floor(np.log2(i + 1)))
         first = 2 ** level - 1
         if i == 0:
             b = ''
         else:
-            b = np.binary_repr(i - first, width=int(level))
-            b = string.replace(b, '0', 'a', maxreplace=-1)
-            b = string.replace(b, '1', 'd', maxreplace=-1)
+            b = np.binary_repr(int(i) - first, width=int(level))
+            b = b.replace('0', 'a')
+            b = b.replace('1', 'd')
         return b
 
     def BestTree(self,wp,threshold,costfn='threshold'):
@@ -164,11 +164,12 @@ class WaveletFunctions:
         while level > 0:
             first = 2 ** level - 1
             while working[0] >= first:
-                # Note this is Python2!
-                # And also that it assumes that the whole list is backwards
-                parent = (working[0] - 1) / 2
+                # Note that it assumes that the whole list is backwards
+                parent = (working[0] - 1) // 2
                 p = self.ConvertWaveletNodeName(parent)
+
                 new_wp[p].data = pywt.idwt(new_wp[self.ConvertWaveletNodeName(working[1])].data,new_wp[self.ConvertWaveletNodeName(working[0])].data, wavelet)[:len(new_wp[p].data)]
+
                 # Delete these two nodes from working
                 working = np.delete(working, 1)
                 working = np.delete(working, 0)
@@ -189,6 +190,9 @@ class WaveletFunctions:
         root.
         """
 
+        print("Wavelet Denoising requested, with the following parameters: type %s, threshold %f, maxLevel %d, bandpass %s, wavelet %s, costfn %s" % (thresholdType, threshold, maxLevel, bandpass, wavelet, costfn))
+        import time
+        opstartingtime = time.time()
         if data is None:
             data = self.data
 
@@ -199,13 +203,14 @@ class WaveletFunctions:
 
         if maxLevel is None:
             self.maxLevel = self.BestLevel(wavelet)
-            print "Best level is ", self.maxLevel
+            print("Best level is %d" % self.maxLevel)
         else:
             self.maxLevel = maxLevel
 
         self.thresholdMultiplier = threshold
 
         wp = pywt.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric', maxlevel=self.maxLevel)
+        # print("Checkpoint 1, %.5f" % (time.time() - opstartingtime))
 
         # Get the threshold
         det1 = wp['d'].data
@@ -213,30 +218,16 @@ class WaveletFunctions:
         sigma = np.median(np.abs(det1)) / 0.6745
         threshold = self.thresholdMultiplier * sigma
 
-        bestleaves = self.BestTree(wp,threshold,costfn)
+        # print("Checkpoint 1b, %.5f" % (time.time() - opstartingtime))
+        bestleaves = ce.BestTree(wp,threshold,costfn)
 
         # Make a new tree with these in
-        new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='zero', maxlevel=wp.maxlevel)
-
         # pywavelet makes the whole tree. So if you don't give it blanks from places where you don't want the values in
         # the original tree, it copies the details from wp even though it wasn't asked for them.
         # Reconstruction with the zeros is different to not reconstructing.
-        for level in range(wp.maxlevel + 1):
-            for n in new_wp.get_level(level, 'natural'):
-                n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
 
         # Copy thresholded versions of the leaves into the new wpt
-        for l in bestleaves:
-            ind = self.ConvertWaveletNodeName(l)
-            if thresholdType == 'hard':
-                # Hard thresholding
-                new_wp[ind].data = np.where(np.abs(wp[ind].data) < threshold, 0.0, wp[ind].data)
-            else:
-                # Soft thresholding
-                # n.data = np.sign(n.data) * np.maximum((np.abs(n.data) - threshold), 0.0)
-                tmp = np.abs(wp[ind].data) - threshold
-                tmp = (tmp + np.abs(tmp)) / 2.
-                new_wp[ind].data = np.sign(wp[ind].data) * tmp
+        new_wp = ce.ThresholdNodes(self, wp, bestleaves, threshold, thresholdType)
 
         # Reconstruct the internal nodes and the data
         new_wp = self.reconstructWPT(new_wp,wp.wavelet,bestleaves)
@@ -256,7 +247,7 @@ class WaveletFunctions:
 
         if maxLevel is None:
             maxLevel = self.BestLevel(wavelet)
-            print "Best level is ", self.maxLevel
+            print("Best level is ", self.maxLevel)
         else:
             maxLevel = maxLevel
 

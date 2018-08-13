@@ -680,7 +680,7 @@ def colourMaps(cmap):
                           dtype=np.ubyte)
         mode = 'hsv'
     else:
-        print "No such colour map"
+        print("No such colour map")
         pos = None
         colour = None
         mode = None
