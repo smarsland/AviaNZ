@@ -797,6 +797,9 @@ class HumanClassify1(QDialog):
         self.species.setFont(font)
 
         # The buttons to move through the overview
+        self.numberDone = QLabel()
+        self.numberLeft = QLabel()
+
         self.correct = QtGui.QToolButton()
         self.correct.setIcon(QtGui.QIcon('img/tick.jpg'))
         iconSize = QtCore.QSize(50, 50)
@@ -874,8 +877,10 @@ class HumanClassify1(QDialog):
 
         # The layouts
         hboxNextPrev = QHBoxLayout()
+        hboxNextPrev.addWidget(self.numberDone)
         hboxNextPrev.addWidget(self.correct)
         hboxNextPrev.addWidget(self.delete)
+        hboxNextPrev.addWidget(self.numberLeft)
         # hboxButtons.addWidget(self.wrong)
         #hboxButtons.addWidget(self.close)
 
@@ -921,6 +926,12 @@ class HumanClassify1(QDialog):
         time = self.media_obj2.elapsedUSecs() // 1000
         if time > self.duration:
             self.stopPlayback()
+
+    def setSegNumbers(self, done, total):
+        text1 = "calls reviewed: " + str(done)
+        text2 = str(total - done) + " to go"
+        self.numberDone.setText(text1)
+        self.numberLeft.setText(text2)
 
     def setImage(self, sg, audiodata, sampleRate, label):
 
