@@ -248,7 +248,7 @@ class postProcess:
                 ind = np.squeeze(np.where(pitch > minfreq))
                 pitch = pitch[ind]
                 if pitch.size == 0:
-                    print(file, 'segment ', seg, ' *++ no fundamental freq detected, could be faded kiwi or noise')
+                    print file, 'segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise'
                     newSegments.remove(seg)
                     continue
                 ind = ind * W / 512
@@ -258,11 +258,12 @@ class postProcess:
                 x = medfilt(pitch, 15)
 
                 if ind.size < 2:
-                    if pitch > 1200 and pitch < 4200:
-                        print(file, 'segment ', seg, round(pitch), ' *##kiwi found')
+
+                    if pitch > 1200 and pitch < 4200:   # todo: scale to other birds, save and import fund frq range from another config file
+                        continue #print file, 'segment ', seg, round(pitch), ' *##kiwi found'
                     else:
-                        print(file, 'segment ', seg, round(
-                            pitch), ' *-- fundamental freq is out of kiwi region, could be noise')
+                        # print file, 'segment ', seg, round(
+                        #     pitch), ' *-- fundamental freq is out of range, could be noise'
                         newSegments.remove(seg)
                 else:
                     # Get the individual pieces
@@ -270,10 +271,11 @@ class postProcess:
                     count = 0
                     if segs == []:
                         if np.mean(pitch) > 1200 and np.mean(pitch) < 4000:
-                            print(file, 'segment ', seg, round(np.mean(pitch)), ' *## kiwi found ')
+                            # print file, 'segment ', seg, round(np.mean(pitch)), ' *## kiwi found '
+                            continue
                         else:
-                            print(file, 'segment ', seg, round(
-                                np.mean(pitch)), ' *-- fundamental freq is out of kiwi region, could be noise')
+                            # print file, 'segment ', seg, round(
+                                # np.mean(pitch)), ' *-- fundamental freq is out of range, could be noise'
                             newSegments.remove(seg)
                             continue
                     flag = False
@@ -283,7 +285,7 @@ class postProcess:
                         s[1] = s[1] * sampleRate / float(256)
                         i = np.where((ind > s[0]) & (ind < s[1]))
                         if np.mean(x[i]) > 1200 and np.mean(x[i]) < 4000:
-                            print(file, 'segment ', seg, round(np.mean(x[i])), ' *## kiwi found ##')
+                            # print file, 'segment ', seg, round(np.mean(x[i])), ' *## kiwi found ##'
                             flag = True
                             break
                     if not flag:
