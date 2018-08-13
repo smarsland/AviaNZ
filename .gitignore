@@ -1,0 +1,18 @@
+# ignore compiled python sources
+*.pyc
+# ignore compiled C objects
+*.so
+
+# vim swap files
+*.swp
+
+# ignore temp files produced during analysis
+Sound Files/Noise examples/Noise_10s/*.xlsx
+Sound Files/Noise examples/Noise_10s/*.data
+
+# auto-generated cython sources have to be listed manually here:
+ext/ce_denoise.c
+ext/build/
+
+# default configs - if this is not distributed
+# AviaNZconfig.txt
