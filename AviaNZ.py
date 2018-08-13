@@ -337,6 +337,10 @@ class AviaNZ(QMainWindow):
         self.dragRectangles.setCheckable(True)
         self.dragRectangles.setChecked(self.config['dragBoxes'])
 
+        self.requireDragging = specMenu.addAction("Mark segments by dragging", self.requireDraggingCheck)
+        self.requireDragging.setCheckable(True)
+        self.requireDragging.setChecked(self.config['requireDrag'])
+
         self.dragRectTransparent = specMenu.addAction("Make dragged boxes transparent", self.dragRectsTransparent)
         self.dragRectTransparent.setCheckable(True)
         self.dragRectTransparent.setChecked(self.config['transparentBoxes'])
@@ -751,6 +755,7 @@ class AviaNZ(QMainWindow):
         self.showOverviewSegsCheck()
         self.dragRectsTransparent()
         self.showPointerDetailsCheck()
+        self.requireDraggingCheck()
         self.dragRectanglesCheck()
 
         # add statusbar
@@ -1179,7 +1184,13 @@ class AviaNZ(QMainWindow):
         Changes the pyqtgraph MouseMode.
         Also swaps the listeners. """
         self.config['dragBoxes'] = self.dragRectangles.isChecked()
-        self.p_spec.enableDrag = self.dragRectangles.isChecked()
+
+    def requireDraggingCheck(self):
+        """ Listener for the menuitem that switches between dragging and click-clicking to draw segments.
+        swaps the listeners. """
+        self.config['requireDrag'] = self.requireDragging.isChecked()
+        self.p_ampl.enableDrag = self.requireDragging.isChecked()
+        self.p_spec.enableDrag = self.requireDragging.isChecked()
 
     def dragRectsTransparent(self):
         """ Listener for the check menu item that decides if the user wants the dragged rectangles to have colour or not.
@@ -1917,12 +1928,6 @@ class AviaNZ(QMainWindow):
                 else:
                     self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
 
-    def mousePressed_ampl(self, evt):
-        print("mouse was pressed")
-
-    def mouseReleased_ampl(self, evt):
-        print("mouse was released")
-
     def mouseClicked_ampl(self,evt):
         """ Listener for if the user clicks on the amplitude plot.
         If there is a box selected, get its colour.
@@ -1931,10 +1936,7 @@ class AviaNZ(QMainWindow):
         (2) clicking anywhere else -> start a box
         (3) clicking a second time to finish a box -> create the segment
         """
-        print("mouse was clicked")
         pos = evt.scenePos()
-        print(pos)
-        print(evt.button())
 
         # if any box is selected, deselect (wherever clicked)
         if self.box1id>-1:
@@ -1942,7 +1944,6 @@ class AviaNZ(QMainWindow):
 
         # if clicked inside scene:
         if self.p_ampl.sceneBoundingRect().contains(pos):
-            print("Contains.")
             mousePoint = self.p_ampl.mapSceneToView(pos)
 
             # if this is the second click and not a box, close the segment
@@ -2108,6 +2109,7 @@ class AviaNZ(QMainWindow):
 
             # if this is the first click:
             else:
+                print("starting something")
                 # if this is right click (drawing mode):
                 if evt.button() == self.MouseDrawingButton:
                     nonebrush = self.ColourNone
@@ -2116,6 +2118,7 @@ class AviaNZ(QMainWindow):
 
                     # start a new box:
                     if self.dragRectangles.isChecked():
+                        print("starting a box")
                         # spectrogram mouse follower box:
                         startpointS = QPointF(mousePoint.x(), mousePoint.y())
                         endpointS = QPointF(mousePoint.x(), mousePoint.y())
