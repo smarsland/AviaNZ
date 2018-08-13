@@ -767,25 +767,46 @@ class DragViewBox(pg.ViewBox):
     sigMouseDragged = QtCore.Signal(object,object,object)
     keyPressed = QtCore.Signal(int)
 
-    def __init__(self, enableDrag, *args, **kwds):
+    def __init__(self, parent, enableDrag, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
         self.enableDrag = enableDrag
+        self.parent = parent
 
     def mouseDragEvent(self, ev):
-        if self.enableDrag:
-            ## if axis is specified, event will only affect that axis.
-            ev.accept()
-            if self.state['mouseMode'] != pg.ViewBox.RectMode or ev.button() == QtCore.Qt.RightButton:
-                ev.ignore()
+        print("uncaptured drag event")
+        # if self.enableDrag:
+        #     ## if axis is specified, event will only affect that axis.
+        #     ev.accept()
+        #     if self.state['mouseMode'] != pg.ViewBox.RectMode or ev.button() == QtCore.Qt.RightButton:
+        #         ev.ignore()
 
-            if ev.isFinish():  ## This is the final move in the drag; draw the actual box
-                self.rbScaleBox.hide()
-                self.sigMouseDragged.emit(ev.buttonDownScenePos(ev.button()),ev.scenePos(),ev.screenPos())
-            else:
-                ## update shape of scale box
-                self.updateScaleBox(ev.buttonDownPos(), ev.pos())
+        #     if ev.isFinish():  ## This is the final move in the drag; draw the actual box
+        #         print("dragging done")
+        #         self.rbScaleBox.hide()
+        #         self.sigMouseDragged.emit(ev.buttonDownScenePos(ev.button()),ev.scenePos(),ev.screenPos())
+        #     else:
+        #         ## update shape of scale box
+        #         self.updateScaleBox(ev.buttonDownPos(), ev.pos())
+        # else:
+        #     pass
+
+    def mousePressEvent(self, ev):
+        if self.enableDrag and ev.button() == self.parent.MouseDrawingButton:
+            print("mousepressevent")
+            self.parent.mouseClicked_ampl(ev)
+            self.parent.mouseClicked_spec(ev)
+            ev.accept()
         else:
-            pass
+            ev.ignore()
+
+    def mouseReleaseEvent(self, ev):
+        if self.enableDrag and ev.button() == self.parent.MouseDrawingButton:
+            print("mousereleaseevent")
+            self.parent.mouseClicked_ampl(ev)
+            self.parent.mouseClicked_spec(ev)
+            ev.accept()
+        else:
+            ev.ignore()
 
     def keyPressEvent(self,ev):
         # This catches the keypresses and sends out a signal
@@ -857,6 +878,7 @@ class ControllableAudio(QAudioOutput):
         self.tempin = QBuffer()
         self.setBufferSize(1000000)
         self.startpos = 0
+        self.keepSlider = False
 
     def load(self, soundFileName):
         if self.soundFile.isOpen():
@@ -873,19 +895,32 @@ class ControllableAudio(QAudioOutput):
         return(self.state() == QAudio.ActiveState)
 
     def endListener(self):
+        # this should only be called if there's some misalignment between GUI and Audio
+        print("state changed to %d" % self.state())
         if self.state() == QAudio.IdleState:
             # give some time for GUI to catch up and stop
             sleep(0.2)
             self.notify.emit()
+            self.keepSlider=False
             self.stop()
 
-    def pressedPlay(self):
-        sleep(0.1)
-        # save starting position in bytes
-        self.startpos = self.soundFile.pos()
-        self.start(self.soundFile)
+    def pressedPlay(self, resetPause=False):
+        print("starting at: %d" % self.time)
+        if not resetPause and self.state() == QAudio.SuspendedState:
+            self.resume()
+        else:
+            if not self.keepSlider:
+                self.pressedStop()
+            sleep(0.1)
+            self.start(self.soundFile)
+
+    def pressedPause(self):
+        self.keepSlider=True # a flag to avoid jumping the slider back to 0
+        self.suspend()
 
     def pressedStop(self):
+        # stop and reset to window/segment start
+        self.keepSlider=False
         self.stop()
         if self.tempin.isOpen():
             self.tempin.close()
@@ -926,6 +961,9 @@ class ControllableAudio(QAudioOutput):
     def seekToMs(self, ms):
         # note: important to specify format correctly!
         self.soundFile.seek(self.format.bytesForDuration(ms*1000))
+        self.time = ms
+        self.startpos = self.soundFile.pos()
+        self.reset()
 
     def applyVolSlider(self, value):
         # passes UI volume nonlinearly
