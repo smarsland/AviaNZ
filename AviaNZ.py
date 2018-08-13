@@ -280,6 +280,11 @@ class AviaNZ(QMainWindow):
             if self.DOC:
                 self.setOperatorReviewerDialog()
 
+            # parse mouse settings
+            if self.config['drawingRightBtn']:
+                self.MouseDrawingButton = QtCore.Qt.RightButton
+            else:
+                self.MouseDrawingButton = QtCore.Qt.LeftButton
             # Save the segments every minute
             self.timer = QTimer()
             #QObject.connect(self.timer, SIGNAL("timeout()"), self.saveSegments)
@@ -481,12 +486,12 @@ class AviaNZ(QMainWindow):
         self.p_overview2.setXLink(self.p_overview)
 
         self.w_ampl = pg.GraphicsLayoutWidget()
-        self.p_ampl = SupportClasses.DragViewBox(enableMouse=False,enableMenu=False,enableDrag=False)
+        self.p_ampl = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False)
         self.w_ampl.addItem(self.p_ampl,row=0,col=1)
         self.d_ampl.addWidget(self.w_ampl)
 
         self.w_spec = pg.GraphicsLayoutWidget()
-        self.p_spec = SupportClasses.DragViewBox(enableMouse=False,enableMenu=False,enableDrag=True)
+        self.p_spec = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False)
         self.w_spec.addItem(self.p_spec,row=0,col=1)
         self.d_spec.addWidget(self.w_spec)
 
@@ -556,6 +561,8 @@ class AviaNZ(QMainWindow):
 
         # Connect up the listeners
         self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
+        # self.p_ampl.sigMouseButtonPress.connect(self.mousePressed_ampl)
+        # self.p_ampl.sigMouseButtonRelease.connect(self.mouseReleased_ampl)
         #self.p_spec.sigMouseDragged.connect(self.mouseDragged_spec)
         self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
         self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
@@ -606,8 +613,15 @@ class AviaNZ(QMainWindow):
         # The buttons inside the controls dock
         self.playButton = QtGui.QToolButton()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.setIconSize(QtCore.QSize(20, 20))
         self.playButton.setToolTip("Play visible")
         self.playButton.clicked.connect(self.playVisible)
+
+        self.stopButton = QtGui.QToolButton()
+        self.stopButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+        self.stopButton.setIconSize(QtCore.QSize(20, 20))
+        self.stopButton.setToolTip("Stop playback")
+        self.stopButton.clicked.connect(self.stopPlayback)
 
         self.playSegButton = QtGui.QToolButton()
         self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
@@ -661,8 +675,9 @@ class AviaNZ(QMainWindow):
 
         # Place all these widgets in the Controls dock
         self.w_controls.addWidget(self.playButton,row=0,col=0)
-        self.w_controls.addWidget(self.playSegButton,row=0,col=1)
-        self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=2)
+        self.w_controls.addWidget(self.stopButton,row=0,col=1)
+        self.w_controls.addWidget(self.playSegButton,row=0,col=2)
+        self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
         self.w_controls.addWidget(self.timePlayed,row=1,col=0, colspan=3)
         self.w_controls.addWidget(self.volIcon, row=2, col=0)
         self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=2)
@@ -1156,6 +1171,7 @@ class AviaNZ(QMainWindow):
             self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
         else:
             self.p_spec.scene().sigMouseMoved.disconnect()
+            self.pointData.setText("")
 
     def dragRectanglesCheck(self):
         """ Listener for the menuitem that says if the user is dragging rectangles or clicking on the spectrogram has
@@ -1163,6 +1179,7 @@ class AviaNZ(QMainWindow):
         Changes the pyqtgraph MouseMode.
         Also swaps the listeners. """
         self.config['dragBoxes'] = self.dragRectangles.isChecked()
+        self.p_spec.enableDrag = self.dragRectangles.isChecked()
 
     def dragRectsTransparent(self):
         """ Listener for the check menu item that decides if the user wants the dragged rectangles to have colour or not.
@@ -1223,18 +1240,11 @@ class AviaNZ(QMainWindow):
         if self.readonly.isChecked():
             try:
                 self.p_ampl.scene().sigMouseClicked.disconnect()
-            except Exception:
+                self.p_spec.scene().sigMouseClicked.disconnect()
+                self.p_spec.sigMouseDragged.disconnect()
+            except Exception as e:
+                print(e)
                 pass
-            if self.dragRectangles.isChecked():
-                try:
-                    self.p_spec.sigMouseDragged.disconnect()
-                except Exception:
-                    pass
-            else:
-                try:
-                    self.p_spec.scene().sigMouseClicked.disconnect()
-                except Exception:
-                    pass
             try:
                 self.p_spec.scene().sigMouseMoved.disconnect()
             except Exception:
@@ -1483,7 +1493,7 @@ class AviaNZ(QMainWindow):
         if not hasattr(self,'bar'):
             self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
         self.p_spec.addItem(self.bar, ignoreBounds=True)
-        # self.bar.sigPositionChangeFinished.connect(self.barMoved)
+        self.bar.sigPositionChangeFinished.connect(self.barMoved)
 
         if self.extra:
             # Extra stuff to show test plots
@@ -1886,10 +1896,14 @@ class AviaNZ(QMainWindow):
         self.listRectanglesa1[boxid].update()
         self.listRectanglesa2[boxid].update()
 
+### mouse management
+
     def mouseMoved(self,evt):
         """ Listener for mouse moves.
         If the user moves the mouse in the spectrogram, print the time, frequency, power for the mouse location. """
-        if self.p_spec.sceneBoundingRect().contains(evt):
+        if not self.showPointerDetails:
+            return
+        elif self.p_spec.sceneBoundingRect().contains(evt):
             mousePoint = self.p_spec.mapSceneToView(evt)
             indexx = int(mousePoint.x())
             indexy = int(mousePoint.y())
@@ -1903,6 +1917,12 @@ class AviaNZ(QMainWindow):
                 else:
                     self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreq, self.sg[indexx, indexy]))
 
+    def mousePressed_ampl(self, evt):
+        print("mouse was pressed")
+
+    def mouseReleased_ampl(self, evt):
+        print("mouse was released")
+
     def mouseClicked_ampl(self,evt):
         """ Listener for if the user clicks on the amplitude plot.
         If there is a box selected, get its colour.
@@ -1911,7 +1931,10 @@ class AviaNZ(QMainWindow):
         (2) clicking anywhere else -> start a box
         (3) clicking a second time to finish a box -> create the segment
         """
+        print("mouse was clicked")
         pos = evt.scenePos()
+        print(pos)
+        print(evt.button())
 
         # if any box is selected, deselect (wherever clicked)
         if self.box1id>-1:
@@ -1919,6 +1942,7 @@ class AviaNZ(QMainWindow):
 
         # if clicked inside scene:
         if self.p_ampl.sceneBoundingRect().contains(pos):
+            print("Contains.")
             mousePoint = self.p_ampl.mapSceneToView(pos)
 
             # if this is the second click and not a box, close the segment
@@ -1961,7 +1985,8 @@ class AviaNZ(QMainWindow):
             # if this is the first click:
             else:
                 # if this is right click (drawing mode):
-                if evt.button() == QtCore.Qt.RightButton:
+                # (or whatever you want)
+                if evt.button() == self.MouseDrawingButton:
                     # can't finish boxes in ampl plot
                     if self.dragRectangles.isChecked():
                         return
@@ -2084,7 +2109,7 @@ class AviaNZ(QMainWindow):
             # if this is the first click:
             else:
                 # if this is right click (drawing mode):
-                if evt.button() == QtCore.Qt.RightButton:
+                if evt.button() == self.MouseDrawingButton:
                     nonebrush = self.ColourNone
                     self.start_ampl_loc = self.convertSpectoAmpl(mousePoint.x())
                     self.start_spec_y = mousePoint.y() / np.shape(self.sg)[1]
@@ -2403,6 +2428,7 @@ class AviaNZ(QMainWindow):
 
         # Store the current page to return to
         self.currentPage = self.currentFileSection
+        self.segmentsDone = 0
         # Check there are segments to show on this page
         if not self.config['showAllPages']:
             if len(self.segments)>0:
@@ -2459,6 +2485,7 @@ class AviaNZ(QMainWindow):
                 x4 = int((self.segments[self.box1id][1]-self.startRead)*self.sampleRate)
 
             self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'])
+            self.humanClassifyDialog1.setSegNumbers(0, len(self.segments))
             self.humanClassifyDialog1.show()
             self.humanClassifyDialog1.activateWindow()
             #self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
@@ -2478,6 +2505,8 @@ class AviaNZ(QMainWindow):
         # Get the next image
         if self.box1id < len(self.segments)-1:
             self.box1id += 1
+            # update "done/to go" numbers:
+            self.humanClassifyDialog1.setSegNumbers(self.box1id, len(self.segments))
             if not self.config['showAllPages']:
                 # Different calls for the two types of region
                 if self.listRectanglesa2[self.box1id] is not None:
@@ -2523,10 +2552,9 @@ class AviaNZ(QMainWindow):
 
     def updateLabel(self,label):
         """ Update the label on a segment that is currently shown in the display. """
-        self.segments[self.box1id][4] = label
-        if self.listRectanglesa2[self.box1id] is not None:
-            self.birdSelected(label, update=False)
+        self.birdSelected(label, update=False)
 
+        if self.listRectanglesa2[self.box1id] is not None:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
             if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
@@ -2543,6 +2571,7 @@ class AviaNZ(QMainWindow):
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
+        self.segmentsDone += 1
         if len(checkText) > 0:
             if label != checkText:
                 label = str(checkText)
@@ -2558,7 +2587,6 @@ class AviaNZ(QMainWindow):
                 json.dump(outputError, file)
                 file.close()
 
-            #self.updateText(label)
             # Update the label on the box if it is in the current page
             self.updateLabel(label)
             # if self.listRectanglesa2[self.box1id] is not None:
@@ -2594,6 +2622,7 @@ class AviaNZ(QMainWindow):
         self.box1id = id-1
         self.segmentsToSave = True
         self.humanClassifyNextImage1()
+        self.segmentsDone += 1
 
     def humanClassifyDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
@@ -3242,14 +3271,17 @@ class AviaNZ(QMainWindow):
 # Code for playing sounds
     def playVisible(self):
         """ Listener for button to play the visible area.
-        On PLAY, all three buttons turn to STOPs.
+        On PLAY, turns to PAUSE and two other buttons turn to STOPs.
         """
         if self.media_obj.isPlaying():
-            self.stopPlayback()
+            self.pausePlayback()
         else:
-            range = self.p_ampl.viewRange()[0]
-            self.setPlaySliderLimits(range[0]*1000, range[1]*1000)
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            if self.media_obj.state() != QAudio.SuspendedState and not self.media_obj.keepSlider:
+                # restart playback
+                range = self.p_ampl.viewRange()[0]
+                self.setPlaySliderLimits(range[0]*1000, range[1]*1000)
+                # (else keep play slider range from before)
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
             self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.media_obj.pressedPlay()
@@ -3270,7 +3302,7 @@ class AviaNZ(QMainWindow):
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-                self.media_obj.pressedPlay()
+                self.media_obj.pressedPlay(resetPause=True)
             else:
                 print("Can't play, no segment selected")
 
@@ -3302,13 +3334,24 @@ class AviaNZ(QMainWindow):
             else:
                 print("Can't play, no segment selected")
 
+    def pausePlayback(self):
+        """ Restores the PLAY buttons, calls media_obj to pause playing."""
+        self.media_obj.pressedPause()
+
+        # Reset all button icons:
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
+        self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
+
     def stopPlayback(self):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
         self.media_obj.pressedStop()
         if self.segmentStart is None:
             self.segmentStart = 0
-        self.playSlider.setValue(self.segmentStart)
-        self.bar.setValue(self.convertAmpltoSpec(self.segmentStart))
+        # self.playSlider.setValue(self.segmentStart)
+        # self.bar.setValue(self.convertAmpltoSpec(self.segmentStart / 1000.0 - self.startRead))
+        self.playSlider.setValue(-1000)
+        self.bar.setValue(-1000)
         self.timePlayed.setText(self.convertMillisecs(self.segmentStart) + "/" + self.totalTime)
 
         # Reset all button icons:
@@ -3320,17 +3363,17 @@ class AviaNZ(QMainWindow):
         """ Listener called on sound notify (every 20 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
-        time = self.media_obj.elapsedUSecs() // 1000 + self.segmentStart # in ms
+        self.media_obj.time = self.media_obj.time + 20 # in ms. TODO: not hardcode notifyInterval
 
         # listener for playback finish. Note small buffer for catching up
-        if time > (self.segmentStop-50):
-            print("stopped at %d ms" % time)
+        if self.media_obj.time > (self.segmentStop-50):
+            print("stopped at %d ms" % self.media_obj.time)
             self.stopPlayback()
         else:
-            self.playSlider.setValue(time)
-            self.timePlayed.setText(self.convertMillisecs(time) + "/" + self.totalTime)
+            self.playSlider.setValue(self.media_obj.time)
+            self.timePlayed.setText(self.convertMillisecs(self.media_obj.time) + "/" + self.totalTime)
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
-            self.bar.setValue(self.convertAmpltoSpec(time / 1000.0 - self.startRead))
+            self.bar.setValue(self.convertAmpltoSpec(self.media_obj.time / 1000.0 - self.startRead))
 
     def setPlaySliderLimits(self, start, end):
         """ Uses start/end in ms, does what it says, and also seeks file position marker.
@@ -3343,11 +3386,11 @@ class AviaNZ(QMainWindow):
     def volSliderMoved(self, value):
         self.media_obj.applyVolSlider(value)
 
-    # def barMoved(self, evt):
-    #     "" Listener for when the bar showing playback position moves.
-    #     ""
-    #     self.playSlider.setValue(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
-    #     self.media_obj.seek(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
+    def barMoved(self, evt):
+        """ Listener for when the bar showing playback position moves.
+        """
+        self.playSlider.setValue(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
+        self.media_obj.seekToMs(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
 
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
@@ -3396,6 +3439,10 @@ class AviaNZ(QMainWindow):
             bl += '\n'
 
         params = [
+            {'name': 'Mouse settings', 'type' : 'group', 'children': [
+                {'name': 'Invert mouse', 'type': 'bool', 'tip': 'If true, segments are drawn with right clicking.',
+                 'value': self.config['drawingRightBtn']}
+            ]},
             {'name': 'Paging', 'type': 'group', 'children': [
                 {'name': 'Page size', 'type': 'int', 'value': self.config['maxFileShow'], 'limits': (5, 900),
                  'step': 5,
@@ -3476,6 +3523,12 @@ class AviaNZ(QMainWindow):
                 self.config['secsSave']=data
             elif childName=='Annotation.Annotation overview cell length':
                 self.config['widthOverviewSegment']=data
+            elif childName == 'Mouse settings.Invert mouse':
+                self.config['drawingRightBtn'] = data
+                if self.config['drawingRightBtn']:
+                    self.MouseDrawingButton = QtCore.Qt.RightButton
+                else:
+                    self.MouseDrawingButton = QtCore.Qt.LeftButton
             elif childName == 'Paging.Page size':
                 self.config['maxFileShow'] = data
             elif childName=='Paging.Page overlap':
