@@ -3440,7 +3440,7 @@ class AviaNZ(QMainWindow):
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
             self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-            self.media_obj.pressedPlay()
+            self.media_obj.pressedPlay(start=self.segmentStart, stop=self.segmentStop, audiodata=self.audiodata)
 
     def playSelectedSegment(self):
         """ Listener for PlaySegment button.
@@ -3451,7 +3451,6 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
         else:
             if self.box1id > -1:
-                print("we here now")
                 self.stopPlayback()
 
                 start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000 + self.startRead * 1000
@@ -3461,7 +3460,6 @@ class AviaNZ(QMainWindow):
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-                # self.media_obj.pressedPlay(resetPause=True)
                 self.media_obj.filterSeg(start, stop, self.audiodata)
             else:
                 print("Can't play, no segment selected")
@@ -3509,8 +3507,6 @@ class AviaNZ(QMainWindow):
         self.media_obj.pressedStop()
         if not hasattr(self, 'segmentStart') or self.segmentStart is None:
             self.segmentStart = 0
-        # self.playSlider.setValue(self.segmentStart)
-        # self.bar.setValue(self.convertAmpltoSpec(self.segmentStart / 1000.0 - self.startRead))
         self.playSlider.setValue(-1000)
         self.bar.setValue(-1000)
         self.timePlayed.setText(self.convertMillisecs(self.segmentStart) + "/" + self.totalTime)
@@ -3542,7 +3538,6 @@ class AviaNZ(QMainWindow):
         self.playSlider.setRange(start + 1000.0 * self.startRead, end + 1000.0 * self.startRead)
         self.segmentStart = self.playSlider.minimum()
         self.segmentStop = self.playSlider.maximum()
-        self.media_obj.seekToMs(self.playSlider.minimum())
 
     def volSliderMoved(self, value):
         self.media_obj.applyVolSlider(value)
@@ -3551,7 +3546,7 @@ class AviaNZ(QMainWindow):
         """ Listener for when the bar showing playback position moves.
         """
         self.playSlider.setValue(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
-        self.media_obj.seekToMs(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
+        self.media_obj.seekToMs(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000, self.segmentStart)
 
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
