@@ -852,7 +852,7 @@ class HumanClassify1(QDialog):
         #self.connect(self.close, SIGNAL("clicked()"), self.accept)
 
         # Audio playback object
-        self.media_obj2 = SupportClasses.ControllableAudio()
+        self.media_obj2 = SupportClasses.ControllableAudio(self.parent.audioFormat())
         self.media_obj2.notify.connect(self.endListener)
 
         # The layouts

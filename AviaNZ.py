@@ -239,7 +239,7 @@ class AviaNZ(QMainWindow):
                     msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                     reply = msg.exec_()
                     if reply == QMessageBox.Yes:
-                        firstFile = QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
+                        firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
                     else:
                         sys.exit()
 
@@ -896,6 +896,10 @@ class AviaNZ(QMainWindow):
         self.prevBoxCol = self.config['ColourNone']
         self.bar.setValue(0)
 
+        # reset playback buttons
+        self.playSegButton.setEnabled(False)
+        self.playBandLimitedSegButton.setEnabled(False)
+
         # Delete the overview segments
         for r in self.SegmentRects:
             self.p_overview2.removeItem(r)
@@ -909,17 +913,10 @@ class AviaNZ(QMainWindow):
     def openFile(self):
         """ This handles the menu item for opening a file.
         Splits the directory name and filename out, and then passes the filename to the loader."""
-        fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
-        #fileName = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
-
-        if fileName!='':
-            # Find the '/' in the fileName
-            i=len(fileName)-1
-            while fileName[i] != '/' and i>0:
-                i = i-1
-            self.dirName = fileName[:i+1]
-
-            self.listLoadFile(fileName)
+        fileName, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
+        self.dirName = os.path.dirname(fileName)
+        print("opening file %s" % fileName)
+        self.listLoadFile(os.path.basename(fileName))
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
@@ -1056,6 +1053,7 @@ class AviaNZ(QMainWindow):
                 self.audioFormat.setChannelCount(np.shape(self.audiodata)[1])
                 self.audioFormat.setSampleRate(self.sampleRate)
                 self.audioFormat.setSampleSize(wavobj.sampwidth*8)
+                print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
                 dlg += 1
 
@@ -3188,7 +3186,7 @@ class AviaNZ(QMainWindow):
             x2 = math.floor(float(x2) * self.config['incr']) #/ self.sampleRate
             #print x1, x2
             # filename = self.filename[:-4] + '_selected' + self.filename[-4:]
-            filename = QtGui.QFileDialog.getSaveFileName(self, 'Save File as', self.dirName, selectedFilter='*.wav')
+            filename, drop = QtGui.QFileDialog.getSaveFileName(self, 'Save File as', self.dirName, selectedFilter='*.wav')
             if filename:
                 wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
 
@@ -3453,6 +3451,9 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
         else:
             if self.box1id > -1:
+                print("we here now")
+                self.stopPlayback()
+
                 start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000 + self.startRead * 1000
                 stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000 + self.startRead * 1000
 
@@ -3460,7 +3461,8 @@ class AviaNZ(QMainWindow):
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-                self.media_obj.pressedPlay(resetPause=True)
+                # self.media_obj.pressedPlay(resetPause=True)
+                self.media_obj.filterSeg(start, stop, self.audiodata)
             else:
                 print("Can't play, no segment selected")
 
@@ -3474,6 +3476,7 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
         else:
             if self.box1id > -1:
+                self.stopPlayback()
                 # check frequency limits, + small buffer bands
                 bottom = max(0.1, self.minFreq, self.segments[self.box1id][2] * self.sampleRate / 2.)
                 top = min(self.segments[self.box1id][3] * self.sampleRate / 2., self.maxFreq-0.1)
@@ -3504,7 +3507,7 @@ class AviaNZ(QMainWindow):
     def stopPlayback(self):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
         self.media_obj.pressedStop()
-        if self.segmentStart is None:
+        if not hasattr(self, 'segmentStart') or self.segmentStart is None:
             self.segmentStart = 0
         # self.playSlider.setValue(self.segmentStart)
         # self.bar.setValue(self.convertAmpltoSpec(self.segmentStart / 1000.0 - self.startRead))
@@ -3524,7 +3527,7 @@ class AviaNZ(QMainWindow):
         self.media_obj.time = self.media_obj.time + 20 # in ms. TODO: not hardcode notifyInterval
 
         # listener for playback finish. Note small buffer for catching up
-        if self.media_obj.time > (self.segmentStop-50):
+        if self.media_obj.time > (self.segmentStop-10):
             print("stopped at %d ms" % self.media_obj.time)
             self.stopPlayback()
         else:
@@ -3576,7 +3579,7 @@ class AviaNZ(QMainWindow):
         exporter = pge.ImageExporter(self.w_spec.scene())
 
         if imageFile=='':
-            imageFile = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
+            imageFile, drop = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
         try:
             # works but requires devel (>=0.11) version of pyqtgraph:
             exporter.export(imageFile)

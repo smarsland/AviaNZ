@@ -900,18 +900,28 @@ class ControllableAudio(QAudioOutput):
         print("state changed to %d" % self.state())
         if self.state() == QAudio.IdleState:
             # give some time for GUI to catch up and stop
-            sleep(0.2)
-            self.notify.emit()
+            while(self.state() != QAudio.StoppedState):
+                sleep(0.02)
+                self.notify.emit()
             self.keepSlider=False
             self.stop()
 
     def pressedPlay(self, resetPause=False):
-        print("starting at: %d" % self.time)
+        print("***** pressed play")
         if not resetPause and self.state() == QAudio.SuspendedState:
+            print("resuming at: %d" % self.soundFile.pos())
             self.resume()
         else:
-            if not self.keepSlider:
+            if not self.keepSlider or resetPause:
+                print("pressing stop")
                 self.pressedStop()
+
+            sleep(0.1)
+            a = self.soundFile.peek( 20)
+            print(a)
+            print("starting at: %d" % self.soundFile.pos())
+            print(self.format.channelCount())
+            print(self.format.sampleSize())
             sleep(0.1)
             self.start(self.soundFile)
 
@@ -930,11 +940,18 @@ class ControllableAudio(QAudioOutput):
 
     def filterBand(self, start, stop, lo, hi, audiodata, sp):
         # takes start-end in ms
-        start = start * self.format.sampleRate() // 1000
-        stop = stop * self.format.sampleRate() // 1000
+        start = max(0, start * self.format.sampleRate() // 1000)
+        stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
         segment = audiodata[start:stop]
         segment = sp.bandpassFilter(segment, lo, hi)
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
+        self.loadArray(segment)
+
+    def filterSeg(self, start, stop, audiodata):
+        # takes start-end in ms
+        start = max(0, int(start * self.format.sampleRate() // 1000))
+        stop = min(int(stop * self.format.sampleRate() // 1000), len(audiodata))
+        segment = audiodata[start:stop]
         self.loadArray(segment)
 
     def loadArray(self, audiodata):
@@ -942,11 +959,12 @@ class ControllableAudio(QAudioOutput):
 
         audiodata = audiodata.astype('int16') # 16 corresponds to sampwidth=2
         # double mono sound to get two channels - simplifies reading
-        audiodata = np.column_stack((audiodata, audiodata))
+        if self.format.channelCount()==2:
+            audiodata = np.column_stack((audiodata, audiodata))
 
         # write filtered output to a BytesIO buffer
         self.tempout = io.BytesIO()
-        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale='dtype-limits', sampwidth=2)
+        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale='dtype-limits', sampwidth=self.format.sampleSize() // 8)
 
         # copy BytesIO@write to QBuffer@read for playing
         self.temparr = QByteArray(self.tempout.getvalue())
