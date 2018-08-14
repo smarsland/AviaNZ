@@ -876,7 +876,7 @@ class ControllableAudio(QAudioOutput):
         self.stateChanged.connect(self.endListener)
         self.soundFile = QFile()
         self.tempin = QBuffer()
-        self.setBufferSize(1000000)
+        self.setBufferSize(3000000)
         self.startpos = 0
         self.keepSlider = False
         self.format = format
@@ -897,7 +897,6 @@ class ControllableAudio(QAudioOutput):
 
     def endListener(self):
         # this should only be called if there's some misalignment between GUI and Audio
-        print("state changed to %d" % self.state())
         if self.state() == QAudio.IdleState:
             # give some time for GUI to catch up and stop
             while(self.state() != QAudio.StoppedState):
@@ -906,24 +905,21 @@ class ControllableAudio(QAudioOutput):
             self.keepSlider=False
             self.stop()
 
-    def pressedPlay(self, resetPause=False):
-        print("***** pressed play")
+    def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
         if not resetPause and self.state() == QAudio.SuspendedState:
             print("resuming at: %d" % self.soundFile.pos())
             self.resume()
         else:
             if not self.keepSlider or resetPause:
-                print("pressing stop")
                 self.pressedStop()
 
-            sleep(0.1)
-            a = self.soundFile.peek( 20)
-            print(a)
-            print("starting at: %d" % self.soundFile.pos())
-            print(self.format.channelCount())
-            print(self.format.sampleSize())
-            sleep(0.1)
-            self.start(self.soundFile)
+            print("starting at: %d" % self.tempin.pos())
+            sleep(0.2)
+            # in case bar was moved under pause, we need this:
+            pos = self.tempin.pos() # bytes
+            pos = self.format.durationForBytes(pos) / 1000 # convert to ms
+            pos = pos + start
+            self.filterSeg(pos, stop, audiodata)
 
     def pressedPause(self):
         self.keepSlider=True # a flag to avoid jumping the slider back to 0
@@ -940,6 +936,7 @@ class ControllableAudio(QAudioOutput):
 
     def filterBand(self, start, stop, lo, hi, audiodata, sp):
         # takes start-end in ms
+        self.time = max(0, start)
         start = max(0, start * self.format.sampleRate() // 1000)
         stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
         segment = audiodata[start:stop]
@@ -949,6 +946,7 @@ class ControllableAudio(QAudioOutput):
 
     def filterSeg(self, start, stop, audiodata):
         # takes start-end in ms
+        self.time = max(0, start)
         start = max(0, int(start * self.format.sampleRate() // 1000))
         stop = min(int(stop * self.format.sampleRate() // 1000), len(audiodata))
         segment = audiodata[start:stop]
@@ -967,22 +965,22 @@ class ControllableAudio(QAudioOutput):
         wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale='dtype-limits', sampwidth=self.format.sampleSize() // 8)
 
         # copy BytesIO@write to QBuffer@read for playing
-        self.temparr = QByteArray(self.tempout.getvalue())
+        self.temparr = QByteArray(self.tempout.getvalue()[44:])
         # self.tempout.close()
         if self.tempin.isOpen():
             self.tempin.close()
         self.tempin.setBuffer(self.temparr)
         self.tempin.open(QIODevice.ReadOnly)
 
-        sleep(0.1)
+        sleep(0.2)
         self.start(self.tempin)
 
-    def seekToMs(self, ms):
-        # note: important to specify format correctly!
-        self.soundFile.seek(self.format.bytesForDuration(ms*1000))
-        self.time = ms
-        self.startpos = self.soundFile.pos()
+    def seekToMs(self, ms, start):
+        print("seeking to %d ms" % ms)
+        # start is an offset for the current view start, as it is position 0 in extracted file
         self.reset()
+        self.tempin.seek(self.format.bytesForDuration((ms-start)*1000))
+        self.time = ms
 
     def applyVolSlider(self, value):
         # passes UI volume nonlinearly
