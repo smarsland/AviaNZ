@@ -795,6 +795,7 @@ class HumanClassify1(QDialog):
         font.setPointSize(24)
         font.setBold(True)
         self.species.setFont(font)
+        self.parent = parent
 
         # The buttons to move through the overview
         self.numberDone = QLabel()
@@ -852,7 +853,7 @@ class HumanClassify1(QDialog):
         #self.connect(self.close, SIGNAL("clicked()"), self.accept)
 
         # Audio playback object
-        self.media_obj2 = SupportClasses.ControllableAudio(self.parent.audioFormat())
+        self.media_obj2 = SupportClasses.ControllableAudio(self.parent.audioFormat)
         self.media_obj2.notify.connect(self.endListener)
 
         # The layouts

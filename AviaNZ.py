@@ -2503,7 +2503,7 @@ class AviaNZ(QMainWindow):
                 x3 = int((self.segments[self.box1id][0]-self.startRead)*self.sampleRate)
                 x4 = int((self.segments[self.box1id][1]-self.startRead)*self.sampleRate)
 
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'])
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
             self.humanClassifyDialog1.setSegNumbers(0, len(self.segments))
             self.humanClassifyDialog1.show()
             self.humanClassifyDialog1.activateWindow()

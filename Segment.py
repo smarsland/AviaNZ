@@ -435,7 +435,7 @@ class Segment:
         #    sd[tau] = np.sum((data[:W] - data[tau:tau+W])**2)
 
         ints = np.arange(1, W)
-        starts = range(0, len(data) - 2 * W, W / 2)
+        starts = range(0, len(data) - 2 * W, W // 2)
 
         for i in starts:
             # Compute squared diff between signal and shift
