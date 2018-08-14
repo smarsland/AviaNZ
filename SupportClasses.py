@@ -158,7 +158,7 @@ class postProcess:
                 continue
             else:  # read the sound segment and check for wind
                 secs = seg[1] - seg[0]
-                data = self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate]
+                data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
 
                 wind_lower = 2.0 * 100 / self.sampleRate
                 wind_upper = 2.0 * 250 / self.sampleRate
@@ -205,7 +205,7 @@ class postProcess:
                     continue
                 else:
                     secs = seg[1] - seg[0]
-                    data = self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate]
+                    data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
                 mfcc = librosa.feature.mfcc(data, self.sampleRate)
                 # Normalise
                 mfcc -= np.mean(mfcc, axis=0)
@@ -229,7 +229,7 @@ class postProcess:
             else:
                 # read the sound segment and check fundamental frq.
                 secs = seg[1] - seg[0]
-                data = self.audioData[seg[0]*self.sampleRate:seg[1]*self.sampleRate]
+                data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
 
                 # bring the segment into 16000
                 if self.sampleRate != 16000:
