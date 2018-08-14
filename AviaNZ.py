@@ -25,7 +25,7 @@ import sys, os, json, platform, re
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox
 from PyQt5.QtCore import Qt, QDir, QTime, QTimer, QPoint, QPointF, QLocale, QFile, QIODevice
-from PyQt5.QtMultimedia import QAudio, QAudioOutput
+from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 
 import wavio
 import numpy as np
@@ -193,6 +193,7 @@ class AviaNZ(QMainWindow):
         self.box1id = -1
         self.DOC = DOC
         self.started = False
+        self.startedInAmpl = False
         self.startTime = 0
         self.segmentsToSave = False
 
@@ -205,7 +206,10 @@ class AviaNZ(QMainWindow):
         self.reviewer = self.config['reviewer']
 
         # audio things
-        self.media_obj = SupportClasses.ControllableAudio()
+        self.audioFormat = QAudioFormat()
+        self.audioFormat.setCodec("audio/pcm")
+        self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
+        self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
         # working directory
         if not os.path.isdir(self.dirName):
@@ -491,12 +495,12 @@ class AviaNZ(QMainWindow):
         self.p_overview2.setXLink(self.p_overview)
 
         self.w_ampl = pg.GraphicsLayoutWidget()
-        self.p_ampl = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False)
+        self.p_ampl = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False, thisIsAmpl=True)
         self.w_ampl.addItem(self.p_ampl,row=0,col=1)
         self.d_ampl.addWidget(self.w_ampl)
 
         self.w_spec = pg.GraphicsLayoutWidget()
-        self.p_spec = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False)
+        self.p_spec = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False, thisIsAmpl=False)
         self.w_spec.addItem(self.p_spec,row=0,col=1)
         self.d_spec.addWidget(self.w_spec)
 
@@ -694,9 +698,6 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(QLabel('Visible window (seconds)'),row=8,col=0,colspan=3)
         self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=3)
 
-        # Audio playback - this responds to audio output timer
-        self.media_obj.notify.connect(self.movePlaySlider)
-
 
         # The slider to show playback position
         # This is hidden, but controls the moving bar
@@ -886,6 +887,7 @@ class AviaNZ(QMainWindow):
             self.p_ampl.removeItem(self.drawingBox_ampl)
             self.p_spec.removeItem(self.drawingBox_spec)
         self.started = False
+        self.startedInAmpl = False
         self.segmentsToSave = False
 
         # Keep track of start points and selected buttons
@@ -949,6 +951,7 @@ class AviaNZ(QMainWindow):
         self.resetStorageArrays()
 
         # Reset the media player
+        self.media_obj = SupportClasses.ControllableAudio(self.audioFormat) # protects on first load
         if self.media_obj.isPlaying():
             self.media_obj.stop()
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
@@ -1043,11 +1046,16 @@ class AviaNZ(QMainWindow):
             if os.stat(self.filename).st_size != 0: # avoid files with no data (Tier 1 has 0Kb .wavs)
                 wavobj = wavio.read(self.filename,self.lenRead,self.startRead)
                 #wavobj = wavio.read(self.filename)
+
+                # Parse wav format details based on file header:
                 self.sampleRate = wavobj.rate
                 self.audiodata = wavobj.data
                 self.minFreq = 0
                 self.maxFreq = self.sampleRate / 2.
                 self.fileLength = wavobj.nframes
+                self.audioFormat.setChannelCount(np.shape(self.audiodata)[1])
+                self.audioFormat.setSampleRate(self.sampleRate)
+                self.audioFormat.setSampleSize(wavobj.sampwidth*8)
 
                 dlg += 1
 
@@ -1136,7 +1144,10 @@ class AviaNZ(QMainWindow):
                 self.timePlayed.setText(self.convertMillisecs(0) + "/" + self.totalTime)
     
                 # Load the file for playback
+                self.media_obj = SupportClasses.ControllableAudio(self.audioFormat)
                 self.media_obj.load(self.filename)
+                # this responds to audio output timer
+                self.media_obj.notify.connect(self.movePlaySlider)
     
                 # Set the length of the scrollbar.
                 self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
@@ -1832,15 +1843,19 @@ class AviaNZ(QMainWindow):
             self.listRectanglesa2.append(None)
             self.listLabels.append(None)
 
-    def deleteSegment(self,id=-1):
+    def deleteSegment(self,id=-1,hr=False):
         """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
         human classify dialogs.
         Deletes the segment that is selected, otherwise does nothing.
         Updates the overview segments as well.
         """
-        if id<0 or not id:
-            # delete selected
+
+        if not hr and (id<0 or not id):
             id = self.box1id
+
+        #if id<0 or not id:
+            # delete selected
+            #id = self.box1id
 
         if id>-1:
             print("segment %d deleted" % id)
@@ -1951,7 +1966,13 @@ class AviaNZ(QMainWindow):
             if self.started:
                 # can't finish boxes in ampl plot
                 if self.dragRectangles.isChecked():
-                    return
+                    if self.startedInAmpl:
+                        # started in ampl and finish in ampl,
+                        # so continue as usual to draw a segment
+                        pass
+                    else:
+                        # started in spec so ignore this bullshit
+                        return
 
                 # remove the drawing box:
                 self.p_spec.removeItem(self.vLine_s)
@@ -1983,15 +2004,16 @@ class AviaNZ(QMainWindow):
                 # the new segment is now selected and can be played
                 self.selectSegment(self.box1id)
                 self.started = not(self.started)
+                self.startedInAmpl = False
 
             # if this is the first click:
             else:
                 # if this is right click (drawing mode):
                 # (or whatever you want)
                 if evt.button() == self.MouseDrawingButton:
-                    # can't finish boxes in ampl plot
-                    if self.dragRectangles.isChecked():
-                        return
+                    # this would prevent starting boxes in ampl plot
+                    # if self.dragRectangles.isChecked():
+                    #    return
 
                     nonebrush = self.ColourNone
                     self.start_ampl_loc = mousePoint.x()
@@ -2017,6 +2039,7 @@ class AviaNZ(QMainWindow):
                     self.p_ampl.scene().sigMouseMoved.connect(self.GrowBox_ampl)
 
                     self.started = not (self.started)
+                    self.startedInAmpl = True
 
                 # if this is left click (selection mode):
                 else:
@@ -2065,6 +2088,10 @@ class AviaNZ(QMainWindow):
             # if this is the second click, close the segment/box
             # note: can finish segment with either left or right click
             if self.started:
+                if self.dragRectangles.isChecked() and self.startedInAmpl:
+                    # started in ampl, and spec is used for boxes, so can't continue here
+                    return
+
                 # remove the drawing box:
                 if not self.dragRectangles.isChecked():
                     self.p_spec.removeItem(self.vLine_s)
@@ -2107,10 +2134,10 @@ class AviaNZ(QMainWindow):
                 # select the new segment/box
                 self.selectSegment(self.box1id)
                 self.started = not(self.started)
+                self.startedInAmpl = False
 
             # if this is the first click:
             else:
-                print("starting something")
                 # if this is right click (drawing mode):
                 if evt.button() == self.MouseDrawingButton:
                     nonebrush = self.ColourNone
@@ -2119,7 +2146,6 @@ class AviaNZ(QMainWindow):
 
                     # start a new box:
                     if self.dragRectangles.isChecked():
-                        print("starting a box")
                         # spectrogram mouse follower box:
                         startpointS = QPointF(mousePoint.x(), mousePoint.y())
                         endpointS = QPointF(mousePoint.x(), mousePoint.y())
@@ -2152,6 +2178,7 @@ class AviaNZ(QMainWindow):
                     self.drawingBox_ampl.setRegion([self.start_ampl_loc, self.start_ampl_loc])
 
                     self.started = not (self.started)
+                    self.startedInAmpl = False
 
                 # if this is left click (selection mode):
                 else:
@@ -2205,7 +2232,7 @@ class AviaNZ(QMainWindow):
         if self.p_spec.sceneBoundingRect().contains(pos):
             mousePoint = self.p_spec.mapSceneToView(pos)
             self.drawingBox_ampl.setRegion([self.start_ampl_loc, self.convertSpectoAmpl(mousePoint.x())])
-            if self.dragRectangles.isChecked():
+            if self.dragRectangles.isChecked() and not self.startedInAmpl:
                 # making a box
                 posY = mousePoint.y() - self.start_spec_y * np.shape(self.sg)[1]
                 self.drawingBox_spec.setSize([mousePoint.x()-self.convertAmpltoSpec(self.start_ampl_loc), posY])
@@ -2574,7 +2601,6 @@ class AviaNZ(QMainWindow):
 
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
-        print "Correct button"
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
         self.segmentsDone += 1
         if len(checkText) > 0:
@@ -2740,10 +2766,7 @@ class AviaNZ(QMainWindow):
                             for error in errors:
                                 inderr.append(self.indices[error])
                             outputErrors = []
-                            print "about to delete... ", error, self.segments[error]
-                            print "inderr ", inderr
                             for error in inderr[-1::-1]:
-                                print error, self.segments[error]
                                 outputErrors.append(self.segments[error])
                                 self.deleteSegment(id=error)
                             self.segmentsToSave = True
@@ -2869,10 +2892,7 @@ class AviaNZ(QMainWindow):
                             for error in errors:
                                 inderr.append(self.indices[error])
                             outputErrors = []
-                            print "about to delete... ", error, self.segments[error]
-                            print "inderr ", inderr
                             for error in inderr[-1::-1]:
-                                print error, self.segments[error]
                                 outputErrors.append(self.segments[error])
                                 self.deleteSegment(id=error)
                             self.segmentsToSave = True
@@ -3754,49 +3774,49 @@ class AviaNZ(QMainWindow):
 
 # ============
 # Various actions: deleting segments, saving, quitting
-    def deleteSegment(self,id=-1,hr=False):
-        """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
-        human classify dialogs.
-        Deletes the segment that is selected, otherwise does nothing.
-        Updates the overview segments as well.
-        """
-        # print id, self.box1id, not id
-        if not hr and (id<0 or not id):
-            id = self.box1id
+    #def deleteSegment(self,id=-1,hr=False):
+        #""" Listener for delete segment button, or backspace key. Also called when segments are deleted by the
+        #human classify dialogs.
+        #Deletes the segment that is selected, otherwise does nothing.
+        #Updates the overview segments as well.
+        #"""
+        ## print id, self.box1id, not id
+        #if not hr and (id<0 or not id):
+            #id = self.box1id
+#
+        #if id>-1:
+            ## Work out which overview segment this segment is in (could be more than one) and update it
+            #inds = int(float(self.convertAmpltoSpec(self.segments[id][0]-self.startRead))/self.widthOverviewSegment)
+            ## print type(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment)), type(len(self.overviewSegments) - 1)
+            #inde = min(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment),len(self.overviewSegments) - 1)
+            ## print "inde", inde
 
-        if id>-1:
-            # Work out which overview segment this segment is in (could be more than one) and update it
-            inds = int(float(self.convertAmpltoSpec(self.segments[id][0]-self.startRead))/self.widthOverviewSegment)
-            # print type(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment)), type(len(self.overviewSegments) - 1)
-            inde = min(int(float(self.convertAmpltoSpec(self.segments[id][1]-self.startRead))/self.widthOverviewSegment),len(self.overviewSegments) - 1)
-            # print "inde", inde
-
-            if self.segments[id][4] == "Don't Know":
-                self.overviewSegments[inds:inde+1,0] -= 1
-            elif self.segments[id][4][-1] == '?':
-                self.overviewSegments[inds:inde + 1, 2] -= 1
-            else:
-                self.overviewSegments[inds:inde + 1, 1] -= 1
-            for box in range(inds, inde + 1):
-                if self.overviewSegments[box,0] > 0:
-                    self.SegmentRects[box].setBrush(self.ColourNone)
-                elif self.overviewSegments[box,2] > 0:
-                    self.SegmentRects[box].setBrush(self.ColourPossible)
-                elif self.overviewSegments[box,1] > 0:
-                    self.SegmentRects[box].setBrush(self.ColourNamed)
-                else:
-                    self.SegmentRects[box].setBrush(pg.mkBrush('w'))
-
-            if self.listRectanglesa1[id] is not None:
-                self.p_ampl.removeItem(self.listRectanglesa1[id])
-                self.p_spec.removeItem(self.listRectanglesa2[id])
-                self.p_spec.removeItem(self.listLabels[id])
-            del self.listLabels[id]
-            del self.segments[id]
-            del self.listRectanglesa1[id]
-            del self.listRectanglesa2[id]
-            self.segmentsToSave = True
-            self.box1id = -1
+            #if self.segments[id][4] == "Don't Know":
+                #self.overviewSegments[inds:inde+1,0] -= 1
+            #elif self.segments[id][4][-1] == '?':
+                #self.overviewSegments[inds:inde + 1, 2] -= 1
+            #else:
+                #self.overviewSegments[inds:inde + 1, 1] -= 1
+            #for box in range(inds, inde + 1):
+                #if self.overviewSegments[box,0] > 0:
+                    #self.SegmentRects[box].setBrush(self.ColourNone)
+                #elif self.overviewSegments[box,2] > 0:
+                    #self.SegmentRects[box].setBrush(self.ColourPossible)
+                #elif self.overviewSegments[box,1] > 0:
+                    #self.SegmentRects[box].setBrush(self.ColourNamed)
+                #else:
+                    #self.SegmentRects[box].setBrush(pg.mkBrush('w'))
+#
+            #if self.listRectanglesa1[id] is not None:
+                #self.p_ampl.removeItem(self.listRectanglesa1[id])
+                #self.p_spec.removeItem(self.listRectanglesa2[id])
+                #self.p_spec.removeItem(self.listLabels[id])
+            #del self.listLabels[id]
+            #del self.segments[id]
+            #del self.listRectanglesa1[id]
+            #del self.listRectanglesa2[id]
+            #self.segmentsToSave = True
+            #self.box1id = -1
 
     def deleteAll(self):
         """ Listener for delete all button.
