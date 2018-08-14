@@ -1,5 +1,5 @@
 {"window_width": 256, "incr": 128, "maxSearchDepth": 20, "minSegment": 50,
-"drawingRightBtn": true, "requireDrag": false,
+"drawingRightBtn": true, "requireDrag": true,
 "dirpath": "./Sound Files", "secsSave": 60, "windowWidth": 6.57,
 "textoffset": 9, "widthOverviewSegment": 10.0, "maxFileShow": 300, "fileOverlap": 10,
 "brightness": 50, "contrast": 50, "overlap_allowed": 5,

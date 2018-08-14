@@ -795,7 +795,6 @@ class DragViewBox(pg.ViewBox):
 
     def mousePressEvent(self, ev):
         if self.enableDrag and ev.button() == self.parent.MouseDrawingButton:
-            print("mousepressevent")
             if self.thisIsAmpl:
                 self.parent.mouseClicked_ampl(ev)
             else:
@@ -806,7 +805,6 @@ class DragViewBox(pg.ViewBox):
 
     def mouseReleaseEvent(self, ev):
         if self.enableDrag and ev.button() == self.parent.MouseDrawingButton:
-            print("mousereleaseevent")
             if self.thisIsAmpl:
                 self.parent.mouseClicked_ampl(ev)
             else:
