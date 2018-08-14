@@ -341,10 +341,6 @@ class AviaNZ(QMainWindow):
         self.dragRectangles.setCheckable(True)
         self.dragRectangles.setChecked(self.config['dragBoxes'])
 
-        self.requireDragging = specMenu.addAction("Mark segments by dragging", self.requireDraggingCheck)
-        self.requireDragging.setCheckable(True)
-        self.requireDragging.setChecked(self.config['requireDrag'])
-
         self.dragRectTransparent = specMenu.addAction("Make dragged boxes transparent", self.dragRectsTransparent)
         self.dragRectTransparent.setCheckable(True)
         self.dragRectTransparent.setChecked(self.config['transparentBoxes'])
@@ -495,12 +491,12 @@ class AviaNZ(QMainWindow):
         self.p_overview2.setXLink(self.p_overview)
 
         self.w_ampl = pg.GraphicsLayoutWidget()
-        self.p_ampl = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False, thisIsAmpl=True)
+        self.p_ampl = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=self.config['requireDrag'], thisIsAmpl=True)
         self.w_ampl.addItem(self.p_ampl,row=0,col=1)
         self.d_ampl.addWidget(self.w_ampl)
 
         self.w_spec = pg.GraphicsLayoutWidget()
-        self.p_spec = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False, thisIsAmpl=False)
+        self.p_spec = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=self.config['requireDrag'], thisIsAmpl=False)
         self.w_spec.addItem(self.p_spec,row=0,col=1)
         self.d_spec.addWidget(self.w_spec)
 
@@ -757,7 +753,6 @@ class AviaNZ(QMainWindow):
         self.showOverviewSegsCheck()
         self.dragRectsTransparent()
         self.showPointerDetailsCheck()
-        self.requireDraggingCheck()
         self.dragRectanglesCheck()
 
         # add statusbar
@@ -1194,13 +1189,6 @@ class AviaNZ(QMainWindow):
         Changes the pyqtgraph MouseMode.
         Also swaps the listeners. """
         self.config['dragBoxes'] = self.dragRectangles.isChecked()
-
-    def requireDraggingCheck(self):
-        """ Listener for the menuitem that switches between dragging and click-clicking to draw segments.
-        swaps the listeners. """
-        self.config['requireDrag'] = self.requireDragging.isChecked()
-        self.p_ampl.enableDrag = self.requireDragging.isChecked()
-        self.p_spec.enableDrag = self.requireDragging.isChecked()
 
     def dragRectsTransparent(self):
         """ Listener for the check menu item that decides if the user wants the dragged rectangles to have colour or not.
@@ -1980,7 +1968,8 @@ class AviaNZ(QMainWindow):
                 # disconnect GrowBox listeners, leave the position listener
                 self.p_ampl.scene().sigMouseMoved.disconnect()
                 self.p_spec.scene().sigMouseMoved.disconnect()
-                self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
+                if self.showPointerDetails.isChecked():
+                    self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
 
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
@@ -2099,7 +2088,8 @@ class AviaNZ(QMainWindow):
                 self.p_spec.removeItem(self.drawingBox_spec)
                 # disconnect GrowBox listeners, leave the position listener
                 self.p_spec.scene().sigMouseMoved.disconnect()
-                self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
+                if self.showPointerDetails.isChecked():
+                    self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
 
                 # Pass either default y coords or box limits:
                 x1 = self.start_ampl_loc
@@ -3597,7 +3587,9 @@ class AviaNZ(QMainWindow):
         params = [
             {'name': 'Mouse settings', 'type' : 'group', 'children': [
                 {'name': 'Invert mouse', 'type': 'bool', 'tip': 'If true, segments are drawn with right clicking.',
-                 'value': self.config['drawingRightBtn']}
+                 'value': self.config['drawingRightBtn']},
+                {'name': 'Mark by dragging', 'type': 'bool', 'tip': 'If false, mark by clicking',
+                 'value': self.config['requireDrag']}
             ]},
             {'name': 'Paging', 'type': 'group', 'children': [
                 {'name': 'Page size', 'type': 'int', 'value': self.config['maxFileShow'], 'limits': (5, 900),
@@ -3685,6 +3677,10 @@ class AviaNZ(QMainWindow):
                     self.MouseDrawingButton = QtCore.Qt.RightButton
                 else:
                     self.MouseDrawingButton = QtCore.Qt.LeftButton
+            elif childName == 'Mouse settings.Mark by dragging':
+                self.config['requireDrag'] = data
+                self.p_ampl.enableDrag = self.config['requireDrag']
+                self.p_spec.enableDrag = self.config['requireDrag']
             elif childName == 'Paging.Page size':
                 self.config['maxFileShow'] = data
             elif childName=='Paging.Page overlap':
