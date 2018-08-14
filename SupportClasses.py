@@ -6,7 +6,7 @@
 #     from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QAbstractButton
 from PyQt5.QtCore import QTime, QFile, QIODevice, QBuffer, QByteArray
-from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
+from PyQt5.QtMultimedia import QAudio, QAudioOutput
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -769,10 +769,11 @@ class DragViewBox(pg.ViewBox):
     sigMouseDragged = QtCore.Signal(object,object,object)
     keyPressed = QtCore.Signal(int)
 
-    def __init__(self, parent, enableDrag, *args, **kwds):
+    def __init__(self, parent, enableDrag, thisIsAmpl, *args, **kwds):
         pg.ViewBox.__init__(self, *args, **kwds)
         self.enableDrag = enableDrag
         self.parent = parent
+        self.thisIsAmpl = thisIsAmpl
 
     def mouseDragEvent(self, ev):
         print("uncaptured drag event")
@@ -795,8 +796,10 @@ class DragViewBox(pg.ViewBox):
     def mousePressEvent(self, ev):
         if self.enableDrag and ev.button() == self.parent.MouseDrawingButton:
             print("mousepressevent")
-            self.parent.mouseClicked_ampl(ev)
-            self.parent.mouseClicked_spec(ev)
+            if self.thisIsAmpl:
+                self.parent.mouseClicked_ampl(ev)
+            else:
+                self.parent.mouseClicked_spec(ev)
             ev.accept()
         else:
             ev.ignore()
@@ -804,8 +807,10 @@ class DragViewBox(pg.ViewBox):
     def mouseReleaseEvent(self, ev):
         if self.enableDrag and ev.button() == self.parent.MouseDrawingButton:
             print("mousereleaseevent")
-            self.parent.mouseClicked_ampl(ev)
-            self.parent.mouseClicked_spec(ev)
+            if self.thisIsAmpl:
+                self.parent.mouseClicked_ampl(ev)
+            else:
+                self.parent.mouseClicked_spec(ev)
             ev.accept()
         else:
             ev.ignore()
@@ -863,16 +868,9 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
 class ControllableAudio(QAudioOutput):
     # This links all the PyQt5 audio playback things -
     # QAudioOutput, QFile, and input from main interfaces
-    format = QAudioFormat()
-    format.setChannelCount(2)
-    format.setSampleRate(48000)
-    format.setSampleSize(16)
-    format.setCodec("audio/pcm")
-    format.setByteOrder(QAudioFormat.LittleEndian)
-    format.setSampleType(QAudioFormat.SignedInt)
 
-    def __init__(self):
-        super(ControllableAudio, self).__init__(self.format)
+    def __init__(self, format):
+        super(ControllableAudio, self).__init__(format)
         # on this notify, move slider (connected in main file)
         self.setNotifyInterval(20)
         self.stateChanged.connect(self.endListener)
@@ -881,6 +879,7 @@ class ControllableAudio(QAudioOutput):
         self.setBufferSize(1000000)
         self.startpos = 0
         self.keepSlider = False
+        self.format = format
 
     def load(self, soundFileName):
         if self.soundFile.isOpen():
