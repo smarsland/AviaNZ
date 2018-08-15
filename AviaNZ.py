@@ -878,7 +878,8 @@ class AviaNZ(QMainWindow):
                 except Exception:
                     pass
                 # Add the other mouse move listener back
-                self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
+                if self.showPointerDetails.isChecked():
+                    self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
                 self.p_spec.removeItem(self.vLine_s)
             self.p_ampl.removeItem(self.drawingBox_ampl)
             self.p_spec.removeItem(self.drawingBox_spec)
@@ -910,44 +911,40 @@ class AviaNZ(QMainWindow):
         """ This handles the menu item for opening a file.
         Splits the directory name and filename out, and then passes the filename to the loader."""
         fileName, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
-        self.dirName = os.path.dirname(fileName)
-        print("opening file %s" % fileName)
-        self.listLoadFile(os.path.basename(fileName))
+        if fileName != '':
+            print("opening file %s" % fileName)
+            self.dirName = os.path.dirname(fileName)
+            self.listLoadFile(os.path.basename(fileName))
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
         Prepares the program for a new file.
         Saves the segments of the current file, resets flags and calls loadFile() """
 
+        # avoid files with no data (Tier 1 has 0Kb .wavs)
+        fullcurrent = os.path.join(self.dirName, current)
+        if not os.path.isfile(fullcurrent):
+            print("File %s does not exist!" % fullcurrent)
+            return
+        if os.stat(fullcurrent).st_size == 0:
+            print("Cannot open file %s of size 0!" % fullcurrent)
+            return
+
         # If there was a previous file, make sure the type of its name is OK. This is because you can get these
         # names from the file listwidget, or from the openFile dialog.
+        # - is this needed at all??
         if self.previousFile is not None:
             if type(self.previousFile) is not self.listitemtype:
                 self.previousFile = self.listFiles.findItems(os.path.basename(str(self.previousFile)), Qt.MatchExactly)
                 if len(self.previousFile)>0:
                     self.previousFile = self.previousFile[0]
 
-            # if len(self.segments) > 0 or self.hasSegments:
-            #     if len(self.segments) > 0:
-            #         if self.segments[0][0] > -1:
-            #             self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')),
-            #                                      self.operator, self.reviewer, -1])
-            #     else:
-            #         self.segments.insert(0,
-            #                              [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
-            #                               self.reviewer, -1])
             self.saveSegments()
-            # self.previousFile.setForeground(Qt.red)
+
         self.previousFile = current
         if type(current) is self.listitemtype:
             current = current.text()
-        self.resetStorageArrays()
 
-        # Reset the media player
-        self.media_obj = SupportClasses.ControllableAudio(self.audioFormat) # protects on first load
-        if self.media_obj.isPlaying():
-            self.media_obj.stop()
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         # Update the file list to show the right one
         i=0
         while self.listOfFiles[i].fileName() != current and i<len(self.listOfFiles)-1:
@@ -984,6 +981,8 @@ class AviaNZ(QMainWindow):
         Then it sets up the audio player and fills in the appropriate time data in the window, and makes
         the scroll bar and overview the appropriate lengths.
         """
+
+        self.resetStorageArrays()
 
         with pg.ProgressDialog("Loading..", 0, 7) as dlg:
             dlg.setCancelButton(None)
@@ -1036,9 +1035,10 @@ class AviaNZ(QMainWindow):
                 self.lenRead = self.config['maxFileShow']+self.config['fileOverlap']
             else:
                 self.lenRead = self.config['maxFileShow'] + 2*self.config['fileOverlap']
+
+
             if os.stat(self.filename).st_size != 0: # avoid files with no data (Tier 1 has 0Kb .wavs)
                 wavobj = wavio.read(self.filename,self.lenRead,self.startRead)
-                #wavobj = wavio.read(self.filename)
 
                 # Parse wav format details based on file header:
                 self.sampleRate = wavobj.rate
@@ -1142,6 +1142,8 @@ class AviaNZ(QMainWindow):
                 self.media_obj.load(self.filename)
                 # this responds to audio output timer
                 self.media_obj.notify.connect(self.movePlaySlider)
+                # Reset the media player
+                self.stopPlayback()
     
                 # Set the length of the scrollbar.
                 self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
@@ -1276,7 +1278,8 @@ class AviaNZ(QMainWindow):
         else:
             self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
             self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
-            self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
+            if self.showPointerDetails.isChecked():
+                self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
             for rect in self.listRectanglesa1:
                 if rect is not None:
                     rect.sigRegionChangeFinished.connect(self.updateRegion_ampl)
@@ -1439,6 +1442,8 @@ class AviaNZ(QMainWindow):
         Does the work of keeping all the plots in the right place as the overview moves.
         It sometimes updates a bit slowly. """
 
+        if self.media_obj.state() == QAudio.ActiveState or self.media_obj.state() == QAudio.SuspendedState:
+            self.stopPlayback()
         #3/4/18: Want to stop it moving past either end
         # Need to disconnect the listener and reconnect it to avoid a recursive call
         minX, maxX = self.overviewImageRegion.getRegion()
@@ -1915,7 +1920,7 @@ class AviaNZ(QMainWindow):
     def mouseMoved(self,evt):
         """ Listener for mouse moves.
         If the user moves the mouse in the spectrogram, print the time, frequency, power for the mouse location. """
-        if not self.showPointerDetails:
+        if not self.showPointerDetails.isChecked():
             return
         elif self.p_spec.sceneBoundingRect().contains(evt):
             mousePoint = self.p_spec.mapSceneToView(evt)
@@ -2205,8 +2210,6 @@ class AviaNZ(QMainWindow):
                         # TODO: pan the view
                         pass
 
-# TODO: if in rect mode you start in ampl plot -> get undefined ys
-
     def GrowBox_ampl(self,pos):
         """ Listener for when a segment is being made in the amplitude plot.
         Makes the blue box that follows the mouse change size. """
@@ -2347,21 +2350,8 @@ class AviaNZ(QMainWindow):
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
 
     def prepare5minMove(self):
-        #if len(self.segments) > 0 or self.hasSegments:
-            # if len(self.segments) > 0:
-            #     if self.segments[0][0] > -1:
-            #         self.segments.insert(0,
-            #                              [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
-            #                               self.reviewer, -1])
-            # else:
-            #     self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
-            #                              self.reviewer, -1])
         self.saveSegments()
         self.resetStorageArrays()
-        # Reset the media player
-        if self.media_obj.isPlaying():
-            self.media_obj.stop()
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.loadFile()
 
     def movePrev5mins(self):
@@ -2374,7 +2364,6 @@ class AviaNZ(QMainWindow):
         if self.currentFileSection <= 0:
             self.prev5mins.setEnabled(False)
         self.prepare5minMove()
-
 
     def moveNext5mins(self):
         """ When the button to move to the previous 5 minutes is pressed, enable that.
@@ -3107,16 +3096,6 @@ class AviaNZ(QMainWindow):
 
             print("Denoising completed in %s seconds" % round(time.time() - opstartingtime, 4))
             self.statusLeft.setText("Ready")
-
-        # TODO: Make the temp file playable
-        # # media_obj = phonon.Phonon.MediaObject(self)
-        # self.media_obj.setCurrentSource(phonon.Phonon.MediaSource(filename))
-        # audio_output = phonon.Phonon.AudioOutput(phonon.Phonon.MusicCategory, self)
-        # phonon.Phonon.createPath(self.media_obj, audio_output)
-        # self.media_obj.tick.connect(self.movePlaySlider)
-        # self.media_obj.setTickInterval(20)
-        # self.media_obj.tick.connect(self.movePlaySlider)
-        # self.media_obj.finished.connect(self.playFinished)
 
     def denoise_undo(self):
         """ Listener for undo button in denoising dialog.
