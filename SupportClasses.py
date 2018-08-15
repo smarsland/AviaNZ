@@ -917,6 +917,7 @@ class ControllableAudio(QAudioOutput):
             pos = self.tempin.pos() # bytes
             pos = self.format.durationForBytes(pos) / 1000 # convert to ms
             pos = pos + start
+            print("pos: %d start: %d stop %d" %(pos, start, stop))
             self.filterSeg(pos, stop, audiodata)
 
     def pressedPause(self):
@@ -933,7 +934,7 @@ class ControllableAudio(QAudioOutput):
             self.soundFile.seek(self.startpos)
 
     def filterBand(self, start, stop, lo, hi, audiodata, sp):
-        # takes start-end in ms
+        # takes start-end in ms, relative to file start
         self.time = max(0, start)
         start = max(0, start * self.format.sampleRate() // 1000)
         stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
@@ -944,6 +945,7 @@ class ControllableAudio(QAudioOutput):
 
     def filterSeg(self, start, stop, audiodata):
         # takes start-end in ms
+        print("filtering between %d -%d" % (start, stop))
         self.time = max(0, start)
         start = max(0, int(start * self.format.sampleRate() // 1000))
         stop = min(int(stop * self.format.sampleRate() // 1000), len(audiodata))
