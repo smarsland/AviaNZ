@@ -7,6 +7,7 @@
 from PyQt5.QtWidgets import QAbstractButton
 from PyQt5.QtCore import QTime, QFile, QIODevice, QBuffer, QByteArray
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
+from PyQt5.QtGui import QPainter
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -248,7 +249,7 @@ class postProcess:
                 ind = np.squeeze(np.where(pitch > minfreq))
                 pitch = pitch[ind]
                 if pitch.size == 0:
-                    print(file, 'segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
+                    print('segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
                     newSegments.remove(seg)
                     continue
                 ind = ind * W / 512
@@ -1120,4 +1121,3 @@ def splitFile5mins(self, name):
     #     post=postProcess(ws1.data, ws1.sampleRate, det)
     #     # post.detectClicks()
     #     post.eRatioConfd()
-
