@@ -131,7 +131,12 @@ class Spectrogram(QDialog):
 
         self.mean_normalise = QCheckBox()
         self.mean_normalise.setChecked(True)
+
+        self.equal_loudness = QCheckBox()
+        self.equal_loudness.setChecked(False)
+
         self.multitaper = QCheckBox()
+        self.multitaper.setChecked(False)
 
         self.low = QSpinBox()
         self.low.setRange(minFreq,sampleRate/2)
@@ -154,6 +159,8 @@ class Spectrogram(QDialog):
         Box.addWidget(self.windowType)
         Box.addWidget(QLabel('Mean normalise'))
         Box.addWidget(self.mean_normalise)
+        Box.addWidget(QLabel('Equal loudness'))
+        Box.addWidget(self.equal_loudness)
         Box.addWidget(QLabel('Multitapering'))
         Box.addWidget(self.multitaper)
         Box.addWidget(QLabel('Window Width'))
@@ -173,7 +180,7 @@ class Spectrogram(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        return [self.windowType.currentText(),self.mean_normalise.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text(),self.low.value(),self.high.value()]
+        return [self.windowType.currentText(),self.mean_normalise.checkState(),self.equal_loudness.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text(),self.low.value(),self.high.value()]
 
     # def closeEvent(self, event):
     #     msg = QMessageBox()
