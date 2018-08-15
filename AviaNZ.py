@@ -920,11 +920,15 @@ class AviaNZ(QMainWindow):
         Prepares the program for a new file.
         Saves the segments of the current file, resets flags and calls loadFile() """
 
-        # avoid files with no data (Tier 1 has 0Kb .wavs)
+        # Need name of file
+        if type(current) is self.listitemtype:
+            current = current.text()
+
         fullcurrent = os.path.join(self.dirName, current)
         if not os.path.isfile(fullcurrent):
             print("File %s does not exist!" % fullcurrent)
             return
+        # avoid files with no data (Tier 1 has 0Kb .wavs)
         if os.stat(fullcurrent).st_size == 0:
             print("Cannot open file %s of size 0!" % fullcurrent)
             return
@@ -941,8 +945,8 @@ class AviaNZ(QMainWindow):
             self.saveSegments()
 
         self.previousFile = current
-        if type(current) is self.listitemtype:
-            current = current.text()
+        #if type(current) is self.listitemtype:
+        #    current = current.text()
 
         # Update the file list to show the right one
         i=0
@@ -3570,7 +3574,7 @@ class AviaNZ(QMainWindow):
 
         params = [
             {'name': 'Mouse settings', 'type' : 'group', 'children': [
-                {'name': 'Invert mouse', 'type': 'bool', 'tip': 'If true, segments are drawn with right clicking.',
+                {'name': 'Use right button to make segments', 'type': 'bool', 'tip': 'If true, segments are drawn with right clicking.',
                  'value': self.config['drawingRightBtn']},
                 {'name': 'Mark by dragging', 'type': 'bool', 'tip': 'If false, mark by clicking',
                  'value': self.config['requireDrag']}
