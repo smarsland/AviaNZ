@@ -35,7 +35,33 @@ class SignalProc:
         pN = np.sum(self.data[startNoise:startNoise+self.length]**2)/self.length
         return 10.*np.log10(pS/pN)
 
-    def spectrogram(self,data,window_width=None,incr=None,window='Hann',mean_normalise=True,onesided=True,multitaper=False,need_even=False):
+    def equalLoudness(self,data):
+        # TODO: Assumes 16000 sampling rate, fix!
+        # Basically, save a few more sets of filter coefficients...
+
+        # Basic equal loudness curve. 
+        # This is for humans, NOT birds (there is a paper that claims to have some, but I can't access it:
+        # https://doi.org/10.1121/1.428951)
+
+        # The filter weights were obtained from Matlab (using yulewalk) for the standard 80 dB ISO curve
+        # for a sampling rate of 16000
+
+        # 10 coefficient Yule-Walker fit for [0,120;20,113;30,103;40,97;50,93;60,91;70,89;80,87;90,86;100,85;200,78;300,76;400,76;500,76;600,76;700,77;800,78;900,79.5;1000,80;1500,79;2000,77;2500,74;3000,71.5;3700,70;4000,70.5;5000,74;6000,79;7000,84;8000,86]
+        # Or at least, EL80(:,1)./(fs/2) and m=10.^((70-EL80(:,2))/20);
+
+        ay = np.array([1.0000,-0.6282, 0.2966,-0.3726,0.0021,-0.4203,0.2220,0.0061, 0.0675, 0.0578,0.0322])
+        by = np.array([0.4492,-0.1435,-0.2278,-0.0142,0.0408,-0.1240,0.0410,0.1048,-0.0186,-0.0319,0.0054])
+
+        # Butterworth highpass
+        ab = np.array([1.0000,-1.9167,0.9201])
+        bb = np.array([0.9592,-1.9184,0.9592])
+
+        data = signal.lfilter(by,ay,data)
+        data = signal.lfilter(bb,ab,data)
+
+        return data
+
+    def spectrogram(self,data,window_width=None,incr=None,window='Hann',equal_loudness=False,mean_normalise=True,onesided=True,multitaper=False,need_even=False):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
@@ -46,6 +72,7 @@ class SignalProc:
         if data is None:
             print ("Error")
 
+        data = data.astype('float')
         if window_width is None:
             window_width = self.window_width
         if incr is None:
@@ -85,6 +112,9 @@ class SignalProc:
         else:
             print("unknown window, using Hann")
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)))
+
+        if equal_loudness:
+            data = self.equalLoudness(data)
 
         if mean_normalise:
             data -= data.mean()
