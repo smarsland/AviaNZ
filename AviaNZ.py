@@ -179,6 +179,18 @@ class AviaNZ(QMainWindow):
             self.saveConfig = True # TODO: revise this with user permissions in mind
         self.configfile = configfile
 
+        print ("Save species info to avoid hardcoding")
+        self.sppInfo = {
+            # spp: [min len, max len, flow, fhigh, fs, f0_low, f0_high, wavelet_thr, wavelet_M, wavelet_nodes]
+            'Kiwi': [10, 30, 1100, 7000, 16000, 1200, 4200, 0.25, 0.6,
+                     [17, 20, 22, 35, 36, 38, 40, 42, 43, 44, 45, 46, 48, 50, 55, 56]],
+            'Gsk': [6, 25, 900, 7000, 16000, 1200, 4200, 0.25, 0.6, [35, 38, 43, 44, 52, 54]],
+            'Lsk': [10, 30, 1200, 7000, 16000, 1200, 4200, 0.25, 0.6, []],  # todo: find len, f0, nodes
+            'Ruru': [1, 30, 500, 7000, 16000, 600, 1300, 0.25, 0.5, [33, 37, 38]],  # find M
+            'SIPO': [1, 5, 1200, 3800, 8000, 1200, 3800, 0.25, 0.2, [61, 59, 54, 51, 60, 58, 49, 47]],  # len, f0
+            'Bittern': [1, 5, 100, 200, 1000, 100, 200, 0.75, 0.2, [10, 21, 22, 43, 44, 45, 46]],   # len, f0, and confirm nodes
+        }
+
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
         print('Locale is set to ' + QLocale().name())
@@ -3249,8 +3261,8 @@ class AviaNZ(QMainWindow):
                     msg.exec_()
                     return
                 else:
-                    ws = WaveletSegment.WaveletSegment(species=str(species))
-                    newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
+                    ws = WaveletSegment.WaveletSegment(species=self.sppInfo[str(species)])
+                    newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, spInfo=self.sppInfo[str(species)], trainTest=False)
             elif str(alg)=="Cross-Correlation":
                 self.findMatches(float(str(CCThr1)))
                 newSegments = []
@@ -3284,16 +3296,18 @@ class AviaNZ(QMainWindow):
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
             # post process to remove short segments, wind, rain, and use F0 check.
-            post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                              segments=newSegments, species=species)
-            if species == "Kiwi":
-                post.short()    # species specific
+            if species == "all":
+                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                                                  segments=newSegments, species=[])
                 post.wind()
                 post.rainClick()
-                post.fundamentalFrq()   # species specific
-            else: # do
+            else:
+                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                                                  segments=newSegments, species=self.sppInfo[species])
+                post.short()  # species specific
                 post.wind()
                 post.rainClick()
+                post.fundamentalFrq()  # species specific
             newSegments = post.segments
             # Save the excel file
             out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=newSegments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)

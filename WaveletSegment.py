@@ -28,7 +28,7 @@ import librosa
 class WaveletSegment:
     # This class implements wavelet segmentation for the AviaNZ interface
 
-    def __init__(self,data=[],sampleRate=0,species='Kiwi',wavelet='dmey2',annotation=None,mingap=0.3,minlength=0.2):
+    def __init__(self,data=[],sampleRate=0,species=None,wavelet='dmey2',annotation=None,mingap=0.3,minlength=0.2):
         self.species=species
         self.annotation=annotation
         if data != []:
@@ -228,7 +228,7 @@ class WaveletSegment:
     #
     #     return detected
 
-    def detectCalls(self,wp,sampleRate, listnodes=[], species='Kiwi',trainTest=False,thr=0):
+    def detectCalls(self,wp,sampleRate, listnodes=[], species=[],trainTest=False,thr=0):
         #for test recordings given the set of nodes
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
         import math
@@ -236,13 +236,7 @@ class WaveletSegment:
             sampleRate=self.sampleRate
 
         if thr==0:
-            if species.title() == 'Sipo':
-                thr = 0.25
-            elif species.title() == 'Bittern':
-                thr=0.75
-            else:
-                # thr = 1.0
-                thr = 0.25
+            thr = species[7]
         detected = np.zeros((int(len(wp.data)/sampleRate),len(listnodes)))
         count = 0
 
@@ -262,18 +256,12 @@ class WaveletSegment:
             # get the coefficients
             C = new_wp.reconstruct(update=True)
             # filter
-            C = self.sp.ButterworthBandpass(C, self.sampleRate, low=1100,high=7000,order=10)
+            C = self.sp.ButterworthBandpass(C, self.sampleRate, low=self.species[2],high=self.species[3],order=10)
             C = np.abs(C)
             N = len(C)
 
             # Compute the number of samples in a window -- species specific
-            if species.title()=='Sipo':
-                M = int(0.2 * sampleRate / 2.0)
-            elif species.title()=='Bittern':
-                M = int(0.2 * sampleRate / 2.0)
-            else:
-                M = int(0.6*sampleRate/2.0) #  M = int(0.8*sampleRate/2.0)
-            #print M
+            M = int(species[8] * sampleRate / 2.0)
 
             # Compute the energy curve (a la Jinnai et al. 2012)
             E = np.zeros(N)
@@ -348,24 +336,9 @@ class WaveletSegment:
     def preprocess(self, species, df=False):
         # set df=True to perform both denoise and filter
         # df=False to skip denoise
-        if species == 'Kiwi':
-            f1 = 1100
-            f2 = 7000
-            fs = 16000
-        elif species == 'Ruru':
-            f1 = 500
-            f2 = 7000
-            fs = 16000
-        elif species == 'Bittern':
-            f1 = 100
-            f2 = 200
-            fs = 1000
-        elif species == 'Sipo':
-            f1 = 1200
-            f2 = 3800
-            fs = 8000
-        else:
-            fs = 16000
+        f1 = species[2]
+        f2 = species[3]
+        fs = species[4]
 
         if self.sampleRate != fs:
             self.data = librosa.core.audio.resample(self.data, self.sampleRate, fs)
@@ -390,15 +363,7 @@ class WaveletSegment:
         # wavio.write('../Sound Files/Kiwi/test/Tier1/test/test/test/test_whole.wav', denoisedData, self.sampleRate, sampwidth=2)
         # librosa.output.write_wav('Sound Files/Kiwi/test/Tier1/test/test/test', denoisedData, self.sampleRate, norm=False)
 
-        if species in ['Kiwi', 'Ruru', 'Bittern', 'Sipo']:
-            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=f2)
-        # elif species == 'Ruru':
-        #     filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=7000)
-        # elif species == 'Sipo':
-        #     filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=1200, high=3800)
-        # else:
-        #     print species
-
+        filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=species[2], high=species[3])
         return filteredDenoisedData
 
     def waveletSegment_train(self,fName, species='Kiwi', df=False):
@@ -452,21 +417,11 @@ class WaveletSegment:
         # TODO: json.dump('species.data', open('species.data', 'wb'))
         return listnodes
 
-    def waveletSegment_test(self,fName=None, data=None, sampleRate=None, listnodes = None, species='Kiwi', trainTest=False, df=False, thr=0):
+    def waveletSegment_test(self,fName=None, data=None, sampleRate=None, listnodes = None, spInfo=[], trainTest=False, df=False, thr=0):
         # Load the relevant list of nodes
         # TODO: Put these into a file along with other relevant parameters (frequency, length, etc.)
         if listnodes is None:
-            if species.title() == 'Kiwi':
-                # nodes = [34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 55]
-                nodes = [17, 20, 22, 35, 36, 38, 40, 42, 43, 44, 45, 46, 48, 50, 55, 56]
-                # nodes = [22, 38, 42, 45, 48, 50]    #  female
-                # nodes = [17, 20, 35, 55, 56] # male
-            elif species.title() == 'Ruru':
-                nodes = [33, 37, 38]
-            elif species.title() == 'Sipo':
-                nodes = [61, 59, 54, 51, 60, 58, 49, 47]
-            elif species.title() == 'Bittern':
-                nodes = [10,21,22,43,44,45,46] # TODO: check this
+            nodes = spInfo[9]
         else:
             nodes = listnodes
 
@@ -476,11 +431,11 @@ class WaveletSegment:
             self.data = data
             self.sampleRate = sampleRate
 
-        filteredDenoisedData = self.preprocess(species,df=df)
+        filteredDenoisedData = self.preprocess(species=spInfo,df=df)
 
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
 
-        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, species=species, trainTest=trainTest, thr=thr)
+        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, species=spInfo, trainTest=trainTest, thr=thr)
 
         # Todo: remove clicks
 
