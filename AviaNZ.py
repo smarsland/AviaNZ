@@ -715,7 +715,7 @@ class AviaNZ(QMainWindow):
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
         self.w_files.addWidget(QLabel('Double click to open'),row=0,col=0)
-        self.w_files.addWidget(QLabel('Red names have segments'),row=1,col=0)
+        self.w_files.addWidget(QLabel('Red names have been viewed'),row=1,col=0)
         self.w_files.addWidget(self.listFiles,row=2,colspan=2)
 
         # The context menu (drops down on mouse click) to select birds
@@ -823,6 +823,7 @@ class AviaNZ(QMainWindow):
 
     def fillFileList(self,fileName):
         """ Generates the list of files for the file listbox.
+        fileName - currently opened file (marks it in the list).
         Most of the work is to deal with directories in that list.
         It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
         red in the list, and the second to know if the files are long."""
@@ -1019,8 +1020,8 @@ class AviaNZ(QMainWindow):
                     self.timeaxis = SupportClasses.TimeAxisHour(orientation='bottom',linkView=self.p_ampl)
                 else:
                     self.startTime = 0
+                    self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
 
-                self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
                 self.w_spec.addItem(self.timeaxis, row=1, col=1)
                 # This next line is a hack to make the axis update
                 self.changeWidth(self.widthWindow.value())
@@ -3426,6 +3427,7 @@ class AviaNZ(QMainWindow):
                 # restart playback
                 range = self.p_ampl.viewRange()[0]
                 self.setPlaySliderLimits(range[0]*1000, range[1]*1000)
+                print(range)
                 # (else keep play slider range from before)
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
             self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
@@ -3443,8 +3445,8 @@ class AviaNZ(QMainWindow):
             if self.box1id > -1:
                 self.stopPlayback()
 
-                start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000 + self.startRead * 1000
-                stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000 + self.startRead * 1000
+                start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
+                stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
 
                 self.setPlaySliderLimits(start, stop)
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
@@ -3520,14 +3522,18 @@ class AviaNZ(QMainWindow):
             self.playSlider.setValue(self.media_obj.time)
             self.timePlayed.setText(self.convertMillisecs(self.media_obj.time) + "/" + self.totalTime)
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
-            self.bar.setValue(self.convertAmpltoSpec(self.media_obj.time / 1000.0 - self.startRead))
+            self.bar.setValue(self.convertAmpltoSpec(self.media_obj.time / 1000.0))
 
     def setPlaySliderLimits(self, start, end):
         """ Uses start/end in ms, does what it says, and also seeks file position marker.
         """
-        self.playSlider.setRange(start + 1000.0 * self.startRead, end + 1000.0 * self.startRead)
-        self.segmentStart = self.playSlider.minimum()
-        self.segmentStop = self.playSlider.maximum()
+        offset = (self.startRead + self.startTime) * 1000 # in ms, absolute
+        print(offset)
+        print(self.startTime)
+        self.playSlider.setRange(start + offset, end + offset)
+        print("playback set between %d and %d" %(start, end))
+        self.segmentStart = self.playSlider.minimum() - offset # relative to file start
+        self.segmentStop = self.playSlider.maximum() - offset # relative to file start
 
     def volSliderMoved(self, value):
         self.media_obj.applyVolSlider(value)
@@ -3535,8 +3541,8 @@ class AviaNZ(QMainWindow):
     def barMoved(self, evt):
         """ Listener for when the bar showing playback position moves.
         """
-        self.playSlider.setValue(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000)
-        self.media_obj.seekToMs(self.convertSpectoAmpl(evt.x()) * 1000 + self.startRead * 1000, self.segmentStart)
+        self.playSlider.setValue(self.convertSpectoAmpl(evt.x()) * 1000)
+        self.media_obj.seekToMs(self.convertSpectoAmpl(evt.x()) * 1000, self.segmentStart)
 
     def setOperatorReviewerDialog(self):
         """ Listener for Set Operator/Reviewer menu item.
