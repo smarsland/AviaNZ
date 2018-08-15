@@ -910,7 +910,7 @@ class AviaNZ(QMainWindow):
         fileName, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
         success = 1
         dirNameOld = self.dirName
-        fileNameOld = self.fileName
+        fileNameOld = self.filename
         if fileName != '':
             print("opening file %s" % fileName)
             self.dirName = os.path.dirname(fileName)
@@ -918,7 +918,7 @@ class AviaNZ(QMainWindow):
         if success==1:
             print("error loading file, reloading current file")
             self.dirName = dirNameOld
-            self.fileName = fileNameOld
+            self.filename = fileNameOld
             self.listLoadFile(fileNameOld)
 
 
