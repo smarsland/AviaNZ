@@ -175,9 +175,8 @@ class AviaNZ(QMainWindow):
             self.saveConfig = True
         except:
             print("Failed to load config file, using defaults")
-            configfile = 'AviaNZconfig.txt'
-            self.config = json.load(open(configfile))
-            self.saveConfig = False # TODO: revise this with user permissions in mind
+            self.config = json.load(open('AviaNZconfig.txt'))
+            self.saveConfig = True # TODO: revise this with user permissions in mind
         self.configfile = configfile
 
         # avoid comma/point problem in number parsing
@@ -3913,8 +3912,12 @@ class AviaNZ(QMainWindow):
         #                              self.reviewer, -1])
         self.saveSegments()
         if self.saveConfig == True:
-            print("Saving config file")
-            json.dump(self.config, open(self.configfile, 'w'))
+            try:
+                print("Saving config file")
+                json.dump(self.config, open(self.configfile, 'w'))
+            except Exception as e:
+                print("ERROR while saving config file:")
+                print(e)
         QApplication.quit()
 
 # =============
@@ -3930,7 +3933,7 @@ def mainlauncher(cli, infile, imagefile, command):
         if not isinstance(infile, str):
             print("ERROR: valid input file (-f) is mandatory in CLI mode!")
             sys.exit()
-        avianz = AviaNZ(configfile='AviaNZconfig.txt',DOC=DOC,CLI=True,firstFile=infile, imageFile=imagefile, command=command)
+        avianz = AviaNZ(configfile='AviaNZconfig_user.txt',DOC=DOC,CLI=True,firstFile=infile, imageFile=imagefile, command=command)
         print("Analysis complete, closing AviaNZ")
     else:
         print("Starting AviaNZ in GUI mode")
@@ -3943,7 +3946,7 @@ def mainlauncher(cli, infile, imagefile, command):
         task = first.getValues()
 
         if task == 1:
-            avianz = AviaNZ(DOC=DOC)
+            avianz = AviaNZ(DOC=DOC, configfile='AviaNZconfig_user.txt')
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==2:
             avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(DOC=DOC)
