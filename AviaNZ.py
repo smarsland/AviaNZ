@@ -490,12 +490,12 @@ class AviaNZ(QMainWindow):
         self.p_overview2.setXLink(self.p_overview)
 
         self.w_ampl = pg.GraphicsLayoutWidget()
-        self.p_ampl = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=self.config['requireDrag'], thisIsAmpl=True)
+        self.p_ampl = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False, thisIsAmpl=True)
         self.w_ampl.addItem(self.p_ampl,row=0,col=1)
         self.d_ampl.addWidget(self.w_ampl)
 
         self.w_spec = pg.GraphicsLayoutWidget()
-        self.p_spec = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=self.config['requireDrag'], thisIsAmpl=False)
+        self.p_spec = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=self.config['requireDrag'] and self.config['dragBoxes'], thisIsAmpl=False)
         self.w_spec.addItem(self.p_spec,row=0,col=1)
         self.d_spec.addWidget(self.w_spec)
 
@@ -565,8 +565,6 @@ class AviaNZ(QMainWindow):
 
         # Connect up the listeners
         self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
-        # self.p_ampl.sigMouseButtonPress.connect(self.mousePressed_ampl)
-        # self.p_ampl.sigMouseButtonRelease.connect(self.mouseReleased_ampl)
         #self.p_spec.sigMouseDragged.connect(self.mouseDragged_spec)
         self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
         self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
@@ -910,10 +908,19 @@ class AviaNZ(QMainWindow):
         """ This handles the menu item for opening a file.
         Splits the directory name and filename out, and then passes the filename to the loader."""
         fileName, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
+        success = 1
+        dirNameOld = self.dirName
+        fileNameOld = self.fileName
         if fileName != '':
             print("opening file %s" % fileName)
             self.dirName = os.path.dirname(fileName)
-            self.listLoadFile(os.path.basename(fileName))
+            success = self.listLoadFile(os.path.basename(fileName))
+        if success==1:
+            print("error loading file, reloading current file")
+            self.dirName = dirNameOld
+            self.fileName = fileNameOld
+            self.listLoadFile(fileNameOld)
+
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
@@ -927,11 +934,11 @@ class AviaNZ(QMainWindow):
         fullcurrent = os.path.join(self.dirName, current)
         if not os.path.isfile(fullcurrent):
             print("File %s does not exist!" % fullcurrent)
-            return
+            return(1)
         # avoid files with no data (Tier 1 has 0Kb .wavs)
         if os.stat(fullcurrent).st_size == 0:
             print("Cannot open file %s of size 0!" % fullcurrent)
-            return
+            return(1)
 
         # If there was a previous file, make sure the type of its name is OK. This is because you can get these
         # names from the file listwidget, or from the openFile dialog.
@@ -970,6 +977,7 @@ class AviaNZ(QMainWindow):
                 self.listFiles.setCurrentItem(index[0])
         else:
             self.loadFile(current)
+        return(0)
 
     def loadFile(self,name=None):
         """ This does the work of loading a file.
@@ -1195,6 +1203,7 @@ class AviaNZ(QMainWindow):
         Changes the pyqtgraph MouseMode.
         Also swaps the listeners. """
         self.config['dragBoxes'] = self.dragRectangles.isChecked()
+        self.p_spec.enableDrag = self.config['dragBoxes'] and self.config['requireDrag']
 
     def dragRectsTransparent(self):
         """ Listener for the check menu item that decides if the user wants the dragged rectangles to have colour or not.
@@ -3576,7 +3585,7 @@ class AviaNZ(QMainWindow):
             {'name': 'Mouse settings', 'type' : 'group', 'children': [
                 {'name': 'Use right button to make segments', 'type': 'bool', 'tip': 'If true, segments are drawn with right clicking.',
                  'value': self.config['drawingRightBtn']},
-                {'name': 'Mark by dragging', 'type': 'bool', 'tip': 'If false, mark by clicking',
+                {'name': 'Mark boxes by dragging', 'type': 'bool', 'tip': 'If false, mark by clicking',
                  'value': self.config['requireDrag']}
             ]},
             {'name': 'Paging', 'type': 'group', 'children': [
@@ -3659,16 +3668,15 @@ class AviaNZ(QMainWindow):
                 self.config['secsSave']=data
             elif childName=='Annotation.Annotation overview cell length':
                 self.config['widthOverviewSegment']=data
-            elif childName == 'Mouse settings.Invert mouse':
+            elif childName == 'Mouse settings.Use right button to make segments':
                 self.config['drawingRightBtn'] = data
                 if self.config['drawingRightBtn']:
                     self.MouseDrawingButton = QtCore.Qt.RightButton
                 else:
                     self.MouseDrawingButton = QtCore.Qt.LeftButton
-            elif childName == 'Mouse settings.Mark by dragging':
+            elif childName == 'Mouse settings.Mark boxes by dragging':
                 self.config['requireDrag'] = data
-                self.p_ampl.enableDrag = self.config['requireDrag']
-                self.p_spec.enableDrag = self.config['requireDrag']
+                self.p_spec.enableDrag = self.config['requireDrag'] and self.config['dragBoxes']
             elif childName == 'Paging.Page size':
                 self.config['maxFileShow'] = data
             elif childName=='Paging.Page overlap':
