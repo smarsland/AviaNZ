@@ -348,10 +348,6 @@ class AviaNZ(QMainWindow):
 
         specMenu.addSeparator()
 
-        self.dragRectangles = specMenu.addAction("Mark boxes in spectrogram", self.dragRectanglesCheck)
-        self.dragRectangles.setCheckable(True)
-        self.dragRectangles.setChecked(self.config['dragBoxes'])
-
         self.dragRectTransparent = specMenu.addAction("Make dragged boxes transparent", self.dragRectsTransparent)
         self.dragRectTransparent.setCheckable(True)
         self.dragRectTransparent.setChecked(self.config['transparentBoxes'])
@@ -507,7 +503,7 @@ class AviaNZ(QMainWindow):
         self.d_ampl.addWidget(self.w_ampl)
 
         self.w_spec = pg.GraphicsLayoutWidget()
-        self.p_spec = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=self.config['requireDrag'] and self.config['dragBoxes'], thisIsAmpl=False)
+        self.p_spec = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=self.config['specMouseAction']==3, thisIsAmpl=False)
         self.w_spec.addItem(self.p_spec,row=0,col=1)
         self.d_spec.addWidget(self.w_spec)
 
@@ -762,7 +758,6 @@ class AviaNZ(QMainWindow):
         self.showOverviewSegsCheck()
         self.dragRectsTransparent()
         self.showPointerDetailsCheck()
-        self.dragRectanglesCheck()
 
         # add statusbar
         self.statusLeft = QLabel("Left")
@@ -1208,14 +1203,6 @@ class AviaNZ(QMainWindow):
         else:
             self.p_spec.scene().sigMouseMoved.disconnect()
             self.pointData.setText("")
-
-    def dragRectanglesCheck(self):
-        """ Listener for the menuitem that says if the user is dragging rectangles or clicking on the spectrogram has
-        changed state.
-        Changes the pyqtgraph MouseMode.
-        Also swaps the listeners. """
-        self.config['dragBoxes'] = self.dragRectangles.isChecked()
-        self.p_spec.enableDrag = self.config['dragBoxes'] and self.config['requireDrag']
 
     def dragRectsTransparent(self):
         """ Listener for the check menu item that decides if the user wants the dragged rectangles to have colour or not.
@@ -1981,7 +1968,7 @@ class AviaNZ(QMainWindow):
             # if this is the second click and not a box, close the segment
             if self.started:
                 # can't finish boxes in ampl plot
-                if self.dragRectangles.isChecked():
+                if self.config['specMouseAction']>1:
                     if self.startedInAmpl:
                         # started in ampl and finish in ampl,
                         # so continue as usual to draw a segment
@@ -2029,7 +2016,7 @@ class AviaNZ(QMainWindow):
                 # (or whatever you want)
                 if evt.button() == self.MouseDrawingButton:
                     # this would prevent starting boxes in ampl plot
-                    # if self.dragRectangles.isChecked():
+                    # if self.config['specMouseAction']>1:
                     #    return
 
                     nonebrush = self.ColourNone
@@ -2105,12 +2092,12 @@ class AviaNZ(QMainWindow):
             # if this is the second click, close the segment/box
             # note: can finish segment with either left or right click
             if self.started:
-                if self.dragRectangles.isChecked() and self.startedInAmpl:
+                if self.config['specMouseAction']>1 and self.startedInAmpl:
                     # started in ampl, and spec is used for boxes, so can't continue here
                     return
 
                 # remove the drawing box:
-                if not self.dragRectangles.isChecked():
+                if not self.config['specMouseAction']>1:
                     self.p_spec.removeItem(self.vLine_s)
                     self.p_ampl.scene().sigMouseMoved.disconnect()
                 self.p_ampl.removeItem(self.vLine_a)
@@ -2126,7 +2113,7 @@ class AviaNZ(QMainWindow):
                 x2 = self.convertSpectoAmpl(max(mousePoint.x(), 0.0))
                 # Could add this check if right edge seems dangerous:
                 # endx = min(x2, np.shape(self.sg)[0]+1)
-                if self.dragRectangles.isChecked():
+                if self.config['specMouseAction']>1:
                     y1 = self.start_spec_y
                     y2 = mousePoint.y() / np.shape(self.sg)[1]
                 else:
@@ -2163,7 +2150,7 @@ class AviaNZ(QMainWindow):
                     self.start_spec_y = mousePoint.y() / np.shape(self.sg)[1]
 
                     # start a new box:
-                    if self.dragRectangles.isChecked():
+                    if self.config['specMouseAction']>1:
                         # spectrogram mouse follower box:
                         startpointS = QPointF(mousePoint.x(), mousePoint.y())
                         endpointS = QPointF(mousePoint.x(), mousePoint.y())
@@ -2248,7 +2235,7 @@ class AviaNZ(QMainWindow):
         if self.p_spec.sceneBoundingRect().contains(pos):
             mousePoint = self.p_spec.mapSceneToView(pos)
             self.drawingBox_ampl.setRegion([self.start_ampl_loc, self.convertSpectoAmpl(mousePoint.x())])
-            if self.dragRectangles.isChecked() and not self.startedInAmpl:
+            if self.config['specMouseAction']>1 and not self.startedInAmpl:
                 # making a box
                 posY = mousePoint.y() - self.start_spec_y * np.shape(self.sg)[1]
                 self.drawingBox_spec.setSize([mousePoint.x()-self.convertAmpltoSpec(self.start_ampl_loc), posY])
@@ -3599,8 +3586,9 @@ class AviaNZ(QMainWindow):
             {'name': 'Mouse settings', 'type' : 'group', 'children': [
                 {'name': 'Use right button to make segments', 'type': 'bool', 'tip': 'If true, segments are drawn with right clicking.',
                  'value': self.config['drawingRightBtn']},
-                {'name': 'Mark boxes by dragging', 'type': 'bool', 'tip': 'If false, mark by clicking',
-                 'value': self.config['requireDrag']}
+                {'name': 'Spectrogram mouse action', 'type': 'list', 'values':
+                    {'Mark segments by clicking' : 1, 'Mark boxes by clicking' : 2, 'Mark boxes by dragging' : 3},
+                 'value': self.config['specMouseAction']}
             ]},
             {'name': 'Paging', 'type': 'group', 'children': [
                 {'name': 'Page size', 'type': 'int', 'value': self.config['maxFileShow'], 'limits': (5, 900),
@@ -3688,9 +3676,9 @@ class AviaNZ(QMainWindow):
                     self.MouseDrawingButton = QtCore.Qt.RightButton
                 else:
                     self.MouseDrawingButton = QtCore.Qt.LeftButton
-            elif childName == 'Mouse settings.Mark boxes by dragging':
-                self.config['requireDrag'] = data
-                self.p_spec.enableDrag = self.config['requireDrag'] and self.config['dragBoxes']
+            elif childName == 'Mouse settings.Spectrogram mouse action':
+                self.config['specMouseAction'] = data
+                self.p_spec.enableDrag = data==3
             elif childName == 'Paging.Page size':
                 self.config['maxFileShow'] = data
             elif childName=='Paging.Page overlap':

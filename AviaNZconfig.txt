@@ -1,5 +1,5 @@
 {"window_width": 256, "incr": 128, "maxSearchDepth": 20, "minSegment": 50,
-"drawingRightBtn": true, "requireDrag": true,
+"drawingRightBtn": true, "specMouseAction": 1,
 "dirpath": "./Sound Files", "secsSave": 60, "windowWidth": 6.57,
 "textoffset": 9, "widthOverviewSegment": 10.0, "maxFileShow": 300, "fileOverlap": 10,
 "brightness": 50, "contrast": 50, "overlap_allowed": 5,
@@ -15,7 +15,7 @@
 "ColourNone": [255, 0, 0, 100],
 "ColourPossible": [255, 255, 0, 100],
 "cmap": "Grey", "showAmplitudePlot": true, "showAnnotationOverview": true, "showPointerDetails": false,
-"readOnly": false, "dragBoxes": false, "transparentBoxes": false, "showListofFiles": true,
+"readOnly": false, "transparentBoxes": false, "showListofFiles": true,
 "invertColourMap": false, "showAllPages": true, "saveCorrections": true,
 "operator": "Stephen", "reviewer": "Nirosha",
 "fs_start": 0, "fs_end": 0, "window": "Hann"}
