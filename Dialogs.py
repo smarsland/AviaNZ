@@ -139,12 +139,12 @@ class Spectrogram(QDialog):
         self.multitaper.setChecked(False)
 
         self.low = QSpinBox()
-        self.low.setRange(minFreq,sampleRate/2)
+        self.low.setRange(0,sampleRate/2)
         self.low.setSingleStep(100)
         self.low.setValue(0)
 
         self.high = QSpinBox()
-        self.high.setRange(minFreq,sampleRate/2)
+        self.high.setRange(0,sampleRate/2)
         self.high.setSingleStep(100)
         self.high.setValue(maxFreq)
 
@@ -178,6 +178,12 @@ class Spectrogram(QDialog):
 
         # Now put everything into the frame
         self.setLayout(Box)
+
+    def setValues(self,minFreq,maxFreq,sampleRate):
+        self.low.setRange(0,sampleRate/2)
+        self.low.setValue(minFreq)
+        self.high.setRange(0,sampleRate/2)
+        self.high.setValue(maxFreq)
 
     def getValues(self):
         return [self.windowType.currentText(),self.mean_normalise.checkState(),self.equal_loudness.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text(),self.low.value(),self.high.value()]
@@ -563,6 +569,7 @@ class Denoise(QDialog):
         self.wblabel = QLabel("Wavelets and Bandpass Filter")
         self.blabel = QLabel("Start and end points of the band")
         self.start = QSpinBox()
+        # TODO: Should really have this as 0 and then just highpass
         self.start.setMinimum(10)
         self.start.setSingleStep(100)
         self.start.setMaximum(self.sampleRate/2-200)
@@ -570,6 +577,7 @@ class Denoise(QDialog):
         self.end = QSpinBox()
         self.end.setMinimum(100)
         self.end.setSingleStep(100)
+        # TODO:Ditto for this and lowpass
         self.end.setMaximum(self.sampleRate /2-100)
         self.end.setValue(7500)
 
@@ -632,6 +640,11 @@ class Denoise(QDialog):
 
         # Now put everything into the frame
         self.setLayout(Box)
+
+    def setValues(self,sampleRate):
+        self.sampleRate = sampleRate
+        self.start.setMaximum(self.sampleRate/2-200)
+        self.end.setMaximum(self.sampleRate/2-200)
 
     def changeBoxes(self,alg):
         # This does the hiding and showing of the options as the algorithm changes
