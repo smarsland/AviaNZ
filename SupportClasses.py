@@ -746,9 +746,10 @@ class ShadedROI(pg.ROI):
 
 class ShadedRectROI(ShadedROI):
     # A rectangular ROI that it shaded, for marking segments
-    def __init__(self, pos, size, centered=False, sideScalers=False, **args):
+    def __init__(self, pos, size, centered=False, sideScalers=False, parent=None, **args):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
         pg.ROI.__init__(self, pos, size, **args)
+        self.parent = parent
         if centered:
             center = [0.5, 0.5]
         else:
@@ -763,6 +764,62 @@ class ShadedRectROI(ShadedROI):
     # this allows compatibility with LinearRegions:
     def setHoverBrush(self, *br, **args):
         pass
+
+    def mouseDragEvent(self, ev):
+        if ev.isStart():
+            if ev.button() != self.parent.MouseDrawingButton:
+                self.setSelected(True)
+                if self.translatable:
+                    self.isMoving = True
+                    self.preMoveState = self.getState()
+                    self.cursorOffset = self.pos() - self.mapToParent(ev.buttonDownPos())
+                    self.sigRegionChangeStarted.emit(self)
+                    ev.accept()
+                else:
+                    ev.ignore()
+
+        elif ev.isFinish():
+            if self.translatable:
+                if self.isMoving:
+                    self.stateChangeFinished()
+                self.isMoving = False
+            return
+
+        if self.translatable and self.isMoving and ev.buttons() != self.parent.MouseDrawingButton:
+            snap = True if (ev.modifiers() & QtCore.Qt.ControlModifier) else None
+            newPos = self.mapToParent(ev.pos()) + self.cursorOffset
+            self.translate(newPos - self.pos(), snap=snap, finish=False)
+
+class LinearRegionItem2(pg.LinearRegionItem):
+    def __init__(self, parent, *args, **kwds):
+        pg.LinearRegionItem.__init__(self, *args, **kwds)
+        self.parent = parent
+
+    def mouseDragEvent(self, ev):
+        if not self.movable or ev.button()==self.parent.MouseDrawingButton:
+            return
+        ev.accept()
+        
+        if ev.isStart():
+            bdp = ev.buttonDownPos()
+            self.cursorOffsets = [l.pos() - bdp for l in self.lines]
+            self.startPositions = [l.pos() for l in self.lines]
+            self.moving = True
+            
+        if not self.moving:
+            return
+            
+        self.lines[0].blockSignals(True)  # only want to update once
+        for i, l in enumerate(self.lines):
+            l.setPos(self.cursorOffsets[i] + ev.pos())
+        self.lines[0].blockSignals(False)
+        self.prepareGeometryChange()
+        
+        if ev.isFinish():
+            self.moving = False
+            self.sigRegionChangeFinished.emit(self)
+        else:
+            self.sigRegionChanged.emit(self)
 
 class DragViewBox(pg.ViewBox):
     # A normal ViewBox, but with ability to drag the segments

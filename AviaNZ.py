@@ -1813,18 +1813,18 @@ class AviaNZ(QMainWindow):
                 y2 = temp
 
             # Add the segment in both plots and connect up the listeners
-            p_ampl_r = pg.LinearRegionItem(brush=brush)
+            p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=brush)
             self.p_ampl.addItem(p_ampl_r, ignoreBounds=True)
             p_ampl_r.setRegion([startpoint, endpoint])
             p_ampl_r.sigRegionChangeFinished.connect(self.updateRegion_ampl)
 
             if y1==0 and y2==0:
-                p_spec_r = pg.LinearRegionItem(brush = brush)
+                p_spec_r = SupportClasses.LinearRegionItem2(self, brush = brush)
                 p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
             else:
                 startpointS = QPointF(self.convertAmpltoSpec(startpoint),y1*np.shape(self.sg)[1])
                 endpointS = QPointF(self.convertAmpltoSpec(endpoint),y2*np.shape(self.sg)[1])
-                p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS)
+                p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, parent=self)
                 if self.dragRectTransparent.isChecked():
                     col = self.prevBoxCol.rgb()
                     col = QtGui.QColor(col)
