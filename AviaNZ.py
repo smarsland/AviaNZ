@@ -3191,6 +3191,8 @@ class AviaNZ(QMainWindow):
             if self.segments[i][0] >= self.startRead and self.segments[i][1] <= min(self.startRead + self.lenRead, self.fileLength / self.sampleRate):
                 self.listLabels[i].setPos(self.listLabels[i].pos()[0], self.textpos)
 
+        QApplication.processEvents()
+
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
         """
