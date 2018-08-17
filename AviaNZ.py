@@ -1423,6 +1423,9 @@ class AviaNZ(QMainWindow):
         for clicks on them. """
         self.overviewImage.setImage(self.sg)
         self.overviewImageRegion = pg.LinearRegionItem()
+        # this is needed for compatibility with other shaded rectangles:
+        self.overviewImageRegion.lines[0].btn = QtCore.Qt.RightButton
+        self.overviewImageRegion.lines[1].btn = QtCore.Qt.RightButton
         self.p_overview.addItem(self.overviewImageRegion, ignoreBounds=True)
         self.overviewImageRegion.setRegion([0, self.convertAmpltoSpec(self.widthWindow.value())])
         self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
