@@ -2,7 +2,7 @@
 "drawingRightBtn": true, "specMouseAction": 1,
 "dirpath": "./Sound Files", "secsSave": 60, "windowWidth": 6.57,
 "textoffset": 9, "widthOverviewSegment": 10.0, "maxFileShow": 300, "fileOverlap": 10,
-"brightness": 50, "contrast": 50, "overlap_allowed": 5,
+"brightness": 50, "contrast": 50, "overlap_allowed": 5, "reviewSpecBuffer": 2,
 "BirdList": ["Warbler", "Hihi", "Kakapo", "Silvereye", "Ruru", "Kiwi", "Kereru", "Rifleman",
                 "Kiwi (M)", "Saddleback", "Kiwi (F)", "Bellbird", "Tomtit", "Not Bird", "Don't Know",
                 "Petrel", "Bittern", "Cuckoo", "Fantail", "Tui", "Albatross", "Avocet", "Blackbird",

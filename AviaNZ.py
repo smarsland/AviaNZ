@@ -688,16 +688,16 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.stopButton,row=0,col=1)
         self.w_controls.addWidget(self.playSegButton,row=0,col=2)
         self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
-        self.w_controls.addWidget(self.timePlayed,row=1,col=0, colspan=3)
+        self.w_controls.addWidget(self.timePlayed,row=1,col=0, colspan=4)
         self.w_controls.addWidget(self.volIcon, row=2, col=0)
-        self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=2)
-        self.w_controls.addWidget(QLabel("Brightness"),row=3,col=0,colspan=3)
-        self.w_controls.addWidget(self.brightnessSlider,row=4,col=0,colspan=3)
-        self.w_controls.addWidget(QLabel("Contrast"),row=5,col=0,colspan=3)
-        self.w_controls.addWidget(self.contrastSlider,row=6,col=0,colspan=3)
-        self.w_controls.addWidget(deleteButton,row=7,col=0,colspan=3)
-        self.w_controls.addWidget(QLabel('Visible window (seconds)'),row=8,col=0,colspan=3)
-        self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=3)
+        self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=3)
+        self.w_controls.addWidget(QLabel("Brightness"),row=3,col=0,colspan=4)
+        self.w_controls.addWidget(self.brightnessSlider,row=4,col=0,colspan=4)
+        self.w_controls.addWidget(QLabel("Contrast"),row=5,col=0,colspan=4)
+        self.w_controls.addWidget(self.contrastSlider,row=6,col=0,colspan=4)
+        self.w_controls.addWidget(deleteButton,row=7,col=0,colspan=4)
+        self.w_controls.addWidget(QLabel('Visible window (seconds)'),row=8,col=0,colspan=4)
+        self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=4)
 
 
         # The slider to show playback position
@@ -939,7 +939,7 @@ class AviaNZ(QMainWindow):
             current = current.text()
 
         fullcurrent = os.path.join(self.dirName, current)
-        if not os.path.isfile(fullcurrent):
+        if not os.path.isfile(fullcurrent) and not os.path.isdir(fullcurrent):
             print("File %s does not exist!" % fullcurrent)
             return(1)
         # avoid files with no data (Tier 1 has 0Kb .wavs)
@@ -2499,10 +2499,15 @@ class AviaNZ(QMainWindow):
                 self.loadSegment()
 
                 # And show it
-                x1 = int(self.convertAmpltoSpec(self.segments[self.box1id][0]-self.startRead))
-                x2 = int(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead))
-                x3 = int((self.segments[self.box1id][0]-self.startRead)*self.sampleRate)
-                x4 = int((self.segments[self.box1id][1]-self.startRead)*self.sampleRate)
+                # Note: +/- reviewSpecBuffer seconds are added on both sides
+                x1 = int(self.convertAmpltoSpec(self.segments[self.box1id][0]-self.startRead-self.config['reviewSpecBuffer']))
+                x1 = min(x1, 0)
+                x2 = int(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead+self.config['reviewSpecBuffer']))
+                x2 = max(x2, len(self.sg))
+                x3 = int((self.segments[self.box1id][0]-self.startRead-self.config['reviewSpecBuffer'])*self.sampleRate)
+                x3 = min(x3, 0)
+                x4 = int((self.segments[self.box1id][1]-self.startRead+self.config['reviewSpecBuffer'])*self.sampleRate)
+                x4 = max(x4, len(self.audiodata))
 
             self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
             self.humanClassifyDialog1.setSegNumbers(0, len(self.segments))
@@ -3591,10 +3596,10 @@ class AviaNZ(QMainWindow):
                  'value': self.config['specMouseAction']}
             ]},
             {'name': 'Paging', 'type': 'group', 'children': [
-                {'name': 'Page size', 'type': 'int', 'value': self.config['maxFileShow'], 'limits': (5, 900),
+                {'name': 'Page size', 'type': 'float', 'value': self.config['maxFileShow'], 'limits': (5, 900),
                  'step': 5,
                  'suffix': ' sec'},
-                {'name': 'Page overlap', 'type': 'int', 'value': self.config['fileOverlap'], 'limits': (0, 20),
+                {'name': 'Page overlap', 'type': 'float', 'value': self.config['fileOverlap'], 'limits': (0, 20),
                  'step': 2,
                  'suffix': ' sec'},
             ]},
