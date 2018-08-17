@@ -805,9 +805,16 @@ class HumanClassify1(QDialog):
 
         # Set up the plot window, then the right and wrong buttons, and a close button
         self.wPlot = pg.GraphicsLayoutWidget()
+        self.sg_axis = pg.AxisItem(orientation='left')
+        self.wPlot.addItem(self.sg_axis, row=0, col=0)
+        
         self.pPlot = self.wPlot.addViewBox(enableMouse=False, row=0, col=1)
         self.plot = pg.ImageItem()
         self.pPlot.addItem(self.plot)
+        self.pPlot.setAspectLocked(ratio=0.2)
+        self.pPlot.disableAutoRange()
+        self.pPlot.setLimits(xMin=0, yMin=-5)
+        self.sg_axis.linkToView(self.pPlot)
 
         self.speciesTop = QLabel("Currently:")
         self.species = QLabel(self.label)
@@ -837,10 +844,10 @@ class HumanClassify1(QDialog):
         # An array of radio buttons and a list and a text entry box
         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
         self.birds1 = []
-        for item in self.birdList[:10]:
+        for item in self.birdList[:9]:
             self.birds1.append(QRadioButton(item))
         self.birds2 = []
-        for item in self.birdList[10:19]:
+        for item in self.birdList[9:17]:
             self.birds2.append(QRadioButton(item))
         self.birds2.append(QRadioButton('Other'))
 
@@ -854,7 +861,7 @@ class HumanClassify1(QDialog):
         # The list of less common birds
         self.birds3 = QListWidget(self)
         self.birds3.setMaximumWidth(150)
-        for item in self.birdList[19:]:
+        for item in self.birdList[17:]:
             self.birds3.addItem(item)
         #self.birds3.sortItems()
         # Explicitly add "Other" option in
@@ -902,30 +909,26 @@ class HumanClassify1(QDialog):
         hboxNextPrev.addWidget(self.correct)
         hboxNextPrev.addWidget(self.delete)
         hboxNextPrev.addWidget(self.numberLeft)
-        # hboxButtons.addWidget(self.wrong)
-        #hboxButtons.addWidget(self.close)
 
         self.playButton = QtGui.QToolButton()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.playButton.setIconSize(iconSize)
+        self.playButton.setIconSize(QtCore.QSize(40, 40))
         self.playButton.clicked.connect(self.playSeg)
 
-        vboxBirds = QVBoxLayout()
-        vboxBirds.addWidget(self.speciesTop)
-        vboxBirds.addWidget(self.species)
-        vboxBirds.addLayout(hboxBirds)
+        self.scroll = QtGui.QScrollArea()
+        self.scroll.setWidget(self.wPlot)
+        self.scroll.setWidgetResizable(True)
 
-        vboxSpecContr = QVBoxLayout()
-        vboxSpecContr.addWidget(self.wPlot)
-        vboxSpecContr.addWidget(self.playButton)
+        vboxSpecContr = pg.LayoutWidget()
+        vboxSpecContr.addWidget(self.speciesTop, row=0, col=0)
+        vboxSpecContr.addWidget(self.species, row=0, col=1, colspan=4)
+        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=5)
+        vboxSpecContr.addWidget(self.playButton, row=2, col=0)
         ## TODO add other volume contrs here
 
-        hboxSpecContrBirds = QHBoxLayout()
-        hboxSpecContrBirds.addLayout(vboxSpecContr)
-        hboxSpecContrBirds.addLayout(vboxBirds)
-
         vboxFull = QVBoxLayout()
-        vboxFull.addLayout(hboxSpecContrBirds)
+        vboxFull.addWidget(vboxSpecContr)
+        vboxFull.addLayout(hboxBirds)
         vboxFull.addLayout(hboxNextPrev)
 
         self.setLayout(vboxFull)
@@ -937,11 +940,13 @@ class HumanClassify1(QDialog):
             self.stopPlayback()
         else:
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            self.playButton.setIconSize(QtCore.QSize(40, 40))
             self.media_obj2.loadArray(self.audiodata)
 
     def stopPlayback(self):
         self.media_obj2.pressedStop()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.setIconSize(QtCore.QSize(40, 40))
 
     def endListener(self):
         time = self.media_obj2.elapsedUSecs() // 1000
@@ -959,18 +964,28 @@ class HumanClassify1(QDialog):
         self.audiodata = audiodata
         self.sampleRate = sampleRate
         self.duration = len(audiodata) / sampleRate * 1000 # in ms
-        print(self.duration)
 
         sg2 = sg
-        if np.shape(sg)[0] < 100:
-            sg2 = 255*np.ones((100,np.shape(sg)[1]))
-            sg2[:np.shape(sg)[0],:np.shape(sg)[1]] = sg
-        if  np.shape(sg)[1]<100:
-            sg2 = 255 * np.ones((np.shape(sg)[0], 100))
-            sg2[:np.shape(sg)[0],:np.shape(sg)[1]] = sg
+        # sg2 = 50 * np.ones((max(500, np.shape(sg)[0]), max(100, np.shape(sg)[1])))
+        # sg2[:np.shape(sg)[0], :np.shape(sg)[1]] = sg
 
+        # TODO: add marks for +/- self.config['reviewSpecBuffer']
+        # add axis
         self.plot.setImage(sg2)
         self.plot.setLookupTable(self.lut)
+
+        FreqRange = (self.parent.maxFreq-self.parent.minFreq)/1000.
+        SgSize = np.shape(sg2)[1]
+        self.sg_axis.setTicks([[(0,self.parent.minFreq/1000.), (SgSize/4, self.parent.minFreq/1000.+FreqRange/4.), (SgSize/2, self.parent.minFreq/1000.+FreqRange/2.), (3*SgSize/4, self.parent.minFreq/1000.+3*FreqRange/4.), (SgSize,self.parent.minFreq/1000.+FreqRange)]])
+        self.sg_axis.setLabel('kHz')
+
+        self.pPlot.setYRange(-5, SgSize)
+        self.wPlot.setMinimumSize(max(500, np.shape(sg2)[0]/3), 250)
+        if self.pPlot.viewRange()[0][1] < np.shape(sg2)[0]:
+            # ugly hack to make sure the entire call is shown
+            print("extending range")
+            self.wPlot.setMinimumSize(max(500, np.shape(sg2)[0]), 250)
+        self.show()
 
         if self.cmapInverted:
             self.plot.setLevels([self.colourEnd, self.colourStart])
@@ -983,14 +998,14 @@ class HumanClassify1(QDialog):
         if label[-1]=='?':
             label = label[:-1]
         ind = self.birdList.index(label)
-        if ind < 10:
+        if ind < 9:
             self.birds1[ind].setChecked(True)
-        elif ind < 19:
-            self.birds2[ind-10].setChecked(True)
+        elif ind < 17:
+            self.birds2[ind-9].setChecked(True)
         else:
             self.birds2[9].setChecked(True)
             self.birds3.setEnabled(True)
-            self.birds3.setCurrentRow(ind-18)
+            self.birds3.setCurrentRow(ind-17)
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
