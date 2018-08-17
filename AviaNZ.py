@@ -2503,16 +2503,18 @@ class AviaNZ(QMainWindow):
 
                 # And show it
                 # Note: +/- reviewSpecBuffer seconds are added on both sides
-                x1 = int(self.convertAmpltoSpec(self.segments[self.box1id][0]-self.startRead-self.config['reviewSpecBuffer']))
-                x1 = min(x1, 0)
-                x2 = int(self.convertAmpltoSpec(self.segments[self.box1id][1]-self.startRead+self.config['reviewSpecBuffer']))
-                x2 = max(x2, len(self.sg))
-                x3 = int((self.segments[self.box1id][0]-self.startRead-self.config['reviewSpecBuffer'])*self.sampleRate)
-                x3 = min(x3, 0)
-                x4 = int((self.segments[self.box1id][1]-self.startRead+self.config['reviewSpecBuffer'])*self.sampleRate)
-                x4 = max(x4, len(self.audiodata))
+                x1nob = self.segments[self.box1id][0]
+                x2nob = self.segments[self.box1id][1]
+                x1 = int(self.convertAmpltoSpec(x1nob -self.startRead-self.config['reviewSpecBuffer']))
+                x1 = max(x1, 0)
+                x2 = int(self.convertAmpltoSpec(x2nob -self.startRead+self.config['reviewSpecBuffer']))
+                x2 = min(x2, len(self.sg))
+                x3 = int((x1nob -self.startRead-self.config['reviewSpecBuffer'])*self.sampleRate)
+                x3 = max(x3, 0)
+                x4 = int((x2nob -self.startRead+self.config['reviewSpecBuffer'])*self.sampleRate)
+                x4 = min(x4, len(self.audiodata))
 
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1, self)
             self.humanClassifyDialog1.setSegNumbers(0, len(self.segments))
             self.humanClassifyDialog1.show()
             self.humanClassifyDialog1.activateWindow()
@@ -2536,19 +2538,24 @@ class AviaNZ(QMainWindow):
             # update "done/to go" numbers:
             self.humanClassifyDialog1.setSegNumbers(self.box1id, len(self.segments))
             if not self.config['showAllPages']:
+                # TODO: this branch might work incorrectly
                 # Different calls for the two types of region
                 if self.listRectanglesa2[self.box1id] is not None:
                     if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                        x1 = self.listRectanglesa2[self.box1id].pos()[0]
-                        x2 = x1 + self.listRectanglesa2[self.box1id].size()[0]
+                        x1nob = self.listRectanglesa2[self.box1id].pos()[0]
+                        x2nob = x1nob + self.listRectanglesa2[self.box1id].size()[0]
                     else:
-                        x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
-                    x1 = int(x1)
-                    x2 = int(x2)
-                    x3 = int(self.listRectanglesa1[self.box1id].getRegion()[0] * self.sampleRate)
-                    x4 = int(self.listRectanglesa1[self.box1id].getRegion()[1] * self.sampleRate)
+                        x1nob, x2nob = self.listRectanglesa2[self.box1id].getRegion()
+                    x1 = int(x1nob - self.config['reviewSpecBuffer'])
+                    x1 = max(x1, 0)
+                    x2 = int(x2nob + self.config['reviewSpecBuffer'])
+                    x2 = min(x2, len(self.sg))
+                    x3 = int((self.listRectanglesa1[self.box1id].getRegion()[0] - self.config['reviewSpecBuffer']) * self.sampleRate)
+                    x3 = max(x3, 0)
+                    x4 = int((self.listRectanglesa1[self.box1id].getRegion()[1] + self.config['reviewSpecBuffer']) * self.sampleRate)
+                    x4 = min(x4, len(self.audiodata))
                     self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
-                                                       self.segments[self.box1id][4])
+                                                       self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1)
             else:
                 # Check if have moved to next segment, and if so load it
                 # If there was a section without segments this would be a bit inefficient, actually no, it was wrong!
@@ -2560,12 +2567,19 @@ class AviaNZ(QMainWindow):
                     self.loadSegment()
 
                 # Show the next segment
-                x1 = int(self.convertAmpltoSpec(self.segments[self.box1id][0] - self.startRead))
-                x2 = int(self.convertAmpltoSpec(self.segments[self.box1id][1] - self.startRead))
-                x3 = int((self.segments[self.box1id][0] - self.startRead) * self.sampleRate)
-                x4 = int((self.segments[self.box1id][1] - self.startRead) * self.sampleRate)
-                self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
-                                                   self.segments[self.box1id][4])
+                if self.listRectanglesa2[self.box1id] is not None:
+                    x1nob = self.segments[self.box1id][0] - self.startRead
+                    x2nob = self.segments[self.box1id][1] - self.startRead
+                    x1 = int(self.convertAmpltoSpec(x1nob - self.config['reviewSpecBuffer']))
+                    x1 = max(x1, 0)
+                    x2 = int(self.convertAmpltoSpec(x2nob + self.config['reviewSpecBuffer']))
+                    x2 = min(x2, len(self.sg))
+                    x3 = int((x1nob - self.config['reviewSpecBuffer']) * self.sampleRate)
+                    x3 = max(x3, 0)
+                    x4 = int((x2nob + self.config['reviewSpecBuffer']) * self.sampleRate)
+                    x4 = min(x4, len(self.audiodata))
+                    self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
+                                                   self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1)
 
         else:
             msg = QMessageBox()
