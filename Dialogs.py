@@ -789,7 +789,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, sg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
+    def __init__(self, sg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, unbufStart, unbufStop, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -816,6 +816,11 @@ class HumanClassify1(QDialog):
         self.pPlot.setLimits(xMin=0, yMin=-5)
         self.sg_axis.linkToView(self.pPlot)
 
+        # prepare the lines for marking true segment boundaries
+        self.line1 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
+        self.line2 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
+
+        # label for current segment assignment
         self.speciesTop = QLabel("Currently:")
         self.species = QLabel(self.label)
         font = self.species.font()
@@ -837,9 +842,6 @@ class HumanClassify1(QDialog):
         self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
         iconSize = QtCore.QSize(50, 50)
         self.delete.setIconSize(iconSize)
-
-        # self.wrong = QtGui.QToolButton()
-        # self.wrong.setIcon(QtGui.QIcon('Resources/cross.png'))
 
         # An array of radio buttons and a list and a text entry box
         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
@@ -919,12 +921,24 @@ class HumanClassify1(QDialog):
         self.scroll.setWidget(self.wPlot)
         self.scroll.setWidgetResizable(True)
 
+        # Volume control
+        self.volSlider = QSlider(Qt.Horizontal)
+        self.volSlider.sliderMoved.connect(self.volSliderMoved)
+        self.volSlider.setRange(0,100)
+        self.volSlider.setValue(50)
+        self.volIcon = QLabel()
+        self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+
+        ## TODO add other brightness contrs here
+
         vboxSpecContr = pg.LayoutWidget()
         vboxSpecContr.addWidget(self.speciesTop, row=0, col=0)
         vboxSpecContr.addWidget(self.species, row=0, col=1, colspan=4)
         vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=5)
         vboxSpecContr.addWidget(self.playButton, row=2, col=0)
-        ## TODO add other volume contrs here
+        vboxSpecContr.addWidget(self.volIcon, row=2, col=1)
+        vboxSpecContr.addWidget(self.volSlider, row=2, col=2, colspan=2)
+ 
 
         vboxFull = QVBoxLayout()
         vboxFull.addWidget(vboxSpecContr)
@@ -933,7 +947,7 @@ class HumanClassify1(QDialog):
 
         self.setLayout(vboxFull)
         # print seg
-        self.setImage(sg,audiodata,sampleRate,self.label)
+        self.setImage(sg,audiodata,sampleRate,self.label, unbufStart, unbufStop)
 
     def playSeg(self):
         if self.media_obj2.isPlaying():
@@ -948,6 +962,10 @@ class HumanClassify1(QDialog):
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.setIconSize(QtCore.QSize(40, 40))
 
+    def volSliderMoved(self, value):
+        # TODO: doesn't seem to change anything while playing
+        self.media_obj2.applyVolSlider(value)
+
     def endListener(self):
         time = self.media_obj2.elapsedUSecs() // 1000
         if time > self.duration:
@@ -959,17 +977,16 @@ class HumanClassify1(QDialog):
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
 
-    def setImage(self, sg, audiodata, sampleRate, label):
-
+    def setImage(self, sg, audiodata, sampleRate, label, unbufStart, unbufStop):
         self.audiodata = audiodata
         self.sampleRate = sampleRate
         self.duration = len(audiodata) / sampleRate * 1000 # in ms
 
+        # fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
-        # sg2 = 50 * np.ones((max(500, np.shape(sg)[0]), max(100, np.shape(sg)[1])))
-        # sg2[:np.shape(sg)[0], :np.shape(sg)[1]] = sg
+        sg2 = 40 * np.ones((max(1000, np.shape(sg)[0]), max(100, np.shape(sg)[1])))
+        sg2[:np.shape(sg)[0], :np.shape(sg)[1]] = sg
 
-        # TODO: add marks for +/- self.config['reviewSpecBuffer']
         # add axis
         self.plot.setImage(sg2)
         self.plot.setLookupTable(self.lut)
@@ -979,13 +996,32 @@ class HumanClassify1(QDialog):
         self.sg_axis.setTicks([[(0,self.parent.minFreq/1000.), (SgSize/4, self.parent.minFreq/1000.+FreqRange/4.), (SgSize/2, self.parent.minFreq/1000.+FreqRange/2.), (3*SgSize/4, self.parent.minFreq/1000.+3*FreqRange/4.), (SgSize,self.parent.minFreq/1000.+FreqRange)]])
         self.sg_axis.setLabel('kHz')
 
-        self.pPlot.setYRange(-5, SgSize)
-        self.wPlot.setMinimumSize(max(500, np.shape(sg2)[0]/3), 250)
-        if self.pPlot.viewRange()[0][1] < np.shape(sg2)[0]:
-            # ugly hack to make sure the entire call is shown
-            print("extending range")
-            self.wPlot.setMinimumSize(max(500, np.shape(sg2)[0]), 250)
         self.show()
+
+        self.pPlot.setYRange(0, SgSize, padding=0.02)
+        self.pPlot.setRange(xRange=(0, np.shape(sg2)[0]), yRange=(0, SgSize))
+        xyratio = np.shape(sg2)
+        xyratio = xyratio[0] / xyratio[1]
+        # 0.2 for x/y pixel aspect ratio
+        # 0.9 for padding
+        self.wPlot.setMaximumSize(max(500, xyratio*250*0.2*0.9), 250)
+        self.wPlot.setMinimumSize(max(500, xyratio*250*0.2*0.9), 250)
+
+        # add marks to separate actual segment from buffer zone
+        # Note: need to use view coordinates to add items to pPlot
+        try:
+            self.pPlot.removeItem(self.line1)
+            self.pPlot.removeItem(self.line2)
+            self.stopPlayback()
+        except Exception as e:
+            print(e)
+            pass
+        startV = self.pPlot.mapFromItemToView(self.plot, QPointF(unbufStart, 0)).x()
+        stopV = self.pPlot.mapFromItemToView(self.plot, QPointF(unbufStop, 0)).x()
+        self.pPlot.addItem(self.line1)
+        self.pPlot.addItem(self.line2)
+        self.line1.setPos(startV)
+        self.line2.setPos(stopV)
 
         if self.cmapInverted:
             self.plot.setLevels([self.colourEnd, self.colourStart])
