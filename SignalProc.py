@@ -121,21 +121,20 @@ class SignalProc:
         if mean_normalise:
             datacopy -= datacopy.mean()
 
+        starts = range(0, len(datacopy) - window_width, incr)
         if multitaper:
             from spectrum import dpss, pmtm
             [tapers, eigen] = dpss(window_width, 2.5, 4)
             counter = 0
-            sg = np.zeros((int(np.ceil(float(len(datacopy)) / incr)),int(window_width / 2)))
-            print(np.shape(sg))
-            for start in range(0, len(datacopy) - window_width, incr):
-                print(np.shape(datacopy[start:start + window_width]))
-                print(np.shape(tapers), np.shape(eigen))
-                S = pmtm(datacopy[start:start + window_width], e=tapers, v=eigen, show=False)
-                sg[counter:counter + 1,:] = S[window_width / 2:].T
+            sg = np.zeros((len(starts),window_width // 2))
+            for start in starts:
+                Sk, weights, eigen = pmtm(datacopy[start:start + window_width], v=tapers, e=eigen, show=False)
+                Sk = abs(Sk)**2
+                Sk = np.mean(Sk.T * weights, axis=1)
+                sg[counter:counter + 1,:] = Sk[window_width // 2:].T
                 counter += 1
             sg = np.fliplr(sg)
         else:
-            starts = range(0, len(datacopy) - window_width, incr)
             if need_even:
                 starts = np.hstack((starts, np.zeros((window_width - len(datacopy) % window_width))))
 
@@ -147,7 +146,7 @@ class SignalProc:
                 sg = np.absolute(ft[:, :window_width // 2])
             else:
                 sg = np.absolute(ft)
-            #sg = (ft*np.conj(ft))[:,window_width / 2:].T
+            #sg = (ft*np.conj(ft))[:,window_width // 2:].T
         return sg
 
     def bandpassFilter(self,data=None,start=1000,end=10000):
