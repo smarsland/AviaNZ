@@ -743,6 +743,49 @@ class ShadedROI(pg.ROI):
         self.pen = fn.mkPen(*br, **kargs)
         self.currentPen = self.pen
 
+def mouseDragEventFlexible(self, ev):
+    if ev.button() == self.rois[0].parent.MouseDrawingButton:
+        return
+    ev.accept()
+    
+    ## Inform ROIs that a drag is happening 
+    ##  note: the ROI is informed that the handle has moved using ROI.movePoint
+    ##  this is for other (more nefarious) purposes.
+    #for r in self.roi:
+        #r[0].pointDragEvent(r[1], ev)
+        
+    if ev.isFinish():
+        if self.isMoving:
+            for r in self.rois:
+                r.stateChangeFinished()
+        self.isMoving = False
+    elif ev.isStart():
+        for r in self.rois:
+            r.handleMoveStarted()
+        self.isMoving = True
+        self.startPos = self.scenePos()
+        self.cursorOffset = self.scenePos() - ev.buttonDownScenePos()
+        
+    if self.isMoving:  ## note: isMoving may become False in mid-drag due to right-click.
+        pos = ev.scenePos() + self.cursorOffset
+        self.movePoint(pos, ev.modifiers(), finish=False)
+
+def mouseDragEventFlexibleLine(self, ev):
+    if self.movable and ev.button() != self.btn:
+        if ev.isStart():
+            self.moving = True
+            self.cursorOffset = self.pos() - self.mapToParent(ev.buttonDownPos())
+            self.startPosition = self.pos()
+        ev.accept()
+
+        if not self.moving:
+            return
+
+        self.setPos(self.cursorOffset + self.mapToParent(ev.pos()))
+        self.sigDragged.emit(self)
+        if ev.isFinish():
+            self.moving = False
+            self.sigPositionChangeFinished.emit(self)
 
 class ShadedRectROI(ShadedROI):
     # A rectangular ROI that it shaded, for marking segments
@@ -790,10 +833,15 @@ class ShadedRectROI(ShadedROI):
             newPos = self.mapToParent(ev.pos()) + self.cursorOffset
             self.translate(newPos - self.pos(), snap=snap, finish=False)
 
+pg.graphicsItems.ROI.Handle.mouseDragEvent = mouseDragEventFlexible
+pg.graphicsItems.InfiniteLine.InfiniteLine.mouseDragEvent = mouseDragEventFlexibleLine
+
 class LinearRegionItem2(pg.LinearRegionItem):
     def __init__(self, parent, *args, **kwds):
         pg.LinearRegionItem.__init__(self, *args, **kwds)
         self.parent = parent
+        self.lines[0].btn = self.parent.MouseDrawingButton
+        self.lines[1].btn = self.parent.MouseDrawingButton
 
     def mouseDragEvent(self, ev):
         if not self.movable or ev.button()==self.parent.MouseDrawingButton:
