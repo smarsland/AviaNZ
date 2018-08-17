@@ -1092,7 +1092,7 @@ class HumanClassify2(QDialog):
     # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
     def __init__(self, sg, segments, label, part, nParts, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
         QDialog.__init__(self, parent)
-        self.setWindowTitle('Check Classifications')
+        self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.frame = QWidget()
 
@@ -1120,9 +1120,9 @@ class HumanClassify2(QDialog):
 
         if len(self.segments) > 0:
 
-            species = QLabel(label)
+            species = QLabel("Species/call type: " + label)
             if nParts>1:
-                partLabel = QLabel("Part "+str(part+1)+" of " + str(nParts))
+                partLabel = QLabel("Page "+str(part+1)+" of " + str(nParts))
             else:
                 partLabel = QLabel("")
 
@@ -1134,13 +1134,13 @@ class HumanClassify2(QDialog):
                 if x2 - x1 > self.width:
                     self.width = x2-x1
             self.width = max(800,self.width+10)
-            #print self.width
+            # print (self.width)
             self.h = 4
             self.flowLayout = SupportClasses.FlowLayout()
             self.makeButtons()
 
             self.vboxFull = QVBoxLayout()
-            self.vboxFull.addWidget(QLabel('Click on the images that are incorrectly labelled'))
+            self.vboxFull.addWidget(QLabel('Click on the images that are incorrectly labelled.'))
             self.vboxFull.addWidget(species)
             self.vboxFull.addWidget(partLabel)
             self.vboxFull.addLayout(self.flowLayout)
@@ -1351,11 +1351,11 @@ class HumanClassify2(QDialog):
 class HumanClassify2a(QDialog):
     def __init__(self, birdlist,parent=None):
         QDialog.__init__(self, parent)
-        self.setWindowTitle('Check Classification')
+        self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         self.birds = QListWidget(self)
-        self.birds.setMaximumWidth(150)
+        self.birds.setMaximumWidth(350)
         #self.birds.addItem('All calls')
         #self.birds.addItem('Uncertain calls')
         for item in birdlist:
@@ -1372,7 +1372,7 @@ class HumanClassify2a(QDialog):
         cancel.clicked.connect(self.cancel)
 
         layout = QVBoxLayout()
-        layout.addWidget(QLabel('Choose the bird you wish to see classification of:'))
+        layout.addWidget(QLabel('Choose species/call type to review:'))
         layout.addWidget(self.birds)
         layout.addWidget(ok)
         layout.addWidget(cancel)

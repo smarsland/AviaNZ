@@ -1108,6 +1108,8 @@ class FlowLayout(QtGui.QLayout):
 
         self.itemList = []
 
+        self.margin = margin
+
     def __del__(self):
         item = self.takeAt(0)
         while item:
@@ -1148,14 +1150,14 @@ class FlowLayout(QtGui.QLayout):
     def sizeHint(self):
         return self.minimumSize()
 
-    def minimumSize(self):
-        size = QtCore.QSize()
-
-        for item in self.itemList:
-            size = size.expandedTo(item.minimumSize())
-
-        size += QtCore.QSize(2 * self.margin(), 2 * self.margin())
-        return size
+    # def minimumSize(self):
+    #     size = QtCore.QSize()
+    #
+    #     for item in self.itemList:
+    #         size = size.expandedTo(item.minimumSize())
+    #
+    #     size += QtCore.QSize(2 * self.margin(), 2 * self.margin())
+    #     return size
 
     def _doLayout(self, rect, testOnly):
         x = rect.x()
