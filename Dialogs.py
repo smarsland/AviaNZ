@@ -789,7 +789,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, sg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
+    def __init__(self, sg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, unbufStart, unbufStop, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -802,6 +802,7 @@ class HumanClassify1(QDialog):
         self.label = label
         self.birdList = birdList
         self.saveConfig = False
+        self.sg = sg
 
         # Set up the plot window, then the right and wrong buttons, and a close button
         self.wPlot = pg.GraphicsLayoutWidget()
@@ -816,6 +817,11 @@ class HumanClassify1(QDialog):
         self.pPlot.setLimits(xMin=0, yMin=-5)
         self.sg_axis.linkToView(self.pPlot)
 
+        # prepare the lines for marking true segment boundaries
+        self.line1 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
+        self.line2 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
+
+        # label for current segment assignment
         self.speciesTop = QLabel("Currently:")
         self.species = QLabel(self.label)
         font = self.species.font()
@@ -827,6 +833,8 @@ class HumanClassify1(QDialog):
         # The buttons to move through the overview
         self.numberDone = QLabel()
         self.numberLeft = QLabel()
+        self.numberDone.setAlignment(QtCore.Qt.AlignCenter)
+        self.numberLeft.setAlignment(QtCore.Qt.AlignCenter)
 
         self.correct = QtGui.QToolButton()
         self.correct.setIcon(QtGui.QIcon('img/tick.jpg'))
@@ -837,9 +845,6 @@ class HumanClassify1(QDialog):
         self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
         iconSize = QtCore.QSize(50, 50)
         self.delete.setIconSize(iconSize)
-
-        # self.wrong = QtGui.QToolButton()
-        # self.wrong.setIcon(QtGui.QIcon('Resources/cross.png'))
 
         # An array of radio buttons and a list and a text entry box
         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
@@ -919,12 +924,48 @@ class HumanClassify1(QDialog):
         self.scroll.setWidget(self.wPlot)
         self.scroll.setWidgetResizable(True)
 
+        # Volume control
+        self.volSlider = QSlider(Qt.Horizontal)
+        self.volSlider.sliderMoved.connect(self.volSliderMoved)
+        self.volSlider.setRange(0,100)
+        self.volSlider.setValue(50)
+        self.volIcon = QLabel()
+        self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+
+        # Brightness, and contrast sliders
+        # note: not reading self.config['brightness/contrast'] now
+        self.brightnessSlider = QSlider(Qt.Horizontal)
+        self.brightnessSlider.setMinimum(0)
+        self.brightnessSlider.setMaximum(100)
+        self.brightnessSlider.setValue(50)
+        self.brightnessSlider.setTickInterval(1)
+        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
+
+        self.contrastSlider = QSlider(Qt.Horizontal)
+        self.contrastSlider.setMinimum(0)
+        self.contrastSlider.setMaximum(100)
+        self.contrastSlider.setValue(50)
+        self.contrastSlider.setTickInterval(1)
+        self.contrastSlider.valueChanged.connect(self.setColourLevels)
+
+
         vboxSpecContr = pg.LayoutWidget()
-        vboxSpecContr.addWidget(self.speciesTop, row=0, col=0)
-        vboxSpecContr.addWidget(self.species, row=0, col=1, colspan=4)
-        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=5)
+        vboxSpecContr.addWidget(self.speciesTop, row=0, col=0, colspan=2)
+        vboxSpecContr.addWidget(self.species, row=0, col=2, colspan=8)
+        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=10)
         vboxSpecContr.addWidget(self.playButton, row=2, col=0)
-        ## TODO add other volume contrs here
+        vboxSpecContr.addWidget(self.volIcon, row=2, col=1)
+        vboxSpecContr.addWidget(self.volSlider, row=2, col=2, colspan=2)
+        labelBr = QLabel("Bright.")
+        labelBr.setAlignment(QtCore.Qt.AlignRight)
+        vboxSpecContr.addWidget(labelBr, row=2, col=4)
+        vboxSpecContr.addWidget(self.brightnessSlider, row=2, col=5, colspan=2)
+        labelCo = QLabel("Contr.")
+        labelCo.setAlignment(QtCore.Qt.AlignRight)
+        vboxSpecContr.addWidget(labelCo, row=2, col=7)
+        vboxSpecContr.addWidget(self.contrastSlider, row=2, col=8, colspan=2)
+ 
 
         vboxFull = QVBoxLayout()
         vboxFull.addWidget(vboxSpecContr)
@@ -933,7 +974,7 @@ class HumanClassify1(QDialog):
 
         self.setLayout(vboxFull)
         # print seg
-        self.setImage(sg,audiodata,sampleRate,self.label)
+        self.setImage(self.sg,audiodata,sampleRate,self.label, unbufStart, unbufStop)
 
     def playSeg(self):
         if self.media_obj2.isPlaying():
@@ -948,6 +989,10 @@ class HumanClassify1(QDialog):
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.setIconSize(QtCore.QSize(40, 40))
 
+    def volSliderMoved(self, value):
+        # TODO: doesn't seem to change anything while playing
+        self.media_obj2.applyVolSlider(value)
+
     def endListener(self):
         time = self.media_obj2.elapsedUSecs() // 1000
         if time > self.duration:
@@ -959,17 +1004,16 @@ class HumanClassify1(QDialog):
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
 
-    def setImage(self, sg, audiodata, sampleRate, label):
-
+    def setImage(self, sg, audiodata, sampleRate, label, unbufStart, unbufStop):
         self.audiodata = audiodata
         self.sampleRate = sampleRate
         self.duration = len(audiodata) / sampleRate * 1000 # in ms
 
+        # fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
-        # sg2 = 50 * np.ones((max(500, np.shape(sg)[0]), max(100, np.shape(sg)[1])))
-        # sg2[:np.shape(sg)[0], :np.shape(sg)[1]] = sg
+        sg2 = 40 * np.ones((max(1000, np.shape(sg)[0]), max(100, np.shape(sg)[1])))
+        sg2[:np.shape(sg)[0], :np.shape(sg)[1]] = sg
 
-        # TODO: add marks for +/- self.config['reviewSpecBuffer']
         # add axis
         self.plot.setImage(sg2)
         self.plot.setLookupTable(self.lut)
@@ -979,13 +1023,32 @@ class HumanClassify1(QDialog):
         self.sg_axis.setTicks([[(0,self.parent.minFreq/1000.), (SgSize/4, self.parent.minFreq/1000.+FreqRange/4.), (SgSize/2, self.parent.minFreq/1000.+FreqRange/2.), (3*SgSize/4, self.parent.minFreq/1000.+3*FreqRange/4.), (SgSize,self.parent.minFreq/1000.+FreqRange)]])
         self.sg_axis.setLabel('kHz')
 
-        self.pPlot.setYRange(-5, SgSize)
-        self.wPlot.setMinimumSize(max(500, np.shape(sg2)[0]/3), 250)
-        if self.pPlot.viewRange()[0][1] < np.shape(sg2)[0]:
-            # ugly hack to make sure the entire call is shown
-            print("extending range")
-            self.wPlot.setMinimumSize(max(500, np.shape(sg2)[0]), 250)
         self.show()
+
+        self.pPlot.setYRange(0, SgSize, padding=0.02)
+        self.pPlot.setRange(xRange=(0, np.shape(sg2)[0]), yRange=(0, SgSize))
+        xyratio = np.shape(sg2)
+        xyratio = xyratio[0] / xyratio[1]
+        # 0.2 for x/y pixel aspect ratio
+        # 0.9 for padding
+        self.wPlot.setMaximumSize(max(500, xyratio*250*0.2*0.9), 250)
+        self.wPlot.setMinimumSize(max(500, xyratio*250*0.2*0.9), 250)
+
+        # add marks to separate actual segment from buffer zone
+        # Note: need to use view coordinates to add items to pPlot
+        try:
+            self.pPlot.removeItem(self.line1)
+            self.pPlot.removeItem(self.line2)
+            self.stopPlayback()
+        except Exception as e:
+            print(e)
+            pass
+        startV = self.pPlot.mapFromItemToView(self.plot, QPointF(unbufStart, 0)).x()
+        stopV = self.pPlot.mapFromItemToView(self.plot, QPointF(unbufStop, 0)).x()
+        self.pPlot.addItem(self.line1)
+        self.pPlot.addItem(self.line2)
+        self.line1.setPos(startV)
+        self.line2.setPos(stopV)
 
         if self.cmapInverted:
             self.plot.setLevels([self.colourEnd, self.colourStart])
@@ -1044,6 +1107,29 @@ class HumanClassify1(QDialog):
         self.species.setText(self.label)
         self.saveConfig = True
 
+    def setColourLevels(self):
+        """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
+        Translates the brightness and contrast values into appropriate image levels.
+        Calculation is simple.
+        """
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        # self.config['brightness'] = self.brightnessSlider.value()
+        # self.config['contrast'] = self.contrastSlider.value()
+        brightness = self.brightnessSlider.value() # self.config['brightness']
+        contrast = self.contrastSlider.value() # self.config['contrast']
+        self.colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
+        self.colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + self.colourStart
+        self.plot.setLevels([self.colourStart, self.colourEnd])
+
+        # TODO: add button for this?
+        # if self.config['invertColourMap']:
+        #     self.overviewImage.setLevels([self.colourEnd, self.colourStart])
+        #     self.specPlot.setLevels([self.colourEnd, self.colourStart])
+        # else:
+        #     self.overviewImage.setLevels([self.colourStart, self.colourEnd])
+        #     self.specPlot.setLevels([self.colourStart, self.colourEnd])
+
     def getValues(self):
         return [self.label, self.saveConfig, self.tbox.text()]
 
@@ -1056,7 +1142,7 @@ class HumanClassify2(QDialog):
     # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
     def __init__(self, sg, segments, label, part, nParts, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
         QDialog.__init__(self, parent)
-        self.setWindowTitle('Check Classifications')
+        self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.frame = QWidget()
 
@@ -1084,9 +1170,9 @@ class HumanClassify2(QDialog):
 
         if len(self.segments) > 0:
 
-            species = QLabel(label)
+            species = QLabel("Species/call type: " + label)
             if nParts>1:
-                partLabel = QLabel("Part "+str(part+1)+" of " + str(nParts))
+                partLabel = QLabel("Page "+str(part+1)+" of " + str(nParts))
             else:
                 partLabel = QLabel("")
 
@@ -1098,13 +1184,13 @@ class HumanClassify2(QDialog):
                 if x2 - x1 > self.width:
                     self.width = x2-x1
             self.width = max(800,self.width+10)
-            #print self.width
+            # print (self.width)
             self.h = 4
             self.flowLayout = SupportClasses.FlowLayout()
             self.makeButtons()
 
             self.vboxFull = QVBoxLayout()
-            self.vboxFull.addWidget(QLabel('Click on the images that are incorrectly labelled'))
+            self.vboxFull.addWidget(QLabel('Click on the images that are incorrectly labelled.'))
             self.vboxFull.addWidget(species)
             self.vboxFull.addWidget(partLabel)
             self.vboxFull.addLayout(self.flowLayout)
@@ -1315,11 +1401,11 @@ class HumanClassify2(QDialog):
 class HumanClassify2a(QDialog):
     def __init__(self, birdlist,parent=None):
         QDialog.__init__(self, parent)
-        self.setWindowTitle('Check Classification')
+        self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         self.birds = QListWidget(self)
-        self.birds.setMaximumWidth(150)
+        self.birds.setMaximumWidth(350)
         #self.birds.addItem('All calls')
         #self.birds.addItem('Uncertain calls')
         for item in birdlist:
@@ -1336,7 +1422,7 @@ class HumanClassify2a(QDialog):
         cancel.clicked.connect(self.cancel)
 
         layout = QVBoxLayout()
-        layout.addWidget(QLabel('Choose the bird you wish to see classification of:'))
+        layout.addWidget(QLabel('Choose species/call type to review:'))
         layout.addWidget(self.birds)
         layout.addWidget(ok)
         layout.addWidget(cancel)
