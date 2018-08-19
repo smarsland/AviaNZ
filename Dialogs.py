@@ -802,6 +802,7 @@ class HumanClassify1(QDialog):
         self.label = label
         self.birdList = birdList
         self.saveConfig = False
+        self.sg = sg
 
         # Set up the plot window, then the right and wrong buttons, and a close button
         self.wPlot = pg.GraphicsLayoutWidget()
@@ -832,6 +833,8 @@ class HumanClassify1(QDialog):
         # The buttons to move through the overview
         self.numberDone = QLabel()
         self.numberLeft = QLabel()
+        self.numberDone.setAlignment(QtCore.Qt.AlignCenter)
+        self.numberLeft.setAlignment(QtCore.Qt.AlignCenter)
 
         self.correct = QtGui.QToolButton()
         self.correct.setIcon(QtGui.QIcon('img/tick.jpg'))
@@ -927,17 +930,41 @@ class HumanClassify1(QDialog):
         self.volSlider.setRange(0,100)
         self.volSlider.setValue(50)
         self.volIcon = QLabel()
+        self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
 
-        ## TODO add other brightness contrs here
+        # Brightness, and contrast sliders
+        # note: not reading self.config['brightness/contrast'] now
+        self.brightnessSlider = QSlider(Qt.Horizontal)
+        self.brightnessSlider.setMinimum(0)
+        self.brightnessSlider.setMaximum(100)
+        self.brightnessSlider.setValue(50)
+        self.brightnessSlider.setTickInterval(1)
+        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
+
+        self.contrastSlider = QSlider(Qt.Horizontal)
+        self.contrastSlider.setMinimum(0)
+        self.contrastSlider.setMaximum(100)
+        self.contrastSlider.setValue(50)
+        self.contrastSlider.setTickInterval(1)
+        self.contrastSlider.valueChanged.connect(self.setColourLevels)
+
 
         vboxSpecContr = pg.LayoutWidget()
-        vboxSpecContr.addWidget(self.speciesTop, row=0, col=0)
-        vboxSpecContr.addWidget(self.species, row=0, col=1, colspan=4)
-        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=5)
+        vboxSpecContr.addWidget(self.speciesTop, row=0, col=0, colspan=2)
+        vboxSpecContr.addWidget(self.species, row=0, col=2, colspan=8)
+        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=10)
         vboxSpecContr.addWidget(self.playButton, row=2, col=0)
         vboxSpecContr.addWidget(self.volIcon, row=2, col=1)
         vboxSpecContr.addWidget(self.volSlider, row=2, col=2, colspan=2)
+        labelBr = QLabel("Bright.")
+        labelBr.setAlignment(QtCore.Qt.AlignRight)
+        vboxSpecContr.addWidget(labelBr, row=2, col=4)
+        vboxSpecContr.addWidget(self.brightnessSlider, row=2, col=5, colspan=2)
+        labelCo = QLabel("Contr.")
+        labelCo.setAlignment(QtCore.Qt.AlignRight)
+        vboxSpecContr.addWidget(labelCo, row=2, col=7)
+        vboxSpecContr.addWidget(self.contrastSlider, row=2, col=8, colspan=2)
  
 
         vboxFull = QVBoxLayout()
@@ -947,7 +974,7 @@ class HumanClassify1(QDialog):
 
         self.setLayout(vboxFull)
         # print seg
-        self.setImage(sg,audiodata,sampleRate,self.label, unbufStart, unbufStop)
+        self.setImage(self.sg,audiodata,sampleRate,self.label, unbufStart, unbufStop)
 
     def playSeg(self):
         if self.media_obj2.isPlaying():
@@ -1079,6 +1106,29 @@ class HumanClassify1(QDialog):
         self.label = str(textitem)
         self.species.setText(self.label)
         self.saveConfig = True
+
+    def setColourLevels(self):
+        """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
+        Translates the brightness and contrast values into appropriate image levels.
+        Calculation is simple.
+        """
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        # self.config['brightness'] = self.brightnessSlider.value()
+        # self.config['contrast'] = self.contrastSlider.value()
+        brightness = self.brightnessSlider.value() # self.config['brightness']
+        contrast = self.contrastSlider.value() # self.config['contrast']
+        self.colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
+        self.colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + self.colourStart
+        self.plot.setLevels([self.colourStart, self.colourEnd])
+
+        # TODO: add button for this?
+        # if self.config['invertColourMap']:
+        #     self.overviewImage.setLevels([self.colourEnd, self.colourStart])
+        #     self.specPlot.setLevels([self.colourEnd, self.colourStart])
+        # else:
+        #     self.overviewImage.setLevels([self.colourStart, self.colourEnd])
+        #     self.specPlot.setLevels([self.colourStart, self.colourEnd])
 
     def getValues(self):
         return [self.label, self.saveConfig, self.tbox.text()]
