@@ -34,11 +34,11 @@ class StartScreen(QDialog):
         # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
         b1 = QPushButton(" Manual Segmentation ")
         b2 = QPushButton("      Batch Processing      ")
-        #b3 = QPushButton("Denoise a folder")
+        b3 = QPushButton(" Review Batch Results ")
         l1 = QLabel("-------")
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
-        #b3.setStyleSheet(btn_style2)
+        b3.setStyleSheet(btn_style)
         l1.setStyleSheet('QLabel {color:transparent}')
 
         hbox = QHBoxLayout()
@@ -48,24 +48,27 @@ class StartScreen(QDialog):
         hbox.addWidget(l1)
         hbox.addWidget(b2)
         hbox.addWidget(l1)
-        #hbox.addWidget(b3)
+        
+        hbox2 = QHBoxLayout()
+        hbox2.addWidget(l1)
+        hbox2.addWidget(b3)
+        hbox2.addWidget(l1)
         # b3.setEnabled(False)
 
         vbox = QVBoxLayout()
         vbox.addStretch(1)
         vbox.addLayout(hbox)
+        vbox.addLayout(hbox2)
         vbox.addWidget(l1)
 
         self.setLayout(vbox)
 
         # self.setGeometry(300, 300, 430, 210)
 
-        #self.connect(b1, SIGNAL('clicked()'), self.manualSeg)
         b1.clicked.connect(self.manualSeg)
         # if DOC==False:
-        #self.connect(b2, SIGNAL('clicked()'), self.findSpecies)
         b2.clicked.connect(self.findSpecies)
-        # self.connect(b3, SIGNAL('clicked()'), self.denoise)
+        b3.clicked.connect(self.reviewSeg)
 
         # vbox = QVBoxLayout()
         # for w in [b1, b2, b3]:
@@ -84,6 +87,10 @@ class StartScreen(QDialog):
 
     def denoise(self):
         self.task = 3
+        self.accept()
+
+    def reviewSeg(self):
+        self.task = 4
         self.accept()
 
     def getValues(self):
@@ -789,7 +796,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, sg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, unbufStart, unbufStop, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -799,10 +806,8 @@ class HumanClassify1(QDialog):
         self.colourStart = colourStart
         self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
-        self.label = label
         self.birdList = birdList
         self.saveConfig = False
-        self.sg = sg
 
         # Set up the plot window, then the right and wrong buttons, and a close button
         self.wPlot = pg.GraphicsLayoutWidget()
@@ -823,7 +828,7 @@ class HumanClassify1(QDialog):
 
         # label for current segment assignment
         self.speciesTop = QLabel("Currently:")
-        self.species = QLabel(self.label)
+        self.species = QLabel()
         font = self.species.font()
         font.setPointSize(24)
         font.setBold(True)
@@ -974,7 +979,7 @@ class HumanClassify1(QDialog):
 
         self.setLayout(vboxFull)
         # print seg
-        self.setImage(self.sg,audiodata,sampleRate,self.label, unbufStart, unbufStop)
+        # self.setImage(self.sg,audiodata,sampleRate,self.label, unbufStart, unbufStop)
 
     def playSeg(self):
         if self.media_obj2.isPlaying():

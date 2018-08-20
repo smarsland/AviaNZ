@@ -858,6 +858,7 @@ class AviaNZ(QMainWindow):
         self.removeSegments()
         if hasattr(self, 'overviewImageRegion'):
             self.p_overview.removeItem(self.overviewImageRegion)
+        self.p_overview.clear()
 
         # This is a flag to say if the next thing that the user clicks on should be a start or a stop for segmentation
         if self.started:
@@ -2406,7 +2407,7 @@ class AviaNZ(QMainWindow):
         """ Listener for the spinbox that decides the width of the main window.
         It updates the top figure plots as the window width is changed.
         Slightly annoyingly, it gets called when the value gets reset, hence the first line. """
-        if not hasattr(self,'overviewImageRegion'):
+        if not hasattr(self,'overviewimageregion'):
             return
         self.windowSize = value
 
@@ -2475,18 +2476,7 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             return
         else:
-            if not self.config['showAllPages']:
-                # Different calls for the two types of region
-                if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                    x1 = self.listRectanglesa2[self.box1id].pos()[0]
-                    x2 = x1 + self.listRectanglesa2[self.box1id].size()[0]
-                else:
-                    x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
-                x1 = int(x1)
-                x2 = int(x2)
-                x3 = int(self.listRectanglesa1[self.box1id].getRegion()[0] * self.sampleRate)
-                x4 = int(self.listRectanglesa1[self.box1id].getRegion()[1] * self.sampleRate)
-            else:
+            if self.config['showAllPages']:
                 # Showing them on all pages is a bit more of a pain
                 # Sort the segments into increasing time order, apply same order to listRects and labels
                 sortOrder = sorted(range(len(self.segments)), key=self.segments.__getitem__)
@@ -2497,28 +2487,12 @@ class AviaNZ(QMainWindow):
 
                 # Check which page is first to have segments on
                 self.currentFileSection = 0
-                while self.segments[0][0] > (self.currentFileSection+1)*self.config['maxFileShow']:
-                    self.currentFileSection += 1
 
-                # Load the first segment
-                self.startRead = self.currentFileSection * self.config['maxFileShow']
-                self.loadSegment()
-
-                # And show it
-                # Note: +/- reviewSpecBuffer seconds are added on both sides
-                x1nob = self.segments[self.box1id][0]
-                x2nob = self.segments[self.box1id][1]
-                x1 = int(self.convertAmpltoSpec(x1nob -self.startRead-self.config['reviewSpecBuffer']))
-                x1 = max(x1, 0)
-                x2 = int(self.convertAmpltoSpec(x2nob -self.startRead+self.config['reviewSpecBuffer']))
-                x2 = min(x2, len(self.sg))
-                x3 = int((x1nob -self.startRead-self.config['reviewSpecBuffer'])*self.sampleRate)
-                x3 = max(x3, 0)
-                x4 = int((x2nob -self.startRead+self.config['reviewSpecBuffer'])*self.sampleRate)
-                x4 = min(x4, len(self.audiodata))
-
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.sg[x1:x2,:],self.audiodata[x3:x4],self.sampleRate,self.segments[self.box1id][4],self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1, self)
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
+            # load the first image:
+            self.box1id = -1
             self.humanClassifyDialog1.setSegNumbers(0, len(self.segments))
+            self.humanClassifyNextImage1()
             self.humanClassifyDialog1.show()
             self.humanClassifyDialog1.activateWindow()
             #self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
@@ -3855,6 +3829,8 @@ def mainlauncher(cli, infile, imagefile, command):
         elif task==2:
             avianz = AviaNZ_batch.AviaNZ_batchProcess()
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
+        elif task==4:
+            avianz = AviaNZ_batch.AviaNZ_reviewAll(configfile='AviaNZconfig_user.txt')
 
         avianz.show()
         app.exec_()
