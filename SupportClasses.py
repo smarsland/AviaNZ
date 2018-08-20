@@ -546,8 +546,8 @@ class exportSegments:
             for seg in self.segments:
                 if int(seg[1]-seg[0]) < self.minLen: # skip very short segments
                     continue
-                ws.cell(row=r, column=2, value=str(QTime().addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
-                ws.cell(row=r, column=3, value=str(QTime().addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
+                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
+                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
                 r += 1
 
         def writeToExcelp2():
@@ -678,6 +678,7 @@ class exportSegments:
         else:
             file = open(str(self.filename) + '.data', 'w')
         json.dump(annotation, file)
+        file.write("\n")
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
