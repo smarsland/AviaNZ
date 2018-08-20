@@ -932,16 +932,17 @@ class AviaNZ(QMainWindow):
             current = current.text()
 
         fullcurrent = os.path.join(self.dirName, current)
-        if not os.path.isfile(fullcurrent) and not os.path.isdir(fullcurrent):
-            print("File %s does not exist!" % fullcurrent)
-            return(1)
-        # avoid files with no data (Tier 1 has 0Kb .wavs)
-        if os.stat(fullcurrent).st_size == 0:
-            print("Cannot open file %s of size 0!" % fullcurrent)
-            return(1)
-        elif os.stat(fullcurrent).st_size < 100:
-            print("File %s appears to have only header" % fullcurrent)
-            return(1)
+        if not os.path.isdir(fullcurrent):
+            if not os.path.isfile(fullcurrent):
+                print("File %s does not exist!" % fullcurrent)
+                return(1)
+            # avoid files with no data (Tier 1 has 0Kb .wavs
+            if os.stat(fullcurrent).st_size == 0:
+                print("Cannot open file %s of size 0!" % fullcurrent)
+                return(1)
+            elif os.stat(fullcurrent).st_size < 100:
+                print("File %s appears to have only header" % fullcurrent)
+                return(1)
 
         # If there was a previous file, make sure the type of its name is OK. This is because you can get these
         # names from the file listwidget, or from the openFile dialog.
