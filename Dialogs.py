@@ -33,7 +33,7 @@ class StartScreen(QDialog):
         btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
         # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
         b1 = QPushButton(" Manual Segmentation ")
-        b2 = QPushButton("      Find a Species      ")
+        b2 = QPushButton("      Batch Processing      ")
         #b3 = QPushButton("Denoise a folder")
         l1 = QLabel("-------")
         b1.setStyleSheet(btn_style)

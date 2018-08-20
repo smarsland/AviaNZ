@@ -46,7 +46,7 @@ import WaveletSegment
 import WaveletFunctions
 #import Features
 #import Learning
-import interface_FindSpecies
+import AviaNZ_batch
 #import math
 
 from openpyxl import load_workbook, Workbook
@@ -3852,10 +3852,8 @@ def mainlauncher(cli, infile, imagefile, command):
             avianz = AviaNZ(DOC=DOC, configfile='AviaNZconfig_user.txt')
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==2:
-            avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(DOC=DOC)
+            avianz = AviaNZ_batch.AviaNZ_batchProcess()
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
-            avianz.show()
-            app.exec_()
 
         avianz.show()
         app.exec_()
