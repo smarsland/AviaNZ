@@ -961,7 +961,7 @@ class AviaNZ(QMainWindow):
 
         # Update the file list to show the right one
         i=0
-        while self.listOfFiles[i].fileName() != current and i<len(self.listOfFiles)-1:
+        while i<len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current:
             i+=1
         if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
             dir = QDir(self.dirName)
