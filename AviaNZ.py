@@ -940,7 +940,7 @@ class AviaNZ(QMainWindow):
             print("Cannot open file %s of size 0!" % fullcurrent)
             return(1)
         elif os.stat(fullcurrent).st_size < 100:
-            print("File %s appears to have only header")
+            print("File %s appears to have only header" % fullcurrent)
             return(1)
 
         # If there was a previous file, make sure the type of its name is OK. This is because you can get these
