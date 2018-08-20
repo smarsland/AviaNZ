@@ -3786,6 +3786,7 @@ class AviaNZ(QMainWindow):
             else:
                 file = open(str(self.filename) + '.data', 'w')
             json.dump(self.segments,file)
+            file.write("\n")
             self.segmentsToSave = False
             del self.segments[0]
         else:
