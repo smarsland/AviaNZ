@@ -910,7 +910,7 @@ class AviaNZ(QMainWindow):
         fileName, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
         success = 1
         dirNameOld = self.dirName
-        fileNameOld = self.filename
+        fileNameOld = os.path.basename(self.filename)
         if fileName != '':
             print("opening file %s" % fileName)
             self.dirName = os.path.dirname(fileName)
@@ -938,6 +938,9 @@ class AviaNZ(QMainWindow):
         # avoid files with no data (Tier 1 has 0Kb .wavs)
         if os.stat(fullcurrent).st_size == 0:
             print("Cannot open file %s of size 0!" % fullcurrent)
+            return(1)
+        elif os.stat(fullcurrent).st_size < 100:
+            print("File %s appears to have only header")
             return(1)
 
         # If there was a previous file, make sure the type of its name is OK. This is because you can get these
