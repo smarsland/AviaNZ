@@ -1146,6 +1146,13 @@ class HumanClassify2(QDialog):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.frame = QWidget()
 
+        # let the user quit without bothering rest of it
+        self.setWindowFlags(self.windowFlags() & QtCore.Qt.WindowCloseButtonHint)
+
+        # todo: fit the window to actual screen size
+        sizeObject = QDesktopWidget().screenGeometry(-1)
+        print (sizeObject.width(),sizeObject.height())
+
         self.sampleRate = sampleRate
         self.incr = incr
         self.lut = lut
@@ -1172,7 +1179,7 @@ class HumanClassify2(QDialog):
 
             species = QLabel("Species/call type: " + label)
             if nParts>1:
-                partLabel = QLabel("Page "+str(part+1)+" of " + str(nParts))
+                partLabel = QLabel("Currently on page "+str(part+1)+" of " + str(nParts))
             else:
                 partLabel = QLabel("")
 
@@ -1204,7 +1211,10 @@ class HumanClassify2(QDialog):
 
 
     def makeButtons(self):
-        segRemain = len(self.segments) - self.firstSegment
+        if self.firstSegment == 0:
+            segRemain = len(self.segments) - 1
+        else:
+            segRemain = len(self.segments) - self.firstSegment
         width = 0
         col = 0
 
