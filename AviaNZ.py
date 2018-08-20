@@ -46,7 +46,7 @@ import WaveletSegment
 import WaveletFunctions
 #import Features
 #import Learning
-import interface_FindSpecies
+import AviaNZ_batch
 #import math
 
 from openpyxl import load_workbook, Workbook
@@ -910,7 +910,7 @@ class AviaNZ(QMainWindow):
         fileName, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
         success = 1
         dirNameOld = self.dirName
-        fileNameOld = self.filename
+        fileNameOld = os.path.basename(self.filename)
         if fileName != '':
             print("opening file %s" % fileName)
             self.dirName = os.path.dirname(fileName)
@@ -932,13 +932,17 @@ class AviaNZ(QMainWindow):
             current = current.text()
 
         fullcurrent = os.path.join(self.dirName, current)
-        if not os.path.isfile(fullcurrent) and not os.path.isdir(fullcurrent):
-            print("File %s does not exist!" % fullcurrent)
-            return(1)
-        # avoid files with no data (Tier 1 has 0Kb .wavs)
-        if os.stat(fullcurrent).st_size == 0:
-            print("Cannot open file %s of size 0!" % fullcurrent)
-            return(1)
+        if not os.path.isdir(fullcurrent):
+            if not os.path.isfile(fullcurrent):
+                print("File %s does not exist!" % fullcurrent)
+                return(1)
+            # avoid files with no data (Tier 1 has 0Kb .wavs
+            if os.stat(fullcurrent).st_size == 0:
+                print("Cannot open file %s of size 0!" % fullcurrent)
+                return(1)
+            elif os.stat(fullcurrent).st_size < 100:
+                print("File %s appears to have only header" % fullcurrent)
+                return(1)
 
         # If there was a previous file, make sure the type of its name is OK. This is because you can get these
         # names from the file listwidget, or from the openFile dialog.
@@ -957,7 +961,7 @@ class AviaNZ(QMainWindow):
 
         # Update the file list to show the right one
         i=0
-        while self.listOfFiles[i].fileName() != current and i<len(self.listOfFiles)-1:
+        while i<len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current:
             i+=1
         if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
             dir = QDir(self.dirName)
@@ -3784,6 +3788,7 @@ class AviaNZ(QMainWindow):
             else:
                 file = open(str(self.filename) + '.data', 'w')
             json.dump(self.segments,file)
+            file.write("\n")
             self.segmentsToSave = False
             del self.segments[0]
         else:
@@ -3850,10 +3855,8 @@ def mainlauncher(cli, infile, imagefile, command):
             avianz = AviaNZ(DOC=DOC, configfile='AviaNZconfig_user.txt')
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==2:
-            avianz = interface_FindSpecies.AviaNZFindSpeciesInterface(DOC=DOC)
+            avianz = AviaNZ_batch.AviaNZ_batchProcess()
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
-            avianz.show()
-            app.exec_()
 
         avianz.show()
         app.exec_()
