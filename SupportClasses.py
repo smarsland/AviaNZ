@@ -481,18 +481,19 @@ class exportSegments:
 
     def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species="Don't Know", startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0):
 
-        if len(segments[0])==2:
-            print("using old format segment list")
-            # convert to new format
-            for seg in segments:
-                seg[2] = 0
-                seg[3] = 0
-                seg[4] = species
-        elif len(segments[0])==5:
-            print("using new format segment list")
-        else:
-            print("ERROR: incorrect segment format")
-            return
+        if len(segments)>0:
+            if len(segments[0])==2:
+                print("using old format segment list")
+                # convert to new format
+                for seg in segments:
+                    seg.append(0)
+                    seg.append(0)
+                    seg.append(species)
+            elif len(segments[0])==5:
+                print("using new format segment list")
+            else:
+                print("ERROR: incorrect segment format")
+                return
 
         self.segments=segments
         self.confirmedSegments = confirmedSegments
