@@ -69,16 +69,16 @@ class AviaNZ_batchProcess(QMainWindow):
         self.area.addDock(self.d_detection,'right')
         self.area.addDock(self.d_files, 'left')
 
-        self.w_browse1 = QPushButton("  &Browse Folder")
-        self.w_browse1.setToolTip("Can select a folder with sub folders to process")
-        self.w_browse1.setFixedHeight(50)
-        self.w_browse1.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
-        self.w_dir1 = QPlainTextEdit()
-        self.w_dir1.setFixedHeight(50)
-        self.w_dir1.setPlainText('')
-        self.w_dir1.setToolTip("The folder being processed")
-        self.d_detection.addWidget(self.w_dir1,row=0,col=1,colspan=2)
-        self.d_detection.addWidget(self.w_browse1,row=0,col=0)
+        self.w_browse = QPushButton("  &Browse Folder")
+        self.w_browse.setToolTip("Can select a folder with sub folders to process")
+        self.w_browse.setFixedHeight(50)
+        self.w_browse.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.w_dir = QPlainTextEdit()
+        self.w_dir.setFixedHeight(50)
+        self.w_dir.setPlainText('')
+        self.w_dir.setToolTip("The folder being processed")
+        self.d_detection.addWidget(self.w_dir,row=0,col=1,colspan=2)
+        self.d_detection.addWidget(self.w_browse,row=0,col=0)
 
         self.w_speLabel1 = QLabel("  Select Species")
         self.d_detection.addWidget(self.w_speLabel1,row=1,col=0)
@@ -99,7 +99,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.d_detection.addWidget(self.w_processButton,row=11,col=2)
         self.w_processButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
 
-        self.w_browse1.clicked.connect(self.browse_detect)
+        self.w_browse.clicked.connect(self.browse)
 
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
@@ -155,24 +155,14 @@ class AviaNZ_batchProcess(QMainWindow):
     def cleanStatus(self):
         self.statusBar().showMessage("Processing file Current/Total")
 
-    def browse_detect(self):
-        self.browse(d=True)
-
-    def browse_denoise(self):
-        self.browse(d=False)
-
-    def browse(self,d=True):
+    def browse(self):
         # self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',"Wav files (*.wav)")
         if self.dirName:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         print("Dir:", self.dirName)
-        if d:
-            self.w_dir1.setPlainText(self.dirName)
-        else:
-            self.w_dir2.setPlainText(self.dirName)
-
+        self.w_dir.setPlainText(self.dirName)
         self.fillFileList(self.dirName)
 
     def detect(self, minLen=5):
@@ -413,16 +403,16 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.area.addDock(self.d_detection,'right')
 
-        self.w_browse1 = QPushButton("  &Browse Folder")
-        self.w_browse1.setToolTip("Can select a folder with sub folders to process")
-        self.w_browse1.setFixedHeight(50)
-        self.w_browse1.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
-        self.w_dir1 = QPlainTextEdit()
-        self.w_dir1.setFixedHeight(50)
-        self.w_dir1.setPlainText('')
-        self.w_dir1.setToolTip("The folder being processed")
-        self.d_detection.addWidget(self.w_dir1,row=0,col=1,colspan=2)
-        self.d_detection.addWidget(self.w_browse1,row=0,col=0)
+        self.w_browse = QPushButton("  &Browse Folder")
+        self.w_browse.setToolTip("Can select a folder with sub folders to process")
+        self.w_browse.setFixedHeight(50)
+        self.w_browse.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.w_dir = QPlainTextEdit()
+        self.w_dir.setFixedHeight(50)
+        self.w_dir.setPlainText('')
+        self.w_dir.setToolTip("The folder being processed")
+        self.d_detection.addWidget(self.w_dir,row=0,col=1,colspan=2)
+        self.d_detection.addWidget(self.w_browse,row=0,col=0)
 
         self.w_speLabel1 = QLabel("  Select Species")
         self.d_detection.addWidget(self.w_speLabel1,row=1,col=0)
@@ -443,7 +433,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.w_processButton,row=11,col=2)
         self.w_processButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
 
-        self.w_browse1.clicked.connect(self.browse_detect)
+        self.w_browse.clicked.connect(self.browse)
 
         self.show()
 
@@ -460,23 +450,14 @@ class AviaNZ_reviewAll(QMainWindow):
     def cleanStatus(self):
         self.statusBar().showMessage("Processing file Current/Total")
 
-    def browse_detect(self):
-        self.browse(d=True)
-
-    def browse_denoise(self):
-        self.browse(d=False)
-
-    def browse(self,d=True):
+    def browse(self):
         # self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',"Wav files (*.wav)")
         if self.dirName:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         print("Dir:", self.dirName)
-        if d:
-            self.w_dir1.setPlainText(self.dirName)
-        else:
-            self.w_dir2.setPlainText(self.dirName)
+        self.w_dir.setPlainText(self.dirName)
 
     def detect(self, minLen=5):
         with pg.BusyCursor():
@@ -518,15 +499,14 @@ class AviaNZ_reviewAll(QMainWindow):
                                 self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
                                 # load segments
                                 self.segments = json.load(open(filename + '.data'))
-                                if self.segments[0][0] == -1:
-                                    self.operator = self.segments[0][2]
-                                    self.reviewer = self.segments[0][3]
-                                    del self.segments[0]
                                 if len(self.segments)==0:
                                     # no segments, skip
                                     print("no segments found in file %s" % filename)
                                     continue
-
+                                if self.segments[0][0] == -1:
+                                    self.operator = self.segments[0][2]
+                                    self.reviewer = self.segments[0][3]
+                                    del self.segments[0]
                                 self.loadFile()
 
                                 # Initialize the dialog for this file
