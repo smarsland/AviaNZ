@@ -3000,6 +3000,15 @@ class AviaNZ(QMainWindow):
         filename = self.filename[:-4] + '_d' + self.filename[-4:]
         wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits', sampwidth=2)
         self.statusLeft.setText("Saved")
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("Destination: " + '\n' + filename)
+        msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+        msg.setWindowIcon(QIcon('img/Avianz.ico'))
+        msg.setWindowTitle("Saved")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+        return
 
     def save_selected_sound(self, id=-1):
         """ Listener for 'Save selected sound' menu item.

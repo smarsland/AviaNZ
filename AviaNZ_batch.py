@@ -1,8 +1,9 @@
-import os, re
+import os, re, platform
 
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtMultimedia import QAudioFormat
+from PyQt5.QtCore import Qt, QDir
 
 import wavio
 import librosa
@@ -47,6 +48,8 @@ class AviaNZ_batchProcess(QMainWindow):
         self.statusBar().showMessage("Processing file Current/Total")
 
         self.setWindowTitle('AviaNZ - Batch Processing')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.createMenu()
         self.createFrame()
         self.center()
 
@@ -54,13 +57,17 @@ class AviaNZ_batchProcess(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setFixedSize(500,300)
+        self.setMinimumSize(600,400)
 
         # Make the docks
         self.d_detection = Dock("Automatic Detection",size=(350,100))
-        self.d_detection.hideTitleBar()
+        # self.d_detection.hideTitleBar()
+
+        self.d_files = Dock("File list", size=(150, 100))
+
 
         self.area.addDock(self.d_detection,'right')
+        self.area.addDock(self.d_files, 'left')
 
         self.w_browse1 = QPushButton("  &Browse Folder")
         self.w_browse1.setToolTip("Can select a folder with sub folders to process")
@@ -94,7 +101,46 @@ class AviaNZ_batchProcess(QMainWindow):
 
         self.w_browse1.clicked.connect(self.browse_detect)
 
+        self.w_files = pg.LayoutWidget()
+        self.d_files.addWidget(self.w_files)
+        self.w_files.addWidget(QLabel('You chose to process'), row=0, col=0)
+        self.w_files.addWidget(QLabel('# sound files'), row=1, col=0)
+        # List to hold the list of files
+        self.listFiles = QListWidget()
+        self.listFiles.setMinimumWidth(150)
+        # self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
+        # self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
+        self.w_files.addWidget(self.listFiles, row=2, col=0)
+
         self.show()
+
+    def createMenu(self):
+        """ Create the basic menu.
+        """
+
+        helpMenu = self.menuBar().addMenu("&Help")
+        helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
+        aboutMenu = self.menuBar().addMenu("&About")
+        aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
+
+    def showAbout(self):
+        """ Create the About Message Box"""
+        msg = QMessageBox()
+        msg.setIconPixmap(QPixmap("img\AviaNZ.png"))
+        msg.setWindowIcon(QIcon('img/Avianz.ico'))
+        msg.setText("The AviaNZ Program, v0.10 (June 2017)")
+        msg.setInformativeText("By Stephen Marsland, Massey University (2016--2017). With code by Nirosha Priyadarshani and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Manic Purage. \ns.r.marsland@massey.ac.nz; n.p.priyadarshani@massey.ac.nz")
+        msg.setWindowTitle("About")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+        return
+
+    def showHelp(self):
+        """ Show the user manual (a pdf file)"""
+        # TODO: manual is not distributed as pdf now
+        import webbrowser
+        # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
     def center(self):
         # geometry of the main window
@@ -126,6 +172,8 @@ class AviaNZ_batchProcess(QMainWindow):
             self.w_dir1.setPlainText(self.dirName)
         else:
             self.w_dir2.setPlainText(self.dirName)
+
+        self.fillFileList(self.dirName)
 
     def detect(self, minLen=5):
         with pg.BusyCursor():
@@ -242,6 +290,39 @@ class AviaNZ_batchProcess(QMainWindow):
                 msg.setStandardButtons(QMessageBox.Ok)
                 msg.exec_()
 
+    def fillFileList(self,fileName):
+        """ Generates the list of files for the file listbox.
+        fileName - currently opened file (marks it in the list).
+        Most of the work is to deal with directories in that list.
+        It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
+        red in the list, and the second to know if the files are long."""
+
+        if not os.path.isdir(self.dirName):
+            print("Directory doesn't exist: making it")
+            os.makedirs(self.dirName)
+
+        self.listFiles.clear()
+        self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
+        listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
+        listOfLongFiles = QDir(self.dirName).entryList(['*_1.wav'])
+        for file in self.listOfFiles:
+            if file.fileName()[:-4]+'_1.wav' in listOfLongFiles:
+                # Ignore this entry
+                pass
+            else:
+                # If there is a .data version, colour the name red to show it has been labelled
+                item = QListWidgetItem(self.listFiles)
+                self.listitemtype = type(item)
+                item.setText(file.fileName())
+                if file.fileName()+'.data' in listOfDataFiles:
+                    item.setForeground(Qt.red)
+        if fileName:
+            index = self.listFiles.findItems(fileName,Qt.MatchExactly)
+            if len(index)>0:
+                self.listFiles.setCurrentItem(index[0])
+            else:
+                index = self.listFiles.findItems(self.listOfFiles[0].fileName(),Qt.MatchExactly)
+                self.listFiles.setCurrentItem(index[0])
 
     def loadFile(self):
         print(self.filename)
