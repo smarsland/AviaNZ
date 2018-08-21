@@ -24,8 +24,8 @@ class StartScreen(QDialog):
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         self.setWindowTitle('AviaNZ - Choose Task')
         self.setAutoFillBackground(False)
-        self.setFixedSize(681, 315)
-        self.setStyleSheet("background-image: url(img/AviaNZ_SW_Large.jpg);")
+        self.setFixedSize(900, 350)
+        self.setStyleSheet("background-image: url(img/AviaNZ_SW_V2.jpg);")
         self.activateWindow()
 
         self.DOC=DOC
@@ -36,45 +36,33 @@ class StartScreen(QDialog):
         b2 = QPushButton("      Batch Processing      ")
         b3 = QPushButton(" Review Batch Results ")
         l1 = QLabel("-------")
+        l2 = QLabel("---")
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
         b3.setStyleSheet(btn_style)
         l1.setStyleSheet('QLabel {color:transparent}')
 
         hbox = QHBoxLayout()
-        # hbox.addStretch(1)
         hbox.addWidget(l1)
         hbox.addWidget(b1)
         hbox.addWidget(l1)
         hbox.addWidget(b2)
         hbox.addWidget(l1)
-        
-        hbox2 = QHBoxLayout()
-        hbox2.addWidget(l1)
-        hbox2.addWidget(b3)
-        hbox2.addWidget(l1)
-        # b3.setEnabled(False)
+        hbox.addWidget(b3)
+        hbox.addWidget(l2)
 
         vbox = QVBoxLayout()
         vbox.addStretch(1)
         vbox.addLayout(hbox)
-        vbox.addLayout(hbox2)
         vbox.addWidget(l1)
 
         self.setLayout(vbox)
-
-        # self.setGeometry(300, 300, 430, 210)
 
         b1.clicked.connect(self.manualSeg)
         # if DOC==False:
         b2.clicked.connect(self.findSpecies)
         b3.clicked.connect(self.reviewSeg)
 
-        # vbox = QVBoxLayout()
-        # for w in [b1, b2, b3]:
-        #         vbox.addWidget(w)
-        #
-        # self.setLayout(vbox)
         self.task = -1
 
     def manualSeg(self):
