@@ -803,6 +803,7 @@ class HumanClassify1(QDialog):
         self.frame = QWidget()
 
         self.lut = lut
+        self.label = ''
         self.colourStart = colourStart
         self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
