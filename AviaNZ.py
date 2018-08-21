@@ -3071,6 +3071,9 @@ class AviaNZ(QMainWindow):
         opstartingtime = time.time()
         print("Segmenting requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
 
+        # clean current segments # TODO: this is a temp solution to avoid duplicated segments
+        self.removeSegments()
+        self.segmentsToSave = True
         # TODO: Currently just gives them all the label "Don't Know"
         seglen = len(self.segments)
         [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution] = self.segmentDialog.getValues()
@@ -3193,6 +3196,17 @@ class AviaNZ(QMainWindow):
         out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename,
                                                datalength=self.datalength, sampleRate=self.sampleRate)
         out.excel()
+        # add user notification
+        # QMessageBox.about(self, "Segments Exported", "Check this directory for the excel output: " + '\n' + self.dirName)
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("Check this directory for the excel output: " + '\n' + self.dirName)
+        msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+        msg.setWindowIcon(QIcon('img/Avianz.ico'))
+        msg.setWindowTitle("Segments Exported")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+        return
 
     def findMatches(self,thr=0.4):
         """ Calls the cross-correlation function to find matches like the currently highlighted box.
