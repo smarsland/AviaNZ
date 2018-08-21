@@ -1786,7 +1786,7 @@ class AviaNZ(QMainWindow):
             if species is None or species=="Don't Know":
                 species = "Don't Know"
                 brush = self.ColourNone
-            elif species[-1]=='?':
+            elif species[:-1]=='?':
                 brush = self.ColourPossible
             else:
                 brush = self.ColourNamed
@@ -2485,7 +2485,7 @@ class AviaNZ(QMainWindow):
                 self.listLabels = [self.listLabels[i] for i in sortOrder]
 
                 # Check which page is first to have segments on
-                self.currentFileSection = 0
+                self.currentFileSection = -1
 
             self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
             # load the first image:
@@ -2539,11 +2539,14 @@ class AviaNZ(QMainWindow):
                     while self.segments[self.box1id][0] > (self.currentFileSection+1)*self.config['maxFileShow']:
                         self.currentFileSection += 1
                     self.startRead = self.currentFileSection * self.config['maxFileShow']
-                    print("Loading next page", self.currentFileSection)
-                    self.loadSegment()
+                    with pg.BusyCursor():
+                        print("Loading next page", self.currentFileSection)
+                        self.loadSegment()
+                self.humanClassifyDialog1.setWindowTitle('Check Classifications: page ' + str(self.currentFileSection+1))
+                print(self.segments[self.box1id])
 
                 # Show the next segment
-                if self.listRectanglesa2[self.box1id] is not None:
+                if self.segments[self.box1id] is not None:
                     x1nob = self.segments[self.box1id][0] - self.startRead
                     x2nob = self.segments[self.box1id][1] - self.startRead
                     x1 = int(self.convertAmpltoSpec(x1nob - self.config['reviewSpecBuffer']))
@@ -2556,6 +2559,8 @@ class AviaNZ(QMainWindow):
                     x4 = min(x4, len(self.audiodata))
                     self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
                                                    self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1, self.minFreq, self.maxFreq)
+                else:
+                    print("segment %s missing for some reaseon" % self.box1id)
 
         else:
             msg = QMessageBox()
@@ -2590,6 +2595,7 @@ class AviaNZ(QMainWindow):
         """ Correct segment labels, save the old ones if necessary """
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
         self.segmentsDone += 1
+        self.humanClassifyDialog1.stopPlayback()
         if len(checkText) > 0:
             if label != checkText:
                 label = str(checkText)
@@ -2636,6 +2642,7 @@ class AviaNZ(QMainWindow):
     def humanClassifyDelete1(self):
         # Delete a segment
         id = self.box1id
+        self.humanClassifyDialog1.stopPlayback()
         self.deleteSegment(self.box1id)
         self.box1id = id-1
         self.segmentsToSave = True
