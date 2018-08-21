@@ -532,6 +532,11 @@ class AviaNZ(QMainWindow):
         # The various plots
         self.overviewImage = pg.ImageItem(enableMouse=False)
         self.p_overview.addItem(self.overviewImage)
+        self.overviewImageRegion = pg.LinearRegionItem()
+        # this is needed for compatibility with other shaded rectangles:
+        self.overviewImageRegion.lines[0].btn = QtCore.Qt.RightButton
+        self.overviewImageRegion.lines[1].btn = QtCore.Qt.RightButton
+        self.p_overview.addItem(self.overviewImageRegion, ignoreBounds=True)
         self.amplPlot = pg.PlotDataItem()
         self.p_ampl.addItem(self.amplPlot)
         self.specPlot = pg.ImageItem()
@@ -856,9 +861,6 @@ class AviaNZ(QMainWindow):
 
         # Remove the segments
         self.removeSegments()
-        if hasattr(self, 'overviewImageRegion'):
-            self.p_overview.removeItem(self.overviewImageRegion)
-        self.p_overview.clear()
 
         # This is a flag to say if the next thing that the user clicks on should be a start or a stop for segmentation
         if self.started:
@@ -1426,11 +1428,6 @@ class AviaNZ(QMainWindow):
         Also, compute the new segments for the overview, and make sure that the listeners are connected
         for clicks on them. """
         self.overviewImage.setImage(self.sg)
-        self.overviewImageRegion = pg.LinearRegionItem()
-        # this is needed for compatibility with other shaded rectangles:
-        self.overviewImageRegion.lines[0].btn = QtCore.Qt.RightButton
-        self.overviewImageRegion.lines[1].btn = QtCore.Qt.RightButton
-        self.p_overview.addItem(self.overviewImageRegion, ignoreBounds=True)
         self.overviewImageRegion.setRegion([0, self.convertAmpltoSpec(self.widthWindow.value())])
         self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
 
