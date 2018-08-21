@@ -3027,7 +3027,7 @@ class AviaNZ(QMainWindow):
             x2 = math.floor(x2 * self.config['incr']) #/ self.sampleRate
             #print x1, x2
             # filename = self.filename[:-4] + '_selected' + self.filename[-4:]
-            filename, drop = QtGui.QFileDialog.getSaveFileName(self, 'Save File as', self.dirName, selectedFilter='*.wav')
+            filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.dirName, '*.wav')
             if filename:
                 wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
 
