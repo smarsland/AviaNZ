@@ -1720,7 +1720,7 @@ class AviaNZ(QMainWindow):
             else:
                 self.overviewSegments[inds:inde+1,0] += 1
 
-        if species[-1] == '?':
+        if species[-1:] == '?':
             brush = self.ColourPossible
             if delete:
                 self.overviewSegments[inds:inde + 1, 2] -= 1
@@ -3000,6 +3000,15 @@ class AviaNZ(QMainWindow):
         filename = self.filename[:-4] + '_d' + self.filename[-4:]
         wavio.write(filename,self.audiodata.astype('int16'),self.sampleRate,scale='dtype-limits', sampwidth=2)
         self.statusLeft.setText("Saved")
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("Destination: " + '\n' + filename)
+        msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+        msg.setWindowIcon(QIcon('img/Avianz.ico'))
+        msg.setWindowTitle("Saved")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+        return
 
     def save_selected_sound(self, id=-1):
         """ Listener for 'Save selected sound' menu item.
@@ -3027,7 +3036,7 @@ class AviaNZ(QMainWindow):
             x2 = math.floor(x2 * self.config['incr']) #/ self.sampleRate
             #print x1, x2
             # filename = self.filename[:-4] + '_selected' + self.filename[-4:]
-            filename, drop = QtGui.QFileDialog.getSaveFileName(self, 'Save File as', self.dirName, selectedFilter='*.wav')
+            filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.dirName, '*.wav')
             if filename:
                 wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
 
@@ -3071,6 +3080,9 @@ class AviaNZ(QMainWindow):
         opstartingtime = time.time()
         print("Segmenting requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
 
+        # clean current segments # TODO: this is a temp solution to avoid duplicated segments
+        self.removeSegments()
+        self.segmentsToSave = True
         # TODO: Currently just gives them all the label "Don't Know"
         seglen = len(self.segments)
         [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution] = self.segmentDialog.getValues()
@@ -3194,6 +3206,17 @@ class AviaNZ(QMainWindow):
         out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename,
                                                datalength=self.datalength, sampleRate=self.sampleRate)
         out.excel()
+        # add user notification
+        # QMessageBox.about(self, "Segments Exported", "Check this directory for the excel output: " + '\n' + self.dirName)
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("Check this directory for the excel output: " + '\n' + self.dirName)
+        msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+        msg.setWindowIcon(QIcon('img/Avianz.ico'))
+        msg.setWindowTitle("Segments Exported")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+        return
 
     def findMatches(self,thr=0.4):
         """ Calls the cross-correlation function to find matches like the currently highlighted box.
