@@ -2529,7 +2529,7 @@ class AviaNZ(QMainWindow):
                     x4 = int((self.listRectanglesa1[self.box1id].getRegion()[1] + self.config['reviewSpecBuffer']) * self.sampleRate)
                     x4 = min(x4, len(self.audiodata))
                     self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
-                                                       self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1)
+                                                       self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1, self.minFreq, self.maxFreq)
             else:
                 # Check if have moved to next segment, and if so load it
                 # If there was a section without segments this would be a bit inefficient, actually no, it was wrong!
@@ -2553,7 +2553,7 @@ class AviaNZ(QMainWindow):
                     x4 = int((x2nob + self.config['reviewSpecBuffer']) * self.sampleRate)
                     x4 = min(x4, len(self.audiodata))
                     self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
-                                                   self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1)
+                                                   self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1, self.minFreq, self.maxFreq)
 
         else:
             msg = QMessageBox()
@@ -3157,6 +3157,7 @@ class AviaNZ(QMainWindow):
                 post.fundamentalFrq()  # species specific
             newSegments = post.segments
             # Save the excel file
+            # note: species parameter now only indicates default species for 2-column segment format!
             out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=newSegments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
             if generateExcel:
                 out.excel()
