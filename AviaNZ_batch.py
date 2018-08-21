@@ -538,15 +538,14 @@ class AviaNZ_reviewAll(QMainWindow):
                                 self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
                                 self.humanClassifyDialog1.exec_()
 
-                # loop complete, all files checked:
-                # Save output
-                # out = SupportClasses.exportSegments(segments=self.segments, confirmedSegments=self.segments, species=self.species, startTime=sTime,
-                #                                    dirName=self.dirName, filename=self.filename,
-                #                                    datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
-                # out.excel()
-                # Save the annotation
-                # out.saveAnnotation()
+                                # (this is resumed after each file is done)
+                                # Append this file's info to the worksheet:
+                                out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value())
+                                out.excel()
+                                # Save the corrected segment JSON
+                                out.saveAnnotation()
 
+                # loop complete, all files checked
                 self.statusBar().showMessage("Processed files " + str(cnt) + "/" + str(total))
                 msg = QMessageBox()
                 msg.setIcon(QMessageBox.Information)
