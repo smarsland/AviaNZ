@@ -826,6 +826,8 @@ class HumanClassify1(QDialog):
         # prepare the lines for marking true segment boundaries
         self.line1 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
         self.line2 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
+        self.pPlot.addItem(self.line1)
+        self.pPlot.addItem(self.line2)
 
         # label for current segment assignment
         self.speciesTop = QLabel("Currently:")
@@ -1010,9 +1012,11 @@ class HumanClassify1(QDialog):
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
 
-    def setImage(self, sg, audiodata, sampleRate, label, unbufStart, unbufStop):
+    def setImage(self, sg, audiodata, sampleRate, label, unbufStart, unbufStop, minFreq=0, maxFreq=0):
         self.audiodata = audiodata
         self.sampleRate = sampleRate
+        if maxFreq==0:
+            maxFreq = sampleRate / 2
         self.duration = len(audiodata) / sampleRate * 1000 # in ms
 
         # fill up a rectangle with dark grey to act as background if the segment is small
@@ -1024,9 +1028,9 @@ class HumanClassify1(QDialog):
         self.plot.setImage(sg2)
         self.plot.setLookupTable(self.lut)
 
-        FreqRange = (self.parent.maxFreq-self.parent.minFreq)/1000.
+        FreqRange = (maxFreq-minFreq)/1000.
         SgSize = np.shape(sg2)[1]
-        self.sg_axis.setTicks([[(0,self.parent.minFreq/1000.), (SgSize/4, self.parent.minFreq/1000.+FreqRange/4.), (SgSize/2, self.parent.minFreq/1000.+FreqRange/2.), (3*SgSize/4, self.parent.minFreq/1000.+3*FreqRange/4.), (SgSize,self.parent.minFreq/1000.+FreqRange)]])
+        self.sg_axis.setTicks([[(0,minFreq/1000.), (SgSize/4, minFreq/1000.+FreqRange/4.), (SgSize/2, minFreq/1000.+FreqRange/2.), (3*SgSize/4, minFreq/1000.+3*FreqRange/4.), (SgSize,minFreq/1000.+FreqRange)]])
         self.sg_axis.setLabel('kHz')
 
         self.show()
@@ -1043,16 +1047,12 @@ class HumanClassify1(QDialog):
         # add marks to separate actual segment from buffer zone
         # Note: need to use view coordinates to add items to pPlot
         try:
-            self.pPlot.removeItem(self.line1)
-            self.pPlot.removeItem(self.line2)
             self.stopPlayback()
         except Exception as e:
             print(e)
             pass
         startV = self.pPlot.mapFromItemToView(self.plot, QPointF(unbufStart, 0)).x()
         stopV = self.pPlot.mapFromItemToView(self.plot, QPointF(unbufStop, 0)).x()
-        self.pPlot.addItem(self.line1)
-        self.pPlot.addItem(self.line2)
         self.line1.setPos(startV)
         self.line2.setPos(stopV)
 

@@ -225,9 +225,7 @@ class AviaNZ_batchProcess(QMainWindow):
                                     post.fundamentalFrq()  # species specific
                                 newSegments = post.segments
                                 # Save output
-                                out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=[], segmentstoCheck=post.segments, species=self.species, startTime=sTime,
-                                                                    dirName=self.dirName, filename=self.filename,
-                                                                    datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
+                                out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=[], segmentstoCheck=post.segments, species=self.species, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
                                 out.excel()
                                 # Save the annotation
                                 out.saveAnnotation()
@@ -422,6 +420,7 @@ class AviaNZ_reviewAll(QMainWindow):
                         if filename.endswith('.wav') and os.path.isfile(filename + '.data'):
                             # test day/night if it is a doc recording
                             print("Opening file %s" % filename)
+
                             Night = False
                             if DOCRecording:
                                 startTime = DOCRecording.group(2)
@@ -436,28 +435,47 @@ class AviaNZ_reviewAll(QMainWindow):
                             else:
                                 cnt=cnt+1
                                 self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
+                                # load segments
+                                self.segments = json.load(open(filename + '.data'))
+                                if self.segments[0][0] == -1:
+                                    self.operator = self.segments[0][2]
+                                    self.reviewer = self.segments[0][3]
+                                    del self.segments[0]
+                                if len(self.segments)==0:
+                                    # no segments, skip
+                                    print("no segments found in file %s" % filename)
+                                    continue
+
                                 self.loadFile()
 
-                                # CALL ACTUAL DIALOG HERE
-                                # THINGS I NEED FOR THIS:
-                                # self.sg & self.audiodata
-                                # lut, colors, config, parent?
+                                # Initialize the dialog for this file
                                 self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
-                                self.box1id = -1
+                                self.box1id = 0
                                 self.humanClassifyNextImage1()
-                                self.humanClassifyDialog1.show()
                                 self.humanClassifyDialog1.activateWindow()
                                 self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
                                 self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
+                                self.humanClassifyDialog1.exec_()
 
-                                # Save output
-                                # out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=[], segmentstoCheck=post.segments, species=self.species, startTime=sTime,
-                                #                                    dirName=self.dirName, filename=self.filename,
-                                #                                    datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
-                                # out.excel()
-                                # Save the annotation
-                                # out.saveAnnotation()
+                # loop complete, all files checked:
+                # Save output
+                # out = SupportClasses.exportSegments(segments=self.segments, confirmedSegments=self.segments, species=self.species, startTime=sTime,
+                #                                    dirName=self.dirName, filename=self.filename,
+                #                                    datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
+                # out.excel()
+                # Save the annotation
+                # out.saveAnnotation()
+
                 self.statusBar().showMessage("Processed files " + str(cnt) + "/" + str(total))
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+                msg.setText("All files checked")
+                msg.setWindowTitle("Finished")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec_()
+                self.humanClassifyDialog1.done(1)
             else:
                 msg = QMessageBox()
                 msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
@@ -510,60 +528,33 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def humanClassifyNextImage1(self):
         # Get the next image
-        if self.box1id < len(self.segments)-1:
-            self.box1id += 1
+        if self.box1id < len(self.segments):
             # update "done/to go" numbers:
             self.humanClassifyDialog1.setSegNumbers(self.box1id, len(self.segments))
-            if not self.config['showAllPages']:
-                # TODO: this branch might work incorrectly
-                # Different calls for the two types of region
-                if self.listRectanglesa2[self.box1id] is not None:
-                    if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                        x1nob = self.listRectanglesa2[self.box1id].pos()[0]
-                        x2nob = x1nob + self.listRectanglesa2[self.box1id].size()[0]
-                    else:
-                        x1nob, x2nob = self.listRectanglesa2[self.box1id].getRegion()
-                    x1 = int(x1nob - self.config['reviewSpecBuffer'])
-                    x1 = max(x1, 0)
-                    x2 = int(x2nob + self.config['reviewSpecBuffer'])
-                    x2 = min(x2, len(self.sg))
-                    x3 = int((self.listRectanglesa1[self.box1id].getRegion()[0] - self.config['reviewSpecBuffer']) * self.sampleRate)
-                    x3 = max(x3, 0)
-                    x4 = int((self.listRectanglesa1[self.box1id].getRegion()[1] + self.config['reviewSpecBuffer']) * self.sampleRate)
-                    x4 = min(x4, len(self.audiodata))
-                    self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
-                                                       self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1)
-            else:
-                # Check if have moved to next segment, and if so load it
-                # If there was a section without segments this would be a bit inefficient, actually no, it was wrong!
-                if self.segments[self.box1id][0] > (self.currentFileSection+1)*self.config['maxFileShow']:
-                    while self.segments[self.box1id][0] > (self.currentFileSection+1)*self.config['maxFileShow']:
-                        self.currentFileSection += 1
-                    self.startRead = self.currentFileSection * self.config['maxFileShow']
-                    print("Loading next page", self.currentFileSection)
-                    self.loadSegment()
+            # Check if have moved to next segment, and if so load it
+            # If there was a section without segments this would be a bit inefficient, actually no, it was wrong!
 
-                # Show the next segment
-                if self.listRectanglesa2[self.box1id] is not None:
-                    x1nob = self.segments[self.box1id][0] - self.startRead
-                    x2nob = self.segments[self.box1id][1] - self.startRead
-                    x1 = int(self.convertAmpltoSpec(x1nob - self.config['reviewSpecBuffer']))
-                    x1 = max(x1, 0)
-                    x2 = int(self.convertAmpltoSpec(x2nob + self.config['reviewSpecBuffer']))
-                    x2 = min(x2, len(self.sg))
-                    x3 = int((x1nob - self.config['reviewSpecBuffer']) * self.sampleRate)
-                    x3 = max(x3, 0)
-                    x4 = int((x2nob + self.config['reviewSpecBuffer']) * self.sampleRate)
-                    x4 = min(x4, len(self.audiodata))
-                    self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
-                                                   self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1)
+            # Show the next segment
+            print(self.segments[self.box1id])
+            x1nob = self.segments[self.box1id][0]
+            x2nob = self.segments[self.box1id][1]
+            x1 = int(self.convertAmpltoSpec(x1nob - self.config['reviewSpecBuffer']))
+            x1 = max(x1, 0)
+            x2 = int(self.convertAmpltoSpec(x2nob + self.config['reviewSpecBuffer']))
+            x2 = min(x2, len(self.sg))
+            x3 = int((x1nob - self.config['reviewSpecBuffer']) * self.sampleRate)
+            x3 = max(x3, 0)
+            x4 = int((x2nob + self.config['reviewSpecBuffer']) * self.sampleRate)
+            x4 = min(x4, len(self.audiodata))
+            self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
+                                           self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1)
 
         else:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
             msg.setIconPixmap(QPixmap("img/Owl_done.png"))
-            msg.setText("All segmentations checked")
+            msg.setText("All segments in this file checked")
             msg.setWindowTitle("Finished")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
@@ -572,7 +563,6 @@ class AviaNZ_reviewAll(QMainWindow):
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
-        self.segmentsDone += 1
         if len(checkText) > 0:
             if label != checkText:
                 label = str(checkText)
@@ -589,64 +579,27 @@ class AviaNZ_reviewAll(QMainWindow):
                 file.close()
 
             # Update the label on the box if it is in the current page
-            self.birdSelected(label, update=False)
+            self.segments[self.box1id][4] = label
 
             if self.saveConfig:
                 self.config['BirdList'].append(label)
         elif label[-1] == '?':
             # Remove the question mark, since the user has agreed
-            self.birdSelected(label[:-1], update=False)
-            #self.segments[self.box1id][4] = label[:-1]
+            self.segments[self.box1id][4] = label[:-1]
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
+        # counter updated here
+        self.box1id += 1
         self.humanClassifyNextImage1()
 
     def humanClassifyDelete1(self):
         # Delete a segment
+        # (no need to update counter then)
         id = self.box1id
-        self.deleteSegment(self.box1id)
-        self.box1id = id-1
+        del self.segments[id]
         self.segmentsToSave = True
         self.humanClassifyNextImage1()
-        self.segmentsDone += 1
-
-    def birdSelected(self,birdname,update=True):
-        """ Collects the label for a bird from the context menu and processes it.
-        Has to update the overview segments in case their colour should change.
-        Also handles getting the name through a message box if necessary.
-        """
-        startpoint = self.segments[self.box1id][0]-self.startRead
-        endpoint = self.segments[self.box1id][1]-self.startRead
-        oldname = self.segments[self.box1id][4]
-
-        self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
-        self.refreshOverviewWith(startpoint, endpoint, birdname)
-
-        # Now update the text
-        if birdname is not 'Other':
-            self.updateText(birdname)
-            if update:
-                # Put the selected bird name at the top of the list
-                if birdname[-1] == '?':
-                    birdname = birdname[:-1]
-                self.config['BirdList'].remove(birdname)
-                self.config['BirdList'].insert(0,birdname)
-        else:
-            text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
-            if ok:
-                text = str(text).title()
-                self.segments[self.box1id][4] = text
-
-                if text in self.config['BirdList']:
-                    pass
-                else:
-                    # Add the new bird name.
-                    if update:
-                        self.config['BirdList'].insert(0,text)
-                    else:
-                        self.config['BirdList'].append(text)
-                    # self.saveConfig = True
 
     def convertAmpltoSpec(self,x):
         """ Unit conversion """
