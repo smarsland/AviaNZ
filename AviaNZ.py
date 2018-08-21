@@ -1720,7 +1720,7 @@ class AviaNZ(QMainWindow):
             else:
                 self.overviewSegments[inds:inde+1,0] += 1
 
-        if species[-1] == '?':
+        if species[-1:] == '?':
             brush = self.ColourPossible
             if delete:
                 self.overviewSegments[inds:inde + 1, 2] -= 1
