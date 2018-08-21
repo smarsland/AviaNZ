@@ -532,8 +532,8 @@ class AviaNZ_reviewAll(QMainWindow):
                                 # Initialize the dialog for this file
                                 self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
                                 self.box1id = 0
+                                self.humanClassifyDialog1.setWindowTitle("AviaNZ - reviewing " + filename)
                                 self.humanClassifyNextImage1()
-                                self.humanClassifyDialog1.activateWindow()
                                 self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
                                 self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
                                 self.humanClassifyDialog1.exec_()

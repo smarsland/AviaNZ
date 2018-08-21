@@ -809,6 +809,9 @@ class HumanClassify1(QDialog):
         self.cmapInverted = cmapInverted
         self.birdList = birdList
         self.saveConfig = False
+        # exec_ forces the cursor into waiting
+        self.activateWindow()
+        pg.QtGui.QApplication.setOverrideCursor(Qt.ArrowCursor)
 
         # Set up the plot window, then the right and wrong buttons, and a close button
         self.wPlot = pg.GraphicsLayoutWidget()
@@ -1014,6 +1017,7 @@ class HumanClassify1(QDialog):
 
     def setImage(self, sg, audiodata, sampleRate, label, unbufStart, unbufStop, minFreq=0, maxFreq=0):
         self.audiodata = audiodata
+        self.sg = sg
         self.sampleRate = sampleRate
         if maxFreq==0:
             maxFreq = sampleRate / 2

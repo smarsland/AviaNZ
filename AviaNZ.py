@@ -1854,9 +1854,14 @@ class AviaNZ(QMainWindow):
     def deleteSegment(self,id=-1,hr=False):
         """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
         human classify dialogs.
+        Stops playback immediately in all cases.
         Deletes the segment that is selected, otherwise does nothing.
         Updates the overview segments as well.
         """
+
+        if self.media_obj.isPlaying():
+            # includes resetting playback buttons
+            self.stopPlayback()
 
         if not hr and (id<0 or not id):
             id = self.box1id
@@ -1883,9 +1888,6 @@ class AviaNZ(QMainWindow):
             del self.listRectanglesa2[id]
             self.segmentsToSave = True
 
-            # reset segment playback buttons
-            self.playSegButton.setEnabled(False)
-            self.playBandLimitedSegButton.setEnabled(False)
             self.box1id = -1
 
     def selectSegment(self, boxid):
