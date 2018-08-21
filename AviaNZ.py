@@ -1112,20 +1112,14 @@ class AviaNZ(QMainWindow):
                             self.reviewer = self.segments[0][3]
                             del self.segments[0]
                     if len(self.segments) > 0:
-                        for s in self.segments:
-                            if s[2] < 1.1 and s[3] < 1.1 and s[3] > 0:
-                                print("Old segments, normalising")
-                                # TODO: There are some potential cockups here. 
-                                # The original version stored frequencies of boxes properly. 
-                                # For reasons unknown I switched to a normalised version, but that's stupid when you can bandpass.
-                                # So this SHOULD detect normalised versions, and turn them into true frequencies assuming that they were on the full spectrogram...
-                                #### Legacy version didn't normalise the segment data for dragged boxes
-                                #### This fixes it, assuming that the spectrogram was 128 pixels high (256 width window)
-                                #### The .5 is to take care of rounding errors
-                                s[2] = s[2]*self.sampleRate/2
-                                s[3] = s[3]*self.sampleRate/2
-                                print(s[2],s[3]) 
-                                self.segmentsToSave = True
+                        if self.segments[0][2] > 1.1 and self.segments[0][3] > 1.1:
+                            # Legacy version didn't normalise the segment data for dragged boxes
+                            # This fixes it, assuming that the spectrogram was 128 pixels high (256 width window)
+                            # The .1 is to take care of rounding errors
+                            s[2] = s[2]/128
+                            s[3] = s[3]/128
+                            #print(s[2],s[3]) 
+                            self.segmentsToSave = True
 
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
@@ -1330,7 +1324,7 @@ class AviaNZ(QMainWindow):
                 ind = np.squeeze(np.where(pitch>minfreq))
                 pitch = pitch[ind]
                 ind = ind*W/(self.config['window_width'])
-                x = (pitch*2./self.sampleRate*np.shape(self.sg)[1]).astype('int')
+                x = (pitch*2/self.sampleRate*np.shape(self.sg)[1]).astype('int')
 
                 from scipy.signal import medfilt
                 x = medfilt(x,15)
@@ -1531,7 +1525,7 @@ class AviaNZ(QMainWindow):
 
         # If there are segments, show them
         for count in range(len(self.segments)):
-            self.addSegment(self.segments[count][0], self.segments[count][1],self.segments[count][2]/self.maxFreq-self.minFreq,self.segments[count][3]/self.maxFreq-self.minFreq,self.segments[count][4],False,count)
+            self.addSegment(self.segments[count][0], self.segments[count][1],self.segments[count][2],self.segments[count][3],self.segments[count][4],False,count)
 
         # This is the moving bar for the playback
         if not hasattr(self,'bar'):
@@ -1659,7 +1653,6 @@ class AviaNZ(QMainWindow):
                 # update the box visual
                 x1 = self.convertSpectoAmpl(sender.pos()[0])
                 x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
-                # TODO: ****
                 print("box changed",sender.pos()[1],sender.pos()[1]+sender.size()[1])
                 self.segments[i][2] = sender.pos()[1]/np.shape(self.sg)[1]
                 self.segments[i][3] = (sender.pos()[1]+sender.size()[1])/np.shape(self.sg)[1]
@@ -1829,10 +1822,8 @@ class AviaNZ(QMainWindow):
                 p_spec_r = SupportClasses.LinearRegionItem2(self, brush = brush)
                 p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
             else:
-                # TODO: ** The ys here are in pixels
                 startpointS = QPointF(self.convertAmpltoSpec(startpoint),y1*np.shape(self.sg)[1])
                 endpointS = QPointF(self.convertAmpltoSpec(endpoint),y2*np.shape(self.sg)[1])
-                print("Drawn segment",y1,y1*np.shape(self.sg)[1], y1 * self.sampleRate / 2 + self.minFreqShow)
                 p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, parent=self)
                 if self.dragRectTransparent.isChecked():
                     col = self.prevBoxCol.rgb()
@@ -1859,9 +1850,8 @@ class AviaNZ(QMainWindow):
             if saveSeg:
                 # Add the segment to the data
                 # Increment the time to be correct for the current section of the file
-                # TODO: Check Y ***
-                print("Adding segment with freq range ",y1 * self.maxFreq + self.minFreqShow, y2 * self.maxFreq + self.minFreqShow)
-                self.segments.append([startpoint+self.startRead, endpoint+self.startRead, y1 * self.maxFreq + self.minFreqShow, y2 * self.maxFreq + self.minFreqShow, species])
+                self.segments.append([startpoint+self.startRead, endpoint+self.startRead, y1, y2, species])
+
             # mark this as the current segment
             self.box1id = len(self.segments) - 1
         else:
@@ -1967,9 +1957,9 @@ class AviaNZ(QMainWindow):
                 minutes = (time//60) % 60
                 hours = (time//3600) % 24
                 if hours>0:
-                    self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (hours,minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreqShow, self.sg[indexx, indexy]))
+                    self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (hours,minutes,seconds, mousePoint.y() * self.sampleRate//2 / np.shape(self.sg)[1] + self.minFreqShow, self.sg[indexx, indexy]))
                 else:
-                    self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate / 2. / np.shape(self.sg)[1] + self.minFreqShow, self.sg[indexx, indexy]))
+                    self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate//2 / np.shape(self.sg)[1] + self.minFreqShow, self.sg[indexx, indexy]))
 
     def mouseClicked_ampl(self,evt):
         """ Listener for if the user clicks on the amplitude plot.
@@ -2501,6 +2491,7 @@ class AviaNZ(QMainWindow):
                     x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
                 x1 = int(x1)
                 x2 = int(x2)
+                # TODO: **
                 x3 = int(self.listRectanglesa1[self.box1id].getRegion()[0] * self.sampleRate)
                 x4 = int(self.listRectanglesa1[self.box1id].getRegion()[1] * self.sampleRate)
             else:
@@ -2870,14 +2861,6 @@ class AviaNZ(QMainWindow):
                             self.listRectanglesa2[s].setRegion([x1, x2])
                         self.listLabels[s].setPos(x1,self.textpos)
 
-                # Update the axis
-                #FreqRange = (self.maxFreq - self.minFreq)/1000.
-                #self.specaxis.setTicks([[(0, self.minFreq / 1000.),
-                #                         (np.shape(self.sg)[1] / 4, self.minFreq / 1000. + FreqRange / 4.),
-                #                         (np.shape(self.sg)[1] / 2, self.minFreq / 1000. + FreqRange / 2.),
-                #                         (3 * np.shape(self.sg)[1] / 4, self.minFreq / 1000. + 3 * FreqRange / 4.),
-                #                         (np.shape(self.sg)[1], self.minFreq / 1000. + FreqRange)]])
-
                 # Redraw everything and redraw it
                 self.removeSegments(delete=False)
                 for r in self.SegmentRects:
@@ -2891,8 +2874,6 @@ class AviaNZ(QMainWindow):
                     self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'],
                                         self.config['incr'])
 
-            self.minFreqShow = minFreq
-            self.maxFreqShow = maxFreq
             self.redoFreqAxis(minFreq,maxFreq)
 
             self.statusLeft.setText("Ready")
@@ -2936,6 +2917,7 @@ class AviaNZ(QMainWindow):
             # or could add an argument to pass custom defaults, e.g.:
             # self.denoiseDialog = Dialogs.Denoise(defaults=("wt", 1, 2, 'a')
         with pg.BusyCursor():
+            bandpassed = False
             opstartingtime = time.time()
             print("Denoising requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
             self.statusLeft.setText("Denoising...")
@@ -2949,52 +2931,56 @@ class AviaNZ(QMainWindow):
 
             if str(alg) == "Wavelets" and self.DOC==False:
                 if thrType is True:
-                    type = 'Soft'
+                    thrType = 'Soft'
                 else:
-                    type = 'Hard'
+                    thrType = 'Hard'
                 if depthchoice:
                     depth = None
                 else:
                     depth = int(str(depth))
-                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
+                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
             elif str(alg) == "Wavelets" and self.DOC==True:
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata)
 
             elif str(alg) == "Bandpass --> Wavelets" and self.DOC==False:
                 if thrType is True:
-                    type = 'soft'
+                    thrType = 'soft'
                 else:
-                    type = 'hard'
+                    thrType = 'hard'
                 if depthchoice:
                     depth = None
                 else:
                     depth = int(str(depth))
                 self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
-                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
+                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
+                bandpassed = True
             elif str(alg) == "Wavelets --> Bandpass" and self.DOC==False:
                 if thrType is True:
-                    type = 'soft'
+                    thrType = 'soft'
                 else:
-                    type = 'hard'
+                    thrType = 'hard'
                 if depthchoice:
                     depth = None
                 else:
                     depth = int(str(depth))
-                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,type,float(str(thr)),depth,wavelet=str(wavelet))
+                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
                 self.audiodata = self.sp.bandpassFilter(self.audiodata,self.sampleRate,start=int(str(start)),end=int(str(end)),minFreq=self.minFreq,maxFreq=self.maxFreq)
+                bandpassed = True
 
             elif str(alg) == "Bandpass":
                 self.audiodata = self.sp.bandpassFilter(self.audiodata,self.sampleRate, start=int(str(start)), end=int(str(end)),minFreq=self.minFreq,maxFreq=self.maxFreq)
+                bandpassed = True
                 #self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
-                self.redoFreqAxis(int(str(start)), int(str(end)))
+                #self.redoFreqAxis(int(str(start)), int(str(end)))
             elif str(alg) == "Butterworth Bandpass":
                 self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)),minFreq=self.minFreq,maxFreq=self.maxFreq)
-                self.redoFreqAxis(int(str(start)), int(str(end)))
+                #self.redoFreqAxis(int(str(start)), int(str(end)))
+                bandpassed = True
             else:
                 #"Median Filter"
                 self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
 
-            print("Denoising completed in %.4f seconds" % (time.time() - opstartingtime))
+            print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             sgRaw = self.sp.spectrogram(self.audiodata,mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided,multitaper=self.sgMultitaper)
             maxsg = np.min(sgRaw)
@@ -3003,15 +2989,13 @@ class AviaNZ(QMainWindow):
 
             self.specPlot.setImage(self.sg)
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
-            self.minFreq = int(str(start))
-            self.maxFreq = int(str(end))
-            self.minFreqShow = max(self.minFreq,self.minFreqShow)
-            self.maxFreqShow = min(self.maxFreq,self.maxFreqShow)
-            
+
+            if bandpassed:
+                # Update the frequency axis
+                self.redoFreqAxis(int(str(start)),int(str(end)))
+
             if hasattr(self,'spectrogramDialog'):
                 self.spectrogramDialog.setValues(self.minFreq,self.maxFreq,self.minFreqShow,self.maxFreqShow)
-
-            self.redoFreqAxis(self.minFreqShow,self.maxFreqShow)
 
             self.setColourLevels()
 
@@ -3040,11 +3024,8 @@ class AviaNZ(QMainWindow):
                     if hasattr(self,'seg'):
                         self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
 
-                    self.minFreq = 0
-                    self.maxFreq = self.sampleRate/2
-                    self.minFreqShow = self.minFreq
-                    self.maxFreqShow = self.maxFreq
-                    self.redoFreqAxis(self.minFreq,self.maxFreq)
+                    # TODO: Would be better to save previous
+                    self.redoFreqAxis(0,self.sampleRate//2)
                     self.setColourLevels()
 
     def denoise_save(self):
@@ -3085,33 +3066,68 @@ class AviaNZ(QMainWindow):
             if filename:
                 wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
 
-    def redoFreqAxis(self,start=None,end=None):
+    def redoFreqAxis(self,start,end):
         """ This is the listener for the menu option to make the frequency axis tight (after bandpass filtering or just spectrogram changes)
         """
-        if start is None:
-            start = self.minFreqShow
-        if end is None:
-            end = self.maxFreqShow
+        print(start,self.minFreqShow)
+        startdiff = start - self.minFreqShow
+        #enddiff = end - self.maxFreqShow
+        self.minFreqShow = max(start,self.minFreq,self.minFreqShow)
+        self.maxFreqShow = min(end,self.maxFreq,self.maxFreqShow)
 
         # 1 pixel height
-        height = (self.maxFreq - self.minFreq) / np.shape(self.sg)[1]
-        #height = self.sampleRate / 2. / np.shape(self.sg)[1]
+        height = self.sampleRate / 2. / np.shape(self.sg)[1]
+        #height = (self.maxFreq - self.minFreq) / np.shape(self.sg)[1]
+        pixelstart = int(start/height)
+        pixelend = int(end/height)
+        print(startdiff, int(startdiff/height),pixelstart,pixelend)
 
-        print("Spectrogram now",int(start/height),int(end/height))
-        self.overviewImage.setImage(self.sg[:,int(start/height):int(end/height)])
-        self.specPlot.setImage(self.sg[:,int(start/height):int(end/height)])
+        print("Spectrogram now",pixelstart,pixelend,self.minFreqShow,self.maxFreqShow,self.minFreq,self.maxFreq,self.sampleRate)
+        self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
+        self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
 
         FreqRange = end - start
         SpecRange = FreqRange/height
         self.specaxis.setTicks([[(0,(start/1000.)),(SpecRange/4,(start/1000.+FreqRange/4000.)),(SpecRange/2,(start/1000.+FreqRange/2000.)),(3*SpecRange/4,(start/1000.+3*FreqRange/4000.)),(SpecRange,(start/1000.+FreqRange/1000.))]])
 
-        # TODO: Code below is inefficient -- better to move though RectA2 and update the locations
         self.textpos = int((end-start)/height) + self.config['textoffset']
         for i in range(len(self.segments)):
             if self.segments[i][0] >= self.startRead and self.segments[i][1] <= min(self.startRead + self.lenRead, self.fileLength / self.sampleRate):
                 # Update label test position
                 self.listLabels[i].setPos(self.listLabels[i].pos()[0], self.textpos)
                 
+                if type(self.listRectanglesa2[i]) == self.ROItype:
+                    self.listRectanglesa2[i].sigRegionChangeFinished.disconnect()
+                    # Get original size
+                    x1 = self.listRectanglesa2[i].pos().x()
+                    x2 = x1 + self.listRectanglesa2[i].size().x()
+                    y1 = self.listRectanglesa2[i].pos().y()
+                    y2 = self.listRectanglesa2[i].size().y()
+
+                    # Move the box according to self.minFreqShow
+                    print("Before",y1)
+                    y1 = y1-int(startdiff/height)
+                    print("After",y1)
+
+                    if y1 > pixelend or (y1+y2) < pixelstart:
+                        # You can't see this box, so don't show it at all
+                        print("Not showing a box")
+                        self.listRectanglesa1[i] = None
+                        self.listRectanglesa2[i] = None
+                        self.listLabels[i] = None
+                    else:
+                        if y1 < pixelstart:
+                            print("Box shrink below",y2)
+                            y2 += (y1 - pixelstart)
+                            y1 = pixelstart
+                            print(y1,y2)
+                        if (y1+y2) > pixelend:
+                            print("Box shrink above")
+                            y2 = pixelend - y1
+                            self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2))
+                        self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
+                    if self.listRectanglesa2[i] is not None:
+                        self.listRectanglesa2[i].sigRegionChangeFinished.connect(self.updateRegion_spec)
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
@@ -3696,7 +3712,7 @@ class AviaNZ(QMainWindow):
         ## print id, self.box1id, not id
         #if not hr and (id<0 or not id):
             #id = self.box1id
-#
+
         #if id>-1:
             ## Work out which overview segment this segment is in (could be more than one) and update it
             #inds = int(float(self.convertAmpltoSpec(self.segments[id][0]-self.startRead))/self.widthOverviewSegment)
@@ -3719,7 +3735,7 @@ class AviaNZ(QMainWindow):
                     #self.SegmentRects[box].setBrush(self.ColourNamed)
                 #else:
                     #self.SegmentRects[box].setBrush(pg.mkBrush('w'))
-#
+
             #if self.listRectanglesa1[id] is not None:
                 #self.p_ampl.removeItem(self.listRectanglesa1[id])
                 #self.p_spec.removeItem(self.listRectanglesa2[id])
@@ -3855,6 +3871,22 @@ class AviaNZ(QMainWindow):
                 print("ERROR while saving config file:")
                 print(e)
         QApplication.quit()
+
+    def backupDatafiles(self):
+        from shutil import copyfile
+        from os.path import isfile
+
+        print("Backing up files in ",self.dirName)
+        listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
+        for file in listOfDataFiles:
+            source = self.dirName + '/' + file
+            destination = source+"2"
+            if os.path.isfile(destination):
+                print(destination," exists, not backing up")
+            else:
+                print(source)
+                print(destination," doesn't exist")
+                copyfile(source, destination)
 
 # =============
 
