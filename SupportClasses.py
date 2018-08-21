@@ -458,10 +458,6 @@ class exportSegments:
         in three different formats: time stamps, presence/absence, and per second presence/absence
         in an excel workbook. It makes the workbook if necessary.
 
-        TODO: Ask for what species if not specified
-        TODO: Add a presence/absence at minute (or 5 minute) resolution
-        TODO: Save the annotation files for batch processing
-
         Inputs
             segments:   detected segments in form of [[s1,e1], [s2,e2],...]
                         OR in format [[s1, e1, fs1, fe1, sp1], [s2, e2, fs2, fe2, sp2], ...]
@@ -526,7 +522,7 @@ class exportSegments:
         """
         # identify all unique species
         speciesList = set()
-        for seg in segments:
+        for seg in self.segments:
             segmentSpecies = seg[4]
             if seg[4].endswith('?'):
                 segmentSpecies = segmentSpecies[:-1]
@@ -610,7 +606,7 @@ class exportSegments:
 
         # now, generate the actual files, SEPARATELY FOR EACH SPECIES:
         for species in speciesList:
-            print("Exporting species %s", species)
+            print("Exporting species %s" % species)
             # setup output files:
             if self.withConf:
                 eFile = self.dirName + '/DetectionSummary_withConf_' + species + '.xlsx'
@@ -657,23 +653,20 @@ class exportSegments:
     def saveAnnotation(self):
         # Save annotations - batch processing
         annotation = []
-        # self.startTime = int(self.startTime[:2]) * 3600 + int(self.startTime[2:4]) * 60 + int(self.startTime[4:6])
-        annotation.append([-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), "Nirosha", "Stephen", -1])
-        ###
+        annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), "Nirosha", "Stephen", -1])
+        # segments can be provided as confirmed/toCheck lists,
+        # otherwise everything from segments list is exported as-is.
         if len(self.confirmedSegments) > 0 or len(self.segmentstoCheck) > 0:
             if self.method == "Wavelets":
-                # if self.withConf:
                 for seg in self.confirmedSegments:
-                    # if seg in self.segments:
                     annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species])
                 for seg in self.segmentstoCheck:
                     annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
-                # else:
-                #     for seg in self.segments:
-                #         annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
             else:
                 for seg in self.segments:
                     annotation.append([float(seg[0]), float(seg[1]), 0, 0, "Don't know"])
+        else:
+            annotation = self.segments
 
         if isinstance(self.filename, str):
             file = open(self.filename + '.data', 'w')
