@@ -477,7 +477,7 @@ class exportSegments:
 
     """
 
-    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species="Don't Know", startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0):
+    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species="Don't Know", startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1):
 
         if len(segments)>0:
             if len(segments[0])==2:
@@ -494,6 +494,7 @@ class exportSegments:
                 return
 
         self.segments=segments
+        self.numpages=numpages
         self.confirmedSegments = confirmedSegments
         self.segmentstoCheck = segmentstoCheck
         self.species=species
@@ -588,12 +589,9 @@ class exportSegments:
             ws.cell(row=r, column=1).font=ft
             c = 2
             for i in range(0,len(detected), self.resolution):
-                if i+self.resolution > self.datalength/self.sampleRate:
-                    ws.cell(row=r, column=c, value=str(i) + '-' + str(int(math.ceil(float(self.datalength)/self.sampleRate))))
-                    ws.cell(row=r, column=c).font = ft
-                else:
-                    ws.cell(row=r, column=c, value=str(i) + '-' + str(i+self.resolution))
-                    ws.cell(row=r, column=c).font = ft
+                endtime = min(i+self.resolution, int(math.ceil(self.datalength * self.numpages / self.sampleRate)))
+                ws.cell(row=r, column=c, value=str(i) + '-' + str(endtime))
+                ws.cell(row=r, column=c).font = ft
                 c += 1
             r += 1
             ws.cell(row=r, column=1, value=str(relfname))
@@ -638,12 +636,15 @@ class exportSegments:
             writeToExcelp2(segmentsWPossible)
 
             # Generate per second binary output
-            n = math.ceil(float(self.datalength) / self.sampleRate)
+            n = math.ceil(float(self.datalength) / self.sampleRate) * self.numpages
             detected = np.zeros(int(n))
-            for seg in segmentsWPossible:
-                for a in range(len(detected)):
-                    if math.floor(seg[0]) <= a and a < math.ceil(seg[1]):
-                        detected[a] = 1
+            for p in range(0, self.numpages-1):
+                print("exporting page %d" % p)
+                for seg in segmentsWPossible:
+                    for t in range(len(detected)):
+                        truet = t + p*self.datalength
+                        if math.floor(seg[0]) <= truet and truet < math.ceil(seg[1]):
+                            detected[truet] = 1
             writeToExcelp3(detected)
 
             # Save the file
