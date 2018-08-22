@@ -151,7 +151,7 @@ class AviaNZ(QMainWindow):
         print("Starting AviaNZ...")
         super(AviaNZ, self).__init__()
         self.root = root
-        self.extra=True
+        self.extra=False
 
         self.CLI = CLI
         try:
@@ -2576,12 +2576,12 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             self.humanClassifyClose1()
 
-     def humanClassifyPrevImage(self):
-         """ Go back one image by changing boxid and calling NextImage.
-         Note: won't undo deleted segments."""
-         if self.box1id>0:
-             self.box1id -= 1
-             self.humanClassifyNextImage1()
+    def humanClassifyPrevImage(self):
+        """ Go back one image by changing boxid and calling NextImage.
+        Note: won't undo deleted segments."""
+        if self.box1id>0:
+            self.box1id -= 1
+            self.humanClassifyNextImage1()
 
     def updateLabel(self,label):
         """ Update the label on a segment that is currently shown in the display. """
