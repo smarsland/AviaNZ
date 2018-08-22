@@ -835,14 +835,17 @@ class HumanClassify1(QDialog):
         self.numberDone.setAlignment(QtCore.Qt.AlignCenter)
         self.numberLeft.setAlignment(QtCore.Qt.AlignCenter)
 
+        iconSize = QtCore.QSize(50, 50)
+        self.buttonPrev = QtGui.QToolButton()
+        self.buttonPrev.setIcon(self.style().standardIcon(QtGui.QStyle.SP_ArrowBack))
+        self.buttonPrev.setIconSize(iconSize)
+
         self.correct = QtGui.QToolButton()
         self.correct.setIcon(QtGui.QIcon('img/tick.jpg'))
-        iconSize = QtCore.QSize(50, 50)
         self.correct.setIconSize(iconSize)
 
         self.delete = QtGui.QToolButton()
         self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
-        iconSize = QtCore.QSize(50, 50)
         self.delete.setIconSize(iconSize)
 
         # An array of radio buttons and a list and a text entry box
@@ -910,6 +913,7 @@ class HumanClassify1(QDialog):
         # The layouts
         hboxNextPrev = QHBoxLayout()
         hboxNextPrev.addWidget(self.numberDone)
+        hboxNextPrev.addWidget(self.buttonPrev)
         hboxNextPrev.addWidget(self.correct)
         hboxNextPrev.addWidget(self.delete)
         hboxNextPrev.addWidget(self.numberLeft)
