@@ -1019,6 +1019,7 @@ class HumanClassify1(QDialog):
         # add axis
         self.plot.setImage(sg2)
         self.plot.setLookupTable(self.lut)
+        self.scroll.horizontalScrollBar().setValue(0)
 
         FreqRange = (maxFreq-minFreq)/1000.
         SgSize = np.shape(sg2)[1]
