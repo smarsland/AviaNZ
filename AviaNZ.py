@@ -1807,10 +1807,6 @@ class AviaNZ(QMainWindow):
                 temp = startpoint
                 startpoint = endpoint
                 endpoint = temp
-            if y1 > y2:
-                temp = y1
-                y1 = y2
-                y2 = temp
 
             # Add the segment in both plots and connect up the listeners
             p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=brush)
@@ -1822,6 +1818,11 @@ class AviaNZ(QMainWindow):
                 p_spec_r = SupportClasses.LinearRegionItem2(self, brush = brush)
                 p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
             else:
+                if y1 > y2:
+                    temp = y1
+                    y1 = y2
+                    y2 = temp
+                # TODO: is sg[1] right?
                 startpointS = QPointF(self.convertAmpltoSpec(startpoint),y1*np.shape(self.sg)[1])
                 endpointS = QPointF(self.convertAmpltoSpec(endpoint),y2*np.shape(self.sg)[1])
                 p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, parent=self)
@@ -3072,12 +3073,12 @@ class AviaNZ(QMainWindow):
         print(start,self.minFreqShow)
         startdiff = start - self.minFreqShow
         #enddiff = end - self.maxFreqShow
-        self.minFreqShow = max(start,self.minFreq,self.minFreqShow)
-        self.maxFreqShow = min(end,self.maxFreq,self.maxFreqShow)
+        self.minFreqShow = max(start,self.minFreq)
+        self.maxFreqShow = min(end,self.maxFreq)
 
-        # 1 pixel height
+        # 1 pixel height in frequencies
         height = self.sampleRate / 2. / np.shape(self.sg)[1]
-        #height = (self.maxFreq - self.minFreq) / np.shape(self.sg)[1]
+        print(self.specPlot.pixelSize())
         pixelstart = int(start/height)
         pixelend = int(end/height)
         print(startdiff, int(startdiff/height),pixelstart,pixelend)
@@ -3093,41 +3094,58 @@ class AviaNZ(QMainWindow):
         self.textpos = int((end-start)/height) + self.config['textoffset']
         for i in range(len(self.segments)):
             if self.segments[i][0] >= self.startRead and self.segments[i][1] <= min(self.startRead + self.lenRead, self.fileLength / self.sampleRate):
-                # Update label test position
-                self.listLabels[i].setPos(self.listLabels[i].pos()[0], self.textpos)
-                
+                shown = True
                 if type(self.listRectanglesa2[i]) == self.ROItype:
-                    self.listRectanglesa2[i].sigRegionChangeFinished.disconnect()
-                    # Get original size
+                    if shown:
+                        self.listRectanglesa2[i].sigRegionChangeFinished.disconnect()
+
+                    # Get original size from the segment for the y values in case it's already been moved
                     x1 = self.listRectanglesa2[i].pos().x()
                     x2 = x1 + self.listRectanglesa2[i].size().x()
-                    y1 = self.listRectanglesa2[i].pos().y()
-                    y2 = self.listRectanglesa2[i].size().y()
+                    y1 = self.segments[i][2]*np.shape(self.sg)[1]
+                    y2 = self.segments[i][3]*np.shape(self.sg)[1] 
+                    print(self.segments[i][3],y1,y2-y1)
+                    print(self.listRectanglesa2[i].pos().y(),self.listRectanglesa2[i].size().y())
 
-                    # Move the box according to self.minFreqShow
-                    print("Before",y1)
+                    # Move the segment boxes
+                    print("Before",y1,y2-y1)
                     y1 = y1-int(startdiff/height)
-                    print("After",y1)
+                    y2 = y2-int(startdiff/height)
+                    self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
+                    self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2-y1))
+                    print("After",y1,y2-y1)
+                    print(self.listRectanglesa2[i].pos().y(),self.listRectanglesa2[i].size().y())
 
-                    if y1 > pixelend or (y1+y2) < pixelstart:
+                    y1Freq = y1/(pixelend-pixelstart)*(self.maxFreqShow-self.minFreqShow)+self.minFreqShow
+                    #y1Freq = y1/np.shape(self.sg)[1]*(self.maxFreqShow-self.minFreqShow)+self.minFreqShow
+                    y2Freq = y2/(pixelend-pixelstart)*(self.maxFreqShow-self.minFreqShow)+self.minFreqShow
+                    #y2Freq = y2/np.shape(self.sg)[1]*(self.maxFreqShow-self.minFreqShow)+self.minFreqShow
+                    print(y1Freq,y2Freq,y1Freq+y2Freq,self.minFreqShow,self.maxFreqShow,(y1Freq > self.maxFreqShow),((y1Freq+y2Freq) < self.minFreqShow),(y1Freq > self.maxFreqShow) or ((y1Freq+y2Freq) < self.minFreqShow))
+                    if (y1Freq > self.maxFreqShow) or (y2Freq < self.minFreqShow):
                         # You can't see this box, so don't show it at all
                         print("Not showing a box")
-                        self.listRectanglesa1[i] = None
-                        self.listRectanglesa2[i] = None
-                        self.listLabels[i] = None
+                        self.p_spec.removeItem(self.listRectanglesa2[i])
+                        self.p_spec.removeItem(self.listLabels[i])
+                        shown = False
                     else:
-                        if y1 < pixelstart:
-                            print("Box shrink below",y2)
-                            y2 += (y1 - pixelstart)
+                        if (y1Freq < self.minFreqShow):
+                            move = self.minFreqShow-y1Freq
+                            print("Box shrink below",pixelstart, y1,y1+y2,move)
+                            #move = (move-self.minFreqShow)/(self.maxFreqShow - self.minFreqShow)
                             y1 = pixelstart
-                            print(y1,y2)
-                        if (y1+y2) > pixelend:
-                            print("Box shrink above")
-                            y2 = pixelend - y1
-                            self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2))
-                        self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
-                    if self.listRectanglesa2[i] is not None:
+                            y2 = y2 - pixelstart + y1
+                            self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
+                            self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2-y1))
+                        if (y2Freq > self.maxFreqShow):
+                            print("Box shrink above",y1,y1+y2, pixelend)
+                            y2 = pixelend 
+                            self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2-y1))
+                    if shown:
                         self.listRectanglesa2[i].sigRegionChangeFinished.connect(self.updateRegion_spec)
+
+                if shown:
+                    # Update label test position
+                    self.listLabels[i].setPos(self.listLabels[i].pos()[0], self.textpos)
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
