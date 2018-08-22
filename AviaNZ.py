@@ -2498,12 +2498,12 @@ class AviaNZ(QMainWindow):
             self.humanClassifyDialog1.show()
             self.humanClassifyDialog1.activateWindow()
             #self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
+            self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
             self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
             self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
             # self.statusLeft.setText("Ready")
 
     def humanClassifyClose1(self):
-        # Listener for the human verification dialog.
         # Listener for the human verification dialog.
         self.humanClassifyDialog1.done(1)
         # Want to show a page at the end, so make it the first one
@@ -2575,6 +2575,13 @@ class AviaNZ(QMainWindow):
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
             self.humanClassifyClose1()
+
+     def humanClassifyPrevImage(self):
+         """ Go back one image by changing boxid and calling NextImage.
+         Note: won't undo deleted segments."""
+         if self.box1id>0:
+             self.box1id -= 1
+             self.humanClassifyNextImage1()
 
     def updateLabel(self,label):
         """ Update the label on a segment that is currently shown in the display. """

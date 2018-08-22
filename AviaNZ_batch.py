@@ -492,90 +492,109 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_dir.setPlainText(self.dirName)
 
     def detect(self, minLen=5):
-        with pg.BusyCursor():
-            if self.dirName:
-                # self.statusLeft.setText("Processing...")
-                i=self.w_spe1.currentIndex()
-                self.species="all"
-                total=0
-                for root, dirs, files in os.walk(str(self.dirName)):
-                    for filename in files:
-                        filename = os.path.join(root, filename)
-                        if filename.endswith('.wav') and os.path.isfile(filename + '.data'):
-                            print(filename)
-                            total=total+1
-                cnt=0   # processed number of files
+        if self.dirName:
+            # self.statusLeft.setText("Processing...")
+            i=self.w_spe1.currentIndex()
+            self.species="all"
+            total=0
+            for root, dirs, files in os.walk(str(self.dirName)):
+                for filename in files:
+                    filename = os.path.join(root, filename)
+                    if filename.endswith('.wav') and os.path.isfile(filename + '.data'):
+                        print(filename)
+                        total=total+1
+            cnt=0   # processed number of files
+            filesuccess = 0
 
-                for root, dirs, files in os.walk(str(self.dirName)):
-                    for filename in files:
-                        DOCRecording = re.search('(\d{6})_(\d{6})', filename)
-                        filename = os.path.join(root, filename)
-                        self.filename = filename
-                        if filename.endswith('.wav') and os.path.isfile(filename + '.data'):
-                            # test day/night if it is a doc recording
-                            print("Opening file %s" % filename)
+            for root, dirs, files in os.walk(str(self.dirName)):
+                for filename in files:
+                    DOCRecording = re.search('(\d{6})_(\d{6})', filename)
+                    filename = os.path.join(root, filename)
+                    self.filename = filename
+                    filesuccess = 0
+                    if filename.endswith('.wav') and os.path.isfile(filename + '.data'):
+                        # test day/night if it is a doc recording
+                        print("Opening file %s" % filename)
 
-                            Night = False
-                            if DOCRecording:
-                                startTime = DOCRecording.group(2)
-                                if int(startTime[:2]) > 18 or int(startTime[:2]) < 6:  # 6pm to 6am as night
-                                    Night = True
-                                    sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
-                            else:
-                                sTime=0
+                        Night = False
+                        if DOCRecording:
+                            startTime = DOCRecording.group(2)
+                            if int(startTime[:2]) > 18 or int(startTime[:2]) < 6:  # 6pm to 6am as night
+                                Night = True
+                                sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                        else:
+                            sTime=0
 
-                            if DOCRecording and self.species in ['Kiwi', 'Ruru'] and not Night:
+                        if DOCRecording and self.species in ['Kiwi', 'Ruru'] and not Night:
+                            continue
+                        else:
+                            cnt=cnt+1
+                            self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
+                            # load segments
+                            self.segments = json.load(open(filename + '.data'))
+                            if len(self.segments)==0:
+                                # no segments, skip
+                                print("no segments found in file %s" % filename)
                                 continue
-                            else:
-                                cnt=cnt+1
-                                self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
-                                # load segments
-                                self.segments = json.load(open(filename + '.data'))
-                                if len(self.segments)==0:
-                                    # no segments, skip
-                                    print("no segments found in file %s" % filename)
-                                    continue
-                                if self.segments[0][0] == -1:
-                                    self.operator = self.segments[0][2]
-                                    self.reviewer = self.segments[0][3]
-                                    del self.segments[0]
-                                self.loadFile()
+                            if self.segments[0][0] == -1:
+                                self.operator = self.segments[0][2]
+                                self.reviewer = self.segments[0][3]
+                                del self.segments[0]
+                            self.loadFile()
 
-                                # Initialize the dialog for this file
-                                self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
-                                self.box1id = 0
-                                self.humanClassifyDialog1.setWindowTitle("AviaNZ - reviewing " + filename)
-                                self.humanClassifyNextImage1()
-                                self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
-                                self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
-                                self.humanClassifyDialog1.exec_()
+                            # Initialize the dialog for this file
+                            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
+                            self.box1id = 0
+                            if hasattr(self, 'dialogPos'):
+                                self.humanClassifyDialog1.move(self.dialogPos)
+                            self.humanClassifyDialog1.setWindowTitle("AviaNZ - reviewing " + filename)
+                            self.humanClassifyNextImage1()
+                            # connect listeners
+                            self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
+                            self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
+                            self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
+                            success = self.humanClassifyDialog1.exec_() # 1 on clean exit
+                            if success == 0:
+                                break
 
-                                # (this is resumed after each file is done)
-                                # Append this file's info to the worksheet:
-                                out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value())
-                                out.excel()
-                                # Save the corrected segment JSON
-                                out.saveAnnotation()
+                            # (this is resumed after each file is done)
+                            # Append this file's info to the worksheet:
+                            out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value())
+                            out.excel()
+                            # Save the corrected segment JSON
+                            out.saveAnnotation()
+                        
+                    # file successfully processed
+                    filesuccess = 1
+                # after the loop, check if file wasn't Esc-broken
+                if filesuccess == 0:
+                    break
 
-                # loop complete, all files checked
-                self.statusBar().showMessage("Processed files " + str(cnt) + "/" + str(total))
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Information)
-                msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            # loop complete, all files checked
+            self.statusBar().showMessage("Processed files " + str(cnt) + "/" + str(total))
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setStandardButtons(QMessageBox.Ok)
+            print(filesuccess)
+            if filesuccess == 1:
                 msg.setIconPixmap(QPixmap("img/Owl_done.png"))
                 msg.setText("All files checked")
                 msg.setWindowTitle("Finished")
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec_()
-                self.humanClassifyDialog1.done(1)
             else:
-                msg = QMessageBox()
                 msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
-                msg.setWindowIcon(QIcon('img/Avianz.ico'))
-                msg.setText("Please select a folder to process!")
-                msg.setWindowTitle("Select Folder")
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.exec_()
+                msg.setText("Review stopped at file %s of %s" % (cnt, total))
+                msg.setWindowTitle("Review stopped")
+            msg.exec_()
+            
+        else:
+            msg = QMessageBox()
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setText("Please select a folder to process!")
+            msg.setWindowTitle("Select Folder")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
 
 
     def loadFile(self):
@@ -586,7 +605,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.audioFormat.setSampleRate(self.sampleRate)
         self.audioFormat.setSampleSize(wavobj.sampwidth*8)
         print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
-
 
         # None of the following should be necessary for librosa
         if self.audiodata.dtype is not 'float':
@@ -650,7 +668,17 @@ class AviaNZ_reviewAll(QMainWindow):
             msg.setWindowTitle("Finished")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
+
+            # store position to popup the next one in there
+            self.dialogPos = self.humanClassifyDialog1.pos()
             self.humanClassifyDialog1.done(1)
+
+    def humanClassifyPrevImage(self):
+        """ Go back one image by changing boxid and calling NextImage.
+        Note: won't undo deleted segments."""
+        if self.box1id>0:
+            self.box1id -= 1
+            self.humanClassifyNextImage1()
 
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
@@ -692,6 +720,11 @@ class AviaNZ_reviewAll(QMainWindow):
         del self.segments[id]
         self.segmentsToSave = True
         self.humanClassifyNextImage1()
+
+    def closeDialog(self, ev):
+        # (actually a poorly named listener for the Esc key)
+        if ev == Qt.Key_Escape and hasattr(self, 'humanClassifyDialog1'):
+            self.humanClassifyDialog1.done(0)
 
     def convertAmpltoSpec(self,x):
         """ Unit conversion """
