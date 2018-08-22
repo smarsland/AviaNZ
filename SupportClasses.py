@@ -44,10 +44,11 @@ class preProcess:
     """
     # todo: remove duplicate preprocess in 'Wavelet Segments'
 
-    def __init__(self,audioData=None, sampleRate=0, species='Kiwi', df=False, wavelet='dmey2'):
+    def __init__(self,audioData=None, sampleRate=0, spInfo=[], df=False, wavelet='dmey2'):
         self.audioData=audioData
         self.sampleRate=sampleRate
-        self.species=species
+        if spInfo != []:
+            self.spInfo=spInfo
         self.df=df
         if wavelet == 'dmey2':
             [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
@@ -61,24 +62,12 @@ class preProcess:
     def denoise_filter(self, level=5):
         # set df=True to perform both denoise and filter
         # df=False to skip denoise
-        if self.species == 'Kiwi':
-            f1 = 1100
-            f2 = 7000
-            fs = 16000
-        elif self.species == 'Ruru':
-            f1 = 500
-            f2 = 7000
-            fs = 16000
-        elif self.species == 'Bittern':
-            f1 = 100
-            f2 = 200
-            fs = 1000
-        elif self.species == 'Sipo':
-            f1 = 1200
-            f2 = 3800
+        if self.spInfo != []:
             fs = 8000
         else:
-            fs = 8000
+            f1 = self.spInfo[2]
+            f2 = self.spInfo[3]
+            fs = self.spInfo[4]
 
         if self.sampleRate != fs:
             self.audioData = librosa.core.audio.resample(self.audioData, self.sampleRate, fs)
@@ -103,7 +92,7 @@ class preProcess:
         # wavio.write('../Sound Files/Kiwi/test/Tier1/test/test/test/test_whole.wav', denoisedData, self.sampleRate, sampwidth=2)
         # librosa.output.write_wav('Sound Files/Kiwi/test/Tier1/test/test/test', denoisedData, self.sampleRate, norm=False)
 
-        if self.species in ['Kiwi', 'Ruru', 'Bittern', 'Sipo']:
+        if f1 and f2:
             filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=f2)
             # filteredDenoisedData = self.sp.bandpassFilter(denoisedData, start=f1, end=f2, sampleRate=self.sampleRate)
         # elif species == 'Ruru':
@@ -120,17 +109,16 @@ class postProcess:
 
     segments:   detected segments in form of [[s1,e1], [s2,e2],...]
     species:    species to consider
-    minLen:     minimum length for the species # min length for kiwi is 5 secs
     """
 
-    def __init__(self,audioData=None, sampleRate=0, segments=[], species='Kiwi', minLen=0):
+    def __init__(self,audioData=None, sampleRate=0, segments=[], spInfo=[]):
         self.audioData = audioData
         self.sampleRate = sampleRate
         self.segments = segments
-        self.species = species
-        self.minLen = minLen
-        if self.minLen == 0 and self.species =='Kiwi':
-            self.minLen = 10
+        if spInfo != []:
+            self.minLen = spInfo[0]
+            self.fundf1 = spInfo[7]
+            self.fundf2 = spInfo[8]
         # self.confirmedSegments = []  # post processed detections with confidence TP
         # self.segmentstoCheck = []  # need more testing to confirm
 
@@ -183,7 +171,6 @@ class postProcess:
                     if secs > self.minLen:  # just check duration
                         continue
                     else:
-                        print(file, seg, "--> windy")
                         newSegments.remove(seg)
         self.segments = newSegments
 
@@ -232,14 +219,14 @@ class postProcess:
                 secs = seg[1] - seg[0]
                 data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
 
-                # bring the segment into 16000
-                if self.sampleRate != 16000:
-                    data = librosa.core.audio.resample(data, self.sampleRate, 16000)
-                    sampleRate = 16000
-                else:
-                    sampleRate = self.sampleRate
+                # # bring the segment into 16000 just because ff was better at 16000
+                # if self.sampleRate != 16000:
+                #     data = librosa.core.audio.resample(data, self.sampleRate, 16000)
+                #     sampleRate = 16000
+                # else:
+                #     sampleRate = self.sampleRate
                 # denoise before fundamental frq. extraction
-                sc = preProcess(audioData=data, sampleRate=sampleRate, species='', df=True)  # species left empty to avoid bandpass filter
+                sc = preProcess(audioData=data, sampleRate=self.sampleRate, species='', df=True)  # species left empty to avoid bandpass filter
                 data, sampleRate = sc.denoise_filter(level=10)
 
                 sp = SignalProc.SignalProc([], 0, 512, 256)
@@ -260,7 +247,7 @@ class postProcess:
 
                 if ind.size < 2:
 
-                    if pitch > 1200 and pitch < 4200:   # todo: scale to other birds, save and import fund frq range from another config file
+                    if pitch > self.fundf1 and pitch < self.fundf2:
                         continue #print file, 'segment ', seg, round(pitch), ' *##kiwi found'
                     else:
                         # print file, 'segment ', seg, round(
@@ -268,10 +255,10 @@ class postProcess:
                         newSegments.remove(seg)
                 else:
                     # Get the individual pieces
-                    segs = segment.identifySegments(ind, maxgap=10, minlength=5)
+                    segs = segment.identifySegments(ind, maxgap=10, minlength=self.minLen/2)
                     count = 0
                     if segs == []:
-                        if np.mean(pitch) > 1200 and np.mean(pitch) < 4000:
+                        if np.mean(pitch) > self.fundf1 and np.mean(pitch) < self.fundf2:
                             # print file, 'segment ', seg, round(np.mean(pitch)), ' *## kiwi found '
                             continue
                         else:
@@ -285,7 +272,7 @@ class postProcess:
                         s[0] = s[0] * sampleRate / float(256)
                         s[1] = s[1] * sampleRate / float(256)
                         i = np.where((ind > s[0]) & (ind < s[1]))
-                        if np.mean(x[i]) > 1200 and np.mean(x[i]) < 4000:
+                        if np.mean(x[i]) > self.fundf1 and np.mean(x[i]) < self.fundf2:
                             # print file, 'segment ', seg, round(np.mean(x[i])), ' *## kiwi found ##'
                             flag = True
                             break
