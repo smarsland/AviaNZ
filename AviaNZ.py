@@ -48,6 +48,7 @@ import WaveletFunctions
 #import Learning
 import AviaNZ_batch
 #import math
+# import traceback
 
 from openpyxl import load_workbook, Workbook
 
@@ -831,6 +832,11 @@ class AviaNZ(QMainWindow):
         Most of the work is to deal with directories in that list.
         It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
         red in the list, and the second to know if the files are long."""
+        # clear file listbox
+        self.listFiles.clearSelection()
+        self.listFiles.clearFocus()
+        self.listFiles.clear()
+
         if not os.path.isdir(self.dirName):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
@@ -974,9 +980,6 @@ class AviaNZ(QMainWindow):
             dir.cd(self.listOfFiles[i].fileName())
             # Now repopulate the listbox
             self.dirName=str(dir.absolutePath())
-            self.listFiles.clearSelection()
-            self.listFiles.clearFocus()
-            self.listFiles.clear()
             self.previousFile = None
             if (i == len(self.listOfFiles)-1) and (self.listOfFiles[i].fileName() != current):
                 self.loadFile(current)
@@ -1043,8 +1046,6 @@ class AviaNZ(QMainWindow):
                     self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
 
                 self.w_spec.addItem(self.timeaxis, row=1, col=1)
-                # This next line is a hack to make the axis update
-                self.changeWidth(self.widthWindow.value())
 
                 dlg += 1
             else:
@@ -1456,7 +1457,7 @@ class AviaNZ(QMainWindow):
         self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(x)*1000.0)
 
-    def updateOverview(self):
+    def updateOverview(self, preserveLength=True):
         """ Listener for when the overview box is changed. Also called by overviewSegmentClicked().
         Does the work of keeping all the plots in the right place as the overview moves.
         It sometimes updates a bit slowly. """
@@ -1477,7 +1478,7 @@ class AviaNZ(QMainWindow):
         if maxX>len(self.sg):
             l = maxX-minX
             maxX=float(len(self.sg))
-            minX=maxX-l
+            minX=max(0, maxX-l)
             self.overviewImageRegion.sigRegionChangeFinished.disconnect()
             self.overviewImageRegion.setRegion([minX,maxX])
             self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
@@ -2409,7 +2410,7 @@ class AviaNZ(QMainWindow):
         """ Listener for the spinbox that decides the width of the main window.
         It updates the top figure plots as the window width is changed.
         Slightly annoyingly, it gets called when the value gets reset, hence the first line. """
-        if not hasattr(self,'overviewimageregion'):
+        if not hasattr(self,'overviewImageRegion'):
             return
         self.windowSize = value
 
@@ -2418,7 +2419,7 @@ class AviaNZ(QMainWindow):
         newmaxX = self.convertAmpltoSpec(value)+minX
         self.overviewImageRegion.setRegion([minX, newmaxX])
         self.scrollSlider.setMaximum(np.shape(self.sg)[0]-self.convertAmpltoSpec(self.widthWindow.value()))
-        self.updateOverview()
+        # self.updateOverview()
 
 # ===============
 # Generate the various dialogs that match the menu items
@@ -2824,7 +2825,7 @@ class AviaNZ(QMainWindow):
             if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
                 self.config['incr'] = int(str(incr))
                 self.config['window_width'] = int(str(window_width))
-                self.changeWidth(self.widthWindow.value())
+                # self.changeWidth(self.widthWindow.value())
                 # Update the positions of the segments
                 self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
                 for s in range(len(self.listRectanglesa2)):
@@ -2853,7 +2854,6 @@ class AviaNZ(QMainWindow):
                 for r in self.SegmentRects:
                     self.p_overview2.removeItem(r)
                 self.SegmentRects = []
-                self.p_overview.removeItem(self.overviewImageRegion)
 
                 self.drawOverview()
                 self.drawfigMain()
@@ -3058,6 +3058,8 @@ class AviaNZ(QMainWindow):
             filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.dirName, '*.wav')
             if filename:
                 wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
+            # update the file list box
+            self.fillFileList(os.path.basename(self.filename))
 
     def redoFreqAxis(self,start=None,end=None):
         """ This is the listener for the menu option to make the frequency axis tight (after bandpass filtering or just spectrogram changes)
