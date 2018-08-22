@@ -44,10 +44,11 @@ class preProcess:
     """
     # todo: remove duplicate preprocess in 'Wavelet Segments'
 
-    def __init__(self,audioData=None, sampleRate=0, species='Kiwi', df=False, wavelet='dmey2'):
+    def __init__(self,audioData=None, sampleRate=0, spInfo=[], df=False, wavelet='dmey2'):
         self.audioData=audioData
         self.sampleRate=sampleRate
-        self.species=species
+        if spInfo != []:
+            self.spInfo=spInfo
         self.df=df
         if wavelet == 'dmey2':
             [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
@@ -61,24 +62,12 @@ class preProcess:
     def denoise_filter(self, level=5):
         # set df=True to perform both denoise and filter
         # df=False to skip denoise
-        if self.species == 'Kiwi':
-            f1 = 1100
-            f2 = 7000
-            fs = 16000
-        elif self.species == 'Ruru':
-            f1 = 500
-            f2 = 7000
-            fs = 16000
-        elif self.species == 'Bittern':
-            f1 = 100
-            f2 = 200
-            fs = 1000
-        elif self.species == 'Sipo':
-            f1 = 1200
-            f2 = 3800
+        if self.spInfo != []:
             fs = 8000
         else:
-            fs = 8000
+            f1 = self.spInfo[2]
+            f2 = self.spInfo[3]
+            fs = self.spInfo[4]
 
         if self.sampleRate != fs:
             self.audioData = librosa.core.audio.resample(self.audioData, self.sampleRate, fs)
@@ -103,7 +92,7 @@ class preProcess:
         # wavio.write('../Sound Files/Kiwi/test/Tier1/test/test/test/test_whole.wav', denoisedData, self.sampleRate, sampwidth=2)
         # librosa.output.write_wav('Sound Files/Kiwi/test/Tier1/test/test/test', denoisedData, self.sampleRate, norm=False)
 
-        if self.species in ['Kiwi', 'Ruru', 'Bittern', 'Sipo']:
+        if f1 and f2:
             filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=f2)
             # filteredDenoisedData = self.sp.bandpassFilter(denoisedData, start=f1, end=f2, sampleRate=self.sampleRate)
         # elif species == 'Ruru':
