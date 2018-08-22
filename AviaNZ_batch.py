@@ -103,14 +103,14 @@ class AviaNZ_batchProcess(QMainWindow):
 
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
-        self.w_files.addWidget(QLabel('You chose to process'), row=0, col=0)
-        self.w_files.addWidget(QLabel('# sound files'), row=1, col=0)
+        self.w_files.addWidget(QLabel('Folder hierarchy [view only]'), row=0, col=0)
+        self.w_files.addWidget(QLabel('Use Browse Folder to choose'), row=1, col=0)
+        self.w_files.addWidget(QLabel('data for batch processing'), row=2, col=0)
         # List to hold the list of files
         self.listFiles = QListWidget()
         self.listFiles.setMinimumWidth(150)
-        # self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
-        # self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
-        self.w_files.addWidget(self.listFiles, row=2, col=0)
+        self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
+        self.w_files.addWidget(self.listFiles, row=3, col=0)
 
         self.show()
 
@@ -156,13 +156,13 @@ class AviaNZ_batchProcess(QMainWindow):
         self.statusBar().showMessage("Processing file Current/Total")
 
     def browse(self):
-        # self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',"Wav files (*.wav)")
         if self.dirName:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         print("Dir:", self.dirName)
         self.w_dir.setPlainText(self.dirName)
+        self.w_dir.setReadOnly(True)
         self.fillFileList(self.dirName)
 
     def detect(self, minLen=5):
@@ -285,9 +285,9 @@ class AviaNZ_batchProcess(QMainWindow):
         It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
         red in the list, and the second to know if the files are long."""
 
-        if not os.path.isdir(self.dirName):
-            print("Directory doesn't exist: making it")
-            os.makedirs(self.dirName)
+        # if not os.path.isdir(self.dirName):
+        #     print("Directory doesn't exist: making it")
+        #     os.makedirs(self.dirName)
 
         self.listFiles.clear()
         self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
@@ -304,13 +304,45 @@ class AviaNZ_batchProcess(QMainWindow):
                 item.setText(file.fileName())
                 if file.fileName()+'.data' in listOfDataFiles:
                     item.setForeground(Qt.red)
-        if fileName:
-            index = self.listFiles.findItems(fileName,Qt.MatchExactly)
-            if len(index)>0:
+        # if fileName:
+        #     index = self.listFiles.findItems(fileName,Qt.MatchExactly)
+        #     if len(index)>0:
+        #         self.listFiles.setCurrentItem(index[0])
+        #     else:
+        #         index = self.listFiles.findItems(self.listOfFiles[0].fileName(),Qt.MatchExactly)
+        #         self.listFiles.setCurrentItem(index[0])
+
+    def listLoadFile(self,current):
+        """ Listener for when the user clicks on an item in filelist
+        """
+
+        # Need name of file
+        if type(current) is self.listitemtype:
+            current = current.text()
+
+        self.previousFile = current
+
+        # Update the file list to show the right one
+        i=0
+        while i<len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current:
+            i+=1
+        if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
+            dir = QDir(self.dirName)
+            dir.cd(self.listOfFiles[i].fileName())
+            # Now repopulate the listbox
+            self.dirName=str(dir.absolutePath())
+            self.listFiles.clearSelection()
+            self.listFiles.clearFocus()
+            self.listFiles.clear()
+            self.previousFile = None
+            if (i == len(self.listOfFiles)-1) and (self.listOfFiles[i].fileName() != current):
+                self.loadFile(current)
+            self.fillFileList(current)
+            # Show the selected file
+            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
+            if len(index) > 0:
                 self.listFiles.setCurrentItem(index[0])
-            else:
-                index = self.listFiles.findItems(self.listOfFiles[0].fileName(),Qt.MatchExactly)
-                self.listFiles.setCurrentItem(index[0])
+        return(0)
 
     def loadFile(self):
         print(self.filename)
