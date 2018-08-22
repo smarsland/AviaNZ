@@ -164,6 +164,9 @@ class AviaNZ(QMainWindow):
             self.saveConfig = True # TODO: revise this with user permissions in mind
         self.configfile = configfile
 
+        # FOR NOW:
+        DOC = self.config['DOC']
+
         # ("Save species info to avoid hardcoding")
         # TODO: Stick in a file and load as required
         self.sppInfo = {
@@ -3213,8 +3216,7 @@ class AviaNZ(QMainWindow):
         self.segmentDialog.undo.setEnabled(False)
 
     def exportSeg(self, annotation=None, species='all'):
-        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename,
-                                               datalength=self.datalength, sampleRate=self.sampleRate)
+        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename, resolution=10, datalength=self.config['maxFileShow']*self.sampleRate, numpages=self.nFileSections, sampleRate=self.sampleRate)
         out.excel()
         # add user notification
         # QMessageBox.about(self, "Segments Exported", "Check this directory for the excel output: " + '\n' + self.dirName)
