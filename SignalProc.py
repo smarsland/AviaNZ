@@ -149,40 +149,101 @@ class SignalProc:
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T
         return sg
 
-    def bandpassFilter(self,data=None,start=1000,end=10000):
+    def bandpassFilter(self,data=None,sampleRate=None,start=0,end=None,minFreq=0,maxFreq=None):
         """ FIR bandpass filter
         128 taps, Hamming window, very basic.
         """
         if data is None:
             data = self.data
+        if sampleRate is None:
+            sampleRate = self.sampleRate
+        if end is None:
+            end = self.sampleRate/2
+        if maxFreq is None:
+            maxFreq = self.sampleRate/2
+        start = max(start,0,minFreq)
+        end = min(end,maxFreq,self.sampleRate/2)
 
-        nyquist = self.sampleRate/2.0
+        print(start,end,minFreq,maxFreq)
+
+        if start == minFreq and end == maxFreq:
+            print("No filter needed!")
+            return data
+
+        nyquist = self.sampleRate/2
         ntaps = 128
-        taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
+
+        if start == minFreq:
+            # Low pass
+            print("Low")
+            taps = signal.firwin(ntaps, cutoff=[end / nyquist], window=('hamming'), pass_zero=True)
+        elif end == maxFreq:
+            # High pass
+            print("High")
+            taps = signal.firwin(ntaps, cutoff=[start / nyquist], window=('hamming'), pass_zero=False)
+        else:
+            # Bandpass
+            print("Band")
+            taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
         #ntaps, beta = signal.kaiserord(ripple_db, width)
         #taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
         return signal.lfilter(taps, 1.0, data)
 
-    def ButterworthBandpass(self,data,sampleRate,low=1000,high=5000,order=10):
+    def ButterworthBandpass(self,data,sampleRate,low=0,high=None,minFreq=0,maxFreq=None,order=10,band=50):
         """ Basic IIR bandpass filter.
         Identifies order of filter, max 10.
 
         """
         if data is None:
             data = self.data
+        if sampleRate is None:
             sampleRate = self.sampleRate
-        nyquist = sampleRate/2.0
+        if high is None:
+            high = self.sampleRate/2
+        if maxFreq is None:
+            maxFreq = self.sampleRate/2
+        low = max(low,0,minFreq)
+        high = min(high,maxFreq,self.sampleRate/2)
+        
+        print(low,high,minFreq,maxFreq)
 
-        lowPass = float(low)/nyquist
-        highPass = float(high)/nyquist
-        lowStop = float(low-50)/nyquist
-        highStop = float(high+50)/nyquist
-        # calculate the best order
-        order,wN = signal.buttord([lowPass, highPass], [lowStop, highStop], 3, 50)
+        if low == minFreq and high == maxFreq:
+            print("No filter needed!")
+            return data
 
-        if order>10:
-            order=10
-        b, a = signal.butter(order,[lowPass, highPass], btype='band')
+        nyquist = sampleRate/2
+
+        if low == minFreq:
+            # Low pass
+            cut1 = high/nyquist
+            cut2 = (high+band)/nyquist
+            # calculate the best order
+            order,wN = signal.buttord(cut1, cut2, 3, band)
+            if order>10:
+                order=10
+            b, a = signal.butter(order,wN,btype='lowpass')
+        elif high == maxFreq:
+            # High pass
+            cut1 = low/nyquist
+            cut2 = (low-band)/nyquist
+            # calculate the best order
+            order,wN = signal.buttord(cut1, cut2, 3, band)
+            if order>10:
+                order=10
+            b, a = signal.butter(order,wN, btype='highpass')
+        else:
+            # Band pass
+            lowPass = low/nyquist
+            highPass = high/nyquist
+            lowStop = (low-band)/nyquist
+            highStop = (high+band)/nyquist
+            # calculate the best order
+            order,wN = signal.buttord([lowPass, highPass], [lowStop, highStop], 3, band)
+            if order>10:
+                order=10
+            b, a = signal.butter(order,wN, btype='bandpass')
+            #b, a = signal.butter(order,[lowPass, highPass], btype='bandpass')
+
         return signal.filtfilt(b, a, data)
 
     # The next functions perform spectrogram inversion

@@ -1020,13 +1020,14 @@ class ControllableAudio(QAudioOutput):
         if self.soundFile.isOpen():
             self.soundFile.seek(self.startpos)
 
-    def filterBand(self, start, stop, lo, hi, audiodata, sp):
+    def filterBand(self, start, stop, low, high, audiodata, sp):
         # takes start-end in ms, relative to file start
         self.time = max(0, start)
         start = max(0, start * self.format.sampleRate() // 1000)
         stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
         segment = audiodata[start:stop]
-        segment = sp.bandpassFilter(segment, lo, hi)
+        print(low,high,"band")
+        segment = sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
         self.loadArray(segment)
 
