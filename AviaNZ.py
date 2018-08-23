@@ -166,7 +166,7 @@ class AviaNZ(QMainWindow):
         self.configfile = configfile
 
         # FOR NOW:
-        #DOC = self.config['DOC']
+        DOC = self.config['DOC']
 
         # ("Save species info to avoid hardcoding")
         # TODO: Stick in a file and load as required
@@ -1535,7 +1535,7 @@ class AviaNZ(QMainWindow):
         self.timeaxis.update()
         pg.QtGui.QApplication.processEvents()
 
-    def drawfigMain(self):
+    def drawfigMain(self,remaking=False):
         """ Draws the main amplitude and spectrogram plots and any segments on them.
         Has to do some work to get the axis labels correct.
         """
@@ -1569,9 +1569,9 @@ class AviaNZ(QMainWindow):
         # If there are segments, show them
         for count in range(len(self.segments)):
             if self.segments[count][2] == 0 and self.segments[count][3] == 0:
-                self.addSegment(self.segments[count][0], self.segments[count][1],0,0,self.segments[count][4],False,count)
+                self.addSegment(self.segments[count][0], self.segments[count][1],0,0,self.segments[count][4],False,count,remaking)
             else:
-                self.addSegment(self.segments[count][0], self.segments[count][1],self.convertFreqtoY(self.segments[count][2]),self.convertFreqtoY(self.segments[count][3]),self.segments[count][4],False,count)
+                self.addSegment(self.segments[count][0], self.segments[count][1],self.convertFreqtoY(self.segments[count][2]),self.convertFreqtoY(self.segments[count][3]),self.segments[count][4],False,count,remaking)
 
         # This is the moving bar for the playback
         if not hasattr(self,'bar'):
@@ -1699,7 +1699,7 @@ class AviaNZ(QMainWindow):
                 # update the box visual
                 x1 = self.convertSpectoAmpl(sender.pos()[0])
                 x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
-                print("box changed",sender.pos()[1],sender.pos()[1]+sender.size()[1])
+                print("box changed",len(self.segments),i,sender.pos(),sender.size(),self.segments[i][4])
                 self.segments[i][2] = self.convertYtoFreq(sender.pos()[1])#/np.shape(self.sg)[1]
                 self.segments[i][3] = self.convertYtoFreq(sender.pos()[1]+sender.size()[1])#/np.shape(self.sg)[1]
                 self.listLabels[i].setPos(sender.pos()[0], self.textpos)
@@ -1800,7 +1800,7 @@ class AviaNZ(QMainWindow):
                 self.SegmentRects[box].setBrush(pg.mkBrush('w'))
             self.SegmentRects[box].update()
 
-    def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=None,saveSeg=True,index=-1):
+    def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=None,saveSeg=True,index=-1,remaking=False):
         """ When a new segment is created, does the work of creating it and connecting its
         listeners. Also updates the relevant overview segment.
         startpoint, endpoint are in amplitude coordinates, while y1, y2 should be standard y coordinates (between 0 and 1)
@@ -1892,9 +1892,14 @@ class AviaNZ(QMainWindow):
             label.setPos(self.convertAmpltoSpec(startpoint), self.textpos)
 
             # Add the segments to the relevent lists
-            self.listRectanglesa1.append(p_ampl_r)
-            self.listRectanglesa2.append(p_spec_r)
-            self.listLabels.append(label)
+            if remaking:
+                self.listRectanglesa1[index] = p_ampl_r
+                self.listRectanglesa2[index] = p_spec_r
+                self.listLabels[index] = label
+            else:
+                self.listRectanglesa1.append(p_ampl_r)
+                self.listRectanglesa2.append(p_spec_r)
+                self.listLabels.append(label)
 
             if saveSeg:
                 # Add the segment to the data
@@ -1943,6 +1948,8 @@ class AviaNZ(QMainWindow):
             self.refreshOverviewWith(startpoint, endpoint, species, delete=True)
 
             if self.listRectanglesa1[id] is not None:
+                self.listRectanglesa1[id].sigRegionChangeFinished.disconnect()
+                self.listRectanglesa2[id].sigRegionChangeFinished.disconnect()
                 self.p_ampl.removeItem(self.listRectanglesa1[id])
                 self.p_spec.removeItem(self.listRectanglesa2[id])
                 self.p_spec.removeItem(self.listLabels[id])
@@ -2885,36 +2892,6 @@ class AviaNZ(QMainWindow):
             if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
                 self.config['incr'] = int(str(incr))
                 self.config['window_width'] = int(str(window_width))
-                # self.changeWidth(self.widthWindow.value())
-                # Update the positions of the segments
-                # TODO: Next lines necessary? Redrawing anyway...
-                #self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
-                #for s in range(len(self.listRectanglesa2)):
-                #    if self.listRectanglesa1[s] is not None:
-                #        x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
-                #        x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
-                #        if type(self.listRectanglesa2[s]) == self.ROItype:
-                #            # TODO: Correct y?
-                #            self.listRectanglesa2[s].sigRegionChangeFinished.disconnect()
-                #            y1Freq = self.convertYtoFreq(self.listRectanglesa2[s].pos().y(),oldSpecy)
-                #            y2Freq = self.convertYtoFreq(self.listRectanglesa2[s].size().y(),oldSpecy)
-                #            self.listRectanglesa2[s].setPos(pg.Point(x1, self.convertFreqtoY(y1Freq)))
-                #            self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, self.convertFreqtoY(y2Freq)))
-                #            self.listRectanglesa2[s].sigRegionChangeFinished.connect(self.updateRegion_spec)
-                #        else:
-                #            self.listRectanglesa2[s].setRegion([x1, x2])
-                #        self.listLabels[s].setPos(x1,self.textpos)
-
-                # Remove everything and redraw it
-                #self.removeSegments(delete=False)
-                #for r in self.SegmentRects:
-                    #self.p_overview2.removeItem(r)
-                #self.SegmentRects = []
-                #self.p_overview.removeItem(self.overviewImageRegion)
-
-                #self.drawOverview()
-                #self.drawfigMain()
-
                 if hasattr(self, 'seg'):
                     self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'], self.config['incr'])
 
@@ -3140,10 +3117,12 @@ class AviaNZ(QMainWindow):
         for r in self.SegmentRects:
             self.p_overview2.removeItem(r)
         self.SegmentRects = []
-        self.p_overview.removeItem(self.overviewImageRegion)
+        #self.p_overview.removeItem(self.overviewImageRegion)
 
         self.drawOverview()
-        self.drawfigMain()
+        self.drawfigMain(remaking=True)
+
+        QApplication.processEvents()
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
@@ -3815,9 +3794,11 @@ class AviaNZ(QMainWindow):
                 self.p_spec.removeItem(r)
         for r in self.listRectanglesa1:
             if r is not None:
+                r.sigRegionChangeFinished.disconnect()
                 self.p_ampl.removeItem(r)
         for r in self.listRectanglesa2:
             if r is not None:
+                r.sigRegionChangeFinished.disconnect()
                 self.p_spec.removeItem(r)
         for r in self.SegmentRects:
             r.setBrush(pg.mkBrush('w'))
@@ -3913,10 +3894,11 @@ class AviaNZ(QMainWindow):
             source = self.dirName + '/' + file
             destination = source+"2"
             if os.path.isfile(destination):
-                print(destination," exists, not backing up")
+                pass
+                #print(destination," exists, not backing up")
             else:
-                print(source)
-                print(destination," doesn't exist")
+                #print(source)
+                #print(destination," doesn't exist")
                 copyfile(source, destination)
 
 # =============
