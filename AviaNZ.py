@@ -171,7 +171,7 @@ class AviaNZ(QMainWindow):
         # TODO: Stick in a file and load as required
         self.sppInfo = {
             # spp: [min len, max len, flow, fhigh, fs, f0_low, f0_high, wavelet_thr, wavelet_M, wavelet_nodes]
-            'Kiwi': [10, 30, 1100, 7000, 16000, 1200, 4200, 0.25, 0.6,
+            'Kiwi': [10, 30, 1100, 7000, 16000, 1200, 4200, 0.5, 0.6,
                      [17, 20, 22, 35, 36, 38, 40, 42, 43, 44, 45, 46, 48, 50, 55, 56]],
             'Gsk': [6, 25, 900, 7000, 16000, 1200, 4200, 0.25, 0.6, [35, 38, 43, 44, 52, 54]],
             'Lsk': [10, 30, 1200, 7000, 16000, 1200, 4200, 0.25, 0.6, []],  # todo: find len, f0, nodes
@@ -3096,10 +3096,8 @@ class AviaNZ(QMainWindow):
         self.removeSegments()
         self.segmentsToSave = True
         # TODO: Currently just gives them all the label "Don't Know"
-        seglen = len(self.segments)
+        # seglen = len(self.segments)
         [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution] = self.segmentDialog.getValues()
-
-        #[alg, ampThr, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,depth,thrType,thr,wavelet,bandchoice,start,end,species] = self.segmentDialog.getValues()
         with pg.BusyCursor():
             species = str(species)
             if species=='Choose species...':
@@ -3138,6 +3136,7 @@ class AviaNZ(QMainWindow):
                 self.findMatches(float(str(CCThr1)))
                 newSegments = []
 
+            print("new segments: ", newSegments)
             # print "to excel", newSegments
                 # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
                 # # but ML is extremely slow and crappy. So I decided to use just the wavelets
@@ -3169,22 +3168,23 @@ class AviaNZ(QMainWindow):
             # post process to remove short segments, wind, rain, and use F0 check.
             if species == "all":
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, species=[])
+                                                  segments=newSegments, spInfo=[])
                 post.wind()
                 post.rainClick()
             else:
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, species=self.sppInfo[species])
+                                                  segments=newSegments, spInfo=self.sppInfo[species])
                 post.short()  # species specific
                 post.wind()
                 post.rainClick()
                 post.fundamentalFrq()  # species specific
 
             newSegments = post.segments
+            print("new segments: ", newSegments)
             if generateExcel:
                 # Save the excel file
                 # note: species parameter now only indicates default species for 2-column segment format!
-                out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=newSegments,dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
+                out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=newSegments, dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
                 out.excel()
             # self.exportSegments(newSegments,species=species)
 
@@ -3869,7 +3869,7 @@ def mainlauncher(cli, infile, imagefile, command):
         app.exec_()
 
 DOC=False    # only DOC features or all
-generateExcel=False
+generateExcel=True
 
 # Start the application
 app = QApplication(sys.argv)
