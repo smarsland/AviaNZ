@@ -213,7 +213,6 @@ class postProcess:
         '''
         Check for fundamental frequency of the segments, discard the segments that does not indicate the species.
         '''
-        print("f1, f2: ", self.fundf1, self.fundf2)
         newSegments = copy.deepcopy(self.segments)
         for seg in self.segments:
             if seg[0] == -1:
@@ -270,13 +269,10 @@ class postProcess:
                         s[0] = s[0] * sampleRate / float(256)
                         s[1] = s[1] * sampleRate / float(256)
                         i = np.where((ind > s[0]) & (ind < s[1]))
-                        print("Mean x[i]", np.mean(x[i]))
                         if (np.mean(x[i]) > self.fundf1) and (np.mean(x[i]) < self.fundf2):    # :   # and (
                             flag = True
-                            print("flag became True")
                             break
                     if not flag:
-                        print("deleting with flag", seg)
                         newSegments.remove(seg)
         self.segments = newSegments
 
