@@ -1747,7 +1747,7 @@ class AviaNZ(QMainWindow):
             self.refreshOverviewWith(self.segments[i][0], self.segments[i][1], species)
 
     def refreshOverviewWith(self, startpoint, endpoint, species, delete=False):
-        """Recalculates the overview box colors and refreshes their display.
+        """Recalculates the overview box colours and refreshes their display.
         To be used when segments are added, deleted or moved."""
         # Work out which overview segment this segment is in (could be more than one)
         # min is to remove possible rounding error
@@ -1822,16 +1822,9 @@ class AviaNZ(QMainWindow):
             self.segmentsToSave = True
             show = True
 
-        #print(show,y1,y2,miny,maxy)
         if show and ((y1<maxy and y2 > miny) or (y1==0 and y2==0)):
             # This is one we want to show
 
-            # Check if the segment already exists:
-            if index>-1:
-                if 'self.listRectanglesa2[index]' in globals():
-                    ***    
-                else:
-                    print("there")
             # Get the name and colour sorted
             if species is None or species=="Don't Know":
                 species = "Don't Know"
@@ -1898,7 +1891,10 @@ class AviaNZ(QMainWindow):
                     self.segments.append([startpoint+self.startRead, endpoint+self.startRead, self.convertYtoFreq(y1), self.convertYtoFreq(y2), species])
 
             # mark this as the current segment
-            self.box1id = len(self.segments) - 1
+            if index>-1:
+                self.box1id = index
+            else:
+                self.box1id = len(self.segments) - 1
         else:
             # Add a None element into the array so that the correct boxids work
             self.listRectanglesa1.append(None)
@@ -3128,11 +3124,11 @@ class AviaNZ(QMainWindow):
         self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
 
         # Remove everything and redraw it
-        #self.removeSegments(delete=False)
-        #for r in self.SegmentRects:
-        #    self.p_overview2.removeItem(r)
-        #self.SegmentRects = []
-        #self.p_overview.removeItem(self.overviewImageRegion)
+        self.removeSegments(delete=False)
+        for r in self.SegmentRects:
+            self.p_overview2.removeItem(r)
+        self.SegmentRects = []
+        self.p_overview.removeItem(self.overviewImageRegion)
 
         self.drawOverview()
         self.drawfigMain()
