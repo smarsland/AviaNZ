@@ -47,8 +47,7 @@ class preProcess:
     def __init__(self,audioData=None, sampleRate=0, spInfo=[], df=False, wavelet='dmey2'):
         self.audioData=audioData
         self.sampleRate=sampleRate
-        if spInfo != []:
-            self.spInfo=spInfo
+        self.spInfo=spInfo
         self.df=df
         if wavelet == 'dmey2':
             [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
@@ -62,8 +61,10 @@ class preProcess:
     def denoise_filter(self, level=5):
         # set df=True to perform both denoise and filter
         # df=False to skip denoise
-        if self.spInfo != []:
+        if self.spInfo == []:
             fs = 8000
+            f1 = None
+            f2 = None
         else:
             f1 = self.spInfo[2]
             f2 = self.spInfo[3]
@@ -117,10 +118,10 @@ class postProcess:
         self.segments = segments
         if spInfo != []:
             self.minLen = spInfo[0]
-            self.fundf1 = spInfo[7]
-            self.fundf2 = spInfo[8]
+            self.fundf1 = spInfo[5]
+            self.fundf2 = spInfo[6]
         else:
-            self.minLen = 1 # hard minimum length of segment for any species
+            self.minLen = 5 # hard minimum length of segment for any species
         # self.confirmedSegments = []  # post processed detections with confidence TP
         # self.segmentstoCheck = []  # need more testing to confirm
 
@@ -218,7 +219,6 @@ class postProcess:
                 continue
             else:
                 # read the sound segment and check fundamental frq.
-                secs = seg[1] - seg[0]
                 data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
 
                 # # bring the segment into 16000 just because ff was better at 16000
@@ -228,7 +228,7 @@ class postProcess:
                 # else:
                 #     sampleRate = self.sampleRate
                 # denoise before fundamental frq. extraction
-                sc = preProcess(audioData=data, sampleRate=self.sampleRate, spInfo='', df=True)  # species left empty to avoid bandpass filter
+                sc = preProcess(audioData=data, sampleRate=self.sampleRate, spInfo=[], df=True)  # species left empty to avoid bandpass filter
                 data, sampleRate = sc.denoise_filter(level=10)
 
                 sp = SignalProc.SignalProc([], 0, 512, 256)
@@ -239,43 +239,37 @@ class postProcess:
                 pitch = pitch[ind]
                 if pitch.size == 0:
                     print('segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
-                    newSegments.remove(seg)
-                    continue
+                    # newSegments.remove(seg) # for now keep it
+                    continue    # continue to the next seg
                 ind = ind * W / 512
                 x = (pitch * 2. / sampleRate * np.shape(sgRaw)[1]).astype('int')
-
                 from scipy.signal import medfilt
                 x = medfilt(pitch, 15)
-
                 if ind.size < 2:
-
-                    if pitch > self.fundf1 and pitch < self.fundf2:
-                        continue #print file, 'segment ', seg, round(pitch), ' *##kiwi found'
+                    if (pitch > self.fundf1) and (pitch < self.fundf2):
+                        print("kiwi ", pitch)
+                        continue    # print file, 'segment ', seg, round(pitch), ' *##kiwi found'
                     else:
-                        # print file, 'segment ', seg, round(
-                        #     pitch), ' *-- fundamental freq is out of range, could be noise'
+                        print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
                         newSegments.remove(seg)
-                else:
-                    # Get the individual pieces
-                    segs = segment.identifySegments(ind, maxgap=10, minlength=self.minLen/2)
+                else:   # Get the individual pieces within a seg
+                    syls = segment.identifySegments(ind, maxgap=10, minlength=self.minLen/2)
                     count = 0
-                    if segs == []:
-                        if np.mean(pitch) > self.fundf1 and np.mean(pitch) < self.fundf2:
+                    if syls == []:
+                        if (np.mean(pitch) > self.fundf1) and (np.mean(pitch) < self.fundf2):
                             # print file, 'segment ', seg, round(np.mean(pitch)), ' *## kiwi found '
                             continue
                         else:
-                            # print file, 'segment ', seg, round(
-                                # np.mean(pitch)), ' *-- fundamental freq is out of range, could be noise'
+                            print('segment ', seg, round(np.mean(pitch)), ' *-- fundamental freq is out of range, could be noise')
                             newSegments.remove(seg)
                             continue
                     flag = False
-                    for s in segs:
+                    for s in syls:  # see if any syllable got right ff
                         count += 1
                         s[0] = s[0] * sampleRate / float(256)
                         s[1] = s[1] * sampleRate / float(256)
                         i = np.where((ind > s[0]) & (ind < s[1]))
-                        if np.mean(x[i]) > self.fundf1 and np.mean(x[i]) < self.fundf2:
-                            # print file, 'segment ', seg, round(np.mean(x[i])), ' *## kiwi found ##'
+                        if (np.mean(x[i]) > self.fundf1) and (np.mean(x[i]) < self.fundf2):    # :   # and (
                             flag = True
                             break
                     if not flag:
@@ -1026,13 +1020,14 @@ class ControllableAudio(QAudioOutput):
         if self.soundFile.isOpen():
             self.soundFile.seek(self.startpos)
 
-    def filterBand(self, start, stop, lo, hi, audiodata, sp):
+    def filterBand(self, start, stop, low, high, audiodata, sp):
         # takes start-end in ms, relative to file start
         self.time = max(0, start)
         start = max(0, start * self.format.sampleRate() // 1000)
         stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
         segment = audiodata[start:stop]
-        segment = sp.bandpassFilter(segment, lo, hi)
+        print(low,high,"band")
+        segment = sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
         self.loadArray(segment)
 
@@ -1178,40 +1173,3 @@ class FlowLayout(QtGui.QLayout):
             lineHeight = max(lineHeight, item.sizeHint().height())
 
         return y + lineHeight - rect.y()
-
-
-#+++++++++++++++++++++++++++++++
-# Helper functions
-def splitFile5mins(self, name):
-    # Nirosha wants to split files that are long (15 mins) into 5 min segments
-    # Could be used when loading long files :)
-    try:
-        self.audiodata, self.sampleRate = lr.load(name,sr=None)
-    except:
-        print("Error: try another file")
-    nsamples = np.shape(self.audiodata)[0]
-    lengthwanted = self.sampleRate * 60 * 5
-    count = 0
-    while (count + 1) * lengthwanted < nsamples:
-        data = self.audiodata[count * lengthwanted:(count + 1) * lengthwanted]
-        filename = name[:-4] + '_' +str(count) + name[-4:]
-        lr.output.write_wav(filename, data, self.sampleRate)
-        count += 1
-    data = self.audiodata[(count) * lengthwanted:]
-    filename = name[:-4] + '_' + str((count)) + name[-4:]
-    lr.output.write_wav(filename,data,self.sampleRate)
-
-    # ###########
-    # #just testing
-    # # fName='Sound Files/Kiwi/test/Tier1/CL78_BIRM_141120_212934'
-    # fName='Sound Files/Kiwi/test/Tier1/BV21_BIRD_141206_234353'
-    # # fName='Sound Files/Kiwi/test/Ponui/kiwi-test2'
-    # ws1=WaveletSegment()
-    # ws1.loadData(fName, trainTest=False)
-    # det = ws1.waveletSegment_test(fName=None, data=ws1.data, sampleRate=ws1.sampleRate, species=ws1.species,
-    #                                          trainTest=False)
-    # # det = np.ones(900)
-    # if sum(det)>0:
-    #     post=postProcess(ws1.data, ws1.sampleRate, det)
-    #     # post.detectClicks()
-    #     post.eRatioConfd()
