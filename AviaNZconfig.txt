@@ -18,4 +18,4 @@
 "readOnly": false, "transparentBoxes": false, "showListofFiles": true,
 "invertColourMap": false, "showAllPages": true, "saveCorrections": true,
 "operator": "Stephen", "reviewer": "Nirosha",
-"fs_start": 0, "fs_end": 0, "window": "Hann"}
+"fs_start": 0, "fs_end": 0, "window": "Hann", "DOC": true}

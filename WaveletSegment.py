@@ -228,15 +228,13 @@ class WaveletSegment:
     #
     #     return detected
 
-    def detectCalls(self,wp,sampleRate, listnodes=[], species=[],trainTest=False,thr=0):
+    def detectCalls(self,wp,sampleRate, listnodes=[], species=[],trainTest=False):
         #for test recordings given the set of nodes
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
         import math
         if sampleRate==0:
             sampleRate=self.sampleRate
-
-        if thr==0:
-            thr = species[7]
+        thr = species[7]
         detected = np.zeros((int(len(wp.data)/sampleRate),len(listnodes)))
         count = 0
 
@@ -262,7 +260,6 @@ class WaveletSegment:
 
             # Compute the number of samples in a window -- species specific
             M = int(species[8] * sampleRate / 2.0)
-
             # Compute the energy curve (a la Jinnai et al. 2012)
             E = np.zeros(N)
             E[M] = np.sum(C[:2 * M+1])
@@ -417,7 +414,7 @@ class WaveletSegment:
         # TODO: json.dump('species.data', open('species.data', 'wb'))
         return listnodes
 
-    def waveletSegment_test(self,fName=None, data=None, sampleRate=None, listnodes = None, spInfo=[], trainTest=False, df=False, thr=0):
+    def waveletSegment_test(self,fName=None, data=None, sampleRate=None, listnodes = None, spInfo=[], trainTest=False, df=False):
         # Load the relevant list of nodes
         # TODO: Put these into a file along with other relevant parameters (frequency, length, etc.)
         if listnodes is None:
@@ -431,11 +428,11 @@ class WaveletSegment:
             self.data = data
             self.sampleRate = sampleRate
 
-        filteredDenoisedData = self.preprocess(species=spInfo,df=df)
+        filteredDenoisedData = self.preprocess(species=spInfo, df=df)
 
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
 
-        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, species=spInfo, trainTest=trainTest, thr=thr)
+        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, species=spInfo, trainTest=trainTest)
 
         # Todo: remove clicks
 
