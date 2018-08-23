@@ -219,6 +219,8 @@ class AviaNZ(QMainWindow):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
 
+        self.backupDatafiles()
+
         # INPUT FILE LOADING
         # search order: infile -> firstFile -> dialog
         # Make life easier for now: preload a birdsong
@@ -1111,16 +1113,18 @@ class AviaNZ(QMainWindow):
                             self.operator = self.segments[0][2]
                             self.reviewer = self.segments[0][3]
                             del self.segments[0]
-                    #if len(self.segments) > 0:
-                        # TODO ****
-                        #if self.segments[0][2] > 1.1 and self.segments[0][3] > 1.1:
-                            # Legacy version didn't normalise the segment data for dragged boxes
-                            # This fixes it, assuming that the spectrogram was 128 pixels high (256 width window)
-                            # The .1 is to take care of rounding errors
-                            #s[2] = s[2]/128
-                            #s[3] = s[3]/128
-                            #print(s[2],s[3]) 
-                            #self.segmentsToSave = True
+                    if len(self.segments) > 0:
+                        for s in self.segments:
+                            if 0 < s[2] < 1.1 and 0 < s[3] < 1.1:
+                                # *** Potential for major cockups here. First version didn't normalise the segment data for dragged boxes.
+                                # The second version did, storing them as values between 0 and 1. It modified the original versions by assuming that the spectrogram was 128 pixels high (256 width window).
+                                # This version does what it should have done in the first place, which is to record actual frequencies
+                                # The .1 is to take care of rounding errors
+                                # TODO: Because of this change (23/8/18) I run a backup on the datafiles in the init
+                                s[2] = self.convertYtoFreq(s[2])
+                                s[3] = self.convertYtoFreq(s[3])
+                                print(s[2],s[3]) 
+                                self.segmentsToSave = True
 
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
@@ -1523,22 +1527,37 @@ class AviaNZ(QMainWindow):
         """
         self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=self.datalength,endpoint=True),self.audiodata)
         self.timeaxis.setLabel('')
-        self.specPlot.setImage(self.sg)
+
+        height = self.sampleRate // 2 / np.shape(self.sg)[1]
+        pixelstart = int(self.minFreqShow/height)
+        pixelend = int(self.maxFreqShow/height)
+
+        self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
+        self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
+        #self.specPlot.setImage(self.sg)
+
         self.setColourMap(self.config['cmap'])
         self.setColourLevels()
 
         # Sort out the spectrogram frequency axis
         # The constants here are divided by 1000 to get kHz, and then remember the top is sampleRate/2
-        FreqRange = (self.maxFreqShow-self.minFreqShow)/1000
-        self.specaxis.setTicks([[(0,self.minFreqShow/1000),(np.shape(self.sg)[1]/4,self.minFreqShow/1000+FreqRange/4),(np.shape(self.sg)[1]/2,self.minFreqShow/1000+FreqRange/2),(3*np.shape(self.sg)[1]/4,self.minFreqShow/1000+3*FreqRange/4),(np.shape(self.sg)[1],self.minFreqShow/1000+FreqRange)]])
+        FreqRange = self.maxFreqShow-self.minFreqShow
+        height = self.sampleRate // 2 / np.shape(self.sg)[1]
+        SpecRange = FreqRange/height
+        #self.specaxis.setTicks([[(0,self.minFreqShow/1000),(np.shape(self.sg)[1]/4,self.minFreqShow/1000+FreqRange/4),(np.shape(self.sg)[1]/2,self.minFreqShow/1000+FreqRange/2),(3*np.shape(self.sg)[1]/4,self.minFreqShow/1000+3*FreqRange/4),(np.shape(self.sg)[1],self.minFreqShow/1000+FreqRange)]])
+        self.specaxis.setTicks([[(0,(self.minFreqShow/1000)),(SpecRange/4,(self.minFreqShow/1000+FreqRange/4000)),(SpecRange/2,(self.minFreqShow/1000+FreqRange/2000)),(3*SpecRange/4,(self.minFreqShow/1000+3*FreqRange/4000)),(SpecRange,(self.minFreqShow/1000+FreqRange/1000))]])
         self.specaxis.setLabel('kHz')
 
         self.updateOverview()
-        self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
+        #self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
+        self.textpos = int((self.maxFreqShow-self.minFreqShow)/height) + self.config['textoffset']
 
         # If there are segments, show them
         for count in range(len(self.segments)):
-            self.addSegment(self.segments[count][0], self.segments[count][1],self.convertFreqtoY(self.segments[count][2]),self.convertFreqtoY(self.segments[count][3]),self.segments[count][4],False,count)
+            if self.segments[count][2] == 0 and self.segments[count][3] == 0:
+                self.addSegment(self.segments[count][0], self.segments[count][1],0,0,self.segments[count][4],False,count)
+            else:
+                self.addSegment(self.segments[count][0], self.segments[count][1],self.convertFreqtoY(self.segments[count][2]),self.convertFreqtoY(self.segments[count][3]),self.segments[count][4],False,count)
 
         # This is the moving bar for the playback
         if not hasattr(self,'bar'):
@@ -1667,8 +1686,8 @@ class AviaNZ(QMainWindow):
                 x1 = self.convertSpectoAmpl(sender.pos()[0])
                 x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
                 print("box changed",sender.pos()[1],sender.pos()[1]+sender.size()[1])
-                self.segments[i][2] = sender.pos()[1]#/np.shape(self.sg)[1]
-                self.segments[i][3] = (sender.pos()[1]+sender.size()[1])#/np.shape(self.sg)[1]
+                self.segments[i][2] = self.convertYtoFreq(sender.pos()[1])#/np.shape(self.sg)[1]
+                self.segments[i][3] = self.convertYtoFreq(sender.pos()[1]+sender.size()[1])#/np.shape(self.sg)[1]
                 self.listLabels[i].setPos(sender.pos()[0], self.textpos)
             else:
                 # update the segment visual
@@ -1776,6 +1795,8 @@ class AviaNZ(QMainWindow):
         If a segment is too long for the current section, truncates it.
         """
         print("segment added at %d-%d, %d-%d" % (startpoint, endpoint, self.convertYtoFreq(y1), self.convertYtoFreq(y2)))
+        miny = self.convertFreqtoY(self.minFreqShow)
+        maxy = self.convertFreqtoY(self.maxFreqShow)
         if not saveSeg:
             timeRangeStart = self.startRead
             timeRangeEnd = min(self.startRead + self.lenRead, self.fileLength / self.sampleRate)
@@ -1801,7 +1822,8 @@ class AviaNZ(QMainWindow):
             self.segmentsToSave = True
             show = True
 
-        if show:
+        #print(show,y1,y2,miny,maxy)
+        if show and ((y1<maxy and y2 > miny) or (y1==0 and y2==0)):
             # This is one we want to show
             # Get the name and colour sorted
             if species is None or species=="Don't Know":
@@ -1835,9 +1857,8 @@ class AviaNZ(QMainWindow):
                     temp = y1
                     y1 = y2
                     y2 = temp
-                # TODO: **
-                startpointS = QPointF(self.convertAmpltoSpec(startpoint),y1)
-                endpointS = QPointF(self.convertAmpltoSpec(endpoint),y2)
+                startpointS = QPointF(self.convertAmpltoSpec(startpoint),max(y1,miny))
+                endpointS = QPointF(self.convertAmpltoSpec(endpoint),min(y2,maxy))
                 p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, parent=self)
                 if self.dragRectTransparent.isChecked():
                     col = self.prevBoxCol.rgb()
@@ -1864,7 +1885,10 @@ class AviaNZ(QMainWindow):
             if saveSeg:
                 # Add the segment to the data
                 # Increment the time to be correct for the current section of the file
-                self.segments.append([startpoint+self.startRead, endpoint+self.startRead, self.convertYtoFreq(y1), self.convertYtoFreq(y2), species])
+                if y1==0 and y2==0:
+                    self.segments.append([startpoint+self.startRead, endpoint+self.startRead, 0, 0, species])
+                else:
+                    self.segments.append([startpoint+self.startRead, endpoint+self.startRead, self.convertYtoFreq(y1), self.convertYtoFreq(y2), species])
 
             # mark this as the current segment
             self.box1id = len(self.segments) - 1
@@ -2853,44 +2877,43 @@ class AviaNZ(QMainWindow):
             self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
 
             # If the size of the spectrogram has changed, need to update the positions of things
-	    # TODO: **** SOME ERROR HERE?
             if int(str(incr)) != self.config['incr'] or int(str(window_width)) != self.config['window_width']:
                 self.config['incr'] = int(str(incr))
                 self.config['window_width'] = int(str(window_width))
                 self.changeWidth(self.widthWindow.value())
+
                 # Update the positions of the segments
                 # TODO: Next lines necessary? Redrawing anyway...
-                self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
-                for s in range(len(self.listRectanglesa2)):
-                    if self.listRectanglesa1[s] is not None:
-                        x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
-                        x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
-                        if type(self.listRectanglesa2[s]) == self.ROItype:
-                            # TODO: Correct y?
-                            self.listRectanglesa2[s].sigRegionChangeFinished.disconnect()
-                            y1Freq = self.convertYtoFreq(self.listRectanglesa2[s].pos().y(),oldSpecy)
-                            y2Freq = self.convertYtoFreq(self.listRectanglesa2[s].size().y(),oldSpecy)
-                            self.listRectanglesa2[s].setPos(pg.Point(x1, self.convertFreqtoY(y1Freq)))
-                            self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, self.convertFreqtoY(y2Freq)))
-                            self.listRectanglesa2[s].sigRegionChangeFinished.connect(self.updateRegion_spec)
-                        else:
-                            self.listRectanglesa2[s].setRegion([x1, x2])
-                        self.listLabels[s].setPos(x1,self.textpos)
+                #self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
+                #for s in range(len(self.listRectanglesa2)):
+                #    if self.listRectanglesa1[s] is not None:
+                #        x1 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[0])
+                #        x2 = self.convertAmpltoSpec(self.listRectanglesa1[s].getRegion()[1])
+                #        if type(self.listRectanglesa2[s]) == self.ROItype:
+                #            # TODO: Correct y?
+                #            self.listRectanglesa2[s].sigRegionChangeFinished.disconnect()
+                #            y1Freq = self.convertYtoFreq(self.listRectanglesa2[s].pos().y(),oldSpecy)
+                #            y2Freq = self.convertYtoFreq(self.listRectanglesa2[s].size().y(),oldSpecy)
+                #            self.listRectanglesa2[s].setPos(pg.Point(x1, self.convertFreqtoY(y1Freq)))
+                #            self.listRectanglesa2[s].setSize(pg.Point(x2 - x1, self.convertFreqtoY(y2Freq)))
+                #            self.listRectanglesa2[s].sigRegionChangeFinished.connect(self.updateRegion_spec)
+                #        else:
+                #            self.listRectanglesa2[s].setRegion([x1, x2])
+                #        self.listLabels[s].setPos(x1,self.textpos)
 
-                # Redraw everything and redraw it
-                self.removeSegments(delete=False)
-                for r in self.SegmentRects:
-                    self.p_overview2.removeItem(r)
-                self.SegmentRects = []
-                self.p_overview.removeItem(self.overviewImageRegion)
+                # Remove everything and redraw it
+                #self.removeSegments(delete=False)
+                #for r in self.SegmentRects:
+                    #self.p_overview2.removeItem(r)
+                #self.SegmentRects = []
+                #self.p_overview.removeItem(self.overviewImageRegion)
 
-                self.drawOverview()
-                self.drawfigMain()
+                #self.drawOverview()
+                #self.drawfigMain()
+
                 if hasattr(self, 'seg'):
-                    self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'],
-                                        self.config['incr'])
+                    self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'], self.config['incr'])
 
-            # *****
             self.redoFreqAxis(minFreq,maxFreq)
 
             self.statusLeft.setText("Ready")
@@ -3086,81 +3109,26 @@ class AviaNZ(QMainWindow):
     def redoFreqAxis(self,start,end):
         """ This is the listener for the menu option to make the frequency axis tight (after bandpass filtering or just spectrogram changes)
         """
-        print(start,self.minFreqShow)
-        startdiff = start - self.minFreqShow
-        #enddiff = end - self.maxFreqShow
+
         self.minFreqShow = max(start,self.minFreq)
         self.maxFreqShow = min(end,self.maxFreq)
 
-        # 1 pixel height in frequencies
-        height = self.sampleRate / 2. / np.shape(self.sg)[1]
-        print(self.specPlot.pixelSize())
-        pixelstart = int(start/height)
-        pixelend = int(end/height)
-        print(startdiff, int(startdiff/height),pixelstart,pixelend)
+        height = self.sampleRate // 2 / np.shape(self.sg)[1]
+        pixelstart = int(self.minFreqShow/height)
+        pixelend = int(self.maxFreqShow/height)
 
-        print("Spectrogram now",pixelstart,pixelend,self.minFreqShow,self.maxFreqShow,self.minFreq,self.maxFreq,self.sampleRate)
         self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
         self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
 
-        FreqRange = end - start
-        SpecRange = FreqRange/height
-        self.specaxis.setTicks([[(0,(start/1000)),(SpecRange/4,(start/1000+FreqRange/4000)),(SpecRange/2,(start/1000+FreqRange/2000)),(3*SpecRange/4,(start/1000+3*FreqRange/4000)),(SpecRange,(start/1000+FreqRange/1000))]])
+        # Remove everything and redraw it
+        self.removeSegments(delete=False)
+        for r in self.SegmentRects:
+            self.p_overview2.removeItem(r)
+        self.SegmentRects = []
+        self.p_overview.removeItem(self.overviewImageRegion)
 
-        self.textpos = int((end-start)/height) + self.config['textoffset']
-        for i in range(len(self.segments)):
-            if self.segments[i][0] >= self.startRead and self.segments[i][1] <= min(self.startRead + self.lenRead, self.fileLength / self.sampleRate):
-                shown = True
-                if type(self.listRectanglesa2[i]) == self.ROItype:
-                    if shown:
-                        self.listRectanglesa2[i].sigRegionChangeFinished.disconnect()
-
-                    # Get original size from the segment for the y values in case it's already been moved
-                    x1 = self.listRectanglesa2[i].pos().x()
-                    x2 = x1 + self.listRectanglesa2[i].size().x()
-                    y1Freq = self.segments[i][2]#*np.shape(self.sg)[1]
-                    y2Freq = self.segments[i][3]#*np.shape(self.sg)[1] 
-                    print(self.segments[i][3],y1Freq,y2Freq-y1Freq)
-                    print(self.convertYtoFreq(self.listRectanglesa2[i].pos().y()),self.convertYtoFreq(self.listRectanglesa2[i].size().y()))
-
-                    # **** HERE ****
-                    # Move the segment boxes
-                    print("Before",y1Freq,y2Freq-y1Freq)
-                    self.listRectanglesa2[i].setPos(pg.Point(x1,self.convertFreqtoY(y1Freq-start)))
-                    self.listRectanglesa2[i].setSize(pg.Point(x2-x1,self.convertFreqtoY(y2Freq-y1Freq)))
-                    print("After",y1Freq,y2Freq-y1Freq)
-                    print(self.listRectanglesa2[i].pos().y(),self.listRectanglesa2[i].size().y())
-
-                    y1Freq = y1/(pixelend-pixelstart)*(self.maxFreqShow-self.minFreqShow)+self.minFreqShow
-                    #y1Freq = y1/np.shape(self.sg)[1]*(self.maxFreqShow-self.minFreqShow)+self.minFreqShow
-                    y2Freq = y2/(pixelend-pixelstart)*(self.maxFreqShow-self.minFreqShow)+self.minFreqShow
-                    #y2Freq = y2/np.shape(self.sg)[1]*(self.maxFreqShow-self.minFreqShow)+self.minFreqShow
-                    print(y1Freq,y2Freq,y1Freq+y2Freq,self.minFreqShow,self.maxFreqShow,(y1Freq > self.maxFreqShow),((y1Freq+y2Freq) < self.minFreqShow),(y1Freq > self.maxFreqShow) or ((y1Freq+y2Freq) < self.minFreqShow))
-                    if (y1Freq > self.maxFreqShow) or (y2Freq < self.minFreqShow):
-                        # You can't see this box, so don't show it at all
-                        print("Not showing a box")
-                        self.p_spec.removeItem(self.listRectanglesa2[i])
-                        self.p_spec.removeItem(self.listLabels[i])
-                        shown = False
-                    else:
-                        if (y1Freq < self.minFreqShow):
-                            move = self.minFreqShow-y1Freq
-                            print("Box shrink below",pixelstart, y1,y1+y2,move)
-                            #move = (move-self.minFreqShow)/(self.maxFreqShow - self.minFreqShow)
-                            y1 = pixelstart
-                            y2 = y2 - pixelstart + y1
-                            self.listRectanglesa2[i].setPos(pg.Point(x1,y1))
-                            self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2-y1))
-                        if (y2Freq > self.maxFreqShow):
-                            print("Box shrink above",y1,y1+y2, pixelend)
-                            y2 = pixelend 
-                            self.listRectanglesa2[i].setSize(pg.Point(x2-x1,y2-y1))
-                    if shown:
-                        self.listRectanglesa2[i].sigRegionChangeFinished.connect(self.updateRegion_spec)
-
-                if shown:
-                    # Update label test position
-                    self.listLabels[i].setPos(self.listLabels[i].pos()[0], self.textpos)
+        self.drawOverview()
+        self.drawfigMain()
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
