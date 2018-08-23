@@ -119,6 +119,8 @@ class postProcess:
             self.minLen = spInfo[0]
             self.fundf1 = spInfo[7]
             self.fundf2 = spInfo[8]
+        else:
+            self.minLen = 1 # hard minimum length of segment for any species
         # self.confirmedSegments = []  # post processed detections with confidence TP
         # self.segmentstoCheck = []  # need more testing to confirm
 
@@ -226,7 +228,7 @@ class postProcess:
                 # else:
                 #     sampleRate = self.sampleRate
                 # denoise before fundamental frq. extraction
-                sc = preProcess(audioData=data, sampleRate=self.sampleRate, species='', df=True)  # species left empty to avoid bandpass filter
+                sc = preProcess(audioData=data, sampleRate=self.sampleRate, spInfo='', df=True)  # species left empty to avoid bandpass filter
                 data, sampleRate = sc.denoise_filter(level=10)
 
                 sp = SignalProc.SignalProc([], 0, 512, 256)

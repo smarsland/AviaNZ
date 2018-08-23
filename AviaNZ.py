@@ -3178,12 +3178,12 @@ class AviaNZ(QMainWindow):
             # post process to remove short segments, wind, rain, and use F0 check.
             if species == "all":
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, species=[])
+                                                  segments=newSegments, spInfo=[])
                 post.wind()
                 post.rainClick()
             else:
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, species=self.sppInfo[species])
+                                                  segments=newSegments, spInfo=self.sppInfo[species])
                 post.short()  # species specific
                 post.wind()
                 post.rainClick()
@@ -3199,12 +3199,11 @@ class AviaNZ(QMainWindow):
 
             # Generate annotation friendly output.
             if str(alg)=="Wavelets":
-                 if len(out.segments)>0:
+                 if len(newSegments)>0:
                     for seg in newSegments:
                         self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
                                         species.title() + "?",index=-1)
                         self.segmentsToSave = True
-
             else:
                 if len(newSegments)>0:
                     for seg in newSegments:
@@ -3214,6 +3213,7 @@ class AviaNZ(QMainWindow):
             self.lenNewSegments = len(newSegments)
             self.segmentDialog.undo.setEnabled(True)
             self.statusLeft.setText("Ready")
+        print("segmentation finished at %s" % (time.time() - opstartingtime))
 
     def segment_undo(self):
         """ Listener for undo button in segmentation dialog.
