@@ -57,13 +57,13 @@ class AviaNZ_batchProcess(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setMinimumSize(600,400)
+        self.setMinimumSize(800,500)
 
         # Make the docks
-        self.d_detection = Dock("Automatic Detection",size=(350,100))
+        self.d_detection = Dock("Automatic Detection",size=(500,500))
         # self.d_detection.hideTitleBar()
 
-        self.d_files = Dock("File list", size=(150, 100))
+        self.d_files = Dock("File list", size=(270, 500))
 
 
         self.area.addDock(self.d_detection,'right')
@@ -103,14 +103,14 @@ class AviaNZ_batchProcess(QMainWindow):
 
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
-        self.w_files.addWidget(QLabel('Folder hierarchy [view only]'), row=0, col=0)
-        self.w_files.addWidget(QLabel('Use Browse Folder to choose'), row=1, col=0)
-        self.w_files.addWidget(QLabel('data for batch processing'), row=2, col=0)
+        self.w_files.addWidget(QLabel('View Only'), row=0, col=0)
+        self.w_files.addWidget(QLabel('use Browse Folder to choose data for processing'), row=1, col=0)
+        # self.w_files.addWidget(QLabel(''), row=2, col=0)
         # List to hold the list of files
         self.listFiles = QListWidget()
         self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
-        self.w_files.addWidget(self.listFiles, row=3, col=0)
+        self.w_files.addWidget(self.listFiles, row=2, col=0)
 
         self.show()
 
