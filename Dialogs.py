@@ -24,8 +24,8 @@ class StartScreen(QDialog):
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         self.setWindowTitle('AviaNZ - Choose Task')
         self.setAutoFillBackground(False)
-        self.setFixedSize(681, 315)
-        self.setStyleSheet("background-image: url(img/AviaNZ_SW_Large.jpg);")
+        self.setFixedSize(900, 350)
+        self.setStyleSheet("background-image: url(img/AviaNZ_SW_V2.jpg);")
         self.activateWindow()
 
         self.DOC=DOC
@@ -34,22 +34,22 @@ class StartScreen(QDialog):
         # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
         b1 = QPushButton(" Manual Segmentation ")
         b2 = QPushButton("      Batch Processing      ")
-        #b3 = QPushButton("Denoise a folder")
+        b3 = QPushButton(" Review Batch Results ")
         l1 = QLabel("-------")
+        l2 = QLabel("---")
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
-        #b3.setStyleSheet(btn_style2)
+        b3.setStyleSheet(btn_style)
         l1.setStyleSheet('QLabel {color:transparent}')
 
         hbox = QHBoxLayout()
-        # hbox.addStretch(1)
         hbox.addWidget(l1)
         hbox.addWidget(b1)
         hbox.addWidget(l1)
         hbox.addWidget(b2)
         hbox.addWidget(l1)
-        #hbox.addWidget(b3)
-        # b3.setEnabled(False)
+        hbox.addWidget(b3)
+        hbox.addWidget(l2)
 
         vbox = QVBoxLayout()
         vbox.addStretch(1)
@@ -58,20 +58,11 @@ class StartScreen(QDialog):
 
         self.setLayout(vbox)
 
-        # self.setGeometry(300, 300, 430, 210)
-
-        #self.connect(b1, SIGNAL('clicked()'), self.manualSeg)
         b1.clicked.connect(self.manualSeg)
         # if DOC==False:
-        #self.connect(b2, SIGNAL('clicked()'), self.findSpecies)
         b2.clicked.connect(self.findSpecies)
-        # self.connect(b3, SIGNAL('clicked()'), self.denoise)
+        b3.clicked.connect(self.reviewSeg)
 
-        # vbox = QVBoxLayout()
-        # for w in [b1, b2, b3]:
-        #         vbox.addWidget(w)
-        #
-        # self.setLayout(vbox)
         self.task = -1
 
     def manualSeg(self):
@@ -84,6 +75,10 @@ class StartScreen(QDialog):
 
     def denoise(self):
         self.task = 3
+        self.accept()
+
+    def reviewSeg(self):
+        self.task = 4
         self.accept()
 
     def getValues(self):
@@ -791,20 +786,22 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, sg, audiodata, sampleRate, label, lut, colourStart, colourEnd, cmapInverted, birdList, unbufStart, unbufStop, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.frame = QWidget()
 
         self.lut = lut
+        self.label = ''
         self.colourStart = colourStart
         self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
-        self.label = label
         self.birdList = birdList
         self.saveConfig = False
-        self.sg = sg
+        # exec_ forces the cursor into waiting
+        self.activateWindow()
+        pg.QtGui.QApplication.setOverrideCursor(Qt.ArrowCursor)
 
         # Set up the plot window, then the right and wrong buttons, and a close button
         self.wPlot = pg.GraphicsLayoutWidget()
@@ -822,10 +819,12 @@ class HumanClassify1(QDialog):
         # prepare the lines for marking true segment boundaries
         self.line1 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
         self.line2 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
+        self.pPlot.addItem(self.line1)
+        self.pPlot.addItem(self.line2)
 
         # label for current segment assignment
         self.speciesTop = QLabel("Currently:")
-        self.species = QLabel(self.label)
+        self.species = QLabel()
         font = self.species.font()
         font.setPointSize(24)
         font.setBold(True)
@@ -838,14 +837,17 @@ class HumanClassify1(QDialog):
         self.numberDone.setAlignment(QtCore.Qt.AlignCenter)
         self.numberLeft.setAlignment(QtCore.Qt.AlignCenter)
 
+        iconSize = QtCore.QSize(50, 50)
+        self.buttonPrev = QtGui.QToolButton()
+        self.buttonPrev.setIcon(self.style().standardIcon(QtGui.QStyle.SP_ArrowBack))
+        self.buttonPrev.setIconSize(iconSize)
+
         self.correct = QtGui.QToolButton()
         self.correct.setIcon(QtGui.QIcon('img/tick.jpg'))
-        iconSize = QtCore.QSize(50, 50)
         self.correct.setIconSize(iconSize)
 
         self.delete = QtGui.QToolButton()
         self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
-        iconSize = QtCore.QSize(50, 50)
         self.delete.setIconSize(iconSize)
 
         # An array of radio buttons and a list and a text entry box
@@ -913,6 +915,7 @@ class HumanClassify1(QDialog):
         # The layouts
         hboxNextPrev = QHBoxLayout()
         hboxNextPrev.addWidget(self.numberDone)
+        hboxNextPrev.addWidget(self.buttonPrev)
         hboxNextPrev.addWidget(self.correct)
         hboxNextPrev.addWidget(self.delete)
         hboxNextPrev.addWidget(self.numberLeft)
@@ -976,7 +979,7 @@ class HumanClassify1(QDialog):
 
         self.setLayout(vboxFull)
         # print seg
-        self.setImage(self.sg,audiodata,sampleRate,self.label, unbufStart, unbufStop)
+        # self.setImage(self.sg,audiodata,sampleRate,self.label, unbufStart, unbufStop)
 
     def playSeg(self):
         if self.media_obj2.isPlaying():
@@ -1006,9 +1009,12 @@ class HumanClassify1(QDialog):
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
 
-    def setImage(self, sg, audiodata, sampleRate, label, unbufStart, unbufStop):
+    def setImage(self, sg, audiodata, sampleRate, label, unbufStart, unbufStop, minFreq=0, maxFreq=0):
         self.audiodata = audiodata
+        self.sg = sg
         self.sampleRate = sampleRate
+        if maxFreq==0:
+            maxFreq = sampleRate / 2
         self.duration = len(audiodata) / sampleRate * 1000 # in ms
 
         # fill up a rectangle with dark grey to act as background if the segment is small
@@ -1019,10 +1025,11 @@ class HumanClassify1(QDialog):
         # add axis
         self.plot.setImage(sg2)
         self.plot.setLookupTable(self.lut)
+        self.scroll.horizontalScrollBar().setValue(0)
 
-        FreqRange = (self.parent.maxFreq-self.parent.minFreq)/1000.
+        FreqRange = (maxFreq-minFreq)/1000.
         SgSize = np.shape(sg2)[1]
-        self.sg_axis.setTicks([[(0,self.parent.minFreq/1000.), (SgSize/4, self.parent.minFreq/1000.+FreqRange/4.), (SgSize/2, self.parent.minFreq/1000.+FreqRange/2.), (3*SgSize/4, self.parent.minFreq/1000.+3*FreqRange/4.), (SgSize,self.parent.minFreq/1000.+FreqRange)]])
+        self.sg_axis.setTicks([[(0,minFreq/1000.), (SgSize/4, minFreq/1000.+FreqRange/4.), (SgSize/2, minFreq/1000.+FreqRange/2.), (3*SgSize/4, minFreq/1000.+3*FreqRange/4.), (SgSize,minFreq/1000.+FreqRange)]])
         self.sg_axis.setLabel('kHz')
 
         self.show()
@@ -1039,16 +1046,12 @@ class HumanClassify1(QDialog):
         # add marks to separate actual segment from buffer zone
         # Note: need to use view coordinates to add items to pPlot
         try:
-            self.pPlot.removeItem(self.line1)
-            self.pPlot.removeItem(self.line2)
             self.stopPlayback()
         except Exception as e:
             print(e)
             pass
         startV = self.pPlot.mapFromItemToView(self.plot, QPointF(unbufStart, 0)).x()
         stopV = self.pPlot.mapFromItemToView(self.plot, QPointF(unbufStop, 0)).x()
-        self.pPlot.addItem(self.line1)
-        self.pPlot.addItem(self.line2)
         self.line1.setPos(startV)
         self.line2.setPos(stopV)
 
