@@ -166,7 +166,7 @@ class AviaNZ(QMainWindow):
         self.configfile = configfile
 
         # FOR NOW:
-        DOC = self.config['DOC']
+        #DOC = self.config['DOC']
 
         # ("Save species info to avoid hardcoding")
         # TODO: Stick in a file and load as required
