@@ -1825,6 +1825,13 @@ class AviaNZ(QMainWindow):
         #print(show,y1,y2,miny,maxy)
         if show and ((y1<maxy and y2 > miny) or (y1==0 and y2==0)):
             # This is one we want to show
+
+            # Check if the segment already exists:
+            if index>-1:
+                if 'self.listRectanglesa2[index]' in globals():
+                    ***    
+                else:
+                    print("there")
             # Get the name and colour sorted
             if species is None or species=="Don't Know":
                 species = "Don't Know"
@@ -3121,11 +3128,11 @@ class AviaNZ(QMainWindow):
         self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
 
         # Remove everything and redraw it
-        self.removeSegments(delete=False)
-        for r in self.SegmentRects:
-            self.p_overview2.removeItem(r)
-        self.SegmentRects = []
-        self.p_overview.removeItem(self.overviewImageRegion)
+        #self.removeSegments(delete=False)
+        #for r in self.SegmentRects:
+        #    self.p_overview2.removeItem(r)
+        #self.SegmentRects = []
+        #self.p_overview.removeItem(self.overviewImageRegion)
 
         self.drawOverview()
         self.drawfigMain()
