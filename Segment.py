@@ -309,7 +309,7 @@ class Segment:
         from scipy.signal import medfilt
         maxFreqs = medfilt(maxFreqs,21)
         seg = np.squeeze(np.where(maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))))
-        return self.identifySegments(seg,minlength=10)
+        return self.identifySegments(seg, minlength=10)
 
     def medianClip(self,thr=3.0,medfiltersize=5,minsize=80,minaxislength=5,minSegment=50):
         """ Median clipping for segmentation
