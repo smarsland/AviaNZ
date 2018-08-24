@@ -263,6 +263,11 @@ class AviaNZ(QMainWindow):
         if not self.CLI:
             QMainWindow.__init__(self, root)
 
+        # parse mouse settings
+        if self.config['drawingRightBtn']:
+            self.MouseDrawingButton = QtCore.Qt.RightButton
+        else:
+            self.MouseDrawingButton = QtCore.Qt.LeftButton
         self.createMenu()
         self.createFrame()
         self.resetStorageArrays()
@@ -293,11 +298,6 @@ class AviaNZ(QMainWindow):
             if self.DOC:
                 self.setOperatorReviewerDialog()
 
-            # parse mouse settings
-            if self.config['drawingRightBtn']:
-                self.MouseDrawingButton = QtCore.Qt.RightButton
-            else:
-                self.MouseDrawingButton = QtCore.Qt.LeftButton
             # Save the segments every minute
             self.timer = QTimer()
             #QObject.connect(self.timer, SIGNAL("timeout()"), self.saveSegments)
@@ -376,10 +376,6 @@ class AviaNZ(QMainWindow):
         # specMenu.addSeparator()
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
 
-        self.showFundamental = specMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
-        self.showFundamental.setCheckable(True)
-        self.showFundamental.setChecked(False)
-
         specMenu.addSeparator()
         self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
         self.readonly.setCheckable(True)
@@ -393,6 +389,11 @@ class AviaNZ(QMainWindow):
         actionMenu.addSeparator()
         actionMenu.addAction("Denoise",self.showDenoiseDialog,"Ctrl+N")
         #actionMenu.addAction("Find matches",self.findMatches)
+        actionMenu.addSeparator()
+        self.showFundamental = actionMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
+        self.showFundamental.setCheckable(True)
+        self.showFundamental.setChecked(False)
+
         if self.DOC==False:
             actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
             actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
@@ -704,6 +705,7 @@ class AviaNZ(QMainWindow):
         self.playSlider.setVisible(False)
         self.d_spec.addWidget(self.playSlider)
         self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
+        self.bar.btn = self.MouseDrawingButton
 
         # A slider to move through the file easily
         self.scrollSlider = QScrollBar(Qt.Horizontal)
@@ -1076,8 +1078,8 @@ class AviaNZ(QMainWindow):
                 self.audioFormat.setSampleSize(wavobj.sampwidth*8)
                 print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
-                self.minFreqShow = self.minFreq
-                self.maxFreqShow = self.maxFreq
+                self.minFreqShow = max(self.minFreq, self.config['minFreq'])
+                self.maxFreqShow = min(self.maxFreq, self.config['maxFreq'])
 
                 dlg += 1
 
@@ -1908,9 +1910,14 @@ class AviaNZ(QMainWindow):
                 self.box1id = len(self.segments) - 1
         else:
             # Add a None element into the array so that the correct boxids work
-            self.listRectanglesa1.append(None)
-            self.listRectanglesa2.append(None)
-            self.listLabels.append(None)
+            if remaking:
+                self.listRectanglesa1[index] = None
+                self.listRectanglesa2[index] = None
+                self.listLabels[index] = None
+            else:
+                self.listRectanglesa1.append(None)
+                self.listRectanglesa2.append(None)
+                self.listLabels.append(None)
 
     def deleteSegment(self,id=-1,hr=False):
         """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
@@ -1960,20 +1967,24 @@ class AviaNZ(QMainWindow):
         print("selected %d" % self.box1id)
 
         brush = fn.mkBrush(self.ColourSelected)
-        self.listRectanglesa1[boxid].setBrush(brush)
-        self.listRectanglesa2[boxid].setBrush(brush)
-        self.listRectanglesa1[boxid].setHoverBrush(brush)
-        self.listRectanglesa2[boxid].setHoverBrush(brush)
+        # TODO: looks like boxid is wrong
+        if self.listRectanglesa1[boxid] is not None and self.listRectanglesa2[boxid] is not None:
+            self.listRectanglesa1[boxid].setBrush(brush)
+            self.listRectanglesa2[boxid].setBrush(brush)
+            self.listRectanglesa1[boxid].setHoverBrush(brush)
+            self.listRectanglesa2[boxid].setHoverBrush(brush)
+
+            self.listRectanglesa1[boxid].update()
+            self.listRectanglesa2[boxid].update()
+        
         # self.listRectanglesa2[boxid].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
         # if it's a rectangle:
         if type(self.listRectanglesa2[boxid]) == self.ROItype:
             self.playBandLimitedSegButton.setEnabled(True)
 
-        self.listRectanglesa1[boxid].update()
-        self.listRectanglesa2[boxid].update()
-
     def deselectSegment(self, boxid):
         """ Restores the segment colors and disables playback buttons."""
+        print("deselected %d" % boxid)
         self.playSegButton.setEnabled(False)
         self.playBandLimitedSegButton.setEnabled(False)
         self.box1id = -1
@@ -2261,7 +2272,7 @@ class AviaNZ(QMainWindow):
                     # Note: Returns the first one it finds, i.e. the newest
                     box1id = -1
                     for count in range(len(self.listRectanglesa2)):
-                        if type(self.listRectanglesa2[count]) == self.ROItype:
+                        if type(self.listRectanglesa2[count]) == self.ROItype and self.listRectanglesa2[count] is not None:
                             x1 = self.listRectanglesa2[count].pos().x()
                             y1 = self.listRectanglesa2[count].pos().y()
                             x2 = x1 + self.listRectanglesa2[count].size().x()
@@ -3096,6 +3107,8 @@ class AviaNZ(QMainWindow):
 
         self.minFreqShow = max(start,self.minFreq)
         self.maxFreqShow = min(end,self.maxFreq)
+        self.config['minFreq'] = start
+        self.config['maxFreq'] = end
 
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
         pixelstart = int(self.minFreqShow/height)
@@ -3797,12 +3810,18 @@ class AviaNZ(QMainWindow):
                 self.p_spec.removeItem(r)
         for r in self.listRectanglesa1:
             if r is not None:
-                r.sigRegionChangeFinished.disconnect()
-                self.p_ampl.removeItem(r)
+                try:
+                    r.sigRegionChangeFinished.disconnect()
+                    self.p_ampl.removeItem(r)
+                except:
+                    pass
         for r in self.listRectanglesa2:
             if r is not None:
-                r.sigRegionChangeFinished.disconnect()
-                self.p_spec.removeItem(r)
+                try:
+                    r.sigRegionChangeFinished.disconnect()
+                    self.p_spec.removeItem(r)
+                except:
+                    pass
         for r in self.SegmentRects:
             r.setBrush(pg.mkBrush('w'))
             r.update()
