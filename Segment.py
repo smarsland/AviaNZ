@@ -371,6 +371,8 @@ class Segment:
     def checkSegmentOverlap(self,segs,minSegment=50):
         # Needs to be python array, not np array
         # Sort by increasing start times
+        if isinstance(segs, np.ndarray):
+            segs = segs.tolist()
         segs = sorted(segs)
         segs = np.array(segs)
 
