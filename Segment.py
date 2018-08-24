@@ -368,7 +368,27 @@ class Segment:
                     float(l.bbox[2] * self.incr / self.fs)])
         return list
 
-    def checkSegmentOverlap(self, blobs, minSegment=50):
+    def checkSegmentOverlap(self,segs,minSegment=50):
+        # Needs to be python array, not np array
+        # Sort by increasing start times
+        segs = sorted(segs)
+        segs = np.array(segs)
+
+        newsegs = []
+        # Loop over segs until the start value of 1 is not inside the end value of the previous
+        s=0
+        while s<len(segs):
+            i = s
+            while i < len(segs)-1 and segs[i+1,0] < segs[i,1]:
+                i += 1
+            newsegs.append([segs[s,0],max(segs[s:i+1,1])])
+            s = i+1
+
+        return newsegs
+
+
+
+    def checkSegmentOverlapCentroids(self, blobs, minSegment=50):
         # Delete overlapping boxes by computing the centroids and picking out overlaps
         # Could also look at width and so just merge boxes that are about the same size
         # Note: no mingap parameter is used right now
