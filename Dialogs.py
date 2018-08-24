@@ -233,15 +233,17 @@ class Segmentation(QDialog):
     # TODO: add the wavelet params
     # TODO: work out how to return varying size of params, also process them
     # TODO: test and play
-    def __init__(self, maxv, parent=None):
+    def __init__(self, maxv, DOC=False, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Segmentation Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(350)
 
         self.algs = QComboBox()
-        #self.algs.addItems(["Amplitude","Energy Curve","Harma","Median Clipping","Wavelets"])
-        self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
+        if DOC:
+            self.algs.addItems(["Median Clipping", "FIR", "Wavelets"])
+        else:
+            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.prevAlg = "Default"
         self.undo = QPushButton("Undo")
