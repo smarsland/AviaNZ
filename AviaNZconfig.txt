@@ -1,4 +1,4 @@
-{"window_width": 256, "incr": 128, "maxSearchDepth": 20, "minSegment": 50,
+{"window_width": 256, "incr": 128, "minFreq": 0, "maxFreq": 24000, "maxSearchDepth": 20, "minSegment": 50,
 "drawingRightBtn": true, "specMouseAction": 1,
 "dirpath": "./Sound Files", "secsSave": 60, "windowWidth": 6.57,
 "textoffset": 9, "widthOverviewSegment": 10.0, "maxFileShow": 300, "fileOverlap": 10,
