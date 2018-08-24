@@ -58,6 +58,7 @@ class Segment:
         segs1 = self.checkSegmentLength(self.segmentByFIR(FIRthr),mingap,minlength,maxlength)
         segs2 = self.checkSegmentLength(self.medianClip(medianClipthr),mingap,minlength,maxlength)
         segs3, p, t = self.yin(100, thr=yinthr, returnSegs=True)
+        segs3 = self.checkSegmentOverlap(segs3,mingap)
         segs3 = self.checkSegmentLength(segs3,mingap,minlength,maxlength)
         segs1 = self.mergeSegments(segs1, segs2)
         segs = self.mergeSegments(segs1,segs3)
@@ -311,7 +312,7 @@ class Segment:
         seg = np.squeeze(np.where(maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))))
         return self.identifySegments(seg, minlength=10)
 
-    def medianClip(self,thr=3.0,medfiltersize=5,minsize=80,minaxislength=5,minSegment=50):
+    def medianClip(self,thr=3.0,medfiltersize=5,minaxislength=5,minSegment=50):
         """ Median clipping for segmentation
         Based on Lasseck's method
         This version only clips in time, ignoring frequency
@@ -353,42 +354,55 @@ class Segment:
         # Delete blobs that are too small
         todelete = []
         for i in blobs:
-            if i.filled_area < minsize or i.minor_axis_length < minaxislength:
+            if i.filled_area < minSegment or i.minor_axis_length < minaxislength:
                 todelete.append(i)
 
         for i in todelete:
             blobs.remove(i)
 
+        list = []
+
+        # convert bounding box pixels to milliseconds:
+        for l in blobs:
+            list.append([float(l.bbox[0] * self.incr / self.fs),
+                    float(l.bbox[2] * self.incr / self.fs)])
+        return list
+
+    def checkSegmentOverlap(self, blobs, minSegment=50):
         # Delete overlapping boxes by computing the centroids and picking out overlaps
         # Could also look at width and so just merge boxes that are about the same size
+        # Note: no mingap parameter is used right now
         centroids = []
         for i in blobs:
-            centroids.append(i.centroid[0])
+            centroids.append((i[1] - i[0])/2)
         centroids = np.array(centroids)
         ind = np.argsort(centroids)
         centroids = centroids[ind]
+        blobs = np.array(blobs)[ind]
 
         current = 0
         centroid = centroids[0]
         count = 0
         list = []
-        list.append([blobs[ind[0]].bbox[0],blobs[ind[0]].bbox[2]])
+        list.append(blobs[0])
         for i in centroids:
-            if i - centroid < minsize / 2.:
-                if blobs[ind[count]].bbox[0]<list[current][0]:
-                    list[current][0] = blobs[ind[count]].bbox[0]
-                if blobs[ind[count]].bbox[2] > list[current][1]:
-                    list[current][1] = blobs[ind[count]].bbox[2]
+            print(i)
+            # TODO: replace this with simple overlap?
+            if (i - centroid)*1000 < minSegment / 2. * 10:
+                if blobs[ind[count]][0] < list[current][0]:
+                    list[current][0] = blobs[ind[count]][0]
+                if blobs[ind[count]][1] > list[current][1]:
+                    list[current][1] = blobs[ind[count]][1]
             else:
                 current += 1
                 centroid = centroids[count]
-                list.append([blobs[ind[count]].bbox[0], blobs[ind[count]].bbox[2]])
+                list.append([blobs[ind[count]][0], blobs[ind[count]][1]])
             count += 1
 
         segments = []
         for i in list:
-            if float(i[1] - i[0])*self.incr/self.fs*1000 > minSegment:
-                segments.append([float(i[0])*self.incr/self.fs,float(i[1])*self.incr/self.fs])
+            if float(i[1] - i[0])*1000 > minSegment:
+                segments.append([i[0], i[1]])
         return segments
 
     def onsets(self,thr=3.0):
@@ -486,8 +500,6 @@ class Segment:
             ind = np.squeeze(np.where(pitch > minfreq))
             segs = self.identifySegments(ind,notSpec=True)
             print(segs, len(ind), len(pitch))
-            #print segs
-            print(W, self.window_width)
             for s in segs:
                s[0] = float(s[0])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr#W / self.window_width
                s[1] = float(s[1])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr#W / self.window_width
