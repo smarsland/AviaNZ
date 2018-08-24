@@ -121,7 +121,7 @@ class postProcess:
             self.fundf1 = spInfo[5]
             self.fundf2 = spInfo[6]
         else:
-            self.minLen = 5 # hard minimum length of segment for any species
+            self.minLen = 0
         # self.confirmedSegments = []  # post processed detections with confidence TP
         # self.segmentstoCheck = []  # need more testing to confirm
 

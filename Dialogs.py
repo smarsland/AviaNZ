@@ -1201,7 +1201,7 @@ class HumanClassify2(QDialog):
     # It could be all the same species, or the ones that it is unsure about, or whatever.
 
     # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
-    def __init__(self, sg, segments, label, part, nParts, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
+    def __init__(self, sg, segments, label, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -1209,10 +1209,6 @@ class HumanClassify2(QDialog):
 
         # let the user quit without bothering rest of it
         self.setWindowFlags(self.windowFlags() & QtCore.Qt.WindowCloseButtonHint)
-
-        # todo: fit the window to actual screen size
-        sizeObject = QDesktopWidget().screenGeometry(-1)
-        print (sizeObject.width(),sizeObject.height())
 
         self.sampleRate = sampleRate
         self.incr = incr
@@ -1227,40 +1223,27 @@ class HumanClassify2(QDialog):
         self.firstSegment = 0
         self.errors = []
 
-        #self.indices = []
-        #self.segments = []
-
-        #self.segments = [item for item in self.segments if item[4] == label or item[4][:-1] == label]
-        #print len(self.segments)
         next = QPushButton("Next/Finish")
-        #self.connect(next, SIGNAL("clicked()"), self.nextPage)
         next.clicked.connect(self.nextPage)
 
+        print("ready to show ", self.segments, len(self.segments))
         if len(self.segments) > 0:
-
             species = QLabel("Species/call type: " + label)
-            if nParts>1:
-                partLabel = QLabel("Currently on page "+str(part+1)+" of " + str(nParts))
-            else:
-                partLabel = QLabel("")
-
-            # Check that width is at least max seg width, or there is a problem!
             self.width = 0
             for ind in range(len(self.segments)):
                 x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
                 x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
                 if x2 - x1 > self.width:
                     self.width = x2-x1
-            self.width = max(800,self.width+10)
+            self.width = max(1000,self.width+10)
             # print (self.width)
-            self.h = 4
+            self.h = 10
             self.flowLayout = SupportClasses.FlowLayout()
-            self.makeButtons()
+            self.makeButtons(first=True)
 
             self.vboxFull = QVBoxLayout()
             self.vboxFull.addWidget(QLabel('Click on the images that are incorrectly labelled.'))
             self.vboxFull.addWidget(species)
-            self.vboxFull.addWidget(partLabel)
             self.vboxFull.addLayout(self.flowLayout)
             self.vboxFull.addWidget(next)
         else:
@@ -1271,8 +1254,10 @@ class HumanClassify2(QDialog):
         self.setLayout(self.vboxFull)
 
 
-    def makeButtons(self):
-        if self.firstSegment == 0:
+    def makeButtons(self, first=False):
+        if first:
+            segRemain = len(self.segments)
+        elif self.firstSegment == 0:
             segRemain = len(self.segments) - 1
         else:
             segRemain = len(self.segments) - self.firstSegment
@@ -1282,7 +1267,7 @@ class HumanClassify2(QDialog):
         ind = self.firstSegment
         self.buttons = []
 
-        while segRemain>0 and col<self.h:
+        while segRemain > 0 and col < self.h:
             x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
             x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
             im = self.setImage(self.sg[x1:x2, :])
