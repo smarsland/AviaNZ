@@ -199,11 +199,11 @@ class SignalProc:
         if sampleRate is None:
             sampleRate = self.sampleRate
         if high is None:
-            high = self.sampleRate/2
+            high = sampleRate/2
         if maxFreq is None:
-            maxFreq = self.sampleRate/2
+            maxFreq = sampleRate/2
         low = max(low,0,minFreq)
-        high = min(high,maxFreq,self.sampleRate/2)
+        high = min(high,maxFreq,sampleRate/2)
         
         print(low,high,minFreq,maxFreq)
 

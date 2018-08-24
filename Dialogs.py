@@ -261,7 +261,10 @@ class Segmentation(QDialog):
         else:
             self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
-        self.prevAlg = "Default"
+        if DOC:
+            self.prevAlg = "Median Clipping"
+        else:
+            self.prevAlg = "Default"
         self.undo = QPushButton("Undo")
         self.resLabel = QLabel("Output Resolution (secs)")
         self.res = QSpinBox()
@@ -352,7 +355,10 @@ class Segmentation(QDialog):
 
         self.medlabel = QLabel("Set median threshold")
         Box.addWidget(self.medlabel)
-        self.medlabel.hide()
+        if DOC:
+            self.medlabel.show()
+        else:
+            self.medlabel.hide()
 
         self.eclabel = QLabel("Set energy curve threshold")
         Box.addWidget(self.eclabel)
@@ -378,7 +384,10 @@ class Segmentation(QDialog):
         self.PowerThr.hide()
 
         Box.addWidget(self.medThr)
-        self.medThr.hide()
+        if DOC:
+            self.medThr.show()
+        else:
+            self.medThr.hide()
         for i in range(len(self.ecthrtype)):
             Box.addWidget(self.ecthrtype[i])
             self.ecthrtype[i].hide()
@@ -437,6 +446,7 @@ class Segmentation(QDialog):
         elif self.prevAlg == "Median Clipping":
             self.medlabel.hide()
             self.medThr.hide()
+            print("hiding")
         elif self.prevAlg == "Fundamental Frequency":
             self.Fundminfreq.hide()
             self.Fundminperiods.hide()
