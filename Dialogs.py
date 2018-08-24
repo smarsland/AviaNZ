@@ -133,15 +133,23 @@ class Spectrogram(QDialog):
         self.multitaper = QCheckBox()
         self.multitaper.setChecked(False)
 
-        self.low = QSpinBox()
+        self.low = QSlider(Qt.Horizontal)
+        self.low.setTickPosition(QSlider.TicksBelow)
+        self.low.setTickInterval(1000)
         self.low.setRange(minFreq,maxFreq)
         self.low.setSingleStep(100)
         self.low.setValue(minFreqShow)
+        self.low.valueChanged.connect(self.lowChange)
+        self.lowtext = QLabel(str(self.low.value()))
 
-        self.high = QSpinBox()
+        self.high = QSlider(Qt.Horizontal)
+        self.high.setTickPosition(QSlider.TicksBelow)
+        self.high.setTickInterval(1000)
         self.high.setRange(minFreq,maxFreq)
         self.high.setSingleStep(100)
         self.high.setValue(maxFreqShow)
+        self.high.valueChanged.connect(self.highChange)
+        self.hightext = QLabel(str(self.high.value()))
 
         self.activate = QPushButton("Update Spectrogram")
 
@@ -165,9 +173,11 @@ class Spectrogram(QDialog):
 
         Box.addWidget(QLabel('Frequency range to show'))
         Box.addWidget(QLabel('Lowest frequency'))
+        Box.addWidget(self.lowtext)
         Box.addWidget(self.low)
         Box.addWidget(QLabel('Highest frequency'))
         Box.addWidget(self.high)
+        Box.addWidget(self.hightext)
 
         Box.addWidget(self.activate)
 
@@ -182,6 +192,12 @@ class Spectrogram(QDialog):
 
     def getValues(self):
         return [self.windowType.currentText(),self.mean_normalise.checkState(),self.equal_loudness.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text(),self.low.value(),self.high.value()]
+
+    def lowChange(self,value):
+        self.lowtext.setText(str(value))
+
+    def highChange(self,value):
+        self.hightext.setText(str(value))
 
     # def closeEvent(self, event):
     #     msg = QMessageBox()
@@ -560,20 +576,26 @@ class Denoise(QDialog):
         self.width.setSingleStep(1)
         self.width.setValue(11)
 
-        # Bandpass: start and end
+        # Bandpass: high and low
         self.bandlabel = QLabel("Bandpass Filter")
         self.wblabel = QLabel("Wavelets and Bandpass Filter")
         self.blabel = QLabel("Start and end points of the band")
-        self.start = QSpinBox()
-        self.start.setMinimum(self.minFreq)
-        self.start.setMaximum(self.maxFreq)
-        self.start.setSingleStep(100)
-        self.start.setValue(self.minFreq)
-        self.end = QSpinBox()
-        self.end.setMinimum(self.minFreq)
-        self.end.setMaximum(self.maxFreq)
-        self.end.setSingleStep(100)
-        self.end.setValue(self.maxFreq)
+        self.low = QSlider(Qt.Horizontal)
+        self.low.setTickPosition(QSlider.TicksBelow)
+        self.low.setTickInterval(1000)
+        self.low.setRange(minFreq,maxFreq)
+        self.low.setSingleStep(100)
+        self.low.setValue(minFreq)
+        self.low.valueChanged.connect(self.lowChange)
+        self.lowtext = QLabel(str(self.low.value()))
+        self.high = QSlider(Qt.Horizontal)
+        self.high.setTickPosition(QSlider.TicksBelow)
+        self.high.setTickInterval(1000)
+        self.high.setRange(minFreq,maxFreq)
+        self.high.setSingleStep(100)
+        self.high.setValue(maxFreq)
+        self.high.valueChanged.connect(self.highChange)
+        self.hightext = QLabel(str(self.high.value()))
 
         #self.trimlabel = QLabel("Make frequency axis tight")
         #self.trimaxis = QCheckBox()
@@ -611,17 +633,21 @@ class Denoise(QDialog):
             Box.addWidget(self.width)
             self.width.hide()
 
-        # Bandpass: start and end
+        # Bandpass: high and low
         Box.addWidget(self.bandlabel)
         self.bandlabel.hide()
         Box.addWidget(self.wblabel)
         self.wblabel.hide()
         Box.addWidget(self.blabel)
         self.blabel.hide()
-        Box.addWidget(self.start)
-        self.start.hide()
-        Box.addWidget(self.end)
-        self.end.hide()
+        Box.addWidget(self.lowtext)
+        self.lowtext.hide()
+        Box.addWidget(self.low)
+        self.low.hide()
+        Box.addWidget(self.high)
+        self.high.hide()
+        Box.addWidget(self.hightext)
+        self.hightext.hide()
 
         #Box.addWidget(self.trimlabel)
         #self.trimlabel.hide()
@@ -638,10 +664,10 @@ class Denoise(QDialog):
     def setValues(self,minFreq,maxFreq):
         self.minFreq = minFreq
         self.maxFreq = maxFreq
-        self.start.setMinimum(self.minFreq)
-        self.start.setMaximum(self.maxFreq)
-        self.end.setMinimum(self.minFreq)
-        self.end.setMaximum(self.maxFreq)
+        self.low.setMinimum(self.minFreq)
+        self.low.setMaximum(self.maxFreq)
+        self.high.setMinimum(self.minFreq)
+        self.high.setMaximum(self.maxFreq)
 
     def changeBoxes(self,alg):
         # This does the hiding and showing of the options as the algorithm changes
@@ -670,8 +696,10 @@ class Denoise(QDialog):
             self.waveletlabel.hide()
             self.wavelet.hide()
             self.blabel.hide()
-            self.start.hide()
-            self.end.hide()
+            self.low.hide()
+            self.lowtext.hide()
+            self.high.hide()
+            self.hightext.hide()
             #self.trimlabel.hide()
             #self.trimaxis.hide()
             #self.trimaxis.setChecked(False)
@@ -691,8 +719,10 @@ class Denoise(QDialog):
             self.waveletlabel.hide()
             self.wavelet.hide()
             self.blabel.hide()
-            self.start.hide()
-            self.end.hide()
+            self.low.hide()
+            self.lowtext.hide()
+            self.high.hide()
+            self.hightext.hide()
             #self.trimlabel.hide()
             #self.trimaxis.hide()
             #self.trimaxis.setChecked(False)
@@ -702,8 +732,10 @@ class Denoise(QDialog):
         elif self.prevAlg == "Bandpass" or self.prevAlg == "Butterworth Bandpass":
             self.bandlabel.hide()
             self.blabel.hide()
-            self.start.hide()
-            self.end.hide()
+            self.low.hide()
+            self.lowtext.hide()
+            self.high.hide()
+            self.hightext.hide()
             #self.trimlabel.hide()
             #self.trimaxis.hide()
             #self.trimaxis.setChecked(False)
@@ -739,8 +771,10 @@ class Denoise(QDialog):
             self.waveletlabel.show()
             self.wavelet.show()
             self.blabel.show()
-            self.start.show()
-            self.end.show()
+            self.low.show()
+            self.lowtext.show()
+            self.high.show()
+            self.hightext.show()
             #self.trimlabel.show()
             #self.trimaxis.show()
         elif str(alg) == "Bandpass --> Wavelets" and self.DOC==False:
@@ -756,14 +790,18 @@ class Denoise(QDialog):
             self.waveletlabel.show()
             self.wavelet.show()
             self.blabel.show()
-            self.start.show()
-            self.end.show()
+            self.low.show()
+            self.lowtext.show()
+            self.high.show()
+            self.hightext.show()
             #self.trimlabel.show()
             #self.trimaxis.show()
         elif str(alg) == "Bandpass" or str(alg) == "Butterworth Bandpass":
             self.bandlabel.show()
-            self.start.show()
-            self.end.show()
+            self.low.show()
+            self.lowtext.show()
+            self.high.show()
+            self.hightext.show()
             #self.trimlabel.show()
             #self.trimaxis.show()
         # else:
@@ -777,9 +815,15 @@ class Denoise(QDialog):
 
     def getValues(self):
         if self.DOC==False:
-            return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.start.text(),self.end.text(),self.width.text()]#,self.trimaxis.isChecked()]
+            return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
         else:
-            return [self.algs.currentText(),self.start.text(),self.end.text(),self.width.text()]#,self.trimaxis.isChecked()]
+            return [self.algs.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
+
+    def lowChange(self,value):
+        self.lowtext.setText(str(value))
+
+    def highChange(self,value):
+        self.hightext.setText(str(value))
 
 #======
 class HumanClassify1(QDialog):
