@@ -345,12 +345,6 @@ class AviaNZ(QMainWindow):
 
         specMenu.addSeparator()
 
-        self.dragRectTransparent = specMenu.addAction("Make dragged boxes transparent", self.dragRectsTransparent)
-        self.dragRectTransparent.setCheckable(True)
-        self.dragRectTransparent.setChecked(self.config['transparentBoxes'])
-
-        specMenu.addSeparator()
-
         colMenu = specMenu.addMenu("&Choose colour map")
         colGroup = QActionGroup(self)
         for colour in self.config['ColourList']:
@@ -1237,7 +1231,7 @@ class AviaNZ(QMainWindow):
         """ Listener for the check menu item that decides if the user wants the dragged rectangles to have colour or not.
         It's a switch from Brush to Pen or vice versa.
         """
-        if self.dragRectTransparent.isChecked():
+        if self.config['transparentBoxes']:
             for box in self.listRectanglesa2:
                 if type(box) == self.ROItype:
                     col = box.brush.color()
@@ -1253,7 +1247,6 @@ class AviaNZ(QMainWindow):
                     box.setBrush(pg.mkBrush(col))
                     box.setPen(pg.mkPen(None))
                     box.update()
-        self.config['transparentBoxes'] = self.dragRectTransparent.isChecked()
 
     def useAmplitudeCheck(self):
         """ Listener for the check menu item saying if the user wants to see the waveform.
@@ -1699,7 +1692,6 @@ class AviaNZ(QMainWindow):
                 # update the box visual
                 x1 = self.convertSpectoAmpl(sender.pos()[0])
                 x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
-                print("box changed",len(self.segments),i,sender.pos(),sender.size(),self.segments[i][4])
                 self.segments[i][2] = self.convertYtoFreq(sender.pos()[1])#/np.shape(self.sg)[1]
                 self.segments[i][3] = self.convertYtoFreq(sender.pos()[1]+sender.size()[1])#/np.shape(self.sg)[1]
                 self.listLabels[i].setPos(sender.pos()[0], self.textpos)
@@ -1874,7 +1866,7 @@ class AviaNZ(QMainWindow):
                 startpointS = QPointF(self.convertAmpltoSpec(startpoint),max(y1,miny))
                 endpointS = QPointF(self.convertAmpltoSpec(endpoint),min(y2,maxy))
                 p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, parent=self)
-                if self.dragRectTransparent.isChecked():
+                if self.config['transparentBoxes']:
                     col = self.prevBoxCol.rgb()
                     col = QtGui.QColor(col)
                     col.setAlpha(255)
@@ -1994,7 +1986,7 @@ class AviaNZ(QMainWindow):
         self.listRectanglesa1[boxid].setHoverBrush(fn.mkBrush(col))
         self.listRectanglesa2[boxid].setHoverBrush(fn.mkBrush(col))
         col.setAlpha(100)
-        if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[boxid]) == self.ROItype:
+        if self.config['transparentBoxes'] and type(self.listRectanglesa2[boxid]) == self.ROItype:
             col = self.prevBoxCol.rgb()
             col = QtGui.QColor(col)
             col.setAlpha(255)
@@ -2658,7 +2650,7 @@ class AviaNZ(QMainWindow):
         if self.listRectanglesa2[self.box1id] is not None:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             self.listRectanglesa1[self.box1id].update()
-            if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+            if self.config['transparentBoxes'] and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
                 col = self.prevBoxCol.rgb()
                 col = QtGui.QColor(col)
                 col.setAlpha(255)
@@ -2696,7 +2688,7 @@ class AviaNZ(QMainWindow):
             #
             #     self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
             #     self.listRectanglesa1[self.box1id].update()
-            #     if self.dragRectTransparent.isChecked() and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+            #     if self.config['transparentBoxes'] and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
             #         col = self.prevBoxCol.rgb()
             #         col = QtGui.QColor(col)
             #         col.setAlpha(255)
@@ -3127,7 +3119,7 @@ class AviaNZ(QMainWindow):
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
         """
-        self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata))
+        self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata),DOC = self.DOC)
         self.segmentDialog.show()
         self.segmentDialog.activateWindow()
         self.segmentDialog.undo.clicked.connect(self.segment_undo)
@@ -3158,17 +3150,23 @@ class AviaNZ(QMainWindow):
             if str(alg) == "Default":
                 newSegments = self.seg.bestSegments()
             elif str(alg) == "Median Clipping":
-                newSegments = self.seg.medianClip(float(str(medThr)),self.config['minSegment'])
+                newSegments = self.seg.medianClip(float(str(medThr)), minSegment=self.config['minSegment'])
+                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
             elif str(alg) == "Harma":
-                newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),self.config['minSegment'])
+                newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),minSegment=self.config['minSegment'])
+                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
             elif str(alg) == "Power":
                 newSegments = self.seg.segmentByPower(float(str(PowerThr)))
+                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
             elif str(alg) == "Onsets":
                 newSegments = self.seg.onsets()
+                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
             elif str(alg) == "Fundamental Frequency":
                 newSegments, pitch, times = self.seg.yin(int(str(minfreq)),int(str(minperiods)),float(str(Yinthr)),int(str(window)),returnSegs=True)
+                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
             elif str(alg) == "FIR":
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
+                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
             elif str(alg)=="Wavelets":
                 if species == 'all':    # Ask the species
                     msg = QMessageBox()
@@ -3240,12 +3238,11 @@ class AviaNZ(QMainWindow):
 
             # Generate annotation friendly output.
             if str(alg)=="Wavelets":
-                 if len(out.segments)>0:
+                 if len(newSegments)>0:
                     for seg in newSegments:
                         self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
                                         species.title() + "?",index=-1)
                         self.segmentsToSave = True
-
             else:
                 if len(newSegments)>0:
                     for seg in newSegments:
@@ -3255,6 +3252,7 @@ class AviaNZ(QMainWindow):
             self.lenNewSegments = len(newSegments)
             self.segmentDialog.undo.setEnabled(True)
             self.statusLeft.setText("Ready")
+        print("segmentation finished at %s" % (time.time() - opstartingtime))
 
     def segment_undo(self):
         """ Listener for undo button in segmentation dialog.
@@ -3554,6 +3552,8 @@ class AviaNZ(QMainWindow):
                  'value': self.config['widthOverviewSegment'],
                  'limits': (5, 300), 'step': 5,
                  'suffix': ' sec'},
+                {'name': 'Make boxes transparent', 'type': 'bool',
+                     'value': self.config['transparentBoxes']},
                 {'name': 'Segment colours', 'type': 'group', 'children': [
                     {'name': 'Confirmed segments', 'type': 'color', 'value': self.config['ColourNamed'],
                      'tip': "Correctly labeled segments"},
@@ -3617,6 +3617,9 @@ class AviaNZ(QMainWindow):
                 self.config['secsSave']=data
             elif childName=='Annotation.Annotation overview cell length':
                 self.config['widthOverviewSegment']=data
+            elif childName=='Annotation.Make boxes transparent':
+                self.config['transparentBoxes']=data
+                self.dragRectsTransparent()
             elif childName == 'Mouse settings.Use right button to make segments':
                 self.config['drawingRightBtn'] = data
                 if self.config['drawingRightBtn']:
