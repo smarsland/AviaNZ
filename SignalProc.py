@@ -3,6 +3,7 @@
 
 import numpy as np
 import scipy.signal as signal
+import spectrum
 
 class SignalProc:
     """ This class implements various signal processing algorithms for the AviaNZ interface.
