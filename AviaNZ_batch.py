@@ -122,14 +122,16 @@ class AviaNZ_batchProcess(QMainWindow):
         helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
         aboutMenu = self.menuBar().addMenu("&About")
         aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
+        aboutMenu = self.menuBar().addMenu("&Quit")
+        aboutMenu.addAction("Quit", self.quitPro,"Ctrl+Q")
 
     def showAbout(self):
         """ Create the About Message Box"""
         msg = QMessageBox()
         msg.setIconPixmap(QPixmap("img\AviaNZ.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
-        msg.setText("The AviaNZ Program, v0.10 (June 2017)")
-        msg.setInformativeText("By Stephen Marsland, Massey University (2016--2017). With code by Nirosha Priyadarshani and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Manic Purage. \ns.r.marsland@massey.ac.nz; n.p.priyadarshani@massey.ac.nz")
+        msg.setText("The AviaNZ Program, v1.1 (August 2018)")
+        msg.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Manic Purage. \n stephen.marsland@vuw.ac.nz")
         msg.setWindowTitle("About")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
@@ -141,6 +143,11 @@ class AviaNZ_batchProcess(QMainWindow):
         import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
         webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
+
+    def quitPro(self):
+        """ quit program
+        """
+        QApplication.quit()
 
     def center(self):
         # geometry of the main window
@@ -426,6 +433,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.setWindowTitle('AviaNZ - Reviewing Batch Results')
         self.createFrame()
+        self.createMenu()
         self.center()
 
     def createFrame(self):
@@ -473,6 +481,41 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_browse.clicked.connect(self.browse)
 
         self.show()
+
+    def createMenu(self):
+        """ Create the basic menu.
+        """
+
+        helpMenu = self.menuBar().addMenu("&Help")
+        helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
+        aboutMenu = self.menuBar().addMenu("&About")
+        aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
+        aboutMenu = self.menuBar().addMenu("&Quit")
+        aboutMenu.addAction("Quit", self.quitPro,"Ctrl+Q")
+
+    def showAbout(self):
+        """ Create the About Message Box"""
+        msg = QMessageBox()
+        msg.setIconPixmap(QPixmap("img\AviaNZ.png"))
+        msg.setWindowIcon(QIcon('img/Avianz.ico'))
+        msg.setText("The AviaNZ Program, v1.1 (August 2018)")
+        msg.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Manic Purage. \n stephen.marsland@vuw.ac.nz")
+        msg.setWindowTitle("About")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+        return
+
+    def showHelp(self):
+        """ Show the user manual (a pdf file)"""
+        # TODO: manual is not distributed as pdf now
+        import webbrowser
+        # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
+
+    def quitPro(self):
+        """ quit program
+        """
+        QApplication.quit()
 
     def center(self):
         # geometry of the main window
