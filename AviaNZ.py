@@ -410,7 +410,8 @@ class AviaNZ(QMainWindow):
         actionMenu.addSeparator()
         actionMenu.addAction("Export segments to Excel",self.exportSeg)
         actionMenu.addSeparator()
-        actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
+        if self.DOC == False:
+            actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
         actionMenu.addSeparator()
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
