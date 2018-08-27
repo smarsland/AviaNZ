@@ -957,25 +957,13 @@ class ControllableAudio(QAudioOutput):
     def __init__(self, format):
         super(ControllableAudio, self).__init__(format)
         # on this notify, move slider (connected in main file)
-        self.setNotifyInterval(20)
+        self.setNotifyInterval(30)
         self.stateChanged.connect(self.endListener)
-        self.soundFile = QFile()
         self.tempin = QBuffer()
         self.setBufferSize(3000000)
         self.startpos = 0
         self.keepSlider = False
         self.format = format
-
-    def load(self, soundFileName):
-        if self.soundFile.isOpen():
-            self.soundFile.close()
-        self.startpos = 0
-
-        self.soundFile.setFileName(soundFileName)
-        try:
-            self.soundFile.open(QIODevice.ReadOnly)
-        except Exception as e:
-            print("ERROR opening file: %s" % e)
 
     def isPlaying(self):
         return(self.state() == QAudio.ActiveState)
@@ -985,14 +973,15 @@ class ControllableAudio(QAudioOutput):
         if self.state() == QAudio.IdleState:
             # give some time for GUI to catch up and stop
             while(self.state() != QAudio.StoppedState):
-                sleep(0.02)
+                sleep(0.03)
                 self.notify.emit()
             self.keepSlider=False
             self.stop()
 
     def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
         if not resetPause and self.state() == QAudio.SuspendedState:
-            print("resuming at: %d" % self.soundFile.pos())
+            print("resuming at: %d" % self.timeoffset)
+            self.sttime = time.time() - self.timeoffset/1000
             self.resume()
         else:
             if not self.keepSlider or resetPause:
@@ -1009,6 +998,10 @@ class ControllableAudio(QAudioOutput):
 
     def pressedPause(self):
         self.keepSlider=True # a flag to avoid jumping the slider back to 0
+        pos = self.tempin.pos() # bytes
+        pos = self.format.durationForBytes(pos) / 1000 # convert to ms
+        # store offset, relative to the start of played segment
+        self.timeoffset = pos + self.timeoffset
         self.suspend()
 
     def pressedStop(self):
@@ -1017,12 +1010,10 @@ class ControllableAudio(QAudioOutput):
         self.stop()
         if self.tempin.isOpen():
             self.tempin.close()
-        if self.soundFile.isOpen():
-            self.soundFile.seek(self.startpos)
 
     def filterBand(self, start, stop, low, high, audiodata, sp):
         # takes start-end in ms, relative to file start
-        self.time = max(0, start)
+        self.timeoffset = max(0, start)
         start = max(0, start * self.format.sampleRate() // 1000)
         stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
         segment = audiodata[start:stop]
@@ -1034,7 +1025,7 @@ class ControllableAudio(QAudioOutput):
     def filterSeg(self, start, stop, audiodata):
         # takes start-end in ms
         print("filtering between %d -%d" % (start, stop))
-        self.time = max(0, start)
+        self.timeoffset = max(0, start)
         start = max(0, int(start * self.format.sampleRate() // 1000))
         stop = min(int(stop * self.format.sampleRate() // 1000), len(audiodata))
         segment = audiodata[start:stop]
@@ -1060,7 +1051,9 @@ class ControllableAudio(QAudioOutput):
         self.tempin.setBuffer(self.temparr)
         self.tempin.open(QIODevice.ReadOnly)
 
+        # actual timer is launched here, with time offset set asynchronously
         sleep(0.2)
+        self.sttime = time.time() - self.timeoffset/1000
         self.start(self.tempin)
 
     def seekToMs(self, ms, start):
@@ -1068,7 +1061,7 @@ class ControllableAudio(QAudioOutput):
         # start is an offset for the current view start, as it is position 0 in extracted file
         self.reset()
         self.tempin.seek(self.format.bytesForDuration((ms-start)*1000))
-        self.time = ms
+        self.timeoffset = ms
 
     def applyVolSlider(self, value):
         # passes UI volume nonlinearly
