@@ -2886,7 +2886,6 @@ class AviaNZ(QMainWindow):
             # or could add an argument to pass custom defaults, e.g.:
             # self.denoiseDialog = Dialogs.Denoise(defaults=("wt", 1, 2, 'a')
         with pg.BusyCursor():
-            bandpassed = False
             opstartingtime = time.time()
             print("Denoising requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
             self.statusLeft.setText("Denoising...")
@@ -2908,8 +2907,13 @@ class AviaNZ(QMainWindow):
                 else:
                     depth = int(str(depth))
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
+                start = self.minFreqShow
+                end = self.maxFreqShow
+
             elif str(alg) == "Wavelets" and self.DOC==True:
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata)
+                start = self.minFreqShow
+                end = self.maxFreqShow
 
             elif str(alg) == "Bandpass --> Wavelets" and self.DOC==False:
                 if thrType is True:
@@ -2922,7 +2926,6 @@ class AviaNZ(QMainWindow):
                     depth = int(str(depth))
                 self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
-                bandpassed = True
             elif str(alg) == "Wavelets --> Bandpass" and self.DOC==False:
                 if thrType is True:
                     thrType = 'soft'
@@ -2934,17 +2937,11 @@ class AviaNZ(QMainWindow):
                     depth = int(str(depth))
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
                 self.audiodata = self.sp.bandpassFilter(self.audiodata,self.sampleRate,start=int(str(start)),end=int(str(end)),minFreq=self.minFreq,maxFreq=self.maxFreq)
-                bandpassed = True
 
             elif str(alg) == "Bandpass":
                 self.audiodata = self.sp.bandpassFilter(self.audiodata,self.sampleRate, start=int(str(start)), end=int(str(end)),minFreq=self.minFreq,maxFreq=self.maxFreq)
-                bandpassed = True
-                #self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)))
-                #self.redoFreqAxis(int(str(start)), int(str(end)))
             elif str(alg) == "Butterworth Bandpass":
                 self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)),minFreq=self.minFreq,maxFreq=self.maxFreq)
-                #self.redoFreqAxis(int(str(start)), int(str(end)))
-                bandpassed = True
             else:
                 #"Median Filter"
                 self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
@@ -2959,9 +2956,8 @@ class AviaNZ(QMainWindow):
             self.specPlot.setImage(self.sg)
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
-            if bandpassed:
-                # Update the frequency axis
-                self.redoFreqAxis(int(str(start)),int(str(end)))
+            # Update the frequency axis
+            self.redoFreqAxis(int(str(start)),int(str(end)))
 
             if hasattr(self,'spectrogramDialog'):
                 self.spectrogramDialog.setValues(self.minFreq,self.maxFreq,self.minFreqShow,self.maxFreqShow)
