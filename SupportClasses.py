@@ -981,8 +981,8 @@ class ControllableAudio(QAudioOutput):
 
     def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
         if not resetPause and self.state() == QAudio.SuspendedState:
-            print("resuming at: %d" % self.timeoffset)
-            self.sttime = time.time() - self.timeoffset/1000
+            print("resuming at: %d" % self.pauseoffset)
+            self.sttime = time.time() - self.pauseoffset/1000
             self.resume()
         else:
             if not self.keepSlider or resetPause:
@@ -1002,7 +1002,7 @@ class ControllableAudio(QAudioOutput):
         pos = self.tempin.pos() # bytes
         pos = self.format.durationForBytes(pos) / 1000 # convert to ms
         # store offset, relative to the start of played segment
-        self.timeoffset = pos + self.timeoffset
+        self.pauseoffset = pos + self.timeoffset
         self.suspend()
 
     def pressedStop(self):
