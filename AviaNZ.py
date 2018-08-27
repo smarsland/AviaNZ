@@ -1496,9 +1496,9 @@ class AviaNZ(QMainWindow):
         """ Listener for when the overview box is changed. Also called by overviewSegmentClicked().
         Does the work of keeping all the plots in the right place as the overview moves.
         It sometimes updates a bit slowly. """
-
-        if self.media_obj.state() == QAudio.ActiveState or self.media_obj.state() == QAudio.SuspendedState:
-            self.stopPlayback()
+        if hasattr(self, 'media_obj'):
+            if self.media_obj.state() == QAudio.ActiveState or self.media_obj.state() == QAudio.SuspendedState:
+                self.stopPlayback()
         #3/4/18: Want to stop it moving past either end
         # Need to disconnect the listener and reconnect it to avoid a recursive call
         minX, maxX = self.overviewImageRegion.getRegion()
@@ -1507,14 +1507,20 @@ class AviaNZ(QMainWindow):
             l = maxX-minX
             minX=0.0
             maxX=minX+l
-            self.overviewImageRegion.sigRegionChangeFinished.disconnect()
+            try:
+                self.overviewImageRegion.sigRegionChangeFinished.disconnect()
+            except:
+                pass
             self.overviewImageRegion.setRegion([minX,maxX])
             self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
         if maxX>len(self.sg):
             l = maxX-minX
             maxX=float(len(self.sg))
             minX=max(0, maxX-l)
-            self.overviewImageRegion.sigRegionChangeFinished.disconnect()
+            try:
+                self.overviewImageRegion.sigRegionChangeFinished.disconnect()
+            except:
+                pass
             self.overviewImageRegion.setRegion([minX,maxX])
             self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
 
