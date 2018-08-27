@@ -1321,6 +1321,7 @@ class HumanClassify2(QDialog):
 
         if len(self.segments2show) > 0:
             species = QLabel("Species/call type: " + label)
+            species.setFont(QtGui.QFont('SansSerif', 10))
             self.width = 0
             for ind in range(len(self.segments2show)):
                 x1 = int(self.convertAmpltoSpec(self.segments2show[ind][0]))
@@ -1334,7 +1335,9 @@ class HumanClassify2(QDialog):
             self.makeButtons(first=True)
 
             self.vboxFull = QVBoxLayout()
-            self.vboxFull.addWidget(QLabel('Click on the images that are incorrectly labelled.'))
+            label1 = QLabel('Click on the images that are incorrectly labelled.')
+            label1.setFont(QtGui.QFont('SansSerif', 12))
+            self.vboxFull.addWidget(label1)
             self.vboxFull.addWidget(species)
             self.vboxFull.addLayout(self.flowLayout)
             self.vboxFull.addWidget(next)
