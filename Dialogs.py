@@ -1312,25 +1312,23 @@ class HumanClassify2(QDialog):
 
         # Seems that image is backwards?
         self.sg = np.fliplr(sg)
-        self.segments = segments
+        self.segments2show = segments
         self.firstSegment = 0
         self.errors = []
 
         next = QPushButton("Next/Finish")
         next.clicked.connect(self.nextPage)
 
-        print("ready to show ", self.segments, len(self.segments))
-        if len(self.segments) > 0:
+        if len(self.segments2show) > 0:
             species = QLabel("Species/call type: " + label)
             self.width = 0
-            for ind in range(len(self.segments)):
-                x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
-                x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
+            for ind in range(len(self.segments2show)):
+                x1 = int(self.convertAmpltoSpec(self.segments2show[ind][0]))
+                x2 = int(self.convertAmpltoSpec(self.segments2show[ind][1]))
                 if x2 - x1 > self.width:
                     self.width = x2-x1
-                    print(self.width)
             self.width = max(1000,self.width+10)
-            self.h = 10
+            self.h = 5
             self.flowLayout = SupportClasses.FlowLayout()
             self.makeButtons(first=True)
 
@@ -1349,31 +1347,31 @@ class HumanClassify2(QDialog):
 
     def makeButtons(self, first=False):
         if first:
-            segRemain = len(self.segments)
-        elif self.firstSegment == 0:
-            segRemain = len(self.segments) #- 1
+            segRemain = len(self.segments2show)
+        # elif self.firstSegment == 0:
+        #     segRemain = len(self.segments2show) - 1
         else:
-            segRemain = len(self.segments) #- self.firstSegment
+            segRemain = len(self.segments2show) - self.firstSegment
         width = 0
         col = 0
-
-        # ind = self.firstSegment
+        ind = self.firstSegment
         self.buttons = []
 
         while segRemain > 0 and col < self.h:
-            x1 = int(self.convertAmpltoSpec(self.segments[0][0]))
-            x2 = int(self.convertAmpltoSpec(self.segments[0][1]))
-            del self.segments[0]
+            x1 = int(self.convertAmpltoSpec(self.segments2show[ind][0]))
+            x2 = int(self.convertAmpltoSpec(self.segments2show[ind][1]))
             im = self.setImage(self.sg[x1:x2, :])
             segRemain -= 1
-            # ind += 1
+            # self.firstSegment +=1
             if width + x2-x1 < self.width:
                 width = width + x2-x1
-                self.buttons.append(SupportClasses.PicButton(0,im[0], im[1]))
-                self.flowLayout.addWidget(self.buttons[-1])
             else:
                 col += 1
                 width = 0
+            self.buttons.append(SupportClasses.PicButton(0,im[0], im[1]))
+            self.flowLayout.addWidget(self.buttons[-1])
+            ind += 1
+
 
     def convertAmpltoSpec(self, x):
         return x * self.sampleRate / self.incr
@@ -1402,9 +1400,9 @@ class HumanClassify2(QDialog):
         print(self.errors)
 
         # Now find out if there are more segments to check, and remake the buttons, otherwise close
-        if len(self.segments) > 0:
+        if len(self.segments2show) > 0:
             self.firstSegment += len(self.buttons)
-            if self.firstSegment != len(self.segments):
+            if self.firstSegment != len(self.segments2show):
                 for btn in reversed(self.buttons):
                     self.flowLayout.removeWidget(btn)
                     # remove it from the gui

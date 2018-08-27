@@ -2747,6 +2747,7 @@ class AviaNZ(QMainWindow):
     def humanRevDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
         """
+        import copy
         if len(self.segments)==0 or self.box1id == len(self.segments) or len(self.listRectanglesa2)==0:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -2780,20 +2781,21 @@ class AviaNZ(QMainWindow):
             self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
             self.listLabels = [self.listLabels[i] for i in sortOrder]
             # filter segments to show
-            segments = []   # segments to show
+            segments2show = []   # segments to show
             ids = []
             id = 0
             # then find segments with label to review
             for seg in self.segments:
                 if seg[4] == label or seg[4][:-1] == label:
-                    segments.append(seg)
+                    segments2show.append(seg)
                     ids.append(id)  # their acctual indices
                 id += 1
 
             # and show them
             self.loadSegment(hr=True)
-            print("segments go to dialog2: ", segments)
-            self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, segments, label, self.sampleRate,
+            print("segments go to dialog2: ", segments2show)
+            segments = copy.deepcopy(segments2show)
+            self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, segments2show, label, self.sampleRate,
                                                                self.config['incr'], self.lut, self.colourStart,
                                                                self.colourEnd, self.config['invertColourMap'])
             self.humanClassifyDialog2.exec_()
@@ -2802,6 +2804,7 @@ class AviaNZ(QMainWindow):
 
             if len(errorInds) > 0:
                 outputErrors = []
+                print(segments)
                 for ind in errorInds:
                     outputErrors.append(segments[ind])
                     self.deleteSegment(id=ids[ind], hr=True)
@@ -3153,13 +3156,13 @@ class AviaNZ(QMainWindow):
                 else:
                     type = species
                     quality = ''
-                s = int(math.floor(seg[0]))
-                e = int(math.ceil(seg[1]))
-                print("start and end: ", s, e)
-                for i in range(s, e):
-                    GT[i][1] = str(1)
-                    GT[i][2] = type
-                    GT[i][3] = quality
+                    s = int(math.floor(seg[0]))
+                    e = int(math.ceil(seg[1]))
+                    print("start and end: ", s, e)
+                    for i in range(s, e):
+                        GT[i][1] = str(1)
+                        GT[i][2] = type
+                        GT[i][3] = quality
         for line in GT:
             if line[1] == 0.0:
                 line[1] = '0'
