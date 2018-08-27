@@ -433,7 +433,7 @@ class AviaNZ(QMainWindow):
         msg.setIconPixmap(QPixmap("img\AviaNZ.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
         msg.setText("The AviaNZ Program, v1.1 (August 2018)")
-        msg.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Manic Purage. \n stephen.marsland@vuw.ac.nz")
+        msg.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         msg.setWindowTitle("About")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
@@ -450,7 +450,7 @@ class AviaNZ(QMainWindow):
         """ Show the cheat sheet of sample spectrograms (a pdf file)"""
         import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/CheatSheet.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/CheetSheet_v1.1.pdf')
+        webbrowser.open_new(r'http://avianz.net/docs/CheatSheet_v1.1.pdf')
 
     def createFrame(self):
         """ Creates the main window.
