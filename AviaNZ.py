@@ -1180,7 +1180,6 @@ class AviaNZ(QMainWindow):
     
                 # Load the file for playback
                 self.media_obj = SupportClasses.ControllableAudio(self.audioFormat)
-                self.media_obj.load(self.filename)
                 # this responds to audio output timer
                 self.media_obj.notify.connect(self.movePlaySlider)
                 # Reset the media player
@@ -3403,17 +3402,18 @@ class AviaNZ(QMainWindow):
         """ Listener called on sound notify (every 20 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
-        self.media_obj.time = self.media_obj.time + 20 # in ms. TODO: not hardcode notifyInterval
+        eltime = (time.time() - self.media_obj.sttime)*1000
 
         # listener for playback finish. Note small buffer for catching up
-        if self.media_obj.time > (self.segmentStop-10):
+        if eltime > (self.segmentStop-10):
             print("stopped at %d ms" % self.media_obj.time)
             self.stopPlayback()
         else:
-            self.playSlider.setValue(self.media_obj.time)
-            self.timePlayed.setText(self.convertMillisecs(self.media_obj.time) + "/" + self.totalTime)
+            self.playSlider.setValue(eltime)
+            self.timePlayed.setText(self.convertMillisecs(eltime) + "/" + self.totalTime)
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
-            self.bar.setValue(self.convertAmpltoSpec(self.media_obj.time / 1000.0))
+            self.bar.setValue(self.convertAmpltoSpec(eltime / 1000.0))
+            QApplication.processEvents()
 
     def setPlaySliderLimits(self, start, end):
         """ Uses start/end in ms, does what it says, and also seeks file position marker.
