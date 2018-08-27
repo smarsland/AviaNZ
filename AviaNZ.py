@@ -2665,7 +2665,7 @@ class AviaNZ(QMainWindow):
         """ Go back one image by changing boxid and calling NextImage.
         Note: won't undo deleted segments."""
         if self.box1id>0:
-            self.box1id -= 1
+            self.box1id -= 2
             self.humanClassifyNextImage1()
 
     def updateLabel(self,label):
