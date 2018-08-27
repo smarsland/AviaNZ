@@ -410,6 +410,8 @@ class AviaNZ(QMainWindow):
         actionMenu.addSeparator()
         actionMenu.addAction("Export segments to Excel",self.exportSeg)
         actionMenu.addSeparator()
+        actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
+        actionMenu.addSeparator()
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
         actionMenu.addSeparator()
@@ -441,12 +443,13 @@ class AviaNZ(QMainWindow):
         # TODO: manual is not distributed as pdf now
         import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.1.pdf')
 
     def showCheatSheet(self):
         """ Show the cheat sheet of sample spectrograms (a pdf file)"""
         import webbrowser
-        webbrowser.open_new(r'file://' + os.path.realpath('./Docs/CheatSheet.pdf'))
+        # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/CheatSheet.pdf'))
+        webbrowser.open_new(r'http://avianz.net/docs/CheetSheet_v1.1.pdf')
 
     def createFrame(self):
         """ Creates the main window.
@@ -3069,6 +3072,119 @@ class AviaNZ(QMainWindow):
 
         QApplication.processEvents()
 
+    def trainWaveletDialog(self):
+        """ Create the wavelet training dialog for the relevant menu item
+        """
+        self.waveletTDialog = Dialogs.WaveletTrain(np.max(self.audiodata), DOC=self.DOC)
+        self.waveletTDialog.show()
+        self.waveletTDialog.activateWindow()
+        # self.waveletTDialog.undo.clicked.connect(self.segment_undo)
+        self.waveletTDialog.browse.clicked.connect(self.browseTrainData)
+        self.waveletTDialog.genGT.clicked.connect(self.prepareTrainData)
+        self.waveletTDialog.train.clicked.connect(self.trainWavelet)
+
+    def trainWavelet(self):
+        """ Listener for the wavelet training dialog.
+        """
+        species = str(self.waveletTDialog.species.text())
+        minLen = int(self.waveletTDialog.minlen.text())
+        minFrq = int(self.waveletTDialog.fLow.text())
+        maxFrq = int(self.waveletTDialog.fHigh.text())
+        ws = WaveletSegment.WaveletSegment(species=[minLen,minFrq,maxFrq])
+        for root, dirs, files in os.walk(str(self.dirName)):
+            for file in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '-sec.txt' in files:
+                    wavFile = root + '/' + file
+                    nodes = ws.waveletSegment_train(wavFile, species=[minLen,minFrq,maxFrq], df=False)
+                    print(nodes)
+
+
+    def prepareTrainData(self):
+        """ Listener for the wavelet training dialog.
+        """
+        # get the species
+        species = str(self.waveletTDialog.species.text())
+        for root, dirs, files in os.walk(str(self.dirName)):
+            for file in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
+                    #annotation to GT (generate _1sec.txt GT)
+                    wavFile = root + '/' + file
+                    self.annotation2GT(wavFile, species)
+
+    def annotation2GT(self, wavFile, species, duration=0):
+        """
+        This generates the ground truth for a given sound file
+        Given the AviaNZ annotation, returns the ground truth as a txt file
+        """
+        import math
+        datFile = wavFile + '.data'
+        eFile = datFile[:-9] + '-sec.txt'
+        if duration == 0:
+            wavobj = wavio.read(wavFile)
+            sampleRate = wavobj.rate
+            data = wavobj.data
+            duration = int(len(data) / sampleRate)  # number of secs
+        GT = np.zeros((duration, 4))
+        GT = GT.tolist()
+        GT[:][1] = str(0)
+        GT[:][2] = ''
+        GT[:][3] = ''
+        if os.path.isfile(datFile):
+            print(datFile)
+            with open(datFile) as f:
+                segments = json.load(f)
+            for seg in segments:
+                print("seg: ", seg)
+                print(species, seg[4])
+                if seg[0] == -1:
+                    continue
+                if not re.search(species, seg[4]):
+                    continue
+                else:
+                    type = species
+                    quality = ''
+                s = int(math.floor(seg[0]))
+                e = int(math.ceil(seg[1]))
+                print("start and end: ", s, e)
+                for i in range(s, e):
+                    GT[i][1] = str(1)
+                    GT[i][2] = type
+                    GT[i][3] = quality
+        for line in GT:
+            if line[1] == 0.0:
+                line[1] = '0'
+            if line[2] == 0.0:
+                line[2] = ''
+            if line[3] == 0.0:
+                line[3] = ''
+        # now save GT as a .txt file
+        for i in range(1, duration + 1):
+            GT[i - 1][0] = str(i)  # add time as the first column to make GT readable
+        print(GT)
+        # strings = (str(item) for item in GT)
+        with open(eFile, "w") as f:
+            for l, el in enumerate(GT):
+                string = '\t'.join(map(str, el))
+                for item in string:
+                    f.write(item)
+                f.write('\n')
+            f.write('\n')
+            # for item in strings:
+            #     f.write(item + "\n")
+
+        # out = file(eFile, "w")
+        # for line in GT:
+        #     print >> out, "\t".join(line)
+        # out.close()
+
+    def browseTrainData(self):
+        """ Listener for the wavelet training dialog.
+        """
+        # [dir] = self.waveletTDialog.getValues()
+        self.dirName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose Folder to Process')
+        print("Dir:", self.dirName)
+        self.waveletTDialog.w_dir.setPlainText(self.dirName)
+
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
         """
@@ -3406,7 +3522,7 @@ class AviaNZ(QMainWindow):
 
         # listener for playback finish. Note small buffer for catching up
         if eltime > (self.segmentStop-10):
-            print("stopped at %d ms" % self.media_obj.time)
+            print("stopped at %d ms" % eltime)
             self.stopPlayback()
         else:
             self.playSlider.setValue(eltime)

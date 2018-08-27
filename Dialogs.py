@@ -244,6 +244,94 @@ class OperatorReviewer(QDialog):
         return [self.name1.text(),self.name2.text()]
 
 #======
+class WaveletTrain(QDialog):
+    # Class for the segmentation dialog box
+    # TODO: add the wavelet params
+    # TODO: work out how to return varying size of params, also process them
+    # TODO: test and play
+    def __init__(self, maxv, DOC=False, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Wavelet Training')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setMinimumWidth(450)
+
+        self.Step1Label1 = QLabel("Step 1:")
+        self.loadLabel = QLabel("Load your training data")
+        self.Step1Label1.setFont(QtGui.QFont('SansSerif', 12))
+        self.browse = QPushButton("Browse")
+        self.w_dir = QPlainTextEdit()
+        self.w_dir.setFixedHeight(50)
+        self.w_dir.setPlainText('<data path>')
+
+        hBox1 = QHBoxLayout()
+        hBox1.addWidget(self.loadLabel)
+        hBox1.addWidget(self.browse)
+
+        self.Step1Label2 = QLabel("Step 2:")
+        self.Step1Label2.setFont(QtGui.QFont('SansSerif', 12))
+        self.spLabel = QLabel("Species (as given in annotation)")
+        self.species = QLineEdit(self)
+        self.minlenLabel = QLabel("Min length")
+        self.minlen = QLineEdit(self)
+        self.flowLabel = QLabel("Lower frq.")
+        self.fLow = QLineEdit(self)
+        self.fhighLabel = QLabel("Higher frq.")
+        self.fHigh = QLineEdit(self)
+        vBox1 = QVBoxLayout()
+        vBox1.addWidget(self.spLabel)
+        vBox1.addWidget(self.species)
+        vBox2 = QVBoxLayout()
+        vBox2.addWidget(self.minlenLabel)
+        vBox2.addWidget(self.minlen)
+        vBox3 = QVBoxLayout()
+        vBox3.addWidget(self.flowLabel)
+        vBox3.addWidget(self.fLow)
+        vBox4 = QVBoxLayout()
+        vBox4.addWidget(self.fhighLabel)
+        vBox4.addWidget(self.fHigh)
+        hBox2 = QHBoxLayout()
+        hBox2.addLayout(vBox1)
+        hBox2.addLayout(vBox2)
+        hBox2.addLayout(vBox3)
+        hBox2.addLayout(vBox4)
+        self.GTLabel = QLabel("Prepare for training")
+        self.genGT = QPushButton("Prepare")
+        hBox3 = QHBoxLayout()
+        hBox3.addWidget(self.GTLabel)
+        hBox3.addWidget(self.genGT)
+
+        self.Step1Label3 = QLabel("Step 3:")
+        self.Step1Label3.setFont(QtGui.QFont('SansSerif', 12))
+        self.trainLabel = QLabel("Train to detect species")
+        self.train = QPushButton("Train")
+        hBox4= QHBoxLayout()
+        hBox4.addWidget(self.trainLabel)
+        hBox4.addWidget(self.train)
+
+        Box = QVBoxLayout()
+        Box.addWidget(self.Step1Label1)
+        Box.addLayout(hBox1)
+        Box.addWidget(self.w_dir)
+        Box.addWidget(self.Step1Label2)
+        Box.addLayout(hBox2)
+        Box.addLayout(hBox3)
+        Box.addWidget(self.Step1Label3)
+        Box.addLayout(hBox4)
+
+        # Now put everything into the frame
+        self.setLayout(Box)
+
+    def bandclicked(self):
+        # TODO: Can they be grayed out?
+        self.start.setEnabled(not self.start.isEnabled())
+        self.end.setEnabled(not self.end.isEnabled())
+
+    def getValues(self):
+        return [self.algs.currentText(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value()]
+        #return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text(),self.species.currentText()]
+
+
+#======
 class Segmentation(QDialog):
     # Class for the segmentation dialog box
     # TODO: add the wavelet params

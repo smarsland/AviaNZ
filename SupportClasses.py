@@ -24,6 +24,7 @@ import WaveletFunctions
 import Segment
 
 from time import sleep
+import time
 
 import librosa
 
