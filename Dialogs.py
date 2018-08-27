@@ -1327,8 +1327,9 @@ class HumanClassify2(QDialog):
                 x2 = int(self.convertAmpltoSpec(self.segments2show[ind][1]))
                 if x2 - x1 > self.width:
                     self.width = x2-x1
+            self.setMinimumWidth(1000)
             self.width = max(1000,self.width+10)
-            self.h = 5
+            self.h = 3
             self.flowLayout = SupportClasses.FlowLayout()
             self.makeButtons(first=True)
 
@@ -1366,8 +1367,8 @@ class HumanClassify2(QDialog):
             if width + x2-x1 < self.width:
                 width = width + x2-x1
             else:
-                col += 1
                 width = 0
+            col += 1
             self.buttons.append(SupportClasses.PicButton(0,im[0], im[1]))
             self.flowLayout.addWidget(self.buttons[-1])
             ind += 1
