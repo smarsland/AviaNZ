@@ -363,11 +363,11 @@ class WaveletSegment:
         filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=species[2], high=species[3])
         return filteredDenoisedData
 
-    def waveletSegment_train(self,fName, species='Kiwi', df=False):
+    def waveletSegment_train(self,fName, species=[], df=False):
         # Let df=true (denoise during preprocess) for bittern, df=false for others
         # Load data and annotation
         self.loadData(fName)
-
+        print("Data loaded")
         filteredDenoisedData = self.preprocess(species,df=df)    # skip denoising
         waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
 
