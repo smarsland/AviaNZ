@@ -961,7 +961,7 @@ class ControllableAudio(QAudioOutput):
         self.setNotifyInterval(30)
         self.stateChanged.connect(self.endListener)
         self.tempin = QBuffer()
-        self.setBufferSize(3000000)
+        self.setBufferSize(3000)
         self.startpos = 0
         self.keepSlider = False
         self.format = format
