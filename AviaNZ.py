@@ -1187,6 +1187,10 @@ class AviaNZ(QMainWindow):
                 self.media_obj.notify.connect(self.movePlaySlider)
                 # Reset the media player
                 self.stopPlayback()
+                self.volSliderMoved(0)
+                self.segmentStop = 50
+                self.media_obj.filterSeg(0, 50, self.audiodata)
+                self.volSliderMoved(self.volSlider.value()) 
     
                 # Set the length of the scrollbar.
                 self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
@@ -3529,7 +3533,6 @@ class AviaNZ(QMainWindow):
             self.timePlayed.setText(self.convertMillisecs(eltime) + "/" + self.totalTime)
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
             self.bar.setValue(self.convertAmpltoSpec(eltime / 1000.0))
-            QApplication.processEvents()
 
     def setPlaySliderLimits(self, start, end):
         """ Uses start/end in ms, does what it says, and also seeks file position marker.
