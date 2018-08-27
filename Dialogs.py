@@ -1291,6 +1291,11 @@ class HumanClassify2(QDialog):
     # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
     def __init__(self, sg, segments, label, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
         QDialog.__init__(self, parent)
+
+        # from win32api import GetSystemMetrics
+        # width_px = GetSystemMetrics(0)
+        # print("width: ", width_px)
+
         self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.frame = QWidget()
@@ -1323,8 +1328,8 @@ class HumanClassify2(QDialog):
                 x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
                 if x2 - x1 > self.width:
                     self.width = x2-x1
+                    print(self.width)
             self.width = max(1000,self.width+10)
-            # print (self.width)
             self.h = 10
             self.flowLayout = SupportClasses.FlowLayout()
             self.makeButtons(first=True)
@@ -1346,21 +1351,22 @@ class HumanClassify2(QDialog):
         if first:
             segRemain = len(self.segments)
         elif self.firstSegment == 0:
-            segRemain = len(self.segments) - 1
+            segRemain = len(self.segments) #- 1
         else:
-            segRemain = len(self.segments) - self.firstSegment
+            segRemain = len(self.segments) #- self.firstSegment
         width = 0
         col = 0
 
-        ind = self.firstSegment
+        # ind = self.firstSegment
         self.buttons = []
 
         while segRemain > 0 and col < self.h:
-            x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
-            x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
+            x1 = int(self.convertAmpltoSpec(self.segments[0][0]))
+            x2 = int(self.convertAmpltoSpec(self.segments[0][1]))
+            del self.segments[0]
             im = self.setImage(self.sg[x1:x2, :])
             segRemain -= 1
-            ind += 1
+            # ind += 1
             if width + x2-x1 < self.width:
                 width = width + x2-x1
                 self.buttons.append(SupportClasses.PicButton(0,im[0], im[1]))
