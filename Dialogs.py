@@ -1215,9 +1215,9 @@ class HumanClassify1(QDialog):
         elif ind < 17:
             self.birds2[ind-9].setChecked(True)
         else:
-            self.birds2[9].setChecked(True)
+            self.birds2[8].setChecked(True)
             self.birds3.setEnabled(True)
-            self.birds3.setCurrentRow(ind-17)
+            self.birds3.setCurrentRow(ind-16)
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
