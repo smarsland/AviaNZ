@@ -1843,7 +1843,7 @@ class AviaNZ(QMainWindow):
             self.segmentsToSave = True
             show = True
 
-        if show and ((y1<maxy and y2 > miny) or (y1==0 and y2==0)):
+        if show and ((y1 <= maxy and y2 >= miny) or (y1==0 and y2==0)):
             # This is one we want to show
 
             # Get the name and colour sorted
@@ -2209,6 +2209,10 @@ class AviaNZ(QMainWindow):
                 if self.config['specMouseAction']>1:
                     y1 = self.start_spec_y
                     y2 = mousePoint.y()
+                    miny = self.convertFreqtoY(self.minFreqShow)
+                    maxy = self.convertFreqtoY(self.maxFreqShow)
+                    y1 = min(max(miny, y1), maxy)
+                    y2 = min(max(miny, y2), maxy)
                 else:
                     y1 = 0
                     y2 = 0
