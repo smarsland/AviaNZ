@@ -963,6 +963,7 @@ class ControllableAudio(QAudioOutput):
         self.tempin = QBuffer()
         self.setBufferSize(3000)
         self.startpos = 0
+        self.timeoffset = 0
         self.keepSlider = False
         self.format = format
 
