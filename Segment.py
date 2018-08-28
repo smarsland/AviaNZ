@@ -381,9 +381,11 @@ class Segment:
         s=0
         while s<len(segs):
             i = s
-            while i < len(segs)-1 and segs[i+1,0] < segs[i,1]:
+            end = segs[i,1]
+            while i < len(segs)-1 and segs[i+1,0] < end:
                 i += 1
-            newsegs.append([segs[s,0],max(segs[s:i+1,1])])
+                end = max(end, segs[i,1])
+            newsegs.append([segs[s,0],end])
             s = i+1
 
         return newsegs
