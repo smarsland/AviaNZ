@@ -1,4 +1,4 @@
-import os, re, platform
+import os, re, platform, fnmatch
 
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -555,6 +555,11 @@ class AviaNZ_reviewAll(QMainWindow):
             filesuccess = 0
 
             for root, dirs, files in os.walk(str(self.dirName)):
+                # delete old xlsx:
+                for file in os.listdir(self.dirName):
+                    if fnmatch.fnmatch(file, 'DetectionSummary_*.xlsx'):
+                        os.remove(os.path.join(self.dirName, file))
+                       
                 for filename in files:
                     DOCRecording = re.search('(\d{6})_(\d{6})', filename)
                     filename = os.path.join(root, filename)
