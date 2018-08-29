@@ -513,6 +513,7 @@ class exportSegments:
             if seg[4].endswith('?'):
                 segmentSpecies = segmentSpecies[:-1]
             speciesList.add(segmentSpecies)
+        speciesList.add("all")
         print("The following species were detected for export:")
         print(speciesList)
 
@@ -526,6 +527,8 @@ class exportSegments:
             ws.cell(row=1, column=1, value="File Name")
             ws.cell(row=1, column=2, value="start (hh:mm:ss)")
             ws.cell(row=1, column=3, value="end (hh:mm:ss)")
+            if species=="all":
+                ws.cell(row=1, column=4, value="species")
 
             # Second sheet
             ws = wb['Presence Absence']
@@ -534,10 +537,8 @@ class exportSegments:
 
             # Third sheet
             ws = wb['Per second']
-            ws.cell(row=1, column=1, value="File Name")
+            ws.cell(row=1, column=1, value="File Name_Page")
             ws.cell(row=1, column=2, value="Presence=1, Absence=0")
-
-            # TODO: Per minute sheet?
 
             # Hack to delete original sheet
             wb.remove_sheet(wb['Sheet'])
@@ -554,6 +555,8 @@ class exportSegments:
                     continue
                 ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
                 ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
+                if species=="all":
+                    ws.cell(row=r, column=4, value=seg[4])
                 r += 1
 
         def writeToExcelp2(segments):
@@ -566,7 +569,7 @@ class exportSegments:
                     ws.cell(row=r, column=2, value='Yes')
                     break
 
-        def writeToExcelp3(detected):
+        def writeToExcelp3(detected, starttime=0):
             # todo: use minLen
             ws = wb['Per second']
             r = ws.max_row + 1
@@ -574,13 +577,14 @@ class exportSegments:
             ft = Font(color=colors.DARKYELLOW)
             ws.cell(row=r, column=1).font=ft
             c = 2
-            for i in range(0,len(detected), self.resolution):
+            for i in range(starttime,starttime+len(detected), self.resolution):
                 endtime = min(i+self.resolution, int(math.ceil(self.datalength * self.numpages / self.sampleRate)))
                 ws.cell(row=r, column=c, value=str(i) + '-' + str(endtime))
                 ws.cell(row=r, column=c).font = ft
                 c += 1
             r += 1
-            ws.cell(row=r, column=1, value=str(relfname))
+            pagesize = int(starttime/self.datalength * self.sampleRate)
+            ws.cell(row=r, column=1, value=str(relfname)+ '_p' + str(pagesize))
             c = 2
             for i in range(0, len(detected), self.resolution):
                 j=1 if np.sum(detected[i:i+self.resolution])>0 else 0
@@ -607,10 +611,11 @@ class exportSegments:
                 wb = makeNewWorkbook()
 
             # extract SINGLE-SPECIES ONLY segments,
-            # incl. potential assingments ('Kiwi?')
+            # incl. potential assignments ('Kiwi?').
+            # if species=="all", take ALL segments.
             segmentsWPossible = []
             for seg in self.segments:
-                if seg[4] == species or seg[4] == species + '?':
+                if seg[4] == species or seg[4] == species + '?' or species=="all":
                     segmentsWPossible.append(seg)
             if len(segmentsWPossible)==0:
                 print("Warning: no segments found for species %s" % species)
@@ -622,16 +627,16 @@ class exportSegments:
             writeToExcelp2(segmentsWPossible)
 
             # Generate per second binary output
-            n = math.ceil(float(self.datalength) / self.sampleRate) * self.numpages
-            detected = np.zeros(int(n))
-            for p in range(0, self.numpages-1):
+            n = math.ceil(float(self.datalength) / self.sampleRate)
+            for p in range(0, self.numpages):
+                detected = np.zeros(n)
                 print("exporting page %d" % p)
                 for seg in segmentsWPossible:
-                    for t in range(len(detected)):
-                        truet = t + p*self.datalength
+                    for t in range(n):
+                        truet = t + p*n
                         if math.floor(seg[0]) <= truet and truet < math.ceil(seg[1]):
-                            detected[truet] = 1
-            writeToExcelp3(detected)
+                            detected[t] = 1
+                writeToExcelp3(detected, p*n)
 
             # Save the file
             wb.save(str(eFile))
