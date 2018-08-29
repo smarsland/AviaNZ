@@ -527,9 +527,11 @@ class exportSegments:
             ws.cell(row=1, column=1, value="File Name")
             ws.cell(row=1, column=2, value="start (hh:mm:ss)")
             ws.cell(row=1, column=3, value="end (hh:mm:ss)")
+            ws.cell(row=1, column=4, value="min freq., Hz")
+            ws.cell(row=1, column=5, value="max freq., Hz")
             if species=="all":
-                ws.cell(row=1, column=4, value="species")
-
+                ws.cell(row=1, column=6, value="species")
+            
             # Second sheet
             ws = wb['Presence Absence']
             ws.cell(row=1, column=1, value="File Name")
@@ -555,8 +557,11 @@ class exportSegments:
                     continue
                 ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
                 ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
+                if seg[3]!=0:
+                    ws.cell(row=r, column=4, value=int(seg[2]))
+                    ws.cell(row=r, column=5, value=int(seg[3]))
                 if species=="all":
-                    ws.cell(row=r, column=4, value=seg[4])
+                    ws.cell(row=r, column=6, value=seg[4])
                 r += 1
 
         def writeToExcelp2(segments):
