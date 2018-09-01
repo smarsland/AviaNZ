@@ -1172,6 +1172,7 @@ class AviaNZ(QMainWindow):
 
                 # Set the window size
                 self.windowSize = self.config['windowWidth']
+                self.timeaxis.setRange(0, self.windowSize)
                 self.widthWindow.setRange(0.5, self.datalengthSec)
     
                 # Reset it if the file is shorter than the window
@@ -1566,8 +1567,11 @@ class AviaNZ(QMainWindow):
         FreqRange = self.maxFreqShow-self.minFreqShow
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
         SpecRange = FreqRange/height
-        #self.specaxis.setTicks([[(0,self.minFreqShow/1000),(np.shape(self.sg)[1]/4,self.minFreqShow/1000+FreqRange/4),(np.shape(self.sg)[1]/2,self.minFreqShow/1000+FreqRange/2),(3*np.shape(self.sg)[1]/4,self.minFreqShow/1000+3*FreqRange/4),(np.shape(self.sg)[1],self.minFreqShow/1000+FreqRange)]])
-        self.specaxis.setTicks([[(0,(self.minFreqShow/1000)),(SpecRange/4,(self.minFreqShow/1000+FreqRange/4000)),(SpecRange/2,(self.minFreqShow/1000+FreqRange/2000)),(3*SpecRange/4,(self.minFreqShow/1000+3*FreqRange/4000)),(SpecRange,(self.minFreqShow/1000+FreqRange/1000))]])
+        self.specaxis.setTicks([[(0,round(self.minFreqShow/1000, 2)),
+                                 (SpecRange/4,round(self.minFreqShow/1000+FreqRange/4000, 2)),
+                                 (SpecRange/2,round(self.minFreqShow/1000+FreqRange/2000, 2)),
+                                 (3*SpecRange/4,round(self.minFreqShow/1000+3*FreqRange/4000, 2)),
+                                 (SpecRange,round(self.minFreqShow/1000+FreqRange/1000, 2))]])
         self.specaxis.setLabel('kHz')
 
         self.updateOverview()
@@ -1850,7 +1854,7 @@ class AviaNZ(QMainWindow):
             if species is None or species=="Don't Know":
                 species = "Don't Know"
                 brush = self.ColourNone
-            elif species[:-1]=='?':
+            elif species[-1]=='?':
                 brush = self.ColourPossible
             else:
                 brush = self.ColourNamed
@@ -2584,6 +2588,9 @@ class AviaNZ(QMainWindow):
             # load the first image:
             self.box1id = -1
             self.humanClassifyDialog1.setSegNumbers(0, len(self.segments))
+            if hasattr(self, 'humanClassifyDialogSize'):
+                self.humanClassifyDialog1.resize(self.humanClassifyDialogSize)
+
             self.humanClassifyNextImage1()
             self.humanClassifyDialog1.show()
             self.humanClassifyDialog1.activateWindow()
@@ -2595,6 +2602,7 @@ class AviaNZ(QMainWindow):
 
     def humanClassifyClose1(self):
         # Listener for the human verification dialog.
+        self.humanClassifyDialogSize = self.humanClassifyDialog1.size()
         self.humanClassifyDialog1.done(1)
         # Want to show a page at the end, so make it the first one
         if self.config['showAllPages']:
@@ -2602,6 +2610,7 @@ class AviaNZ(QMainWindow):
 
     def humanClassifyNextImage1(self):
         # Get the next image
+        self.humanClassifyDialogSize = self.humanClassifyDialog1.size()
         if self.box1id < len(self.segments)-1:
             self.box1id += 1
             # update "done/to go" numbers:
