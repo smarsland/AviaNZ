@@ -966,6 +966,12 @@ class HumanClassify1(QDialog):
         self.pPlot.addItem(self.line1)
         self.pPlot.addItem(self.line2)
 
+        # playback line
+        self.bar = pg.InfiniteLine(angle=90, movable=False, pen={'color':'c', 'width': 3})
+        self.bar.btn = QtCore.Qt.RightButton
+        self.bar.setValue(0)
+        self.pPlot.addItem(self.bar)
+
         # label for current segment assignment
         self.speciesTop = QLabel("Currently:")
         self.species = QLabel()
@@ -1139,13 +1145,20 @@ class HumanClassify1(QDialog):
         self.playButton.setIconSize(QtCore.QSize(40, 40))
 
     def volSliderMoved(self, value):
-        # TODO: doesn't seem to change anything while playing
         self.media_obj2.applyVolSlider(value)
 
     def endListener(self):
+        """ Listener to check for playback end.
+        Also hijacked to move the playback bar."""
         time = self.media_obj2.elapsedUSecs() // 1000
+        print(time)
         if time > self.duration:
             self.stopPlayback()
+        else:
+            barx = time / 1000 * self.sampleRate / self.incr
+            self.bar.setValue(barx)
+            self.bar.update()
+            QApplication.processEvents()
 
     def setSegNumbers(self, done, total):
         text1 = "calls reviewed: " + str(done)
@@ -1153,10 +1166,12 @@ class HumanClassify1(QDialog):
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
 
-    def setImage(self, sg, audiodata, sampleRate, label, unbufStart, unbufStop, minFreq=0, maxFreq=0):
+    def setImage(self, sg, audiodata, sampleRate, incr, label, unbufStart, unbufStop, minFreq=0, maxFreq=0):
         self.audiodata = audiodata
         self.sg = sg
         self.sampleRate = sampleRate
+        self.incr = incr
+        self.bar.setValue(0)
         if maxFreq==0:
             maxFreq = sampleRate / 2
         self.duration = len(audiodata) / sampleRate * 1000 # in ms
