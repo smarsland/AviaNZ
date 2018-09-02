@@ -24,7 +24,7 @@ import sys, os, json, platform, re
 
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox
-from PyQt5.QtCore import Qt, QDir, QTime, QTimer, QPoint, QPointF, QLocale, QFile, QIODevice
+from PyQt5.QtCore import Qt, QDir, QTime, QTimer, QPoint, QPointF, QLocale, QFile, QIODevice, QLine
 from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 
 import wavio
@@ -1054,6 +1054,7 @@ class AviaNZ(QMainWindow):
                     self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
 
                 self.w_spec.addItem(self.timeaxis, row=1, col=1)
+
                 # This next line is a hack to make the axis update
                 #self.changeWidth(self.widthWindow.value())
 
@@ -1585,6 +1586,8 @@ class AviaNZ(QMainWindow):
             else:
                 self.addSegment(self.segments[count][0], self.segments[count][1],self.convertFreqtoY(self.segments[count][2]),self.convertFreqtoY(self.segments[count][3]),self.segments[count][4],False,count,remaking)
 
+        self.drawProtocolMarks()
+
         # This is the moving bar for the playback
         if not hasattr(self,'bar'):
             self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
@@ -1770,6 +1773,38 @@ class AviaNZ(QMainWindow):
             self.segments[i][0] = sender.getRegion()[0] + self.startRead
             self.segments[i][1] = sender.getRegion()[1] + self.startRead
             self.refreshOverviewWith(self.segments[i][0], self.segments[i][1], species)
+
+    def drawProtocolMarks(self):
+        # if check-ignore protocol is used, mark check-ignore limits.
+        # Also called when the relevant parameters are changed in interface settings.
+
+        # Clean old marks, if any
+        if hasattr(self, 'protocolMarks'):
+            for m in self.protocolMarks:
+                print("removing mark")
+                print(m)
+                self.p_spec.removeItem(m)
+                self.protocolMarks.remove(m)
+        else:
+            self.protocolMarks = []
+
+        if self.config['protocolOn']:
+            linePen = pg.mkPen((148, 0, 211), width=5)
+            lnum = 0
+            linestart = 0
+            # pages >1 start with an overlap zone, so need to offset marks:
+            if self.currentFileSection > 0:
+                linestart += self.config['fileOverlap']
+            while linestart < self.datalength/self.sampleRate:
+                lineend = min(self.datalength/self.sampleRate, linestart + self.config['protocolSize'])
+                print(self.convertAmpltoSpec(linestart))
+                print(self.convertAmpltoSpec(lineend))
+                line = SupportClasses.FixedLineROI(((self.convertAmpltoSpec(linestart),0),
+                                      (self.convertAmpltoSpec(lineend),0)), movable=False, pen=linePen)
+                self.protocolMarks.append(line)
+                self.p_spec.addItem(line)
+                line.clearHandles()
+                linestart += self.config['protocolInterval']
 
     def refreshOverviewWith(self, startpoint, endpoint, species, delete=False):
         """Recalculates the overview box colours and refreshes their display.
@@ -3641,9 +3676,6 @@ class AviaNZ(QMainWindow):
             ]},
 
             {'name': 'Annotation', 'type': 'group', 'children': [
-                {'name': 'Auto save segments every', 'type': 'float', 'value': self.config['secsSave'], 'step': 5,
-                 'limits': (5, 900),
-                 'suffix': ' sec'},
                 {'name': 'Annotation overview cell length', 'type': 'float',
                  'value': self.config['widthOverviewSegment'],
                  'limits': (5, 300), 'step': 5,
@@ -3660,6 +3692,13 @@ class AviaNZ(QMainWindow):
                     {'name': 'Currently selected', 'type': 'color', 'value': self.config['ColourSelected'],
                      'tip': "Currently delected segment"},
                 ]},
+                {'name': 'Check-ignore protocol', 'type': 'group', 'children': [
+                    {'name': 'Show check-ignore marks', 'type': 'bool', 'value': self.config['protocolOn']},
+                    {'name': 'Length of checking zone', 'type': 'float', 'value': self.config['protocolSize'],
+                     'limits': (1, 300), 'step': 1, 'suffix': ' sec'},
+                    {'name': 'Repeat zones every', 'type': 'float', 'value': self.config['protocolInterval'],
+                     'limits': (1, 600), 'step': 1, 'suffix': ' sec'},
+                ]}
             ]},
 
             {'name': 'Human classify', 'type': 'group', 'children': [
@@ -3670,6 +3709,10 @@ class AviaNZ(QMainWindow):
             {'name': 'Output parameters', 'type': 'group', 'children': [
                 {'name': 'Show all pages', 'type': 'bool', 'value': self.config['showAllPages'],
                  'tip': "Where to show segments from when looking at outputs"},
+                {'name': 'Auto save segments every', 'type': 'float', 'value': self.config['secsSave'],
+                 'step': 5,
+                 'limits': (5, 900),
+                 'suffix': ' sec'},
             ]},
 
             {'name': 'User', 'type': 'group', 'children': [
@@ -3709,7 +3752,7 @@ class AviaNZ(QMainWindow):
             else:
                 childName = param.name()
 
-            if childName=='Annotation.Auto save segments every':
+            if childName=='Output parameters.Auto save segments every':
                 self.config['secsSave']=data
             elif childName=='Annotation.Annotation overview cell length':
                 self.config['widthOverviewSegment']=data
@@ -3771,6 +3814,15 @@ class AviaNZ(QMainWindow):
                                                    self.config['ColourSelected'][2], self.config['ColourSelected'][3])
                 self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1],
                                                    self.config['ColourSelected'][2], 255)
+            elif childName=='Annotation.Check-ignore protocol.Show check-ignore marks':
+                self.config['protocolOn'] = data
+                self.drawProtocolMarks()
+            elif childName=='Annotation.Check-ignore protocol.Length of checking zone':
+                self.config['protocolSize'] = data
+                self.drawProtocolMarks()
+            elif childName=='Annotation.Check-ignore protocol.Repeat zones every':
+                self.config['protocolInterval'] = data
+                self.drawProtocolMarks()
             elif childName=='Output parameters.Show all pages':
                 self.config['showAllPages'] = data
             elif childName=='User.Operator':
