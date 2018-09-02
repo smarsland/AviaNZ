@@ -62,7 +62,7 @@ The program automatically loads the first 5 minutes of a file.
 	\begin{description}
 	\item[Overview] This shows you a picture of the 5 minutes of the file (labelled 2 in the figure). The part you are looking at in the main plots is shown in blue (it's actually the whole file in the example figure). Below it there is a coloured bar (labelled 3 in the figure, and in yellow). There are left and right arrow buttons (labelled 4) and double arrow buttons (labelled 5) on the left of this area. The single arrow buttons move the view in the main area along, while the double arrow buttons move to the previous 5 minutes or to the next 5 minutes of the file (if it exists). 
 	\item [Files (12)] This is a list of files in your current directory. You can double-click on one to select it and open it. Files in red have been annotated, files in black have not. The double arrow button on the top right of this area (labelled 11) moves on to the next file.
-	\item[Amplitude plot (6)] This shows a picture of the sound file. It's one of the two parts of the interface that you can use to label the birdcalls. If you don't want to see it, you can hide it using the Appearance menu by selecting `Show amplitude ploe'
+	\item[Amplitude plot (6)] This shows a picture of the sound file. It's one of the two parts of the interface that you can use to label the birdcalls. If you don't want to see it, you can hide it using the Appearance menu by selecting `Show amplitude plot'
 	\item[Spectrogram plot (7)] This is the second picture of the sound file, and the one that has more information and is most useful. There is a display showing the value of the sounds at the location of the mouse (8 in the figure), and also a scroll bar to move through the file (9). 
 	\item[Controls] These play the sound file, and modify the appearance of the plots (13--17 in the figure).
 	\end{description}
@@ -108,11 +108,11 @@ In addition, there are two extra parts to the interface:
 
 \subsection{Moving Through Long Files}
 
-\item If files are longer than 5 minutes, use the double arrows labelled (5) to move to the next or previous sections. Note that there is a 10 second overlap between the files. You can change the page size and the amount of page overlap by choosing the relevant options in the `Interface Settings' in the Interface menu, as will be described later. The times on the axis below the spectrogram show locations in the full file. Note that denoising applies to the visible 5 minute portion of the file, not the whole file. 
+\item If files are longer than 5 minutes, use the double arrows labelled (5) to move to the next or previous sections. Note that there is a 10 second overlap between the files. You can change the page size and the amount of page overlap by choosing the relevant options in the `Interface Settings' in the Interface menu, as will be described later. The times on the axis below the spectrogram show locations in the full file. Note that operations like denoising and segmentation apply to the visible 5 minute portion of the file, not the whole file. 
 
 \subsection{Playing the Sounds}
 
-\item You can play the sounds visible on the screen using the `Play' button at the top-left of the Controls section (labelled 13). The button turns into a `Pause' button while playing (or you can press the `Escape' key). The light blue bar in the spectrogram plot (7)  shows where the playback is up to. You can drag this bar if you want to hear a particular part of the file. Move the mouse over it, and the bar will go red. Then click and drag to move it. The time below the play button shows the length of the file and the current position of the blue bar in minutes and seconds. You can change the volume of playback using the slider in (14). 
+\item You can play the sounds visible on the screen using the `Play' button at the top-left of the Controls section (labelled 13). The button turns into a `Pause' button while playing (or you can press the `Escape' key). The light blue bar in the spectrogram plot (7)  shows where the playback is up to. When paused, you can drag this bar if you want to hear a particular part of the file. Move the mouse over it, and the bar will go red. Then click and drag to move it. The time below the play button shows the length of the file and the current position of the blue bar in minutes and seconds. You can change the volume of playback using the slider in (14). 
 You can also play a segment of sound, assuming that a segment is selected. We will cover this below.
 
 \item To stop playback and have the slider return to the start of the visible section, press the Stop button instead.
@@ -123,7 +123,7 @@ You can also play a segment of sound, assuming that a segment is selected. We wi
 
 \item Segmentation has changed slightly in this version of the software. 
 
-\item You  select a segment by clicking on it with one of the mouse buttons (left or right), and create one by using the other mouse button. You can select which performs which action using the `Mouse settings' of the `Interface settings' in the Appearance menu.
+\item You select and edit a segment by clicking on it with one of the mouse buttons (left or right), and create one by using the other mouse button. You can select which performs which action using the `Mouse settings' of the `Interface settings' in the Appearance menu.
 
 \item There are three options for how to create a segment. You select one of them in the `Mouse settings' of the `Interface settings' in the Appearance menu:
 	\begin{itemize}
@@ -163,7 +163,7 @@ You can also play a segment of sound, assuming that a segment is selected. We wi
 	
 \item You can click on those rectangles, which will update the amplitude and spectrogram plots to show that section of the file.  
 
-\item Segments can be moved by dragging them, or opened out by dragging the left and right ends, just like the Overview highlight. For boxes that were dragged instead of clicked, click on the top right corner of the box and then drag to resize.
+\item Segments can be moved by dragging them, or resized by dragging the left and right ends, just like the Overview highlight. For bounded-frequency boxes, drag the handle on the top right corner of the box to resize. (All these interactions use the non-drawing mouse button.)
 
 \item Segments can be deleted by selecting them (so that they turn blue) and then clicking on the `Delete Current Segment' in the Controls (16). You can also just press the delete or backspace key on the keyboard. 
 
@@ -178,7 +178,7 @@ You can also play a segment of sound, assuming that a segment is selected. We wi
 \subsubsection{{\em Appearance Menu}}
 
 \begin{description}
-\item [Changing appearance] The first four options in the menu hide or reveal the amplitude plot (6), list of files (12), annotation overview (3), and information about where the mouse is pointing in the spectrogram (8) . 
+\item [Changing appearance] The first four options in the menu hide or reveal the amplitude plot (6), list of files (12), annotation overview (3), and information about where the mouse is pointing in the spectrogram (8). 
 %\item [Drag boxes] This option enables the user to select if they wish to perform segmentation by clicking on the start and end of a segment, or dragging a box. The boxes can be made transparent, when only their edge shows the colour code of what kind of label they have been given.
 %\item[Invert Spectrogram] This is currently a play feature that shows that it is possibly to invert a spectrogram to get a new wave file. The spectrogram picture will update to be a bit blurred. 
 \item [Choose colour map] This enables the user to select a colour map they prefer to the standard grey one. There is also an option to swap black and white (inverting the colour map). 
@@ -205,26 +205,26 @@ These options will mostly provide dialog boxes that ask you to make choices.
 We currently provide 3 options, and you can try them to see how well they work.
 %\item [Find Matches] If you select a segment (so that its box is green) and then press this button the program will look for others that are similar. It does not currently deal well with nosie. 
 %\item [Filter Spectrogram] This tries to clean the spectrogram for easier viewing.
-\item [Human Review] These two options provide two different ways to view the segments and their labels for easier checking. The option to Show all pages decides on whether to view segments in an entire file, or just the current 5 minutes of it. 
+\item [Human Review] These two options provide two different ways to view the segments and their labels for easier checking. The option to Show all pages (under Interface options) decides on whether to view segments in an entire file, or just the current 5 minutes of it. 
 	\begin{description}
 	\item [Human Review [All segments]] This option shows the segments one-by-one in time order (Figure~\ref{check1}).
 	\begin{figure}
 	\centering
 	\includegraphics[width=.6\textwidth]{Figs/review1}
-	\caption{Example of outputs for Check segments [All segments].}
+	\caption{Example of outputs for Human Review [All segments].}
 	\label{check1}
 	\end{figure}
-	To play the segment, click on the play button. You can also change the spectrogram colouring to make it easier to review. If the label is correct, click on the green tick, when the next image will load. If not, select the correct label before clicking the tick button. To delete a segment, click on the red dustbin button. To move back to the previous one, click the back arrow. 
+	To play the segment, click on the play button. Green bars mark the limits of current segment, and couple seconds of context are provided around it. You can also change the spectrogram colouring to make it easier to review. If the label is correct, click on the green tick, when the next image will load. If not, select the correct label before clicking the tick button. To delete a segment, click on the red dustbin button. To move back to the previous one, click the back arrow. 
 	\item [Human Review [Choose species]] This option asks you to choose a bird from those found in the current file. For each segment that is wrongly labelled, click on its picture (the colour map will change). These segments will be deleted (Figure~\ref{check2}). By default, the program will automatically save the corrections in a temporary folder so that they can be used to help us improve these classifications in the future. You can stop this behaviour in the Interface Settings interface.
 	\begin{figure}
 	\centering
 	\includegraphics[width=.4\textwidth]{Figs/Check2}
-	\caption{Example of outputs for Check segments [Choose species].}
+	\caption{Example of outputs for Human Review [Choose species].}
 	\label{check2}
 	\end{figure}
 	\end{description}
 
-\item [Export segments to Excel] This enables the user to save a summary of the annotation of the currently opened file into an Excel workbook (in the same locations as the current sound file), as is described in Section~\ref{sec:outputs}. 
+\item [Export segments to Excel] This enables the user to save a summary of the annotation of the currently opened file into an Excel workbook (in the same location as the current sound file), as is described in Section~\ref{sec:outputs}. 
 \item [Save as image] Saves the spectrogram currently visible on the screen as an image.
 \item [Save selected sound] Saves a selected segment as a short sound file.
 \end{description}
@@ -242,6 +242,8 @@ We currently provide 3 options, and you can try them to see how well they work.
 If you select `Find a Species' from the starting window, you will see a screen like the one below (Figure~\ref{batch}). Navigate to the parent folder with recordings to process. If you are looking for a particular species that you have a detector for, choose it from the list (currently Kiwi). This will customise the detector. Otherwise, choose `All' from this list to find all sounds. 
 
 When the user hits the `Process Folder' button the detector will start go through each file in the given folder (and any subfolders) and the cursor will turn into busy mode. Processing will take a considerable amount of time depending on the size of the dataset.
+
+The results of such segmentation can be reviewed using 'Review Batch Results' option in the starting screen. A similar menu will prompt you to select a folder with previously processed files. Clicking on the "Process Folder" will then start the Human Review [All Species] dialog directly. Its workings are the same as described above.
 
 \begin{figure}[h!]
 \centering

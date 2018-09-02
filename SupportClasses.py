@@ -703,6 +703,13 @@ class TimeAxisMin(pg.AxisItem):
         self.offset = offset
         self.update()
 
+class FixedLineROI(pg.LineSegmentROI):
+    def clearHandles(self):
+        self.scene().removeItem(self.handles[0]['item'])
+        self.scene().removeItem(self.handles[1]['item'])
+        #while len(self.handles) > 0:
+        #    self.removeHandle(self.handles[0]['item'])
+
 class ShadedROI(pg.ROI):
     # A region of interest that is shaded, for marking segments
     def paint(self, p, opt, widget):
