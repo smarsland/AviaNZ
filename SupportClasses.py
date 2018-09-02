@@ -978,11 +978,12 @@ class ControllableAudio(QAudioOutput):
         self.setNotifyInterval(30)
         self.stateChanged.connect(self.endListener)
         self.tempin = QBuffer()
-        self.setBufferSize(3000)
         self.startpos = 0
         self.timeoffset = 0
         self.keepSlider = False
         self.format = format
+        # set buffer size to 100 ms
+        self.setBufferSize(self.format.sampleSize() * self.format.sampleRate()/10 * self.format.channelCount())
 
     def isPlaying(self):
         return(self.state() == QAudio.ActiveState)
@@ -1036,14 +1037,12 @@ class ControllableAudio(QAudioOutput):
         start = max(0, start * self.format.sampleRate() // 1000)
         stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
         segment = audiodata[start:stop]
-        print(low,high,"band")
         segment = sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
         self.loadArray(segment)
 
     def filterSeg(self, start, stop, audiodata):
         # takes start-end in ms
-        print("filtering between %d -%d" % (start, stop))
         self.timeoffset = max(0, start)
         start = max(0, int(start * self.format.sampleRate() // 1000))
         stop = min(int(stop * self.format.sampleRate() // 1000), len(audiodata))
@@ -1052,8 +1051,13 @@ class ControllableAudio(QAudioOutput):
 
     def loadArray(self, audiodata):
         # loads an array from memory into an audio buffer
-
-        audiodata = audiodata.astype('int16') # 16 corresponds to sampwidth=2
+        if self.format.sampleSize() == 16:
+            audiodata = audiodata.astype('int16') # 16 corresponds to sampwidth=2
+        elif self.format.sampleSize() == 32:
+            audiodata = audiodata.astype('int32')
+        else:
+            print("ERROR: sampleSize %d not supported" % self.format.sampleSize())
+            return
         # double mono sound to get two channels - simplifies reading
         if self.format.channelCount()==2:
             audiodata = np.column_stack((audiodata, audiodata))
