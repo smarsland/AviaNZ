@@ -1151,14 +1151,13 @@ class HumanClassify1(QDialog):
         """ Listener to check for playback end.
         Also hijacked to move the playback bar."""
         time = self.media_obj2.elapsedUSecs() // 1000
-        print(time)
         if time > self.duration:
             self.stopPlayback()
         else:
             barx = time / 1000 * self.sampleRate / self.incr
             self.bar.setValue(barx)
             self.bar.update()
-            QApplication.processEvents()
+            # QApplication.processEvents()
 
     def setSegNumbers(self, done, total):
         text1 = "calls reviewed: " + str(done)

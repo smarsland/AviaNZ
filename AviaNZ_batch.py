@@ -585,8 +585,8 @@ class AviaNZ_reviewAll(QMainWindow):
                             self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
                             # load segments
                             self.segments = json.load(open(filename + '.data'))
-                            if len(self.segments)==0:
-                                # no segments, skip
+                            if len(self.segments)<2:
+                                # no segments or just reviewer-operator "segment", so skip
                                 print("no segments found in file %s" % filename)
                                 continue
                             if self.segments[0][0] == -1:
@@ -599,6 +599,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
                             self.box1id = 0
                             if hasattr(self, 'dialogPos'):
+                                self.humanClassifyDialog1.resize(self.dialogSize)
                                 self.humanClassifyDialog1.move(self.dialogPos)
                             self.humanClassifyDialog1.setWindowTitle("AviaNZ - reviewing " + filename)
                             self.humanClassifyNextImage1()
@@ -608,6 +609,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
                             success = self.humanClassifyDialog1.exec_() # 1 on clean exit
                             if success == 0:
+                                self.humanClassifyDialog1.stopPlayback()
                                 break
 
                             # (this is resumed after each file is done)
@@ -709,7 +711,7 @@ class AviaNZ_reviewAll(QMainWindow):
             x3 = max(x3, 0)
             x4 = int((x2nob + self.config['reviewSpecBuffer']) * self.sampleRate)
             x4 = min(x4, len(self.audiodata))
-            self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate,
+            self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
                                            self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1)
 
         else:
@@ -723,6 +725,7 @@ class AviaNZ_reviewAll(QMainWindow):
             msg.exec_()
 
             # store position to popup the next one in there
+            self.dialogSize = self.humanClassifyDialog1.size()
             self.dialogPos = self.humanClassifyDialog1.pos()
             self.humanClassifyDialog1.done(1)
 

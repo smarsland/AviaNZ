@@ -983,7 +983,7 @@ class ControllableAudio(QAudioOutput):
         self.keepSlider = False
         self.format = format
         # set buffer size to 100 ms
-        self.setBufferSize(self.format.sampleSize() * self.format.sampleRate()/10 * self.format.channelCount())
+        self.setBufferSize(int(self.format.sampleSize() * self.format.sampleRate()/10 * self.format.channelCount()))
 
     def isPlaying(self):
         return(self.state() == QAudio.ActiveState)
