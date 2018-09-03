@@ -950,7 +950,9 @@ class HumanClassify1(QDialog):
         # Set up the plot window, then the right and wrong buttons, and a close button
         self.wPlot = pg.GraphicsLayoutWidget()
         self.sg_axis = pg.AxisItem(orientation='left')
+        self.sg_axis2 = pg.AxisItem(orientation='right')
         self.wPlot.addItem(self.sg_axis, row=0, col=0)
+        self.wPlot.addItem(self.sg_axis2, row=0, col=2)
         
         self.pPlot = self.wPlot.addViewBox(enableMouse=False, row=0, col=1)
         self.plot = pg.ImageItem()
@@ -959,12 +961,19 @@ class HumanClassify1(QDialog):
         self.pPlot.disableAutoRange()
         self.pPlot.setLimits(xMin=0, yMin=-5)
         self.sg_axis.linkToView(self.pPlot)
+        self.sg_axis2.linkToView(self.pPlot)
 
         # prepare the lines for marking true segment boundaries
         self.line1 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
         self.line2 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
         self.pPlot.addItem(self.line1)
         self.pPlot.addItem(self.line2)
+
+        # time texts to go along these two lines
+        self.segTimeText1 = pg.TextItem(color=(50,205,50), anchor=(0,1))
+        self.segTimeText2 = pg.TextItem(color=(50,205,50), anchor=(0,1))
+        self.pPlot.addItem(self.segTimeText1)
+        self.pPlot.addItem(self.segTimeText2)
 
         # playback line
         self.bar = pg.InfiniteLine(angle=90, movable=False, pen={'color':'c', 'width': 3})
@@ -1104,7 +1113,6 @@ class HumanClassify1(QDialog):
         self.contrastSlider.setTickInterval(1)
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
-
         vboxSpecContr = pg.LayoutWidget()
         vboxSpecContr.addWidget(self.speciesTop, row=0, col=0, colspan=2)
         vboxSpecContr.addWidget(self.species, row=0, col=2, colspan=8)
@@ -1165,7 +1173,7 @@ class HumanClassify1(QDialog):
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
 
-    def setImage(self, sg, audiodata, sampleRate, incr, label, unbufStart, unbufStop, minFreq=0, maxFreq=0):
+    def setImage(self, sg, audiodata, sampleRate, incr, label, unbufStart, unbufStop, time1, time2, minFreq=0, maxFreq=0):
         self.audiodata = audiodata
         self.sg = sg
         self.sampleRate = sampleRate
@@ -1177,18 +1185,22 @@ class HumanClassify1(QDialog):
 
         # fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
-        sg2 = 40 * np.ones((max(1000, np.shape(sg)[0]), max(100, np.shape(sg)[1])))
-        sg2[:np.shape(sg)[0], :np.shape(sg)[1]] = sg
+        # sg2 = 40 * np.ones((max(1000, np.shape(sg)[0]), max(100, np.shape(sg)[1])))
+        # sg2[:np.shape(sg)[0], :np.shape(sg)[1]] = sg
 
         # add axis
         self.plot.setImage(sg2)
         self.plot.setLookupTable(self.lut)
+        self.setColourLevels()
         self.scroll.horizontalScrollBar().setValue(0)
 
         FreqRange = (maxFreq-minFreq)/1000.
         SgSize = np.shape(sg2)[1]
-        self.sg_axis.setTicks([[(0,minFreq/1000.), (SgSize/4, minFreq/1000.+FreqRange/4.), (SgSize/2, minFreq/1000.+FreqRange/2.), (3*SgSize/4, minFreq/1000.+3*FreqRange/4.), (SgSize,minFreq/1000.+FreqRange)]])
+        ticks = [[(0,minFreq/1000.), (SgSize/4, minFreq/1000.+FreqRange/4.), (SgSize/2, minFreq/1000.+FreqRange/2.), (3*SgSize/4, minFreq/1000.+3*FreqRange/4.), (SgSize,minFreq/1000.+FreqRange)]]
+        self.sg_axis.setTicks(ticks)
         self.sg_axis.setLabel('kHz')
+        self.sg_axis2.setTicks(ticks)
+        self.sg_axis2.setLabel('kHz')
 
         self.show()
 
@@ -1212,6 +1224,13 @@ class HumanClassify1(QDialog):
         stopV = self.pPlot.mapFromItemToView(self.plot, QPointF(unbufStop, 0)).x()
         self.line1.setPos(startV)
         self.line2.setPos(stopV)
+        # add time markers next to the lines
+        time1 = QTime(0,0,0).addSecs(time1).toString('hh:mm:ss')
+        time2 = QTime(0,0,0).addSecs(time2).toString('hh:mm:ss')
+        self.segTimeText1.setText(time1)
+        self.segTimeText2.setText(time2)
+        self.segTimeText1.setPos(startV, SgSize)
+        self.segTimeText2.setPos(stopV, SgSize)
 
         if self.cmapInverted:
             self.plot.setLevels([self.colourEnd, self.colourStart])

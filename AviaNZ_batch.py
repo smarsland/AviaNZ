@@ -712,7 +712,8 @@ class AviaNZ_reviewAll(QMainWindow):
             x4 = int((x2nob + self.config['reviewSpecBuffer']) * self.sampleRate)
             x4 = min(x4, len(self.audiodata))
             self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
-                                           self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1)
+                                           self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1,
+                                           self.segments[self.box1id][0], self.segments[self.box1id][1])
 
         else:
             msg = QMessageBox()
