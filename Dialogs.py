@@ -1322,7 +1322,7 @@ class HumanClassify2(QDialog):
     # It could be all the same species, or the ones that it is unsure about, or whatever.
 
     # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
-    def __init__(self, sg, segments, label, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
+    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
         QDialog.__init__(self, parent)
 
         # from win32api import GetSystemMetrics
@@ -1337,6 +1337,8 @@ class HumanClassify2(QDialog):
         self.setWindowFlags(self.windowFlags() & QtCore.Qt.WindowCloseButtonHint)
 
         self.sampleRate = sampleRate
+        self.audiodata = audiodata
+        self.audioFormat = audioFormat
         self.incr = incr
         self.lut = lut
         self.colourStart = colourStart
@@ -1395,8 +1397,12 @@ class HumanClassify2(QDialog):
         self.buttons = []
 
         while segRemain > 0 and col < self.h:
-            x1 = int(self.convertAmpltoSpec(self.segments2show[ind][0]))
-            x2 = int(self.convertAmpltoSpec(self.segments2show[ind][1]))
+            x1a = self.segments2show[ind][0]
+            x2a = self.segments2show[ind][1]
+            x1 = int(self.convertAmpltoSpec(x1a))
+            x2 = int(self.convertAmpltoSpec(x2a))
+            x1a = int(x1a * self.sampleRate)
+            x2a = int(x2a * self.sampleRate)
             im = self.setImage(self.sg[x1:x2, :])
             segRemain -= 1
             # self.firstSegment +=1
@@ -1405,10 +1411,9 @@ class HumanClassify2(QDialog):
             else:
                 width = 0
             col += 1
-            self.buttons.append(SupportClasses.PicButton(0,im[0], im[1]))
+            self.buttons.append(SupportClasses.PicButton(0,im[0], im[1], self.audiodata[x1a:x2a], self.audioFormat, (x2a-x1a) / self.sampleRate))
             self.flowLayout.addWidget(self.buttons[-1])
             ind += 1
-
 
     def convertAmpltoSpec(self, x):
         return x * self.sampleRate / self.incr
@@ -1432,6 +1437,7 @@ class HumanClassify2(QDialog):
     def nextPage(self):
         # Find out which buttons have been clicked (so are not correct)
         for i in range(len(self.buttons)):
+            self.buttons[i].stopPlayback()
             if self.buttons[i].buttonClicked:
                 self.errors.append(i+self.firstSegment)
         print(self.errors)
