@@ -256,80 +256,118 @@ class WaveletTrain(QDialog):
         self.setMinimumWidth(450)
 
         self.Step1Label1 = QLabel("Step 1:")
+        self.Step1Label1.setFont(QtGui.QFont('TimesNewRoman', 12))
         self.loadLabel = QLabel("Load your training data")
-        self.Step1Label1.setFont(QtGui.QFont('SansSerif', 12))
         self.browse = QPushButton("Browse")
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
         self.w_dir.setPlainText('<data path>')
+        self.w_dir.setStyleSheet(
+        """QPlainTextEdit {background-color: #FFFFFF;
+                           color: grey;
+                           font-family: TimesNewRoman;}""")
 
         hBox1 = QHBoxLayout()
         hBox1.addWidget(self.loadLabel)
         hBox1.addWidget(self.browse)
 
         self.Step1Label2 = QLabel("Step 2:")
-        self.Step1Label2.setFont(QtGui.QFont('SansSerif', 12))
+        self.Step1Label2.setFont(QtGui.QFont('TimesNewRoman', 12))
+
         self.spLabel = QLabel("Species (as given in annotation)")
         self.species = QLineEdit(self)
-        self.minlenLabel = QLabel("Min length")
-        self.minlen = QLineEdit(self)
-        self.flowLabel = QLabel("Lower frq.")
-        self.fLow = QLineEdit(self)
-        self.fhighLabel = QLabel("Higher frq.")
-        self.fHigh = QLineEdit(self)
-        vBox1 = QVBoxLayout()
-        vBox1.addWidget(self.spLabel)
-        vBox1.addWidget(self.species)
-        vBox2 = QVBoxLayout()
-        vBox2.addWidget(self.minlenLabel)
-        vBox2.addWidget(self.minlen)
-        vBox3 = QVBoxLayout()
-        vBox3.addWidget(self.flowLabel)
-        vBox3.addWidget(self.fLow)
-        vBox4 = QVBoxLayout()
-        vBox4.addWidget(self.fhighLabel)
-        vBox4.addWidget(self.fHigh)
-        hBox2 = QHBoxLayout()
-        hBox2.addLayout(vBox1)
-        hBox2.addLayout(vBox2)
-        hBox2.addLayout(vBox3)
-        hBox2.addLayout(vBox4)
+        hBox_spName = QHBoxLayout()
+        hBox_spName.addWidget(self.spLabel)
+        hBox_spName.addWidget(self.species)
+
         self.GTLabel = QLabel("Prepare for training")
         self.genGT = QPushButton("Prepare")
-        hBox3 = QHBoxLayout()
-        hBox3.addWidget(self.GTLabel)
-        hBox3.addWidget(self.genGT)
+        hBox_prepare = QHBoxLayout()
+        hBox_prepare.addWidget(self.GTLabel)
+        hBox_prepare.addWidget(self.genGT)
 
         self.Step1Label3 = QLabel("Step 3:")
-        self.Step1Label3.setFont(QtGui.QFont('SansSerif', 12))
+        self.Step1Label3.setFont(QtGui.QFont('TimesNewRoman', 12))
+
+        # Todo: read this species info from the training annotations, need to check how reliable though. F0 seems easy to capture reliably.
+        # for now user to study the calls and input values
+        self.minlenLabel = QLabel("Min length (secs)")
+        self.minlen = QLineEdit(self)
+        self.maxlenLabel = QLabel("Max length (secs)")
+        self.maxlen = QLineEdit(self)
+        self.flowLabel = QLabel("Lower frq. (Hz)")
+        self.fLow = QLineEdit(self)
+        self.fhighLabel = QLabel("Higher frq. (Hz)")
+        self.fHigh = QLineEdit(self)
+        self.fsLabel = QLabel("Sampling frq. (Hz)")
+        self.fs = QLineEdit(self)
+        self.f0LowLabel = QLabel("Lower fund. frq. (Hz)")
+        self.f0Low = QLineEdit(self)
+        self.f0HighLabel = QLabel("Higher fund. frq. (Hz)")
+        self.f0High = QLineEdit(self)
+        self.thrLabel = QLabel("Set threshold")
+        self.thr = QDoubleSpinBox()
+        self.thr.setRange(0.1, 1)
+        self.thr.setSingleStep(0.05)
+        self.thr.setDecimals(2)
+        self.thr.setValue(0.5)
+
+
+        vBox_minLen = QVBoxLayout()
+        vBox_minLen.addWidget(self.minlenLabel)
+        vBox_minLen.addWidget(self.minlen)
+        vBox_maxLen = QVBoxLayout()
+        vBox_maxLen.addWidget(self.maxlenLabel)
+        vBox_maxLen.addWidget(self.maxlen)
+        vBox_frqLow = QVBoxLayout()
+        vBox_frqLow.addWidget(self.flowLabel)
+        vBox_frqLow.addWidget(self.fLow)
+        vBox_frqHigh = QVBoxLayout()
+        vBox_frqHigh.addWidget(self.fhighLabel)
+        vBox_frqHigh.addWidget(self.fHigh)
+        vBox_fs = QVBoxLayout()
+        vBox_fs.addWidget(self.fsLabel)
+        vBox_fs.addWidget(self.fs)
+        vBox_f0Low = QVBoxLayout()
+        vBox_f0Low.addWidget(self.f0LowLabel)
+        vBox_f0Low.addWidget(self.f0Low)
+        vBox_f0High = QVBoxLayout()
+        vBox_f0High.addWidget(self.f0HighLabel)
+        vBox_f0High.addWidget(self.f0High)
+        vBox_thr = QVBoxLayout()
+        vBox_thr.addWidget(self.thrLabel)
+        vBox_thr.addWidget(self.thr)
+
+        hBox_train = QHBoxLayout()
+        # hBox2.addLayout(hBox_spp)
+        hBox_train.addLayout(vBox_minLen)
+        hBox_train.addLayout(vBox_maxLen)
+        hBox_train.addLayout(vBox_frqLow)
+        hBox_train.addLayout(vBox_frqHigh)
+        hBox_train.addLayout(vBox_fs)
+        hBox_train.addLayout(vBox_f0Low)
+        hBox_train.addLayout(vBox_f0High)
+        hBox_train.addLayout(vBox_thr)
+
         self.trainLabel = QLabel("Train to detect species")
         self.train = QPushButton("Train")
-        hBox4= QHBoxLayout()
-        hBox4.addWidget(self.trainLabel)
-        hBox4.addWidget(self.train)
+        hBox_train2= QHBoxLayout()
+        hBox_train2.addWidget(self.trainLabel)
+        hBox_train2.addWidget(self.train)
 
         Box = QVBoxLayout()
         Box.addWidget(self.Step1Label1)
         Box.addLayout(hBox1)
         Box.addWidget(self.w_dir)
         Box.addWidget(self.Step1Label2)
-        Box.addLayout(hBox2)
-        Box.addLayout(hBox3)
+        Box.addLayout(hBox_spName)
+        # Box.addLayout(hBox2)
+        Box.addLayout(hBox_prepare)
         Box.addWidget(self.Step1Label3)
-        Box.addLayout(hBox4)
-
+        Box.addLayout(hBox_train)
+        Box.addLayout(hBox_train2)
         # Now put everything into the frame
         self.setLayout(Box)
-
-    def bandclicked(self):
-        # TODO: Can they be grayed out?
-        self.start.setEnabled(not self.start.isEnabled())
-        self.end.setEnabled(not self.end.isEnabled())
-
-    def getValues(self):
-        return [self.algs.currentText(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value()]
-        #return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text(),self.species.currentText()]
-
 
 #======
 class Segmentation(QDialog):
@@ -337,7 +375,7 @@ class Segmentation(QDialog):
     # TODO: add the wavelet params
     # TODO: work out how to return varying size of params, also process them
     # TODO: test and play
-    def __init__(self, maxv, DOC=False, parent=None):
+    def __init__(self, maxv, DOC=False, sppInfo=None, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Segmentation Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -456,7 +494,9 @@ class Segmentation(QDialog):
         self.specieslabel = QLabel("Species")
         self.species=QComboBox()
         # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
-        self.species.addItems(["Choose species...","Kiwi","Ruru"])
+        spp = [*sppInfo]
+        spp.insert(0,"Choose species...")
+        self.species.addItems(spp)
         # self.species.currentIndexChanged[QString].connect(self.changeBoxes)
 
         Box.addWidget(self.specieslabel)
@@ -953,7 +993,7 @@ class HumanClassify1(QDialog):
         self.sg_axis2 = pg.AxisItem(orientation='right')
         self.wPlot.addItem(self.sg_axis, row=0, col=0)
         self.wPlot.addItem(self.sg_axis2, row=0, col=2)
-        
+
         self.pPlot = self.wPlot.addViewBox(enableMouse=False, row=0, col=1)
         self.plot = pg.ImageItem()
         self.pPlot.addItem(self.plot)

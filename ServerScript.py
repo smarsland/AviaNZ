@@ -89,7 +89,7 @@ def detect(dirName='',trainTest=False, species=''):
                         # Save the annotation
                         out.saveAnnotation()
                         cnt=cnt+1
-                        print "current: ", cnt
+                        print ("current: ", cnt)
 
 # detect('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset\positive',trainTest=False, species='Kiwi')
 
@@ -141,7 +141,7 @@ def annotation2excel(dirName='', species=''):
                 out.seg_pos = segments_possible
                 out.excel()  # only the segments those passed eRatio test
                 cnt=cnt+1
-                print "current: ", cnt
+                print("current: ", cnt)
 
 # ----- Utility function. When no kiwi was detected just make empty data file.
 def emptyData(dirName='',trainTest=False, species=''):
@@ -158,7 +158,7 @@ def emptyData(dirName='',trainTest=False, species=''):
             if file.endswith('.wav') and Night and os.stat(root + '/' + file).st_size != 0: # avoid day recordings and files with no data (Tier 1 has 0Kb .wavs)
                 if file + '.data' not in files:  # skip already processed files
                     # Save the excel file
-                    print file
+                    print (file)
                     filename = root + '/' + file
                     sTime= int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
                     out = SupportClasses.exportSegments(segments=[], species=species, startTime=sTime,
@@ -174,7 +174,7 @@ def emptyData(dirName='',trainTest=False, species=''):
                     # Save the annotation
                     out.saveAnnotation()
                     cnt=cnt+1
-                    print "current: ", cnt
+                    print("current: ", cnt)
 
 # ----- Remove segments < 5 seconds long from the annotations (.data) - Filter 1
 def deleteShort(dirName='', minLen=4):
@@ -202,7 +202,7 @@ def deleteShort(dirName='', minLen=4):
                     file = open(file, 'w')
                     json.dump(newSegments, file)
                 cnt += 1
-                print file, cnt
+                print(file, cnt)
 
 def eRatio(dirName):
     for root, dirs, files in os.walk(str(dirName)):
@@ -216,7 +216,7 @@ def eRatio(dirName):
                 if np.shape(np.shape(data))[0] > 1:
                     data = data[:, 0]
                 post = SupportClasses.postProcess(data, sampleRate, [])
-                print file, post.eRatioConfd(seg=None)
+                print(file, post.eRatioConfd(seg=None))
 
 # eRatio('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1-TP and FP segments\FP')
 
@@ -343,11 +343,11 @@ def deleteWindRain(dirName, windTest=True, rainTest=False, Tmean_wind = 1e-8):
                                     else:
                                         potentialCall = False
                                     if not potentialCall:
-                                        print file, seg, "--> windy"
+                                        print(file, seg, "--> windy")
                                         newSegments.remove(seg)
                                         chg = True
                                 else:
-                                    print file, seg, "--> not windy"
+                                    print(file, seg, "--> not windy")
                             if rainTest:
                                 limite_inf = int(round(len(p) * rain_lower)) # minimum frequency of the rainfall frequency band 0.0272 (in
                                                                              # normalized frequency); in Hz=0.0272*(44100/2)=599.8  Hz
@@ -371,18 +371,18 @@ def deleteWindRain(dirName, windTest=True, rainTest=False, Tmean_wind = 1e-8):
                                     else:
                                         potentialCall = False
                                     if not potentialCall:
-                                        print file, seg, "--> windy"
+                                        print(file, seg, "--> windy")
                                         newSegments.remove(seg)
                                         chg = True
                                 else:
                                     # rainy.append(0)
-                                    print file, "--> not rainy"
+                                    print(file, "--> not rainy")
 
                     if chg:
                         file = open(file, 'w')
                         json.dump(newSegments, file)
                 cnt += 1
-                print file, cnt
+                print(file, cnt)
 
 # ----- Delete wind/rain corrupted segments - Filter 2
 # def deleteWindRain(dirName, Tmean_wind = 1e-8, Tsnr_rain = 3.5, windTest=True, rainTest=False):
@@ -483,7 +483,7 @@ def deleteClick(dirName):
                     # Find T_ERatio based on first 5 secs as it varies accorss the recordings
                     post = SupportClasses.postProcess(audioData, sampleRate, [])
                     # T_ERatio = post.eRatioConfd([1, 6, "", ""])
-                    print file
+                    print(file)
                     chg = False
                     for seg in segments:
                         if seg[0] == -1:
@@ -518,7 +518,7 @@ def deleteClick(dirName):
                                 if secs > 10:
                                     continue
                                 else:
-                                    print seg
+                                    print(seg)
                                     newSegments.remove(seg)
                                     chg = True
                     if chg:
@@ -550,7 +550,7 @@ def deleteClick2(dirName):
                     # Find T_ERatio based on first 5 secs as it varies accorss the recordings
                     post = SupportClasses.postProcess(audioData, sampleRate, [])
                     # T_ERatio = post.eRatioConfd([1, 6, "", ""])
-                    print file
+                    print(file)
                     if len(segments)>2:
                         ff = Features.Features(audioData, sampleRate)
                         mfcc = ff.get_mfcc()
@@ -612,7 +612,7 @@ def deleteClick2(dirName):
                                 if ff>500 and ff<5000:
                                     continue
                                 else:
-                                    print seg
+                                    print(seg)
                                     newSegments.remove(seg)
                                     chg = True
                     if chg:
@@ -644,14 +644,14 @@ def accuracy(dirName):
                         continue
                     res[int(np.ceil(seg[0])-1):int(np.ceil(seg[1])-1)] = 1
                 wSeg = WaveletSegment.WaveletSegment(species='Kiwi')
-                print file
+                print(file)
                 fB, recall, tp, fp, tn, fn = wSeg.fBetaScore(np.asarray(GT), res)
                 TP += tp
                 TN += tn
                 FP += fp
                 FN += fn
-    print '------SUMMARY TP, FP, TN, FN, recall, precision, specificity, accuracy-------'
-    print int(TP), int(FP), int(TN), int(FN), TP/(TP+FN), TP/(TP+FP), TN/(TN+FP), (TP + TN)/ (TP + TN + FP + FN) # TP, FP, TN, FN, recall, precision, specificity, accuracy
+    print ('------SUMMARY TP, FP, TN, FN, recall, precision, specificity, accuracy-------')
+    print (int(TP), int(FP), int(TN), int(FN), TP/(TP+FN), TP/(TP+FP), TN/(TN+FP), (TP + TN)/ (TP + TN + FP + FN)) # TP, FP, TN, FN, recall, precision, specificity, accuracy
 
 # # filter 0
 # accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1')
@@ -666,7 +666,7 @@ def accuracy(dirName):
 # filter 3 - click (rain) segs
 # accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1')
 # deleteClick('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset')
-# accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset')
+# accuracy('D:\AviaNZ\Sound Files\Tier1\Tier1Common')
 
 # Resample to 16,000 Hz
 def resample(dirName):
@@ -796,7 +796,7 @@ def isKiwi_dtw_mfcc_batch(dirName, refDir, species='Kiwi'):
                 if file[:-5] not in files:
                     continue
                 else:
-                    print filename
+                    print(filename)
                     audioData, sampleRate = loadFile(filename)  # read, filter, and re-sample to 16 kHz
 
                 for seg in segments:
@@ -841,10 +841,10 @@ def isKiwi_dtw_mfcc(dirName, yTest, srTest, mfccFromFile=False):
                     d = DTW(mfccRef,mfccTest)
                     dList.append(d)
     if sorted(dList)[1]<0.6:
-        print 'it is KIWI',sorted(dList)[1]
+        print('it is KIWI',sorted(dList)[1])
         return True
     else:
-        print 'it is NOT kiwi', sorted(dList)[1]
+        print('it is NOT kiwi', sorted(dList)[1])
         return False
     # return dList
 

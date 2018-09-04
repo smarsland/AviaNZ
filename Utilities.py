@@ -4,6 +4,84 @@ import os, json
 import math, re
 import datetime
 
+#------------------------------------------------- generate .data from excel summary (GSK)
+def excel2data(dir,excelFile, sub=False):
+    import os
+    import openpyxl
+
+    # read excel file
+    book = openpyxl.load_workbook(excelFile)
+    sheet = book.active
+    rid = sheet['A2': 'A919']
+    endtime = sheet['C2': 'C919']
+    date = sheet['D2': 'D919']
+    type = sheet['E2': 'E919']
+    qlty = sheet['F2': 'F919']
+    rids=[]
+    endtimes=[]
+    endtimes_sec=[]
+    dates=[]
+    types=[]
+    quality=[]
+    for i in range(len(rid)):
+        rids.append(str(rid[i][0].value))
+    for i in range(len(endtime)):
+        endtimes.append(str(endtime[i][0].value))
+        h,m,s=str(endtime[i][0].value).split(':')
+        if len(h)>2:
+            x,h = h.split(' ')
+        try:
+            secs=int(h)*60*60+int(m)*60+int(s)
+        except:
+            print("here", i)
+            print(str(endtime[i][0].value))
+            print(h, m, s)
+        endtimes_sec.append(str(secs))
+    for i in range(len(date)):
+        d,t=str(date[i][0].value).split(' ')
+        y,m,d = d.split('-')
+        if not sub:
+            d=str(d)+str(m)+str(y[2:4])	# convert to DOC format
+        else:
+            d = str(y) + str(m) + str(d)
+        dates.append(d)
+    for i in range(len(type)):
+        types.append(str(type[i][0].value))
+    for i in range(len(qlty)):
+        quality.append(str(qlty[i][0].value))
+
+    # generate the .data files from excel
+    for root, dirs, files in os.walk(str(dir)):
+        for f1 in files:
+            if f1.endswith('.wav'):
+                if not sub:
+                    DOCRecording = re.search('(\d{6})_(\d{6})', f1)
+                else:
+                    DOCRecording = re.search('(\d{8})_(\d{6})', f1)
+                if DOCRecording:
+                    startTime = DOCRecording.group(2)
+                    recdate = DOCRecording.group(1)
+                annotation=[]
+                # find the recorder ID
+                if not sub:
+                    id = root.split('\\')[-1]
+                else:
+                    id = root.split('\\')[-2]
+                # convert start time into seconds
+                startSecs = int(startTime[0:2])*60*60+int(startTime[2:4])*60+int(startTime[4:6])
+                # now find any matching segments from excel
+                for i in range(len(rids)):
+                    if id==rids[i] and recdate==dates[i] and startSecs<int(endtimes_sec[i]) and int(endtimes_sec[i])<startSecs+900:
+                        if len(types[i])>1:
+                            annotation.append([int(endtimes_sec[i])-startSecs-40,int(endtimes_sec[i])-startSecs,500,3900,types[i]+'_'+quality[i]])
+                        else:
+                            annotation.append([int(endtimes_sec[i])-startSecs-20,int(endtimes_sec[i])-startSecs,500,3900,types[i]+'_'+quality[i]])
+                annotation.insert(0,[-1, startTime, "Doc_Operator", "Doc_Reviewer", -1])
+                file = open(root + '\\' + f1 + '.data', 'w')
+                json.dump(annotation, file)
+                file.close()
+# excel2data('D:\AviaNZ\Sound Files\kiwi-Fiordland roroa-Sandy and Robin\Brown_manualAnnotation\\New folder','D:\AviaNZ\Sound Files\kiwi-Fiordland roroa-Sandy and Robin\Brown files to Nirosha2.xlsx', sub=True)
+
 #----------------------------generate .data from Freebird tag files
 def tag2data(dir,birdlist):
     import os
@@ -118,7 +196,7 @@ def delEmpAnn(dir):
                 elif len(segments)==1 and segments[0][0]==-1:
                     os.remove(annotation)
 
-# delEmpAnn('F:\Tier1-2014-15')
+# delEmpAnn('E:\Tier1-2014-15 batch1')
 
 #------------------------------------------------- code to extract segments
 def extractSegments(wavFile, destination, copyName, species):

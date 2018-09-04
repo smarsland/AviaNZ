@@ -21,20 +21,20 @@ import Dialogs
 
 import json
 
-sppInfo = {
-            # spp: [min len, max len, flow, fhigh, fs, f0_low, f0_high, wavelet_thr, wavelet_M, wavelet_nodes]
-            'Kiwi': [10, 30, 1100, 7000, 16000, 1200, 4200, 0.5, 0.6, [17, 20, 22, 35, 36, 38, 40, 42, 43, 44, 45, 46, 48, 50, 55, 56]],
-            'Gsk': [6, 25, 900, 7000, 16000, 1200, 4200, 0.25, 0.6, [35, 38, 43, 44, 52, 54]],
-            'Lsk': [10, 30, 1200, 7000, 16000, 1200, 4200,  0.25, 0.6, []], # todo: find len, f0, nodes
-            'Ruru': [1, 30, 500, 7000, 16000, 600, 1300,  0.25, 0.5, [33, 37, 38]], # find M
-            'SIPO': [1, 5, 1200, 3800, 8000, 1200, 3800,  0.25, 0.2, [61, 59, 54, 51, 60, 58, 49, 47]],  # find len, f0
-            'Bittern': [1, 5, 100, 200, 1000, 100, 200, 0.75, 0.2, [10,21,22,43,44,45,46]],  # find len, f0, confirm nodes
-}
+# sppInfo = {
+#             # spp: [min_len, max_len, flow, fhigh, fs, f0_low, f0_high, wavelet_thr, wavelet_M, wavelet_nodes]
+#             'Kiwi': [10, 30, 1100, 7000, 16000, 1200, 4200, 0.5, 0.6, [17, 20, 22, 35, 36, 38, 40, 42, 43, 44, 45, 46, 48, 50, 55, 56]],
+#             'Gsk': [6, 25, 900, 7000, 16000, 1200, 4200, 0.25, 0.6, [35, 38, 43, 44, 52, 54]],
+#             'Lsk': [10, 30, 1200, 7000, 16000, 1200, 4200,  0.25, 0.6, []], # todo: find len, f0, nodes
+#             'Ruru': [1, 30, 500, 7000, 16000, 600, 1300,  0.25, 0.5, [33, 37, 38]], # find M
+#             'SIPO': [1, 5, 1200, 3800, 8000, 1200, 3800,  0.25, 0.2, [61, 59, 54, 51, 60, 58, 49, 47]],  # find len, f0
+#             'Bittern': [1, 5, 100, 200, 1000, 100, 200, 0.75, 0.2, [10,21,22,43,44,45,46]],  # find len, f0, confirm nodes
+# }
 
 class AviaNZ_batchProcess(QMainWindow):
     # Main class for batch processing
 
-    def __init__(self,root=None,minSegment=50, DOC=True):
+    def __init__(self,root=None,minSegment=50,DOC=True,sppinfofile=None):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
         super(AviaNZ_batchProcess, self).__init__()
@@ -52,6 +52,15 @@ class AviaNZ_batchProcess(QMainWindow):
         self.createMenu()
         self.createFrame()
         self.center()
+
+        try:
+            print("Loading species info from file %s" % sppinfofile)
+            self.sppInfo = json.load(open(sppinfofile))
+            # self.savesppinfo = True
+        except:
+            print("Failed to load spp info file, using defaults")
+            self.sppInfo = json.load(open('sppInfo.txt'))
+            # self.savesppinfo = True # TODO: revise this with user permissions in mind
 
     def createFrame(self):
         # Make the window and set its size
@@ -210,8 +219,8 @@ class AviaNZ_batchProcess(QMainWindow):
                             if DOCRecording and self.species in ['Kiwi', 'Ruru'] and not Night:
                                 continue
                             else:
-                                # if not os.path.isfile(root+'/'+filename+'.data'): # if already processed then skip?
-                                #     continue
+                                if os.path.isfile(root+'/'+filename+'.data'): # if already processed then skip?
+                                    continue
                                 cnt=cnt+1
                                 # self.statusRight.setText("Processing file " + str(cnt) + "/" + str(total))
                                 self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + " please wait...")
@@ -240,11 +249,12 @@ class AviaNZ_batchProcess(QMainWindow):
                                 #     newSegments = self.seg.segmentByFIR(float(str(self.FIRThr1.text())))
                                 #     # print newSegments
                                 # elif self.algs.currentText()=='Wavelets':
+                                print("Species: ", self.species)
                                 if self.species!='all':
                                     self.method = "Wavelets"
-                                    ws = WaveletSegment.WaveletSegment(species=sppInfo[self.species])
-                                    print ("sppInfo: ", sppInfo[self.species])
-                                    newSegments = ws.waveletSegment_test(fName=None, data=self.audiodata, sampleRate= self.sampleRate, spInfo=sppInfo[self.species], trainTest=False)
+                                    ws = WaveletSegment.WaveletSegment(species=self.sppInfo[self.species])
+                                    print ("sppInfo: ", self.sppInfo[self.species])
+                                    newSegments = ws.waveletSegment_test(fName=None, data=self.audiodata, sampleRate= self.sampleRate, spInfo=self.sppInfo[self.species], trainTest=False)
                                     print("in batch", newSegments)
                                 else:
                                     self.method = "Default"
@@ -263,7 +273,7 @@ class AviaNZ_batchProcess(QMainWindow):
                                     post = SupportClasses.postProcess(audioData=self.audiodata,
                                                                       sampleRate=self.sampleRate,
                                                                       segments=newSegments,
-                                                                      spInfo=sppInfo[self.species])
+                                                                      spInfo=self.sppInfo[self.species])
                                     # print ("After wavelets: ", post.segments)
                                     post.short()  # species specific
                                     # print ("After short: ", post.segments)
@@ -559,7 +569,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 for file in os.listdir(self.dirName):
                     if fnmatch.fnmatch(file, 'DetectionSummary_*.xlsx'):
                         os.remove(os.path.join(self.dirName, file))
-                       
+
                 for filename in files:
                     DOCRecording = re.search('(\d{6})_(\d{6})', filename)
                     filename = os.path.join(root, filename)

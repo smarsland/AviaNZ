@@ -58,7 +58,7 @@ class WaveletSegment:
             data = self.data
             sampleRate = self.sampleRate
 
-        n=len(data)/sampleRate
+        n=int(len(data)/sampleRate)
 
         coefs = np.zeros((2**(nlevels+1)-2, n))
         for t in range(n):
@@ -367,13 +367,14 @@ class WaveletSegment:
         # Let df=true (denoise during preprocess) for bittern, df=false for others
         # Load data and annotation
         self.loadData(fName)
-        print("Data loaded")
+        # print(self.annotation)
         filteredDenoisedData = self.preprocess(species,df=df)    # skip denoising
+        # print("denoising completed")
         waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
 
         # Compute point-biserial correlations and sort wrt it, return top nNodes
         nodes = self.compute_r(self.annotation, waveletCoefs)
-        #print nodes
+        # print(nodes)
 
         # Now for Nirosha's sorting
         # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
@@ -381,7 +382,7 @@ class WaveletSegment:
 
         # These nodes refer to the unrooted tree, so add 1 to get the real indices
         nodes = [n + 1 for n in nodes]
-        #print nodes
+        # print(nodes)
 
         # Generate a full 5 level wavelet packet decomposition
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
@@ -390,7 +391,7 @@ class WaveletSegment:
         listnodes = []
         bestBetaScore = 0
         bestRecall=0
-        m = len(filteredDenoisedData) / self.sampleRate
+        m = int(len(filteredDenoisedData) / self.sampleRate)
         detected = np.zeros(m)
 
         for node in nodes:
@@ -402,6 +403,8 @@ class WaveletSegment:
             # update the detections
             detections = np.maximum.reduce([detected, detected_c])
             fB,recall,tp,fp,tn,fn = self.fBetaScore(self.annotation, detections)
+            # print("Node,", node)
+            # print("fB, recall: ", fB,recall)
             if fB > bestBetaScore:
                 bestBetaScore = fB
                 bestRecall=recall
@@ -484,7 +487,7 @@ class WaveletSegment:
             self.data = self.data.astype('float') #/ 32768.0
         if np.shape(np.shape(self.data))[0]>1:
             self.data = np.squeeze(self.data[:,0])
-        n=len(self.data)/self.sampleRate
+        n=int(len(self.data)/self.sampleRate)
 
         if trainTest==True:     #survey data don't have annotations
             # Get the segmentation from the txt file
