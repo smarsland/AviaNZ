@@ -1782,9 +1782,7 @@ class AviaNZ(QMainWindow):
         if hasattr(self, 'protocolMarks'):
             for m in self.protocolMarks:
                 self.p_spec.removeItem(m)
-                self.protocolMarks.remove(m)
-        else:
-            self.protocolMarks = []
+        self.protocolMarks = []
 
         if self.config['protocolOn']:
             linePen = pg.mkPen((148, 0, 211), width=5)
@@ -1794,6 +1792,7 @@ class AviaNZ(QMainWindow):
             if self.currentFileSection > 0:
                 linestart += self.config['fileOverlap']
             while linestart < self.datalength/self.sampleRate:
+                print(linestart)
                 lineend = min(self.datalength/self.sampleRate, linestart + self.config['protocolSize'])
                 line = SupportClasses.FixedLineROI(((self.convertAmpltoSpec(linestart),0),
                                       (self.convertAmpltoSpec(lineend),0)), movable=False, pen=linePen)
@@ -2842,7 +2841,8 @@ class AviaNZ(QMainWindow):
             self.loadSegment(hr=True)
             print("segments go to dialog2: ", segments2show)
             segments = copy.deepcopy(segments2show)
-            self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, segments2show, label, self.sampleRate,
+            self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, segments2show,
+                                                               label, self.sampleRate, self.audioFormat,
                                                                self.config['incr'], self.lut, self.colourStart,
                                                                self.colourEnd, self.config['invertColourMap'])
             self.humanClassifyDialog2.exec_()

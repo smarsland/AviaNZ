@@ -936,7 +936,8 @@ class ChildInfoViewBox(pg.ViewBox):
 
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
-    def __init__(self, index, im1, im2, parent=None):
+    # Also includes playback capability.
+    def __init__(self, index, im1, im2, audiodata, format, duration, parent=None):
         super(PicButton, self).__init__(parent)
         self.index = index
         self.im1 = im1
@@ -944,12 +945,47 @@ class PicButton(QAbstractButton):
         self.buttonClicked = False
         self.clicked.connect(self.changePic)
 
+        # playback things
+        self.media_obj = ControllableAudio(format)
+        self.media_obj.notify.connect(self.endListener)
+        self.audiodata = audiodata
+        self.duration = duration * 1000 # in ms
+
+        self.playButton = QtGui.QToolButton(self)
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.clicked.connect(self.playImage)
+        self.playButton.hide()
+
     def paintEvent(self, event):
         im = self.im2 if self.buttonClicked else self.im1
 
         if type(event) is not bool:
             painter = QPainter(self)
             painter.drawImage(event.rect(), im)
+
+    def enterEvent(self, QEvent):
+        self.playButton.show()
+
+    def leaveEvent(self, QEvent):
+        if not self.media_obj.isPlaying():
+            self.playButton.hide()
+
+    def playImage(self):
+        if self.media_obj.isPlaying():
+            self.stopPlayback()
+        else:
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            self.media_obj.loadArray(self.audiodata)
+
+    def endListener(self):
+        time = self.media_obj.elapsedUSecs() // 1000
+        if time > self.duration:
+            self.stopPlayback()
+
+    def stopPlayback(self):
+        self.media_obj.pressedStop()
+        self.playButton.hide()
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
 
     def sizeHint(self):
         return self.im1.size()
@@ -1055,6 +1091,9 @@ class ControllableAudio(QAudioOutput):
             audiodata = audiodata.astype('int16') # 16 corresponds to sampwidth=2
         elif self.format.sampleSize() == 32:
             audiodata = audiodata.astype('int32')
+        elif self.format.sampleSize() == 24:
+            audiodata = audiodata.astype('int32')
+            print("Warning: 24-bit sample playback currently not supported")
         else:
             print("ERROR: sampleSize %d not supported" % self.format.sampleSize())
             return
@@ -1064,7 +1103,7 @@ class ControllableAudio(QAudioOutput):
 
         # write filtered output to a BytesIO buffer
         self.tempout = io.BytesIO()
-        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale='dtype-limits', sampwidth=self.format.sampleSize() // 8)
+        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale='none', sampwidth=self.format.sampleSize() // 8)
 
         # copy BytesIO@write to QBuffer@read for playing
         self.temparr = QByteArray(self.tempout.getvalue()[44:])
