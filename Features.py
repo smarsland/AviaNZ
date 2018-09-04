@@ -463,12 +463,12 @@ def isKiwi_dtw_mfcc(dirName, yTest, srTest):
                 filename = root + '/' + filename #[:-4]
                 y, sr = loadFile(filename)
                 d = mfcc_dtw(y=y, sr=sr, yTest=yTest, srTest=srTest)
-                print filename, d
+                print(filename, d)
                 dList.append(d)
     if sorted(dList)[1]<0.2:
-        print 'it is KIWI',sorted(dList)[1]
+        print('it is KIWI',sorted(dList)[1])
     else:
-        print 'it is NOT kiwi', sorted(dList)[1]
+        print('it is NOT kiwi', sorted(dList)[1])
     return dList
 
 # dList=isKiwi_dtw_mfcc("Sound Files/dtw_mfcc/kiwi/kiwimale", yTest,srTest)

@@ -205,8 +205,6 @@ class SignalProc:
             maxFreq = sampleRate/2
         low = max(low,0,minFreq)
         high = min(high,maxFreq,sampleRate/2)
-        
-        print(low,high,minFreq,maxFreq)
 
         if low == minFreq and high == maxFreq:
             print("No filter needed!")

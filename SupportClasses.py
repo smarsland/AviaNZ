@@ -531,7 +531,7 @@ class exportSegments:
             ws.cell(row=1, column=5, value="max freq., Hz")
             if species=="all":
                 ws.cell(row=1, column=6, value="species")
-            
+
             # Second sheet
             ws = wb['Presence Absence']
             ws.cell(row=1, column=1, value="File Name")

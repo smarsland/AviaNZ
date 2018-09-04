@@ -144,7 +144,7 @@ class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
 
-    def __init__(self,root=None,configfile=None,DOC=True,CLI=False,firstFile='', imageFile='', command=''):
+    def __init__(self,root=None,configfile=None,sppinfofile=None,DOC=True,CLI=False,firstFile='', imageFile='', command=''):
         """Initialisation of the class. Load a configuration file, or create a new one if it doesn't
         exist. Also initialises the data structures and loads an initial file (specified explicitly)
         and sets up the window.
@@ -165,21 +165,18 @@ class AviaNZ(QMainWindow):
             self.saveConfig = True # TODO: revise this with user permissions in mind
         self.configfile = configfile
 
+        try:
+            print("Loading species info from file %s" % sppinfofile)
+            self.sppInfo = json.load(open(sppinfofile))
+            self.savesppinfo = True
+        except:
+            print("Failed to load spp info file, using defaults")
+            self.sppInfo = json.load(open('sppInfo.txt'))
+            self.savesppinfo = True # TODO: revise this with user permissions in mind
+        self.sppinfofile = sppinfofile
+
         # FOR NOW:
         DOC = self.config['DOC']
-
-        # ("Save species info to avoid hardcoding")
-        # TODO: Stick in a file and load as required
-        self.sppInfo = {
-            # spp: [min len, max len, flow, fhigh, fs, f0_low, f0_high, wavelet_thr, wavelet_M, wavelet_nodes]
-            'Kiwi': [10, 30, 1100, 7000, 16000, 1200, 4200, 0.5, 0.6,
-                     [17, 20, 22, 35, 36, 38, 40, 42, 43, 44, 45, 46, 48, 50, 55, 56]],
-            'Gsk': [6, 25, 900, 7000, 16000, 1200, 4200, 0.25, 0.6, [35, 38, 43, 44, 52, 54]],
-            'Lsk': [10, 30, 1200, 7000, 16000, 1200, 4200, 0.25, 0.6, []],  # todo: find len, f0, nodes
-            'Ruru': [1, 30, 500, 7000, 16000, 600, 1300, 0.25, 0.5, [33, 37, 38]],  # find M
-            'SIPO': [1, 5, 1200, 3800, 8000, 1200, 3800, 0.25, 0.2, [61, 59, 54, 51, 60, 58, 49, 47]],  # len, f0
-            'Bittern': [1, 5, 100, 200, 1000, 100, 200, 0.75, 0.2, [10, 21, 22, 43, 44, 45, 46]],   # len, f0, and confirm nodes
-        }
 
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
@@ -410,7 +407,7 @@ class AviaNZ(QMainWindow):
         actionMenu.addSeparator()
         actionMenu.addAction("Export segments to Excel",self.exportSeg)
         actionMenu.addSeparator()
-        if self.DOC == False:
+        if self.DOC == True:
             actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
         actionMenu.addSeparator()
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
@@ -3146,30 +3143,63 @@ class AviaNZ(QMainWindow):
     def trainWavelet(self):
         """ Listener for the wavelet training dialog.
         """
-        species = str(self.waveletTDialog.species.text())
+        species = str(self.waveletTDialog.species.text()).title()
         minLen = int(self.waveletTDialog.minlen.text())
+        maxLen = int(self.waveletTDialog.maxlen.text())
         minFrq = int(self.waveletTDialog.fLow.text())
         maxFrq = int(self.waveletTDialog.fHigh.text())
-        ws = WaveletSegment.WaveletSegment(species=[minLen,minFrq,maxFrq])
-        for root, dirs, files in os.walk(str(self.dirName)):
+        fs = int(self.waveletTDialog.fs.text())
+        f0_low = int(self.waveletTDialog.f0Low.text())
+        f0_high = int(self.waveletTDialog.f0High.text())
+        thr = self.waveletTDialog.thr.value()
+        M = minLen/2
+        # print(species,minLen,minFrq,maxFrq)
+        ws = WaveletSegment.WaveletSegment(species=[minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M])
+        optimumNodes=[]
+        for root, dirs, files in os.walk(str(self.dName)):
             for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '-sec.txt' in files:
-                    wavFile = root + '/' + file
-                    nodes = ws.waveletSegment_train(wavFile, species=[minLen,minFrq,maxFrq], df=False)
+                print(file)
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files:
+                    wavFile = root + '/' + file[:-4]
+                    print(wavFile)
+                    nodes = ws.waveletSegment_train(wavFile, species=[minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M], df=False)
                     print(nodes)
-
+                    for node in nodes:
+                        if node not in optimumNodes:
+                            optimumNodes.append(node)
+        # add this filter to sppinfoFile
+        if self.saveConfig:
+            self.sppInfo[species] = [minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M, optimumNodes]
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("Training is completed! \nThis new filter will appear under wavelet segmentation now. \nFirst test it on a seperate dataset (small) before actual use. \nIf you find it does not perform well please retrain the filter \nadding more trining data and test.")
+        msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+        msg.setWindowIcon(QIcon('img/Avianz.ico'))
+        msg.setWindowTitle("Detector Ready to Test!")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+        return
 
     def prepareTrainData(self):
         """ Listener for the wavelet training dialog.
         """
         # get the species
         species = str(self.waveletTDialog.species.text())
-        for root, dirs, files in os.walk(str(self.dirName)):
+        for root, dirs, files in os.walk(str(self.dName)):
             for file in files:
                 if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
                     #annotation to GT (generate _1sec.txt GT)
                     wavFile = root + '/' + file
                     self.annotation2GT(wavFile, species)
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setText("Step 2 is done. \nMove on to Step 3 to complete training.")
+        msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+        msg.setWindowIcon(QIcon('img/Avianz.ico'))
+        msg.setWindowTitle("Preperation Done!")
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec_()
+        return
 
     def annotation2GT(self, wavFile, species, duration=0):
         """
@@ -3190,18 +3220,18 @@ class AviaNZ(QMainWindow):
         GT[:][2] = ''
         GT[:][3] = ''
         if os.path.isfile(datFile):
-            print(datFile)
+            # print(datFile)
             with open(datFile) as f:
                 segments = json.load(f)
             for seg in segments:
-                print("seg: ", seg)
-                print(species, seg[4])
+                # print("seg: ", seg)
+                # print(species, seg[4])
                 if seg[0] == -1:
                     continue
-                if not re.search(species, seg[4]):
+                if not re.search(species.title(), seg[4].title()):
                     continue
                 else:
-                    type = species
+                    type = species.title()
                     quality = ''
                     s = int(math.floor(seg[0]))
                     e = int(math.ceil(seg[1]))
@@ -3229,26 +3259,22 @@ class AviaNZ(QMainWindow):
                     f.write(item)
                 f.write('\n')
             f.write('\n')
-            # for item in strings:
-            #     f.write(item + "\n")
-
-        # out = file(eFile, "w")
-        # for line in GT:
-        #     print >> out, "\t".join(line)
-        # out.close()
 
     def browseTrainData(self):
         """ Listener for the wavelet training dialog.
         """
         # [dir] = self.waveletTDialog.getValues()
-        self.dirName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose Folder to Process')
+        self.dName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose Folder to Process')
         print("Dir:", self.dirName)
-        self.waveletTDialog.w_dir.setPlainText(self.dirName)
+        self.waveletTDialog.w_dir.setPlainText(self.dName)
+        self.waveletTDialog.w_dir.setReadOnly(True)
+        self.waveletTDialog.raise_()
+        # self.waveletTDialog.show()
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
         """
-        self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata),DOC = self.DOC)
+        self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata),DOC = self.DOC, sppInfo=self.sppInfo)
         self.segmentDialog.show()
         self.segmentDialog.activateWindow()
         self.segmentDialog.undo.clicked.connect(self.segment_undo)
@@ -4037,6 +4063,13 @@ class AviaNZ(QMainWindow):
             except Exception as e:
                 print("ERROR while saving config file:")
                 print(e)
+        if self.savesppinfo == True:
+            try:
+                print("Saving species info file")
+                json.dump(self.sppInfo, open(self.sppinfofile, 'w'))
+            except Exception as e:
+                print("ERROR while saving species info file:")
+                print(e)
         QApplication.quit()
 
     def backupDatafiles(self):
@@ -4069,7 +4102,7 @@ def mainlauncher(cli, infile, imagefile, command):
         if not isinstance(infile, str):
             print("ERROR: valid input file (-f) is mandatory in CLI mode!")
             sys.exit()
-        avianz = AviaNZ(configfile='AviaNZconfig_user.txt',DOC=DOC,CLI=True,firstFile=infile, imageFile=imagefile, command=command)
+        avianz = AviaNZ(configfile='AviaNZconfig.txt',DOC=DOC,CLI=True,firstFile=infile, imageFile=imagefile, command=command)
         print("Analysis complete, closing AviaNZ")
     else:
         print("Starting AviaNZ in GUI mode")
@@ -4082,10 +4115,10 @@ def mainlauncher(cli, infile, imagefile, command):
         task = first.getValues()
 
         if task == 1:
-            avianz = AviaNZ(DOC=DOC, configfile='AviaNZconfig_user.txt')
+            avianz = AviaNZ(DOC=DOC, configfile='AviaNZconfig_user.txt', sppinfofile='sppInfo_user.txt')
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==2:
-            avianz = AviaNZ_batch.AviaNZ_batchProcess()
+            avianz = AviaNZ_batch.AviaNZ_batchProcess(DOC=DOC,sppinfofile='sppInfo_user.txt')
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==4:
             avianz = AviaNZ_batch.AviaNZ_reviewAll(configfile='AviaNZconfig_user.txt')
@@ -4093,7 +4126,7 @@ def mainlauncher(cli, infile, imagefile, command):
         avianz.show()
         app.exec_()
 
-DOC=False    # only DOC features or all
+DOC=True    # only DOC features or all
 generateExcel=True
 
 # Start the application
