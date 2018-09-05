@@ -1341,6 +1341,7 @@ class AviaNZ(QMainWindow):
             if self.showFundamental.isChecked():
                 self.statusLeft.setText("Drawing fundamental frequency...")
                 pitch, y, minfreq, W = self.seg.yin()
+                print("pitch: ", np.min(pitch), np.max(pitch))
                 ind = np.squeeze(np.where(pitch>minfreq))
                 pitch = pitch[ind]
                 ind = ind*W/(self.config['window_width'])
@@ -3135,6 +3136,7 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog = Dialogs.WaveletTrain(np.max(self.audiodata), DOC=self.DOC)
         self.waveletTDialog.show()
         self.waveletTDialog.activateWindow()
+        self.dName=None
         # self.waveletTDialog.undo.clicked.connect(self.segment_undo)
         self.waveletTDialog.browse.clicked.connect(self.browseTrainData)
         self.waveletTDialog.genGT.clicked.connect(self.prepareTrainData)
@@ -3144,35 +3146,65 @@ class AviaNZ(QMainWindow):
         """ Listener for the wavelet training dialog.
         """
         species = str(self.waveletTDialog.species.text()).title()
+        sylLen = float(self.waveletTDialog.avgSyllen.text())
         minLen = int(self.waveletTDialog.minlen.text())
         maxLen = int(self.waveletTDialog.maxlen.text())
         minFrq = int(self.waveletTDialog.fLow.text())
         maxFrq = int(self.waveletTDialog.fHigh.text())
         fs = int(self.waveletTDialog.fs.text())
-        f0_low = int(self.waveletTDialog.f0Low.text())
-        f0_high = int(self.waveletTDialog.f0High.text())
+        f0_low = []     # int(self.waveletTDialog.f0Low.text())
+        f0_high = []    # int(self.waveletTDialog.f0High.text())
         thr = self.waveletTDialog.thr.value()
-        M = minLen/2
+        M = sylLen
         # print(species,minLen,minFrq,maxFrq)
         ws = WaveletSegment.WaveletSegment(species=[minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M])
         optimumNodes=[]
         for root, dirs, files in os.walk(str(self.dName)):
             for file in files:
                 print(file)
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
                     wavFile = root + '/' + file[:-4]
+                    datFile = root + '/' + file + '.data'
                     print(wavFile)
+                    # calculate f0_low and f0_high from GT
+                    if os.path.isfile(datFile):
+                        # print(datFile)
+                        with open(datFile) as f:
+                            segments = json.load(f)
+                        for seg in segments:
+                            if seg[0] == -1:
+                                continue
+                            elif seg[4].title() == species:
+                                secs = seg[1] - seg[0]
+                                wavobj = wavio.read(wavFile+'.wav', nseconds=secs, offset=seg[0])
+                                data = wavobj.data
+                                if np.shape(np.shape(data))[0] > 1:
+                                    data = data[:, 0]
+                                sampleRate = wavobj.rate
+                                if data is not 'float':
+                                    data = data.astype('float')
+                                print("size: ", np.shape(data))
+                                print("type: ", type(data))
+                                # data = self.audioData[int(seg[0] * self.sampleRate):int(seg[1] * self.sampleRate)]
+                                f0_l, f0_h = self.ff(data, minLen, maxLen, minFrq, maxFrq, sampleRate)
+                                if f0_l != 0 and f0_h != 0:
+                                    f0_low.append(f0_l)
+                                    f0_high.append(f0_h)
+                    # find wavelet nodes
                     nodes = ws.waveletSegment_train(wavFile, species=[minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M], df=False)
                     print(nodes)
                     for node in nodes:
                         if node not in optimumNodes:
                             optimumNodes.append(node)
+        print('ff: ', f0_low, f0_high)
+        f0_low = np.min(f0_low)
+        f0_high = np.max(f0_high)
         # add this filter to sppinfoFile
         if self.saveConfig:
             self.sppInfo[species] = [minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M, optimumNodes]
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
-        msg.setText("Training is completed! \nThis new filter will appear under wavelet segmentation now. \nFirst test it on a seperate dataset (small) before actual use. \nIf you find it does not perform well please retrain the filter \nadding more trining data and test.")
+        msg.setText("Training is completed! \nNow this detector will appear under wavelet segmentation. \nFirst test it on a seperate dataset before actual use. \nIf you find it does not perform well, retrain the detector \nadding more trining data and test.")
         msg.setIconPixmap(QPixmap("img/Owl_done.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
         msg.setWindowTitle("Detector Ready to Test!")
@@ -3180,9 +3212,70 @@ class AviaNZ(QMainWindow):
         msg.exec_()
         return
 
+    def ff(self, data, minLen, maxLen, minF, maxF, fs):
+        sc = SupportClasses.preProcess(audioData=data, sampleRate=fs, spInfo=[minLen,maxLen,minF, maxF, fs], df=True)  # species left empty to avoid bandpass filter
+        data, sampleRate = sc.denoise_filter(level=10)
+        sp = SignalProc.SignalProc([], 0, 512, 256)
+        sgRaw = sp.spectrogram(data, 512, 256, mean_normalise=True, onesided=True, multitaper=False)
+        segment = Segment.Segment(data, sgRaw, sp, sampleRate, 512, 256)
+        pitch, y, minfreq, W = segment.yin(minfreq=100)
+        print("pitch: ", np.min(pitch), np.max(pitch))
+        ind = np.squeeze(np.where(pitch > minfreq))
+        pitch = pitch[ind]
+        print("pitch: ", np.min(pitch), np.max(pitch))
+        if pitch.size == 0:
+            print(' *++ no fundamental freq detected')
+            return 0, 0
+        ind = ind * W / 512
+        x = (pitch * 2. / sampleRate * np.shape(sgRaw)[1]).astype('int')
+        from scipy.signal import medfilt
+        x = medfilt(pitch, 15)
+        if ind.size < 2:
+            print("f0=", pitch)
+            f0 = pitch
+            return f0,f0
+        else:  # Get the individual pieces within a seg
+            syls = segment.identifySegments(ind, maxgap=10, minlength=minLen / 2)
+            print("sys= ", sys)
+            if syls == []:
+                return np.min(pitch), np.max(pitch)
+            low = []
+            high = []
+            for s in syls:  # see if any syllable got right ff
+                s[0] = s[0] * sampleRate / float(256)
+                s[1] = s[1] * sampleRate / float(256)
+                i = np.where((ind > s[0]) & (ind < s[1]))
+                print('i=', i)
+                print("x[i]=",x[i])
+                if len(x[i])>0:
+                    low.append(np.min(x[i]))
+                    high.append(np.min(x[i]))
+            if len(low)>0:
+                return np.min(low), np.max(high)
+            else:
+                return 0,0
+
     def prepareTrainData(self):
         """ Listener for the wavelet training dialog.
         """
+        if str(self.waveletTDialog.species.text()) =='':
+            msg = QMessageBox()
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setText("Please specify the species!")
+            msg.setWindowTitle("Species")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
+            return
+        if self.dName is None or self.dName == '':
+            msg = QMessageBox()
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setText("Please specify trainig data!")
+            msg.setWindowTitle("Taining data")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
+            return
         # get the species
         species = str(self.waveletTDialog.species.text())
         for root, dirs, files in os.walk(str(self.dName)):

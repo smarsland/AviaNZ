@@ -42,6 +42,15 @@ class AviaNZ_batchProcess(QMainWindow):
         self.dirName=[]
         self.DOC=DOC
 
+        try:
+            print("Loading species info from file %s" % sppinfofile)
+            self.sppInfo = json.load(open(sppinfofile))
+            # self.savesppinfo = True
+        except:
+            print("Failed to load spp info file, using defaults")
+            self.sppInfo = json.load(open('sppInfo.txt'))
+            # self.savesppinfo = True # TODO: revise this with user permissions in mind
+
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
 
@@ -52,15 +61,6 @@ class AviaNZ_batchProcess(QMainWindow):
         self.createMenu()
         self.createFrame()
         self.center()
-
-        try:
-            print("Loading species info from file %s" % sppinfofile)
-            self.sppInfo = json.load(open(sppinfofile))
-            # self.savesppinfo = True
-        except:
-            print("Failed to load spp info file, using defaults")
-            self.sppInfo = json.load(open('sppInfo.txt'))
-            # self.savesppinfo = True # TODO: revise this with user permissions in mind
 
     def createFrame(self):
         # Make the window and set its size
@@ -92,7 +92,14 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_speLabel1 = QLabel("  Select Species")
         self.d_detection.addWidget(self.w_speLabel1,row=1,col=0)
         self.w_spe1 = QComboBox()
-        self.w_spe1.addItems(["Kiwi", "Ruru", "Bittern", "all"])
+        # print(self.sppInfo)
+
+
+        spp = [*self.sppInfo]
+        # spp = []
+        spp.insert(0, "Choose species...")
+        self.w_spe1.addItems(spp)
+        # self.w_spe1.addItems(["Kiwi", "Ruru", "Bittern", "all"])
         self.d_detection.addWidget(self.w_spe1,row=1,col=1,colspan=2)
 
         self.w_resLabel = QLabel("  Output Resolution (secs)")
@@ -185,14 +192,8 @@ class AviaNZ_batchProcess(QMainWindow):
         with pg.BusyCursor():
             if self.dirName:
                 # self.statusLeft.setText("Processing...")
-                i=self.w_spe1.currentIndex()
-                if i==0:
-                    self.species="Kiwi"
-                elif i==1:
-                    self.species="Ruru"
-                elif i==2:
-                    self.species ="Bittern"
-                else: # All
+                self.species=self.w_spe1.currentText()
+                if self.species == "Choose species...":
                     self.species="all"
                 total=0
                 for root, dirs, files in os.walk(str(self.dirName)):
@@ -224,6 +225,7 @@ class AviaNZ_batchProcess(QMainWindow):
                                 cnt=cnt+1
                                 # self.statusRight.setText("Processing file " + str(cnt) + "/" + str(total))
                                 self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + " please wait...")
+                                self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + " please wait...")
                                 self.filename=root+'/'+filename
                                 self.loadFile()
                                 # self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
@@ -249,13 +251,13 @@ class AviaNZ_batchProcess(QMainWindow):
                                 #     newSegments = self.seg.segmentByFIR(float(str(self.FIRThr1.text())))
                                 #     # print newSegments
                                 # elif self.algs.currentText()=='Wavelets':
-                                print("Species: ", self.species)
+                                # print("Species: ", self.species)
                                 if self.species!='all':
                                     self.method = "Wavelets"
                                     ws = WaveletSegment.WaveletSegment(species=self.sppInfo[self.species])
-                                    print ("sppInfo: ", self.sppInfo[self.species])
+                                    # print ("sppInfo: ", self.sppInfo[self.species])
                                     newSegments = ws.waveletSegment_test(fName=None, data=self.audiodata, sampleRate= self.sampleRate, spInfo=self.sppInfo[self.species], trainTest=False)
-                                    print("in batch", newSegments)
+                                    # print("in batch", newSegments)
                                 else:
                                     self.method = "Default"
                                     self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)

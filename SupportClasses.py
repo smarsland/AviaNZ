@@ -649,7 +649,7 @@ class exportSegments:
     def saveAnnotation(self):
         # Save annotations - batch processing
         annotation = []
-        annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), "Nirosha", "Stephen", -1])
+        annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), "Auto", "", -1])
         # segments can be provided as confirmed/toCheck lists,
         # otherwise everything from segments list is exported as-is.
         if len(self.confirmedSegments) > 0 or len(self.segmentstoCheck) > 0:
