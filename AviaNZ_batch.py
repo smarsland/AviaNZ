@@ -214,6 +214,9 @@ class AviaNZ_batchProcess(QMainWindow):
                                 if int(startTime[:2]) > 18 or int(startTime[:2]) < 6:  # 6pm to 6am as night
                                     Night = True
                                     sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                                else:
+                                    Night = False
+                                    sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
                             else:
                                 sTime=0
 
@@ -287,6 +290,7 @@ class AviaNZ_batchProcess(QMainWindow):
                                     print ("After ff: ", post.segments)
                                 newSegments = post.segments
                                 # Save output
+                                print("stime: ", sTime)
                                 out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=[], segmentstoCheck=post.segments, species=self.species, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
                                 out.excel()
                                 # Save the annotation
