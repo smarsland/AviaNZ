@@ -3145,6 +3145,7 @@ class AviaNZ(QMainWindow):
     def trainWavelet(self):
         """ Listener for the wavelet training dialog.
         """
+        import librosa
         species = str(self.waveletTDialog.species.text()).title()
         sylLen = float(self.waveletTDialog.avgSyllen.text())
         minLen = int(self.waveletTDialog.minlen.text())
@@ -3183,9 +3184,8 @@ class AviaNZ(QMainWindow):
                                 sampleRate = wavobj.rate
                                 if data is not 'float':
                                     data = data.astype('float')
-                                print("size: ", np.shape(data))
-                                print("type: ", type(data))
-                                # data = self.audioData[int(seg[0] * self.sampleRate):int(seg[1] * self.sampleRate)]
+                                if fs != sampleRate:
+                                    data = librosa.core.audio.resample(data, sampleRate, fs)
                                 f0_l, f0_h = self.ff(data, minLen, maxLen, minFrq, maxFrq, sampleRate)
                                 if f0_l != 0 and f0_h != 0:
                                     f0_low.append(f0_l)
@@ -3197,8 +3197,13 @@ class AviaNZ(QMainWindow):
                         if node not in optimumNodes:
                             optimumNodes.append(node)
         print('ff: ', f0_low, f0_high)
-        f0_low = np.min(f0_low)
-        f0_high = np.max(f0_high)
+        if len(f0_low) > 0 and len(f0_high) > 0:
+            f0_low = np.min(f0_low)
+            f0_high = np.max(f0_high)
+        else:
+            # user to enter?
+            f0_low = minFrq
+            f0_high = maxFrq
         # add this filter to sppinfoFile
         if self.saveConfig:
             self.sppInfo[species] = [minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M, optimumNodes]
@@ -3222,7 +3227,8 @@ class AviaNZ(QMainWindow):
         print("pitch: ", np.min(pitch), np.max(pitch))
         ind = np.squeeze(np.where(pitch > minfreq))
         pitch = pitch[ind]
-        print("pitch: ", np.min(pitch), np.max(pitch))
+        if len(pitch)>0:
+            print("pitch: ", np.min(pitch), np.max(pitch))
         if pitch.size == 0:
             print(' *++ no fundamental freq detected')
             return 0, 0
@@ -3854,7 +3860,7 @@ class AviaNZ(QMainWindow):
         self.t.show()
         self.t.setWindowTitle('AviaNZ - Interface Settings')
         self.t.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.t.setFixedSize(420, 550)
+        self.t.setFixedSize(520, 800)
 
     def changeParams(self,param, changes):
         """ Update the config and the interface if anything changes in the tree
