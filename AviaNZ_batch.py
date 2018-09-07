@@ -19,7 +19,7 @@ import WaveletSegment
 import SupportClasses
 import Dialogs
 
-import json
+import json, copy
 
 # sppInfo = {
 #             # spp: [min_len, max_len, flow, fhigh, fs, f0_low, f0_high, wavelet_thr, wavelet_M, wavelet_nodes]
@@ -97,7 +97,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
         spp = [*self.sppInfo]
         # spp = []
-        spp.insert(0, "Choose species...")
+        spp.insert(0, "All species")
         self.w_spe1.addItems(spp)
         # self.w_spe1.addItems(["Kiwi", "Ruru", "Bittern", "all"])
         self.d_detection.addWidget(self.w_spe1,row=1,col=1,colspan=2)
@@ -193,14 +193,23 @@ class AviaNZ_batchProcess(QMainWindow):
             if self.dirName:
                 # self.statusLeft.setText("Processing...")
                 self.species=self.w_spe1.currentText()
-                if self.species == "Choose species...":
+                if self.species == "All species":
                     self.species="all"
+                    self.method = "Default"
+                else:
+                    self.method = "Wavelets"
                 total=0
                 for root, dirs, files in os.walk(str(self.dirName)):
                     for filename in files:
                         if filename.endswith('.wav'):
                             total=total+1
                 cnt=0   # processed number of files
+
+                out = SupportClasses.exportSegments(segments=[], confirmedSegments=[],
+                                                    segmentstoCheck=[], species=self.species,
+                                                    startTime=0, dirName=self.dirName, filename='',
+                                                    datalength=0, sampleRate=0,
+                                                    method=self.method, resolution=self.w_res.value(), batchMode=True)
 
                 for root, dirs, files in os.walk(str(self.dirName)):
                     for filename in files:
@@ -256,13 +265,13 @@ class AviaNZ_batchProcess(QMainWindow):
                                 # elif self.algs.currentText()=='Wavelets':
                                 # print("Species: ", self.species)
                                 if self.species!='all':
-                                    self.method = "Wavelets"
+                                    # self.method = "Wavelets"
                                     ws = WaveletSegment.WaveletSegment(species=self.sppInfo[self.species])
                                     # print ("sppInfo: ", self.sppInfo[self.species])
                                     newSegments = ws.waveletSegment_test(fName=None, data=self.audiodata, sampleRate= self.sampleRate, spInfo=self.sppInfo[self.species], trainTest=False)
                                     # print("in batch", newSegments)
                                 else:
-                                    self.method = "Default"
+                                    # self.method = "Default"
                                     self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
                                     newSegments=self.seg.bestSegments()
                                     # print newSegments
@@ -291,10 +300,18 @@ class AviaNZ_batchProcess(QMainWindow):
                                 newSegments = post.segments
                                 # Save output
                                 print("stime: ", sTime)
-                                out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=[], segmentstoCheck=post.segments, species=self.species, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
+                                # out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=[], segmentstoCheck=post.segments, species=self.species, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
+                                out.segments = newSegments
+                                out.segmentstoCheck = post.segments
+                                out.startTime = sTime
+                                out.dirName = self.dirName
+                                out.filename = self.filename
+                                out.datalength = self.datalength
+                                out.sampleRate = self.sampleRate
                                 out.excel()
                                 # Save the annotation
                                 out.saveAnnotation()
+                out.wb.save(str(out.eFile))
                 # self.statusLeft.setText("Ready")
                 self.statusBar().showMessage("Processed files " + str(cnt) + "/" + str(total))
             else:
@@ -478,7 +495,8 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_speLabel1 = QLabel("  Select Species")
         self.d_detection.addWidget(self.w_speLabel1,row=1,col=0)
         self.w_spe1 = QComboBox()
-        self.w_spe1.addItems(["all"])
+        self.spList = ['All']
+        self.w_spe1.addItems(self.spList)
         self.d_detection.addWidget(self.w_spe1,row=1,col=1,colspan=2)
 
         self.w_resLabel = QLabel("  Output Resolution (secs)")
@@ -490,11 +508,12 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.w_res, row=2, col=1, colspan=2)
 
         self.w_processButton = QPushButton("&Review Folder")
-        self.w_processButton.clicked.connect(self.detect)
+        self.w_processButton.clicked.connect(self.review)
         self.d_detection.addWidget(self.w_processButton,row=11,col=2)
         self.w_processButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
 
         self.w_browse.clicked.connect(self.browse)
+        # print("spList after browse: ", self.spList)
 
         self.show()
 
@@ -554,12 +573,187 @@ class AviaNZ_reviewAll(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         print("Dir:", self.dirName)
         self.w_dir.setPlainText(self.dirName)
+        # find species names from the annotations
+        for root, dirs, files in os.walk(str(self.dirName)):
+            for filename in files:
+                if filename.endswith('.data'):
+                    datFile = root + '/' + filename
+                    if os.path.isfile(datFile):
+                        with open(datFile) as f:
+                            segments = json.load(f)
+                            for seg in segments:
+                                if seg[0] == -1:
+                                    continue
+                                elif seg[4][-1] == '?':
+                                    if seg[4][:-1] not in self.spList:
+                                        self.spList.append(seg[4][:-1])
+                                elif seg[4] not in self.spList:
+                                    self.spList.append(seg[4])
+        print("species list within browse: ", self.spList)
+        self.w_spe1.clear()
+        self.w_spe1.addItems(self.spList)
 
-    def detect(self, minLen=5):
+
+    def review(self):
+        self.species = self.w_spe1.currentText().title()
+        if self.species == 'All':
+            self.review_all()
+        else:
+            self.review_single()
+
+    def review_single(self):
+        if self.dirName:
+            total = 0
+            for root, dirs, files in os.walk(str(self.dirName)):
+                for filename in files:
+                    filename = os.path.join(root, filename)
+                    if filename.endswith('.wav') and os.path.isfile(filename + '.data'):
+                        print(filename)
+                        total = total + 1
+            cnt = 0  # processed number of files
+            filesuccess = 0
+
+            for root, dirs, files in os.walk(str(self.dirName)):
+                # delete old xlsx:
+                for file in os.listdir(self.dirName):
+                    if fnmatch.fnmatch(file, 'DetectionSummary_'+self.species+'.xlsx'):
+                        os.remove(os.path.join(self.dirName, file))
+
+                for filename in files:
+                    DOCRecording = re.search('(\d{6})_(\d{6})', filename)
+                    filename = os.path.join(root, filename)
+                    self.filename = filename
+                    filesuccess = 0
+                    if filename.endswith('.wav') and os.path.isfile(filename + '.data'):
+                        # test day/night if it is a doc recording
+                        print("Opening file %s" % filename)
+
+                        Night = False
+                        if DOCRecording:
+                            startTime = DOCRecording.group(2)
+                            if int(startTime[:2]) > 18 or int(startTime[:2]) < 6:  # 6pm to 6am as night
+                                Night = True
+                            sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                        else:
+                            sTime = 0
+
+                        if DOCRecording and self.species in ['Kiwi', 'Ruru'] and not Night:
+                            continue
+                        else:
+                            cnt = cnt + 1
+                            self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
+                            # load segments
+                            self.segments = json.load(open(filename + '.data'))
+                            if len(self.segments) ==0 or  len(self.segments) ==1 and self.segments[0][0] == -1:
+                                # no segments or just reviewer-operator "segment", so skip
+                                print("no segments found in file %s" % filename)
+                                continue
+                            if self.segments[0][0] == -1:
+                                self.operator = self.segments[0][2]
+                                self.reviewer = self.segments[0][3]
+                                del self.segments[0]
+                            print("self.segments initial: ", self.segments)
+                            self.other = []
+                            print("species: ", self.species)
+                            for seg in self.segments:
+                                if seg[4][-1] == '?':
+                                    if self.species != seg[4][:-1]:
+                                        self.other.append(seg)
+                                        self.segments.remove(seg)
+                                elif self.species != seg[4]:
+                                    self.other.append(seg)
+                                    self.segments.remove(seg)
+                            print("self.segments to show in dialog: ", self.segments)
+                            print("self.segments not to show in dialog: ", self.other)
+                            self.loadFile()
+                            segments = copy.deepcopy(self.segments)
+                            errorInds = []
+                            # Initialize the dialog for this file
+                            if len(self.segments)>0:
+                                self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments,
+                                                               self.species, self.sampleRate, self.audioFormat,
+                                                               self.config['incr'], self.lut, self.colourStart,
+                                                               self.colourEnd, self.config['invertColourMap'])
+
+                                self.humanClassifyDialog2.exec_()
+                                errorInds = self.humanClassifyDialog2.getValues()
+                                print("errors: ", errorInds, len(errorInds))
+
+                            outputErrors = []
+                            if len(errorInds) > 0:
+                                print(segments)
+                                for ind in errorInds:
+                                    outputErrors.append(segments[ind])
+                                    # self.deleteSegment(id=ids[ind], hr=True)
+                                    # ids = [x - 1 for x in ids]
+                                self.segmentsToSave = True
+                                if self.config['saveCorrections']:
+                                    # Save the errors in a file
+                                    file = open(self.filename + '.corrections_' + str(self.species), 'a')
+                                    json.dump(outputErrors, file)
+                                    file.close()
+
+                            # success = self.humanClassifyDialog1.exec_()  # 1 on clean exit
+                            # if success == 0:
+                            #     self.humanClassifyDialog1.stopPlayback()
+                            #     break
+
+                            # (this is resumed after each file is done)
+                            # Append this file's info to the worksheet:
+                            for seg in outputErrors:
+                                if seg in self.segments:
+                                    segments.remove(seg)
+                            # remove '?'
+                            for seg in segments:
+                                if seg[4][-1] == '?':
+                                    seg[4] = seg[4][:-1]
+                            for seg in self.other:
+                                segments.append(seg)
+                            out = SupportClasses.exportSegments(segments=segments, startTime=sTime,
+                                                                dirName=self.dirName, filename=self.filename,
+                                                                datalength=self.datalength, sampleRate=self.sampleRate,
+                                                                resolution=self.w_res.value())
+                            out.excel()
+                            # Save the corrected segment JSON
+                            out.saveAnnotation()
+
+                    # file successfully processed
+                    filesuccess = 1
+                # after the loop, check if file wasn't Esc-broken
+                if filesuccess == 0:
+                    break
+
+            # loop complete, all files checked
+            self.statusBar().showMessage("Processed files " + str(cnt) + "/" + str(total))
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setStandardButtons(QMessageBox.Ok)
+            print(filesuccess)
+            if filesuccess == 1:
+                msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+                msg.setText("All files checked")
+                msg.setWindowTitle("Finished")
+            else:
+                msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+                msg.setText("Review stopped at file %s of %s" % (cnt, total))
+                msg.setWindowTitle("Review stopped")
+            msg.exec_()
+
+        else:
+            msg = QMessageBox()
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setText("Please select a folder to process!")
+            msg.setWindowTitle("Select Folder")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
+
+    def review_all(self, minLen=5):
         if self.dirName:
             # self.statusLeft.setText("Processing...")
-            i=self.w_spe1.currentIndex()
-            self.species="all"
+            # i=self.w_spe1.currentIndex()
+            # self.species="all"
             total=0
             for root, dirs, files in os.walk(str(self.dirName)):
                 for filename in files:
@@ -590,7 +784,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             startTime = DOCRecording.group(2)
                             if int(startTime[:2]) > 18 or int(startTime[:2]) < 6:  # 6pm to 6am as night
                                 Night = True
-                                sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                            sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
                         else:
                             sTime=0
 

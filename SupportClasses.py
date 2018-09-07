@@ -463,7 +463,7 @@ class exportSegments:
 
     """
 
-    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species="Don't Know", startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1):
+    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species="Don't Know", startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1, batchMode=False):
 
         if len(segments)>0:
             if len(segments[0])==2:
@@ -490,16 +490,58 @@ class exportSegments:
         self.datalength=datalength
         self.sampleRate=sampleRate
         self.method=method
-        if resolution>math.ceil(float(self.datalength)/self.sampleRate):
-            self.resolution=int(math.ceil(float(self.datalength)/self.sampleRate))
-        else:
-            self.resolution=resolution
+        self.resolution = resolution
         self.trainTest = trainTest
         self.withConf=withConf  # todo: remove
         self.seg_pos=seg_pos #segmentstoCheck
         self.operator = operator
         self.reviewer = reviewer
         self.minLen = minLen
+        self.batch = batchMode # if batch mode is on avoid re-opeinig and closing
+        if self.batch:
+            if self.withConf:
+                self.eFile = self.dirName + '/DetectionSummary_withConf_' + species + '.xlsx'
+            else:
+                self.eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
+            # relfname = os.path.relpath(str(self.filename), str(self.dirName))
+
+            if os.path.isfile(self.eFile):
+                try:
+                    self.wb = load_workbook(str(self.eFile))
+                except:
+                    print("Unable to open file")  # Does not exist OR no read permissions
+                    return
+            else:
+                self.wb = self.makeNewWorkbook(self.species)
+
+    def makeNewWorkbook(self, species):
+        self.wb = Workbook()
+        self.wb.create_sheet(title='Time Stamps', index=1)
+        self.wb.create_sheet(title='Presence Absence', index=2)
+        self.wb.create_sheet(title='Per second', index=3)
+
+        ws = self.wb['Time Stamps']
+        ws.cell(row=1, column=1, value="File Name")
+        ws.cell(row=1, column=2, value="start (hh:mm:ss)")
+        ws.cell(row=1, column=3, value="end (hh:mm:ss)")
+        ws.cell(row=1, column=4, value="min freq., Hz")
+        ws.cell(row=1, column=5, value="max freq., Hz")
+        if species=="all":
+            ws.cell(row=1, column=6, value="species")
+
+        # Second sheet
+        ws = self.wb['Presence Absence']
+        ws.cell(row=1, column=1, value="File Name")
+        ws.cell(row=1, column=2, value="Presence/Absence")
+
+        # Third sheet
+        ws = self.wb['Per second']
+        ws.cell(row=1, column=1, value="File Name_Page")
+        ws.cell(row=1, column=2, value="Presence=1, Absence=0")
+
+        # Hack to delete original sheet
+        self.wb.remove_sheet(self.wb['Sheet'])
+        return self.wb
 
     def excel(self):
         """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence in an excel workbook. It makes the workbook if necessary.
@@ -508,46 +550,20 @@ class exportSegments:
         """
         # identify all unique species
         speciesList = set()
-        for seg in self.segments:
-            segmentSpecies = seg[4]
-            if seg[4].endswith('?'):
-                segmentSpecies = segmentSpecies[:-1]
-            speciesList.add(segmentSpecies)
-        speciesList.add("all")
-        print("The following species were detected for export:")
-        print(speciesList)
-
-        def makeNewWorkbook():
-            wb = Workbook()
-            wb.create_sheet(title='Time Stamps', index=1)
-            wb.create_sheet(title='Presence Absence', index=2)
-            wb.create_sheet(title='Per second', index=3)
-
-            ws = wb['Time Stamps']
-            ws.cell(row=1, column=1, value="File Name")
-            ws.cell(row=1, column=2, value="start (hh:mm:ss)")
-            ws.cell(row=1, column=3, value="end (hh:mm:ss)")
-            ws.cell(row=1, column=4, value="min freq., Hz")
-            ws.cell(row=1, column=5, value="max freq., Hz")
-            if species=="all":
-                ws.cell(row=1, column=6, value="species")
-
-            # Second sheet
-            ws = wb['Presence Absence']
-            ws.cell(row=1, column=1, value="File Name")
-            ws.cell(row=1, column=2, value="Presence/Absence")
-
-            # Third sheet
-            ws = wb['Per second']
-            ws.cell(row=1, column=1, value="File Name_Page")
-            ws.cell(row=1, column=2, value="Presence=1, Absence=0")
-
-            # Hack to delete original sheet
-            wb.remove_sheet(wb['Sheet'])
-            return wb
+        if self.batch:
+            speciesList.add(self.species)
+        else:
+            for seg in self.segments:
+                segmentSpecies = seg[4]
+                if seg[4].endswith('?'):
+                    segmentSpecies = segmentSpecies[:-1]
+                speciesList.add(segmentSpecies)
+            speciesList.add("all")
+            print("The following species were detected for export:")
+            print(speciesList)
 
         def writeToExcelp1(segments):
-            ws = wb['Time Stamps']
+            ws = self.wb['Time Stamps']
             r = ws.max_row + 1
             # Print the filename
             ws.cell(row=r, column=1, value=str(relfname))
@@ -565,7 +581,7 @@ class exportSegments:
                 r += 1
 
         def writeToExcelp2(segments):
-            ws = wb['Presence Absence']
+            ws = self.wb['Presence Absence']
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value=str(relfname))
             ws.cell(row=r, column=2, value='_')
@@ -576,7 +592,12 @@ class exportSegments:
 
         def writeToExcelp3(detected, starttime=0):
             # todo: use minLen
-            ws = wb['Per second']
+            need_reset = False
+            if self.resolution > math.ceil(float(self.datalength) / self.sampleRate):
+                resolution_before = self.resolution
+                need_reset = True
+                self.resolution = int(math.ceil(float(self.datalength) / self.sampleRate))
+            ws = self.wb['Per second']
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value= str(self.resolution) + ' secs resolution')
             ft = Font(color=colors.DARKYELLOW)
@@ -595,31 +616,38 @@ class exportSegments:
                 j=1 if np.sum(detected[i:i+self.resolution])>0 else 0
                 ws.cell(row=r, column=c, value=j)
                 c += 1
+            # reset resolution
+            if need_reset:
+                self.resolution = resolution_before
 
         # now, generate the actual files, SEPARATELY FOR EACH SPECIES:
         for species in speciesList:
             print("Exporting species %s" % species)
             # setup output files:
-            if self.withConf:
-                eFile = self.dirName + '/DetectionSummary_withConf_' + species + '.xlsx'
-            else:
-                eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
+            if not self.batch:
+                if self.withConf:
+                    self.eFile = self.dirName + '/DetectionSummary_withConf_' + species + '.xlsx'
+                else:
+                    self.eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
+
+                if os.path.isfile(self.eFile):
+                    try:
+                        self.wb = load_workbook(str(self.eFile))
+                    except:
+                        print("Unable to open file")  # Does not exist OR no read permissions
+                        return
+                else:
+                    self.wb = self.makeNewWorkbook(species)
             relfname = os.path.relpath(str(self.filename), str(self.dirName))
-
-            if os.path.isfile(eFile):
-                try:
-                    wb = load_workbook(str(eFile))
-                except:
-                    print("Unable to open file")  # Does not exist OR no read permissions
-                    return
-            else:
-                wb = makeNewWorkbook()
-
             # extract SINGLE-SPECIES ONLY segments,
             # incl. potential assignments ('Kiwi?').
             # if species=="all", take ALL segments.
             segmentsWPossible = []
             for seg in self.segments:
+                if len(seg) == 2:
+                    seg.append(0)
+                    seg.append(0)
+                    seg.append(species)
                 if seg[4] == species or seg[4] == species + '?' or species=="all":
                     segmentsWPossible.append(seg)
             if len(segmentsWPossible)==0:
@@ -644,7 +672,8 @@ class exportSegments:
                 writeToExcelp3(detected, p*n)
 
             # Save the file
-            wb.save(str(eFile))
+            if not self.batch:
+                self.wb.save(str(self.eFile))
 
     def saveAnnotation(self):
         # Save annotations - batch processing
