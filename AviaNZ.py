@@ -2542,9 +2542,9 @@ class AviaNZ(QMainWindow):
 # ===============
 # Generate the various dialogs that match the menu items
 
-    def loadSegment(self, hr=False):
+    def loadSegment(self, hr2=False):
         # Loads a segment for the HumanClassify dialogs
-        if hr:
+        if hr2:
             wavobj = wavio.read(self.filename)
         else:
             wavobj = wavio.read(self.filename, self.config['maxFileShow'], self.startRead)
@@ -2836,7 +2836,7 @@ class AviaNZ(QMainWindow):
                 id += 1
 
             # and show them
-            self.loadSegment(hr=True)
+            self.loadSegment(hr2=True)
             print("segments go to dialog2: ", segments2show)
             segments = copy.deepcopy(segments2show)
             self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, segments2show,
