@@ -66,14 +66,13 @@ class AviaNZ_batchProcess(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setMinimumSize(800,500)
+        self.setFixedSize(800,500)
 
         # Make the docks
         self.d_detection = Dock("Automatic Detection",size=(500,500))
         # self.d_detection.hideTitleBar()
 
         self.d_files = Dock("File list", size=(270, 500))
-
 
         self.area.addDock(self.d_detection,'right')
         self.area.addDock(self.d_files, 'left')
@@ -349,13 +348,6 @@ class AviaNZ_batchProcess(QMainWindow):
                 item.setText(file.fileName())
                 if file.fileName()+'.data' in listOfDataFiles:
                     item.setForeground(Qt.red)
-        # if fileName:
-        #     index = self.listFiles.findItems(fileName,Qt.MatchExactly)
-        #     if len(index)>0:
-        #         self.listFiles.setCurrentItem(index[0])
-        #     else:
-        #         index = self.listFiles.findItems(self.listOfFiles[0].fileName(),Qt.MatchExactly)
-        #         self.listFiles.setCurrentItem(index[0])
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on an item in filelist
@@ -462,9 +454,9 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
 
-        self.statusBar().showMessage("Processing file Current/Total")
+        self.statusBar().showMessage("Reviewing file Current/Total")
 
-        self.setWindowTitle('AviaNZ - Reviewing Batch Results')
+        self.setWindowTitle('AviaNZ - Review Batch Results')
         self.createFrame()
         self.createMenu()
         self.center()
@@ -473,13 +465,16 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setFixedSize(500,300)
+        self.setFixedSize(800, 500)
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
-        self.d_detection = Dock("Automatic Detection",size=(350,100))
+        self.d_detection = Dock("Automatic Detection",size=(500,500))
         self.d_detection.hideTitleBar()
+        self.d_files = Dock("File list", size=(270, 500))
 
-        self.area.addDock(self.d_detection,'right')
+        self.area.addDock(self.d_detection, 'right')
+        self.area.addDock(self.d_files, 'left')
 
         self.w_browse = QPushButton("  &Browse Folder")
         self.w_browse.setToolTip("Can select a folder with sub folders to process")
@@ -514,6 +509,17 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.w_browse.clicked.connect(self.browse)
         # print("spList after browse: ", self.spList)
+
+        self.w_files = pg.LayoutWidget()
+        self.d_files.addWidget(self.w_files)
+        self.w_files.addWidget(QLabel('View Only'), row=0, col=0)
+        self.w_files.addWidget(QLabel('use Browse Folder to choose data for processing'), row=1, col=0)
+        # self.w_files.addWidget(QLabel(''), row=2, col=0)
+        # List to hold the list of files
+        self.listFiles = QListWidget()
+        self.listFiles.setMinimumWidth(150)
+        self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
+        self.w_files.addWidget(self.listFiles, row=2, col=0)
 
         self.show()
 
@@ -573,6 +579,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         print("Dir:", self.dirName)
         self.w_dir.setPlainText(self.dirName)
+        self.spList = ['All species']
         # find species names from the annotations
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
@@ -589,13 +596,12 @@ class AviaNZ_reviewAll(QMainWindow):
                                         self.spList.append(seg[4][:-1])
                                 elif seg[4] not in self.spList:
                                     self.spList.append(seg[4])
-        print("species list within browse: ", self.spList)
         self.w_spe1.clear()
         self.w_spe1.addItems(self.spList)
-
+        self.fillFileList(self.dirName)
 
     def review(self):
-        self.species = self.w_spe1.currentText().title()
+        self.species = self.w_spe1.currentText()
         if self.species == 'All species':
             self.review_all()
         else:
@@ -641,7 +647,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             continue
                         else:
                             cnt = cnt + 1
-                            self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
+                            self.statusBar().showMessage("Reviewing file " + str(cnt) + "/" + str(total) + "...")
                             # load segments
                             self.segments = json.load(open(filename + '.data'))
                             if len(self.segments) ==0 or  (len(self.segments) ==1 and self.segments[0][0] == -1):
@@ -652,27 +658,27 @@ class AviaNZ_reviewAll(QMainWindow):
                                 self.operator = self.segments[0][2]
                                 self.reviewer = self.segments[0][3]
                                 del self.segments[0]
-                            print("self.segments initial: ", self.segments)
-                            self.segments_other = []
-                            print("species: ", self.species)
+                            # print("self.segments initial: ", self.segments)
+                            # self.segments_other = []
+                            # print("species: ", self.species)
                             self.segments_sp = []
                             for seg in self.segments:
                                 if seg[4][-1] == '?':
                                     if self.species == seg[4][:-1]:
                                         self.segments_sp.append(seg)
-                                    else:
-                                        self.segments_other.append(seg)
+                                    # else:
+                                    #     self.segments_other.append(seg)
                                 elif self.species == seg[4]:
                                     self.segments_sp.append(seg)
-                                else:
-                                    self.segments_other.append(seg)
-                            print("self.segments to show in dialog: ", self.segments_sp)
-                            print("self.segments not to show in dialog: ", self.segments_other)
+                                # else:
+                                #     self.segments_other.append(seg)
+                            # print("self.segments to show in dialog: ", self.segments_sp)
+                            # print("self.segments not to show in dialog: ", self.segments_other)
                             self.loadFile()
                             segments = copy.deepcopy(self.segments)
                             errorInds = []
                             # Initialize the dialog for this file
-                            if len(self.segments)>0:
+                            if len(self.segments_sp) > 0:
                                 self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments_sp,
                                                                self.species, self.sampleRate, self.audioFormat,
                                                                self.config['incr'], self.lut, self.colourStart,
@@ -684,7 +690,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
                             outputErrors = []
                             if len(errorInds) > 0:
-                                print(self.segments)
+                                # print(self.segments)
                                 for ind in errorInds:
                                     outputErrors.append(self.segments[ind])
                                     # self.deleteSegment(id=ids[ind], hr=True)
@@ -710,8 +716,8 @@ class AviaNZ_reviewAll(QMainWindow):
                             for seg in segments:
                                 if seg[4][-1] == '?':
                                     seg[4] = seg[4][:-1]
-                            for seg in self.segments_other:
-                                segments.append(seg)
+                            # for seg in self.segments_other:
+                            #     segments.append(seg)
                             out = SupportClasses.exportSegments(segments=segments, startTime=sTime,
                                                                 dirName=self.dirName, filename=self.filename,
                                                                 datalength=self.datalength, sampleRate=self.sampleRate,
@@ -795,7 +801,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             continue
                         else:
                             cnt=cnt+1
-                            self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
+                            self.statusBar().showMessage("Reviewing file " + str(cnt) + "/" + str(total) + "...")
                             # load segments
                             self.segments = json.load(open(filename + '.data'))
                             if len(self.segments)<2:
@@ -1017,3 +1023,61 @@ class AviaNZ_reviewAll(QMainWindow):
         self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
 
+    def fillFileList(self,fileName):
+        """ Generates the list of files for the file listbox.
+        fileName - currently opened file (marks it in the list).
+        Most of the work is to deal with directories in that list.
+        It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
+        red in the list, and the second to know if the files are long."""
+
+        # if not os.path.isdir(self.dirName):
+        #     print("Directory doesn't exist: making it")
+        #     os.makedirs(self.dirName)
+
+        self.listFiles.clear()
+        self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
+        listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
+        listOfLongFiles = QDir(self.dirName).entryList(['*_1.wav'])
+        for file in self.listOfFiles:
+            if file.fileName()[:-4]+'_1.wav' in listOfLongFiles:
+                # Ignore this entry
+                pass
+            else:
+                # If there is a .data version, colour the name red to show it has been labelled
+                item = QListWidgetItem(self.listFiles)
+                self.listitemtype = type(item)
+                item.setText(file.fileName())
+                if file.fileName()+'.data' in listOfDataFiles:
+                    item.setForeground(Qt.red)
+
+    def listLoadFile(self,current):
+        """ Listener for when the user clicks on an item in filelist
+        """
+
+        # Need name of file
+        if type(current) is self.listitemtype:
+            current = current.text()
+
+        self.previousFile = current
+
+        # Update the file list to show the right one
+        i=0
+        while i<len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current:
+            i+=1
+        if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
+            dir = QDir(self.dirName)
+            dir.cd(self.listOfFiles[i].fileName())
+            # Now repopulate the listbox
+            self.dirName=str(dir.absolutePath())
+            self.listFiles.clearSelection()
+            self.listFiles.clearFocus()
+            self.listFiles.clear()
+            self.previousFile = None
+            if (i == len(self.listOfFiles)-1) and (self.listOfFiles[i].fileName() != current):
+                self.loadFile(current)
+            self.fillFileList(current)
+            # Show the selected file
+            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
+            if len(index) > 0:
+                self.listFiles.setCurrentItem(index[0])
+        return(0)
