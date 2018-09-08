@@ -1374,14 +1374,17 @@ class HumanClassify2(QDialog):
     # It could be all the same species, or the ones that it is unsure about, or whatever.
 
     # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
-    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, parent=None):
+    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, filename=None, parent=None):
         QDialog.__init__(self, parent)
 
         # from win32api import GetSystemMetrics
         # width_px = GetSystemMetrics(0)
         # print("width: ", width_px)
 
-        self.setWindowTitle('Human review')
+        if filename:
+            self.setWindowTitle('Human review - ' + filename)
+        else:
+            self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.frame = QWidget()
 

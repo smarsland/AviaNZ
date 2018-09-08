@@ -370,6 +370,7 @@ class WaveletSegment:
         # print(self.annotation)
         filteredDenoisedData = self.preprocess(species,df=df)    # skip denoising
         # print("denoising completed")
+        # print("inside waveletSegment_train fs= ", self.sampleRate)
         waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
 
         # Compute point-biserial correlations and sort wrt it, return top nNodes
