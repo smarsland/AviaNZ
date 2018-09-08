@@ -495,7 +495,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_speLabel1 = QLabel("  Select Species")
         self.d_detection.addWidget(self.w_speLabel1,row=1,col=0)
         self.w_spe1 = QComboBox()
-        self.spList = ['All']
+        self.spList = ['All species']
         self.w_spe1.addItems(self.spList)
         self.d_detection.addWidget(self.w_spe1,row=1,col=1,colspan=2)
 
@@ -596,7 +596,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def review(self):
         self.species = self.w_spe1.currentText().title()
-        if self.species == 'All':
+        if self.species == 'All species':
             self.review_all()
         else:
             self.review_single()
@@ -644,7 +644,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + "...")
                             # load segments
                             self.segments = json.load(open(filename + '.data'))
-                            if len(self.segments) ==0 or  len(self.segments) ==1 and self.segments[0][0] == -1:
+                            if len(self.segments) ==0 or  (len(self.segments) ==1 and self.segments[0][0] == -1):
                                 # no segments or just reviewer-operator "segment", so skip
                                 print("no segments found in file %s" % filename)
                                 continue
@@ -653,27 +653,30 @@ class AviaNZ_reviewAll(QMainWindow):
                                 self.reviewer = self.segments[0][3]
                                 del self.segments[0]
                             print("self.segments initial: ", self.segments)
-                            self.other = []
+                            self.segments_other = []
                             print("species: ", self.species)
+                            self.segments_sp = []
                             for seg in self.segments:
                                 if seg[4][-1] == '?':
-                                    if self.species != seg[4][:-1]:
-                                        self.other.append(seg)
-                                        self.segments.remove(seg)
-                                elif self.species != seg[4]:
-                                    self.other.append(seg)
-                                    self.segments.remove(seg)
-                            print("self.segments to show in dialog: ", self.segments)
-                            print("self.segments not to show in dialog: ", self.other)
+                                    if self.species == seg[4][:-1]:
+                                        self.segments_sp.append(seg)
+                                    else:
+                                        self.segments_other.append(seg)
+                                elif self.species == seg[4]:
+                                    self.segments_sp.append(seg)
+                                else:
+                                    self.segments_other.append(seg)
+                            print("self.segments to show in dialog: ", self.segments_sp)
+                            print("self.segments not to show in dialog: ", self.segments_other)
                             self.loadFile()
                             segments = copy.deepcopy(self.segments)
                             errorInds = []
                             # Initialize the dialog for this file
                             if len(self.segments)>0:
-                                self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments,
+                                self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments_sp,
                                                                self.species, self.sampleRate, self.audioFormat,
                                                                self.config['incr'], self.lut, self.colourStart,
-                                                               self.colourEnd, self.config['invertColourMap'])
+                                                               self.colourEnd, self.config['invertColourMap'], filename)
 
                                 self.humanClassifyDialog2.exec_()
                                 errorInds = self.humanClassifyDialog2.getValues()
@@ -681,9 +684,9 @@ class AviaNZ_reviewAll(QMainWindow):
 
                             outputErrors = []
                             if len(errorInds) > 0:
-                                print(segments)
+                                print(self.segments)
                                 for ind in errorInds:
-                                    outputErrors.append(segments[ind])
+                                    outputErrors.append(self.segments[ind])
                                     # self.deleteSegment(id=ids[ind], hr=True)
                                     # ids = [x - 1 for x in ids]
                                 self.segmentsToSave = True
@@ -707,7 +710,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             for seg in segments:
                                 if seg[4][-1] == '?':
                                     seg[4] = seg[4][:-1]
-                            for seg in self.other:
+                            for seg in self.segments_other:
                                 segments.append(seg)
                             out = SupportClasses.exportSegments(segments=segments, startTime=sTime,
                                                                 dirName=self.dirName, filename=self.filename,
