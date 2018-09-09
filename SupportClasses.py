@@ -540,7 +540,7 @@ class exportSegments:
         ws.cell(row=1, column=2, value="Presence=1, Absence=0")
 
         # Hack to delete original sheet
-        self.wb.remove_sheet(self.wb['Sheet'])
+        del self.wb['Sheet']
         return self.wb
 
     def excel(self):
@@ -678,7 +678,7 @@ class exportSegments:
     def saveAnnotation(self):
         # Save annotations - batch processing
         annotation = []
-        annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), "Auto", "", -1])
+        annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), self.operator, self.reviewer, -1])
         # segments can be provided as confirmed/toCheck lists,
         # otherwise everything from segments list is exported as-is.
         if len(self.confirmedSegments) > 0 or len(self.segmentstoCheck) > 0:
@@ -691,7 +691,8 @@ class exportSegments:
                 for seg in self.segments:
                     annotation.append([float(seg[0]), float(seg[1]), 0, 0, "Don't know"])
         else:
-            annotation = self.segments
+            for seg in self.segments:
+                annotation.append(seg)
 
         if isinstance(self.filename, str):
             file = open(self.filename + '.data', 'w')

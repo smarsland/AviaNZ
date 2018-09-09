@@ -653,20 +653,75 @@ def accuracy(dirName):
     print ('------SUMMARY TP, FP, TN, FN, recall, precision, specificity, accuracy-------')
     print (int(TP), int(FP), int(TN), int(FN), TP/(TP+FN), TP/(TP+FP), TN/(TN+FP), (TP + TN)/ (TP + TN + FP + FN)) # TP, FP, TN, FN, recall, precision, specificity, accuracy
 
+def fFrq(dirName):
+    for root, dirs, files in os.walk(str(dirName)):
+        for file in files:
+            if file.endswith('.wav'):
+                fileName = root + '/' + file
+                wavobj = wavio.read(fileName)
+                sampleRate = wavobj.rate
+                data = wavobj.data
+
+                # None of the following should be necessary for librosa
+                if data.dtype is not 'float':
+                    data = data.astype('float')  # / 32768.0
+                if np.shape(np.shape(data))[0] > 1:
+                    data = data[:, 0]
+
+                sp = SignalProc.SignalProc([], 0, 512, 256)
+                sgRaw = sp.spectrogram(data, 512, 256, mean_normalise=True, onesided=True, multitaper=False)
+                segment = Segment.Segment(data, sgRaw, sp, sampleRate, 512, 256)
+                pitch, y, minfreq, W = segment.yin(minfreq=100)
+                ind = np.squeeze(np.where(pitch > minfreq))
+                pitch = pitch[ind]
+                if pitch.size == 0:
+                    print(file, ' *++ no fundamental freq detected, could be faded kiwi or noise')
+                    continue
+                ind = ind * W / 512
+                x = (pitch * 2. / sampleRate * np.shape(sgRaw)[1]).astype('int')
+
+                from scipy.signal import medfilt
+                x = medfilt(pitch, 15)
+
+                if ind.size <2:
+                    if pitch>850 and pitch<4500:
+                        print(file, round(pitch), ' *##kiwi found')
+                    else:
+                        print(file, round(pitch), ' *-- fundamental freq is out of kiwi region, could be noise')
+                else:
+                    # Get the individual pieces
+                    segs = segment.identifySegments(ind, maxgap=10, minlength=5)
+                    count = 0
+                    if segs == []:
+                        if np.mean(pitch)>850 and np.mean(pitch)<4500:
+                            print(file, round(np.mean(pitch)), ' *## kiwi found ')
+                        else:
+                            print(file, round(np.mean(pitch)), ' *-- fundamental freq is out of kiwi region, could be noise')
+                    for s in segs:
+                        count += 1
+                        s[0] = s[0] * sampleRate / float(256)
+                        s[1] = s[1] * sampleRate / float(256)
+                        i = np.where((ind > s[0]) & (ind < s[1]))
+                        if np.mean(x[i])>850 and np.mean(x[i])<4500:
+                            print(file, round(np.mean(x[i])), ' *## kiwi found ##')
+                        else:
+                            print(file, round(np.mean(x[i])), ' *-- fundamental freq is out of kiwi region, could be noise')
+
 # # filter 0
 # accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1')
 # # filter 1 - short segs
-# deleteShort(dirName='E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset', minLen=4)
+# deleteShort(dirName='E:\kiwi-Fiordland roroa-Sandy and Robin\Brown', minLen=2)
 # deleteShort(dirName='E:\AviaNZ\Sound Files\Kiwi\\test\Tier1\\test', minLen=4)
 # accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset')
 # filter 2 - windy segs
-# deleteWindRain('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset')
+# deleteWindRain('E:\kiwi-Fiordland roroa-Sandy and Robin\Brown')
 # deleteWindRain('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1\\test', windTest=True, rainTest=False )
 # accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset')
 # filter 3 - click (rain) segs
 # accuracy('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1')
-# deleteClick('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset')
+# deleteClick('E:\kiwi-Fiordland roroa-Sandy and Robin\Brown')
 # accuracy('D:\AviaNZ\Sound Files\Tier1\Tier1Common')
+# fFrq('E:\kiwi-Fiordland roroa-Sandy and Robin\Brown')
 
 # Resample to 16,000 Hz
 def resample(dirName):
