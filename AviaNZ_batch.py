@@ -307,6 +307,7 @@ class AviaNZ_batchProcess(QMainWindow):
                                 out.filename = self.filename
                                 out.datalength = self.datalength
                                 out.sampleRate = self.sampleRate
+                                out.operator = 'Auto'
                                 out.excel()
                                 # Save the annotation
                                 out.saveAnnotation()
@@ -469,13 +470,17 @@ class AviaNZ_reviewAll(QMainWindow):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
-        self.d_detection = Dock("Automatic Detection",size=(500,500))
-        self.d_detection.hideTitleBar()
+        self.d_detection = Dock("Review",size=(500,500))
+        # self.d_detection.hideTitleBar()
         self.d_files = Dock("File list", size=(270, 500))
 
         self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
 
+        self.w_revLabel = QLabel("  Reviewer")
+        self.w_reviewer = QLineEdit()
+        self.d_detection.addWidget(self.w_revLabel, row=0, col=0)
+        self.d_detection.addWidget(self.w_reviewer, row=0, col=1, colspan=2)
         self.w_browse = QPushButton("  &Browse Folder")
         self.w_browse.setToolTip("Can select a folder with sub folders to process")
         self.w_browse.setFixedHeight(50)
@@ -484,23 +489,23 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_dir.setFixedHeight(50)
         self.w_dir.setPlainText('')
         self.w_dir.setToolTip("The folder being processed")
-        self.d_detection.addWidget(self.w_dir,row=0,col=1,colspan=2)
-        self.d_detection.addWidget(self.w_browse,row=0,col=0)
+        self.d_detection.addWidget(self.w_dir,row=1,col=1,colspan=2)
+        self.d_detection.addWidget(self.w_browse,row=1,col=0)
 
         self.w_speLabel1 = QLabel("  Select Species")
-        self.d_detection.addWidget(self.w_speLabel1,row=1,col=0)
+        self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
         self.w_spe1 = QComboBox()
         self.spList = ['All species']
         self.w_spe1.addItems(self.spList)
-        self.d_detection.addWidget(self.w_spe1,row=1,col=1,colspan=2)
+        self.d_detection.addWidget(self.w_spe1,row=2,col=1,colspan=2)
 
         self.w_resLabel = QLabel("  Output Resolution (secs)")
-        self.d_detection.addWidget(self.w_resLabel, row=2, col=0)
+        self.d_detection.addWidget(self.w_resLabel, row=3, col=0)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
         self.w_res.setSingleStep(5)
         self.w_res.setValue(60)
-        self.d_detection.addWidget(self.w_res, row=2, col=1, colspan=2)
+        self.d_detection.addWidget(self.w_res, row=3, col=1, colspan=2)
 
         self.w_processButton = QPushButton("&Review Folder")
         self.w_processButton.clicked.connect(self.review)
@@ -602,10 +607,21 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def review(self):
         self.species = self.w_spe1.currentText()
-        if self.species == 'All species':
-            self.review_all()
+        self.reviewer = self.w_reviewer.text()
+        print("reviewer: ", self.reviewer)
+        if self.reviewer == '':
+            msg = QMessageBox()
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setText("Please enter reviewer name")
+            msg.setWindowTitle("Reviewer")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
         else:
-            self.review_single()
+            if self.species == 'All species':
+                self.review_all()
+            else:
+                self.review_single()
 
     def review_single(self):
         if self.dirName:
@@ -656,7 +672,7 @@ class AviaNZ_reviewAll(QMainWindow):
                                 continue
                             if self.segments[0][0] == -1:
                                 self.operator = self.segments[0][2]
-                                self.reviewer = self.segments[0][3]
+                                # self.reviewer = self.segments[0][3]
                                 del self.segments[0]
                             # print("self.segments initial: ", self.segments)
                             # self.segments_other = []
@@ -721,7 +737,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             out = SupportClasses.exportSegments(segments=segments, startTime=sTime,
                                                                 dirName=self.dirName, filename=self.filename,
                                                                 datalength=self.datalength, sampleRate=self.sampleRate,
-                                                                resolution=self.w_res.value())
+                                                                resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer)
                             out.excel()
                             # Save the corrected segment JSON
                             out.saveAnnotation()
@@ -733,7 +749,7 @@ class AviaNZ_reviewAll(QMainWindow):
                     break
 
             # loop complete, all files checked
-            self.statusBar().showMessage("Processed files " + str(cnt) + "/" + str(total))
+            self.statusBar().showMessage("Reviewed files " + str(cnt) + "/" + str(total))
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -804,13 +820,13 @@ class AviaNZ_reviewAll(QMainWindow):
                             self.statusBar().showMessage("Reviewing file " + str(cnt) + "/" + str(total) + "...")
                             # load segments
                             self.segments = json.load(open(filename + '.data'))
-                            if len(self.segments)<2:
+                            if len(self.segments) ==0 or  (len(self.segments) ==1 and self.segments[0][0] == -1):
                                 # no segments or just reviewer-operator "segment", so skip
                                 print("no segments found in file %s" % filename)
                                 continue
                             if self.segments[0][0] == -1:
                                 self.operator = self.segments[0][2]
-                                self.reviewer = self.segments[0][3]
+                                # self.reviewer = self.segments[0][3]
                                 del self.segments[0]
                             self.loadFile()
 
@@ -833,7 +849,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
                             # (this is resumed after each file is done)
                             # Append this file's info to the worksheet:
-                            out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value())
+                            out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.review())
                             out.excel()
                             # Save the corrected segment JSON
                             out.saveAnnotation()
@@ -845,7 +861,7 @@ class AviaNZ_reviewAll(QMainWindow):
                     break
 
             # loop complete, all files checked
-            self.statusBar().showMessage("Processed files " + str(cnt) + "/" + str(total))
+            self.statusBar().showMessage("Reviewed files " + str(cnt) + "/" + str(total))
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -860,7 +876,6 @@ class AviaNZ_reviewAll(QMainWindow):
                 msg.setText("Review stopped at file %s of %s" % (cnt, total))
                 msg.setWindowTitle("Review stopped")
             msg.exec_()
-            
         else:
             msg = QMessageBox()
             msg.setIconPixmap(QPixmap("img/Owl_warning.png"))

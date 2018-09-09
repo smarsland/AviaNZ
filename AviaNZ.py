@@ -2860,6 +2860,8 @@ class AviaNZ(QMainWindow):
                     file = open(self.filename + '.corrections_' + str(label), 'a')
                     json.dump(outputErrors, file)
                     file.close()
+                # Todo: update excel? hopefully it's not necessary (1) there is 'export to excel' option
+                    # (2) correcponding excel might be in a parent directory, so locating it correctly is tricky and creating anoher excel in the same level as sound file is extra cost.
         # Want to show a page at the end, so make it the first one
         # self.showFirstPage()
         self.statusLeft.setText("Ready")
