@@ -689,7 +689,7 @@ class exportSegments:
                     annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
             else:
                 for seg in self.segments:
-                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, "Don't know"])
+                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, "Don't Know"])
         else:
             for seg in self.segments:
                 annotation.append(seg)
