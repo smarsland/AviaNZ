@@ -1420,7 +1420,7 @@ class HumanClassify2(QDialog):
                     self.width = x2-x1
             self.setMinimumWidth(1000)
             self.width = max(1000,self.width+10)
-            self.h = 3
+            self.h = 5
             self.flowLayout = SupportClasses.FlowLayout()
             self.makeButtons(first=True)
 
@@ -1435,6 +1435,7 @@ class HumanClassify2(QDialog):
             self.vboxFull = QVBoxLayout()
             self.vboxFull.addWidget(QLabel('No images to show'))
             self.vboxFull.addWidget(next)
+            self.vboxFull.heightForWidth(600)
 
         self.setLayout(self.vboxFull)
 
@@ -1464,7 +1465,7 @@ class HumanClassify2(QDialog):
             if width + x2-x1 < self.width:
                 width = width + x2-x1
             else:
-                width = 0
+                width = x2-x1
             col += 1
             self.buttons.append(SupportClasses.PicButton(0,im[0], im[1], self.audiodata[x1a:x2a], self.audioFormat, (x2a-x1a) / self.sampleRate))
             self.flowLayout.addWidget(self.buttons[-1])

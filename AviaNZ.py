@@ -407,7 +407,7 @@ class AviaNZ(QMainWindow):
         actionMenu.addSeparator()
         actionMenu.addAction("Export segments to Excel",self.exportSeg)
         actionMenu.addSeparator()
-        if self.DOC == True:
+        if self.DOC == False:
             actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
         actionMenu.addSeparator()
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
@@ -4177,7 +4177,7 @@ class AviaNZ(QMainWindow):
         from shutil import copyfile
         from os.path import isfile
 
-        print("Backing up files in ",self.dirName)
+        print("Backing up files in ", self.dirName)
         listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
         for file in listOfDataFiles:
             source = self.dirName + '/' + file
