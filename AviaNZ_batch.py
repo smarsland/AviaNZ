@@ -745,6 +745,7 @@ class AviaNZ_reviewAll(QMainWindow):
                                            self.colourEnd, self.config['invertColourMap'], self.filename)
 
             success = self.humanClassifyDialog2.exec_()
+            print(success)
             # capture Esc press or other "dirty" exit:
             if success == 0:
                  return(0)
