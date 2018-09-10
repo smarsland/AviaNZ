@@ -1466,6 +1466,7 @@ class HumanClassify2(QDialog):
             else:
                 width = 0
             col += 1
+            print(x1a, x2a)
             self.buttons.append(SupportClasses.PicButton(0,im[0], im[1], self.audiodata[x1a:x2a], self.audioFormat, (x2a-x1a) / self.sampleRate))
             self.flowLayout.addWidget(self.buttons[-1])
             ind += 1
