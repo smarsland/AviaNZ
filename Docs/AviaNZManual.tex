@@ -31,6 +31,7 @@ We really want feedback on it, particularly what works and what doesn't, how you
 
 \section{Getting Started}
 
+In Windows, please make sure that you run the program as Administrator (by right-clicking on the icon and selected `Run as Administrator'). 
 When the program loads, you are presented with three options in the following start-up screen:
 
 \begin{figure}[h!]
@@ -239,12 +240,17 @@ We currently provide 3 options, and you can try them to see how well they work.
 
 \section{Automatic Segmentation of a Folder}
 \label{sec:auto}
-If you select `Find a Species' from the starting window, you will see a screen like the one below (Figure~\ref{batch}). Navigate to the parent folder with recordings to process. If you are looking for a particular species that you have a detector for, choose it from the list (currently Kiwi). This will customise the detector. Otherwise, choose `All' from this list to find all sounds. 
+If you select `Batch Processing' from the starting window, you will see a screen like the one below (Figure~\ref{batch}). Navigate to a folder containing recordings to process. If this folder contains subfolders, the program will work through all of the folders inside the original one. It ignores any files that already have annotations. Choose the species that you are interested in detecting from the drop down list, or select `All Species'. 
 
-When the user hits the `Process Folder' button the detector will start go through each file in the given folder (and any subfolders) and the cursor will turn into busy mode. Processing will take a considerable amount of time depending on the size of the dataset.
+Press the `Process Folder' button to start the program. Note that this is a very computationally intensive process, and will take a long time (hours) if there are lots of files to process, and make your computer hard to use for anything else. 
 
-The results of such segmentation can be reviewed using 'Review Batch Results' option in the starting screen. A similar menu will prompt you to select a folder with previously processed files. Clicking on the "Process Folder" will then start the Human Review [All Species] dialog directly. Its workings are the same as described above.
-
+The results of this process can be seen in three different ways:
+	\begin{itemize}
+	\item Open AviaNZ again and use manual review. When you load a file that has been process you will see all of the segments and can move or correct them as desired. 
+	\item Use the 'Review Batch Results' option in the starting screen. A similar menu to the `Batch Processing' option will prompt you to select a folder with previously processed files. If you choose ' All species' then you will see a screen like Figure~\ref{check1}, while if you select a particular species, you will see a screen like Figure~\ref{check2}. 
+	\item AviaNZ also produces an Excel spreadsheet, as is described in Section~\ref{sec:outputs}
+	\end{itemize}
+	
 \begin{figure}[h!]
 \centering
 \includegraphics[width=.5\textwidth]{Figs/batchchoose}
@@ -254,7 +260,7 @@ The results of such segmentation can be reviewed using 'Review Batch Results' op
 
 \begin{figure}[h!]
 \centering
-\includegraphics[width=.5\textwidth]{Figs/batchreview}
+\includegraphics[width=.5\textwidth]{Figs/review2}
 \caption{The interface for batch processing.}
 \label{batch2}
 \end{figure}
