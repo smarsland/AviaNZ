@@ -400,7 +400,7 @@ class AviaNZ_batchProcess(QMainWindow):
         if (self.species=='Kiwi' or self.species=='Ruru') and self.sampleRate!=16000:
             self.audiodata = librosa.core.audio.resample(self.audiodata,self.sampleRate,16000)
             self.sampleRate=16000
-            self.audioFormat.setSampleRate(self.sampleRate)
+            # self.audioFormat.setSampleRate(self.sampleRate)
             self.datalength = np.shape(self.audiodata)[0]
             print("file was downsampled to %d" % self.sampleRate)
 
