@@ -635,10 +635,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # ! WARNING: any Detection...xlsx files will be DELETED,
         # ! ANYWHERE INSIDE the specified dir, recursively
         total = 0
-        if self.species == 'All species':
-            xlsname = '*DetectionSummary_*.xlsx'
-        else:
-            xlsname = '*DetectionSummary_'+self.species+'.xlsx'
+        xlsname = '*DetectionSummary_'+self.species+'.xlsx'
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 filename = os.path.join(root, filename)
@@ -650,6 +647,13 @@ class AviaNZ_reviewAll(QMainWindow):
                 if filename.endswith('.wav') and os.path.isfile(filename + '.data'):
                     total = total + 1
 
+
+        # open the excel once
+        print("self.dirName: ", self.dirName)
+        self.out = SupportClasses.exportSegments(segments=[], startTime=0,
+                                            dirName=self.dirName,
+                                            datalength=0, sampleRate=0,species=self.species,
+                                            resolution=self.w_res.value(), operator='', reviewer=self.reviewer, batchMode=True)
         # main file review loop
         cnt = 0
         for root, dirs, files in os.walk(str(self.dirName)):
@@ -685,10 +689,11 @@ class AviaNZ_reviewAll(QMainWindow):
                         else:
                             self.operator = "None"
 
-                        # skip files with no segments
-                        if len(self.segments) ==0:
-                            print("no segments found in file %s" % filename)
-                            continue
+                        # people need presence absence in each file, so no skip
+                        # # skip files with no segments
+                        # if len(self.segments) ==0:
+                        #     print("no segments found in file %s" % filename)
+                        #     continue
 
                         # file has segments, so call the right review dialog
                         # return value will be 1 for correct close, 0 for Esc
@@ -697,14 +702,19 @@ class AviaNZ_reviewAll(QMainWindow):
                             filesuccess = self.review_all(sTime)
                         else:
                             filesuccess = self.review_single(sTime)
+                            print("filesuccess: ", filesuccess)
                         if filesuccess == 0:
+                            self.out.wb.save(str(self.out.eFile))
                             break
 
             # after the loop, check if file wasn't Esc-broken
             if filesuccess == 0:
+                self.out.wb.save(str(self.out.eFile))
                 break
 
         # loop complete, all files checked
+        # save the excel at the end
+        self.out.wb.save(str(self.out.eFile))
         self.statusBar().showMessage("Reviewed files " + str(cnt) + "/" + str(total))
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
@@ -776,13 +786,19 @@ class AviaNZ_reviewAll(QMainWindow):
                 seg[4] = seg[4][:-1]
         # for seg in self.segments_other:
         #     segments.append(seg)
-        out = SupportClasses.exportSegments(segments=segments, startTime=sTime,
-                                            dirName=self.dirName, filename=self.filename,
-                                            datalength=self.datalength, sampleRate=self.sampleRate,
-                                            resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer)
-        out.excel()
+        # out = SupportClasses.exportSegments(segments=segments, startTime=sTime,
+        #                                     dirName=self.dirName, filename=self.filename,
+        #                                     datalength=self.datalength, sampleRate=self.sampleRate,
+        #                                     resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, batchMode=True)
+        self.out.segments = segments
+        self.out.startTime = sTime
+        self.out.datalength = self.datalength
+        self.out.sampleRate = self.sampleRate
+        self.out.operator = self.operator
+        self.out.filename=self.filename
+        self.out.excel()
         # Save the corrected segment JSON
-        out.saveAnnotation()
+        self.out.saveAnnotation()
         return(1)
 
     def review_all(self, sTime, minLen=5):
@@ -805,10 +821,16 @@ class AviaNZ_reviewAll(QMainWindow):
 
        # (this is resumed after each file is done)
        # Append this file's info to the worksheet:
-       out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer)
-       out.excel()
+       # out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, batchMode=True)
+       self.out.segments = self.segments
+       self.out.startTime = sTime
+       self.out.datalength = self.datalength
+       self.out.sampleRate = self.sampleRate
+       self.out.operator = self.operator
+       self.out.filename = self.filename
+       self.out.excel()
        # Save the corrected segment JSON
-       out.saveAnnotation()
+       self.out.saveAnnotation()
        return(1)
 
     def loadFile(self):

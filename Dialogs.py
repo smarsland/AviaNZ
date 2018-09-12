@@ -115,11 +115,12 @@ class FileDataDialog(QDialog):
 class Spectrogram(QDialog):
     # Class for the spectrogram dialog box
     # TODO: Steal the graph from Raven (View/Configure Brightness)
-    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, parent=None):
+    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, doc=True, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(300)
+        self.DOC = doc
 
         self.windowType = QComboBox()
         self.windowType.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
@@ -164,8 +165,9 @@ class Spectrogram(QDialog):
         Box.addWidget(self.mean_normalise)
         Box.addWidget(QLabel('Equal loudness'))
         Box.addWidget(self.equal_loudness)
-        Box.addWidget(QLabel('Multitapering'))
-        Box.addWidget(self.multitaper)
+        if self.DOC == False:
+            Box.addWidget(QLabel('Multitapering'))
+            Box.addWidget(self.multitaper)
         Box.addWidget(QLabel('Window Width'))
         Box.addWidget(self.window_width)
         Box.addWidget(QLabel('Hop'))
