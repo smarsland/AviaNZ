@@ -463,7 +463,7 @@ class exportSegments:
 
     """
 
-    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species="Don't Know", startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1, batchMode=False):
+    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species="Don't Know", startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1):
 
         if len(segments)>0:
             if len(segments[0])==2:
@@ -497,22 +497,6 @@ class exportSegments:
         self.operator = operator
         self.reviewer = reviewer
         self.minLen = minLen
-        self.batch = batchMode # if batch mode is on avoid re-opeinig and closing
-        if self.batch:
-            if self.withConf:
-                self.eFile = self.dirName + '/DetectionSummary_withConf_' + species + '.xlsx'
-            else:
-                self.eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
-            # relfname = os.path.relpath(str(self.filename), str(self.dirName))
-
-            if os.path.isfile(self.eFile):
-                try:
-                    self.wb = load_workbook(str(self.eFile))
-                except:
-                    print("Unable to open file")  # Does not exist OR no read permissions
-                    return
-            else:
-                self.wb = self.makeNewWorkbook(self.species)
 
     def makeNewWorkbook(self, species):
         self.wb = Workbook()
@@ -550,20 +534,18 @@ class exportSegments:
         """
         # identify all unique species
         speciesList = set()
-        if self.batch:
-            speciesList.add(self.species)
-        else:
-            for seg in self.segments:
-                segmentSpecies = seg[4]
-                if seg[4].endswith('?'):
-                    segmentSpecies = segmentSpecies[:-1]
-                speciesList.add(segmentSpecies)
-            speciesList.add("all")
-            print("The following species were detected for export:")
-            print(speciesList)
+        speciesList.add(self.species)
+        for seg in self.segments:
+            segmentSpecies = seg[4]
+            if seg[4].endswith('?'):
+                segmentSpecies = segmentSpecies[:-1]
+            speciesList.add(segmentSpecies)
+        speciesList.add("all")
+        print("The following species were detected for export:")
+        print(speciesList)
 
         def writeToExcelp1(segments):
-            ws = self.wb['Time Stamps']
+            ws = wb['Time Stamps']
             r = ws.max_row + 1
             # Print the filename
             ws.cell(row=r, column=1, value=str(relfname))
@@ -582,7 +564,7 @@ class exportSegments:
                 r += 1
 
         def writeToExcelp2(segments):
-            ws = self.wb['Presence Absence']
+            ws = wb['Presence Absence']
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value=str(relfname))
             ws.cell(row=r, column=2, value='_')
@@ -600,7 +582,7 @@ class exportSegments:
                 resolution_before = self.resolution
                 need_reset = True
                 self.resolution = int(math.ceil(float(self.datalength) / self.sampleRate))
-            ws = self.wb['Per second']
+            ws = wb['Per second']
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value= str(self.resolution) + ' secs resolution')
             ft = Font(color=colors.DARKYELLOW)
@@ -627,20 +609,22 @@ class exportSegments:
         for species in speciesList:
             print("Exporting species %s" % species)
             # setup output files:
-            if not self.batch:
-                if self.withConf:
-                    self.eFile = self.dirName + '/DetectionSummary_withConf_' + species + '.xlsx'
-                else:
-                    self.eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
+            # if an Excel exists, append (so multiple files go into one worksheet)
+            # if not, create new
 
-                if os.path.isfile(self.eFile):
-                    try:
-                        self.wb = load_workbook(str(self.eFile))
-                    except:
-                        print("Unable to open file")  # Does not exist OR no read permissions
-                        return
-                else:
-                    self.wb = self.makeNewWorkbook(species)
+            if self.withConf:
+                self.eFile = self.dirName + '/DetectionSummary_withConf_' + species + '.xlsx'
+            else:
+                self.eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
+
+            if os.path.isfile(self.eFile):
+                try:
+                    wb = load_workbook(str(self.eFile))
+                except:
+                    print("Unable to open file")  # Does not exist OR no read permissions
+                    return
+            else:
+                wb = self.makeNewWorkbook(species)
             relfname = os.path.relpath(str(self.filename), str(self.dirName))
             # extract SINGLE-SPECIES ONLY segments,
             # incl. potential assignments ('Kiwi?').
@@ -675,8 +659,7 @@ class exportSegments:
                 writeToExcelp3(detected, p*n)
 
             # Save the file
-            if not self.batch:
-                self.wb.save(str(self.eFile))
+            wb.save(str(self.eFile))
 
     def saveAnnotation(self):
         # Save annotations - batch processing
