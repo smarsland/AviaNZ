@@ -197,25 +197,36 @@ class AviaNZ_batchProcess(QMainWindow):
                     self.method = "Default"
                 else:
                     self.method = "Wavelets"
+        
+                # directory found, so start review
+                # 1. find any .wav files
+                # 2. delete old results (xlsx)
+                # ! WARNING: any Detection...xlsx files will be DELETED,
+                # ! ANYWHERE INSIDE the specified dir, recursively
                 total=0
                 for root, dirs, files in os.walk(str(self.dirName)):
                     for filename in files:
+                        if fnmatch.fnmatch(filename, '*DetectionSummary_*.xlsx'):
+                            print("Removing excel file %s" % filename)
+                            os.remove(os.path.join(root, filename))
                         if filename.endswith('.wav'):
                             total=total+1
                 cnt=0   # processed number of files
 
-                out = SupportClasses.exportSegments(segments=[], confirmedSegments=[],
-                                                    segmentstoCheck=[], species=self.species,
-                                                    startTime=0, dirName=self.dirName, filename='',
-                                                    datalength=0, sampleRate=0,
-                                                    method=self.method, resolution=self.w_res.value(), batchMode=True)
-
                 for root, dirs, files in os.walk(str(self.dirName)):
                     for filename in files:
                         if filename.endswith('.wav'):
+                            cnt=cnt+1
+                            # check if file not empty                            
+                            print("Opening file %s" % filename)
+                            self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total))
+                            if os.stat(os.path.join(root, filename)).st_size < 100:
+                                print("skipping empty file")
+                                continue
+
                             # test day/night if it is a doc recording
-                            print(filename)
                             Night = False
+
                             DOCRecording = re.search('(\d{6})_(\d{6})', filename)
                             if DOCRecording:
                                 startTime = DOCRecording.group(2)
@@ -232,11 +243,8 @@ class AviaNZ_batchProcess(QMainWindow):
                                 continue
                             else:
                                 if os.path.isfile(root+'/'+filename+'.data'): # if already processed then skip?
+                                    print("file already has segments, skipping")
                                     continue
-                                cnt=cnt+1
-                                # self.statusRight.setText("Processing file " + str(cnt) + "/" + str(total))
-                                self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + " please wait...")
-                                self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total) + " please wait...")
                                 self.filename=root+'/'+filename
                                 self.loadFile()
                                 # self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
@@ -299,21 +307,11 @@ class AviaNZ_batchProcess(QMainWindow):
                                 newSegments = post.segments
                                 # Save output
                                 print("stime: ", sTime)
-                                # out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=[], segmentstoCheck=post.segments, species=self.species, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value())
-                                out.segments = newSegments
-                                out.segmentstoCheck = post.segments
-                                out.startTime = sTime
-                                out.dirName = self.dirName
-                                out.filename = self.filename
-                                out.datalength = self.datalength
-                                out.sampleRate = self.sampleRate
-                                out.operator = 'Auto'
+                                out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=[], segmentstoCheck=post.segments, species=self.species, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto")
                                 out.excel()
                                 # Save the annotation
                                 out.saveAnnotation()
-                out.wb.save(str(out.eFile))
-                # self.statusLeft.setText("Ready")
-                self.statusBar().showMessage("Processed files " + str(cnt) + "/" + str(total))
+                self.statusBar().showMessage("Processed all %d files" % total)
             else:
                 msg = QMessageBox()
                 msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
@@ -635,12 +633,11 @@ class AviaNZ_reviewAll(QMainWindow):
         # ! WARNING: any Detection...xlsx files will be DELETED,
         # ! ANYWHERE INSIDE the specified dir, recursively
         total = 0
-        xlsname = '*DetectionSummary_'+self.species+'.xlsx'
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 filename = os.path.join(root, filename)
 
-                if fnmatch.fnmatch(filename, xlsname):
+                if fnmatch.fnmatch(filename, '*DetectionSummary_*.xlsx'):
                     print("Removing excel file %s" % filename)
                     os.remove(filename)
 
@@ -648,14 +645,9 @@ class AviaNZ_reviewAll(QMainWindow):
                     total = total + 1
 
 
-        # open the excel once
-        print("self.dirName: ", self.dirName)
-        self.out = SupportClasses.exportSegments(segments=[], startTime=0,
-                                            dirName=self.dirName,
-                                            datalength=0, sampleRate=0,species=self.species,
-                                            resolution=self.w_res.value(), operator='', reviewer=self.reviewer, batchMode=True)
         # main file review loop
         cnt = 0
+        filesuccess = 1
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 DOCRecording = re.search('(\d{6})_(\d{6})', filename)
@@ -664,6 +656,10 @@ class AviaNZ_reviewAll(QMainWindow):
                 filesuccess = 1
                 if filename.endswith('.wav') and os.path.isfile(filename + '.data'):
                     print("Opening file %s" % filename)
+                    cnt=cnt+1
+                    if os.stat(filename).st_size < 100:
+                        print("skipping empty file")
+                        continue
 
                     # test day/night if it is a doc recording
                     Night = False
@@ -678,7 +674,6 @@ class AviaNZ_reviewAll(QMainWindow):
                     if DOCRecording and self.species in ['Kiwi', 'Ruru'] and not Night:
                         continue
                     else:
-                        cnt=cnt+1
                         self.statusBar().showMessage("Reviewing file " + str(cnt) + "/" + str(total) + "...")
                         # load segments
                         self.segments = json.load(open(filename + '.data'))
@@ -704,17 +699,14 @@ class AviaNZ_reviewAll(QMainWindow):
                             filesuccess = self.review_single(sTime)
                             print("filesuccess: ", filesuccess)
                         if filesuccess == 0:
-                            self.out.wb.save(str(self.out.eFile))
                             break
 
             # after the loop, check if file wasn't Esc-broken
             if filesuccess == 0:
-                self.out.wb.save(str(self.out.eFile))
                 break
 
         # loop complete, all files checked
         # save the excel at the end
-        self.out.wb.save(str(self.out.eFile))
         self.statusBar().showMessage("Reviewed files " + str(cnt) + "/" + str(total))
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
@@ -786,17 +778,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 seg[4] = seg[4][:-1]
         # for seg in self.segments_other:
         #     segments.append(seg)
-        # out = SupportClasses.exportSegments(segments=segments, startTime=sTime,
-        #                                     dirName=self.dirName, filename=self.filename,
-        #                                     datalength=self.datalength, sampleRate=self.sampleRate,
-        #                                     resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, batchMode=True)
-        self.out.segments = segments
-        self.out.startTime = sTime
-        self.out.datalength = self.datalength
-        self.out.sampleRate = self.sampleRate
-        self.out.operator = self.operator
-        self.out.filename=self.filename
-        self.out.excel()
+        out = SupportClasses.exportSegments(segments=segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=self.species)
+        out.excel()
         # Save the corrected segment JSON
         self.out.saveAnnotation()
         return(1)
@@ -815,22 +798,19 @@ class AviaNZ_reviewAll(QMainWindow):
        self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
        self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
        success = self.humanClassifyDialog1.exec_() # 1 on clean exit
+
+       # (this is resumed after each file is done, even on Esc)
+       # Append this file's info to the worksheet:
+       print("self.dirName: ", self.dirName)
+       out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species="all")
+       out.excel()
+       # Save the corrected segment JSON
+       out.saveAnnotation()
+
        if success == 0:
            self.humanClassifyDialog1.stopPlayback()
            return(0)
 
-       # (this is resumed after each file is done)
-       # Append this file's info to the worksheet:
-       # out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, batchMode=True)
-       self.out.segments = self.segments
-       self.out.startTime = sTime
-       self.out.datalength = self.datalength
-       self.out.sampleRate = self.sampleRate
-       self.out.operator = self.operator
-       self.out.filename = self.filename
-       self.out.excel()
-       # Save the corrected segment JSON
-       self.out.saveAnnotation()
        return(1)
 
     def loadFile(self):
