@@ -546,7 +546,7 @@ class exportSegments:
     def excel(self):
         """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence in an excel workbook. It makes the workbook if necessary.
         Saves each species into a separate workbook.
-        TODO: Add a presence/absence at minute (or 5 minute) resolution
+        TODO: Add a presence/absence at minute (or 5 minute) resolution [it is already there - third sheet]
         """
         # identify all unique species
         speciesList = set()
@@ -569,8 +569,9 @@ class exportSegments:
             ws.cell(row=r, column=1, value=str(relfname))
             # Loop over the segments
             for seg in segments:
-                if int(seg[1]-seg[0]) < self.minLen: # skip very short segments
-                    continue
+                # if int(seg[1]-seg[0]) < self.minLen: # skip very short segments
+                #     continue
+                # deleting short segments already done during post processing
                 ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
                 ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
                 if seg[3]!=0:
@@ -585,10 +586,12 @@ class exportSegments:
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value=str(relfname))
             ws.cell(row=r, column=2, value='_')
-            for seg in segments:
-                if seg[1]-seg[0] > self.minLen: # skip very short segments
-                    ws.cell(row=r, column=2, value='Yes')
-                    break
+            if len(segments)>0:
+                # if seg[1]-seg[0] > self.minLen: # skip very short segments
+                ws.cell(row=r, column=2, value='Yes')
+                # break
+            else:
+                ws.cell(row=r, column=2, value='No')
 
         def writeToExcelp3(detected, starttime=0):
             # todo: use minLen
@@ -650,9 +653,9 @@ class exportSegments:
                     seg.append(species)
                 if seg[4] == species or seg[4] == species + '?' or species=="all":
                     segmentsWPossible.append(seg)
-            if len(segmentsWPossible)==0:
-                print("Warning: no segments found for species %s" % species)
-                continue
+            # if len(segmentsWPossible)==0:
+            #     print("Warning: no segments found for species %s" % species)
+            #     continue
 
             # export segments
             writeToExcelp1(segmentsWPossible)

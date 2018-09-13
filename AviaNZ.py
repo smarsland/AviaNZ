@@ -3019,7 +3019,7 @@ class AviaNZ(QMainWindow):
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
             # Update the frequency axis
-            self.redoFreqAxis(int(str(start)),int(str(end)))
+            self.redoFreqAxis(int(start),int(end))
 
             if hasattr(self,'spectrogramDialog'):
                 self.spectrogramDialog.setValues(self.minFreq,self.maxFreq,self.minFreqShow,self.maxFreqShow)
