@@ -220,7 +220,7 @@ class AviaNZ(QMainWindow):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
 
-        # self.backupDatafiles()
+        self.backupDatafiles()
 
         # INPUT FILE LOADING
         # search order: infile -> firstFile -> dialog
@@ -4181,7 +4181,7 @@ class AviaNZ(QMainWindow):
         listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
         for file in listOfDataFiles:
             source = self.dirName + '/' + file
-            destination = source+"2"
+            destination = source[:-5]+".backup"
             if os.path.isfile(destination):
                 pass
                 #print(destination," exists, not backing up")
