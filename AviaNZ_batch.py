@@ -198,7 +198,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 else:
                     self.method = "Wavelets"
         
-                # directory found, so start review
+                # directory found, so start processing
                 # 1. find any .wav files
                 # 2. delete old results (xlsx)
                 # ! WARNING: any Detection...xlsx files will be DELETED,
@@ -781,7 +781,7 @@ class AviaNZ_reviewAll(QMainWindow):
         out = SupportClasses.exportSegments(segments=segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=self.species)
         out.excel()
         # Save the corrected segment JSON
-        self.out.saveAnnotation()
+        out.saveAnnotation()
         return(1)
 
     def review_all(self, sTime, minLen=5):
