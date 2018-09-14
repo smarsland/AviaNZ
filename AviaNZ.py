@@ -3519,8 +3519,8 @@ class AviaNZ(QMainWindow):
             self.deleteSegment(seg)
         self.segmentDialog.undo.setEnabled(False)
 
-    def exportSeg(self, annotation=None, species='all'):
-        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename, resolution=10, datalength=self.config['maxFileShow']*self.sampleRate, numpages=self.nFileSections, sampleRate=self.sampleRate)
+    def exportSeg(self, annotation=None, species='All species'):
+        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename, resolution=10, datalength=self.config['maxFileShow']*self.sampleRate, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
         out.excel()
         # add user notification
         # QMessageBox.about(self, "Segments Exported", "Check this directory for the excel output: " + '\n' + self.dirName)
