@@ -430,7 +430,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # and sets up the window.
         super(AviaNZ_reviewAll, self).__init__()
         self.root = root
-        self.dirName=[]
+        self.dirName=""
         self.DOC=DOC
 
         # read config file
@@ -617,7 +617,7 @@ class AviaNZ_reviewAll(QMainWindow):
             msg.exec_()
             return
 
-        if self.dirName is None:
+        if self.dirName is "":
             msg = QMessageBox()
             msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
