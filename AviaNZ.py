@@ -220,7 +220,7 @@ class AviaNZ(QMainWindow):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
 
-        self.backupDatafiles()
+        # self.backupDatafiles()
 
         # INPUT FILE LOADING
         # search order: infile -> firstFile -> dialog
@@ -3756,7 +3756,7 @@ class AviaNZ(QMainWindow):
         self.reviewer = str(name2)
         self.statusRight.setText("Operator: " + self.operator + ", Reviewer: "+self.reviewer)
         self.setOperatorReviewerDialog.close()
-        #self.segmentsToSave = True
+        self.segmentsToSave = True
 
     def saveImage(self, imageFile=''):
         import pyqtgraph.exporters as pge
