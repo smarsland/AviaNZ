@@ -220,7 +220,7 @@ class AviaNZ(QMainWindow):
             print("Directory doesn't exist: making it")
             os.makedirs(self.dirName)
 
-        self.backupDatafiles()
+        # self.backupDatafiles()
 
         # INPUT FILE LOADING
         # search order: infile -> firstFile -> dialog

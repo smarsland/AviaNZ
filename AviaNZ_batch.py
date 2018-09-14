@@ -687,17 +687,27 @@ class AviaNZ_reviewAll(QMainWindow):
                         # people need presence absence in each file, so no skip
                         # # skip files with no segments
                         # if len(self.segments) ==0:
-                        #     print("no segments found in file %s" % filename)
                         #     continue
 
-                        # file has segments, so call the right review dialog
-                        # return value will be 1 for correct close, 0 for Esc
                         self.loadFile()
-                        if self.species == 'All species':
+                        if len(self.segments) == 0:
+                            # and skip review dialog, but save the name into excel
+                            print("no segments found in file %s" % filename)
+                        # file has segments, so call the right review dialog:
+                        elif self.species == 'All species':
                             filesuccess = self.review_all(sTime)
                         else:
                             filesuccess = self.review_single(sTime)
                             print("filesuccess: ", filesuccess)
+
+                        # Store the output to an Excel file (no matter if review dialog exit was clean)
+                        out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=self.species)
+                        out.excel()
+                        # Save the corrected segment JSON
+                        out.saveAnnotation()
+
+                        # break out of both loops if Esc detected
+                        # (return value will be 1 for correct close, 0 for Esc)
                         if filesuccess == 0:
                             break
 
@@ -723,7 +733,10 @@ class AviaNZ_reviewAll(QMainWindow):
         msg.exec_()
 
     def review_single(self, sTime):
-        # print("species: ", self.species)
+        """ Initializes all species dialog.
+            Updates self.segments as a side effect.
+            Returns 1 for clean completion, 0 for Esc press or other dirty exit.
+        """
         # self.segments_other = []
         self.segments_sp = []
         for seg in self.segments:
@@ -767,8 +780,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 json.dump(outputErrors, file)
                 file.close()
 
-        # (this is resumed after each file is done)
-        # Append this file's info to the worksheet:
+        # Produce segments:
         for seg in outputErrors:
             if seg in self.segments:
                 segments.remove(seg)
@@ -778,13 +790,15 @@ class AviaNZ_reviewAll(QMainWindow):
                 seg[4] = seg[4][:-1]
         # for seg in self.segments_other:
         #     segments.append(seg)
-        out = SupportClasses.exportSegments(segments=segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=self.species)
-        out.excel()
-        # Save the corrected segment JSON
-        self.out.saveAnnotation()
+
+        self.segments = segments
         return(1)
 
     def review_all(self, sTime, minLen=5):
+       """ Initializes all species dialog.
+           Updates self.segments as a side effect.
+           Returns 1 for clean completion, 0 for Esc press or other dirty exit.
+       """
        # Initialize the dialog for this file
        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
        self.box1id = 0
@@ -798,14 +812,6 @@ class AviaNZ_reviewAll(QMainWindow):
        self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
        self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
        success = self.humanClassifyDialog1.exec_() # 1 on clean exit
-
-       # (this is resumed after each file is done, even on Esc)
-       # Append this file's info to the worksheet:
-       print("self.dirName: ", self.dirName)
-       out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species="all")
-       out.excel()
-       # Save the corrected segment JSON
-       out.saveAnnotation()
 
        if success == 0:
            self.humanClassifyDialog1.stopPlayback()

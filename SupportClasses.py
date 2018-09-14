@@ -510,7 +510,7 @@ class exportSegments:
         ws.cell(row=1, column=3, value="end (hh:mm:ss)")
         ws.cell(row=1, column=4, value="min freq., Hz")
         ws.cell(row=1, column=5, value="max freq., Hz")
-        if species=="all":
+        if species=="All species":
             ws.cell(row=1, column=6, value="species")
 
         # Second sheet
@@ -529,8 +529,8 @@ class exportSegments:
 
     def excel(self):
         """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence in an excel workbook. It makes the workbook if necessary.
-        Saves each species into a separate workbook.
-        TODO: Add a presence/absence at minute (or 5 minute) resolution [it is already there - third sheet]
+        Saves each species into a separate workbook,
+        + an extra workbook for all species (to function as a readable segment printout).
         """
         # identify all unique species
         speciesList = set()
@@ -540,7 +540,7 @@ class exportSegments:
             if seg[4].endswith('?'):
                 segmentSpecies = segmentSpecies[:-1]
             speciesList.add(segmentSpecies)
-        speciesList.add("all")
+        speciesList.add("All species")
         print("The following species were detected for export:")
         print(speciesList)
 
@@ -559,7 +559,7 @@ class exportSegments:
                 if seg[3]!=0:
                     ws.cell(row=r, column=4, value=int(seg[2]))
                     ws.cell(row=r, column=5, value=int(seg[3]))
-                if species=="all":
+                if species=="All species":
                     ws.cell(row=r, column=6, value=seg[4])
                 r += 1
 
@@ -628,14 +628,14 @@ class exportSegments:
             relfname = os.path.relpath(str(self.filename), str(self.dirName))
             # extract SINGLE-SPECIES ONLY segments,
             # incl. potential assignments ('Kiwi?').
-            # if species=="all", take ALL segments.
+            # if species=="All", take ALL segments.
             segmentsWPossible = []
             for seg in self.segments:
                 if len(seg) == 2:
                     seg.append(0)
                     seg.append(0)
                     seg.append(species)
-                if seg[4] == species or seg[4] == species + '?' or species=="all":
+                if seg[4] == species or seg[4] == species + '?' or species=="All species":
                     segmentsWPossible.append(seg)
             # if len(segmentsWPossible)==0:
             #     print("Warning: no segments found for species %s" % species)
