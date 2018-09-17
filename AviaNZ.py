@@ -3019,7 +3019,7 @@ class AviaNZ(QMainWindow):
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
             # Update the frequency axis
-            self.redoFreqAxis(int(start),int(end))
+            self.redoFreqAxis(int(start),int(end), store=False)
 
             if hasattr(self,'spectrogramDialog'):
                 self.spectrogramDialog.setValues(self.minFreq,self.maxFreq,self.minFreqShow,self.maxFreqShow)
@@ -3104,14 +3104,16 @@ class AviaNZ(QMainWindow):
             # update the file list box
             self.fillFileList(os.path.basename(self.filename))
 
-    def redoFreqAxis(self,start,end):
+    def redoFreqAxis(self,start,end, store=True):
         """ This is the listener for the menu option to make the frequency axis tight (after bandpass filtering or just spectrogram changes)
+                store: boolean, indicates whether changes should be stored in the config
         """
 
         self.minFreqShow = max(start,self.minFreq)
         self.maxFreqShow = min(end,self.maxFreq)
-        self.config['minFreq'] = start
-        self.config['maxFreq'] = end
+        if store:
+            self.config['minFreq'] = start
+            self.config['maxFreq'] = end
 
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
         pixelstart = int(self.minFreqShow/height)
@@ -3520,7 +3522,7 @@ class AviaNZ(QMainWindow):
         self.segmentDialog.undo.setEnabled(False)
 
     def exportSeg(self, annotation=None, species='All species'):
-        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename, resolution=10, datalength=self.config['maxFileShow']*self.sampleRate, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
+        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename, resolution=10, datalength=self.datalength, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
         out.excel()
         # add user notification
         # QMessageBox.about(self, "Segments Exported", "Check this directory for the excel output: " + '\n' + self.dirName)
@@ -3705,7 +3707,7 @@ class AviaNZ(QMainWindow):
         """ Listener called on sound notify (every 20 ms).
         Controls the slider, text timer, and listens for playback finish.
         """
-        eltime = (time.time() - self.media_obj.sttime)*1000
+        eltime = self.media_obj.processedUSecs() // 1000 + self.media_obj.timeoffset
 
         # listener for playback finish. Note small buffer for catching up
         if eltime > (self.segmentStop-10):
@@ -3715,7 +3717,7 @@ class AviaNZ(QMainWindow):
             self.playSlider.setValue(eltime)
             self.timePlayed.setText(self.convertMillisecs(eltime) + "/" + self.totalTime)
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
-            self.bar.setValue(self.convertAmpltoSpec(eltime / 1000.0))
+            self.bar.setValue(self.convertAmpltoSpec(eltime / 1000.0 - 0.1))
 
     def setPlaySliderLimits(self, start, end):
         """ Uses start/end in ms, does what it says, and also seeks file position marker.

@@ -1024,8 +1024,8 @@ class HumanClassify1(QDialog):
         self.pPlot.addItem(self.line2)
 
         # time texts to go along these two lines
-        self.segTimeText1 = pg.TextItem(color=(50,205,50), anchor=(0,1))
-        self.segTimeText2 = pg.TextItem(color=(50,205,50), anchor=(0,1))
+        self.segTimeText1 = pg.TextItem(color=(50,205,50), anchor=(0,1.10))
+        self.segTimeText2 = pg.TextItem(color=(50,205,50), anchor=(0,0.75))
         self.pPlot.addItem(self.segTimeText1)
         self.pPlot.addItem(self.segTimeText2)
 
