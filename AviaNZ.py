@@ -63,8 +63,6 @@ print("Package import complete.")
 # ==============
 # TODO
 
-# (4) pysox
-
 # Finish segmentation
 #   Mostly there, need to test them
 #   Add a minimum length of time for a segment -> make this a parameter
@@ -202,6 +200,12 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = False
 
         self.lastSpecies = "Don't Know"
+        
+        # Whether or not the context menu allows multiple birds. 
+        # Only changed with modifier key (Meta) in this version
+        # Second checks if signal is there
+        self.multipleBirds = False
+        self.menuBirdListSignal = False
 
         self.dirName = self.config['dirpath']
         self.previousFile = None
@@ -735,7 +739,11 @@ class AviaNZ(QMainWindow):
         # The context menu (drops down on mouse click) to select birds
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.menuBirdList = QMenu()
-        self.menuBird2 = self.menuBirdList.addMenu('Other')
+        self.menuBird2 = QMenu('Other')
+        #self.menuBird2 = self.menuBirdList.addMenu('Other')
+        # New line to allow multiple selections
+        self.menuBirdList.installEventFilter(self)
+        self.menuBird2.installEventFilter(self)
         self.fillBirdList()
 
         # Make the colours that are used in the interface
@@ -814,9 +822,10 @@ class AviaNZ(QMainWindow):
         The first 20 items are in the first menu, the next in a second menu.
         This is called a lot because the order of birds in the list changes since the last choice
         is moved to the top of the list. """
-        # TODO: Add as a user option whether or not the list refreshes? Espeically wrt the long list
+        # TODO: Add as a user option whether or not the list refreshes? Especially wrt the long list
         # But that probably is what you want -- hear once, more likely to hear again?
         # TODO: obvious flag
+        # TODO: *** I'm going have the potential for species being a list. Is it going to cause problems?
         self.menuBirdList.clear()
         self.menuBird2.clear()
 
@@ -824,18 +833,35 @@ class AviaNZ(QMainWindow):
             if unsure and item != "Don't Know":
                 item = item+'?'
             bird = self.menuBirdList.addAction(item)
-            receiver = lambda checked, birdname=item: self.birdSelected(birdname)
-            #self.connect(bird, SIGNAL("triggered()"), receiver)
-            bird.triggered.connect(receiver)
+            bird.setCheckable(True)
+            # TODO: Next line (and repeat below) won't work -- kaka in kakapo, but no comma and ? a problem
+            if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
+                bird.setChecked(True)
+            if self.multipleBirds:
+                self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
+                self.menuBirdListSignal = True
+                #TODO: Disconnect this if it is connected!
+            else:
+                # Disconnect signal if it exists
+                if self.menuBirdListSignal:
+                    self.menuBirdList.aboutToHide.disconnect()
+                    self.menuBirdListSignal = False
+                bird.setCheckable(False)
+                receiver = lambda checked, birdname=item: self.birdSelected(birdname)
+                bird.triggered.connect(receiver)
             self.menuBirdList.addAction(bird)
-        self.menuBird2 = self.menuBirdList.addMenu('Other')
+        self.menuBirdList.addMenu(self.menuBird2)
         for item in self.config['BirdList'][20:40]+['Other']:
             if unsure and item != "Don't Know" and item != "Other":
                 item = item+'?'
             bird = self.menuBird2.addAction(item)
-            receiver = lambda checked, birdname=item: self.birdSelected(birdname)
-            #self.connect(bird, SIGNAL("triggered()"), receiver)
-            bird.triggered.connect(receiver)
+            bird.setCheckable(True)
+            if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
+                bird.setChecked(True)
+            if self.multipleBirds:
+                bird.setCheckable(False)
+                receiver = lambda checked, birdname=item: self.birdSelected(birdname)
+                bird.triggered.connect(receiver)
             self.menuBird2.addAction(bird)
 
     def fillFileList(self,fileName):
@@ -2137,9 +2163,12 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                elif modifiers == QtCore.Qt.AltModifier:
+                elif modifiers == QtCore.Qt.MetaModifier:
+                    print("Meta!")
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
-                    print("Alt!")
+                    self.multipleBirds = True
+                    self.fillBirdList()
+                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
@@ -2208,8 +2237,10 @@ class AviaNZ(QMainWindow):
                         modifiers = QtGui.QApplication.keyboardModifiers()
                         if modifiers == QtCore.Qt.ControlModifier:
                             self.fillBirdList(unsure=True)
-                        elif modifiers == QtCore.Qt.AltModifier:
-                            print("Alt!")
+                        elif modifiers == QtCore.Qt.MetaModifier:
+                            print("Meta!")
+                            self.multipleBirds = True
+                            self.fillBirdList()
                         else:
                             self.fillBirdList()
                         self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
@@ -2277,8 +2308,11 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                elif modifiers == QtCore.Qt.AltModifier:
-                    print("Alt!")
+                elif modifiers == QtCore.Qt.MetaModifier:
+                    print("Meta!")
+                    self.multipleBirds = True
+                    self.fillBirdList()
+                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
@@ -2363,8 +2397,10 @@ class AviaNZ(QMainWindow):
                         modifiers = QtGui.QApplication.keyboardModifiers()
                         if modifiers == QtCore.Qt.ControlModifier:
                             self.fillBirdList(unsure=True)
-                        elif modifiers == QtCore.Qt.AltModifier:
-                            print("Alt!")
+                        elif modifiers == QtCore.Qt.MetaModifier:
+                            print("Meta!")
+                            self.multipleBirds = True
+                            self.fillBirdList()
                         else:
                             self.fillBirdList()
                         self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
@@ -2399,6 +2435,8 @@ class AviaNZ(QMainWindow):
         Has to update the overview segments in case their colour should change.
         Also handles getting the name through a message box if necessary.
         """
+        # TODO: Right place?
+        self.multipleBirds = False
         startpoint = self.segments[self.box1id][0]-self.startRead
         endpoint = self.segments[self.box1id][1]-self.startRead
         oldname = self.segments[self.box1id][4]
@@ -2467,6 +2505,11 @@ class AviaNZ(QMainWindow):
         # Store the species in case the user wants it for the next segment
         self.lastSpecies = text
         self.segmentsToSave = True
+
+    def processMultipleBirdSelections(self):
+        self.segments[self.box1id][4] = ""
+        [self.birdSelected(action.text()) for action in self.menuBirdList.actions() if action.isChecked()]
+        [self.birdSelected(action.text()) for action in self.menuBird2.actions() if action.isChecked()]
 
     def setColourMap(self,cmap):
         """ Listener for the menu item that chooses a colour map.
@@ -4228,6 +4271,19 @@ class AviaNZ(QMainWindow):
                 #print(source)
                 #print(destination," doesn't exist")
                 copyfile(source, destination)
+
+    def eventFilter(self, obj, event):
+        # This is an event filter for the context menu. It allows the user to select
+        # multiple birds by stopping the menu being closed on first click
+        if self.multipleBirds and event.type() in [QtCore.QEvent.MouseButtonRelease]:
+            if isinstance(obj, QtGui.QMenu):
+                if obj.activeAction():
+                    if not obj.activeAction().menu(): 
+                        #if the selected action does not have a submenu
+                        #eat the event, but trigger the function
+                        obj.activeAction().trigger()
+                        return True
+        return QMenu.eventFilter(self,obj, event)
 
 # =============
 

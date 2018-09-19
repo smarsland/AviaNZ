@@ -751,15 +751,9 @@ class AviaNZ(QMainWindow):
                 item = item+'?'
             bird = self.menuBirdList.addAction(item)
             bird.setCheckable(True)
-            # This next line was a lot neater as "item in ...", but Kaka is inside Kakapo!
-            #if hasattr(self,'segments'):
-            #    print(self.segments[self.box1id][4])
-            if hasattr(self,'segments') and (item+',') in self.segments[self.box1id][4]:
+            if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
+            #if hasattr(self,'segments') and (item+',') in self.segments[self.box1id][4]:
                 bird.setChecked(True)
-            # Commented next lines out twice
-            #receiver = lambda checked, birdname=item: self.birdSelected(birdname)
-            #self.connect(bird, SIGNAL("triggered()"), receiver)
-            #bird.triggered.connect(receiver)
             self.menuBirdList.addAction(bird)
         self.menuBirdList.addMenu(self.menuBird2)
         for item in self.config['BirdList'][29:]:#+['Other']:
@@ -767,20 +761,9 @@ class AviaNZ(QMainWindow):
                 item = item+'?'
             bird = self.menuBird2.addAction(item)
             bird.setCheckable(True)
-            #found = False
-            #if hasattr(self,'segments'):
-                #if (item+',') in self.segments[self.box1id][4]: 
-                    #found = True
-                #elif item in self.segments[self.box1id][4] and self.segments[self.box1id][4].index(item):
-                    #ind = self.segments[self.box1id][4].index(item)
-                    #if item == self.segments[self.box1id][4][ind:ind+len(item)]:
-                        #found = True
-            #if found:
-            if hasattr(self,'segments') and (item+',') in self.segments[self.box1id][4]:
+            if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
+            #if hasattr(self,'segments') and (item+',') in self.segments[self.box1id][4]:
                 bird.setChecked(True)
-            #receiver = lambda checked, birdname=item: self.birdSelected(birdname)
-            #self.connect(bird, SIGNAL("triggered()"), receiver)
-            #bird.triggered.connect(receiver)
             self.menuBird2.addAction(bird)
 
     def fillFileList(self,fileName):
@@ -1096,6 +1079,9 @@ class AviaNZ(QMainWindow):
                                 s[3] = self.convertYtoFreq(s[3])
                                 #print(s[2],s[3])
                                 self.segmentsToSave = True
+                            if type(s[4]) is not list:
+                                s[4] = [s[4]]
+                                print(s[4])
                 else:
                     # Hartley bodge: Make a file with 10s segments every minute
                     print("Hartley bodging")
@@ -1772,6 +1758,7 @@ class AviaNZ(QMainWindow):
         # min is to remove possible rounding error
         inds = int(self.convertAmpltoSpec(startpoint) / self.widthOverviewSegment)
         inde = min(int(self.convertAmpltoSpec(endpoint) / self.widthOverviewSegment),len(self.overviewSegments)-1)
+        # TODO: List, multiple labels
         if species is None or species == "Don't Know" or type(species) is int:
             brush = self.ColourNone
             if delete:
@@ -1845,6 +1832,7 @@ class AviaNZ(QMainWindow):
             # This is one we want to show
 
             # Get the name and colour sorted
+            # TODO: will now need fixing
             if species is None or species=="Don't Know":
                 species = ""
                 brush = self.ColourNone
@@ -1892,7 +1880,7 @@ class AviaNZ(QMainWindow):
             p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
 
             # Put the text into the box
-            label = pg.TextItem(text=species, color='k')
+            label = pg.TextItem(text=','.join(species), color='k')
             self.p_spec.addItem(label)
             label.setPos(self.convertAmpltoSpec(startpoint), self.textpos)
 
@@ -2356,7 +2344,8 @@ class AviaNZ(QMainWindow):
         # Now update the text
         print(birdname)
         if birdname is not 'Other':
-            self.updateText(oldname+birdname)
+            self.updateText(birdname)
+            #self.updateText(oldname+birdname)
             # Commented out next lines
             #if update:
                 # Put the selected bird name at the top of the list
@@ -2382,7 +2371,7 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = True
 
     def processMultipleBirdSelections(self):
-        self.segments[self.box1id][4] = ""
+        self.segments[self.box1id][4] = []
         [self.birdSelected(action.text()) for action in self.menuBirdList.actions() if action.isChecked()]
         [self.birdSelected(action.text()) for action in self.menuBird2.actions() if action.isChecked()]
 
@@ -2393,15 +2382,18 @@ class AviaNZ(QMainWindow):
         #print(segID, len(self.segments), len(self.listRectanglesa1))
         print(self.segments[segID][4], text)
         # Next lines changed
-        if self.segments[segID][4] is None or self.segments[segID][4] ==',':
-            self.segments[segID][4] = text
-        else:
-            if text not in self.segments[segID][4]:
-                self.segments[segID][4] = text + ","
+        # TODO: Now it's a list?
+        self.segments[segID][4].append(text)
+        #if len(self.segments[segID][4] is None or self.segments[segID][4] ==',':
+        #    self.segments[segID][4] = [text]
+        #else:
+        #    if text not in self.segments[segID][4]:
+        #        self.segments[segID][4] = text + ","
         #print(segID, len(self.listLabels),self.segments[segID][4])
-        self.listLabels[segID].setText(text,'k')
+        self.listLabels[segID].setText(','.join(self.segments[segID][4]),'k')
 
         # Update the colour
+        # TODO: Needs work -- any ? in list...
         if text != "Don't Know":
             if text[-1] == '?':
                 self.prevBoxCol = self.ColourPossible
@@ -2643,6 +2635,7 @@ class AviaNZ(QMainWindow):
                     x3 = max(x3, 0)
                     x4 = int((self.listRectanglesa1[self.box1id].getRegion()[1] + self.config['reviewSpecBuffer']) * self.sampleRate)
                     x4 = min(x4, len(self.audiodata))
+                    #TODO: Deal with multiple labels
                     self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
                                                        self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1, 
                                                        self.segments[self.box1id][0], self.segments[self.box1id][1], self.minFreq, self.maxFreq)
@@ -2671,6 +2664,7 @@ class AviaNZ(QMainWindow):
                     x3 = max(x3, 0)
                     x4 = int((x2nob + self.config['reviewSpecBuffer']) * self.sampleRate)
                     x4 = min(x4, len(self.audiodata))
+                    # TODO: Multiple labels
                     self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
                                                    self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1,
                                                    self.segments[self.box1id][0], self.segments[self.box1id][1], self.minFreq, self.maxFreq)
@@ -2725,7 +2719,7 @@ class AviaNZ(QMainWindow):
                 # self.saveConfig = True
             #self.humanClassifyDialog1.tbox.setText('')
 
-        if label != self.segments[self.box1id][4]:
+        if label not in self.segments[self.box1id][4]:
             if self.config['saveCorrections']:
                 # Save the correction
                 outputError = [self.segments[self.box1id], label]
@@ -2789,6 +2783,8 @@ class AviaNZ(QMainWindow):
 
         # Get all labels
         names = [item[4] for item in self.segments]
+        #names = ','.join(names)
+        # TODO: check ? in list
         names = [n if n[-1] != '?' else n[:-1] for n in names]
         # Make them unique
         keys = {}
@@ -2813,7 +2809,8 @@ class AviaNZ(QMainWindow):
             id = 0
             # then find segments with label to review
             for seg in self.segments:
-                if seg[4] == label or seg[4][:-1] == label:
+                if label in seg[4] or label+'?' in seg[4]:
+                #if seg[4] == label or seg[4][:-1] == label:
                     segments2show.append(seg)
                     ids.append(id)  # their acctual indices
                 id += 1
@@ -3160,7 +3157,8 @@ class AviaNZ(QMainWindow):
                         for seg in segments:
                             if seg[0] == -1:
                                 continue
-                            elif seg[4].title() == species:
+                            elif species in seg[4].title():
+                            #elif seg[4].title() == species:
                                 secs = seg[1] - seg[0]
                                 wavobj = wavio.read(wavFile+'.wav', nseconds=secs, offset=seg[0])
                                 data = wavobj.data
@@ -3312,6 +3310,7 @@ class AviaNZ(QMainWindow):
                 # print(species, seg[4])
                 if seg[0] == -1:
                     continue
+                # TODO ???
                 if not re.search(species.title(), seg[4].title()):
                     continue
                 else:
@@ -4137,7 +4136,8 @@ class AviaNZ(QMainWindow):
             #print(lastrow)
             ws.cell(row=lastrow,column=1,value=lastrow-1)
             for col in range(1,len(self.config['BirdList'])+1):
-                if (self.config['BirdList'][col-1]+',') in seg[4]:
+                if self.config['BirdList'][col-1] in seg[4]:
+                #if (self.config['BirdList'][col-1]+',') in seg[4]:
                     #print(seg[4],"1")
                     ws.cell(row=lastrow, column=col+1, value=1)
                     props[col-1] += 1
