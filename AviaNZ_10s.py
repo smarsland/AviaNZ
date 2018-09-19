@@ -23,10 +23,9 @@
 # This is a variant of the standard AviaNZ software. If a file that has not been opened before is chosen, then it puts a 10 second segment at the start of every minute throughout the file. 
 # Then when any of these segments are selected, it is possible to select multiple birds from the list, all of which will be saved into the segment file. 
 # It is not possible to add new birds into the list using Other>Other, because it disrupts the flow
-# I've improved the way the context menu is set up out of necessity, should put into full version?
 
-# Need to load in a list of birds from a file
-# And to use that to make a binary detection matrix in excel for each 10 seconds
+# It also loads in a list of birds from a file
+# And uses that to make a binary detection matrix in excel for each 10 seconds
 
 import sys, os, json, platform, re
 
