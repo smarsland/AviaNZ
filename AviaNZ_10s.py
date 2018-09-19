@@ -222,10 +222,12 @@ class AviaNZ(QMainWindow):
         else:
             # Make the window and associated widgets
             self.setWindowTitle('AviaNZ')
+            # Make the window full screen
+            self.showMaximized()
             keyPressed = QtCore.Signal(int)
 
-            if self.DOC:
-                self.setOperatorReviewerDialog()
+            #if self.DOC:
+                #self.setOperatorReviewerDialog()
 
             # Save the segments every minute
             self.timer = QTimer()
@@ -1847,7 +1849,7 @@ class AviaNZ(QMainWindow):
             if species is None or species=="Don't Know":
                 species = ""
                 brush = self.ColourNone
-            elif species[-1]=='?':
+            elif len(species) > 0 and species[-1]=='?':
                 brush = self.ColourPossible
             else:
                 brush = self.ColourNamed
@@ -2105,6 +2107,8 @@ class AviaNZ(QMainWindow):
                 # if this is right click (drawing mode):
                 # (or whatever you want)
                 if evt.button() == self.MouseDrawingButton:
+                    return
+                    # Not called for Nyree
                     # this would prevent starting boxes in ampl plot
                     # if self.config['specMouseAction']>1:
                     #    return
@@ -2239,45 +2243,46 @@ class AviaNZ(QMainWindow):
             else:
                 # if this is right click (drawing mode):
                 if evt.button() == self.MouseDrawingButton:
-                    nonebrush = self.ColourNone
-                    self.start_ampl_loc = self.convertSpectoAmpl(mousePoint.x())
-                    self.start_spec_y = mousePoint.y()
+                    pass
+                    #nonebrush = self.ColourNone
+                    #self.start_ampl_loc = self.convertSpectoAmpl(mousePoint.x())
+                    #self.start_spec_y = mousePoint.y()
 
                     # start a new box:
-                    if self.config['specMouseAction']>1:
-                        # spectrogram mouse follower box:
-                        startpointS = QPointF(mousePoint.x(), mousePoint.y())
-                        endpointS = QPointF(mousePoint.x(), mousePoint.y())
+                    #if self.config['specMouseAction']>1:
+                        ## spectrogram mouse follower box:
+                        #startpointS = QPointF(mousePoint.x(), mousePoint.y())
+                        #endpointS = QPointF(mousePoint.x(), mousePoint.y())
 
-                        self.drawingBox_spec = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, invertible=True)
-                        self.drawingBox_spec.setBrush(nonebrush)
-                        self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
-                        self.p_spec.scene().sigMouseMoved.connect(self.GrowBox_spec)
+                        #self.drawingBox_spec = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, invertible=True)
+                        #self.drawingBox_spec.setBrush(nonebrush)
+                        #self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
+                        #self.p_spec.scene().sigMouseMoved.connect(self.GrowBox_spec)
                     # start a new segment:
-                    else:
+                    #else:
                         # spectrogram bar and mouse follower:
-                        self.vLine_s = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
-                        self.p_spec.addItem(self.vLine_s, ignoreBounds=True)
-                        self.vLine_s.setPos(mousePoint.x())
+                        #self.vLine_s = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
+                        #self.p_spec.addItem(self.vLine_s, ignoreBounds=True)
+                        #self.vLine_s.setPos(mousePoint.x())
 
-                        self.drawingBox_spec = pg.LinearRegionItem(brush=nonebrush)
-                        self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
-                        self.drawingBox_spec.setRegion([mousePoint.x(),mousePoint.x()])
-                        self.p_spec.scene().sigMouseMoved.connect(self.GrowBox_spec)
+                        #self.drawingBox_spec = pg.LinearRegionItem(brush=nonebrush)
+                        #self.p_spec.addItem(self.drawingBox_spec, ignoreBounds=True)
+                        #self.drawingBox_spec.setRegion([mousePoint.x(),mousePoint.x()])
+                        #self.p_spec.scene().sigMouseMoved.connect(self.GrowBox_spec)
                         # note - only in segment mode react to movement over ampl plot:
-                        self.p_ampl.scene().sigMouseMoved.connect(self.GrowBox_ampl)
+                        #self.p_ampl.scene().sigMouseMoved.connect(self.GrowBox_ampl)
 
                     # for box and segment - amplitude plot bar:
-                    self.vLine_a = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
-                    self.p_ampl.addItem(self.vLine_a, ignoreBounds=True)
-                    self.vLine_a.setPos(self.start_ampl_loc)
+                    #self.vLine_a = pg.InfiniteLine(angle=90, movable=False,pen={'color': 'r', 'width': 3})
+                    #self.p_ampl.addItem(self.vLine_a, ignoreBounds=True)
+                    #self.vLine_a.setPos(self.start_ampl_loc)
 
-                    self.drawingBox_ampl = pg.LinearRegionItem(brush=nonebrush)
-                    self.p_ampl.addItem(self.drawingBox_ampl, ignoreBounds=True)
-                    self.drawingBox_ampl.setRegion([self.start_ampl_loc, self.start_ampl_loc])
+                    #self.drawingBox_ampl = pg.LinearRegionItem(brush=nonebrush)
+                    #self.p_ampl.addItem(self.drawingBox_ampl, ignoreBounds=True)
+                    #self.drawingBox_ampl.setRegion([self.start_ampl_loc, self.start_ampl_loc])
 
-                    self.started = not (self.started)
-                    self.startedInAmpl = False
+                    #self.started = not (self.started)
+                    #self.startedInAmpl = False
 
                 # if this is left click (selection mode):
                 else:
