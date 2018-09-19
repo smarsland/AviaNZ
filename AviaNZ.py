@@ -290,6 +290,9 @@ class AviaNZ(QMainWindow):
         else:
             # Make the window and associated widgets
             self.setWindowTitle('AviaNZ')
+            # Make the window full screen
+            # TODO: Make this an option
+            #self.showMaximized()
             keyPressed = QtCore.Signal(int)
 
             if self.DOC:
@@ -2124,6 +2127,9 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                elif modifiers == QtCore.Qt.AltModifier:
+                    self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
+                    print("Alt!")
                 else:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
@@ -2192,6 +2198,8 @@ class AviaNZ(QMainWindow):
                         modifiers = QtGui.QApplication.keyboardModifiers()
                         if modifiers == QtCore.Qt.ControlModifier:
                             self.fillBirdList(unsure=True)
+                        elif modifiers == QtCore.Qt.AltModifier:
+                            print("Alt!")
                         else:
                             self.fillBirdList()
                         self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
@@ -2259,6 +2267,8 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                elif modifiers == QtCore.Qt.AltModifier:
+                    print("Alt!")
                 else:
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
@@ -2343,6 +2353,8 @@ class AviaNZ(QMainWindow):
                         modifiers = QtGui.QApplication.keyboardModifiers()
                         if modifiers == QtCore.Qt.ControlModifier:
                             self.fillBirdList(unsure=True)
+                        elif modifiers == QtCore.Qt.AltModifier:
+                            print("Alt!")
                         else:
                             self.fillBirdList()
                         self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
