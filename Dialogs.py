@@ -1753,3 +1753,22 @@ class InterfaceSettings2(QDialog):
       self.tabWidget.setTabText(2, "Spectrogram Settings")
       self.tabWidget.tab3.setLayout(layout)
 
+#+++++++++++++
+
+class birdLongList(QDialog):
+    # A list of birds, at species and then sub-species level
+    # TODO: Only process once
+        # Note assumes they are in alpha order, and have > in
+    # TODO: Spacing is based on the DOC list, which has c. 500 entries. What if you have more?
+
+    def __init__(self, birdList, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Choose bird species')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setMinimumWidth(320)
+
+        self.listBirds = QTreeWidget()
+        self.listBirds.resize(500,200)
+        self.listBirds.setColumnCount(3)
+        for item in self.config['BirdList'][40:]:
+            self.listBirds.addItem(item)

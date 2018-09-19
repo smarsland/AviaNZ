@@ -178,6 +178,12 @@ class AviaNZ(QMainWindow):
         # FOR NOW:
         DOC = self.config['DOC']
 
+        # Load the birdlist 
+        # TODO: review this to be something from the user config
+        birdlist = json.load(open('BirdList.txt'))
+        self.config['BirdList'] = birdlist
+        
+
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
         print('Locale is set to ' + QLocale().name())
@@ -805,8 +811,12 @@ class AviaNZ(QMainWindow):
         The first 20 items are in the first menu, the next in a second menu.
         This is called a lot because the order of birds in the list changes since the last choice
         is moved to the top of the list. """
+        # TODO: Add as a user option whether or not the list refreshes? Espeically wrt the long list
+        # But that probably is what you want -- hear once, more likely to hear again?
+        # TODO: obvious flag
         self.menuBirdList.clear()
         self.menuBird2.clear()
+
         for item in self.config['BirdList'][:20]:
             if unsure and item != "Don't Know":
                 item = item+'?'
@@ -816,7 +826,7 @@ class AviaNZ(QMainWindow):
             bird.triggered.connect(receiver)
             self.menuBirdList.addAction(bird)
         self.menuBird2 = self.menuBirdList.addMenu('Other')
-        for item in self.config['BirdList'][20:]+['Other']:
+        for item in self.config['BirdList'][20:40]+['Other']:
             if unsure and item != "Don't Know" and item != "Other":
                 item = item+'?'
             bird = self.menuBird2.addAction(item)
@@ -2394,20 +2404,35 @@ class AviaNZ(QMainWindow):
                 self.config['BirdList'].remove(birdname)
                 self.config['BirdList'].insert(0,birdname)
         else:
-            text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
-            if ok:
-                text = str(text).title()
-                self.updateText(text)
+            # There are to options here: get a new name, or show a list
+            # TODO: Flag between them
+            if False:
+                # Ask the user for the new name, and save it
+                # TODO: This version is wrong if you load the birdlist from a file
+                text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
+                if ok:
+                    text = str(text).title()
+                    self.updateText(text)
 
-                if text in self.config['BirdList']:
-                    pass
-                else:
-                    # Add the new bird name.
-                    if update:
-                        self.config['BirdList'].insert(0,text)
+                    if text in self.config['BirdList']:
+                        pass
                     else:
-                        self.config['BirdList'].append(text)
-                    # self.saveConfig = True
+                        # Add the new bird name.
+                        if update:
+                            self.config['BirdList'].insert(0,text)
+                        else:
+                            self.config['BirdList'].append(text)
+                        # self.saveConfig = True
+            else:
+               # Open a dialog to show the long list
+                if True:
+                    # *** TODO: Complete this
+                    # TODO: From 40, or all species?
+                    # TODO: Needs to be modal dialg
+                    self.birdLongListDialog = Dialog.birdLongList(self.config['BirdList'][40:])
+                    self.birdLongListDialog.show()
+                    self.birdLongListDialog.activateWindow()
+                    self.birdLongListDialog.activate.clicked.connect(self.birdSelected)
 
     def updateText(self, text,segID=None):
         """ When the user sets or changes the name in a segment, update the text and the colour. """
