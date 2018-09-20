@@ -991,7 +991,7 @@ class HumanClassify1(QDialog):
         self.frame = QWidget()
 
         self.lut = lut
-        self.label = ''
+        self.label = []
         self.colourStart = colourStart
         self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
@@ -1067,15 +1067,17 @@ class HumanClassify1(QDialog):
         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
         #self.birds1 = []
         self.birds = QButtonGroup()
-        self.birdslist = []
+        self.birdbtns = []
         for item in self.birdList[:19]:
-            self.birdslist.append(QCheckBox(item))
-            self.birds.addButton(self.birdslist[-1],len(self.birdslist)-1)
+            self.birdbtns.append(QCheckBox(item))
+            self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
+            self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
         #self.birds2 = QButtonGroup()
         #for item in self.birdList[9:17]:
             #self.birds2.addButton(QCheckBox(item))
-        self.birdslist.append(QCheckBox('Other'))
-        self.birds.addButton(self.birdslist[-1],len(self.birdslist)-1)
+        self.birdbtns.append(QCheckBox('Other'))
+        self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
+        self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
 
         #for i in range(len(self.birds1)):
             #self.birds1[i].setEnabled(True)
@@ -1086,12 +1088,13 @@ class HumanClassify1(QDialog):
 
         # The list of less common birds
         self.birds3 = QListWidget(self)
-        self.birds3.setMaximumWidth(150)
-        for item in self.birdList[17:]:
+        for item in self.birdList[19:]:
             self.birds3.addItem(item)
-        #self.birds3.sortItems()
         # Explicitly add "Other" option in
         self.birds3.insertItem(0, 'Other')
+        
+        self.birds3.setMaximumWidth(150)
+        #self.birds3.sortItems()
 
         self.birds3.itemClicked.connect(self.listBirdsClicked)
         self.birds3.setEnabled(False)
@@ -1113,7 +1116,7 @@ class HumanClassify1(QDialog):
         birds1Layout = QVBoxLayout()
         birds2Layout = QVBoxLayout()
         count = 0
-        for btn in self.birdslist:
+        for btn in self.birdbtns:
             if count<10: 
                 birds1Layout.addWidget(btn)
             else:
@@ -1237,6 +1240,7 @@ class HumanClassify1(QDialog):
         self.sg = sg
         self.sampleRate = sampleRate
         self.incr = incr
+        self.label = label
         self.bar.setValue(0)
         if maxFreq==0:
             maxFreq = sampleRate / 2
@@ -1297,20 +1301,32 @@ class HumanClassify1(QDialog):
             self.plot.setLevels([self.colourStart, self.colourEnd])
 
         # Select the right options
-        # TODO: Fix next
         self.species.setText(','.join(label))
-        print(label,len(label),type(label))
+        #print(label,len(label),type(label))
+        for btn in self.birdbtns:
+            btn.setChecked(False)
+        self.birds3.clearSelection()
+        if len(label)>1:
+            self.birds.setExclusive(False)
+            self.birds3.setSelectionMode(QAbstractItemView.MultiSelection)
+            self.multipleBirds = True
+        else:       
+            self.birds.setExclusive(True)
+            self.birds3.setSelectionMode(QAbstractItemView.SingleSelection)
+            self.multipleBirds = False
         for l in label:
-            print('herex',l)
             if l[-1]=='?':
                 l= l[:-1]
-            ind = self.birdList.index(l)
-            if ind < 18:
-                self.birdslist[ind].setChecked(True)
+            if l in self.birdList:
+                ind = self.birdList.index(l)
             else:
-                self.birdslist[19].setChecked(True)
+                ind = 18
+            if ind < 18:
+                self.birdbtns[ind].setChecked(True)
+            else:
+                self.birdbtns[19].setChecked(True)
                 self.birds3.setEnabled(True)
-                self.birds3.setCurrentRow(ind-20)
+                self.birds3.item(ind-18).setSelected(True)
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
@@ -1321,19 +1337,50 @@ class HumanClassify1(QDialog):
                     #pass
                     self.birds3.setEnabled(True)
                 else:
+                    # TODO: Test if exclusive
                     self.birds3.setEnabled(False)
-                    self.label = str(button.text())
-                    self.species.setText(self.label)
+                    #print('add before',self.label)
+                    if self.multipleBirds:
+                        if button.text() not in self.label and button.text()+'?' not in self.label:
+                            self.label.append(str(button.text()))
+                    else:           
+                        self.label = [str(button.text())]
+                    #print('after',self.label)
+                    self.species.setText(','.join(self.label))
+            else:
+                if button.text() == "Other":
+                    # TODO: Remove all others?
+                    self.birds3.setEnabled(False)
+                if str(button.text()) in self.label:
+                    #print('remove before',self.label)
+                    self.label.remove(str(button.text()))
+                    #print('after',self.label)
+                    self.species.setText(','.join(self.label))
+                elif button.text()+'?' in self.label:
+                    self.label.remove(str(button.text())+'?')
+                    self.species.setText(','.join(self.label))
 
     def listBirdsClicked(self, item):
         # Listener for clicks in the listbox of birds
         if (item.text() == "Other"):
             self.tbox.setEnabled(True)
         else:
+            #TODO: Check if selected or not
             # Save the entry
             self.tbox.setEnabled(False)
-            self.label = str(item.text())
-            self.species.setText(self.label)
+            #print('text add before',self.label)
+            if self.multipleBirds:
+                if item.isSelected() and item.text() not in self.label and item.text()+'?' not in self.label:
+                    self.label.append(str(item.text()))
+                if not item.isSelected():
+                    if item.text() in self.label:
+                        self.label.remove(str(item.text()))
+                    elif item.text()+'?' in self.label:
+                        self.label.remove(str(item.text()))
+            else:           
+                self.label = [str(item.text())]
+            #print('after',self.label)
+            self.species.setText(','.join(self.label))
 
     def birdTextEntered(self):
         # Listener for the text entry in the bird list
@@ -1345,8 +1392,14 @@ class HumanClassify1(QDialog):
             pass
         else:
             self.birds3.addItem(textitem)
-        self.label = str(textitem)
-        self.species.setText(self.label)
+        #self.label.append(str(textitem))
+        print(self.multipleBirds)
+        if self.multipleBirds:
+            self.label.append(str(textitem))
+        else:           
+            self.label = [str(textitem)]
+        self.species.setText(','.join(self.label))
+        print(self.label)
         self.saveConfig = True
 
     def setColourLevels(self):
@@ -1373,6 +1426,7 @@ class HumanClassify1(QDialog):
         #     self.specPlot.setLevels([self.colourStart, self.colourEnd])
 
     def getValues(self):
+        print('out',self.label)
         return [self.label, self.saveConfig, self.tbox.text()]
 
 #======
@@ -1460,6 +1514,8 @@ class HumanClassify2(QDialog):
         ind = self.firstSegment
         self.buttons = []
 
+        print("makeButtons",segRemain,self.firstSegment)
+
         while segRemain > 0 and col < self.h:
             x1a = self.segments2show[ind][0]
             x2a = self.segments2show[ind][1]
@@ -1500,8 +1556,9 @@ class HumanClassify2(QDialog):
 
     def nextPage(self):
         # Find out which buttons have been clicked (so are not correct)
-        if len(self.buttons) == 0:
-            return
+        if not hasattr(self,'buttons'):
+            self.done(0)
+
         for i in range(len(self.buttons)):
             self.buttons[i].stopPlayback()
             if self.buttons[i].buttonClicked:
