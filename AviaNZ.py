@@ -1975,8 +1975,9 @@ class AviaNZ(QMainWindow):
             p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
 
             # Put the text into the box
+            print("species: ", species)
             label = pg.TextItem(text=','.join(species), color='k')
-            #label = pg.TextItem(text=species, color='k')
+            # label = pg.TextItem(text=species, color='k')
             self.p_spec.addItem(label)
             label.setPos(self.convertAmpltoSpec(startpoint), self.textpos)
 
@@ -2970,7 +2971,7 @@ class AviaNZ(QMainWindow):
             for seg in self.segments:
                 if label in seg[4] or label+'?' in seg[4]:
                     segments2show.append(seg)
-                    ids.append(id)  # their acctual indices
+                    ids.append(id)  # their actual indices
                 id += 1
 
             # and show them
@@ -2998,10 +2999,18 @@ class AviaNZ(QMainWindow):
                     file = open(self.filename + '.corrections_' + str(label), 'a')
                     json.dump(outputErrors, file)
                     file.close()
-                # Todo: update excel? hopefully it's not necessary (1) there is 'export to excel' option
-                    # (2) correcponding excel might be in a parent directory, so locating it correctly is tricky and creating anoher excel in the same level as sound file is extra cost.
-        # Want to show a page at the end, so make it the first one
-        # self.showFirstPage()
+            # avoid '?' and confirm the segments
+            id = 0
+            for seg in self.segments:
+                if seg[4][-1][:-1] == label and seg[4][-1][-1] == '?':
+                    self.segments[id][4][-1] = label
+                    self.segmentsToSave = True
+                    id += 1
+            # Todo: update excel? hopefully it's not necessary (1) there is 'export to excel' option
+            # (2) correcponding excel might be in a parent directory, so locating it correctly is tricky and creating anoher excel in the same level as sound file is extra cost.
+            self.saveSegments()
+            # for seg in self.segments:
+            #     self.updateLabel(self.segments[self.box1id][4])
         self.statusLeft.setText("Ready")
 
     def showSpectrogramDialog(self):
@@ -3539,7 +3548,7 @@ class AviaNZ(QMainWindow):
         with pg.BusyCursor():
             species = str(species)
             if species=='Choose species...':
-                species='all'
+                species='All species'
             #if not hasattr(self,'seg'):
             #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
             self.statusLeft.setText("Segmenting...")
@@ -3564,7 +3573,7 @@ class AviaNZ(QMainWindow):
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
             elif str(alg)=="Wavelets":
-                if species == 'all':    # Ask the species
+                if species == 'All species':    # Ask the species
                     msg = QMessageBox()
                     msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
                     msg.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -3610,7 +3619,7 @@ class AviaNZ(QMainWindow):
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
             # post process to remove short segments, wind, rain, and use F0 check.
-            if species == "all":
+            if species == "All species":
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                   segments=newSegments, spInfo=[])
                 post.wind()
@@ -3637,7 +3646,7 @@ class AviaNZ(QMainWindow):
                  if len(newSegments)>0:
                     for seg in newSegments:
                         self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
-                                        species.title() + "?",index=-1)
+                                        [species.title() + "?"],index=-1)
                         self.segmentsToSave = True
             else:
                 if len(newSegments)>0:

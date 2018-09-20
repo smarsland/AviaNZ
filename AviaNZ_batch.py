@@ -193,7 +193,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 # self.statusLeft.setText("Processing...")
                 self.species=self.w_spe1.currentText()
                 if self.species == "All species":
-                    self.species="all"
+                    # self.species="all"
                     self.method = "Default"
                 else:
                     self.method = "Wavelets"
@@ -271,7 +271,7 @@ class AviaNZ_batchProcess(QMainWindow):
                                 #     # print newSegments
                                 # elif self.algs.currentText()=='Wavelets':
                                 # print("Species: ", self.species)
-                                if self.species!='all':
+                                if self.species!='All species':
                                     # self.method = "Wavelets"
                                     ws = WaveletSegment.WaveletSegment(species=self.sppInfo[self.species])
                                     # print ("sppInfo: ", self.sppInfo[self.species])
@@ -284,7 +284,7 @@ class AviaNZ_batchProcess(QMainWindow):
                                     # print newSegments
 
                                 # post process to remove short segments, wind, rain, and use F0 check.
-                                if self.species == "all":
+                                if self.species == "All species":
                                     post = SupportClasses.postProcess(audioData=self.audiodata,
                                                                       sampleRate=self.sampleRate,
                                                                       segments=newSegments, spInfo=[])
@@ -594,11 +594,13 @@ class AviaNZ_reviewAll(QMainWindow):
                             for seg in segments:
                                 if seg[0] == -1:
                                     continue
-                                elif seg[4][-1] == '?':
-                                    if seg[4][:-1] not in self.spList:
-                                        self.spList.append(seg[4][:-1])
-                                elif seg[4] not in self.spList:
-                                    self.spList.append(seg[4])
+                                elif len(seg[4])>0:
+                                    for birdName in seg[4]:
+                                        if birdName[-1] == '?':
+                                            if birdName[:-1] not in self.spList:
+                                                self.spList.append(birdName[:-1])
+                                        elif birdName not in self.spList:
+                                            self.spList.append(birdName)
         self.w_spe1.clear()
         self.w_spe1.addItems(self.spList)
         self.fillFileList(self.dirName)
@@ -701,7 +703,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             print("filesuccess: ", filesuccess)
 
                         # Store the output to an Excel file (no matter if review dialog exit was clean)
-                        out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=self.species)
+                        out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=[self.species])
                         out.excel()
                         # Save the corrected segment JSON
                         out.saveAnnotation()

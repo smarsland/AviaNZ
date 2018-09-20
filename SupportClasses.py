@@ -534,12 +534,18 @@ class exportSegments:
         """
         # identify all unique species
         speciesList = set()
-        speciesList.add(self.species)
+        for sp in self.species:
+            speciesList.add(sp)
         for seg in self.segments:
-            segmentSpecies = seg[4]
-            if seg[4].endswith('?'):
-                segmentSpecies = segmentSpecies[:-1]
-            speciesList.add(segmentSpecies)
+            for birdName in seg[4]:
+                segmentSpecies = birdName
+                if birdName.endswith('?'):
+                    segmentSpecies = segmentSpecies[:-1]
+                speciesList.add(segmentSpecies)
+            # segmentSpecies = seg[4]
+            # if seg[4].endswith('?'):
+            #     segmentSpecies = segmentSpecies[:-1]
+                speciesList.add(segmentSpecies)
         speciesList.add("All species")
         print("The following species were detected for export:")
         print(speciesList)
@@ -560,7 +566,7 @@ class exportSegments:
                     ws.cell(row=r, column=4, value=int(seg[2]))
                     ws.cell(row=r, column=5, value=int(seg[3]))
                 if species=="All species":
-                    ws.cell(row=r, column=6, value=seg[4])
+                    ws.cell(row=r, column=6, value=str(seg[4]))
                 r += 1
 
         def writeToExcelp2(segments):
@@ -670,12 +676,12 @@ class exportSegments:
         if len(self.confirmedSegments) > 0 or len(self.segmentstoCheck) > 0:
             if self.method == "Wavelets":
                 for seg in self.confirmedSegments:
-                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species])
+                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, [self.species]])
                 for seg in self.segmentstoCheck:
-                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, self.species + '?'])
+                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, [self.species + '?']])
             else:
                 for seg in self.segments:
-                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, "Don't Know"])
+                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, ["Don't Know"]])
         else:
             for seg in self.segments:
                 annotation.append(seg)
@@ -1088,7 +1094,7 @@ class ControllableAudio(QAudioOutput):
         self.timeoffset = max(0, start)
         start = max(0, start * self.format.sampleRate() // 1000)
         stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
-        segment = audiodata[start:stop]
+        segment = audiodata[int(start):int(stop)]
         segment = sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
         self.loadArray(segment)
