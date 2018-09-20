@@ -20,6 +20,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# TODO: Bug -> overwrites updated labels
 import sys, os, json, platform, re
 
 from PyQt5.QtGui import QIcon, QPixmap
@@ -825,41 +826,43 @@ class AviaNZ(QMainWindow):
         # TODO: Add as a user option whether or not the list refreshes? Especially wrt the long list
         # But that probably is what you want -- hear once, more likely to hear again?
         # TODO: obvious flag
-        # TODO: *** I'm going have the potential for species being a list. Is it going to cause problems?
         self.menuBirdList.clear()
         self.menuBird2.clear()
 
+        # Regardless of how got here, if there are multiple species in list, don't overwrite the set!
+        if hasattr(self,'segments') and len(self.segments[self.box1id][4]) > 1:
+            self.multipleBirds = True
+        print("fillBird",self.multipleBirds)
+
         for item in self.config['BirdList'][:20]:
             if unsure and item != "Don't Know":
-                item = item+'?'
-            bird = self.menuBirdList.addAction(item)
+                bird = self.menuBirdList.addAction(item+'?')
+            else:
+                bird = self.menuBirdList.addAction(item)
             bird.setCheckable(True)
-            # TODO: Next line (and repeat below) won't work -- kaka in kakapo, but no comma and ? a problem
             if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
                 bird.setChecked(True)
             if self.multipleBirds:
                 self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
                 self.menuBirdListSignal = True
-                #TODO: Disconnect this if it is connected!
             else:
                 # Disconnect signal if it exists
                 if self.menuBirdListSignal:
                     self.menuBirdList.aboutToHide.disconnect()
                     self.menuBirdListSignal = False
-                bird.setCheckable(False)
                 receiver = lambda checked, birdname=item: self.birdSelected(birdname)
                 bird.triggered.connect(receiver)
             self.menuBirdList.addAction(bird)
         self.menuBirdList.addMenu(self.menuBird2)
         for item in self.config['BirdList'][20:40]+['Other']:
             if unsure and item != "Don't Know" and item != "Other":
-                item = item+'?'
-            bird = self.menuBird2.addAction(item)
+                bird = self.menuBird2.addAction(item+'?')
+            else:
+                bird = self.menuBird2.addAction(item)
             bird.setCheckable(True)
             if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
                 bird.setChecked(True)
-            if self.multipleBirds:
-                bird.setCheckable(False)
+            if not self.multipleBirds:
                 receiver = lambda checked, birdname=item: self.birdSelected(birdname)
                 bird.triggered.connect(receiver)
             self.menuBird2.addAction(bird)
@@ -1177,6 +1180,8 @@ class AviaNZ(QMainWindow):
                                 s[3] = self.convertYtoFreq(s[3])
                                 print(s[2],s[3])
                                 self.segmentsToSave = True
+                            if type(s[4]) is not list:
+                                s[4] = [s[4]]
 
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
@@ -1845,14 +1850,16 @@ class AviaNZ(QMainWindow):
         # min is to remove possible rounding error
         inds = int(self.convertAmpltoSpec(startpoint) / self.widthOverviewSegment)
         inde = min(int(self.convertAmpltoSpec(endpoint) / self.widthOverviewSegment),len(self.overviewSegments)-1)
-        if species == "Don't Know" or type(species) is int:
+
+
+        #if species == "Don't Know" or type(species) is int:
+        if species is None or "Don't Know" in species or type(species) is int or len(species)==0:
             brush = self.ColourNone
             if delete:
                 self.overviewSegments[inds:inde+1,0] -= 1
             else:
                 self.overviewSegments[inds:inde+1,0] += 1
-
-        if species[-1:] == '?':
+        elif '?' in ''.join(species):
             brush = self.ColourPossible
             if delete:
                 self.overviewSegments[inds:inde + 1, 2] -= 1
@@ -1918,13 +1925,21 @@ class AviaNZ(QMainWindow):
             # This is one we want to show
 
             # Get the name and colour sorted
-            if species is None or species=="Don't Know":
-                species = "Don't Know"
+            # TODO: check
+            if species is None or "Don't Know" in species or len(species) == 0:
+                species = []
                 brush = self.ColourNone
-            elif species[-1]=='?':
+            elif '?' in ''.join(species):
                 brush = self.ColourPossible
             else:
                 brush = self.ColourNamed
+            #if species is None or species=="Don't Know":
+                #species = "Don't Know"
+                #brush = self.ColourNone
+            #elif species[-1]=='?':
+                #brush = self.ColourPossible
+            #else:
+                #brush = self.ColourNamed
 
             self.refreshOverviewWith(startpoint, endpoint, species)
             self.prevBoxCol = brush
@@ -1965,7 +1980,8 @@ class AviaNZ(QMainWindow):
             p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
 
             # Put the text into the box
-            label = pg.TextItem(text=species, color='k')
+            label = pg.TextItem(text=','.join(species), color='k')
+            #label = pg.TextItem(text=species, color='k')
             self.p_spec.addItem(label)
             label.setPos(self.convertAmpltoSpec(startpoint), self.textpos)
 
@@ -2155,21 +2171,25 @@ class AviaNZ(QMainWindow):
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
                 # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
+                # TODO: re last: what's wrong with and?
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
+                    self.multipleBirds = False
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                 elif modifiers == QtCore.Qt.ControlModifier:
+                    self.multipleBirds = False
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                elif modifiers == QtCore.Qt.MetaModifier:
-                    print("Meta!")
+                elif modifiers == QtCore.Qt.AltModifier:
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     self.multipleBirds = True
+                    print("Meta!",self.multipleBirds)
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
+                    self.multipleBirds = False
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
                     self.fillBirdList()
@@ -2236,12 +2256,14 @@ class AviaNZ(QMainWindow):
                         # popup dialog
                         modifiers = QtGui.QApplication.keyboardModifiers()
                         if modifiers == QtCore.Qt.ControlModifier:
+                            self.multipleBirds = False
                             self.fillBirdList(unsure=True)
-                        elif modifiers == QtCore.Qt.MetaModifier:
-                            print("Meta!")
+                        elif modifiers == QtCore.Qt.AltModifier:
                             self.multipleBirds = True
+                            print("Meta!",self.multipleBirds)
                             self.fillBirdList()
                         else:
+                            self.multipleBirds = False
                             self.fillBirdList()
                         self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                     else:
@@ -2302,18 +2324,22 @@ class AviaNZ(QMainWindow):
                 # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
+                    self.multipleBirds = False
                     self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
                 elif modifiers == QtCore.Qt.ControlModifier:
+                    self.multipleBirds = False
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                elif modifiers == QtCore.Qt.MetaModifier:
-                    print("Meta!")
+                elif modifiers == QtCore.Qt.AltModifier:
+                    self.addSegment(x1, x2, y1, y2)
                     self.multipleBirds = True
+                    print("Meta!",self.multipleBirds)
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
+                    self.multipleBirds = False
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.fillBirdList()
@@ -2396,12 +2422,14 @@ class AviaNZ(QMainWindow):
 
                         modifiers = QtGui.QApplication.keyboardModifiers()
                         if modifiers == QtCore.Qt.ControlModifier:
+                            self.multipleBirds = False
                             self.fillBirdList(unsure=True)
-                        elif modifiers == QtCore.Qt.MetaModifier:
-                            print("Meta!")
+                        elif modifiers == QtCore.Qt.AltModifier:
                             self.multipleBirds = True
+                            print("Meta!",self.multipleBirds)
                             self.fillBirdList()
                         else:
+                            self.multipleBirds = False
                             self.fillBirdList()
                         self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                     else:
@@ -2435,8 +2463,6 @@ class AviaNZ(QMainWindow):
         Has to update the overview segments in case their colour should change.
         Also handles getting the name through a message box if necessary.
         """
-        # TODO: Right place?
-        self.multipleBirds = False
         startpoint = self.segments[self.box1id][0]-self.startRead
         endpoint = self.segments[self.box1id][1]-self.startRead
         oldname = self.segments[self.box1id][4]
@@ -2447,6 +2473,7 @@ class AviaNZ(QMainWindow):
         # Now update the text
         if birdname is not 'Other':
             self.updateText(birdname)
+            # TODO: Next bit should have a choice flag, might not want it
             if update:
                 # Put the selected bird name at the top of the list
                 if birdname[-1] == '?':
@@ -2489,25 +2516,47 @@ class AviaNZ(QMainWindow):
         if segID is None:
             segID = self.box1id
         #print segID, len(self.segments), len(self.listRectanglesa1)
-        self.segments[segID][4] = text
-        print(segID, len(self.listLabels))
+
+        print(text,self.multipleBirds, self.segments[segID][4])
+        # TODO: Now it's a list?
+        if self.multipleBirds:
+            self.segments[segID][4].append(text)
+        else:
+            self.segments[segID][4] = [text]
+
+        print(text,self.multipleBirds, self.segments[segID][4])
+        text = ','.join(self.segments[segID][4])
         self.listLabels[segID].setText(text,'k')
 
         # Update the colour
-        if text != "Don't Know":
-            if text[-1] == '?':
+        # TODO: Check
+        if "Don't Know" not in self.segments[segID][4]:
+            if '?' in text:
                 self.prevBoxCol = self.ColourPossible
             else:
                 self.prevBoxCol = self.ColourNamed
         else:
             self.prevBoxCol = self.ColourNone
+        
+       # self.segments[segID][4] = text
+       # print(segID, len(self.listLabels))
+       # self.listLabels[segID].setText(text,'k')
+
+        # Update the colour
+       # if text != "Don't Know":
+       #     if text[-1] == '?':
+       #         self.prevBoxCol = self.ColourPossible
+       #     else:
+       #         self.prevBoxCol = self.ColourNamed
+       # else:
+       #     self.prevBoxCol = self.ColourNone
 
         # Store the species in case the user wants it for the next segment
         self.lastSpecies = text
         self.segmentsToSave = True
 
     def processMultipleBirdSelections(self):
-        self.segments[self.box1id][4] = ""
+        self.segments[self.box1id][4] = []
         [self.birdSelected(action.text()) for action in self.menuBirdList.actions() if action.isChecked()]
         [self.birdSelected(action.text()) for action in self.menuBird2.actions() if action.isChecked()]
 
@@ -2831,7 +2880,8 @@ class AviaNZ(QMainWindow):
                 file.close()
 
             # Update the label on the box if it is in the current page
-            self.updateLabel(label)
+            #self.updateLabel(label)
+            self.updateLabel(','.join(self.segments[self.box1id][4]))
             # if self.listRectanglesa2[self.box1id] is not None:
             #     self.birdSelected(label,update=False)
             #
@@ -2884,9 +2934,18 @@ class AviaNZ(QMainWindow):
             return
         self.statusLeft.setText("Checking...")
 
+
         # Get all labels
         names = [item[4] for item in self.segments]
-        names = [n if n[-1] != '?' else n[:-1] for n in names]
+        # Need to have a single list, so this makes it
+        flatten = lambda list: [item for sublist in list for item in sublist]
+        names = flatten(names)
+        names = [re.sub('\?','',item) for item in names]
+
+        # Get all labels
+        #names = [item[4] for item in self.segments]
+        #names = [n if n[-1] != '?' else n[:-1] for n in names]
+
         # Make them unique
         keys = {}
         for n in names:

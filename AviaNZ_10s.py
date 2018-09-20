@@ -30,7 +30,7 @@
 import sys, os, json, platform, re
 
 from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QAction
+from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox
 from PyQt5.QtCore import Qt, QDir, QTime, QTimer, QPoint, QPointF, QLocale, QFile, QIODevice, QLine
 from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 
@@ -810,9 +810,6 @@ class AviaNZ(QMainWindow):
 
         # Remove the segments
         self.removeSegments()
-        # TODO: Next 2 lines necessary?
-        #if hasattr(self, 'overviewImageRegion'):
-        #    self.p_overview.removeItem(self.overviewImageRegion)
 
         # This is a flag to say if the next thing that the user clicks on should be a start or a stop for segmentation
         if self.started:
@@ -1081,7 +1078,6 @@ class AviaNZ(QMainWindow):
                                 self.segmentsToSave = True
                             if type(s[4]) is not list:
                                 s[4] = [s[4]]
-                                print(s[4])
                 else:
                     # Hartley bodge: Make a file with 10s segments every minute
                     print("Hartley bodging")
@@ -1759,14 +1755,13 @@ class AviaNZ(QMainWindow):
         inds = int(self.convertAmpltoSpec(startpoint) / self.widthOverviewSegment)
         inde = min(int(self.convertAmpltoSpec(endpoint) / self.widthOverviewSegment),len(self.overviewSegments)-1)
         # TODO: List, multiple labels
-        if species is None or species == "Don't Know" or type(species) is int:
+        if species is None or "Don't Know" in species or type(species) is int or len(species)==0:
             brush = self.ColourNone
             if delete:
                 self.overviewSegments[inds:inde+1,0] -= 1
             else:
                 self.overviewSegments[inds:inde+1,0] += 1
-
-        elif species[-1:] == '?':
+        elif '?' in ''.join(species):
             brush = self.ColourPossible
             if delete:
                 self.overviewSegments[inds:inde + 1, 2] -= 1
@@ -1833,10 +1828,10 @@ class AviaNZ(QMainWindow):
 
             # Get the name and colour sorted
             # TODO: will now need fixing
-            if species is None or species=="Don't Know":
-                species = ""
+            if "Don't Know" in species or len(species) == 0:
+                species = []
                 brush = self.ColourNone
-            elif len(species) > 0 and species[-1]=='?':
+            elif '?' in ''.join(species):
                 brush = self.ColourPossible
             else:
                 brush = self.ColourNamed
@@ -2380,22 +2375,24 @@ class AviaNZ(QMainWindow):
         if segID is None:
             segID = self.box1id
         #print(segID, len(self.segments), len(self.listRectanglesa1))
-        print(self.segments[segID][4], text)
+        #print(self.segments[segID][4], text)
         # Next lines changed
-        # TODO: Now it's a list?
-        self.segments[segID][4].append(text)
         #if len(self.segments[segID][4] is None or self.segments[segID][4] ==',':
         #    self.segments[segID][4] = [text]
         #else:
         #    if text not in self.segments[segID][4]:
         #        self.segments[segID][4] = text + ","
         #print(segID, len(self.listLabels),self.segments[segID][4])
-        self.listLabels[segID].setText(','.join(self.segments[segID][4]),'k')
+
+        # TODO: Now it's a list?
+        self.segments[segID][4].append(text)
+        text = ','.join(self.segments[segID][4])
+        self.listLabels[segID].setText(text,'k')
 
         # Update the colour
         # TODO: Needs work -- any ? in list...
-        if text != "Don't Know":
-            if text[-1] == '?':
+        if "Don't Know" not in self.segments[segID][4]:
+            if '?' in text:
                 self.prevBoxCol = self.ColourPossible
             else:
                 self.prevBoxCol = self.ColourNamed
@@ -2635,7 +2632,7 @@ class AviaNZ(QMainWindow):
                     x3 = max(x3, 0)
                     x4 = int((self.listRectanglesa1[self.box1id].getRegion()[1] + self.config['reviewSpecBuffer']) * self.sampleRate)
                     x4 = min(x4, len(self.audiodata))
-                    #TODO: Deal with multiple labels
+                    #TODO: Deal with multiple labels -- this passes them as a string to avoid errors, but it won't work on the other end!
                     self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
                                                        self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1, 
                                                        self.segments[self.box1id][0], self.segments[self.box1id][1], self.minFreq, self.maxFreq)
@@ -2710,6 +2707,8 @@ class AviaNZ(QMainWindow):
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
+        # TODO: Fix this -- returns need proper processing
+        print(label+'return')
         self.segmentsDone += 1
         self.humanClassifyDialog1.stopPlayback()
         if len(checkText) > 0:
@@ -2728,7 +2727,8 @@ class AviaNZ(QMainWindow):
                 file.close()
 
             # Update the label on the box if it is in the current page
-            self.updateLabel(label)
+            self.updateLabel(','.join(self.segments[self.box1id][4]))
+            #self.updateLabel(label)
             # if self.listRectanglesa2[self.box1id] is not None:
             #     self.birdSelected(label,update=False)
             #
@@ -2783,9 +2783,11 @@ class AviaNZ(QMainWindow):
 
         # Get all labels
         names = [item[4] for item in self.segments]
-        #names = ','.join(names)
-        # TODO: check ? in list
-        names = [n if n[-1] != '?' else n[:-1] for n in names]
+        # Need to have a single list, so this makes it
+        flatten = lambda list: [item for sublist in list for item in sublist]
+        names = flatten(names)
+        names = [re.sub('\?','',item) for item in names]
+        #names = [n if n[-1] != '?' else n[:-1] for n in names]
         # Make them unique
         keys = {}
         for n in names:
@@ -3157,6 +3159,7 @@ class AviaNZ(QMainWindow):
                         for seg in segments:
                             if seg[0] == -1:
                                 continue
+                            # TODO: ??
                             elif species in seg[4].title():
                             #elif seg[4].title() == species:
                                 secs = seg[1] - seg[0]
