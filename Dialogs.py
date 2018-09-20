@@ -1065,20 +1065,24 @@ class HumanClassify1(QDialog):
 
         # An array of radio buttons and a list and a text entry box
         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
-        self.birds1 = []
-        for item in self.birdList[:9]:
-            self.birds1.append(QRadioButton(item))
-        self.birds2 = []
-        for item in self.birdList[9:17]:
-            self.birds2.append(QRadioButton(item))
-        self.birds2.append(QRadioButton('Other'))
+        #self.birds1 = []
+        self.birds = QButtonGroup()
+        self.birdslist = []
+        for item in self.birdList[:19]:
+            self.birdslist.append(QCheckBox(item))
+            self.birds.addButton(self.birdslist[-1],len(self.birdslist)-1)
+        #self.birds2 = QButtonGroup()
+        #for item in self.birdList[9:17]:
+            #self.birds2.addButton(QCheckBox(item))
+        self.birdslist.append(QCheckBox('Other'))
+        self.birds.addButton(self.birdslist[-1],len(self.birdslist)-1)
 
-        for i in range(len(self.birds1)):
-            self.birds1[i].setEnabled(True)
-            self.birds1[i].clicked.connect(self.radioBirdsClicked)
-        for i in range(len(self.birds2)):
-            self.birds2[i].setEnabled(True)
-            self.birds2[i].clicked.connect(self.radioBirdsClicked)
+        #for i in range(len(self.birds1)):
+            #self.birds1[i].setEnabled(True)
+            #self.birds1[i].clicked.connect(self.radioBirdsClicked)
+        #for i in range(len(self.birds2)):
+            #self.birds2[i].setEnabled(True)
+            #self.birds2[i].clicked.connect(self.radioBirdsClicked)
 
         # The list of less common birds
         self.birds3 = QListWidget(self)
@@ -1107,12 +1111,14 @@ class HumanClassify1(QDialog):
 
         # The layouts
         birds1Layout = QVBoxLayout()
-        for i in range(len(self.birds1)):
-            birds1Layout.addWidget(self.birds1[i])
-
         birds2Layout = QVBoxLayout()
-        for i in range(len(self.birds2)):
-            birds2Layout.addWidget(self.birds2[i])
+        count = 0
+        for btn in self.birdslist:
+            if count<10: 
+                birds1Layout.addWidget(btn)
+            else:
+                birds2Layout.addWidget(btn)
+            count += 1
 
         birdListLayout = QVBoxLayout()
         birdListLayout.addWidget(self.birds3)
@@ -1182,7 +1188,6 @@ class HumanClassify1(QDialog):
         labelCo.setAlignment(QtCore.Qt.AlignRight)
         vboxSpecContr.addWidget(labelCo, row=2, col=7)
         vboxSpecContr.addWidget(self.contrastSlider, row=2, col=8, colspan=2)
- 
 
         vboxFull = QVBoxLayout()
         vboxFull.addWidget(vboxSpecContr)
@@ -1291,25 +1296,26 @@ class HumanClassify1(QDialog):
         else:
             self.plot.setLevels([self.colourStart, self.colourEnd])
 
-        # Make one of the options be selected
-        self.species.setText(label)
-        self.label=label
-        if label[-1]=='?':
-            label = label[:-1]
-        ind = self.birdList.index(label)
-        if ind < 9:
-            self.birds1[ind].setChecked(True)
-        elif ind < 17:
-            self.birds2[ind-9].setChecked(True)
-        else:
-            self.birds2[8].setChecked(True)
-            self.birds3.setEnabled(True)
-            self.birds3.setCurrentRow(ind-16)
+        # Select the right options
+        # TODO: Fix next
+        self.species.setText(','.join(label))
+        print(label,len(label),type(label))
+        for l in label:
+            print('herex',l)
+            if l[-1]=='?':
+                l= l[:-1]
+            ind = self.birdList.index(l)
+            if ind < 18:
+                self.birdslist[ind].setChecked(True)
+            else:
+                self.birdslist[19].setChecked(True)
+                self.birds3.setEnabled(True)
+                self.birds3.setCurrentRow(ind-20)
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
         # Update the text and store the data
-        for button in self.birds1 + self.birds2:
+        for button in self.birds.buttons():
             if button.isChecked():
                 if button.text() == "Other":
                     #pass
@@ -1494,6 +1500,8 @@ class HumanClassify2(QDialog):
 
     def nextPage(self):
         # Find out which buttons have been clicked (so are not correct)
+        if len(self.buttons) == 0:
+            return
         for i in range(len(self.buttons)):
             self.buttons[i].stopPlayback()
             if self.buttons[i].buttonClicked:
