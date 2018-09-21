@@ -463,7 +463,7 @@ class exportSegments:
 
     """
 
-    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species="Don't Know", startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1):
+    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species="Don't Know", startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1, batch=False):
 
         if len(segments)>0:
             if len(segments[0])==2:
@@ -480,6 +480,7 @@ class exportSegments:
                 return
 
         self.segments=segments
+        print("inside excel: ", self.segments)
         self.numpages=numpages
         self.confirmedSegments = confirmedSegments
         self.segmentstoCheck = segmentstoCheck
@@ -497,6 +498,7 @@ class exportSegments:
         self.operator = operator
         self.reviewer = reviewer
         self.minLen = minLen
+        self.batch = batch
 
     def makeNewWorkbook(self, species):
         self.wb = Workbook()
@@ -566,7 +568,7 @@ class exportSegments:
                     ws.cell(row=r, column=4, value=int(seg[2]))
                     ws.cell(row=r, column=5, value=int(seg[3]))
                 if species=="All species":
-                    ws.cell(row=r, column=6, value=str(seg[4]))
+                    ws.cell(row=r, column=6, value=", ".join(seg[4]))
                 r += 1
 
         def writeToExcelp2(segments):
@@ -619,9 +621,15 @@ class exportSegments:
             # if not, create new
 
             if self.withConf:
-                self.eFile = self.dirName + '/DetectionSummary_withConf_' + species + '.xlsx'
+                if self.batch:
+                    self.eFile = self.dirName + '/DetectionSummary_withConf_' + species + '.xlsx'
+                else:
+                    self.eFile = self.filename + '_withConf_' + species + '.xlsx'
             else:
-                self.eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
+                if self.batch:
+                    self.eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
+                else:
+                    self.eFile = self.filename + '_' + species + '.xlsx'
 
             if os.path.isfile(self.eFile):
                 try:
@@ -641,7 +649,8 @@ class exportSegments:
                     seg.append(0)
                     seg.append(0)
                     seg.append(species)
-                if seg[4] == species or seg[4] == species + '?' or species=="All species":
+                # if seg[4] == species or seg[4] == species + '?' or species=="All species":
+                if species in seg[4] or species+'?' in seg[4] or species == "All species":
                     segmentsWPossible.append(seg)
             # if len(segmentsWPossible)==0:
             #     print("Warning: no segments found for species %s" % species)
@@ -678,7 +687,7 @@ class exportSegments:
                 for seg in self.confirmedSegments:
                     annotation.append([float(seg[0]), float(seg[1]), 0, 0, [self.species]])
                 for seg in self.segmentstoCheck:
-                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, [self.species + '?']])
+                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, [self.species[0] + '?']])
             else:
                 for seg in self.segments:
                     annotation.append([float(seg[0]), float(seg[1]), 0, 0, ["Don't Know"]])

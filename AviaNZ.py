@@ -3637,7 +3637,10 @@ class AviaNZ(QMainWindow):
             if generateExcel:
                 # Save the excel file
                 # note: species parameter now only indicates default species for 2-column segment format!
-                out = SupportClasses.exportSegments(species=species, startTime=self.startTime, segments=newSegments, dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
+                if species == 'All species':
+                    out = SupportClasses.exportSegments(species=[], startTime=self.startTime, segments=newSegments, dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
+                else:
+                    out = SupportClasses.exportSegments(species=[species], startTime=self.startTime, segments=newSegments, dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
                 out.excel()
             # self.exportSegments(newSegments,species=species)
 
@@ -3668,7 +3671,17 @@ class AviaNZ(QMainWindow):
             self.deleteSegment(seg)
         self.segmentDialog.undo.setEnabled(False)
 
-    def exportSeg(self, annotation=None, species='All species'):
+    def exportSeg(self, annotation=None):
+        # find all the species
+        species = set()
+        species.add("All species")
+        for seg in self.segments:
+            for birdName in seg[4]:
+                if birdName.endswith('?'):
+                    species.add(birdName[:-1])
+                else:
+                    species.add(birdName)
+        species = list(species)
         out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename, resolution=10, datalength=self.datalength, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
         out.excel()
         # add user notification
