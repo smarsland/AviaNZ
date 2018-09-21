@@ -307,7 +307,10 @@ class AviaNZ_batchProcess(QMainWindow):
                                 newSegments = post.segments
                                 # Save output
                                 print("stime: ", sTime)
-                                out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=[], segmentstoCheck=post.segments, species=self.species, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto")
+                                if self.species == 'All species':
+                                    out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=[], segmentstoCheck=post.segments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                                else:
+                                    out = SupportClasses.exportSegments(segments=newSegments, confirmedSegments=[], segmentstoCheck=post.segments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                                 out.excel()
                                 # Save the annotation
                                 out.saveAnnotation()
@@ -703,7 +706,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             print("filesuccess: ", filesuccess)
 
                         # Store the output to an Excel file (no matter if review dialog exit was clean)
-                        out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=[self.species])
+                        out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=[self.species], batch=True)
                         out.excel()
                         # Save the corrected segment JSON
                         out.saveAnnotation()
@@ -742,15 +745,14 @@ class AviaNZ_reviewAll(QMainWindow):
         # self.segments_other = []
         self.segments_sp = []
         for seg in self.segments:
-            if seg[4][-1] == '?':
-                if self.species == seg[4][:-1]:
+            for birdName in seg[4]:
+                if birdName[-1] == '?':
+                    if self.species == birdName[:-1]:
+                        self.segments_sp.append(seg)
+                        break
+                elif self.species == birdName:
                     self.segments_sp.append(seg)
-                # else:
-                #     self.segments_other.append(seg)
-            elif self.species == seg[4]:
-                self.segments_sp.append(seg)
-            # else:
-            #     self.segments_other.append(seg)
+                    break
 
         segments = copy.deepcopy(self.segments)
         errorInds = []

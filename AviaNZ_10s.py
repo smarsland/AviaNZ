@@ -1959,13 +1959,13 @@ class AviaNZ(QMainWindow):
                 endpoint = temp
 
             # Add the segment in both plots and connect up the listeners
-            p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=brush)
+            p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=brush,movable=False)
             self.p_ampl.addItem(p_ampl_r, ignoreBounds=True)
             p_ampl_r.setRegion([startpoint, endpoint])
             p_ampl_r.sigRegionChangeFinished.connect(self.updateRegion_ampl)
 
             if y1==0 and y2==0:
-                p_spec_r = SupportClasses.LinearRegionItem2(self, brush = brush)
+                p_spec_r = SupportClasses.LinearRegionItem2(self, brush = brush,movable=False)
                 p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
             else:
                 if y1 > y2:
@@ -2364,6 +2364,7 @@ class AviaNZ(QMainWindow):
             else:
                 # if this is right click (drawing mode):
                 if evt.button() == self.MouseDrawingButton:
+                    return
                     nonebrush = self.ColourNone
                     self.start_ampl_loc = self.convertSpectoAmpl(mousePoint.x())
                     self.start_spec_y = mousePoint.y()
@@ -2537,7 +2538,7 @@ class AviaNZ(QMainWindow):
             else:
                 self.segments[segID][4] = [text]
 
-        #print(text,self.multipleBirds, self.segments[segID][4])
+        print(text,self.multipleBirds, self.segments[segID][4])
         text = ','.join(self.segments[segID][4])
         self.listLabels[segID].setText(text,'k')
 
