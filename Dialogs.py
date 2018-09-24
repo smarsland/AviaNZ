@@ -1065,26 +1065,15 @@ class HumanClassify1(QDialog):
 
         # An array of radio buttons and a list and a text entry box
         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
-        #self.birds1 = []
         self.birds = QButtonGroup()
         self.birdbtns = []
         for item in self.birdList[:19]:
             self.birdbtns.append(QCheckBox(item))
             self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
             self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
-        #self.birds2 = QButtonGroup()
-        #for item in self.birdList[9:17]:
-            #self.birds2.addButton(QCheckBox(item))
         self.birdbtns.append(QCheckBox('Other'))
         self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
         self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
-
-        #for i in range(len(self.birds1)):
-            #self.birds1[i].setEnabled(True)
-            #self.birds1[i].clicked.connect(self.radioBirdsClicked)
-        #for i in range(len(self.birds2)):
-            #self.birds2[i].setEnabled(True)
-            #self.birds2[i].clicked.connect(self.radioBirdsClicked)
 
         # The list of less common birds
         self.birds3 = QListWidget(self)
@@ -1104,9 +1093,6 @@ class HumanClassify1(QDialog):
         self.tbox.setMaximumWidth(150)
         self.tbox.returnPressed.connect(self.birdTextEntered)
         self.tbox.setEnabled(False)
-
-        #self.close = QPushButton("Done")
-        #self.connect(self.close, SIGNAL("clicked()"), self.accept)
 
         # Audio playback object
         self.media_obj2 = SupportClasses.ControllableAudio(self.parent.audioFormat)
@@ -1368,7 +1354,6 @@ class HumanClassify1(QDialog):
             #TODO: Check if selected or not
             # Save the entry
             self.tbox.setEnabled(False)
-            #print('text add before',self.label)
             if self.multipleBirds:
                 if item.isSelected() and item.text() not in self.label and item.text()+'?' not in self.label:
                     self.label.append(str(item.text()))
@@ -1379,7 +1364,6 @@ class HumanClassify1(QDialog):
                         self.label.remove(str(item.text()))
             else:           
                 self.label = [str(item.text())]
-            #print('after',self.label)
             self.species.setText(','.join(self.label))
 
     def birdTextEntered(self):
