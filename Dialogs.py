@@ -1345,7 +1345,7 @@ class HumanClassify1(QDialog):
                             self.label.append(str(button.text()))
                     else:           
                         self.label = [str(button.text())]
-                    #print('after',self.label)
+                    print('after',self.label)
                     self.species.setText(','.join(self.label))
             else:
                 if button.text() == "Other":

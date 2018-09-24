@@ -2460,7 +2460,7 @@ class AviaNZ(QMainWindow):
         self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
         self.refreshOverviewWith(startpoint, endpoint, birdname)
 
-        print("birdSelected",birdname)
+        print("birdSelected",birdname,type(birdname))
         # Now update the text
         if birdname is not 'Other':
             self.updateText(birdname)
@@ -2510,8 +2510,10 @@ class AviaNZ(QMainWindow):
 
         print("updateText",text,self.multipleBirds, self.segments[segID][4])
         if self.multipleBirds:
+            print("in multiple")
             self.segments[segID][4].append(text)
         else:
+            print(type(text),type(self.segments[segID][4]))
             if type(text) is list:
                 self.segments[segID][4] = text
             else:
@@ -2701,6 +2703,8 @@ class AviaNZ(QMainWindow):
         # Store the current page to return to
         self.currentPage = self.currentFileSection
         self.segmentsDone = 0
+
+        self.multipleBirds = False
         # Check there are segments to show on this page
         if not self.config['showAllPages']:
             if len(self.segments)>0:
@@ -2837,7 +2841,6 @@ class AviaNZ(QMainWindow):
     def updateLabel(self,label):
         """ Update the label on a segment that is currently shown in the display. """
 
-
         self.birdSelected(label, update=False)
 
         if self.listRectanglesa2[self.box1id] is not None:
@@ -2873,7 +2876,7 @@ class AviaNZ(QMainWindow):
             else:
                 self.config['BirdList'].append(text)
 
-        #print(label != self.segments[self.box1id][4], label , self.segments[self.box1id][4],'?' in ''.join(label))
+        print(label != self.segments[self.box1id][4], label , self.segments[self.box1id][4],'?' in ''.join(label))
         # Todo: boxid[4] has been updated so this if doesn't effect? added update label to else but not the ideal sol
         if label != self.segments[self.box1id][4]:
             print("HCC1, updating",label)
