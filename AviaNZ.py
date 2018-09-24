@@ -4403,7 +4403,7 @@ def mainlauncher(cli, infile, imagefile, command):
         app.exec_()
 
 DOC=True    # only DOC features or all
-generateExcel=True
+generateExcel=False # generate xlsx immediately after segmenting?
 
 # Start the application
 app = QApplication(sys.argv)
