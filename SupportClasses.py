@@ -463,28 +463,21 @@ class exportSegments:
 
     """
 
-    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species="Don't Know", startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1, batch=False):
+    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species=["Don't Know"], startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1, batch=False):
 
-        if len(segments)>0:
-            if len(segments[0])==2:
-                print("using old format segment list")
-                # convert to new format
-                for seg in segments:
-                    seg.append(0)
-                    seg.append(0)
-                    seg.append(species)
-            elif len(segments[0])==5:
-                print("using new format segment list")
-            else:
-                print("ERROR: incorrect segment format")
-                return
-
-        self.segments=segments
-        print("inside excel: ", self.segments)
-        self.numpages=numpages
-        self.confirmedSegments = confirmedSegments
-        self.segmentstoCheck = segmentstoCheck
         self.species=species
+        # convert 2-col lists to 5-col lists, if needed
+        self.segments = self.correctSegFormat(segments, [])
+        self.confirmedSegments = self.correctSegFormat(confirmedSegments, species)
+        if species==[]:
+            self.segmentstoCheck = self.correctSegFormat(segmentstoCheck, ["Don't Know"])
+        else:
+            self.segmentstoCheck = self.correctSegFormat(segmentstoCheck, [species[0] + "?"])
+
+        print("exporting previous segments: ", self.segments)
+        print("exporting confirmed segments: ", self.confirmedSegments)
+        print("exporting unchecked segments: ", self.segmentstoCheck)
+        self.numpages=numpages
         self.startTime=startTime
         self.dirName=dirName
         self.filename=filename
@@ -499,6 +492,28 @@ class exportSegments:
         self.reviewer = reviewer
         self.minLen = minLen
         self.batch = batch
+
+    def correctSegFormat(self, seglist, species):
+        # Checks and if needed corrects 2-col segments to 5-col segments.
+        # segments can be provided as confirmed/toCheck lists,
+        # while everything from segments list is exported as-is.
+        if len(seglist)>0:
+            if len(seglist[0])==2:
+                print("using old format segment list")
+                # convert to new format
+                for seg in seglist:
+                    seg.append(0)
+                    seg.append(0)
+                    seg.append(species)
+                return(seglist)
+            elif len(seglist[0])==5:
+                print("using new format segment list")
+                return(seglist)
+            else:
+                print("ERROR: incorrect segment format")
+                return
+        else:
+            return([])
 
     def makeNewWorkbook(self, species):
         self.wb = Workbook()
@@ -543,10 +558,6 @@ class exportSegments:
                 segmentSpecies = birdName
                 if birdName.endswith('?'):
                     segmentSpecies = segmentSpecies[:-1]
-                speciesList.add(segmentSpecies)
-            # segmentSpecies = seg[4]
-            # if seg[4].endswith('?'):
-            #     segmentSpecies = segmentSpecies[:-1]
                 speciesList.add(segmentSpecies)
         speciesList.add("All species")
         print("The following species were detected for export:")
@@ -680,25 +691,18 @@ class exportSegments:
         # Save annotations - batch processing
         annotation = []
         annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), self.operator, self.reviewer, -1])
-        # segments can be provided as confirmed/toCheck lists,
-        # otherwise everything from segments list is exported as-is.
-        if len(self.confirmedSegments) > 0 or len(self.segmentstoCheck) > 0:
-            if self.method == "Wavelets":
-                for seg in self.confirmedSegments:
-                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, [self.species]])
-                for seg in self.segmentstoCheck:
-                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, [self.species[0] + '?']])
-            else:
-                for seg in self.segments:
-                    annotation.append([float(seg[0]), float(seg[1]), 0, 0, ["Don't Know"]])
-        else:
-            for seg in self.segments:
-                annotation.append(seg)
+        for seg in self.confirmedSegments:
+            annotation.append([float(seg[0]), float(seg[1]), float(seg[2]), float(seg[3]), seg[4]])
+        for seg in self.segmentstoCheck:
+            annotation.append([float(seg[0]), float(seg[1]), float(seg[2]), float(seg[3]), seg[4]])
+        for seg in self.segments:
+            annotation.append([float(seg[0]), float(seg[1]), float(seg[2]), float(seg[3]), seg[4]])
 
         if isinstance(self.filename, str):
             file = open(self.filename + '.data', 'w')
         else:
             file = open(str(self.filename) + '.data', 'w')
+        print(annotation)
         json.dump(annotation, file)
         file.write("\n")
 
@@ -1259,3 +1263,65 @@ class FlowLayout(QtGui.QLayout):
             lineHeight = max(lineHeight, item.sizeHint().height())
 
         return y + lineHeight - rect.y()
+
+class Log(object):
+    """ Used for logging info during batch processing.
+        Stores only the most recent analysis, so e.g.
+        if starting Kiwi, then Ruru, then Kiwi again,
+        option to resume WILL NOT be offered."""
+
+    def __init__(self, path, settings):
+        # in order to append, the previous log must:
+        # 1. exist
+        # 2. be writeable
+        # 3. match current analysis
+        # On init, we parse the existing log to see if appending is possible.
+        # Actual append/create happens later.
+        self.possibleAppend = False
+        self.file = path
+        self.settings = settings
+        self.filesDone = []
+        if os.path.isfile(path):
+            try:
+                f = open(path, 'r+')
+                print("Found log file at %s" % path)
+                lines = [line.rstrip('\n') for line in f]
+                # EXAMPLE FORMAT:
+                # lines[0]: freetext info
+                # lines[1]: species
+                # lines[2]: method
+                # lines[3]: resolution...
+                for s in range(len(settings)):
+                    if len(lines)<=len(settings) or str(settings[s]) != lines[s+1]:
+                        break
+                else:
+                    # loop unbroken = settings match
+                    # remaining lines are paths to processed files:
+                    self.filesDone = lines[len(settings)+1:]
+                    self.possibleAppend = True
+                f.close()
+
+            except IOError:
+                # bad error: lacking permissions?
+                print("ERROR: could not open log at %s" % path)
+
+    def startNewLog(self):
+        print("starting new log")
+        # start new log file and dump the header there
+        self.file = open(self.file, 'w')
+        self.file.write("Log started on " + time.strftime("%Y %m %d, %H:%M:%S") + ".\n")
+        for s in self.settings:
+            self.file.write(str(s))
+            self.file.write("\n")
+
+    def openForAppend(self):
+        print("appending old log")
+        # just open the old file:
+        self.file = open(self.file, 'a')
+
+    def appendFile(self, path):
+        print('appending %s' % path)
+        # attach file path to end of log
+        self.file.write(path)
+        self.file.write("\n")
+        self.file.flush()
