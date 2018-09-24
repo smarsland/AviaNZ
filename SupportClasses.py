@@ -474,9 +474,6 @@ class exportSegments:
         else:
             self.segmentstoCheck = self.correctSegFormat(segmentstoCheck, [species[0] + "?"])
 
-        print("exporting previous segments: ", self.segments)
-        print("exporting confirmed segments: ", self.confirmedSegments)
-        print("exporting unchecked segments: ", self.segmentstoCheck)
         self.numpages=numpages
         self.startTime=startTime
         self.dirName=dirName
@@ -702,7 +699,7 @@ class exportSegments:
             file = open(self.filename + '.data', 'w')
         else:
             file = open(str(self.filename) + '.data', 'w')
-        print(annotation)
+
         json.dump(annotation, file)
         file.write("\n")
 
