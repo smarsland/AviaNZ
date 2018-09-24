@@ -174,7 +174,7 @@ class AviaNZ(QMainWindow):
         self.sppinfofile = sppinfofile
 
         # FOR NOW:
-        DOC = self.config['DOC']
+        # DOC = self.config['DOC']
 
         # Load the birdlist 
         # TODO: review this to be something from the user config
@@ -420,6 +420,7 @@ class AviaNZ(QMainWindow):
         actionMenu.addSeparator()
         actionMenu.addAction("Export segments to Excel",self.exportSeg)
         actionMenu.addSeparator()
+        print("self.DOC: ", self.DOC)
         if self.DOC == False:
             actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
         actionMenu.addSeparator()
@@ -1847,7 +1848,6 @@ class AviaNZ(QMainWindow):
         inds = int(self.convertAmpltoSpec(startpoint) / self.widthOverviewSegment)
         inde = min(int(self.convertAmpltoSpec(endpoint) / self.widthOverviewSegment),len(self.overviewSegments)-1)
 
-        #if species == "Don't Know" or type(species) is int:
         if species is None or "Don't Know" in species or type(species) is int or len(species)==0:
             brush = self.ColourNone
             if delete:
@@ -1920,21 +1920,15 @@ class AviaNZ(QMainWindow):
             # This is one we want to show
 
             # Get the name and colour sorted
-            # TODO: check
-            if species is None or "Don't Know" in species or len(species) == 0:
+            if species is None or species==["Don't Know"] or len(species) == 0:
                 species = []
+                brush = self.ColourNone
+            elif "Don't Know" in species:
                 brush = self.ColourNone
             elif '?' in ''.join(species):
                 brush = self.ColourPossible
             else:
                 brush = self.ColourNamed
-            #if species is None or species=="Don't Know":
-                #species = "Don't Know"
-                #brush = self.ColourNone
-            #elif species[-1]=='?':
-                #brush = self.ColourPossible
-            #else:
-                #brush = self.ColourNamed
 
             self.refreshOverviewWith(startpoint, endpoint, species)
             self.prevBoxCol = brush
@@ -2880,7 +2874,7 @@ class AviaNZ(QMainWindow):
                 self.config['BirdList'].append(text)
 
         #print(label != self.segments[self.box1id][4], label , self.segments[self.box1id][4],'?' in ''.join(label))
-
+        # Todo: boxid[4] has been updated so this if doesn't effect? added update label to else but not the ideal sol
         if label != self.segments[self.box1id][4]:
             print("HCC1, updating",label)
             if self.config['saveCorrections']:
@@ -2901,6 +2895,8 @@ class AviaNZ(QMainWindow):
                 if self.segments[self.box1id][4][i][-1] == '?':
                     self.segments[self.box1id][4][i] = self.segments[self.box1id][4][i][:-1] 
             self.updateLabel(self.segments[self.box1id][4])
+        else:
+            self.updateLabel(label)
 
         self.refreshOverviewWith(startpoint, endpoint, label)
 
@@ -2911,6 +2907,8 @@ class AviaNZ(QMainWindow):
     def humanClassifyDelete1(self):
         # Delete a segment
         id = self.box1id
+        self.humanClassifyDialog1.stopPlayback()
+        self.deleteSegment(self.box1id)
 
         self.box1id = id-1
         self.segmentsToSave = True
@@ -3638,9 +3636,9 @@ class AviaNZ(QMainWindow):
                 # Save the excel file
                 # note: species parameter now only indicates default species for 2-column segment format!
                 if species == 'All species':
-                    out = SupportClasses.exportSegments(species=[], startTime=self.startTime, segments=newSegments, dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
+                    out = SupportClasses.exportSegments(species=[], startTime=self.startTime, segments=newSegments, dirName=self.dirName, filename=self.filename[:-4], datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
                 else:
-                    out = SupportClasses.exportSegments(species=[species], startTime=self.startTime, segments=newSegments, dirName=self.dirName, filename=self.filename, datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
+                    out = SupportClasses.exportSegments(species=[species], startTime=self.startTime, segments=newSegments, dirName=self.dirName, filename=self.filename[:-4], datalength=self.datalength,sampleRate=self.sampleRate, method=str(alg),resolution=resolution)
                 out.excel()
             # self.exportSegments(newSegments,species=species)
 
@@ -3682,7 +3680,7 @@ class AviaNZ(QMainWindow):
                 else:
                     species.add(birdName)
         species = list(species)
-        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename, resolution=10, datalength=self.datalength, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
+        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename[:-4], resolution=10, datalength=self.datalength, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
         out.excel()
         # add user notification
         # QMessageBox.about(self, "Segments Exported", "Check this directory for the excel output: " + '\n' + self.dirName)
@@ -4402,7 +4400,7 @@ def mainlauncher(cli, infile, imagefile, command):
         avianz.show()
         app.exec_()
 
-DOC=True    # only DOC features or all
+DOC=False    # only DOC features or all
 generateExcel=False # generate xlsx immediately after segmenting?
 
 # Start the application
