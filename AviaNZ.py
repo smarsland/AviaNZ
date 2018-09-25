@@ -2460,7 +2460,6 @@ class AviaNZ(QMainWindow):
         self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
         self.refreshOverviewWith(startpoint, endpoint, birdname)
 
-        print("birdSelected",birdname,type(birdname))
         # Now update the text
         if birdname is not 'Other':
             self.updateText(birdname)
@@ -2506,12 +2505,16 @@ class AviaNZ(QMainWindow):
         """ When the user sets or changes the name in a segment, update the text and the colour. """
         if segID is None:
             segID = self.box1id
-        #print segID, len(self.segments), len(self.listRectanglesa1)
 
         print("updateText",text,self.multipleBirds, self.segments[segID][4])
+        # produce list from text
         if self.multipleBirds:
-            print("in multiple")
-            self.segments[segID][4].append(text)
+            if type(text) is list:
+                self.segments[segID][4].extend(text)
+            else:
+                self.segments[segID][4].append(text)
+            # get the unique elements:
+            self.segments[segID][4] = list(set(self.segments[segID][4]))
         else:
             print(type(text),type(self.segments[segID][4]))
             if type(text) is list:
@@ -2519,7 +2522,7 @@ class AviaNZ(QMainWindow):
             else:
                 self.segments[segID][4] = [text]
 
-        #print(text,self.multipleBirds, self.segments[segID][4])
+        # produce text from list, to update the label
         text = ','.join(self.segments[segID][4])
         self.listLabels[segID].setText(text,'k')
 
@@ -2840,7 +2843,6 @@ class AviaNZ(QMainWindow):
 
     def updateLabel(self,label):
         """ Update the label on a segment that is currently shown in the display. """
-
         self.birdSelected(label, update=False)
 
         if self.listRectanglesa2[self.box1id] is not None:
@@ -2876,7 +2878,6 @@ class AviaNZ(QMainWindow):
             else:
                 self.config['BirdList'].append(text)
 
-        print(label != self.segments[self.box1id][4], label , self.segments[self.box1id][4],'?' in ''.join(label))
         # Todo: boxid[4] has been updated so this if doesn't effect? added update label to else but not the ideal sol
         if label != self.segments[self.box1id][4]:
             print("HCC1, updating",label)
@@ -2892,13 +2893,13 @@ class AviaNZ(QMainWindow):
             if self.saveConfig:
                 self.config['BirdList'].append(label)
         elif '?' in ''.join(label):
-            #print("Remove ?")
             # Remove the question mark, since the user has agreed
             for i in range(len(self.segments[self.box1id][4])):
                 if self.segments[self.box1id][4][i][-1] == '?':
                     self.segments[self.box1id][4][i] = self.segments[self.box1id][4][i][:-1] 
             self.updateLabel(self.segments[self.box1id][4])
         else:
+            # segment info matches, so just update the spec label
             self.updateLabel(label)
 
         self.refreshOverviewWith(startpoint, endpoint, label)

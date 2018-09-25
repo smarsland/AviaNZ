@@ -1065,26 +1065,15 @@ class HumanClassify1(QDialog):
 
         # An array of radio buttons and a list and a text entry box
         # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
-        #self.birds1 = []
         self.birds = QButtonGroup()
         self.birdbtns = []
         for item in self.birdList[:19]:
             self.birdbtns.append(QCheckBox(item))
             self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
             self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
-        #self.birds2 = QButtonGroup()
-        #for item in self.birdList[9:17]:
-            #self.birds2.addButton(QCheckBox(item))
         self.birdbtns.append(QCheckBox('Other'))
         self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
         self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
-
-        #for i in range(len(self.birds1)):
-            #self.birds1[i].setEnabled(True)
-            #self.birds1[i].clicked.connect(self.radioBirdsClicked)
-        #for i in range(len(self.birds2)):
-            #self.birds2[i].setEnabled(True)
-            #self.birds2[i].clicked.connect(self.radioBirdsClicked)
 
         # The list of less common birds
         self.birds3 = QListWidget(self)
@@ -1104,9 +1093,6 @@ class HumanClassify1(QDialog):
         self.tbox.setMaximumWidth(150)
         self.tbox.returnPressed.connect(self.birdTextEntered)
         self.tbox.setEnabled(False)
-
-        #self.close = QPushButton("Done")
-        #self.connect(self.close, SIGNAL("clicked()"), self.accept)
 
         # Audio playback object
         self.media_obj2 = SupportClasses.ControllableAudio(self.parent.audioFormat)
@@ -1303,14 +1289,17 @@ class HumanClassify1(QDialog):
         # Select the right options
         self.species.setText(','.join(label))
         #print(label,len(label),type(label))
-        for btn in self.birdbtns:
-            btn.setChecked(False)
         self.birds3.clearSelection()
         if len(label)>1:
+            print(label)
             self.birds.setExclusive(False)
             self.birds3.setSelectionMode(QAbstractItemView.MultiSelection)
             self.multipleBirds = True
+            for btn in self.birdbtns:
+                btn.setChecked(False)
         else:       
+            for btn in self.birdbtns:
+                btn.setChecked(False)
             self.birds.setExclusive(True)
             self.birds3.setSelectionMode(QAbstractItemView.SingleSelection)
             self.multipleBirds = False
@@ -1319,9 +1308,6 @@ class HumanClassify1(QDialog):
                 l= l[:-1]
             if l in self.birdList:
                 ind = self.birdList.index(l)
-            else:
-                ind = 18
-            if ind < 18:
                 self.birdbtns[ind].setChecked(True)
             else:
                 self.birdbtns[19].setChecked(True)
@@ -1368,7 +1354,6 @@ class HumanClassify1(QDialog):
             #TODO: Check if selected or not
             # Save the entry
             self.tbox.setEnabled(False)
-            #print('text add before',self.label)
             if self.multipleBirds:
                 if item.isSelected() and item.text() not in self.label and item.text()+'?' not in self.label:
                     self.label.append(str(item.text()))
@@ -1379,7 +1364,6 @@ class HumanClassify1(QDialog):
                         self.label.remove(str(item.text()))
             else:           
                 self.label = [str(item.text())]
-            #print('after',self.label)
             self.species.setText(','.join(self.label))
 
     def birdTextEntered(self):
