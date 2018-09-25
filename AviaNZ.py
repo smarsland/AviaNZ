@@ -23,7 +23,7 @@
 import sys, os, json, platform, re
 
 from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox
+from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QLineEdit
 from PyQt5.QtCore import Qt, QDir, QTime, QTimer, QPoint, QPointF, QLocale, QFile, QIODevice, QLine
 from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 
@@ -148,6 +148,7 @@ class AviaNZ(QMainWindow):
         and sets up the window.
         One interesting configuration point is the DOC setting, which hides the more 'research' functions."""
         print("Starting AviaNZ...")
+
         super(AviaNZ, self).__init__()
         self.root = root
         self.extra=False
@@ -277,6 +278,7 @@ class AviaNZ(QMainWindow):
             self.MouseDrawingButton = QtCore.Qt.LeftButton
         self.createMenu()
         self.createFrame()
+
         self.resetStorageArrays()
         if self.CLI:
             self.loadFile(firstFile)
@@ -305,8 +307,6 @@ class AviaNZ(QMainWindow):
             #self.showMaximized()
             keyPressed = QtCore.Signal(int)
 
-            if self.DOC:
-                self.setOperatorReviewerDialog()
 
             # Save the segments every minute
             self.timer = QTimer()
@@ -318,6 +318,10 @@ class AviaNZ(QMainWindow):
             self.listLoadFile(firstFile)
             self.previousFile = firstFile
 
+        if self.DOC:
+            self.setOperatorReviewerDialog()
+
+
     def createMenu(self):
         """ Create the menu entries at the top of the screen and link them as appropriate.
         Some of them are initialised according to the data in the configuration file."""
@@ -328,6 +332,11 @@ class AviaNZ(QMainWindow):
         fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
         fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
+
+        #test = QLineEdit('Shit')
+        #fileMenu.addWidgetAction(test)
+
+
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
         # Add it a second time, then it appears!
         if platform.system() == 'Darwin':
@@ -3908,9 +3917,9 @@ class AviaNZ(QMainWindow):
             self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator=self.operator,reviewer=self.reviewer)
         else:
             self.setOperatorReviewerDialog = Dialogs.OperatorReviewer(operator='', reviewer='')
-        self.setOperatorReviewerDialog.show()
-        self.setOperatorReviewerDialog.activateWindow()
+        #self.setOperatorReviewerDialog.activateWindow()
         self.setOperatorReviewerDialog.activate.clicked.connect(self.changeOperator)
+        self.setOperatorReviewerDialog.exec()
 
     def changeOperator(self):
         """ Listener for the operator/reviewer dialog.
