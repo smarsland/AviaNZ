@@ -412,8 +412,8 @@ class AviaNZ(QMainWindow):
         if self.DOC==False:
             actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
             actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
-        actionMenu.addSeparator()
-        actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
+        #actionMenu.addSeparator()
+        #actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
         if self.DOC == False:
             actionMenu.addAction("Classify segments",self.classifySegments,"Ctrl+C")
         actionMenu.addSeparator()
@@ -1190,7 +1190,7 @@ class AviaNZ(QMainWindow):
                     print("Hartley bodging")
                     i = 0
                     while i<self.fileLength / self.sampleRate:
-                        self.segments.append([i,i+10, 0, 0, ' '])
+                        self.segments.append([i,i+10, 0, 0, []])
                         i += 60
 
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
@@ -2570,7 +2570,14 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = True
 
     def processMultipleBirdSelections(self):
+        startpoint = self.segments[self.box1id][0]-self.startRead
+        endpoint = self.segments[self.box1id][1]-self.startRead
+        for oldname in self.segments[self.box1id][4]:
+            self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
+            print("removing",oldname)
+
         self.segments[self.box1id][4] = []
+        self.listLabels[self.box1id].setText('','k')
         [self.birdSelected(action.text()) for action in self.menuBirdList.actions() if action.isChecked()]
         [self.birdSelected(action.text()) for action in self.menuBird2.actions() if action.isChecked()]
 
@@ -4214,7 +4221,9 @@ class AviaNZ(QMainWindow):
             reply = msg.exec_()
             if reply == QMessageBox.Yes:
                 self.removeSegments()
-                self.segmentsToSave = True
+                self.segmentsToSave = False
+                os.remove(self.filename + '.data')
+                self.listFiles.currentItem().setForeground(Qt.black)
 
             # reset segment playback buttons
             self.playSegButton.setEnabled(False)
@@ -4287,6 +4296,7 @@ class AviaNZ(QMainWindow):
             json.dump(self.segments,file)
             file.write("\n")
             self.segmentsToSave = False
+            self.previousFile.setForeground(Qt.red)
             del self.segments[0]
             self.exportToExcel()
         else:
@@ -4333,6 +4343,7 @@ class AviaNZ(QMainWindow):
 
         wb.save(str(eFile))
         print("Saved to "+eFile)
+
     def closeEvent(self, event):
         """ Catch the user closing the window by clicking the Close button instead of quitting. """
         self.quit()

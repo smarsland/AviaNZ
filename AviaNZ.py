@@ -2504,7 +2504,8 @@ class AviaNZ(QMainWindow):
         else:
             birdname = birdname + ', ' + self.fullbirdlist.currentText()
         self.birdSelected(birdname)
-        self.menuBirdList.hide()
+        if not self.multipleBirds:
+            self.menuBirdList.hide()
 
     def birdSelected(self,birdname,update=True):
         """ Collects the label for a bird from the context menu and processes it.
@@ -2606,6 +2607,13 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = True
 
     def processMultipleBirdSelections(self):
+        startpoint = self.segments[self.box1id][0]-self.startRead
+        endpoint = self.segments[self.box1id][1]-self.startRead
+        for oldname in self.segments[self.box1id][4]:
+            self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
+
+        self.segments[self.box1id][4] = []
+        self.listLabels[self.box1id].setText('','k')
         self.segments[self.box1id][4] = []
         [self.birdSelected(action.text()) for action in self.menuBirdList.actions() if action.isChecked()]
         [self.birdSelected(action.text()) for action in self.menuBird2.actions() if action.isChecked()]
@@ -4274,7 +4282,9 @@ class AviaNZ(QMainWindow):
             reply = msg.exec_()
             if reply == QMessageBox.Yes:
                 self.removeSegments()
-                self.segmentsToSave = True
+                #self.segmentsToSave = True
+                os.remove(self.filename + '.data')
+                self.listFiles.currentItem().setForeground(Qt.black)
 
             # reset segment playback buttons
             self.playSegButton.setEnabled(False)
@@ -4346,6 +4356,7 @@ class AviaNZ(QMainWindow):
                 file = open(str(self.filename) + '.data', 'w')
             json.dump(self.segments,file)
             file.write("\n")
+            self.previousFile.setForeground(Qt.red)
             self.segmentsToSave = False
             del self.segments[0]
         else:
