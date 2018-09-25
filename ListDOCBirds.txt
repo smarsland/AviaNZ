@@ -37,7 +37,6 @@
 "Curlew>Eastern",
 "Dabchick",
 "Dollarbird",
-"Dotteral>NZ",
 "Dotterel>Banded",
 "Dotterel>Banded Auckland Is",
 "Dotterel>Black-fronted",

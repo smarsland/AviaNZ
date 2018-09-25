@@ -22,8 +22,8 @@
 
 import sys, os, json, platform, re
 
-from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QLineEdit
+from PyQt5.QtGui import QIcon, QPixmap, QStandardItemModel, QStandardItem
+from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QLineEdit, QWidgetAction, QComboBox, QTreeView
 from PyQt5.QtCore import Qt, QDir, QTime, QTimer, QPoint, QPointF, QLocale, QFile, QIODevice, QLine
 from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 
@@ -179,9 +179,14 @@ class AviaNZ(QMainWindow):
 
         # Load the birdlist 
         # TODO: review this to be something from the user config
-        birdlist = json.load(open('BirdList.txt'))
-        self.config['BirdList'] = birdlist
-        
+        # This is Nyree's list
+        #self.config['BirdList'] = json.load(open('BirdList.txt'))
+
+        # This is the DOC list 
+        # TODO: Note kludge here
+        self.config['ShortBirdList'] = self.config['BirdList']
+        self.config['BirdList'] = json.load(open('ListDOCBirds.txt')) 
+        self.makeFullBirdList()
 
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
@@ -332,9 +337,6 @@ class AviaNZ(QMainWindow):
         fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
         fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
-
-        #test = QLineEdit('Shit')
-        #fileMenu.addWidgetAction(test)
 
 
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
@@ -754,6 +756,9 @@ class AviaNZ(QMainWindow):
         # New line to allow multiple selections
         self.menuBirdList.installEventFilter(self)
         self.menuBird2.installEventFilter(self)
+    
+        # TODO: flag in case not using
+        # Make the full list combox box
         self.fillBirdList()
 
         # Make the colours that are used in the interface
@@ -827,6 +832,36 @@ class AviaNZ(QMainWindow):
         elif ev == Qt.Key_Escape and self.media_obj.isPlaying():
             self.stopPlayback()
 
+    def makeFullBirdList(self):
+        """ Makes a combo box holding the complete list of birds """
+        self.fullbirdlist = QComboBox()
+        self.fullbirdlist.resize(100,400)
+        self.fullbirdlist.setView(QTreeView())
+
+        self.fullbirdlist.view().setHeaderHidden(True)
+        self.fullbirdlist.view().setItemsExpandable(True)
+        #self.fullbirdlist.view().setRootIsDecorated(False)
+
+        model = QStandardItemModel()
+        headlist = []
+        # TODO: Add index of parent of each bird into the info about them, so can get the index sorted
+        for bird in self.config['BirdList']:
+            ind = bird.find('>')
+            if ind == -1:
+                ind = len(bird)
+            if bird[:ind] not in headlist:
+                headlist.append(bird[:ind])
+                item = QStandardItem(bird[:ind])
+                item.setSelectable(True)
+                model.appendRow(item)
+            if ind < len(bird):
+                subitem = QStandardItem(bird[ind+1:])
+                item.setSelectable(False)
+                item.appendRow(subitem)
+                subitem.setSelectable(True)
+
+        self.fullbirdlist.setModel(model)
+
     def fillBirdList(self,unsure=False):
         """ Sets the contents of the context menu.
         The first 20 items are in the first menu, the next in a second menu.
@@ -842,7 +877,8 @@ class AviaNZ(QMainWindow):
         if hasattr(self,'segments') and len(self.segments[self.box1id][4]) > 1:
             self.multipleBirds = True
 
-        for item in self.config['BirdList'][:20]:
+        for item in self.config['ShortBirdList'][:20]:
+        #for item in self.config['BirdList'][:20]:
             if unsure and item != "Don't Know":
                 item = item+'?'
             bird = self.menuBirdList.addAction(item)
@@ -861,7 +897,7 @@ class AviaNZ(QMainWindow):
                 bird.triggered.connect(receiver)
             self.menuBirdList.addAction(bird)
         self.menuBirdList.addMenu(self.menuBird2)
-        for item in self.config['BirdList'][20:40]+['Other']:
+        for item in self.config['ShortBirdList'][20:40]:#:+['Other']:
             if unsure and item != "Don't Know" and item != "Other":
                 item = item+'?'
             bird = self.menuBird2.addAction(item)
@@ -872,6 +908,14 @@ class AviaNZ(QMainWindow):
                 receiver = lambda checked, birdname=item: self.birdSelected(birdname)
                 bird.triggered.connect(receiver)
             self.menuBird2.addAction(bird)
+
+        self.makeFullBirdList()
+        self.showFullbirdlist = QWidgetAction(self.menuBirdList)
+        self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
+        bird = self.menuBird2.addAction(self.showFullbirdlist)
+        self.fullbirdlist.activated.connect(self.birdSelectedList)
+        #self.fullbirdlist.currentIndexChanged.connect(self.birdSelectedList)
+        
 
     def fillFileList(self,fileName):
         """ Generates the list of files for the file listbox.
@@ -2457,6 +2501,11 @@ class AviaNZ(QMainWindow):
                 # making a segment
                 self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_ampl_loc), mousePoint.x()])
 
+    def birdSelectedList(self,index):
+        """ If the user clicks in the full bird list, update the text, and copy the species into the short list """
+        # More fun with indices needed ***
+        print(index,self.fullbirdlist.currentIndex(), self.fullbirdlist.currentText())
+
     def birdSelected(self,birdname,update=True):
         """ Collects the label for a bird from the context menu and processes it.
         Has to update the overview segments in case their colour should change.
@@ -3551,7 +3600,7 @@ class AviaNZ(QMainWindow):
         print("Segmenting requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
 
         # clean current segments # TODO: this is a temp solution to avoid duplicated segments
-        self.removeSegments()
+        #self.removeSegments()
         self.segmentsToSave = True
         # TODO: Currently just gives them all the label "Don't Know"
         # seglen = len(self.segments)
