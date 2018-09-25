@@ -1289,14 +1289,17 @@ class HumanClassify1(QDialog):
         # Select the right options
         self.species.setText(','.join(label))
         #print(label,len(label),type(label))
-        for btn in self.birdbtns:
-            btn.setChecked(False)
         self.birds3.clearSelection()
         if len(label)>1:
+            print(label)
             self.birds.setExclusive(False)
             self.birds3.setSelectionMode(QAbstractItemView.MultiSelection)
             self.multipleBirds = True
+            for btn in self.birdbtns:
+                btn.setChecked(False)
         else:       
+            for btn in self.birdbtns:
+                btn.setChecked(False)
             self.birds.setExclusive(True)
             self.birds3.setSelectionMode(QAbstractItemView.SingleSelection)
             self.multipleBirds = False
@@ -1305,9 +1308,6 @@ class HumanClassify1(QDialog):
                 l= l[:-1]
             if l in self.birdList:
                 ind = self.birdList.index(l)
-            else:
-                ind = 18
-            if ind < 18:
                 self.birdbtns[ind].setChecked(True)
             else:
                 self.birdbtns[19].setChecked(True)
@@ -1331,7 +1331,7 @@ class HumanClassify1(QDialog):
                             self.label.append(str(button.text()))
                     else:           
                         self.label = [str(button.text())]
-                    #print('after',self.label)
+                    print('after',self.label)
                     self.species.setText(','.join(self.label))
             else:
                 if button.text() == "Other":
