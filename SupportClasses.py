@@ -1322,3 +1322,4 @@ class Log(object):
         self.file.write(path)
         self.file.write("\n")
         self.file.flush()
+
