@@ -321,7 +321,7 @@ class AviaNZ(QMainWindow):
             
             self.fillFileList(firstFile)
             self.listLoadFile(firstFile)
-            self.previousFile = firstFile
+            #self.previousFile = firstFile
 
         if self.DOC:
             self.setOperatorReviewerDialog()
@@ -2512,6 +2512,7 @@ class AviaNZ(QMainWindow):
         Has to update the overview segments in case their colour should change.
         Also handles getting the name through a message box if necessary.
         """
+        print(self.segments[self.box1id])
         startpoint = self.segments[self.box1id][0]-self.startRead
         endpoint = self.segments[self.box1id][1]-self.startRead
         oldname = self.segments[self.box1id][4]
@@ -4282,9 +4283,9 @@ class AviaNZ(QMainWindow):
             reply = msg.exec_()
             if reply == QMessageBox.Yes:
                 self.removeSegments()
-                #self.segmentsToSave = True
-                os.remove(self.filename + '.data')
-                self.listFiles.currentItem().setForeground(Qt.black)
+                self.segmentsToSave = True
+                #os.remove(self.filename + '.data')
+                #self.listFiles.currentItem().setForeground(Qt.black)
 
             # reset segment playback buttons
             self.playSegButton.setEnabled(False)
@@ -4356,7 +4357,7 @@ class AviaNZ(QMainWindow):
                 file = open(str(self.filename) + '.data', 'w')
             json.dump(self.segments,file)
             file.write("\n")
-            self.previousFile.setForeground(Qt.red)
+            #self.previousFile.setForeground(Qt.red)
             self.segmentsToSave = False
             del self.segments[0]
         else:
