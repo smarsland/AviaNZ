@@ -215,7 +215,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # LOG FILE is read here
         # note: important to log all analysis settings here
         self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'),
-                                [self.species, self.method, self.w_res.value()])
+                                self.species, [self.method, self.w_res.value()])
 
         # Ask for RESUME CONFIRMATION here
         confirmedResume = QMessageBox.Cancel
@@ -238,13 +238,10 @@ class AviaNZ_batchProcess(QMainWindow):
             # catch unclean (Esc) exits
             return
         elif confirmedResume == QMessageBox.No:
-            # start new log file
-            self.log.startNewLog()
             # work on all files
             self.filesDone = []
+            self.log.currentAnalysis = []
         elif confirmedResume == QMessageBox.Yes:
-            # append to log file
-            self.log.openForAppend()
             # ignore files in log
             self.filesDone = self.log.filesDone
 
@@ -266,6 +263,11 @@ class AviaNZ_batchProcess(QMainWindow):
             print("Analysis cancelled")
             return
 
+        # update log: delete everything (by opening in overwrite mode),
+        # and reprint old headers if relevant
+        self.log.file = open(self.log.file, 'w')
+        # TODO CONTINUE HERE
+
         # delete old results (xlsx)
         # ! WARNING: any Detection...xlsx files will be DELETED,
         # ! ANYWHERE INSIDE the specified dir, recursively
@@ -280,14 +282,16 @@ class AviaNZ_batchProcess(QMainWindow):
             for root, dirs, files in os.walk(str(self.dirName)):
                 for filename in files:
                     self.filename = os.path.join(root, filename)
+                    self.segments = []
+                    newSegments = []
                     if self.filename in self.filesDone:
                         # skip the processing, but still need to update excel:
                         print("File %s processed previously, skipping" % filename)
                         self.loadFile(wipe = (self.species=="All species"))
                         if self.species == 'All species':
-                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=post.segments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                            out = SupportClasses.exportSegments(segments=self.segments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         else:
-                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=post.segments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                            out = SupportClasses.exportSegments(segments=self.segments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         out.excel()
                         continue
 
@@ -375,12 +379,13 @@ class AviaNZ_batchProcess(QMainWindow):
                             print ("After rain: ", post.segments)
                             post.fundamentalFrq()  # species specific
                             print ("After ff: ", post.segments)
+                        newSegments = post.segments
 
                         # Save the excel
                         if self.species == 'All species':
-                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=post.segments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=newSegments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         else:
-                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=post.segments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=newSegments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         out.excel()
                         # Save the annotation
                         out.saveAnnotation()

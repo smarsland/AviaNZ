@@ -652,12 +652,11 @@ class exportSegments:
             # incl. potential assignments ('Kiwi?').
             # if species=="All", take ALL segments.
             segmentsWPossible = []
-            for seg in self.segments:
+            for seg in self.segments + self.confirmedSegments + self.segmentstoCheck:
                 if len(seg) == 2:
                     seg.append(0)
                     seg.append(0)
                     seg.append(species)
-                # if seg[4] == species or seg[4] == species + '?' or species=="All species":
                 if species in seg[4] or species+'?' in seg[4] or species == "All species":
                     segmentsWPossible.append(seg)
             # if len(segmentsWPossible)==0:
@@ -1263,11 +1262,20 @@ class FlowLayout(QtGui.QLayout):
 
 class Log(object):
     """ Used for logging info during batch processing.
-        Stores only the most recent analysis, so e.g.
-        if starting Kiwi, then Ruru, then Kiwi again,
-        option to resume WILL NOT be offered."""
+        Stores most recent analysis for each species, to stay in sync w/ data files.
+        Arguments:
+        1. path to log file
+        2. species
+        3. list of other settings of the current analysis
 
-    def __init__(self, path, settings):
+        LOG FORMAT, for each analysis:
+        #freetext line
+        species
+        settings line
+        files, multiple lines
+    """
+
+    def __init__(self, path, species, settings):
         # in order to append, the previous log must:
         # 1. exist
         # 2. be writeable
@@ -1276,40 +1284,41 @@ class Log(object):
         # Actual append/create happens later.
         self.possibleAppend = False
         self.file = path
-        self.settings = settings
+        self.species = species
+        self.settings = ','.join(settings)
+        self.analyses = []
         self.filesDone = []
+        self.currentHeader = ""
+
+        # now, check if the specified log can be resumed:
         if os.path.isfile(path):
             try:
                 f = open(path, 'r+')
                 print("Found log file at %s" % path)
+
                 lines = [line.rstrip('\n') for line in f]
-                # EXAMPLE FORMAT:
-                # lines[0]: freetext info
-                # lines[1]: species
-                # lines[2]: method
-                # lines[3]: resolution...
-                for s in range(len(settings)):
-                    if len(lines)<=len(settings) or str(settings[s]) != lines[s+1]:
-                        break
-                else:
-                    # loop unbroken = settings match
-                    # remaining lines are paths to processed files:
-                    self.filesDone = lines[len(settings)+1:]
-                    self.possibleAppend = True
                 f.close()
+                lstart = 0
+                lend = 1
+                while lend<len(lines):
+                    # parse to separate each analysis into
+                    # [freetext, species, settings, [files]]
+                    # (basically I'm parsing txt into json because I'm dumb)
+                    if lines[lend] == "#":
+                        self.analyses.append([lines[lstart], lines[lstart+1], lines[lstart+2],
+                                        lines[lstart+2 : lend]])
+
+                # check if settings match with any previous analysis
+                for a in self.analyses:
+                    if a[1]==self.species and a[2]==self.settings:
+                        self.currentHeader = a[0]
+                        # (a1 and a2 match species & settings anyway)
+                        self.filesDone = a[3]
+                        self.possibleAppend = True
 
             except IOError:
                 # bad error: lacking permissions?
                 print("ERROR: could not open log at %s" % path)
-
-    def startNewLog(self):
-        print("starting new log")
-        # start new log file and dump the header there
-        self.file = open(self.file, 'w')
-        self.file.write("Log started on " + time.strftime("%Y %m %d, %H:%M:%S") + ".\n")
-        for s in self.settings:
-            self.file.write(str(s))
-            self.file.write("\n")
 
     def openForAppend(self):
         print("appending old log")
@@ -1317,8 +1326,22 @@ class Log(object):
         self.file = open(self.file, 'a')
 
     def appendFile(self, path):
-        print('appending %s' % path)
+        print('appending %s to log' % path)
         # attach file path to end of log
         self.file.write(path)
         self.file.write("\n")
         self.file.flush()
+
+    def appendHeader(self, header, species, settings):
+        if header is None:
+            header = "#Analysis started on " + time.strftime("%Y %m %d, %H:%M:%S") + ":\n"
+        self.file.write(header)
+        self.file.write("\n")
+        self.file.write(species)
+        self.file.write("\n")
+        if type(settings) is list:
+            settings = ','.join(settings)
+        self.file.write(settings)
+        self.file.write("\n")
+        self.file.flush()
+
