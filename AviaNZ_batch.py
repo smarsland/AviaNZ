@@ -240,7 +240,6 @@ class AviaNZ_batchProcess(QMainWindow):
         elif confirmedResume == QMessageBox.No:
             # work on all files
             self.filesDone = []
-            self.log.currentAnalysis = []
         elif confirmedResume == QMessageBox.Yes:
             # ignore files in log
             self.filesDone = self.log.filesDone
@@ -264,9 +263,19 @@ class AviaNZ_batchProcess(QMainWindow):
             return
 
         # update log: delete everything (by opening in overwrite mode),
-        # and reprint old headers if relevant
+        # reprint old headers,
+        # print current header (or old if resuming),
+        # print old file list if resuming.
         self.log.file = open(self.log.file, 'w')
-        # TODO CONTINUE HERE
+        if self.species!="All species":
+            self.log.reprintOld()
+            # else single-sp runs should be deleted anyway
+        if confirmedResume == QMessageBox.No:
+            self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
+        elif confirmedResume == QMessageBox.Yes:
+            self.log.appendHeader(self.log.currentHeader, self.log.species, self.log.settings)
+            for f in self.log.filesDone:
+                self.log.appendFile(f)
 
         # delete old results (xlsx)
         # ! WARNING: any Detection...xlsx files will be DELETED,
@@ -352,9 +361,13 @@ class AviaNZ_batchProcess(QMainWindow):
                         # elif self.algs.currentText()=='Wavelets':
                         # print("Species: ", self.species)
                         if self.species!='All species':
+                            # wipe same species:
+                            self.segments[:] = [s for s in self.segments if self.species not in s[4] and self.species+'?' not in s[4]]
                             ws = WaveletSegment.WaveletSegment(species=self.sppInfo[self.species])
                             newSegments = ws.waveletSegment_test(fName=None, data=self.audiodata, sampleRate= self.sampleRate, spInfo=self.sppInfo[self.species], trainTest=False)
                         else:
+                            # wipe all segments:
+                            self.segments = []
                             self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
                             newSegments=self.seg.bestSegments()
 
@@ -383,7 +396,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
                         # Save the excel
                         if self.species == 'All species':
-                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=newSegments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                            out = SupportClasses.exportSegments(segments=[], segmentstoCheck=newSegments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         else:
                             out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=newSegments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         out.excel()
