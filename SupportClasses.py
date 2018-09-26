@@ -1285,10 +1285,11 @@ class Log(object):
         self.possibleAppend = False
         self.file = path
         self.species = species
-        self.settings = ','.join(settings)
-        self.analyses = []
+        self.settings = ','.join(map(str, settings))
+        self.oldAnalyses = []
         self.filesDone = []
         self.currentHeader = ""
+        allans = []
 
         # now, check if the specified log can be resumed:
         if os.path.isfile(path):
@@ -1300,41 +1301,51 @@ class Log(object):
                 f.close()
                 lstart = 0
                 lend = 1
+                # parse to separate each analysis into
+                # [freetext, species, settings, [files]]
+                # (basically I'm parsing txt into json because I'm dumb)
                 while lend<len(lines):
-                    # parse to separate each analysis into
-                    # [freetext, species, settings, [files]]
-                    # (basically I'm parsing txt into json because I'm dumb)
-                    if lines[lend] == "#":
-                        self.analyses.append([lines[lstart], lines[lstart+1], lines[lstart+2],
-                                        lines[lstart+2 : lend]])
+                    print(lines[lend])
+                    if lines[lend][0] == "#":
+                        allans.append([lines[lstart], lines[lstart+1], lines[lstart+2],
+                                        lines[lstart+3 : lend]])
+                        lstart = lend
+                    lend += 1
+                allans.append([lines[lstart], lines[lstart+1], lines[lstart+2],
+                                lines[lstart+3 : lend]])
 
-                # check if settings match with any previous analysis
-                for a in self.analyses:
-                    if a[1]==self.species and a[2]==self.settings:
-                        self.currentHeader = a[0]
-                        # (a1 and a2 match species & settings anyway)
-                        self.filesDone = a[3]
-                        self.possibleAppend = True
+                # parse the log thusly:
+                # if current species analysis found, store parameters
+                # and compare to check if it can be resumed.
+                # store all other analyses for re-printing.
+                for a in allans:
+                    print(a)
+                    if a[1]==self.species:
+                        print("resumable analysis found")
+                        # do not reprint this in log
+                        if a[2]==self.settings:
+                            self.currentHeader = a[0]
+                            # (a1 and a2 match species & settings anyway)
+                            self.filesDone = a[3]
+                            self.possibleAppend = True
+                    else:
+                        # store this for re-printing to log
+                        self.oldAnalyses.append(a)
 
             except IOError:
                 # bad error: lacking permissions?
                 print("ERROR: could not open log at %s" % path)
 
-    def openForAppend(self):
-        print("appending old log")
-        # just open the old file:
-        self.file = open(self.file, 'a')
-
-    def appendFile(self, path):
-        print('appending %s to log' % path)
+    def appendFile(self, filename):
+        print('appending %s to log' % filename)
         # attach file path to end of log
-        self.file.write(path)
+        self.file.write(filename)
         self.file.write("\n")
         self.file.flush()
 
     def appendHeader(self, header, species, settings):
         if header is None:
-            header = "#Analysis started on " + time.strftime("%Y %m %d, %H:%M:%S") + ":\n"
+            header = "#Analysis started on " + time.strftime("%Y %m %d, %H:%M:%S") + ":"
         self.file.write(header)
         self.file.write("\n")
         self.file.write(species)
@@ -1344,4 +1355,12 @@ class Log(object):
         self.file.write(settings)
         self.file.write("\n")
         self.file.flush()
+
+    def reprintOld(self):
+        # push everything from oldAnalyses to log
+        # To be called once starting a new log is confirmed
+        for a in self.oldAnalyses:
+            self.appendHeader(a[0], a[1], a[2])
+            for f in a[3]:
+                self.appendFile(f)
 
