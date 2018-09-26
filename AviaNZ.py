@@ -757,6 +757,9 @@ class AviaNZ(QMainWindow):
         self.menuBirdList.installEventFilter(self)
         self.menuBird2.installEventFilter(self)
         self.fillBirdList()
+        self.menuBirdList.triggered.connect(self.birdSelectedMenu)
+        self.menuBird2.triggered.connect(self.birdSelectedMenu)
+        self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
 
         # Make the colours that are used in the interface
         # The dark ones are to draw lines instead of boxes
@@ -874,7 +877,6 @@ class AviaNZ(QMainWindow):
             self.multipleBirds = True
 
         for item in self.config['ShortBirdList'][:20]:
-        #for item in self.config['BirdList'][:20]:
             if unsure and item != "Don't Know":
                 item = item+'?'
             bird = self.menuBirdList.addAction(item)
@@ -882,15 +884,15 @@ class AviaNZ(QMainWindow):
             if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
                 bird.setChecked(True)
             if self.multipleBirds:
-                self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
+                # self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
                 self.menuBirdListSignal = True
             else:
                 # Disconnect signal if it exists
                 if self.menuBirdListSignal:
-                    self.menuBirdList.aboutToHide.disconnect()
+                    # self.menuBirdList.aboutToHide.disconnect()
                     self.menuBirdListSignal = False
-                receiver = lambda checked, birdname=item: self.birdSelected(birdname)
-                bird.triggered.connect(receiver)
+                #receiver = lambda checked, birdname=item: self.birdSelected(birdname)
+                #bird.triggered.connect(receiver)
             self.menuBirdList.addAction(bird)
         self.menuBirdList.addMenu(self.menuBird2)
         for item in self.config['ShortBirdList'][20:40]:#:+['Other']:
@@ -901,8 +903,9 @@ class AviaNZ(QMainWindow):
             if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
                 bird.setChecked(True)
             if not self.multipleBirds:
-                receiver = lambda checked, birdname=item: self.birdSelected(birdname)
-                bird.triggered.connect(receiver)
+                pass
+                #receiver = lambda checked, birdname=item: self.birdSelected(birdname)
+                #bird.triggered.connect(receiver)
             self.menuBird2.addAction(bird)
 
         self.makeFullBirdList()
@@ -2497,13 +2500,12 @@ class AviaNZ(QMainWindow):
 
     def birdSelectedList(self,index):
         """ If the user clicks in the full bird list, update the text, and copy the species into the short list """
-        
         birdname = self.fullbirdlist.view().currentIndex().parent().data(0) 
         if birdname is None:
             birdname = self.fullbirdlist.currentText()
         else:
             birdname = birdname + ', ' + self.fullbirdlist.currentText()
-        self.birdSelected(birdname)
+        self.birdSelectedMenu(birdname)
         if not self.multipleBirds:
             self.menuBirdList.hide()
 
@@ -2512,6 +2514,7 @@ class AviaNZ(QMainWindow):
         Has to update the overview segments in case their colour should change.
         Also handles getting the name through a message box if necessary.
         """
+        print("birdselected")
         print(self.segments[self.box1id])
         startpoint = self.segments[self.box1id][0]-self.startRead
         endpoint = self.segments[self.box1id][1]-self.startRead
@@ -2556,12 +2559,79 @@ class AviaNZ(QMainWindow):
                             self.config['BirdList'].append(text)
                         # self.saveConfig = True
 
+    def birdSelectedMenu(self,birditem):
+        """ Collects the label for a bird from the context menu and processes it.
+        Has to update the overview segments in case their colour should change.
+        Also handles getting the name through a message box if necessary.
+        """
+        if type(birditem) is not str:
+            birdname = birditem.text()
+        else:
+            birdname = birditem
+
+        print(self.segments[self.box1id])
+        startpoint = self.segments[self.box1id][0]-self.startRead
+        endpoint = self.segments[self.box1id][1]-self.startRead
+        oldname = self.segments[self.box1id][4]
+
+        # if it was checked, uncheck
+        # basically re-create all names here:
+        self.segments[self.box1id][4] = []
+        for t in oldname:
+            self.refreshOverviewWith(startpoint, endpoint, t, delete=True)
+            if t != birdname:
+                self.refreshOverviewWith(startpoint, endpoint, t)
+                self.updateText(t)
+
+        # and add the new one here:
+        if birdname not in oldname:
+            self.refreshOverviewWith(startpoint, endpoint, birdname)
+            self.updateText(birdname)
+
+        # Now update the text
+        if birdname is not 'Other':
+            # Put the selected bird name at the top of the list
+            if birdname[-1] == '?':
+                birdname = birdname[:-1]
+            if birdname in self.config['ShortBirdList']:
+                self.config['ShortBirdList'].remove(birdname)
+            else:
+                del self.config['ShortBirdList'][-1]
+            self.config['ShortBirdList'].insert(0,birdname)
+            print(self.config['ShortBirdList'][0])
+            
+        else:
+            # This allows textual name entry
+            # TODO: Flag between them
+            if False:
+                # Ask the user for the new name, and save it
+                # TODO: This version is wrong if you load the birdlist from a file
+                text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
+                if ok:
+                    text = str(text).title()
+                    self.updateText(text)
+
+                    if text in self.config['BirdList']:
+                        pass
+                    else:
+                        # Add the new bird name.
+                        if update:
+                            self.config['BirdList'].insert(0,text)
+                        else:
+                            self.config['BirdList'].append(text)
+                        # self.saveConfig = True
+        if self.multipleBirds:
+            # just select the bird
+            pass
+        else:
+            # select the bird and close
+            self.menuBirdList.hide()
+
     def updateText(self,text,segID=None):
         """ When the user sets or changes the name in a segment, update the text and the colour. """
         if segID is None:
             segID = self.box1id
 
-        print("updateText",text,self.multipleBirds, self.segments[segID][4])
         # produce list from text
         if self.multipleBirds:
             if type(text) is list:
@@ -2594,30 +2664,12 @@ class AviaNZ(QMainWindow):
        # print(segID, len(self.listLabels))
        # self.listLabels[segID].setText(text,'k')
 
-        # Update the colour
-       # if text != "Don't Know":
-       #     if text[-1] == '?':
-       #         self.prevBoxCol = self.ColourPossible
-       #     else:
-       #         self.prevBoxCol = self.ColourNamed
-       # else:
-       #     self.prevBoxCol = self.ColourNone
-
         # Store the species in case the user wants it for the next segment
         self.lastSpecies = text
         self.segmentsToSave = True
 
     def processMultipleBirdSelections(self):
-        startpoint = self.segments[self.box1id][0]-self.startRead
-        endpoint = self.segments[self.box1id][1]-self.startRead
-        for oldname in self.segments[self.box1id][4]:
-            self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
-
-        self.segments[self.box1id][4] = []
-        self.listLabels[self.box1id].setText('','k')
-        self.segments[self.box1id][4] = []
-        [self.birdSelected(action.text()) for action in self.menuBirdList.actions() if action.isChecked()]
-        [self.birdSelected(action.text()) for action in self.menuBird2.actions() if action.isChecked()]
+        pass
 
     def setColourMap(self,cmap):
         """ Listener for the menu item that chooses a colour map.
