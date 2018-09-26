@@ -48,7 +48,7 @@ import WaveletFunctions
 #import Learning
 import AviaNZ_batch
 #import math
-# import traceback
+import traceback
 
 from openpyxl import load_workbook, Workbook
 
@@ -757,9 +757,9 @@ class AviaNZ(QMainWindow):
         self.menuBirdList.installEventFilter(self)
         self.menuBird2.installEventFilter(self)
         self.fillBirdList()
-        self.menuBirdList.triggered.connect(self.birdSelectedMenu)
-        self.menuBird2.triggered.connect(self.birdSelectedMenu)
-        self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
+        self.menuBirdList.triggered.connect(self.birdSelected)
+        self.menuBird2.triggered.connect(self.birdSelected)
+        # self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
 
         # Make the colours that are used in the interface
         # The dark ones are to draw lines instead of boxes
@@ -1897,7 +1897,7 @@ class AviaNZ(QMainWindow):
         # min is to remove possible rounding error
         inds = int(self.convertAmpltoSpec(startpoint) / self.widthOverviewSegment)
         inde = min(int(self.convertAmpltoSpec(endpoint) / self.widthOverviewSegment),len(self.overviewSegments)-1)
-
+        
         if species is None or "Don't Know" in species or type(species) is int or len(species)==0:
             brush = self.ColourNone
             if delete:
@@ -2505,61 +2505,11 @@ class AviaNZ(QMainWindow):
             birdname = self.fullbirdlist.currentText()
         else:
             birdname = birdname + ', ' + self.fullbirdlist.currentText()
-        self.birdSelectedMenu(birdname)
+        self.birdSelected(birdname)
         if not self.multipleBirds:
             self.menuBirdList.hide()
 
-    def birdSelected(self,birdname,update=True):
-        """ Collects the label for a bird from the context menu and processes it.
-        Has to update the overview segments in case their colour should change.
-        Also handles getting the name through a message box if necessary.
-        """
-        print("birdselected")
-        print(self.segments[self.box1id])
-        startpoint = self.segments[self.box1id][0]-self.startRead
-        endpoint = self.segments[self.box1id][1]-self.startRead
-        oldname = self.segments[self.box1id][4]
-
-        self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
-        self.refreshOverviewWith(startpoint, endpoint, birdname)
-
-        # Now update the text
-        if birdname is not 'Other':
-            self.updateText(birdname)
-            # TODO: Next bit should have a choice flag, might not want it
-            if update:
-                # Put the selected bird name at the top of the list
-                if birdname[-1] == '?':
-                    birdname = birdname[:-1]
-                if birdname in self.config['ShortBirdList']:
-                    self.config['ShortBirdList'].remove(birdname)
-                else:
-                    del self.config['ShortBirdList'][-1]
-                self.config['ShortBirdList'].insert(0,birdname)
-                print(self.config['ShortBirdList'][0])
-                
-        else:
-            # This allows textual name entry
-            # TODO: Flag between them
-            if False:
-                # Ask the user for the new name, and save it
-                # TODO: This version is wrong if you load the birdlist from a file
-                text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
-                if ok:
-                    text = str(text).title()
-                    self.updateText(text)
-
-                    if text in self.config['BirdList']:
-                        pass
-                    else:
-                        # Add the new bird name.
-                        if update:
-                            self.config['BirdList'].insert(0,text)
-                        else:
-                            self.config['BirdList'].append(text)
-                        # self.saveConfig = True
-
-    def birdSelectedMenu(self,birditem):
+    def birdSelected(self,birditem):
         """ Collects the label for a bird from the context menu and processes it.
         Has to update the overview segments in case their colour should change.
         Also handles getting the name through a message box if necessary.
@@ -2578,15 +2528,17 @@ class AviaNZ(QMainWindow):
         # basically re-create all names here:
         self.segments[self.box1id][4] = []
         for t in oldname:
-            self.refreshOverviewWith(startpoint, endpoint, t, delete=True)
             if t != birdname:
-                self.refreshOverviewWith(startpoint, endpoint, t)
                 self.updateText(t)
 
         # and add the new one here:
         if birdname not in oldname:
-            self.refreshOverviewWith(startpoint, endpoint, birdname)
             self.updateText(birdname)
+        self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
+        self.refreshOverviewWith(startpoint, endpoint, self.segments[self.box1id][4])
+        # patch for updating if all names were deleted:
+        if self.segments[self.box1id][4] == []:
+            self.updateText(text="Don't Know")
 
         # Now update the text
         if birdname is not 'Other':
@@ -2620,10 +2572,8 @@ class AviaNZ(QMainWindow):
                         else:
                             self.config['BirdList'].append(text)
                         # self.saveConfig = True
-        if self.multipleBirds:
-            # just select the bird
-            pass
-        else:
+
+        if not self.multipleBirds:
             # select the bird and close
             self.menuBirdList.hide()
 
@@ -2660,16 +2610,9 @@ class AviaNZ(QMainWindow):
         else:
             self.prevBoxCol = self.ColourNone
         
-       # self.segments[segID][4] = text
-       # print(segID, len(self.listLabels))
-       # self.listLabels[segID].setText(text,'k')
-
         # Store the species in case the user wants it for the next segment
         self.lastSpecies = text
         self.segmentsToSave = True
-
-    def processMultipleBirdSelections(self):
-        pass
 
     def setColourMap(self,cmap):
         """ Listener for the menu item that chooses a colour map.
@@ -2957,7 +2900,8 @@ class AviaNZ(QMainWindow):
 
     def updateLabel(self,label):
         """ Update the label on a segment that is currently shown in the display. """
-        self.birdSelected(label, update=False)
+        for l in label:
+            self.birdSelected(l)
 
         if self.listRectanglesa2[self.box1id] is not None:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
