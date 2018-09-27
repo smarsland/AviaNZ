@@ -20,6 +20,9 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+# TODO: Why is the image so small in HumanReview1?
+
 import sys, os, json, platform, re
 
 from PyQt5.QtGui import QIcon, QPixmap, QStandardItemModel, QStandardItem
@@ -183,19 +186,32 @@ class AviaNZ(QMainWindow):
         # TODO: review this to be something from the user config
         # This is Nyree's list
         if self.Hartley:
-            self.shortBirdList = json.load(open('BirdList.txt'))
+            try:
+                self.shortBirdList = json.load(open('BirdList.txt'))
+            except:
+                print("Failed to load bird list")
         else:
             # This is the DOC list 
-            self.shortBirdList = json.load(open(self.config['BirdListShort']))
-            if self.config['BirdListLong'] is None:
+            try:
+                self.shortBirdList = json.load(open(self.config['BirdListShort']))
+            except:
+                print("Failed to load bird list")
+        
+            if self.config['BirdListLong'] == "None":
                 # If don't have a long bird list, check the length of the short bird list is OK, and otherwise split it
                 # 40 is a bit random, but 20 in a list is long enough!
                 if len(self.shortBirdList) > 40:
                     self.longBirdList = self.shortBirdList.copy()
                     self.shortBirdList = self.shortBirdList[:40]
+                else:       
+                    self.longBirdList = None
             else:
-                self.longBirdList = json.load(open(self.config['BirdListLong']))
-        self.makeFullBirdList()
+                try:
+                    self.longBirdList = json.load(open(self.config['BirdListLong']))
+                except:
+                    print("Failed to load bird list")
+                    self.longBirdList = None
+        #self.makeFullBirdList()
 
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
@@ -214,15 +230,10 @@ class AviaNZ(QMainWindow):
         self.startTime = 0
         self.segmentsToSave = False
 
-        self.lastSpecies = "Don't Know"
+        self.lastSpecies = ["Don't Know"]
         
         # Whether or not the context menu allows multiple birds. 
-        # Only changed with modifier key (Meta) in this version
-        # Second checks if signal is there
         self.multipleBirds = False
-
-        # TODO: Can probably be deleted
-        self.menuBirdListSignal = False
 
         self.dirName = self.config['dirpath']
         self.previousFile = None
@@ -851,19 +862,15 @@ class AviaNZ(QMainWindow):
     def makeFullBirdList(self):
         """ Makes a combo box holding the complete list of birds """
         self.fullbirdlist = QComboBox()
-        #self.fullbirdlist = SupportClasses.TreeComboBox()
-        #self.fullbirdlist.resize(100,400)
         self.fullbirdlist.setView(QTreeView())
         self.fullbirdlist.setRootModelIndex(QModelIndex())
 
         self.fullbirdlist.view().setHeaderHidden(True)
         self.fullbirdlist.view().setItemsExpandable(True)
-        #self.fullbirdlist.view().setRootIsDecorated(False)
 
         self.model = QStandardItemModel()
         headlist = []
         for bird in self.longBirdList:
-            # TODO: Next line -> consistency
             ind = bird.find('>')
             if ind == -1:
                 ind = len(bird)
@@ -877,7 +884,10 @@ class AviaNZ(QMainWindow):
                 item.setSelectable(False)
                 item.appendRow(subitem)
                 subitem.setSelectable(True)
-
+        item = QStandardItem("Other")
+        item.setSelectable(True)
+        self.model.appendRow(item)
+        
         self.fullbirdlist.setModel(self.model)
 
     def fillBirdList(self,unsure=False):
@@ -893,43 +903,40 @@ class AviaNZ(QMainWindow):
         if hasattr(self,'segments') and len(self.segments[self.box1id][4]) > 1:
             self.multipleBirds = True
 
-        for item in self.config['ShortBirdList'][:20]:
+        for item in self.shortBirdList[:20]:
             if unsure and item != "Don't Know":
                 item = item+'?'
             bird = self.menuBirdList.addAction(item)
             bird.setCheckable(True)
             if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
                 bird.setChecked(True)
-            if self.multipleBirds or self.Hartley:
-                # self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
-                self.menuBirdListSignal = True
-            else:
-                # Disconnect signal if it exists
-                if self.menuBirdListSignal:
-                    # self.menuBirdList.aboutToHide.disconnect()
-                    self.menuBirdListSignal = False
-                #receiver = lambda checked, birdname=item: self.birdSelected(birdname)
-                #bird.triggered.connect(receiver)
             self.menuBirdList.addAction(bird)
         self.menuBirdList.addMenu(self.menuBird2)
-        for item in self.config['ShortBirdList'][20:40]:#:+['Other']:
-            if unsure and item != "Don't Know" and item != "Other":
-                item = item+'?'
-            bird = self.menuBird2.addAction(item)
-            bird.setCheckable(True)
-            if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
-                bird.setChecked(True)
-            if not self.multipleBirds and not self.Hartley:
-                pass
-                #receiver = lambda checked, birdname=item: self.birdSelected(birdname)
-                #bird.triggered.connect(receiver)
-            self.menuBird2.addAction(bird)
-
-        self.makeFullBirdList()
-        self.showFullbirdlist = QWidgetAction(self.menuBirdList)
-        self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
-        bird = self.menuBird2.addAction(self.showFullbirdlist)
-        self.fullbirdlist.activated.connect(self.birdSelectedList)
+        if self.Hartley:
+            for item in self.shortBirdList[20:]:
+                if unsure and item != "Don't Know" and item != "Other":
+                    item = item+'?'
+                bird = self.menuBird2.addAction(item)
+                bird.setCheckable(True)
+                if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
+                    bird.setChecked(True)
+                self.menuBird2.addAction(bird)
+        else:
+            for item in self.shortBirdList[20:40]:
+                if unsure and item != "Don't Know" and item != "Other":
+                    item = item+'?'
+                bird = self.menuBird2.addAction(item)
+                bird.setCheckable(True)
+                if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
+                    bird.setChecked(True)
+                self.menuBird2.addAction(bird)
+    
+            if self.longBirdList is not None:
+                self.makeFullBirdList()
+                self.showFullbirdlist = QWidgetAction(self.menuBirdList)
+                self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
+                bird = self.menuBird2.addAction(self.showFullbirdlist)
+                self.fullbirdlist.activated.connect(self.birdSelectedList)
 
     def fillFileList(self,fileName):
         """ Generates the list of files for the file listbox.
@@ -1242,7 +1249,6 @@ class AviaNZ(QMainWindow):
                                 # TODO: Because of this change (23/8/18) I run a backup on the datafiles in the init
                                 s[2] = self.convertYtoFreq(s[2])
                                 s[3] = self.convertYtoFreq(s[3])
-                                #print(s[2],s[3])
                                 self.segmentsToSave = True
                             if type(s[4]) is not list:
                                 s[4] = [s[4]]
@@ -1907,7 +1913,6 @@ class AviaNZ(QMainWindow):
             if self.currentFileSection > 0:
                 linestart += self.config['fileOverlap']
             while linestart < self.datalength/self.sampleRate:
-                #print(linestart)
                 lineend = min(self.datalength/self.sampleRate, linestart + self.config['protocolSize'])
                 line = SupportClasses.FixedLineROI(((self.convertAmpltoSpec(linestart),0),
                                       (self.convertAmpltoSpec(lineend),0)), movable=False, pen=linePen)
@@ -2054,7 +2059,6 @@ class AviaNZ(QMainWindow):
             p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
 
             # Put the text into the box
-            print("species: ", species)
             label = pg.TextItem(text=','.join(species), color='k')
             # label = pg.TextItem(text=species, color='k')
             self.p_spec.addItem(label)
@@ -2141,7 +2145,7 @@ class AviaNZ(QMainWindow):
         print("selected %d" % self.box1id)
 
         brush = fn.mkBrush(self.ColourSelected)
-        # TODO: looks like boxid is wrong
+        # TODO: looks like boxid is wrong ??
         if self.listRectanglesa1[boxid] is not None and self.listRectanglesa2[boxid] is not None:
             self.listRectanglesa1[boxid].setBrush(brush)
             self.listRectanglesa2[boxid].setBrush(brush)
@@ -2246,7 +2250,6 @@ class AviaNZ(QMainWindow):
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
                 # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
-                # TODO: re last: what's wrong with and?
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
                     self.multipleBirds = False
@@ -2257,10 +2260,10 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                elif modifiers == QtCore.Qt.AltModifier:
+                elif modifiers == QtCore.Qt.AltModifier or (QtCore.Qt.ShiftModifier and QtCore.Qt.ControlModifier):
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
+                    self.segments[self.box1id][4] = []
                     self.multipleBirds = True
-                    #print("Meta!",self.multipleBirds)
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
@@ -2335,9 +2338,8 @@ class AviaNZ(QMainWindow):
                         if modifiers == QtCore.Qt.ControlModifier:
                             self.multipleBirds = False
                             self.fillBirdList(unsure=True)
-                        elif modifiers == QtCore.Qt.AltModifier:
+                        elif modifiers == QtCore.Qt.AltModifier or (QtCore.Qt.ShiftModifier and QtCore.Qt.ControlModifier):
                             self.multipleBirds = True
-                            #print("Meta!",self.multipleBirds)
                             self.fillBirdList()
                         else:
                             self.multipleBirds = False
@@ -2409,10 +2411,11 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                elif modifiers == QtCore.Qt.AltModifier:
+                elif modifiers == QtCore.Qt.AltModifier or (QtCore.Qt.ShiftModifier and QtCore.Qt.ControlModifier):
                     self.addSegment(x1, x2, y1, y2)
+                    self.segments[self.box1id][4] = []
                     self.multipleBirds = True
-                    #print("Meta!",self.multipleBirds)
+                    # Context menu
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
@@ -2503,9 +2506,8 @@ class AviaNZ(QMainWindow):
                         if modifiers == QtCore.Qt.ControlModifier:
                             self.multipleBirds = False
                             self.fillBirdList(unsure=True)
-                        elif modifiers == QtCore.Qt.AltModifier:
+                        elif modifiers == QtCore.Qt.AltModifier or (QtCore.Qt.ShiftModifier and QtCore.Qt.ControlModifier):
                             self.multipleBirds = True
-                            #print("Meta!",self.multipleBirds)
                             self.fillBirdList()
                         else:
                             self.multipleBirds = False
@@ -2543,64 +2545,12 @@ class AviaNZ(QMainWindow):
         if birdname is None:
             birdname = self.fullbirdlist.currentText()
         else:
-            birdname = birdname + ', ' + self.fullbirdlist.currentText()
-        self.birdSelectedMenu(birdname)
+            birdname = birdname + ' (' + self.fullbirdlist.currentText() + ')'
+        self.birdSelectedMenu(birdname,fromList=True)
         if not self.multipleBirds and not self.Hartley:
             self.menuBirdList.hide()
 
-    def birdSelected(self,birdname,update=True):
-        """ Collects the label for a bird from the context menu and processes it.
-        Has to update the overview segments in case their colour should change.
-        Also handles getting the name through a message box if necessary.
-        """
-        print("birdselected")
-        print(self.segments[self.box1id])
-        startpoint = self.segments[self.box1id][0]-self.startRead
-        endpoint = self.segments[self.box1id][1]-self.startRead
-        oldname = self.segments[self.box1id][4]
-
-        self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
-        self.refreshOverviewWith(startpoint, endpoint, birdname)
-
-        # Now update the text
-        if birdname is not 'Other':
-            self.updateText(birdname)
-            # TODO: Next bit should have a choice flag, might not want it
-            if update:
-                # Put the selected bird name at the top of the list
-                if birdname[-1] == '?':
-                    birdname = birdname[:-1]
-                if birdname in self.config['ShortBirdList']:
-                    self.config['ShortBirdList'].remove(birdname)
-                else:
-                    del self.config['ShortBirdList'][-1]
-                self.config['ShortBirdList'].insert(0,birdname)
-                print(self.config['ShortBirdList'][0])
-                
-        else:
-            # This allows textual name entry
-            # TODO: Flag between them
-            # TODO: ???
-            if False:
-                # Ask the user for the new name, and save it
-                # TODO: This version is wrong if you load the birdlist from a file
-                text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
-                if ok:
-                    text = str(text).title()
-                    self.updateText(text)
-
-                    if text in self.longBirdList:
-                        pass
-                    else:
-                        # Add the new bird name.
-                        # TODO: And save the lists?
-                        if update:
-                            self.shortBirdList.insert(0,text)
-                            del shortBirdList[-1]
-                        self.longBirdList.append(text)
-                        # self.saveConfig = True
-
-    def birdSelectedMenu(self,birditem):
+    def birdSelectedMenu(self,birditem,fromList=False,update=True):
         """ Collects the label for a bird from the context menu and processes it.
         Has to update the overview segments in case their colour should change.
         Also handles getting the name through a message box if necessary.
@@ -2610,7 +2560,6 @@ class AviaNZ(QMainWindow):
         else:
             birdname = birditem
 
-        #print(self.segments[self.box1id],birditem,birditem.text())
         startpoint = self.segments[self.box1id][0]-self.startRead
         endpoint = self.segments[self.box1id][1]-self.startRead
         oldname = self.segments[self.box1id][4]
@@ -2625,12 +2574,12 @@ class AviaNZ(QMainWindow):
                 self.updateText(t)
 
         # and add the new one here:
-        if birdname not in oldname:
+        if (birdname not in oldname or fromList) and birdname != "Other":
             self.refreshOverviewWith(startpoint, endpoint, birdname)
             self.updateText(birdname)
 
-        self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
-        self.refreshOverviewWith(startpoint, endpoint, self.segments[self.box1id][4])
+        #self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
+        #self.refreshOverviewWith(startpoint, endpoint, self.segments[self.box1id][4])
         # patch for updating if all names were deleted:
         if self.segments[self.box1id][4] == []:
                 if self.Hartley:
@@ -2639,37 +2588,37 @@ class AviaNZ(QMainWindow):
                     self.updateText(text="Don't Know")
 
         # Now update the text
-        if birdname is not 'Other':
+        if birdname != 'Other' and update:
             # Put the selected bird name at the top of the list
-            if birdname[-1] == '?':
+            if len(birdname) > 0 and birdname[-1] == '?':
                 birdname = birdname[:-1]
             if birdname in self.shortBirdList:
                 self.shortBirdList.remove(birdname)
             else:
                 del self.shortBirdList[-1]
             self.shortBirdList.insert(0,birdname)
-            print(self.shortBirdList[0])
-            
         else:
             # This allows textual name entry
-            # TODO: Flag between them
-            if False:
-                # Ask the user for the new name, and save it
-                # TODO: This version is wrong if you load the birdlist from a file
-                text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
-                if ok:
-                    text = str(text).title()
-                    self.updateText(text)
+            # Ask the user for the new name, and save it
+            text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name: (as species>subsp)')
+            if ok:
+                text = str(text).title()
+                self.updateText(text)
 
-                    if text in self.longBirdList:
-                        pass
-                    else:
-                        # Add the new bird name.
-                        if update:
-                            self.shortBirdList.insert(0,text)
-                            del shortBirdList[-1]
-                        self.longBirdList.append(text)
-                        # self.saveConfig = True
+                if text in self.longBirdList:
+                    pass
+                else:
+                    # Add the new bird name.
+                    if update:
+                        self.shortBirdList.insert(0,text)
+                        del self.shortBirdList[-1]
+                    self.longBirdList.append(text)
+                    self.longBirdList = sorted(self.longBirdList, key=str.lower)
+                    self.longBirdList.remove('Unidentifiable')
+                    self.longBirdList.append('Unidentifiable')
+                    json.dump(self.longBirdList, open(self.config['BirdListLong'], 'w'),indent=1)
+                    
+                    # self.saveConfig = True
 
         if not self.multipleBirds and not self.Hartley:
             # select the bird and close
@@ -2684,16 +2633,20 @@ class AviaNZ(QMainWindow):
         if self.multipleBirds or self.Hartley:
             if type(text) is list:
                 self.segments[segID][4].extend(text)
+                self.lastSpecies = text
             else:
                 self.segments[segID][4].append(text)
+                self.lastSpecies = [text]
             # get the unique elements:
             self.segments[segID][4] = list(set(self.segments[segID][4]))
         else:
-            print(type(text),type(self.segments[segID][4]))
             if type(text) is list:
                 self.segments[segID][4] = text
             else:
                 self.segments[segID][4] = [text]
+
+        # Store the species in case the user wants it for the next segment
+        self.segmentsToSave = True
 
         # produce text from list, to update the label
         text = ','.join(self.segments[segID][4])
@@ -2708,13 +2661,6 @@ class AviaNZ(QMainWindow):
         else:
             self.prevBoxCol = self.ColourNone
         
-       # self.segments[segID][4] = text
-       # print(segID, len(self.listLabels))
-       # self.listLabels[segID].setText(text,'k')
-
-        # Store the species in case the user wants it for the next segment
-        self.lastSpecies = text
-        self.segmentsToSave = True
 
     def processMultipleBirdSelections(self):
         pass
@@ -2902,8 +2848,7 @@ class AviaNZ(QMainWindow):
                 # Check which page is first to have segments on
                 self.currentFileSection = -1
 
-            # TODO: Next line needs both
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.shortBirdList, self.longBirdList self)
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.shortBirdList, self.longBirdList, self)
             # load the first image:
             self.box1id = -1
             self.humanClassifyDialog1.setSegNumbers(0, len(self.segments))
@@ -2966,7 +2911,6 @@ class AviaNZ(QMainWindow):
                         print("Loading next page", self.currentFileSection)
                         self.loadSegment()
                 self.humanClassifyDialog1.setWindowTitle('Check Classifications: page ' + str(self.currentFileSection+1))
-                #print("a",self.segments[self.box1id])
 
                 # Show the next segment
                 if self.segments[self.box1id] is not None:
@@ -3006,7 +2950,8 @@ class AviaNZ(QMainWindow):
 
     def updateLabel(self,label):
         """ Update the label on a segment that is currently shown in the display. """
-        self.birdSelected(label, update=False)
+        for l in label:
+            self.birdSelectedMenu(l, update=False)
 
         if self.listRectanglesa2[self.box1id] is not None:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
@@ -3033,29 +2978,36 @@ class AviaNZ(QMainWindow):
         self.humanClassifyDialog1.stopPlayback()
         self.segmentsDone += 1
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
-        print('Correct1',label,checkText,self.segments[self.box1id])
+        #print('Correct1',label,checkText,self.segments[self.box1id])
 
         if len(checkText) > 0:
             if text in self.longBirdList:
                 pass
             else:
                 self.longBirdList.append(text)
+                self.longBirdList = sorted(self.longBirdList, key=str.lower)
+                self.longBirdList.remove('Unidentifiable')
+                self.longBirdList.append('Unidentifiable')
+                json.dump(self.longBirdList, open(self.config['BirdListLong'], 'w'),indent=1)
 
         # Todo: boxid[4] has been updated so this if doesn't effect? added update label to else but not the ideal sol
         if label != self.segments[self.box1id][4]:
-            print("HCC1, updating",label)
+            #print("HCC1, updating",label)
             if self.config['saveCorrections']:
                 # Save the correction
                 outputError = [self.segments[self.box1id], label]
                 file = open(self.filename + '.corrections', 'a')
-                json.dump(outputError, file)
+                json.dump(outputError, file,indent=1)
                 file.close()
 
             self.updateLabel(label)
 
             if self.saveConfig:
-                # TODO
-                self.longBirdList.append(label)
+                self.longBirdList.append(text)
+                self.longBirdList = sorted(self.longBirdList, key=str.lower)
+                self.longBirdList.remove('Unidentifiable')
+                self.longBirdList.append('Unidentifiable')
+                json.dump(self.longBirdList, open(self.config['BirdListLong'], 'w'),indent=1)
         elif '?' in ''.join(label):
             # Remove the question mark, since the user has agreed
             for i in range(len(self.segments[self.box1id][4])):
@@ -3063,8 +3015,8 @@ class AviaNZ(QMainWindow):
                     self.segments[self.box1id][4][i] = self.segments[self.box1id][4][i][:-1] 
             self.updateLabel(self.segments[self.box1id][4])
         else:
-            # segment info matches, so just update the spec label
-            self.updateLabel(label)
+            # segment info matches, so don't do anything
+            pass
 
         self.refreshOverviewWith(startpoint, endpoint, label)
 
@@ -3105,7 +3057,6 @@ class AviaNZ(QMainWindow):
         flatten = lambda list: [item for sublist in list for item in sublist]
         names = flatten(names)
         names = [re.sub('\?','',item) for item in names]
-        print(names)
 
         # Get all labels
         #names = [item[4] for item in self.segments]
@@ -3116,7 +3067,6 @@ class AviaNZ(QMainWindow):
         for n in names:
             keys[n] = 1
         names = keys.keys()
-        print(names)
         self.humanClassifyDialog2a = Dialogs.HumanClassify2a(names)
 
         if self.humanClassifyDialog2a.exec_() == 1:
@@ -3142,7 +3092,7 @@ class AviaNZ(QMainWindow):
 
             # and show them
             self.loadSegment(hr2=True)
-            print("segments to go to dialog2: ", segments2show)
+            #print("segments to go to dialog2: ", segments2show)
             segments = copy.deepcopy(segments2show)
             self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, segments2show,
                                                                label, self.sampleRate, self.audioFormat,
@@ -3150,20 +3100,24 @@ class AviaNZ(QMainWindow):
                                                                self.colourEnd, self.config['invertColourMap'])
             self.humanClassifyDialog2.exec_()
             errorInds = self.humanClassifyDialog2.getValues()
-            print("errors: ", errorInds, len(errorInds))
+            #print("errors: ", errorInds, len(errorInds))
 
             if len(errorInds) > 0:
                 outputErrors = []
-                print(segments)
                 for ind in errorInds:
                     outputErrors.append(segments[ind])
-                    self.deleteSegment(id=ids[ind], hr=True)
+                    # Delete segment if it only has that label, otherwise remove that label
+                    if len(self.segments[ids[ind]][4]) == 1:
+                        self.deleteSegment(id=ids[ind], hr=True)
+                    else:
+                        labelind = self.segments[ids[ind]][4].index(label)
+                        self.segments[ids[ind]][4] = self.segments[ids[ind]][4][:labelind] + self.segments[ids[ind]][4][labelind+1:]
                     ids = [x-1 for x in ids]
                 self.segmentsToSave = True
                 if self.config['saveCorrections']:
                     # Save the errors in a file
                     file = open(self.filename + '.corrections_' + str(label), 'a')
-                    json.dump(outputErrors, file)
+                    json.dump(outputErrors, file,indent=1)
                     file.close()
             # avoid '?' and confirm the segments
             id = 0
@@ -3474,19 +3428,15 @@ class AviaNZ(QMainWindow):
         f0_high = []    # int(self.waveletTDialog.f0High.text())
         thr = self.waveletTDialog.thr.value()
         M = sylLen
-        # print(species,minLen,minFrq,maxFrq)
         ws = WaveletSegment.WaveletSegment(species=[minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M])
         optimumNodes=[]
         for root, dirs, files in os.walk(str(self.dName)):
             for file in files:
-                print(file)
                 if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
                     wavFile = root + '/' + file[:-4]
                     datFile = root + '/' + file + '.data'
-                    print(wavFile)
                     # calculate f0_low and f0_high from GT
                     if os.path.isfile(datFile):
-                        # print(datFile)
                         with open(datFile) as f:
                             segments = json.load(f)
                         for seg in segments:
@@ -3509,7 +3459,7 @@ class AviaNZ(QMainWindow):
                                     f0_high.append(f0_h)
                     # find wavelet nodes
                     nodes = ws.waveletSegment_train(wavFile, species=[minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M], df=False)
-                    print(nodes)
+                    #print(nodes)
                     for node in nodes:
                         if node not in optimumNodes:
                             optimumNodes.append(node)
@@ -3559,7 +3509,7 @@ class AviaNZ(QMainWindow):
             return f0,f0
         else:  # Get the individual pieces within a seg
             syls = segment.identifySegments(ind, maxgap=10, minlength=minLen / 2)
-            print("sys= ", sys)
+            #print("sys= ", sys)
             if syls == []:
                 return np.min(pitch), np.max(pitch)
             low = []
@@ -3568,8 +3518,8 @@ class AviaNZ(QMainWindow):
                 s[0] = s[0] * sampleRate / float(256)
                 s[1] = s[1] * sampleRate / float(256)
                 i = np.where((ind > s[0]) & (ind < s[1]))
-                print('i=', i)
-                print("x[i]=",x[i])
+                #print('i=', i)
+                #print("x[i]=",x[i])
                 if len(x[i])>0:
                     low.append(np.min(x[i]))
                     high.append(np.min(x[i]))
@@ -3666,7 +3616,6 @@ class AviaNZ(QMainWindow):
         # now save GT as a .txt file
         for i in range(1, duration + 1):
             GT[i - 1][0] = str(i)  # add time as the first column to make GT readable
-        print(GT)
         # strings = (str(item) for item in GT)
         with open(eFile, "w") as f:
             for l, el in enumerate(GT):
@@ -3681,7 +3630,7 @@ class AviaNZ(QMainWindow):
         """
         # [dir] = self.waveletTDialog.getValues()
         self.dName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose Folder to Process')
-        print("Dir:", self.dirName)
+        #print("Dir:", self.dirName)
         self.waveletTDialog.w_dir.setPlainText(self.dName)
         self.waveletTDialog.w_dir.setReadOnly(True)
         self.waveletTDialog.raise_()
@@ -3758,7 +3707,7 @@ class AviaNZ(QMainWindow):
                 else:
                     newSegments = self.findMatches(float(str(CCThr1)))
 
-            print("new segments: ", newSegments)
+            #print("new segments: ", newSegments)
             # print "to excel", newSegments
                 # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
                 # # but ML is extremely slow and crappy. So I decided to use just the wavelets
@@ -4033,7 +3982,7 @@ class AviaNZ(QMainWindow):
                 # restart playback
                 range = self.p_ampl.viewRange()[0]
                 self.setPlaySliderLimits(range[0]*1000, range[1]*1000)
-                print(range)
+                #print(range)
                 # (else keep play slider range from before)
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
             self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
@@ -4135,10 +4084,10 @@ class AviaNZ(QMainWindow):
         """ Uses start/end in ms, does what it says, and also seeks file position marker.
         """
         offset = (self.startRead + self.startTime) * 1000 # in ms, absolute
-        print(offset)
-        print(self.startTime)
+        #print(offset)
+        #print(self.startTime)
         self.playSlider.setRange(start + offset, end + offset)
-        print("playback set between %d and %d" %(start, end))
+        #print("playback set between %d and %d" %(start, end))
         self.segmentStart = self.playSlider.minimum() - offset # relative to file start
         self.segmentStop = self.playSlider.maximum() - offset # relative to file start
 
@@ -4188,14 +4137,7 @@ class AviaNZ(QMainWindow):
     def changeSettings(self):
         """ Create the parameter tree when the Interface settings menu is pressed.
         """
-        # first save the annotations
-        # self.saveSegments()
-
-        birdList = [str(item) for item in self.config['ShortBirdList']]
-        bl = ""
-        for i in range(len(birdList)):
-            bl += birdList[i]
-            bl += '\n'
+        self.saveSegments()
 
         params = [
             {'name': 'Mouse settings', 'type' : 'group', 'children': [
@@ -4262,8 +4204,13 @@ class AviaNZ(QMainWindow):
                  'tip': "Person name"},
             ]},
 
-            {'name': 'Bird List', 'type': 'group', 'children': [
-                {'name': 'Add/Remove/Modify', 'type': 'text', 'value': bl}
+            {'name': 'Common Bird List', 'type': 'group', 'children': [
+                {'name': 'Filename', 'type': 'str', 'value': self.config['BirdListShort']}
+                ]},
+
+            {'name': 'Full Bird List', 'type': 'group', 'children': [
+                 {'name': 'Filename', 'type': 'str', 'value': self.config['BirdListLong'],
+                     'tip': "Can be None"},
                 ]},
         ]
 
@@ -4313,9 +4260,10 @@ class AviaNZ(QMainWindow):
                 self.config['fileOverlap']=data
             elif childName=='Human classify.Save corrections':
                 self.config['saveCorrections'] = data
-            # TODO
-            elif childName=='Bird List.Add/Remove/Modify':
-                self.config['BirdList'] = data.split('\n')
+            elif childName=='Common Bird List.Filename':
+                self.config['BirdListShort'] = data
+            elif childName=='Full Bird List.Filename':
+                self.config['BirdListLong'] = data
             elif childName=='Annotation.Segment colours.Confirmed segments':
                 rgbaNamed = list(data.getRgb())
                 if rgbaNamed[3] > 100:
@@ -4369,35 +4317,21 @@ class AviaNZ(QMainWindow):
                 self.config['operator'] = data
                 self.operator = data
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
+            elif childName=='Common Bird List.Filename':
+                self.config['BirdListShort'] = data
+                self.shortBirdList = json.load(open(self.config['BirdListShort']))
+            elif childName=='Full Bird List.Filename':
+                if data == 'None':
+                    data = None
+                else:
+                    self.longBirdList = json.load(open(self.config['BirdListLong']))
+                self.config['BirdListLong'] = data
 
-            elif childName == 'User.Reviewer':
-                self.config['reviewer'] = data
-                self.reviewer = data
-                self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
-
-        # # Reload the file to make these changes take effect
-        # self.resetStorageArrays()
-        # # Reset the media player
-        # if self.media_obj.state() == phonon.Phonon.PlayingState:
-        #    self.media_obj.pause()
-        #    self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-
+        self.saveConfig = True
         # Find the '/' in the fileName
         i=len(self.filename)-1
         while self.filename[i] != '/' and i>0:
             i = i-1
-        #print self.filename[i:], type(self.filename)
-
-        #if len(self.segments) > 0 or self.hasSegments:
-            # if len(self.segments) > 0:
-            #     if self.segments[0][0] > -1:
-            #         self.segments.insert(0,
-            #                              [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
-            #                               self.reviewer, -1])
-            # else:
-            #     self.segments.insert(0, [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
-            #                              self.reviewer, -1])
-        self.saveSegments()
 
         self.resetStorageArrays()
         self.loadFile(self.filename[i+1:])
@@ -4546,7 +4480,7 @@ class AviaNZ(QMainWindow):
                 file = open(self.filename + '.data', 'w')
             else:
                 file = open(str(self.filename) + '.data', 'w')
-            json.dump(self.segments,file)
+            json.dump(self.segments,file,indent=1)
             file.write("\n")
             #if self.Hartley:
                 #if self.previousFile is not None:
@@ -4558,10 +4492,10 @@ class AviaNZ(QMainWindow):
         else:
             print("Nothing to save")
 
+
     def exportToExcel_Hartley(self):
         from openpyxl import load_workbook, Workbook
         eFile = self.filename[:-4] + '_output.xlsx'
-        print(len(self.shortBirdList))
 
         wb = Workbook()
         ws = wb.active
@@ -4591,7 +4525,6 @@ class AviaNZ(QMainWindow):
         ws = wb['Summary']
         ws.cell(row=1, column=1, value="Species")
         ws.cell(row=1, column=2, value="Proportion")
-        print(lastrow)
         for row in range(1,len(self.shortBirdList)+1):
             ws.cell(row=row+1, column=1, value=self.shortBirdList[row-1])
             ws.cell(row=row+1, column=2, value=props[row-1]/(lastrow-2))
@@ -4624,17 +4557,20 @@ class AviaNZ(QMainWindow):
         if self.saveConfig == True:
             try:
                 print("Saving config file")
-                json.dump(self.config, open(self.configfile, 'w'))
+                json.dump(self.config, open(self.configfile, 'w'),indent=1)
             except Exception as e:
                 print("ERROR while saving config file:")
                 print(e)
         if self.savesppinfo == True:
             try:
                 print("Saving species info file")
-                json.dump(self.sppInfo, open(self.sppinfofile, 'w'))
+                json.dump(self.sppInfo, open(self.sppinfofile, 'w'),indent=1)
             except Exception as e:
                 print("ERROR while saving species info file:")
                 print(e)
+
+        # Save the shortBirdList
+        json.dump(self.shortBirdList, open(self.config['BirdListShort'], 'w'),indent=1)
         QApplication.quit()
 
     def backupDatafiles(self):
