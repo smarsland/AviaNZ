@@ -183,12 +183,18 @@ class AviaNZ(QMainWindow):
         # TODO: review this to be something from the user config
         # This is Nyree's list
         if self.Hartley:
-            self.config['ShortBirdList'] = json.load(open('BirdList.txt'))
+            self.shortBirdList = json.load(open('BirdList.txt'))
         else:
             # This is the DOC list 
-            # TODO: Note kludge here
-            self.config['ShortBirdList'] = self.config['BirdList']
-            self.config['BirdList'] = json.load(open('ListDOCBirds.txt')) 
+            self.shortBirdList = json.load(open(self.config['BirdListShort']))
+            if self.config['BirdListLong'] is None:
+                # If don't have a long bird list, check the length of the short bird list is OK, and otherwise split it
+                # 40 is a bit random, but 20 in a list is long enough!
+                if len(self.shortBirdList) > 40:
+                    self.longBirdList = self.shortBirdList.copy()
+                    self.shortBirdList = self.shortBirdList[:40]
+            else:
+                self.longBirdList = json.load(open(self.config['BirdListLong']))
         self.makeFullBirdList()
 
         # avoid comma/point problem in number parsing
@@ -856,7 +862,8 @@ class AviaNZ(QMainWindow):
 
         self.model = QStandardItemModel()
         headlist = []
-        for bird in self.config['BirdList']:
+        for bird in self.longBirdList:
+            # TODO: Next line -> consistency
             ind = bird.find('>')
             if ind == -1:
                 ind = len(bird)
@@ -2573,6 +2580,7 @@ class AviaNZ(QMainWindow):
         else:
             # This allows textual name entry
             # TODO: Flag between them
+            # TODO: ???
             if False:
                 # Ask the user for the new name, and save it
                 # TODO: This version is wrong if you load the birdlist from a file
@@ -2581,14 +2589,15 @@ class AviaNZ(QMainWindow):
                     text = str(text).title()
                     self.updateText(text)
 
-                    if text in self.config['BirdList']:
+                    if text in self.longBirdList:
                         pass
                     else:
                         # Add the new bird name.
+                        # TODO: And save the lists?
                         if update:
-                            self.config['BirdList'].insert(0,text)
-                        else:
-                            self.config['BirdList'].append(text)
+                            self.shortBirdList.insert(0,text)
+                            del shortBirdList[-1]
+                        self.longBirdList.append(text)
                         # self.saveConfig = True
 
     def birdSelectedMenu(self,birditem):
@@ -2634,12 +2643,12 @@ class AviaNZ(QMainWindow):
             # Put the selected bird name at the top of the list
             if birdname[-1] == '?':
                 birdname = birdname[:-1]
-            if birdname in self.config['ShortBirdList']:
-                self.config['ShortBirdList'].remove(birdname)
+            if birdname in self.shortBirdList:
+                self.shortBirdList.remove(birdname)
             else:
-                del self.config['ShortBirdList'][-1]
-            self.config['ShortBirdList'].insert(0,birdname)
-            print(self.config['ShortBirdList'][0])
+                del self.shortBirdList[-1]
+            self.shortBirdList.insert(0,birdname)
+            print(self.shortBirdList[0])
             
         else:
             # This allows textual name entry
@@ -2652,14 +2661,14 @@ class AviaNZ(QMainWindow):
                     text = str(text).title()
                     self.updateText(text)
 
-                    if text in self.config['BirdList']:
+                    if text in self.longBirdList:
                         pass
                     else:
                         # Add the new bird name.
                         if update:
-                            self.config['BirdList'].insert(0,text)
-                        else:
-                            self.config['BirdList'].append(text)
+                            self.shortBirdList.insert(0,text)
+                            del shortBirdList[-1]
+                        self.longBirdList.append(text)
                         # self.saveConfig = True
 
         if not self.multipleBirds and not self.Hartley:
@@ -2893,7 +2902,8 @@ class AviaNZ(QMainWindow):
                 # Check which page is first to have segments on
                 self.currentFileSection = -1
 
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['BirdList'], self)
+            # TODO: Next line needs both
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.shortBirdList, self.longBirdList self)
             # load the first image:
             self.box1id = -1
             self.humanClassifyDialog1.setSegNumbers(0, len(self.segments))
@@ -3026,10 +3036,10 @@ class AviaNZ(QMainWindow):
         print('Correct1',label,checkText,self.segments[self.box1id])
 
         if len(checkText) > 0:
-            if text in self.config['BirdList']:
+            if text in self.longBirdList:
                 pass
             else:
-                self.config['BirdList'].append(text)
+                self.longBirdList.append(text)
 
         # Todo: boxid[4] has been updated so this if doesn't effect? added update label to else but not the ideal sol
         if label != self.segments[self.box1id][4]:
@@ -3044,7 +3054,8 @@ class AviaNZ(QMainWindow):
             self.updateLabel(label)
 
             if self.saveConfig:
-                self.config['BirdList'].append(label)
+                # TODO
+                self.longBirdList.append(label)
         elif '?' in ''.join(label):
             # Remove the question mark, since the user has agreed
             for i in range(len(self.segments[self.box1id][4])):
@@ -4302,6 +4313,7 @@ class AviaNZ(QMainWindow):
                 self.config['fileOverlap']=data
             elif childName=='Human classify.Save corrections':
                 self.config['saveCorrections'] = data
+            # TODO
             elif childName=='Bird List.Add/Remove/Modify':
                 self.config['BirdList'] = data.split('\n')
             elif childName=='Annotation.Segment colours.Confirmed segments':
@@ -4549,24 +4561,24 @@ class AviaNZ(QMainWindow):
     def exportToExcel_Hartley(self):
         from openpyxl import load_workbook, Workbook
         eFile = self.filename[:-4] + '_output.xlsx'
-        print(len(self.config['BirdList']))
+        print(len(self.shortBirdList))
 
         wb = Workbook()
         ws = wb.active
         ws.cell(row=1, column=1, value="Interval")
-        for col in range(1,len(self.config['BirdList'])+1):
+        for col in range(1,len(self.shortBirdList)+1):
             #print(self.config['BirdList'][col-1])
-            ws.cell(row=1, column=1+col, value=self.config['BirdList'][col-1])
+            ws.cell(row=1, column=1+col, value=self.shortBirdList[col-1])
         lastrow = 2
 
-        props = np.zeros(len(self.config['BirdList']))
+        props = np.zeros(len(self.shortBirdList))
 
         for seg in self.segments[lastrow-2:]:
             #print(lastrow)
             ws.cell(row=lastrow,column=1,value=lastrow-1)
-            for col in range(1,len(self.config['BirdList'])+1):
-                if self.config['BirdList'][col-1] in seg[4]:
-                #if (self.config['BirdList'][col-1]+',') in seg[4]:
+            for col in range(1,len(self.shortBirdList)+1):
+                if self.shortBirdList[col-1] in seg[4]:
+                #if (self.shortBirdList[col-1]+',') in seg[4]:
                     #print(seg[4],"1")
                     ws.cell(row=lastrow, column=col+1, value=1)
                     props[col-1] += 1
@@ -4580,9 +4592,8 @@ class AviaNZ(QMainWindow):
         ws.cell(row=1, column=1, value="Species")
         ws.cell(row=1, column=2, value="Proportion")
         print(lastrow)
-        for row in range(1,len(self.config['BirdList'])+1):
-            #print(self.config['BirdList'][col-1])
-            ws.cell(row=row+1, column=1, value=self.config['BirdList'][row-1])
+        for row in range(1,len(self.shortBirdList)+1):
+            ws.cell(row=row+1, column=1, value=self.shortBirdList[row-1])
             ws.cell(row=row+1, column=2, value=props[row-1]/(lastrow-2))
 
         wb.save(str(eFile))
