@@ -49,6 +49,7 @@ import WaveletFunctions
 import AviaNZ_batch
 #import math
 import traceback
+import librosa
 
 from openpyxl import load_workbook, Workbook
 
@@ -766,9 +767,9 @@ class AviaNZ(QMainWindow):
         self.menuBirdList.installEventFilter(self)
         self.menuBird2.installEventFilter(self)
         self.fillBirdList()
-        self.menuBirdList.triggered.connect(self.birdSelected)
-        self.menuBird2.triggered.connect(self.birdSelected)
-        # self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
+        self.menuBirdList.triggered.connect(self.birdSelectedMenu)
+        self.menuBird2.triggered.connect(self.birdSelectedMenu)
+        self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
 
         # Make the colours that are used in the interface
         # The dark ones are to draw lines instead of boxes
@@ -1915,7 +1916,7 @@ class AviaNZ(QMainWindow):
         # min is to remove possible rounding error
         inds = int(self.convertAmpltoSpec(startpoint) / self.widthOverviewSegment)
         inde = min(int(self.convertAmpltoSpec(endpoint) / self.widthOverviewSegment),len(self.overviewSegments)-1)
-        
+
         if species is None or "Don't Know" in species or type(species) is int or len(species)==0:
             brush = self.ColourNone
             if delete:
@@ -2536,11 +2537,61 @@ class AviaNZ(QMainWindow):
             birdname = self.fullbirdlist.currentText()
         else:
             birdname = birdname + ', ' + self.fullbirdlist.currentText()
-        self.birdSelected(birdname)
+        self.birdSelectedMenu(birdname)
         if not self.multipleBirds and not self.Hartley:
             self.menuBirdList.hide()
 
-    def birdSelected(self,birditem):
+    def birdSelected(self,birdname,update=True):
+        """ Collects the label for a bird from the context menu and processes it.
+        Has to update the overview segments in case their colour should change.
+        Also handles getting the name through a message box if necessary.
+        """
+        print("birdselected")
+        print(self.segments[self.box1id])
+        startpoint = self.segments[self.box1id][0]-self.startRead
+        endpoint = self.segments[self.box1id][1]-self.startRead
+        oldname = self.segments[self.box1id][4]
+
+        self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
+        self.refreshOverviewWith(startpoint, endpoint, birdname)
+
+        # Now update the text
+        if birdname is not 'Other':
+            self.updateText(birdname)
+            # TODO: Next bit should have a choice flag, might not want it
+            if update:
+                # Put the selected bird name at the top of the list
+                if birdname[-1] == '?':
+                    birdname = birdname[:-1]
+                if birdname in self.config['ShortBirdList']:
+                    self.config['ShortBirdList'].remove(birdname)
+                else:
+                    del self.config['ShortBirdList'][-1]
+                self.config['ShortBirdList'].insert(0,birdname)
+                print(self.config['ShortBirdList'][0])
+                
+        else:
+            # This allows textual name entry
+            # TODO: Flag between them
+            if False:
+                # Ask the user for the new name, and save it
+                # TODO: This version is wrong if you load the birdlist from a file
+                text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name:')
+                if ok:
+                    text = str(text).title()
+                    self.updateText(text)
+
+                    if text in self.config['BirdList']:
+                        pass
+                    else:
+                        # Add the new bird name.
+                        if update:
+                            self.config['BirdList'].insert(0,text)
+                        else:
+                            self.config['BirdList'].append(text)
+                        # self.saveConfig = True
+
+    def birdSelectedMenu(self,birditem):
         """ Collects the label for a bird from the context menu and processes it.
         Has to update the overview segments in case their colour should change.
         Also handles getting the name through a message box if necessary.
@@ -2559,12 +2610,16 @@ class AviaNZ(QMainWindow):
         # basically re-create all names here:
         self.segments[self.box1id][4] = []
         for t in oldname:
+            self.refreshOverviewWith(startpoint, endpoint, t, delete=True)
             if t != birdname:
+                self.refreshOverviewWith(startpoint, endpoint, t)
                 self.updateText(t)
 
         # and add the new one here:
         if birdname not in oldname:
+            self.refreshOverviewWith(startpoint, endpoint, birdname)
             self.updateText(birdname)
+
         self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
         self.refreshOverviewWith(startpoint, endpoint, self.segments[self.box1id][4])
         # patch for updating if all names were deleted:
@@ -2644,9 +2699,16 @@ class AviaNZ(QMainWindow):
         else:
             self.prevBoxCol = self.ColourNone
         
+       # self.segments[segID][4] = text
+       # print(segID, len(self.listLabels))
+       # self.listLabels[segID].setText(text,'k')
+
         # Store the species in case the user wants it for the next segment
         self.lastSpecies = text
         self.segmentsToSave = True
+
+    def processMultipleBirdSelections(self):
+        pass
 
     def setColourMap(self,cmap):
         """ Listener for the menu item that chooses a colour map.
@@ -2934,8 +2996,7 @@ class AviaNZ(QMainWindow):
 
     def updateLabel(self,label):
         """ Update the label on a segment that is currently shown in the display. """
-        for l in label:
-            self.birdSelected(l)
+        self.birdSelected(label, update=False)
 
         if self.listRectanglesa2[self.box1id] is not None:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
@@ -3390,7 +3451,7 @@ class AviaNZ(QMainWindow):
     def trainWavelet(self):
         """ Listener for the wavelet training dialog.
         """
-        import librosa
+        # import librosa
         species = str(self.waveletTDialog.species.text()).title()
         sylLen = float(self.waveletTDialog.avgSyllen.text())
         minLen = int(self.waveletTDialog.minlen.text())
@@ -3420,7 +3481,7 @@ class AviaNZ(QMainWindow):
                         for seg in segments:
                             if seg[0] == -1:
                                 continue
-                            elif seg[4].title() == species:
+                            elif seg[4][0].title() == species:
                                 secs = seg[1] - seg[0]
                                 wavobj = wavio.read(wavFile+'.wav', nseconds=secs, offset=seg[0])
                                 data = wavobj.data
@@ -3572,7 +3633,7 @@ class AviaNZ(QMainWindow):
                 # print(species, seg[4])
                 if seg[0] == -1:
                     continue
-                if not re.search(species.title(), seg[4].title()):
+                if not re.search(species.title(), seg[4][0].title()):
                     continue
                 else:
                     type = species.title()
@@ -3638,11 +3699,11 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = True
         # TODO: Currently just gives them all the label "Don't Know"
         # seglen = len(self.segments)
-        [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution] = self.segmentDialog.getValues()
+        [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution,species_cc] = self.segmentDialog.getValues()
         with pg.BusyCursor():
             species = str(species)
-            if species=='Choose species...':
-                species='All species'
+            # if species=='Choose species...':
+            #     species='All species'
             #if not hasattr(self,'seg'):
             #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
             self.statusLeft.setText("Segmenting...")
@@ -3667,7 +3728,7 @@ class AviaNZ(QMainWindow):
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
             elif str(alg)=="Wavelets":
-                if species == 'All species':    # Ask the species
+                if species == 'Choose species...':    # Ask the species
                     msg = QMessageBox()
                     msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
                     msg.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -3680,8 +3741,11 @@ class AviaNZ(QMainWindow):
                     ws = WaveletSegment.WaveletSegment(species=self.sppInfo[str(species)])
                     newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, spInfo=self.sppInfo[str(species)], trainTest=False)
             elif str(alg)=="Cross-Correlation":
-                self.findMatches(float(str(CCThr1)))
-                newSegments = []
+                if species_cc != 'Choose species...':
+                    # need to load template/s
+                    newSegments = self.findMatches(float(str(CCThr1)), species_cc)
+                else:
+                    newSegments = self.findMatches(float(str(CCThr1)))
 
             print("new segments: ", newSegments)
             # print "to excel", newSegments
@@ -3713,7 +3777,14 @@ class AviaNZ(QMainWindow):
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
             # post process to remove short segments, wind, rain, and use F0 check.
-            if species == "All species":
+            if species == "Bittern": # bitten booms are treated differently
+                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                                                  segments=newSegments, spInfo=self.sppInfo[species])
+            elif species_cc == "Bittern":
+                print("New segs 1: ", newSegments)
+                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                                                  segments=newSegments, spInfo=self.sppInfo[species_cc])
+            elif species == "All species" or species_cc == 'Choose species...':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                   segments=newSegments, spInfo=[])
                 post.wind()
@@ -3741,9 +3812,23 @@ class AviaNZ(QMainWindow):
             # Generate annotation friendly output.
             if str(alg)=="Wavelets":
                  if len(newSegments)>0:
+                    y1 = self.convertFreqtoY(self.sppInfo[str(species)][2]/2)
+                    y2 = self.convertFreqtoY(self.sppInfo[str(species)][4]/2)
+                    if self.sppInfo[str(species)][4]/2 > self.sampleRate:
+                        y2 = self.convertFreqtoY(self.sampleRate/2-self.sampleRate*0.01)
                     for seg in newSegments:
-                        self.addSegment(float(seg[0]), float(seg[1]), 0, 0,
+                        self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
                                         [species.title() + "?"],index=-1)
+                        self.segmentsToSave = True
+            elif str(alg)=="Cross-Correlation" and species_cc != 'Choose species...':
+                if len(newSegments) > 0:
+                    y1 = self.convertFreqtoY(self.sppInfo[str(species_cc)][2] / 2)
+                    y2 = self.convertFreqtoY(self.sppInfo[str(species_cc)][4] / 2)
+                    if self.sppInfo[str(species_cc)][4] / 2 > self.sampleRate:
+                        y2 = self.convertFreqtoY(self.sampleRate / 2 - self.sampleRate * 0.01)
+                    for seg in newSegments:
+                        self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
+                                        [species_cc.title() + "?"], index=-1)
                         self.segmentsToSave = True
             else:
                 if len(newSegments)>0:
@@ -3790,10 +3875,70 @@ class AviaNZ(QMainWindow):
         msg.exec_()
         return
 
-    def findMatches(self,thr=0.4):
+    def findMatches(self,thr=0.4, species='Choose species...'):
         """ Calls the cross-correlation function to find matches like the currently highlighted box.
+        It also check if you have selected a species, then allow to read those templates and match.
         """
-        if self.box1id is None or self.box1id == -1:
+        # print ("inside find Matches: ", species)
+        segments = []
+        if species != 'Choose species...' and os.path.exists('Sound Files/' + species):
+            self.statusLeft.setText("Finding matches...")
+            print("Reading template/s")
+            # Todo: do more than one template and merge result?
+            wavobj = wavio.read('Sound Files/'+species+'/train1_1.wav')
+
+            # Parse wav format details based on file header:
+            sampleRate = wavobj.rate
+            audiodata = wavobj.data
+            # minFreq = 0
+            # maxFreq = self.sampleRate / 2.
+            # fileLength = wavobj.nframes
+
+            if audiodata.dtype is not 'float':
+                audiodata = audiodata.astype('float')  # / 32768.0
+
+            if np.shape(np.shape(audiodata))[0] > 1:
+                audiodata = audiodata[:, 0]
+            # downsample
+            print("fs: ", sampleRate, self.sppInfo[str(species)][4])
+            if sampleRate != self.sppInfo[str(species)][4]:
+                audiodata = librosa.core.audio.resample(audiodata, sampleRate, self.sppInfo[str(species)][4])
+                sampleRate = self.sppInfo[str(species)][4]
+            datalength = np.shape(audiodata)[0]
+            len_seg = datalength / sampleRate
+
+            sp_temp = SignalProc.SignalProc([], 0, self.config['window_width'], self.config['incr'])
+            sgRaw_temp = sp_temp.spectrogram(audiodata, self.config['window_width'],
+                                        self.config['incr'], mean_normalise=self.sgMeanNormalise,
+                                        equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided,
+                                        multitaper=self.sgMultitaper)
+
+            # Get the data for the spectrogram
+            if self.sampleRate != self.sppInfo[str(species)][4]:
+                data1 = librosa.core.audio.resample(self.audiodata, self.sampleRate, self.sppInfo[str(species)][4])
+                sampleRate1 = self.sppInfo[str(species)][4]
+            else:
+                data1 = self.audiodata
+                sampleRate1 = self.sampleRate
+            sgRaw = self.sp.spectrogram(data1,mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided,multitaper=self.sgMultitaper)
+            indices = self.seg.findCCMatches(sgRaw_temp,sgRaw,thr)
+            # scale indices to match with self.samplerate
+            indices = [i*self.sampleRate/sampleRate1 for i in indices]
+            # print('indices:', indices)
+            # identifySegments(seg=indices, minlength=10)
+            # indices are in spectrogram pixels, need to turn into times
+            y1 = self.convertFreqtoY(self.sppInfo[str(species)][2]/2)
+            if self.sppInfo[str(species)][4]/2 > self.sampleRate:
+                y2 = self.convertFreqtoY(self.sampleRate / 2 - self.sampleRate * 0.01)
+            else:
+                y2 = self.convertFreqtoY(self.sppInfo[str(species)][4] / 2)
+            for i in indices:
+                if np.abs(i) > self.config['overlap_allowed']:
+                    time = i*self.config['incr'] / self.sampleRate
+                    # print(time, time + len_seg,self.segments)
+                    # self.addSegment(time, time+len_seg,y1,y2,[species+'?'])
+                    segments.append([time, time+len_seg])
+        elif self.box1id is None or self.box1id == -1:
             print("No box selected")
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -3803,7 +3948,7 @@ class AviaNZ(QMainWindow):
             msg.setWindowTitle("No segment")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
-            return
+            return []
         else:
             self.statusLeft.setText("Finding matches...")
             # Only want to draw new segments, so find out how many there are now
@@ -3824,8 +3969,10 @@ class AviaNZ(QMainWindow):
                 # Miss out the one selected: note the hack parameter
                 if np.abs(i-x1) > self.config['overlap_allowed']:
                     time = i*self.config['incr'] / self.sampleRate
-                    self.addSegment(time, time+len_seg,0,0,self.segments[self.box1id][4])
+                    segments.append([time, time+len_seg])
+                    # self.addSegment(time, time+len_seg,0,0,self.segments[self.box1id][4])
             self.statusLeft.setText("Ready")
+        return segments
 
     def classifySegments(self):
         # TODO: Finish this
