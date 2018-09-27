@@ -372,7 +372,11 @@ class AviaNZ_batchProcess(QMainWindow):
                             newSegments=self.seg.bestSegments()
 
                         # post process to remove short segments, wind, rain, and use F0 check.
-                        if self.species == "All species":
+                        if self.species == "Bittern":
+                            post = SupportClasses.postProcess(audioData=self.audiodata,
+                                                              sampleRate=self.sampleRate,
+                                                              segments=newSegments, spInfo=[self.species])
+                        elif self.species == "All species":
                             post = SupportClasses.postProcess(audioData=self.audiodata,
                                                               sampleRate=self.sampleRate,
                                                               segments=newSegments, spInfo=[])
