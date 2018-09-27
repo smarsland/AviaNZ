@@ -157,6 +157,7 @@ class AviaNZ(QMainWindow):
         self.root = root
         self.extra=extra
         self.Hartley=Hartley
+        self.Hartley=True
 
         self.CLI = CLI
         try:
@@ -187,7 +188,7 @@ class AviaNZ(QMainWindow):
         # This is Nyree's list
         if self.Hartley:
             try:
-                self.shortBirdList = json.load(open('BirdList.txt'))
+                self.shortBirdList = json.load(open('ListHartleyBirds.txt'))
             except:
                 print("Failed to load bird list")
         else:
@@ -408,7 +409,7 @@ class AviaNZ(QMainWindow):
         #    self.showFundamental2.setCheckable(True)
         #    self.showFundamental2.setChecked(False)
 
-        if not self.DOC:
+        if not self.DOC and not self.Hartley:
             self.showInvSpec = specMenu.addAction("Show inverted spectrogram", self.showInvertedSpectrogram)
             self.showInvSpec.setCheckable(True)
             self.showInvSpec.setChecked(False)
