@@ -507,6 +507,10 @@ class Segmentation(QDialog):
 
         self.specieslabel = QLabel("Species")
         self.species=QComboBox()
+
+        self.specieslabel_cc = QLabel("Species")
+        self.species_cc = QComboBox()
+        self.species_cc.addItems(["Choose species...", "Bittern"])
         # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
         spp = [*sppInfo]
         spp.insert(0,"Choose species...")
@@ -517,6 +521,11 @@ class Segmentation(QDialog):
         self.specieslabel.hide()
         Box.addWidget(self.species)
         self.species.hide()
+
+        Box.addWidget(self.specieslabel_cc)
+        self.specieslabel_cc.hide()
+        Box.addWidget(self.species_cc)
+        self.species_cc.hide()
 
         Box.addWidget(self.HarmaThr1)
         Box.addWidget(self.HarmaThr2)
@@ -600,6 +609,8 @@ class Segmentation(QDialog):
             self.Fundwindowlabel.hide()
         elif self.prevAlg == "Cross-Correlation":
             self.CCThr1.hide()
+            self.specieslabel_cc.hide()
+            self.species_cc.hide()
         #elif self.prevAlg == "Onsets":
         #    self.Onsetslabel.hide()
         elif self.prevAlg == "FIR":
@@ -659,6 +670,8 @@ class Segmentation(QDialog):
         #    pass
         elif self.prevAlg == "Cross-Correlation":
             self.CCThr1.show()
+            self.specieslabel_cc.show()
+            self.species_cc.show()
         else:
             #"Wavelets"
             self.specieslabel.show()
@@ -670,7 +683,7 @@ class Segmentation(QDialog):
         self.end.setEnabled(not self.end.isEnabled())
 
     def getValues(self):
-        return [self.algs.currentText(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value()]
+        return [self.algs.currentText(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value(), self.species_cc.currentText()]
         #return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text(),self.species.currentText()]
 
 #======
