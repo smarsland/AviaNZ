@@ -157,7 +157,6 @@ class AviaNZ(QMainWindow):
         self.root = root
         self.extra=extra
         self.Hartley=Hartley
-        self.Hartley=True
 
         self.CLI = CLI
         try:
