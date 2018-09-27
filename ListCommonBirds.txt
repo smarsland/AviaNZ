@@ -1,5 +1,5 @@
 [
- "Bittern",
+"Bittern",
  "Bellbird",
  "Bellbird/Tui",
  "Kokako (Nth Is)",
@@ -27,8 +27,8 @@
  "Robin (NZ)",
  "Rook",
  "Saddleback (Nth Is)",
- "Silvereye"
+ "Silvereye",
  "Skylark",
  "Sparrow (House)",
- "Starling",
+ "Starling"
 ]
