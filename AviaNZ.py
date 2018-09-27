@@ -142,7 +142,7 @@ class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
 
-    def __init__(self,root=None,configfile=None,sppinfofile=None,DOC=True,CLI=False,firstFile='', imageFile='', command=''):
+    def __init__(self,root=None,configfile=None,sppinfofile=None,DOC=True,extra=False,Hartley=False,CLI=False,firstFile='', imageFile='', command=''):
         """Initialisation of the class. Load a configuration file, or create a new one if it doesn't
         exist. Also initialises the data structures and loads an initial file (specified explicitly)
         and sets up the window.
@@ -151,7 +151,8 @@ class AviaNZ(QMainWindow):
 
         super(AviaNZ, self).__init__()
         self.root = root
-        self.extra=False
+        self.extra=extra
+        self.Hartley=Hartley
 
         self.CLI = CLI
         try:
@@ -180,12 +181,13 @@ class AviaNZ(QMainWindow):
         # Load the birdlist 
         # TODO: review this to be something from the user config
         # This is Nyree's list
-        #self.config['BirdList'] = json.load(open('BirdList.txt'))
-
-        # This is the DOC list 
-        # TODO: Note kludge here
-        self.config['ShortBirdList'] = self.config['BirdList']
-        self.config['BirdList'] = json.load(open('ListDOCBirds.txt')) 
+        if self.Hartley:
+            self.config['ShortBirdList'] = json.load(open('BirdList.txt'))
+        else:
+            # This is the DOC list 
+            # TODO: Note kludge here
+            self.config['ShortBirdList'] = self.config['BirdList']
+            self.config['BirdList'] = json.load(open('ListDOCBirds.txt')) 
         self.makeFullBirdList()
 
         # avoid comma/point problem in number parsing
@@ -211,6 +213,8 @@ class AviaNZ(QMainWindow):
         # Only changed with modifier key (Meta) in this version
         # Second checks if signal is there
         self.multipleBirds = False
+
+        # TODO: Can probably be deleted
         self.menuBirdListSignal = False
 
         self.dirName = self.config['dirpath']
@@ -309,7 +313,8 @@ class AviaNZ(QMainWindow):
             self.setWindowTitle('AviaNZ')
             # Make the window full screen
             # TODO: Make this an option
-            #self.showMaximized()
+            if self.Hartley:
+                self.showMaximized()
             keyPressed = QtCore.Signal(int)
 
 
@@ -337,7 +342,6 @@ class AviaNZ(QMainWindow):
         fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
         fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
-
 
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
         # Add it a second time, then it appears!
@@ -386,7 +390,7 @@ class AviaNZ(QMainWindow):
         #    self.showFundamental2.setCheckable(True)
         #    self.showFundamental2.setChecked(False)
 
-        if self.DOC==False:
+        if not self.DOC:
             self.showInvSpec = specMenu.addAction("Show inverted spectrogram", self.showInvertedSpectrogram)
             self.showInvSpec.setCheckable(True)
             self.showInvSpec.setChecked(False)
@@ -407,32 +411,37 @@ class AviaNZ(QMainWindow):
 
         actionMenu = self.menuBar().addMenu("&Actions")
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
-        actionMenu.addSeparator()
-        actionMenu.addAction("Denoise",self.showDenoiseDialog,"Ctrl+N")
+        if not self.Hartley:
+            actionMenu.addSeparator()
+            actionMenu.addAction("Denoise",self.showDenoiseDialog,"Ctrl+N")
         #actionMenu.addAction("Find matches",self.findMatches)
-        actionMenu.addSeparator()
-        self.showFundamental = actionMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
-        self.showFundamental.setCheckable(True)
-        self.showFundamental.setChecked(False)
+            actionMenu.addSeparator()
+            self.showFundamental = actionMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
+            self.showFundamental.setCheckable(True)
+            self.showFundamental.setChecked(False)
 
-        if self.DOC==False:
+        if not self.DOC and not self.Hartley:
             actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
             actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
-        actionMenu.addSeparator()
-        actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
-        if self.DOC == False:
+
+        if not self.Hartley:
+            actionMenu.addSeparator()
+            actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
+
+        if not self.DOC and not self.Hartley:
             actionMenu.addAction("Classify segments",self.classifySegments,"Ctrl+C")
-        actionMenu.addSeparator()
+            actionMenu.addSeparator()
         #self.showAllTick = actionMenu.addAction("Show all pages", self.showAllCheck)
         #self.showAllTick.setCheckable(True)
         #self.showAllTick.setChecked(self.config['showAllPages'])
-        actionMenu.addAction("Human Review [All segments]",self.humanClassifyDialog1,"Ctrl+1")
-        actionMenu.addAction("Human Review [Choose species]",self.humanRevDialog2,"Ctrl+2")
-        actionMenu.addSeparator()
-        actionMenu.addAction("Export segments to Excel",self.exportSeg)
-        actionMenu.addSeparator()
-        print("self.DOC: ", self.DOC)
-        if self.DOC == False:
+
+        if not self.Hartley:
+            actionMenu.addAction("Human Review [All segments]",self.humanClassifyDialog1,"Ctrl+1")
+            actionMenu.addAction("Human Review [Choose species]",self.humanRevDialog2,"Ctrl+2")
+            actionMenu.addSeparator()
+            actionMenu.addAction("Export segments to Excel",self.exportSeg)
+            actionMenu.addSeparator()
+        if not self.DOC and not self.Hartley:
             actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
         actionMenu.addSeparator()
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
@@ -883,7 +892,7 @@ class AviaNZ(QMainWindow):
             bird.setCheckable(True)
             if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
                 bird.setChecked(True)
-            if self.multipleBirds:
+            if self.multipleBirds or self.Hartley:
                 # self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
                 self.menuBirdListSignal = True
             else:
@@ -902,7 +911,7 @@ class AviaNZ(QMainWindow):
             bird.setCheckable(True)
             if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
                 bird.setChecked(True)
-            if not self.multipleBirds:
+            if not self.multipleBirds and not self.Hartley:
                 pass
                 #receiver = lambda checked, birdname=item: self.birdSelected(birdname)
                 #bird.triggered.connect(receiver)
@@ -1230,6 +1239,14 @@ class AviaNZ(QMainWindow):
                             if type(s[4]) is not list:
                                 s[4] = [s[4]]
 
+                if self.Hartley and not os.path.isfile(self.filename + '.data'):
+                    # Hartley bodge: Make a file with 10s segments every minute
+                    print("Hartley bodging")
+                    i = 0
+                    while i<self.fileLength / self.sampleRate:
+                        self.segments.append([i,i+10, 0, 0, []])
+                        i += 60
+
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
                 # Update the data that is seen by the other classes
@@ -1253,8 +1270,9 @@ class AviaNZ(QMainWindow):
                 # Delete any denoising backups from the previous file
                 if hasattr(self,'audiodata_backup'):
                     self.audiodata_backup = None
-                self.showFundamental.setChecked(False)
-                if self.DOC == False:
+                if not self.Hartley:
+                    self.showFundamental.setChecked(False)
+                if not self.DOC or not self.Hartley:
                     self.showInvSpec.setChecked(False)
 
                 self.timeaxis.setOffset(self.startRead+self.startTime)
@@ -1971,7 +1989,10 @@ class AviaNZ(QMainWindow):
 
             # Get the name and colour sorted
             if species is None or species==["Don't Know"] or len(species) == 0:
-                species = []
+                if self.Hartley:
+                    species = []
+                else:
+                    species = ["Don't Know"]
                 brush = self.ColourNone
             elif "Don't Know" in species:
                 brush = self.ColourNone
@@ -1990,13 +2011,19 @@ class AviaNZ(QMainWindow):
                 endpoint = temp
 
             # Add the segment in both plots and connect up the listeners
-            p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=brush)
+            if self.Hartley:
+                p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=brush,movable=False)
+            else:
+                p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=brush)
             self.p_ampl.addItem(p_ampl_r, ignoreBounds=True)
             p_ampl_r.setRegion([startpoint, endpoint])
             p_ampl_r.sigRegionChangeFinished.connect(self.updateRegion_ampl)
 
             if y1==0 and y2==0:
-                p_spec_r = SupportClasses.LinearRegionItem2(self, brush = brush)
+                if self.Hartley:
+                    p_spec_r = SupportClasses.LinearRegionItem2(self, brush = brush,movable=False)
+                else:
+                    p_spec_r = SupportClasses.LinearRegionItem2(self, brush = brush)
                 p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
             else:
                 if y1 > y2:
@@ -2245,6 +2272,8 @@ class AviaNZ(QMainWindow):
                 # if this is right click (drawing mode):
                 # (or whatever you want)
                 if evt.button() == self.MouseDrawingButton:
+                    if self.Hartley:
+                        return
                     # this would prevent starting boxes in ampl plot
                     # if self.config['specMouseAction']>1:
                     #    return
@@ -2394,6 +2423,8 @@ class AviaNZ(QMainWindow):
             else:
                 # if this is right click (drawing mode):
                 if evt.button() == self.MouseDrawingButton:
+                    if self.Hartley:
+                        return
                     nonebrush = self.ColourNone
                     self.start_ampl_loc = self.convertSpectoAmpl(mousePoint.x())
                     self.start_spec_y = mousePoint.y()
@@ -2506,7 +2537,7 @@ class AviaNZ(QMainWindow):
         else:
             birdname = birdname + ', ' + self.fullbirdlist.currentText()
         self.birdSelected(birdname)
-        if not self.multipleBirds:
+        if not self.multipleBirds and not self.Hartley:
             self.menuBirdList.hide()
 
     def birdSelected(self,birditem):
@@ -2519,7 +2550,7 @@ class AviaNZ(QMainWindow):
         else:
             birdname = birditem
 
-        print(self.segments[self.box1id])
+        #print(self.segments[self.box1id],birditem,birditem.text())
         startpoint = self.segments[self.box1id][0]-self.startRead
         endpoint = self.segments[self.box1id][1]-self.startRead
         oldname = self.segments[self.box1id][4]
@@ -2538,7 +2569,10 @@ class AviaNZ(QMainWindow):
         self.refreshOverviewWith(startpoint, endpoint, self.segments[self.box1id][4])
         # patch for updating if all names were deleted:
         if self.segments[self.box1id][4] == []:
-            self.updateText(text="Don't Know")
+                if self.Hartley:
+                    self.updateText(text=[])
+                else:
+                    self.updateText(text="Don't Know")
 
         # Now update the text
         if birdname is not 'Other':
@@ -2573,7 +2607,7 @@ class AviaNZ(QMainWindow):
                             self.config['BirdList'].append(text)
                         # self.saveConfig = True
 
-        if not self.multipleBirds:
+        if not self.multipleBirds and not self.Hartley:
             # select the bird and close
             self.menuBirdList.hide()
 
@@ -2583,7 +2617,7 @@ class AviaNZ(QMainWindow):
             segID = self.box1id
 
         # produce list from text
-        if self.multipleBirds:
+        if self.multipleBirds or self.Hartley:
             if type(text) is list:
                 self.segments[segID][4].extend(text)
             else:
@@ -4280,8 +4314,10 @@ class AviaNZ(QMainWindow):
             if reply == QMessageBox.Yes:
                 self.removeSegments()
                 self.segmentsToSave = True
-                #os.remove(self.filename + '.data')
-                #self.listFiles.currentItem().setForeground(Qt.black)
+                if self.Hartley:
+                    self.segmentsToSave = False
+                    os.remove(self.filename + '.data')
+                    self.listFiles.currentItem().setForeground(Qt.black)
 
             # reset segment playback buttons
             self.playSegButton.setEnabled(False)
@@ -4353,12 +4389,57 @@ class AviaNZ(QMainWindow):
                 file = open(str(self.filename) + '.data', 'w')
             json.dump(self.segments,file)
             file.write("\n")
-            #self.previousFile.setForeground(Qt.red)
+            #if self.Hartley:
+                #if self.previousFile is not None:
+                    #self.previousFile.setForeground(Qt.red)
             self.segmentsToSave = False
             del self.segments[0]
+            if self.Hartley:
+                self.exportToExcel_Hartley()
         else:
             print("Nothing to save")
 
+    def exportToExcel_Hartley(self):
+        from openpyxl import load_workbook, Workbook
+        eFile = self.filename[:-4] + '_output.xlsx'
+        print(len(self.config['BirdList']))
+
+        wb = Workbook()
+        ws = wb.active
+        ws.cell(row=1, column=1, value="Interval")
+        for col in range(1,len(self.config['BirdList'])+1):
+            #print(self.config['BirdList'][col-1])
+            ws.cell(row=1, column=1+col, value=self.config['BirdList'][col-1])
+        lastrow = 2
+
+        props = np.zeros(len(self.config['BirdList']))
+
+        for seg in self.segments[lastrow-2:]:
+            #print(lastrow)
+            ws.cell(row=lastrow,column=1,value=lastrow-1)
+            for col in range(1,len(self.config['BirdList'])+1):
+                if self.config['BirdList'][col-1] in seg[4]:
+                #if (self.config['BirdList'][col-1]+',') in seg[4]:
+                    #print(seg[4],"1")
+                    ws.cell(row=lastrow, column=col+1, value=1)
+                    props[col-1] += 1
+                else:
+                    #print(seg[4],"0")
+                    ws.cell(row=lastrow, column=col+1, value=0)
+            lastrow += 1
+        
+        wb.create_sheet(title='Summary', index=2)
+        ws = wb['Summary']
+        ws.cell(row=1, column=1, value="Species")
+        ws.cell(row=1, column=2, value="Proportion")
+        print(lastrow)
+        for row in range(1,len(self.config['BirdList'])+1):
+            #print(self.config['BirdList'][col-1])
+            ws.cell(row=row+1, column=1, value=self.config['BirdList'][row-1])
+            ws.cell(row=row+1, column=2, value=props[row-1]/(lastrow-2))
+
+        wb.save(str(eFile))
+        print("Saved to "+eFile)
     def closeEvent(self, event):
         """ Catch the user closing the window by clicking the Close button instead of quitting. """
         self.quit()
@@ -4418,7 +4499,7 @@ class AviaNZ(QMainWindow):
     def eventFilter(self, obj, event):
         # This is an event filter for the context menu. It allows the user to select
         # multiple birds by stopping the menu being closed on first click
-        if self.multipleBirds and event.type() in [QtCore.QEvent.MouseButtonRelease]:
+        if (self.multipleBirds or self.Hartley) and event.type() in [QtCore.QEvent.MouseButtonRelease]:
             if isinstance(obj, QtGui.QMenu):
                 if obj.activeAction():
                     if not obj.activeAction().menu(): 
