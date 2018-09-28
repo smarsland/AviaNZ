@@ -47,8 +47,9 @@ import WaveletFunctions
 #import Features
 #import Learning
 import AviaNZ_batch
+import fnmatch
 #import math
-import traceback
+# import traceback
 
 from openpyxl import load_workbook, Workbook
 
@@ -3742,6 +3743,12 @@ class AviaNZ(QMainWindow):
                 else:
                     species.add(birdName)
         species = list(species)
+        for root, dirs, files in os.walk(str(self.dirName)):
+            for file in files:
+                file = os.path.join(root, file)
+                if fnmatch.fnmatch(file, self.filename[:-4] + "_*.xlsx"):
+                    print("removing file %s" % file)
+                    os.remove(file)
         out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename[:-4], resolution=10, datalength=self.datalength, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
         out.excel()
         # add user notification

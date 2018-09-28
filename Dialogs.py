@@ -1306,8 +1306,8 @@ class HumanClassify1(QDialog):
         for l in label:
             if l[-1]=='?':
                 l= l[:-1]
+            ind = self.birdList.index(l)
             if l in self.birdList:
-                ind = self.birdList.index(l)
                 self.birdbtns[ind].setChecked(True)
             else:
                 self.birdbtns[19].setChecked(True)
