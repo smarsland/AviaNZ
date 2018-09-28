@@ -507,6 +507,10 @@ class Segmentation(QDialog):
 
         self.specieslabel = QLabel("Species")
         self.species=QComboBox()
+
+        self.specieslabel_cc = QLabel("Species")
+        self.species_cc = QComboBox()
+        self.species_cc.addItems(["Choose species...", "Bittern"])
         # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
         spp = [*sppInfo]
         spp.insert(0,"Choose species...")
@@ -517,6 +521,11 @@ class Segmentation(QDialog):
         self.specieslabel.hide()
         Box.addWidget(self.species)
         self.species.hide()
+
+        Box.addWidget(self.specieslabel_cc)
+        self.specieslabel_cc.hide()
+        Box.addWidget(self.species_cc)
+        self.species_cc.hide()
 
         Box.addWidget(self.HarmaThr1)
         Box.addWidget(self.HarmaThr2)
@@ -600,6 +609,8 @@ class Segmentation(QDialog):
             self.Fundwindowlabel.hide()
         elif self.prevAlg == "Cross-Correlation":
             self.CCThr1.hide()
+            self.specieslabel_cc.hide()
+            self.species_cc.hide()
         #elif self.prevAlg == "Onsets":
         #    self.Onsetslabel.hide()
         elif self.prevAlg == "FIR":
@@ -659,6 +670,8 @@ class Segmentation(QDialog):
         #    pass
         elif self.prevAlg == "Cross-Correlation":
             self.CCThr1.show()
+            self.specieslabel_cc.show()
+            self.species_cc.show()
         else:
             #"Wavelets"
             self.specieslabel.show()
@@ -670,7 +683,7 @@ class Segmentation(QDialog):
         self.end.setEnabled(not self.end.isEnabled())
 
     def getValues(self):
-        return [self.algs.currentText(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value()]
+        return [self.algs.currentText(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value(), self.species_cc.currentText()]
         #return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text(),self.species.currentText()]
 
 #======
@@ -984,7 +997,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, birdList, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, shortBirdList, longBirdList, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -995,7 +1008,8 @@ class HumanClassify1(QDialog):
         self.colourStart = colourStart
         self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
-        self.birdList = birdList
+        self.shortBirdList = shortBirdList
+        self.longBirdList = longBirdList
         self.saveConfig = False
         # exec_ forces the cursor into waiting
         self.activateWindow()
@@ -1003,19 +1017,19 @@ class HumanClassify1(QDialog):
 
         # Set up the plot window, then the right and wrong buttons, and a close button
         self.wPlot = pg.GraphicsLayoutWidget()
-        self.sg_axis = pg.AxisItem(orientation='left')
-        self.sg_axis2 = pg.AxisItem(orientation='right')
-        self.wPlot.addItem(self.sg_axis, row=0, col=0)
-        self.wPlot.addItem(self.sg_axis2, row=0, col=2)
-
         self.pPlot = self.wPlot.addViewBox(enableMouse=False, row=0, col=1)
         self.plot = pg.ImageItem()
         self.pPlot.addItem(self.plot)
         self.pPlot.setAspectLocked(ratio=0.2)
         self.pPlot.disableAutoRange()
         self.pPlot.setLimits(xMin=0, yMin=-5)
+        self.sg_axis = pg.AxisItem(orientation='left')
+        #self.sg_axis2 = pg.AxisItem(orientation='right')
+        self.wPlot.addItem(self.sg_axis, row=0, col=0)
+        #self.wPlot.addItem(self.sg_axis2, row=0, col=2)
+
         self.sg_axis.linkToView(self.pPlot)
-        self.sg_axis2.linkToView(self.pPlot)
+        #self.sg_axis2.linkToView(self.pPlot)
 
         # prepare the lines for marking true segment boundaries
         self.line1 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
@@ -1063,26 +1077,29 @@ class HumanClassify1(QDialog):
         self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
         self.delete.setIconSize(iconSize)
 
-        # An array of radio buttons and a list and a text entry box
-        # Create an array of radio buttons for the most common birds (2 columns of 10 choices)
+        # An array of check boxes and a list and a text entry box
+        # Create an array of check bixes for the most common birds (2 columns of 10 choices)
         self.birds = QButtonGroup()
         self.birdbtns = []
-        for item in self.birdList[:19]:
+        for item in self.shortBirdList[:29]:
             self.birdbtns.append(QCheckBox(item))
             self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
             self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
-        self.birdbtns.append(QCheckBox('Other'))
+        self.birdbtns.append(QCheckBox('Other')),
         self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
         self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
 
         # The list of less common birds
         self.birds3 = QListWidget(self)
-        for item in self.birdList[19:]:
+        for item in self.longBirdList:
+            if '>' in item:
+                ind = item.index('>')
+                item = item[:ind] + " (" + item[ind+1:] + ")"
             self.birds3.addItem(item)
         # Explicitly add "Other" option in
-        self.birds3.insertItem(0, 'Other')
-        
-        self.birds3.setMaximumWidth(150)
+        self.birds3.addItem('Other')
+        self.birds3.setMaximumWidth(400)
+
         #self.birds3.sortItems()
 
         self.birds3.itemClicked.connect(self.listBirdsClicked)
@@ -1101,12 +1118,15 @@ class HumanClassify1(QDialog):
         # The layouts
         birds1Layout = QVBoxLayout()
         birds2Layout = QVBoxLayout()
+        birds3Layout = QVBoxLayout()
         count = 0
         for btn in self.birdbtns:
             if count<10: 
                 birds1Layout.addWidget(btn)
-            else:
+            elif count<20:
                 birds2Layout.addWidget(btn)
+            else:
+                birds3Layout.addWidget(btn)
             count += 1
 
         birdListLayout = QVBoxLayout()
@@ -1118,6 +1138,7 @@ class HumanClassify1(QDialog):
         hboxBirds = QHBoxLayout()
         hboxBirds.addLayout(birds1Layout)
         hboxBirds.addLayout(birds2Layout)
+        hboxBirds.addLayout(birds3Layout)
         hboxBirds.addLayout(birdListLayout)
 
         # The layouts
@@ -1248,8 +1269,8 @@ class HumanClassify1(QDialog):
         ticks = [[(0,minFreq/1000.), (SgSize/4, minFreq/1000.+FreqRange/4.), (SgSize/2, minFreq/1000.+FreqRange/2.), (3*SgSize/4, minFreq/1000.+3*FreqRange/4.), (SgSize,minFreq/1000.+FreqRange)]]
         self.sg_axis.setTicks(ticks)
         self.sg_axis.setLabel('kHz')
-        self.sg_axis2.setTicks(ticks)
-        self.sg_axis2.setLabel('kHz')
+        #self.sg_axis2.setTicks(ticks)
+        #self.sg_axis2.setLabel('kHz')
 
         self.show()
 
@@ -1259,6 +1280,7 @@ class HumanClassify1(QDialog):
         xyratio = xyratio[0] / xyratio[1]
         # 0.2 for x/y pixel aspect ratio
         # 0.9 for padding
+        # TODO: ***Issues here
         self.wPlot.setMaximumSize(max(500, xyratio*250*0.2*0.9), 250)
         self.wPlot.setMinimumSize(max(500, xyratio*250*0.2*0.9), 250)
 
@@ -1287,6 +1309,9 @@ class HumanClassify1(QDialog):
             self.plot.setLevels([self.colourStart, self.colourEnd])
 
         # Select the right options
+        print("setImage",label)
+        if label == []:
+            label = ["Don't Know"]
         self.species.setText(','.join(label))
         #print(label,len(label),type(label))
         self.birds3.clearSelection()
@@ -1306,13 +1331,21 @@ class HumanClassify1(QDialog):
         for l in label:
             if l[-1]=='?':
                 l= l[:-1]
-            ind = self.birdList.index(l)
-            if l in self.birdList:
+            if l in self.shortBirdList[:29]:
+                ind = self.shortBirdList.index(l)
                 self.birdbtns[ind].setChecked(True)
             else:
-                self.birdbtns[19].setChecked(True)
+                self.birdbtns[29].setChecked(True)
                 self.birds3.setEnabled(True)
-                self.birds3.item(ind-18).setSelected(True)
+                if l not in self.longBirdList:
+                    if '(' in l:
+                        ind = l.index('(')
+                        l = l[:ind-1] + ">" + l[ind+1:-1]
+                ind = self.longBirdList.index(l)
+                print(ind,self.longBirdList[ind],l)
+                #self.birds3.setCurrentIndex(self.birds3.model().indexFromItem(ind))
+                #self.birds3.setCurrentText(l)
+                self.birds3.item(ind).setSelected(True)
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
@@ -1804,6 +1837,7 @@ class InterfaceSettings2(QDialog):
 
 #+++++++++++++
 
+"""
 class birdLongList(QDialog):
     # A list of birds, at species and then sub-species level
     # TODO: Only process once
@@ -1821,3 +1855,4 @@ class birdLongList(QDialog):
         self.listBirds.setColumnCount(3)
         for item in self.config['BirdList'][40:]:
             self.listBirds.addItem(item)
+"""
