@@ -1930,6 +1930,8 @@ class AviaNZ(QMainWindow):
         inds = int(self.convertAmpltoSpec(startpoint) / self.widthOverviewSegment)
         inde = min(int(self.convertAmpltoSpec(endpoint) / self.widthOverviewSegment),len(self.overviewSegments)-1)
 
+        print(self.overviewSegments[inds:inde+1,:])
+
         if species is None or "Don't Know" in species or type(species) is int or len(species)==0:
             brush = self.ColourNone
             if delete:
@@ -1948,6 +1950,8 @@ class AviaNZ(QMainWindow):
                 self.overviewSegments[inds:inde + 1, 1] -= 1
             else:
                 self.overviewSegments[inds:inde + 1, 1] += 1
+        print(self.overviewSegments[inds:inde+1,:])
+        print("refreshed")
 
         # set the colour of these boxes in the overview
         for box in range(inds, inde + 1):
@@ -2551,7 +2555,7 @@ class AviaNZ(QMainWindow):
         if not self.multipleBirds and not self.Hartley:
             self.menuBirdList.hide()
 
-    def birdSelectedMenu(self,birditem,fromList=False,update=True):
+    def birdSelectedMenu(self,birditem,fromList=False):
         """ Collects the label for a bird from the context menu and processes it.
         Has to update the overview segments in case their colour should change.
         Also handles getting the name through a message box if necessary.
@@ -2567,32 +2571,28 @@ class AviaNZ(QMainWindow):
 
         # if it was checked, uncheck
         # basically re-create all names here:
-        self.segments[self.box1id][4] = []
-        for t in oldname:
-            self.refreshOverviewWith(startpoint, endpoint, t, delete=True)
-            if t != birdname and t != "Don't Know":
-                self.refreshOverviewWith(startpoint, endpoint, t)
-                self.updateText(t)
-
-        # and add the new one here:
         print(oldname)
         print(birdname)
-        if (birdname not in oldname or fromList) and birdname != "Other":
-            self.refreshOverviewWith(startpoint, endpoint, birdname)
+        self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
+        self.segments[self.box1id][4] = []
+        for t in oldname:
+            # don't add the current species and Don't Know
+            if t != birdname and t != "Don't Know":
+                self.updateText(t)
+
+        # if species wasn't in the list before, means it is now ticked, so add it:
+        if birdname not in oldname and birdname != "Other":
             self.updateText(birdname)
 
-        #self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
-        #self.refreshOverviewWith(startpoint, endpoint, self.segments[self.box1id][4])
         # patch for updating if all names were deleted:
         if self.segments[self.box1id][4] == []:
-            self.refreshOverviewWith(startpoint, endpoint, "Don't Know")
             if self.Hartley:
                 self.updateText(text=[])
             else:
                 self.updateText(text="Don't Know")
 
         # Now update the text
-        if birdname != 'Other' and update:
+        if birdname != 'Other':
             # Put the selected bird name at the top of the list
             if len(birdname) > 0 and birdname[-1] == '?':
                 birdname = birdname[:-1]
@@ -2624,6 +2624,9 @@ class AviaNZ(QMainWindow):
                     
                     # self.saveConfig = True
 
+        # refresh overview boxes after all updates:
+        self.refreshOverviewWith(startpoint, endpoint, self.segments[self.box1id][4])
+
         if not self.multipleBirds and not self.Hartley:
             # select the bird and close
             self.menuBirdList.hide()
@@ -2633,6 +2636,7 @@ class AviaNZ(QMainWindow):
         if segID is None:
             segID = self.box1id
 
+        print("multipleBirds is %s" % self.multipleBirds)
         # produce list from text
         if self.multipleBirds or self.Hartley:
             if type(text) is list:
@@ -2881,6 +2885,7 @@ class AviaNZ(QMainWindow):
         self.humanClassifyDialogSize = self.humanClassifyDialog1.size()
         if self.box1id < len(self.segments)-1:
             self.box1id += 1
+            species = list(self.segments[self.box1id][4])
             # update "done/to go" numbers:
             #print("Next image",self.segments[self.box1id])
             self.humanClassifyDialog1.setSegNumbers(self.box1id, len(self.segments))
@@ -2902,7 +2907,7 @@ class AviaNZ(QMainWindow):
                     x4 = int((self.listRectanglesa1[self.box1id].getRegion()[1] + self.config['reviewSpecBuffer']) * self.sampleRate)
                     x4 = min(x4, len(self.audiodata))
                     self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
-                                                       self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1, 
+                                                       species, self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1, 
                                                        self.segments[self.box1id][0], self.segments[self.box1id][1], self.minFreq, self.maxFreq)
             else:
                 # Check if have moved to next segment, and if so load it
@@ -2929,7 +2934,7 @@ class AviaNZ(QMainWindow):
                     x4 = int((x2nob + self.config['reviewSpecBuffer']) * self.sampleRate)
                     x4 = min(x4, len(self.audiodata))
                     self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
-                                                   self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1,
+                                                   species, self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1,
                                                    self.segments[self.box1id][0], self.segments[self.box1id][1], self.minFreq, self.maxFreq)
                 else:
                     print("segment %s missing for some reason" % self.box1id)
@@ -2954,8 +2959,18 @@ class AviaNZ(QMainWindow):
 
     def updateLabel(self,label):
         """ Update the label on a segment that is currently shown in the display. """
+        print("Update with label")
+        print(label)
+        # birdSelectedMenu flips the state of each label
+        # so need to pass all labels for deletion, or clean before updating
+        
+        # TODO: figure out if we need to track self.multipleBirds
+        multipleTemp = self.multipleBirds
+        self.multipleBirds = True
+        self.segments[self.box1id][4] = []
         for l in label:
-            self.birdSelectedMenu(l, update=False)
+            self.birdSelectedMenu(l)
+        self.multipleBirds = multipleTemp
 
         if self.listRectanglesa2[self.box1id] is not None:
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
@@ -2977,12 +2992,12 @@ class AviaNZ(QMainWindow):
         endpoint = self.segments[self.box1id][1]-self.startRead
         oldname = self.segments[self.box1id][4]
 
-        self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
-
         self.humanClassifyDialog1.stopPlayback()
         self.segmentsDone += 1
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
-        #print('Correct1',label,checkText,self.segments[self.box1id])
+        print("HCC1, updating ")
+        print(oldname)
+        print(label)
 
         if len(checkText) > 0:
             if text in self.longBirdList:
@@ -2996,7 +3011,6 @@ class AviaNZ(QMainWindow):
 
         # Todo: boxid[4] has been updated so this if doesn't effect? added update label to else but not the ideal sol
         if label != self.segments[self.box1id][4]:
-            #print("HCC1, updating",label)
             if self.config['saveCorrections']:
                 # Save the correction
                 outputError = [self.segments[self.box1id], label]
@@ -3004,6 +3018,7 @@ class AviaNZ(QMainWindow):
                 json.dump(outputError, file,indent=1)
                 file.close()
 
+            self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
             self.updateLabel(label)
 
             if self.saveConfig:
@@ -3021,8 +3036,6 @@ class AviaNZ(QMainWindow):
         else:
             # segment info matches, so don't do anything
             pass
-
-        self.refreshOverviewWith(startpoint, endpoint, label)
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)

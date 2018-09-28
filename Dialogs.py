@@ -1253,6 +1253,8 @@ class HumanClassify1(QDialog):
             maxFreq = sampleRate / 2
         self.duration = len(audiodata) / sampleRate * 1000 # in ms
 
+        print("Parent species:" , self.parent.segments[self.parent.box1id][4])
+
         # fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
         # sg2 = 40 * np.ones((max(1000, np.shape(sg)[0]), max(100, np.shape(sg)[1])))
@@ -1309,11 +1311,9 @@ class HumanClassify1(QDialog):
             self.plot.setLevels([self.colourStart, self.colourEnd])
 
         # Select the right options
-        print("setImage",label)
         if label == []:
             label = ["Don't Know"]
         self.species.setText(','.join(label))
-        #print(label,len(label),type(label))
         self.birds3.clearSelection()
         if len(label)>1:
             print(label)
@@ -1350,30 +1350,29 @@ class HumanClassify1(QDialog):
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
         # Update the text and store the data
+        print("Parent species:" , self.parent.segments[self.parent.box1id][4])
+        # clean out old species from overview:
+        # segm = self.parent.segments[self.parent.box1id]
+        # self.parent.refreshOverviewWith(segm[0], segm[1], segm[4], delete=True)
         for button in self.birds.buttons():
             if button.isChecked():
                 if button.text() == "Other":
-                    #pass
                     self.birds3.setEnabled(True)
                 else:
                     # TODO: Test if exclusive
                     self.birds3.setEnabled(False)
-                    #print('add before',self.label)
                     if self.multipleBirds:
                         if button.text() not in self.label and button.text()+'?' not in self.label:
                             self.label.append(str(button.text()))
                     else:           
                         self.label = [str(button.text())]
-                    print('after',self.label)
                     self.species.setText(','.join(self.label))
             else:
                 if button.text() == "Other":
                     # TODO: Remove all others?
                     self.birds3.setEnabled(False)
                 if str(button.text()) in self.label:
-                    #print('remove before',self.label)
                     self.label.remove(str(button.text()))
-                    #print('after',self.label)
                     self.species.setText(','.join(self.label))
                 elif button.text()+'?' in self.label:
                     self.label.remove(str(button.text())+'?')
