@@ -1930,8 +1930,6 @@ class AviaNZ(QMainWindow):
         inds = int(self.convertAmpltoSpec(startpoint) / self.widthOverviewSegment)
         inde = min(int(self.convertAmpltoSpec(endpoint) / self.widthOverviewSegment),len(self.overviewSegments)-1)
 
-        print(self.overviewSegments[inds:inde+1,:])
-
         if species is None or "Don't Know" in species or type(species) is int or len(species)==0:
             brush = self.ColourNone
             if delete:
@@ -1950,8 +1948,6 @@ class AviaNZ(QMainWindow):
                 self.overviewSegments[inds:inde + 1, 1] -= 1
             else:
                 self.overviewSegments[inds:inde + 1, 1] += 1
-        print(self.overviewSegments[inds:inde+1,:])
-        print("refreshed")
 
         # set the colour of these boxes in the overview
         for box in range(inds, inde + 1):
@@ -2636,7 +2632,6 @@ class AviaNZ(QMainWindow):
         if segID is None:
             segID = self.box1id
 
-        print("multipleBirds is %s" % self.multipleBirds)
         # produce list from text
         if self.multipleBirds or self.Hartley:
             if type(text) is list:
@@ -2876,6 +2871,7 @@ class AviaNZ(QMainWindow):
         # Listener for the human verification dialog.
         self.humanClassifyDialogSize = self.humanClassifyDialog1.size()
         self.humanClassifyDialog1.done(1)
+        self.box1id = -1
         # Want to show a page at the end, so make it the first one
         if self.config['showAllPages']:
             self.showFirstPage()
@@ -2886,6 +2882,17 @@ class AviaNZ(QMainWindow):
         if self.box1id < len(self.segments)-1:
             self.box1id += 1
             species = list(self.segments[self.box1id][4])
+
+            # Update the colour in case of sudden dialog closing
+            text = ','.join(species)
+            if "Don't Know" not in text and len(species) > 0:
+                if '?' in text:
+                    self.prevBoxCol = self.ColourPossible
+                else:
+                    self.prevBoxCol = self.ColourNamed
+            else:
+                self.prevBoxCol = self.ColourNone
+
             # update "done/to go" numbers:
             #print("Next image",self.segments[self.box1id])
             self.humanClassifyDialog1.setSegNumbers(self.box1id, len(self.segments))
@@ -2990,14 +2997,11 @@ class AviaNZ(QMainWindow):
         """ Correct segment labels, save the old ones if necessary """
         startpoint = self.segments[self.box1id][0]-self.startRead
         endpoint = self.segments[self.box1id][1]-self.startRead
-        oldname = self.segments[self.box1id][4]
+        oldname = list(self.segments[self.box1id][4])
 
         self.humanClassifyDialog1.stopPlayback()
         self.segmentsDone += 1
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
-        print("HCC1, updating ")
-        print(oldname)
-        print(label)
 
         if len(checkText) > 0:
             if text in self.longBirdList:
@@ -3018,7 +3022,10 @@ class AviaNZ(QMainWindow):
                 json.dump(outputError, file,indent=1)
                 file.close()
 
+            # force wipe old overview to empty,
+            # because it's difficult to maintain old species properly through dialogs
             self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
+            self.refreshOverviewWith(startpoint, endpoint, "Don't Know")
             self.updateLabel(label)
 
             if self.saveConfig:
@@ -3032,6 +3039,10 @@ class AviaNZ(QMainWindow):
             for i in range(len(self.segments[self.box1id][4])):
                 if self.segments[self.box1id][4][i][-1] == '?':
                     self.segments[self.box1id][4][i] = self.segments[self.box1id][4][i][:-1] 
+
+            # force wipe old overview to empty
+            self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
+            self.refreshOverviewWith(startpoint, endpoint, "Don't Know")
             self.updateLabel(self.segments[self.box1id][4])
         else:
             # segment info matches, so don't do anything
@@ -3117,7 +3128,7 @@ class AviaNZ(QMainWindow):
                                                                self.colourEnd, self.config['invertColourMap'])
             self.humanClassifyDialog2.exec_()
             errorInds = self.humanClassifyDialog2.getValues()
-            #print("errors: ", errorInds, len(errorInds))
+            print("errors: ", errorInds, len(errorInds))
 
             if len(errorInds) > 0:
                 outputErrors = []
@@ -3125,24 +3136,33 @@ class AviaNZ(QMainWindow):
                     outputErrors.append(segments[ind])
                     # Delete segment if it only has that label, otherwise remove that label
                     if len(self.segments[ids[ind]][4]) == 1:
+                        # if single species, mark for deletion
                         self.deleteSegment(id=ids[ind], hr=True)
+                        ids = [x-1 for x in ids]
                     else:
-                        labelind = self.segments[ids[ind]][4].index(label)
-                        self.segments[ids[ind]][4] = self.segments[ids[ind]][4][:labelind] + self.segments[ids[ind]][4][labelind+1:]
-                    ids = [x-1 for x in ids]
+                        # if multiple species in label, only edit the label
+                        self.box1id = ids[ind]
+                        # this will "untick" that bird from the selected segment:
+                        self.birdSelectedMenu(label)
+
                 self.segmentsToSave = True
                 if self.config['saveCorrections']:
                     # Save the errors in a file
                     file = open(self.filename + '.corrections_' + str(label), 'a')
                     json.dump(outputErrors, file,indent=1)
                     file.close()
+
             # avoid '?' and confirm the segments
             id = 0
             for seg in self.segments:
-                if seg[4][-1][:-1] == label and seg[4][-1][-1] == '?':
-                    self.segments[id][4][-1] = label
-                    self.segmentsToSave = True
-                    id += 1
+                for sp in seg[4]:
+                    if sp[:-1] == label and sp[-1] == '?':
+                        self.box1id = id
+                        # this will untick the 'species?' and tick the 'species'
+                        self.birdSelectedMenu(sp)
+                        self.birdSelectedMenu(label)
+                        self.segmentsToSave = True
+                id += 1
             # Todo: update excel? hopefully it's not necessary (1) there is 'export to excel' option
             # (2) correcponding excel might be in a parent directory, so locating it correctly is tricky and creating anoher excel in the same level as sound file is extra cost.
             self.saveSegments()

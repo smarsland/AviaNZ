@@ -17,4 +17,5 @@ ext/build/
 # default configs - if this is not distributed
 # AviaNZconfig.txt
 AviaNZconfig_user.txt
+sppInfo_user.txt
 ListCommonBirds.txt
