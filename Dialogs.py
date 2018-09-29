@@ -1236,6 +1236,13 @@ class HumanClassify1(QDialog):
             self.bar.update()
             # QApplication.processEvents()
 
+    def updateButtonList(self):
+        # refreshes bird button names
+        # to be used when bird list updates
+        for i in range(len(self.birdbtns)-1):
+            self.birdbtns[i].setChecked(False)
+            self.birdbtns[i].setText(self.shortBirdList[i])
+
     def setSegNumbers(self, done, total):
         text1 = "calls reviewed: " + str(done)
         text2 = str(total - done) + " to go"
@@ -1315,16 +1322,14 @@ class HumanClassify1(QDialog):
             label = ["Don't Know"]
         self.species.setText(','.join(label))
         self.birds3.clearSelection()
+        self.updateButtonList()
         if len(label)>1:
-            print(label)
             self.birds.setExclusive(False)
             self.birds3.setSelectionMode(QAbstractItemView.MultiSelection)
             self.multipleBirds = True
             for btn in self.birdbtns:
                 btn.setChecked(False)
         else:       
-            for btn in self.birdbtns:
-                btn.setChecked(False)
             self.birds.setExclusive(True)
             self.birds3.setSelectionMode(QAbstractItemView.SingleSelection)
             self.multipleBirds = False
@@ -1342,18 +1347,11 @@ class HumanClassify1(QDialog):
                         ind = l.index('(')
                         l = l[:ind-1] + ">" + l[ind+1:-1]
                 ind = self.longBirdList.index(l)
-                print(ind,self.longBirdList[ind],l)
-                #self.birds3.setCurrentIndex(self.birds3.model().indexFromItem(ind))
-                #self.birds3.setCurrentText(l)
                 self.birds3.item(ind).setSelected(True)
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
         # Update the text and store the data
-        print("Parent species:" , self.parent.segments[self.parent.box1id][4])
-        # clean out old species from overview:
-        # segm = self.parent.segments[self.parent.box1id]
-        # self.parent.refreshOverviewWith(segm[0], segm[1], segm[4], delete=True)
         for button in self.birds.buttons():
             if button.isChecked():
                 if button.text() == "Other":
