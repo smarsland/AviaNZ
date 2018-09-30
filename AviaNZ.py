@@ -1698,8 +1698,7 @@ class AviaNZ(QMainWindow):
         self.specaxis.setLabel('kHz')
 
         self.updateOverview()
-        #self.textpos = np.shape(self.sg)[1] + self.config['textoffset']
-        self.textpos = int((self.maxFreqShow-self.minFreqShow)/height) + self.config['textoffset']
+        self.textpos = int((self.maxFreqShow-self.minFreqShow)/height) #+ self.config['textoffset']
 
         # If there are segments, show them
         for count in range(len(self.segments)):
@@ -2060,7 +2059,7 @@ class AviaNZ(QMainWindow):
             p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
 
             # Put the text into the box
-            label = pg.TextItem(text=','.join(species), color='k')
+            label = pg.TextItem(text=','.join(species), color='k', anchor=(0,1))
             # label = pg.TextItem(text=species, color='k')
             self.p_spec.addItem(label)
             label.setPos(self.convertAmpltoSpec(startpoint), self.textpos)
