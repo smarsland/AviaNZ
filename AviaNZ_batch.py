@@ -231,6 +231,13 @@ class AviaNZ_batchProcess(QMainWindow):
                 confirmedResume = msg.exec_()
             else:
                 print("all files appear to have previous analysis results")
+                msg = QMessageBox()
+                msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+                msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                msg.setText("All files have previous analysis results")
+                msg.setWindowTitle("Already processed")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec_()
         else:
             confirmedResume = QMessageBox.No
 
@@ -902,8 +909,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 segments.remove(seg)
         # remove '?'
         for seg in segments:
-            if seg[4][-1] == '?':
-                seg[4] = seg[4][:-1]
+            if seg[4][-1][-1] == '?':
+                seg[4][-1] = seg[4][-1][:-1]
         # for seg in self.segments_other:
         #     segments.append(seg)
 
