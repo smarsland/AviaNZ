@@ -192,7 +192,7 @@ class AviaNZ(QMainWindow):
             except:
                 print("Failed to load bird list")
         else:
-            # This is the DOC list 
+            # This is the DOC list
             try:
                 self.shortBirdList = json.load(open(self.config['BirdListShort']))
             except:
@@ -1287,7 +1287,7 @@ class AviaNZ(QMainWindow):
                     self.audiodata_backup = None
                 if not self.Hartley:
                     self.showFundamental.setChecked(False)
-                if not self.DOC or not self.Hartley:
+                if not self.DOC and not self.Hartley:
                     self.showInvSpec.setChecked(False)
 
                 self.timeaxis.setOffset(self.startRead+self.startTime)
@@ -4359,6 +4359,10 @@ class AviaNZ(QMainWindow):
                 self.config['operator'] = data
                 self.operator = data
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
+            elif childName=='User.Reviewer':
+                self.config['reviewer'] = data
+                self.reviewer = data
+                self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
             elif childName=='Common Bird List.Filename':
                 self.config['BirdListShort'] = data
                 self.shortBirdList = json.load(open(self.config['BirdListShort']))
@@ -4451,7 +4455,10 @@ class AviaNZ(QMainWindow):
                 self.segmentsToSave = True
                 if self.Hartley:
                     self.segmentsToSave = False
-                    os.remove(self.filename + '.data')
+                    if os.path.isfile(self.filename + '.data'):
+                        os.remove(self.filename + '.data')
+                    if os.path.isfile(self.filename[:-4] + '_output.xlsx'):
+                        os.remove(self.filename[:-4] + '_output.xlsx')
                     self.listFiles.currentItem().setForeground(Qt.black)
 
             # reset segment playback buttons
@@ -4671,7 +4678,7 @@ def mainlauncher(cli, infile, imagefile, command):
         task = first.getValues()
 
         if task == 1:
-            avianz = AviaNZ(DOC=DOC, configfile='AviaNZconfig_user.txt', sppinfofile='sppInfo_user.txt')
+            avianz = AviaNZ(DOC=DOC, configfile='AviaNZconfig_user.txt', sppinfofile='sppInfo_user.txt',Hartley=Hartley)
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==2:
             avianz = AviaNZ_batch.AviaNZ_batchProcess(DOC=DOC,sppinfofile='sppInfo_user.txt')
@@ -4683,6 +4690,7 @@ def mainlauncher(cli, infile, imagefile, command):
         app.exec_()
 
 DOC=False    # only DOC features or all
+Hartley = False  # only 10s features
 generateExcel=False # generate xlsx immediately after segmenting?
 
 # Start the application
