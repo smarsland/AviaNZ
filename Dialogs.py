@@ -19,7 +19,7 @@ from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, reg
 
 #======
 class StartScreen(QDialog):
-    def __init__(self, parent=None,DOC=True):
+    def __init__(self, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         self.setWindowTitle('AviaNZ - Choose Task')
@@ -27,8 +27,6 @@ class StartScreen(QDialog):
         self.setFixedSize(900, 350)
         self.setStyleSheet("background-image: url(img/AviaNZ_SW_V2.jpg);")
         self.activateWindow()
-
-        self.DOC=DOC
 
         btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
         # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
@@ -59,7 +57,6 @@ class StartScreen(QDialog):
         self.setLayout(vbox)
 
         b1.clicked.connect(self.manualSeg)
-        # if DOC==False:
         b2.clicked.connect(self.findSpecies)
         b3.clicked.connect(self.reviewSeg)
 
@@ -115,12 +112,12 @@ class FileDataDialog(QDialog):
 class Spectrogram(QDialog):
     # Class for the spectrogram dialog box
     # TODO: Steal the graph from Raven (View/Configure Brightness)
-    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, doc=True, parent=None):
+    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, DOC=True, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(300)
-        self.DOC = doc
+        self.DOC = DOC
 
         self.windowType = QComboBox()
         self.windowType.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
@@ -165,7 +162,7 @@ class Spectrogram(QDialog):
         Box.addWidget(self.mean_normalise)
         Box.addWidget(QLabel('Equal loudness'))
         Box.addWidget(self.equal_loudness)
-        if self.DOC == False:
+        if not self.DOC:
             Box.addWidget(QLabel('Multitapering'))
             Box.addWidget(self.multitaper)
         Box.addWidget(QLabel('Window Width'))
@@ -251,7 +248,7 @@ class WaveletTrain(QDialog):
     # TODO: add the wavelet params
     # TODO: work out how to return varying size of params, also process them
     # TODO: test and play
-    def __init__(self, maxv, DOC=False, parent=None):
+    def __init__(self, maxv, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Wavelet Training')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -701,7 +698,7 @@ class Denoise(QDialog):
 
         self.algs = QComboBox()
         # self.algs.addItems(["Wavelets","Bandpass","Butterworth Bandpass" ,"Wavelets --> Bandpass","Bandpass --> Wavelets","Median Filter"])
-        if self.DOC == False:
+        if not self.DOC:
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass", "Median Filter"])
         else:
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass"])
@@ -710,7 +707,7 @@ class Denoise(QDialog):
 
         # Wavelet: Depth of tree, threshold type, threshold multiplier, wavelet
         # self.wavlabel = QLabel("Wavelets")
-        if self.DOC==False:
+        if not self.DOC:
             self.depthlabel = QLabel("Depth of wavelet packet decomposition (or tick box to use best)")
             self.depthchoice = QCheckBox()
             #self.connect(self.depthchoice, SIGNAL('clicked()'), self.depthclicked)
@@ -777,7 +774,7 @@ class Denoise(QDialog):
         Box = QVBoxLayout()
         Box.addWidget(self.algs)
 
-        if self.DOC == False:
+        if not self.DOC:
             Box.addWidget(self.depthlabel)
             Box.addWidget(self.depthchoice)
             Box.addWidget(self.depth)
@@ -838,7 +835,7 @@ class Denoise(QDialog):
 
     def changeBoxes(self,alg):
         # This does the hiding and showing of the options as the algorithm changes
-        if self.prevAlg == "Wavelets" and self.DOC==False:
+        if self.prevAlg == "Wavelets" and not self.DOC:
             # self.wavlabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
@@ -850,7 +847,7 @@ class Denoise(QDialog):
             self.thr.hide()
             self.waveletlabel.hide()
             self.wavelet.hide()
-        elif self.prevAlg == "Bandpass --> Wavelets" and self.DOC==False:
+        elif self.prevAlg == "Bandpass --> Wavelets" and not self.DOC:
             self.wblabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
@@ -873,7 +870,7 @@ class Denoise(QDialog):
             self.medlabel.hide()
             self.widthlabel.hide()
             self.width.hide()
-        elif self.prevAlg == "Wavelets --> Bandpass" and self.DOC==False:
+        elif self.prevAlg == "Wavelets --> Bandpass" and not self.DOC:
             self.wblabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
@@ -913,7 +910,7 @@ class Denoise(QDialog):
             self.width.hide()
 
         self.prevAlg = str(alg)
-        if str(alg) == "Wavelets" and self.DOC==False:
+        if str(alg) == "Wavelets" and not self.DOC:
             # self.wavlabel.show()
             self.depthlabel.show()
             self.depthchoice.show()
@@ -925,7 +922,7 @@ class Denoise(QDialog):
             self.thr.show()
             self.waveletlabel.show()
             self.wavelet.show()
-        elif str(alg) == "Wavelets --> Bandpass" and self.DOC==False:
+        elif str(alg) == "Wavelets --> Bandpass" and not self.DOC:
             # self.wblabel.show()
             self.depthlabel.show()
             self.depthchoice.show()
@@ -944,7 +941,7 @@ class Denoise(QDialog):
             self.hightext.show()
             #self.trimlabel.show()
             #self.trimaxis.show()
-        elif str(alg) == "Bandpass --> Wavelets" and self.DOC==False:
+        elif str(alg) == "Bandpass --> Wavelets" and not self.DOC:
             # self.wblabel.show()
             self.depthlabel.show()
             self.depthchoice.show()
@@ -981,7 +978,7 @@ class Denoise(QDialog):
         self.depth.setEnabled(not self.depth.isEnabled())
 
     def getValues(self):
-        if self.DOC==False:
+        if not self.DOC:
             return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
         else:
             return [self.algs.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
@@ -1832,24 +1829,3 @@ class InterfaceSettings2(QDialog):
       self.tabWidget.setTabText(2, "Spectrogram Settings")
       self.tabWidget.tab3.setLayout(layout)
 
-#+++++++++++++
-
-"""
-class birdLongList(QDialog):
-    # A list of birds, at species and then sub-species level
-    # TODO: Only process once
-        # Note assumes they are in alpha order, and have > in
-    # TODO: Spacing is based on the DOC list, which has c. 500 entries. What if you have more?
-
-    def __init__(self, birdList, parent=None):
-        QDialog.__init__(self, parent)
-        self.setWindowTitle('Choose bird species')
-        self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setMinimumWidth(320)
-
-        self.listBirds = QTreeWidget()
-        self.listBirds.resize(500,200)
-        self.listBirds.setColumnCount(3)
-        for item in self.config['BirdList'][40:]:
-            self.listBirds.addItem(item)
-"""
