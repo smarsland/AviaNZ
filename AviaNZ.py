@@ -1753,7 +1753,7 @@ class AviaNZ(QMainWindow):
     def addRegularSegments(self):
         """ Perform the Hartley bodge: make a file with 10s segments every minute """
         if len(self.segments) > 1:
-            if self.segments[1][0] == 0 and self.segments[1][1] == 10:
+            if self.segments[0][0] == 0 and self.segments[0][1] == 10:
                 print("Not adding segments")
             else:
                 i = 0
