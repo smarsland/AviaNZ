@@ -1146,6 +1146,8 @@ class AviaNZ(QMainWindow):
                             if type(s[4]) is not list:
                                 s[4] = [s[4]]
 
+                print(self.Hartley)
+                print(os.path.isfile(self.filename + '.data'))
                 if self.Hartley and not os.path.isfile(self.filename + '.data'):
                     self.addRegularSegments()
 
@@ -1750,16 +1752,21 @@ class AviaNZ(QMainWindow):
 
     def addRegularSegments(self):
         """ Perform the Hartley bodge: make a file with 10s segments every minute """
-        for seg in self.segments:
-            if seg[0] == 0 and seg[1] == 10:
+        if len(self.segments) > 1:
+            if self.segments[1][0] == 0 and self.segments[1][1] == 10:
                 print("Not adding segments")
             else:
-                print("Hartley bodging")
                 i = 0
-                while i<self.fileLength / self.sampleRate:
-                    self.segments.append([i,i+self.config['protocolSize'], 0, 0, []])
+                while i < self.fileLength / self.sampleRate:
+                    self.segments.append([i, i + self.config['protocolSize'], 0, 0, []])
                     i += self.config['protocolInterval']
                 self.segmentsToSave = True
+        else:
+            i = 0
+            while i < self.fileLength / self.sampleRate:
+                self.segments.append([i, i + self.config['protocolSize'], 0, 0, []])
+                i += self.config['protocolInterval']
+            self.segmentsToSave = True
 
     """def drawProtocolMarks(self):
         # if check-ignore protocol is used, mark check-ignore limits.
