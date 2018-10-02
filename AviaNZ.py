@@ -4180,6 +4180,14 @@ class AviaNZ(QMainWindow):
         """ Create the parameter tree when the Interface settings menu is pressed.
         """
         self.saveSegments()
+        fn1 = self.config['BirdListShort']
+        if '/' in fn1:
+            ind = fn1[-1::-1].index('/')
+            fn1 = fn1[-ind:]
+        fn2 = self.config['BirdListLong']
+        if fn2 is not None and '/' in fn2:
+            ind = fn2[-1::-1].index('/')
+            fn2 = fn2[-ind:]
 
         params = [
             {'name': 'Mouse settings', 'type' : 'group', 'children': [
@@ -4246,13 +4254,17 @@ class AviaNZ(QMainWindow):
                  'tip': "Person name"},
             ]},
 
+
             {'name': 'Common Bird List', 'type': 'group', 'children': [
-                {'name': 'Filename', 'type': 'str', 'value': self.config['BirdListShort']}
+                #{'name': 'Filename', 'type': 'text', 'value': self.config['BirdListShort']},
+                {'name': 'Filename', 'type': 'str', 'value': fn1,'readonly':True},
+                {'name': 'Choose File', 'type': 'action'},
                 ]},
 
             {'name': 'Full Bird List', 'type': 'group', 'children': [
-                 {'name': 'Filename', 'type': 'str', 'value': self.config['BirdListLong'],
-                     'tip': "Can be None"},
+                {'name': 'Filename', 'type': 'str', 'value': fn2,'readonly':True, 'tip': "Can be None"},
+                #{'name': 'Choose File', 'type': 'action'},
+                {'name': 'No long list', 'type': 'bool', 'value': self.config['BirdListLong'] is None or self.config['BirdListLong'] == 'None', 'tip': "If you don't have a long list of birds"}
                 ]},
         ]
 
@@ -4363,15 +4375,37 @@ class AviaNZ(QMainWindow):
                 self.config['reviewer'] = data
                 self.reviewer = data
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
-            elif childName=='Common Bird List.Filename':
-                self.config['BirdListShort'] = data
+            elif childName=='Common Bird List.Choose File':
+                filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Text files (*.txt)")
+                if '/' in filename:
+                    ind = filename[-1::-1].index('/')
+                    filename = filename[-ind:]
+                self.p['Common Bird List','Filename'] = filename
+                self.config['BirdListShort'] = filename
                 self.shortBirdList = json.load(open(self.config['BirdListShort']))
-            elif childName=='Full Bird List.Filename':
-                if data == 'None':
-                    data = None
+            #elif childName=='Full Bird List.Choose File':
+                #filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Text files (*.txt)")
+                #if '/' in filename:
+                    #ind = filename[-1::-1].index('/')
+                    #filename = filename[-ind:]
+                #if data is not 'None':
+                    #self.config['BirdListLong'] = filename
+                    #self.p['Full Bird List','Filename'] = filename
+                    #self.longBirdList = json.load(open(self.config['BirdListLong']))
+            elif childName=='Full Bird List.No long list':
+                if param.value():
+                    self.config['BirdListLong'] = 'None'
+                    self.p['Full Bird List','Filename'] = 'None'
+                    self.longBirdList = None
                 else:
-                    self.longBirdList = json.load(open(self.config['BirdListLong']))
-                self.config['BirdListLong'] = data
+                    if self.p['Full Bird List','Filename'] is None or self.p['Full Bird List','Filename'] == '' or self.p['Full Bird List','Filename'] == 'None':
+                        filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Text files (*.txt)")
+                        if '/' in filename:
+                            ind = filename[-1::-1].index('/')
+                            filename = filename[-ind:]
+                        self.p['Full Bird List','Filename'] = filename
+                        self.config['BirdListLong'] = filename
+                        self.longBirdList = json.load(open(self.config['BirdListLong']))
 
         self.saveConfig = True
         # Find the '/' in the fileName
@@ -4379,6 +4413,10 @@ class AviaNZ(QMainWindow):
         while self.filename[i] != '/' and i>0:
             i = i-1
 
+        if '/' in self.filename:
+            ind = self.filename[-1::-1].index('/')
+
+        print(self.filename[i+1:],self.filename[-i:])
         self.resetStorageArrays()
         self.loadFile(self.filename[i+1:])
 
