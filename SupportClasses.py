@@ -416,7 +416,7 @@ class postProcess:
         #fs = self.sampleRate
         #data = self.audioData
 
-        if sg == None:
+        if sg is None:
             sp = SignalProc.SignalProc(self.audioData, self.sampleRate, 256, 128)
             self.sg = sp.spectrogram(self.audioData)
         else:
