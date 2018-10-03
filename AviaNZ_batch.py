@@ -865,7 +865,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.segments_sp = []
         for seg in self.segments:
             for birdName in seg[4]:
-                if birdName[-1] == '?':
+                if len(birdName)>0 and birdName[-1] == '?':
                     if self.species == birdName[:-1]:
                         self.segments_sp.append(seg)
                         break
@@ -923,7 +923,10 @@ class AviaNZ_reviewAll(QMainWindow):
        """
        # Initialize the dialog for this file
        shortBirdList = json.load(open(self.config['BirdListShort']))
-       longBirdList = json.load(open(self.config['BirdListLong']))
+       if self.config['BirdListLong'] is not None and self.config['BirdListLong'] != "None":
+            longBirdList = json.load(open(self.config['BirdListLong']))
+       else:
+            longBirdList = None
        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], shortBirdList, longBirdList, self)
        self.box1id = 0
        if hasattr(self, 'dialogPos'):
