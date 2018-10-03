@@ -22,6 +22,12 @@
 
 
 # TODO: Why is the image so small in HumanReview1?
+# TODO: Update order in context menu should be an option
+# TODO: Contrast and brightness in HR2
+# TODO: Multiple species option sorted
+# TODO: Config Folder to tidy things up
+# TODO: Think about the species list stuff -> how to import filters?
+# TODO: Full list of next steps
 
 import sys, os, json, platform, re
 

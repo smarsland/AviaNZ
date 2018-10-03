@@ -34,13 +34,12 @@ import json, copy
 class AviaNZ_batchProcess(QMainWindow):
     # Main class for batch processing
 
-    def __init__(self,root=None,minSegment=50,DOC=True,sppinfofile=None):
+    def __init__(self,root=None,minSegment=50,sppinfofile=None):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
         super(AviaNZ_batchProcess, self).__init__()
         self.root = root
         self.dirName=[]
-        self.DOC=DOC
 
         try:
             print("Loading species info from file %s" % sppinfofile)
@@ -552,13 +551,12 @@ class AviaNZ_reviewAll(QMainWindow):
     # Main class for reviewing batch processing results
     # Should call HumanClassify1 somehow
 
-    def __init__(self,root=None,configfile='',minSegment=50, DOC=True):
+    def __init__(self,root=None,configfile='',minSegment=50):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
         super(AviaNZ_reviewAll, self).__init__()
         self.root = root
         self.dirName=""
-        self.DOC=DOC
 
         # read config file
         try:
@@ -723,7 +721,7 @@ class AviaNZ_reviewAll(QMainWindow):
                                     continue
                                 elif len(seg[4])>0:
                                     for birdName in seg[4]:
-                                        if birdName[-1] == '?':
+                                        if len(birdName)>0 and birdName[-1] == '?':
                                             if birdName[:-1] not in self.spList:
                                                 self.spList.append(birdName[:-1])
                                         elif birdName not in self.spList:
@@ -1055,7 +1053,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
             if self.saveConfig:
                 self.config['BirdList'].append(label)
-        elif label[-1] == '?':
+        elif len(label)>0 and label[-1] == '?':
             # Remove the question mark, since the user has agreed
             self.segments[self.box1id][4] = label[:-1]
 
