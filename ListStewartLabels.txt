@@ -1,0 +1,16 @@
+[
+ "Kiwi (F)",
+ "Don't Know",
+ "Kiwi (M, far)",
+ "Kiwi (M)",
+ "Kiwi (F, far)",
+ "Other bird",
+ "Degraded",
+ "Rain",
+ "Wind",
+ "Wind gusts",
+ "Weather",
+ "Waves",
+ "Insects",
+ "People"
+]
