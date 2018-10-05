@@ -4,6 +4,7 @@
 "MultipleSpecies": true,
 "DOC": true,
 "Hartley": false,
+"ReorderList": true,
 "dirpath": "./Sound Files", "secsSave": 60, "windowWidth": 6.57,
 "widthOverviewSegment": 10.0, "maxFileShow": 300, "fileOverlap": 10,
 "brightness": 50, "contrast": 50, "overlap_allowed": 5, "reviewSpecBuffer": 1,

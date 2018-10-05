@@ -21,13 +21,13 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-# TODO: Why is the image so small in HumanReview1?
-# TODO: Update order in context menu should be an option
+# Update order in context menu should be an option
 # TODO: Contrast and brightness in HR2
 # TODO: Multiple species option sorted
 # TODO: Config Folder to tidy things up
-# TODO: Think about the species list stuff -> how to import filters?
+# TODO: Instead of sppinfo: Filters folder with file per species, internal dictionary
 # TODO: Full list of next steps
+# TODO: Manual should say DK -> bird auto. But can readd DK if necessary
 
 import sys, os, json, platform, re
 
@@ -2427,11 +2427,13 @@ class AviaNZ(QMainWindow):
             # Put the selected bird name at the top of the list
             if len(birdname) > 0 and birdname[-1] == '?':
                 birdname = birdname[:-1]
-            if birdname in self.shortBirdList:
-                self.shortBirdList.remove(birdname)
-            else:
-                del self.shortBirdList[-1]
-            self.shortBirdList.insert(0,birdname)
+            if self.config['ReorderList']:
+                # Either move the label to the top of the list, or delete the last
+                if birdname in self.shortBirdList:
+                    self.shortBirdList.remove(birdname)
+                else:
+                    del self.shortBirdList[-1]
+                self.shortBirdList.insert(0,birdname)
         else:
             # This allows textual name entry
             # Ask the user for the new name, and save it
@@ -2444,7 +2446,7 @@ class AviaNZ(QMainWindow):
                     pass
                 else:
                     # Add the new bird name.
-                    if update:
+                    if self.config['ReorderList']:
                         self.shortBirdList.insert(0,text)
                         del self.shortBirdList[-1]
                     self.longBirdList.append(text)
@@ -4019,6 +4021,7 @@ class AviaNZ(QMainWindow):
             ]},
 
             {'name': 'Maximise window on startup', 'type': 'bool', 'value': self.config['StartMaximized']},
+            {'name': 'Dynamically reorder bird list' , 'type': 'bool', 'value': self.config['ReorderList']},
             {'name': 'Default to multiple species', 'type': 'bool', 'value': self.config['MultipleSpecies']},
 
             {'name': 'Annotation', 'type': 'group', 'children': [
@@ -4131,6 +4134,8 @@ class AviaNZ(QMainWindow):
                 self.config['StartMaximized'] = data
                 if data:
                     self.showMaximized()
+            elif childName == 'Dynamically reorder bird list':
+                self.config['ReorderList'] = data
             elif childName == 'Default to multiple species':
                 self.config['MultipleSpecies'] = data
             elif childName=='Human classify.Save corrections':
