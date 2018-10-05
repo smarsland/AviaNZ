@@ -1089,9 +1089,10 @@ class HumanClassify1(QDialog):
             self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
         else:
             for item in self.shortBirdList[:29]:
-                self.birdbtns.append(QRadioButton(item))
-                self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
-                self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
+                btn = QRadioButton(item)
+                self.birdbtns.append(btn)
+                self.birds.addButton(btn,len(self.birdbtns)-1)
+                btn.clicked.connect(self.radioBirdsClicked)
             self.birdbtns.append(QRadioButton('Other')),
             self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
             self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
@@ -1355,21 +1356,19 @@ class HumanClassify1(QDialog):
                 self.birds3.item(ind).setSelected(True)
 
     def tickBirdsClicked(self):
-        # Listener for when the user selects a radio button
+        # Listener for when the user selects a bird tick box
         # Update the text and store the data
         for button in self.birds.buttons():
             if button.isChecked():
                 if button.text() == "Other":
                     self.birds3.setEnabled(True)
                 else:
-                    # TODO: Test if exclusive
                     self.birds3.setEnabled(False)
                     if button.text() not in self.label and button.text()+'?' not in self.label:
                         self.label.append(str(button.text()))
                     self.species.setText(','.join(self.label))
             else:
                 if button.text() == "Other":
-                    # TODO: Remove all others?
                     self.birds3.setEnabled(False)
                 if str(button.text()) in self.label:
                     self.label.remove(str(button.text()))
@@ -1381,16 +1380,15 @@ class HumanClassify1(QDialog):
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
         # Update the text and store the data
-        for button in self.birds.buttons():
-            if button.text() == "Other":
-                # TODO: Remove all others?
-                self.birds3.setEnabled(False)
-            if str(button.text()) in self.label:
-                self.label.remove(str(button.text()))
-                self.species.setText(','.join(self.label))
-            elif button.text()+'?' in self.label:
-                self.label.remove(str(button.text())+'?')
-                self.species.setText(','.join(self.label))
+        for button in self.birdbtns:
+            if button.isChecked():
+                print("clicked", button.text())
+                if button.text() == "Other":
+                    self.birds3.setEnabled(True)
+                else:
+                    self.birds3.setEnabled(False)
+                    self.label = [button.text()]
+                    self.species.setText(button.text())
 
     def listBirdsClicked(self, item):
         # Listener for clicks in the listbox of birds
