@@ -3973,6 +3973,10 @@ class AviaNZ(QMainWindow):
         if fn2 is not None and '/' in fn2:
             ind = fn2[-1::-1].index('/')
             fn2 = fn2[-ind:]
+        hasMultipleSegments = False
+        for s in self.segments:
+            if len(s[4])>1:
+                hasMultipleSegments=True
 
         params = [
             {'name': 'Mouse settings', 'type' : 'group', 'children': [
@@ -3993,7 +3997,7 @@ class AviaNZ(QMainWindow):
 
             {'name': 'Maximise window on startup', 'type': 'bool', 'value': self.config['StartMaximized']},
             {'name': 'Dynamically reorder bird list' , 'type': 'bool', 'value': self.config['ReorderList']},
-            {'name': 'Default to multiple species', 'type': 'bool', 'value': self.config['MultipleSpecies']},
+            {'name': 'Default to multiple species', 'type': 'bool', 'value': self.config['MultipleSpecies'], 'readonly': hasMultipleSegments},
 
             {'name': 'Annotation', 'type': 'group', 'children': [
                 {'name': 'Annotation overview cell length', 'type': 'float',
