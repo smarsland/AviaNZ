@@ -152,7 +152,7 @@ class AviaNZ(QMainWindow):
         self.extra = False
 
         # Whether or not the context menu allows multiple birds. 
-        self.multipleBirds = False
+        self.multipleBirds = self.config['MultipleSpecies']
 
         self.dirName = self.config['dirpath']
         self.previousFile = None
@@ -801,10 +801,6 @@ class AviaNZ(QMainWindow):
         self.menuBirdList.clear()
         self.menuBird2.clear()
 
-        # Regardless of how got here, if there are multiple species in list, don't overwrite the set!
-        if hasattr(self,'segments') and len(self.segments[self.box1id][4]) > 1:
-            self.multipleBirds = True
-
         for item in self.shortBirdList[:20]:
             if unsure and item != "Don't Know":
                 item = item+'?'
@@ -915,6 +911,9 @@ class AviaNZ(QMainWindow):
         self.playPosition = self.windowStart
         self.prevBoxCol = self.config['ColourNone']
         self.bar.setValue(0)
+
+        # Reset the MultipleSpecies option
+        self.multipleBirds = self.config['MultipleSpecies']
 
         # reset playback buttons
         self.playSegButton.setEnabled(False)
@@ -1151,6 +1150,9 @@ class AviaNZ(QMainWindow):
                                 self.segmentsToSave = True
                             if type(s[4]) is not list:
                                 s[4] = [s[4]]
+                            # Check if there are any multiple birds in the list, and switch the option on regardless of user preference
+                            if len(s[4])>1:
+                                self.multipleBirds = True
 
                 print(self.Hartley)
                 print(os.path.isfile(self.filename + '.data'))
@@ -2087,25 +2089,15 @@ class AviaNZ(QMainWindow):
 
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
-                # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
-                    self.multipleBirds = False
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                 elif modifiers == QtCore.Qt.ControlModifier:
-                    self.multipleBirds = False
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                elif modifiers == QtCore.Qt.AltModifier or (QtCore.Qt.ShiftModifier and QtCore.Qt.ControlModifier):
-                    self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
-                    self.segments[self.box1id][4] = []
-                    self.multipleBirds = True
-                    self.fillBirdList()
-                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
-                    self.multipleBirds = False
                     self.addSegment(self.start_ampl_loc,max(mousePoint.x(),0.0))
                     # Context menu
                     self.fillBirdList()
@@ -2174,13 +2166,8 @@ class AviaNZ(QMainWindow):
                         # popup dialog
                         modifiers = QtGui.QApplication.keyboardModifiers()
                         if modifiers == QtCore.Qt.ControlModifier:
-                            self.multipleBirds = False
                             self.fillBirdList(unsure=True)
-                        elif modifiers == QtCore.Qt.AltModifier or (QtCore.Qt.ShiftModifier and QtCore.Qt.ControlModifier):
-                            self.multipleBirds = True
-                            self.fillBirdList()
                         else:
-                            self.multipleBirds = False
                             self.fillBirdList()
                         self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                     else:
@@ -2241,23 +2228,13 @@ class AviaNZ(QMainWindow):
                 # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
                 modifiers = QtGui.QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
-                    self.multipleBirds = False
                     self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
                 elif modifiers == QtCore.Qt.ControlModifier:
-                    self.multipleBirds = False
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.fillBirdList(unsure=True)
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                elif modifiers == QtCore.Qt.AltModifier or (QtCore.Qt.ShiftModifier and QtCore.Qt.ControlModifier):
-                    self.addSegment(x1, x2, y1, y2)
-                    self.segments[self.box1id][4] = []
-                    self.multipleBirds = True
-                    # Context menu
-                    self.fillBirdList()
-                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                 else:
-                    self.multipleBirds = False
                     self.addSegment(x1, x2, y1, y2)
                     # Context menu
                     self.fillBirdList()
@@ -2342,13 +2319,8 @@ class AviaNZ(QMainWindow):
 
                         modifiers = QtGui.QApplication.keyboardModifiers()
                         if modifiers == QtCore.Qt.ControlModifier:
-                            self.multipleBirds = False
                             self.fillBirdList(unsure=True)
-                        elif modifiers == QtCore.Qt.AltModifier or (QtCore.Qt.ShiftModifier and QtCore.Qt.ControlModifier):
-                            self.multipleBirds = True
-                            self.fillBirdList()
                         else:
-                            self.multipleBirds = False
                             self.fillBirdList()
                         self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                     else:
@@ -2385,7 +2357,7 @@ class AviaNZ(QMainWindow):
         else:
             birdname = birdname + ' (' + self.fullbirdlist.currentText() + ')'
         self.birdSelectedMenu(birdname,fromList=True)
-        if not self.multipleBirds and not self.Hartley:
+        if not self.multipleBirds:
             self.menuBirdList.hide()
 
     def birdSelectedMenu(self,birditem,fromList=False):
@@ -2460,7 +2432,7 @@ class AviaNZ(QMainWindow):
         # refresh overview boxes after all updates:
         self.refreshOverviewWith(startpoint, endpoint, self.segments[self.box1id][4])
 
-        if not self.multipleBirds and not self.Hartley:
+        if not self.multipleBirds:
             # select the bird and close
             self.menuBirdList.hide()
 
@@ -2470,7 +2442,7 @@ class AviaNZ(QMainWindow):
             segID = self.box1id
 
         # produce list from text
-        if self.multipleBirds or self.Hartley:
+        if self.multipleBirds:
             if type(text) is list:
                 self.segments[segID][4].extend(text)
                 self.lastSpecies = text
@@ -2655,7 +2627,6 @@ class AviaNZ(QMainWindow):
         self.currentPage = self.currentFileSection
         self.segmentsDone = 0
 
-        self.multipleBirds = False
         # Check there are segments to show on this page
         if not self.config['showAllPages']:
             if len(self.segments)>0:
@@ -2688,7 +2659,7 @@ class AviaNZ(QMainWindow):
                 # Check which page is first to have segments on
                 self.currentFileSection = -1
 
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.shortBirdList, self.longBirdList, self)
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.shortBirdList, self.longBirdList, self.multipleBirds, self)
             # load the first image:
             self.box1id = -1
             self.humanClassifyDialog1.setSegNumbers(0, len(self.segments))
@@ -2805,7 +2776,7 @@ class AviaNZ(QMainWindow):
         # birdSelectedMenu flips the state of each label
         # so need to pass all labels for deletion, or clean before updating
         
-        # TODO: figure out if we need to track self.multipleBirds
+        # Need to keep track of self.multipleBirds
         multipleTemp = self.multipleBirds
         self.multipleBirds = True
         self.segments[self.box1id][4] = []
@@ -4492,7 +4463,7 @@ class AviaNZ(QMainWindow):
     def eventFilter(self, obj, event):
         # This is an event filter for the context menu. It allows the user to select
         # multiple birds by stopping the menu being closed on first click
-        if (self.multipleBirds or self.Hartley) and event.type() in [QtCore.QEvent.MouseButtonRelease]:
+        if self.multipleBirds and event.type() in [QtCore.QEvent.MouseButtonRelease]:
             if isinstance(obj, QtGui.QMenu):
                 if obj.activeAction():
                     if not obj.activeAction().menu(): 

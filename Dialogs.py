@@ -994,7 +994,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, shortBirdList, longBirdList, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, shortBirdList, longBirdList, multipleBirds, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -1007,6 +1007,7 @@ class HumanClassify1(QDialog):
         self.cmapInverted = cmapInverted
         self.shortBirdList = shortBirdList
         self.longBirdList = longBirdList
+        self.multipleBirds = multipleBirds
         self.saveConfig = False
         # exec_ forces the cursor into waiting
         self.activateWindow()
@@ -1078,13 +1079,22 @@ class HumanClassify1(QDialog):
         # Create an array of check bixes for the most common birds (2 columns of 10 choices)
         self.birds = QButtonGroup()
         self.birdbtns = []
-        for item in self.shortBirdList[:29]:
-            self.birdbtns.append(QCheckBox(item))
+        if self.multipleBirds:
+            for item in self.shortBirdList[:29]:
+                self.birdbtns.append(QCheckBox(item))
+                self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
+                self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
+            self.birdbtns.append(QCheckBox('Other')),
+            self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
+            self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
+        else:
+            for item in self.shortBirdList[:29]:
+                self.birdbtns.append(QRadioButton(item))
+                self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
+                self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
+            self.birdbtns.append(QRadioButton('Other')),
             self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
             self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
-        self.birdbtns.append(QCheckBox('Other')),
-        self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
-        self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
 
         # The list of less common birds
         self.birds3 = QListWidget(self)
@@ -1323,13 +1333,11 @@ class HumanClassify1(QDialog):
         if len(label)>1:
             self.birds.setExclusive(False)
             self.birds3.setSelectionMode(QAbstractItemView.MultiSelection)
-            self.multipleBirds = True
             for btn in self.birdbtns:
                 btn.setChecked(False)
         else:       
             self.birds.setExclusive(True)
             self.birds3.setSelectionMode(QAbstractItemView.SingleSelection)
-            self.multipleBirds = False
         for l in label:
             if l[-1]=='?':
                 l= l[:-1]
@@ -1346,7 +1354,7 @@ class HumanClassify1(QDialog):
                 ind = self.longBirdList.index(l)
                 self.birds3.item(ind).setSelected(True)
 
-    def radioBirdsClicked(self):
+    def tickBirdsClicked(self):
         # Listener for when the user selects a radio button
         # Update the text and store the data
         for button in self.birds.buttons():
@@ -1356,11 +1364,8 @@ class HumanClassify1(QDialog):
                 else:
                     # TODO: Test if exclusive
                     self.birds3.setEnabled(False)
-                    if self.multipleBirds:
-                        if button.text() not in self.label and button.text()+'?' not in self.label:
-                            self.label.append(str(button.text()))
-                    else:           
-                        self.label = [str(button.text())]
+                    if button.text() not in self.label and button.text()+'?' not in self.label:
+                        self.label.append(str(button.text()))
                     self.species.setText(','.join(self.label))
             else:
                 if button.text() == "Other":
@@ -1372,6 +1377,20 @@ class HumanClassify1(QDialog):
                 elif button.text()+'?' in self.label:
                     self.label.remove(str(button.text())+'?')
                     self.species.setText(','.join(self.label))
+
+    def radioBirdsClicked(self):
+        # Listener for when the user selects a radio button
+        # Update the text and store the data
+        for button in self.birds.buttons():
+            if button.text() == "Other":
+                # TODO: Remove all others?
+                self.birds3.setEnabled(False)
+            if str(button.text()) in self.label:
+                self.label.remove(str(button.text()))
+                self.species.setText(','.join(self.label))
+            elif button.text()+'?' in self.label:
+                self.label.remove(str(button.text())+'?')
+                self.species.setText(','.join(self.label))
 
     def listBirdsClicked(self, item):
         # Listener for clicks in the listbox of birds
