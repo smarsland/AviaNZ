@@ -386,7 +386,7 @@ class Segmentation(QDialog):
     # TODO: add the wavelet params
     # TODO: work out how to return varying size of params, also process them
     # TODO: test and play
-    def __init__(self, maxv, DOC=False, sppInfo=None, parent=None):
+    def __init__(self, maxv, DOC=False, species=None, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Segmentation Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -505,11 +505,12 @@ class Segmentation(QDialog):
         self.specieslabel = QLabel("Species")
         self.species=QComboBox()
 
+        # TODO: Tidy this
         self.specieslabel_cc = QLabel("Species")
         self.species_cc = QComboBox()
         self.species_cc.addItems(["Choose species...", "Bittern"])
         # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
-        spp = [*sppInfo]
+        spp = [*species]
         spp.insert(0,"Choose species...")
         self.species.addItems(spp)
         # self.species.currentIndexChanged[QString].connect(self.changeBoxes)
@@ -1099,11 +1100,12 @@ class HumanClassify1(QDialog):
 
         # The list of less common birds
         self.birds3 = QListWidget(self)
-        for item in self.longBirdList:
-            if '>' in item:
-                ind = item.index('>')
-                item = item[:ind] + " (" + item[ind+1:] + ")"
-            self.birds3.addItem(item)
+        if self.longBirdList is not None and self.longBirdList != 'None':
+            for item in self.longBirdList:
+                if '>' in item:
+                    ind = item.index('>')
+                    item = item[:ind] + " (" + item[ind+1:] + ")"
+                self.birds3.addItem(item)
         # Explicitly add "Other" option in
         self.birds3.addItem('Other')
         self.birds3.setMaximumWidth(400)
