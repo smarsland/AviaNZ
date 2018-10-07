@@ -23,11 +23,13 @@
 
 # Update order in context menu should be an option
 # TODO: Contrast and brightness in HR2
-# TODO: Multiple species option sorted
+# TODO: Multiple species option sorted -> disable change option
 # TODO: Config Folder to tidy things up
 # TODO: Instead of sppinfo: Filters folder with file per species, internal dictionary
 # TODO: Full list of next steps
-# TODO: Manual should say DK -> bird auto. But can readd DK if necessary
+# TODO: Manual should say DK -> bird auto. But can re-add DK if necessary
+
+# sppinfofile sppInfo
 
 import sys, os, json, platform, re
 
@@ -73,7 +75,7 @@ class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
 
-    def __init__(self,root=None,configfile=None,sppinfofile=None,CLI=False,firstFile='', imageFile='', command=''):
+    def __init__(self,root=None,configfile=None,CLI=False,firstFile='', imageFile='', command=''):
         """Initialisation of the class. Load a configuration file, or create a new one if it doesn't
         exist. Also initialises the data structures and loads an initial file (specified explicitly)
         and sets up the window.
@@ -90,19 +92,28 @@ class AviaNZ(QMainWindow):
             self.saveConfig = True
         except:
             print("Failed to load config file, using defaults")
-            self.config = json.load(open('AviaNZconfig.txt'))
+            self.config = json.load(open('Config/AviaNZconfig.txt'))
             self.saveConfig = True # TODO: revise this with user permissions in mind
         self.configfile = configfile
 
+        #self.config['FiltersFolder'] = 'xx'
+        print("Loading species info from folder %s" % self.config['FiltersFolder'])
         try:
-            print("Loading species info from file %s" % sppinfofile)
-            self.sppInfo = json.load(open(sppinfofile))
-            self.savesppinfo = True
+            self.FiltersFiles = [f[:-4] for f in os.listdir(self.config['FiltersFolder']) if os.path.isfile(os.path.join(self.config['FiltersFolder'], f))]
         except:
-            print("Failed to load spp info file, using defaults")
-            self.sppInfo = json.load(open('sppInfo.txt'))
-            self.savesppinfo = True # TODO: revise this with user permissions in mind
-        self.sppinfofile = sppinfofile
+            "Folder not found, no filters loaded"
+            self.FiltersFiles = None
+        print(self.FiltersFiles)
+
+        #try:
+            #self.sppInfo = json.load(open(sppInfoFolder))
+            # TODO
+            #self.savesppinfo = True
+        #except:
+            #print("Failed to load spp info file, using defaults")
+            #self.sppInfo = json.load(open('sppInfo.txt'))
+            #self.savesppinfo = True # TODO: revise this with user permissions in mind
+        #self.sppinfofile = sppinfofile
 
 
         # Load the birdlist 
@@ -757,13 +768,16 @@ class AviaNZ(QMainWindow):
         These are:
             backspace to delete a segment
             escape to pause playback """
-        if ev == Qt.Key_Backspace:
+        if ev == Qt.Key_Backspace or ev == Qt.Key_Delete:
             self.deleteSegment()
         elif ev == Qt.Key_Escape and self.media_obj.isPlaying():
             self.stopPlayback()
 
     def makeFullBirdList(self):
-        """ Makes a combo box holding the complete list of birds """
+        """ Makes a combo box holding the complete list of birds.
+        Some work is needed to keep track of the indices since it's a two column 
+        list: species and subspecies in most cases.
+        Also parses the DOC files, which use > to mark the subspecies. """
         self.fullbirdlist = QComboBox()
         self.fullbirdlist.setView(QTreeView())
         self.fullbirdlist.setRootModelIndex(QModelIndex())
@@ -796,6 +810,7 @@ class AviaNZ(QMainWindow):
     def fillBirdList(self,unsure=False):
         """ Sets the contents of the context menu.
         The first 20 items are in the first menu, the next in a second menu.
+        Any extras go into the combobox at the end of the second list.
         This is called a lot because the order of birds in the list changes since the last choice
         is moved to the top of the list. """
         self.menuBirdList.clear()
@@ -1279,7 +1294,7 @@ class AviaNZ(QMainWindow):
 
     def useAmplitudeCheck(self):
         """ Listener for the check menu item saying if the user wants to see the waveform.
-        Does not remove the dock, just hide it. It's therefore easy to replace, but could have some performance overhead.
+        Does not remove the dock, just hides it. It's therefore easy to replace, but could have some performance overhead.
         """
         if self.useAmplitudeTick.isChecked():
             self.useAmplitude = True
@@ -1411,6 +1426,7 @@ class AviaNZ(QMainWindow):
             self.statusLeft.setText("Ready")
 
     def denoiseImage(self):
+        # TODO
         """ Denoise the spectrogram. To be used in conjunction with spectrogram inversion. """
         #from cv2 import fastNlMeansDenoising
         #sg = np.array(self.sg/np.max(self.sg)*255,dtype = np.uint8)
@@ -2475,6 +2491,7 @@ class AviaNZ(QMainWindow):
         
 
     def processMultipleBirdSelections(self):
+        # TODO??
         pass
 
     def setColourMap(self,cmap):
@@ -2589,7 +2606,7 @@ class AviaNZ(QMainWindow):
 # Generate the various dialogs that match the menu items
 
     def loadSegment(self, hr2=False):
-        # Loads a segment for the HumanClassify dialogs
+        """ Loads a segment for the HumanClassify dialogs """
         if hr2:
             wavobj = wavio.read(self.filename)
         else:
@@ -2609,8 +2626,8 @@ class AviaNZ(QMainWindow):
         self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
     def showFirstPage(self):
-        # After the HumanClassify dialogs have closed, need to show the correct data on the screen
-        # Returns to the page user started with
+        """ After the HumanClassify dialogs have closed, need to show the correct data on the screen
+         Returns to the page user started with """
         if self.config['maxFileShow']<self.datalengthSec:
             self.currentFileSection = self.currentPage
             self.prepare5minMove()
@@ -2676,7 +2693,7 @@ class AviaNZ(QMainWindow):
             # self.statusLeft.setText("Ready")
 
     def humanClassifyClose1(self):
-        # Listener for the human verification dialog.
+        """ Listener for the human verification dialog. """
         self.humanClassifyDialogSize = self.humanClassifyDialog1.size()
         self.humanClassifyDialog1.done(1)
         self.box1id = -1
@@ -2685,7 +2702,7 @@ class AviaNZ(QMainWindow):
             self.showFirstPage()
 
     def humanClassifyNextImage1(self):
-        # Get the next image
+        """ Get the next image """
         self.humanClassifyDialogSize = self.humanClassifyDialog1.size()
         if self.box1id < len(self.segments)-1:
             self.box1id += 1
@@ -2858,7 +2875,7 @@ class AviaNZ(QMainWindow):
         self.humanClassifyNextImage1()
 
     def humanClassifyDelete1(self):
-        # Delete a segment
+        """ If the user has deleted a segment in the review, delete it from the main display """
         id = self.box1id
         self.humanClassifyDialog1.stopPlayback()
         self.deleteSegment(self.box1id)
@@ -3256,6 +3273,7 @@ class AviaNZ(QMainWindow):
     def trainWavelet(self):
         """ Listener for the wavelet training dialog.
         """
+        # TODO: Needs work
         # import librosa
         species = str(self.waveletTDialog.species.text()).title()
         sylLen = float(self.waveletTDialog.avgSyllen.text())
@@ -3312,10 +3330,11 @@ class AviaNZ(QMainWindow):
             f0_high = maxFrq
         # add this filter to sppinfoFile
         if self.saveConfig:
-            self.sppInfo[species] = [minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M, optimumNodes]
+            #self.sppInfo[species] = [minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M, optimumNodes]
+            self.makeNewFilter(species,minLen,maxLen,minFrq,maxFrq,fs,f0_low,f0_high,thr,M,optimumNodes)
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
-        msg.setText("Training is completed! \nNow this detector will appear under wavelet segmentation. \nFirst test it on a seperate dataset before actual use. \nIf you find it does not perform well, retrain the detector \nadding more trining data and test.")
+        msg.setText("Training is completed! \nNow this detector will appear under wavelet segmentation. \nFirst test it on a seperate dataset before actual use. \nIf you find it does not perform well, retrain the detector \nadding more trining data and test again.")
         msg.setIconPixmap(QPixmap("img/Owl_done.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
         msg.setWindowTitle("Detector Ready to Test!")
@@ -3478,7 +3497,7 @@ class AviaNZ(QMainWindow):
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
         """
-        self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata),DOC = self.DOC, sppInfo=self.sppInfo)
+        self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata),DOC=self.DOC, species=self.FiltersFiles)
         self.segmentDialog.show()
         self.segmentDialog.activateWindow()
         self.segmentDialog.undo.clicked.connect(self.segment_undo)
@@ -3534,6 +3553,7 @@ class AviaNZ(QMainWindow):
                     msg.exec_()
                     return
                 else:
+                    # TODO: Start here!
                     ws = WaveletSegment.WaveletSegment(species=self.sppInfo[str(species)])
                     newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, spInfo=self.sppInfo[str(species)], trainTest=False)
             elif str(alg)=="Cross-Correlation":
@@ -4377,7 +4397,19 @@ class AviaNZ(QMainWindow):
         else:
             print("Nothing to save")
 
+    def makeNewFilter(species,minLen,maxLen,minFrq,maxFrq,fs,f0_low,f0_high,thr,M,optimumNodes):
+        """ Write out a new dictionary for a filter for a particular species """
 
+        dict = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq], 'F0Range': [f0_low, f0_high], 'WaveletParams': [thr, M, optimumNodes]}
+
+        # Check if file exists
+        filename = self.config['FiltersFolder']+species+'.txt'
+        # TODO: More?
+        if isfile(filename):
+            print("File already exists, overwriting")
+        json.dump(dict,filename)
+
+    # TODO: Move this to SupportClasses, or just delete?
     def exportToExcel_Hartley(self):
         from openpyxl import load_workbook, Workbook
         eFile = self.filename[:-4] + '_output.xlsx'
@@ -4435,13 +4467,14 @@ class AviaNZ(QMainWindow):
             except Exception as e:
                 print("ERROR while saving config file:")
                 print(e)
-        if self.savesppinfo == True:
-            try:
-                print("Saving species info file")
-                json.dump(self.sppInfo, open(self.sppinfofile, 'w'),indent=1)
-            except Exception as e:
-                print("ERROR while saving species info file:")
-                print(e)
+        # TODO
+        #if self.savesppinfo == True:
+            #try:
+                #print("Saving species info file")
+                #json.dump(self.sppInfo, open(self.sppinfofile, 'w'),indent=1)
+            #except Exception as e:
+                #print("ERROR while saving species info file:")
+                #print(e)
 
         # Save the shortBirdList
         json.dump(self.shortBirdList, open(self.config['BirdListShort'], 'w'),indent=1)
@@ -4490,7 +4523,7 @@ def mainlauncher(cli, infile, imagefile, command):
         if not isinstance(infile, str):
             print("ERROR: valid input file (-f) is mandatory in CLI mode!")
             sys.exit()
-        avianz = AviaNZ(configfile='AviaNZconfig.txt',CLI=True,firstFile=infile, imageFile=imagefile, command=command)
+        avianz = AviaNZ(configfile='Config/AviaNZconfig.txt',CLI=True,firstFile=infile, imageFile=imagefile, command=command)
         print("Analysis complete, closing AviaNZ")
     else:
         print("Starting AviaNZ in GUI mode")
@@ -4503,13 +4536,13 @@ def mainlauncher(cli, infile, imagefile, command):
         task = first.getValues()
 
         if task == 1:
-            avianz = AviaNZ(configfile='AviaNZconfig_user.txt', sppinfofile='sppInfo_user.txt')
+            avianz = AviaNZ(configfile='Config/AviaNZconfig_user.txt')
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==2:
-            avianz = AviaNZ_batch.AviaNZ_batchProcess(sppinfofile='sppInfo_user.txt')
+            avianz = AviaNZ_batch.AviaNZ_batchProcess()
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==4:
-            avianz = AviaNZ_batch.AviaNZ_reviewAll(configfile='AviaNZconfig_user.txt')
+            avianz = AviaNZ_batch.AviaNZ_reviewAll(configfile='Config/AviaNZconfig_user.txt')
 
         avianz.show()
         app.exec_()
