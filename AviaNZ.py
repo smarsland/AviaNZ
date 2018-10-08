@@ -20,15 +20,18 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-# Update order in context menu should be an option
+# TODO: Manual, final checks, push out
+# TODO: Manual should say DK -> bird auto. But can re-add DK if necessary
+# TODO: Training, various code tidies (utilities, waveletsegment), tidy repository
+# TODO: Automate some of the training options
+# TODO: Think about the dictionary a bit more for option checking
 # TODO: Contrast and brightness in HR2
+# Update order in context menu should be an option
 # Multiple species option sorted 
 # Config Folder to tidy things up
 # Instead of sppinfo: Filters folder with file per species, internal dictionary
-# TODO: After batch processing, give completed message
+# After batch processing, give completed message
 # TODO: Full list of next steps
-# TODO: Manual should say DK -> bird auto. But can re-add DK if necessary
 
 import sys, os, json, platform, re
 
@@ -3091,7 +3094,7 @@ class AviaNZ(QMainWindow):
                 else:
                     thrType = 'Hard'
                 if depthchoice:
-                    depth = None
+                    depth = 0
                 else:
                     depth = int(str(depth))
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))

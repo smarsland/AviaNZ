@@ -201,7 +201,7 @@ class WaveletFunctions:
             wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
             wavelet.orthogonal=True
 
-        if maxLevel is None:
+        if maxLevel == 0:
             self.maxLevel = self.BestLevel(wavelet)
             print("Best level is %d" % self.maxLevel)
         else:
