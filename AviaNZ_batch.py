@@ -34,7 +34,7 @@ import json, copy
 class AviaNZ_batchProcess(QMainWindow):
     # Main class for batch processing
 
-    def __init__(self,root=None,minSegment=50,sppinfofile=None):
+    def __init__(self,root=None,minSegment=50):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
         super(AviaNZ_batchProcess, self).__init__()
@@ -42,13 +42,10 @@ class AviaNZ_batchProcess(QMainWindow):
         self.dirName=[]
 
         try:
-            print("Loading species info from file %s" % sppinfofile)
-            self.sppInfo = json.load(open(sppinfofile))
-            # self.savesppinfo = True
+            self.FilterFiles = [f[:-4] for f in os.listdir('Filters') if os.path.isfile(os.path.join('Filters', f))]
         except:
-            print("Failed to load spp info file, using defaults")
-            self.sppInfo = json.load(open('sppInfo.txt'))
-            # self.savesppinfo = True # TODO: revise this with user permissions in mind
+            "Folder not found, no filters loaded"
+            self.FilterFiles = None
 
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
@@ -93,7 +90,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # print(self.sppInfo)
 
 
-        spp = [*self.sppInfo]
+        spp = [*self.FilterFiles]
         # spp = []
         spp.insert(0, "All species")
         self.w_spe1.addItems(spp)
@@ -369,8 +366,9 @@ class AviaNZ_batchProcess(QMainWindow):
                         if self.species!='All species':
                             # wipe same species:
                             self.segments[:] = [s for s in self.segments if self.species not in s[4] and self.species+'?' not in s[4]]
-                            ws = WaveletSegment.WaveletSegment(species=self.sppInfo[self.species])
-                            newSegments = ws.waveletSegment_test(fName=None, data=self.audiodata, sampleRate= self.sampleRate, spInfo=self.sppInfo[self.species], trainTest=False)
+                            ws = WaveletSegment.WaveletSegment()
+                            speciesData = json.load(open(os.path.join('Filters', self.species+'.txt')))
+                            newSegments = ws.waveletSegment_test(fName=None, data=self.audiodata, sampleRate= self.sampleRate, spInfo=speciesData, trainTest=False)
                         else:
                             # wipe all segments:
                             self.segments = []
@@ -381,18 +379,18 @@ class AviaNZ_batchProcess(QMainWindow):
                         if self.species == "Bittern":
                             post = SupportClasses.postProcess(audioData=self.audiodata,
                                                               sampleRate=self.sampleRate,
-                                                              segments=newSegments, spInfo=[self.species])
+                                                              segments=newSegments, spInfo=speciesData)
                         elif self.species == "All species":
                             post = SupportClasses.postProcess(audioData=self.audiodata,
                                                               sampleRate=self.sampleRate,
-                                                              segments=newSegments, spInfo=[])
+                                                              segments=newSegments, spInfo={})
                             post.wind()
                             post.rainClick()
                         else:
                             post = SupportClasses.postProcess(audioData=self.audiodata,
                                                               sampleRate=self.sampleRate,
                                                               segments=newSegments,
-                                                              spInfo=self.sppInfo[self.species])
+                                                              spInfo=speciesData)
                             # print ("After wavelets: ", post.segments)
                             post.short()  # species specific
                             # print ("After short: ", post.segments)
@@ -416,6 +414,15 @@ class AviaNZ_batchProcess(QMainWindow):
                         self.log.appendFile(self.filename)
             self.log.file.close()
             self.statusBar().showMessage("Processed all %d files" % total)
+            msg = QMessageBox()
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setText("Finished processing. Would you like to return to the start screen?")
+            msg.setWindowTitle("Finished")
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.Yes: 
+                QApplication.exit(1)
 
     def fillFileList(self,fileName):
         """ Generates the list of files for the file listbox.
