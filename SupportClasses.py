@@ -45,7 +45,7 @@ class preProcess:
     """
     # todo: remove duplicate preprocess in 'Wavelet Segments'
 
-    def __init__(self,audioData=None, sampleRate=0, spInfo=[], df=False, wavelet='dmey2'):
+    def __init__(self,audioData=None, sampleRate=0, spInfo={}, df=False, wavelet='dmey2'):
         self.audioData=audioData
         self.sampleRate=sampleRate
         self.spInfo=spInfo
@@ -62,14 +62,14 @@ class preProcess:
     def denoise_filter(self, level=5):
         # set df=True to perform both denoise and filter
         # df=False to skip denoise
-        if self.spInfo == []:
+        if self.spInfo == {}:
             fs = 8000
             f1 = None
             f2 = None
         else:
-            f1 = self.spInfo[2]
-            f2 = self.spInfo[3]
-            fs = self.spInfo[4]
+            f1 = self.spInfo['FreqRange'][0]
+            f2 = self.spInfo['FreqRange'][1]
+            fs = self.spInfo['SampleRate']
 
         if self.sampleRate != fs:
             self.audioData = librosa.core.audio.resample(self.audioData, self.sampleRate, fs)
@@ -113,14 +113,13 @@ class postProcess:
     species:    species to consider
     """
 
-    def __init__(self,audioData=None, sampleRate=0, segments=[], spInfo=[]):
+    def __init__(self,audioData=None, sampleRate=0, segments=[], spInfo={}):
         self.audioData = audioData
         self.sampleRate = sampleRate
         self.segments = segments
-        if spInfo != []:
-            self.minLen = spInfo[0]
-            self.fundf1 = spInfo[5]
-            self.fundf2 = spInfo[6]
+        if spInfo != {}:
+            self.minLen = spInfo['TimeRange'][0]
+            self.F0 = spInfo['F0Range']
         else:
             self.minLen = 0
         # self.confirmedSegments = []  # post processed detections with confidence TP
@@ -210,7 +209,7 @@ class postProcess:
                         newSegments.remove(seg)
         self.segments = newSegments
 
-    def fundamentalFrq(self ):
+    def fundamentalFrq(self):
         '''
         Check for fundamental frequency of the segments, discard the segments that does not indicate the species.
         '''
@@ -229,7 +228,7 @@ class postProcess:
                 # else:
                 #     sampleRate = self.sampleRate
                 # denoise before fundamental frq. extraction
-                sc = preProcess(audioData=data, sampleRate=self.sampleRate, spInfo=[], df=True)  # species left empty to avoid bandpass filter
+                sc = preProcess(audioData=data, sampleRate=self.sampleRate, spInfo={}, df=True)  # species left empty to avoid bandpass filter
                 data, sampleRate = sc.denoise_filter(level=10)
 
                 sp = SignalProc.SignalProc([], 0, 512, 256)
@@ -247,7 +246,7 @@ class postProcess:
                 from scipy.signal import medfilt
                 x = medfilt(pitch, 15)
                 if ind.size < 2:
-                    if (pitch > self.fundf1) and (pitch < self.fundf2):
+                    if (pitch > self.F0[0]) and (pitch < self.F0[1]):
                         print("kiwi ", pitch)
                         continue    # print file, 'segment ', seg, round(pitch), ' *##kiwi found'
                     else:
@@ -257,7 +256,7 @@ class postProcess:
                     syls = segment.identifySegments(ind, maxgap=10, minlength=self.minLen/2)
                     count = 0
                     if syls == []:
-                        if (np.mean(pitch) > self.fundf1) and (np.mean(pitch) < self.fundf2):
+                        if (np.mean(pitch) > self.F0[0]) and (np.mean(pitch) < self.F0[1]):
                             # print file, 'segment ', seg, round(np.mean(pitch)), ' *## kiwi found '
                             continue
                         else:
@@ -270,7 +269,7 @@ class postProcess:
                         s[0] = s[0] * sampleRate / float(256)
                         s[1] = s[1] * sampleRate / float(256)
                         i = np.where((ind > s[0]) & (ind < s[1]))
-                        if (np.mean(x[i]) > self.fundf1) and (np.mean(x[i]) < self.fundf2):    # :   # and (
+                        if (np.mean(x[i]) > self.F0[0]) and (np.mean(x[i]) < self.F0[1]):    # :   # and (
                             flag = True
                             break
                     if not flag:

@@ -23,13 +23,12 @@
 
 # Update order in context menu should be an option
 # TODO: Contrast and brightness in HR2
-# TODO: Multiple species option sorted -> disable change option
-# TODO: Config Folder to tidy things up
-# TODO: Instead of sppinfo: Filters folder with file per species, internal dictionary
+# Multiple species option sorted 
+# Config Folder to tidy things up
+# Instead of sppinfo: Filters folder with file per species, internal dictionary
+# TODO: After batch processing, give completed message
 # TODO: Full list of next steps
 # TODO: Manual should say DK -> bird auto. But can re-add DK if necessary
-
-# sppinfofile sppInfo
 
 import sys, os, json, platform, re
 
@@ -288,6 +287,7 @@ class AviaNZ(QMainWindow):
         # fileMenu.addAction("&Change Directory", self.chDir)
         fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
+        fileMenu.addAction("Restart Program",self.restart,"Ctrl+R")
         fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
 
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
@@ -3286,7 +3286,7 @@ class AviaNZ(QMainWindow):
         f0_high = []    # int(self.waveletTDialog.f0High.text())
         thr = self.waveletTDialog.thr.value()
         M = sylLen
-        ws = WaveletSegment.WaveletSegment(species=[minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M])
+        ws = WaveletSegment.WaveletSegment()
         optimumNodes=[]
         for root, dirs, files in os.walk(str(self.dName)):
             for file in files:
@@ -3316,11 +3316,11 @@ class AviaNZ(QMainWindow):
                                     f0_low.append(f0_l)
                                     f0_high.append(f0_h)
                     # find wavelet nodes
-                    nodes = ws.waveletSegment_train(wavFile, species=[minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M], df=False)
+                    speciesDict = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq], 'F0Range': [f0_low, f0_high], 'WaveletParams': [thr, M]}
+                    nodes = ws.waveletSegment_train(wavFile, soundInfo=speciesDict,df=False)
                     for node in nodes:
                         if node not in optimumNodes:
                             optimumNodes.append(node)
-        #print('ff: ', f0_low, f0_high)
         if len(f0_low) > 0 and len(f0_high) > 0:
             f0_low = np.min(f0_low)
             f0_high = np.max(f0_high)
@@ -3331,7 +3331,16 @@ class AviaNZ(QMainWindow):
         # add this filter to sppinfoFile
         if self.saveConfig:
             #self.sppInfo[species] = [minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M, optimumNodes]
-            self.makeNewFilter(species,minLen,maxLen,minFrq,maxFrq,fs,f0_low,f0_high,thr,M,optimumNodes)
+            speciesDict['WaveletParams'].append(optimumNodes)
+
+            filename = self.config['FiltersFolder']+species+'.txt'
+            # TODO: More?
+            if isfile(filename):
+                print("File already exists, overwriting")
+            f = open(filename,'w')
+            f.write(json.dumps(speciesDict))
+            f.close()
+
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
         msg.setText("Training is completed! \nNow this detector will appear under wavelet segmentation. \nFirst test it on a seperate dataset before actual use. \nIf you find it does not perform well, retrain the detector \nadding more trining data and test again.")
@@ -3553,9 +3562,9 @@ class AviaNZ(QMainWindow):
                     msg.exec_()
                     return
                 else:
-                    # TODO: Start here!
-                    ws = WaveletSegment.WaveletSegment(species=self.sppInfo[str(species)])
-                    newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, spInfo=self.sppInfo[str(species)], trainTest=False)
+                    speciesData = json.load(open(os.path.join(self.config['FiltersFolder'], species+'.txt')))
+                    ws = WaveletSegment.WaveletSegment()
+                    newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, trainTest=False)
             elif str(alg)=="Cross-Correlation":
                 if species_cc != 'Choose species...':
                     # need to load template/s
@@ -3595,19 +3604,18 @@ class AviaNZ(QMainWindow):
             # post process to remove short segments, wind, rain, and use F0 check.
             if species == "Bittern": # bitten booms are treated differently
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, spInfo=self.sppInfo[species])
+                                                  segments=newSegments, spInfo=speciesData)
             elif species_cc == "Bittern":
                 print("New segs 1: ", newSegments)
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, spInfo=self.sppInfo[species_cc])
+                                                  segments=newSegments, spInfo=speciesData)
             elif species == "All species" or species_cc == 'Choose species...':
-                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, spInfo=[])
+                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
                 post.wind()
                 post.rainClick()
             else:
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, spInfo=self.sppInfo[species])
+                                                  segments=newSegments, spInfo=speciesData)
                 post.short()  # species specific
                 post.wind()
                 post.rainClick()
@@ -3619,9 +3627,9 @@ class AviaNZ(QMainWindow):
             # Generate annotation friendly output.
             if str(alg)=="Wavelets":
                  if len(newSegments)>0:
-                    y1 = self.convertFreqtoY(self.sppInfo[str(species)][2]/2)
-                    y2 = self.convertFreqtoY(self.sppInfo[str(species)][4]/2)
-                    if self.sppInfo[str(species)][4]/2 > self.sampleRate:
+                    y1 = self.convertFreqtoY(speciesData['FreqRange'][0]/2)
+                    y2 = self.convertFreqtoY(speciesData['SampleRate']/2)
+                    if speciesData['SampleRate']/2 > self.sampleRate:
                         y2 = self.convertFreqtoY(self.sampleRate/2-self.sampleRate*0.01)
                     for seg in newSegments:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
@@ -3629,9 +3637,9 @@ class AviaNZ(QMainWindow):
                         self.segmentsToSave = True
             elif str(alg)=="Cross-Correlation" and species_cc != 'Choose species...':
                 if len(newSegments) > 0:
-                    y1 = self.convertFreqtoY(self.sppInfo[str(species_cc)][2] / 2)
-                    y2 = self.convertFreqtoY(self.sppInfo[str(species_cc)][4] / 2)
-                    if self.sppInfo[str(species_cc)][4] / 2 > self.sampleRate:
+                    y1 = self.convertFreqtoY(speciesData['FreqRange'][0]/2)
+                    y2 = self.convertFreqtoY(speciesData['SampleRate']/2)
+                    if speciesData['SampleRate']/2 > self.sampleRate:
                         y2 = self.convertFreqtoY(self.sampleRate / 2 - self.sampleRate * 0.01)
                     for seg in newSegments:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
@@ -4397,8 +4405,8 @@ class AviaNZ(QMainWindow):
         else:
             print("Nothing to save")
 
-    def makeNewFilter(species,minLen,maxLen,minFrq,maxFrq,fs,f0_low,f0_high,thr,M,optimumNodes):
-        """ Write out a new dictionary for a filter for a particular species """
+    """def makeNewFilter(species,minLen,maxLen,minFrq,maxFrq,fs,f0_low,f0_high,thr,M,optimumNodes):
+        # Write out a new dictionary for a filter for a particular species 
 
         dict = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq], 'F0Range': [f0_low, f0_high], 'WaveletParams': [thr, M, optimumNodes]}
 
@@ -4407,7 +4415,7 @@ class AviaNZ(QMainWindow):
         # TODO: More?
         if isfile(filename):
             print("File already exists, overwriting")
-        json.dump(dict,filename)
+        json.dump(dict,filename)"""
 
     # TODO: Move this to SupportClasses, or just delete?
     def exportToExcel_Hartley(self):
@@ -4449,6 +4457,22 @@ class AviaNZ(QMainWindow):
         wb.save(str(eFile))
         print("Saved to "+eFile)
 
+    def restart(self):
+        """ Listener for the restart option, which uses exit(1) to restart the program at the splash screen """
+        print("Quitting")
+        self.saveSegments()
+        if self.saveConfig == True:
+            try:
+                print("Saving config file")
+                json.dump(self.config, open(self.configfile, 'w'),indent=1)
+            except Exception as e:
+                print("ERROR while saving config file:")
+                print(e)
+
+        # Save the shortBirdList
+        json.dump(self.shortBirdList, open(self.config['BirdListShort'], 'w'),indent=1)
+        QApplication.exit(1)
+        
     def closeEvent(self, event):
         """ Catch the user closing the window by clicking the Close button instead of quitting. """
         self.quit()
@@ -4545,7 +4569,10 @@ def mainlauncher(cli, infile, imagefile, command):
             avianz = AviaNZ_batch.AviaNZ_reviewAll(configfile='Config/AviaNZconfig_user.txt')
 
         avianz.show()
-        app.exec_()
+        out = app.exec_()
+        QApplication.closeAllWindows()
+        if out == 1:
+            mainlauncher()
 
 # Start the application
 app = QApplication(sys.argv)
