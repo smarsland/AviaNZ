@@ -21,4 +21,4 @@
 "invertColourMap": false, "showAllPages": true, "saveCorrections": true,
 "operator": "Stephen", "reviewer": "Nirosha",
 "protocolOn": false, "protocolSize": 10, "protocolInterval": 60,
-"fs_start": 0, "fs_end": 0, "window": "Hann", "DOC": true,"FiltersFolder", "Filters"}
+"fs_start": 0, "fs_end": 0, "window": "Hann", "DOC": true,"FiltersFolder":"Filters"}
