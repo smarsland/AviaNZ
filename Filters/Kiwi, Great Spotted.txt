@@ -1,6 +1,6 @@
 { 
   "Name": "Kiwi, Great Spotted", 
-  "SampleRate": 1000,
+  "SampleRate": 16000,
   "TimeRange": [2, 25],
   "FreqRange": [900, 200], 
   "F0Range": [850, 4500], 

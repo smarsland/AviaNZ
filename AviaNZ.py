@@ -22,10 +22,12 @@
 
 # TODO: Manual, final checks, push out
 # TODO: Manual should say DK -> bird auto. But can re-add DK if necessary
+# TODO: Manual should say how excels are managed - e.g. if someone process species e.g. ruru, kiwi and then choose 'All species' - it wipes all the species excells etc.
 # TODO: Training, various code tidies (utilities, waveletsegment), tidy repository
 # TODO: Automate some of the training options
 # TODO: Think about the dictionary a bit more for option checking
 # TODO: Contrast and brightness in HR2
+# TODO: BatchProcessing, let the user define time range to process (e.g. 6pm-6am) when the recordings contain time-date information
 # Update order in context menu should be an option
 # Multiple species option sorted 
 # Config Folder to tidy things up
@@ -1068,7 +1070,7 @@ class AviaNZ(QMainWindow):
                     self.startTime = DOCRecording.group(2)
 
                     #if int(self.startTime[:2]) > 8 or int(self.startTime[:2]) < 8:
-                    if int(self.startTime[:2]) > 18 or int(self.startTime[:2]) < 6: # 6pm to 6am
+                    if int(self.startTime[:2]) > 17 or int(self.startTime[:2]) < 7: # 6pm to 6am
                         print("Night time DOC recording")
                     else:
                         print("Day time DOC recording")
@@ -1107,7 +1109,7 @@ class AviaNZ(QMainWindow):
                 self.audioFormat.setChannelCount(np.shape(self.audiodata)[1])
                 self.audioFormat.setSampleRate(self.sampleRate)
                 self.audioFormat.setSampleSize(wavobj.sampwidth*8)
-                print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
+                print("Detected format: %d channels, %d Hz, %d bit samplesbit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
                 self.minFreqShow = max(self.minFreq, self.config['minFreq'])
                 self.maxFreqShow = min(self.maxFreq, self.config['maxFreq'])
@@ -3289,6 +3291,8 @@ class AviaNZ(QMainWindow):
         f0_high = []    # int(self.waveletTDialog.f0High.text())
         thr = self.waveletTDialog.thr.value()
         M = sylLen
+        speciesDict = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen], 'FreqRange': [minFrq, maxFrq],
+                       'F0Range': [minFrq, maxFrq], 'WaveletParams': [thr, M]}
         ws = WaveletSegment.WaveletSegment()
         optimumNodes=[]
         for root, dirs, files in os.walk(str(self.dName)):
@@ -3314,13 +3318,14 @@ class AviaNZ(QMainWindow):
                                     data = data.astype('float')
                                 if fs != sampleRate:
                                     data = librosa.core.audio.resample(data, sampleRate, fs)
-                                f0_l, f0_h = self.ff(data, minLen, maxLen, minFrq, maxFrq, sampleRate)
+                                f0_l, f0_h = self.ff(data, sampleRate, speciesDict)
                                 if f0_l != 0 and f0_h != 0:
                                     f0_low.append(f0_l)
                                     f0_high.append(f0_h)
                     # find wavelet nodes
-                    speciesDict = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq], 'F0Range': [f0_low, f0_high], 'WaveletParams': [thr, M]}
                     nodes = ws.waveletSegment_train(wavFile, soundInfo=speciesDict,df=False)
+                    print(wavFile)
+                    print("filtered nodes: ", nodes)
                     for node in nodes:
                         if node not in optimumNodes:
                             optimumNodes.append(node)
@@ -3331,6 +3336,7 @@ class AviaNZ(QMainWindow):
             # user to enter?
             f0_low = minFrq
             f0_high = maxFrq
+        speciesDict['F0Range']=[f0_low, f0_high]
         # add this filter to sppinfoFile
         if self.saveConfig:
             #self.sppInfo[species] = [minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M, optimumNodes]
@@ -3338,7 +3344,7 @@ class AviaNZ(QMainWindow):
 
             filename = self.config['FiltersFolder']+species+'.txt'
             # TODO: More?
-            if isfile(filename):
+            if os.path.isfile(filename):
                 print("File already exists, overwriting")
             f = open(filename,'w')
             f.write(json.dumps(speciesDict))
@@ -3346,7 +3352,7 @@ class AviaNZ(QMainWindow):
 
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
-        msg.setText("Training is completed! \nNow this detector will appear under wavelet segmentation. \nFirst test it on a seperate dataset before actual use. \nIf you find it does not perform well, retrain the detector \nadding more trining data and test again.")
+        msg.setText("Training is completed! \nNow this detector will appear under wavelet segmentation. \nFirst test it on a seperate dataset before actual use. \nIf you find it does not perform well, retrain the detector \nby changing the thr and adding more trining data.")
         msg.setIconPixmap(QPixmap("img/Owl_done.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
         msg.setWindowTitle("Detector Ready to Test!")
@@ -3354,8 +3360,8 @@ class AviaNZ(QMainWindow):
         msg.exec_()
         return
 
-    def ff(self, data, minLen, maxLen, minF, maxF, fs):
-        sc = SupportClasses.preProcess(audioData=data, sampleRate=fs, spInfo=[minLen,maxLen,minF, maxF, fs], df=True)  # species left empty to avoid bandpass filter
+    def ff(self, data, fs, speciesDict):
+        sc = SupportClasses.preProcess(audioData=data, sampleRate=fs, spInfo=speciesDict, df=True)  # species left empty to avoid bandpass filter
         data, sampleRate = sc.denoise_filter(level=10)
         sp = SignalProc.SignalProc([], 0, 512, 256)
         sgRaw = sp.spectrogram(data, 512, 256, mean_normalise=True, onesided=True, multitaper=False)
@@ -3377,26 +3383,8 @@ class AviaNZ(QMainWindow):
             #print("f0=", pitch)
             f0 = pitch
             return f0,f0
-        else:  # Get the individual pieces within a seg
-            syls = segment.identifySegments(ind, maxgap=10, minlength=minLen / 2)
-            #print("sys= ", sys)
-            if syls == []:
-                return np.min(pitch), np.max(pitch)
-            low = []
-            high = []
-            for s in syls:  # see if any syllable got right ff
-                s[0] = s[0] * sampleRate / float(256)
-                s[1] = s[1] * sampleRate / float(256)
-                i = np.where((ind > s[0]) & (ind < s[1]))
-                #print('i=', i)
-                #print("x[i]=",x[i])
-                if len(x[i])>0:
-                    low.append(np.min(x[i]))
-                    high.append(np.min(x[i]))
-            if len(low)>0:
-                return np.min(low), np.max(high)
-            else:
-                return 0,0
+        else:
+            return round(np.min(pitch)), round(np.max(pitch))
 
     def prepareTrainData(self):
         """ Listener for the wavelet training dialog.
