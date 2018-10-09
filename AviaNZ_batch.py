@@ -300,6 +300,12 @@ class AviaNZ_batchProcess(QMainWindow):
                         # skip the processing, but still need to update excel:
                         print("File %s processed previously, skipping" % filename)
                         self.loadFile(wipe = (self.species=="All species"))
+                        DOCRecording = re.search('(\d{6})_(\d{6})', filename)
+                        if DOCRecording:
+                            startTime = DOCRecording.group(2)
+                            sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                        else:
+                            sTime = 0
                         if self.species == 'All species':
                             out = SupportClasses.exportSegments(segments=self.segments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         else:
@@ -323,7 +329,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         DOCRecording = re.search('(\d{6})_(\d{6})', filename)
                         if DOCRecording:
                             startTime = DOCRecording.group(2)
-                            if int(startTime[:2]) > 18 or int(startTime[:2]) < 6:  # 6pm to 6am as night
+                            if int(startTime[:2]) > 17 or int(startTime[:2]) < 7:  # 6pm to 6am as night
                                 Night = True
                                 sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
                             else:

@@ -221,12 +221,6 @@ class postProcess:
                 # read the sound segment and check fundamental frq.
                 data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
 
-                # # bring the segment into 16000 just because ff was better at 16000
-                # if self.sampleRate != 16000:
-                #     data = librosa.core.audio.resample(data, self.sampleRate, 16000)
-                #     sampleRate = 16000
-                # else:
-                #     sampleRate = self.sampleRate
                 # denoise before fundamental frq. extraction
                 sc = preProcess(audioData=data, sampleRate=self.sampleRate, spInfo={}, df=True)  # species left empty to avoid bandpass filter
                 data, sampleRate = sc.denoise_filter(level=10)
@@ -247,33 +241,20 @@ class postProcess:
                 x = medfilt(pitch, 15)
                 if ind.size < 2:
                     if (pitch > self.F0[0]) and (pitch < self.F0[1]):
-                        print("kiwi ", pitch)
+                        print("match with F0 of bird, ", pitch)
                         continue    # print file, 'segment ', seg, round(pitch), ' *##kiwi found'
                     else:
                         print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
                         newSegments.remove(seg)
-                else:   # Get the individual pieces within a seg
-                    syls = segment.identifySegments(ind, maxgap=10, minlength=self.minLen/2)
-                    count = 0
-                    if syls == []:
-                        if (np.mean(pitch) > self.F0[0]) and (np.mean(pitch) < self.F0[1]):
-                            # print file, 'segment ', seg, round(np.mean(pitch)), ' *## kiwi found '
-                            continue
-                        else:
-                            print('segment ', seg, round(np.mean(pitch)), ' *-- fundamental freq is out of range, could be noise')
-                            newSegments.remove(seg)
-                            continue
-                    flag = False
-                    for s in syls:  # see if any syllable got right ff
-                        count += 1
-                        s[0] = s[0] * sampleRate / float(256)
-                        s[1] = s[1] * sampleRate / float(256)
-                        i = np.where((ind > s[0]) & (ind < s[1]))
-                        if (np.mean(x[i]) > self.F0[0]) and (np.mean(x[i]) < self.F0[1]):    # :   # and (
-                            flag = True
-                            break
-                    if not flag:
+                else:
+                    if (np.mean(pitch) > self.F0[0]) and (np.mean(pitch) < self.F0[1]):
+                        # print file, 'segment ', seg, round(np.mean(pitch)), ' *## kiwi found '
+                        continue
+                    else:
+                        print('segment ', seg, round(np.mean(pitch)),
+                              ' *-- fundamental freq is out of range, could be noise')
                         newSegments.remove(seg)
+                        continue
         self.segments = newSegments
 
     # ***no use of the rest of the functions in this class for the moment.
