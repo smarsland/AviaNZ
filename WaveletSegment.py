@@ -23,7 +23,6 @@ import librosa
 
 # TODO: Inconsisient about symmlots of or zeros for the wavelet packet
 # TODO: This still needs lots of tidying up
-# TODO: Make a dictionary and json it with species params in (read-only)
 
 class WaveletSegment:
     # This class implements wavelet segmentation for the AviaNZ interface
@@ -221,14 +220,14 @@ class WaveletSegment:
     #
     #     return detected
 
-    def detectCalls(self,wp,sampleRate, listnodes=[], species=[],trainTest=False):
+    def detectCalls(self,wp,sampleRate, listnodes=[], spInfo={},trainTest=False):
         #for test recordings given the set of nodes
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
         import math
         if sampleRate==0:
             sampleRate=self.sampleRate
-        if species != []:
-            thr = species['WaveletParams'][0]
+        if spInfo != {}:
+            thr = spInfo['WaveletParams'][0]
         else:
             pass
             # TODO: during train species thr is not avaialble to read from Filters
@@ -251,12 +250,12 @@ class WaveletSegment:
             # get the coefficients
             C = new_wp.reconstruct(update=True)
             # filter
-            C = self.sp.ButterworthBandpass(C, self.sampleRate, low=species['FreqRange'][0],high=species['FreqRange'][1],order=10)
+            C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0],high=spInfo['FreqRange'][1],order=10)
             C = np.abs(C)
             N = len(C)
 
             # Compute the number of samples in a window -- species specific
-            M = int(species['WaveletParams'][1] * sampleRate / 2.0)
+            M = int(spInfo['WaveletParams'][1] * sampleRate / 2.0)
             # Compute the energy curve (a la Jinnai et al. 2012)
             E = np.zeros(N)
             E[M] = np.sum(C[:2 * M+1])
@@ -292,17 +291,6 @@ class WaveletSegment:
         # detected[0]=0       # to avoid two FPs usually occur at the start and end of the recording
         # detected[-1]=0
         return detected
-        # if trainTest==True:
-        #     return detected
-        # else:
-        #     detected=np.where(detected>0)
-        #     # print "det",detected
-        #     if np.shape(detected)[1]>1:
-        #         return self.identifySegments(np.squeeze(detected))
-        #     elif np.shape(detected)[1]==1:
-        #         return self.identifySegments(detected)
-        #     else:
-        #         return []
 
     def identifySegments(self, seg): #, maxgap=1, minlength=1):
     # TODO: *** Replace with segmenter.checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0)
@@ -313,24 +301,11 @@ class WaveletSegment:
                 segments.append([s, s+1])
         return segments
 
-    # def mergeSeg(self,segments):
-    #     # **** Replace with segmenter.identifySegments(self, seg, maxgap=1, minlength=1,notSpec=False):
-    #     """ Combines segments from the wavelet segmenter."""
-    #     indx = []
-    #     for i in range(len(segments) - 1):
-    #         if segments[i][1] == segments[i + 1][0]:
-    #             indx.append(i)
-    #     indx.reverse()
-    #     for i in indx:
-    #         segments[i][1] = segments[i + 1][1]
-    #         del (segments[i + 1])
-    #     return segments
-
     # Usage functions
-    def preprocess(self, species, df=False):
+    def preprocess(self, spInfo, df=False):
         # set df=True to perform both denoise and filter
         # df=False to skip denoise
-        fs = species['SampleRate']
+        fs = spInfo['SampleRate']
 
         if self.sampleRate != fs:
             self.data = librosa.core.audio.resample(self.data, self.sampleRate, fs)
@@ -342,28 +317,15 @@ class WaveletSegment:
         else:
             denoisedData=self.data  # this is to avoid washing out very fade calls during the denoising
 
-        # # Denoise each 10 secs and merge
-        # denoisedData = []
-        # n = len(self.data)
-        # dLen=10*self.sampleRate
-        # for i in range(0,n,dLen):
-        #     temp = self.WaveletFunctions.waveletDenoise(self.data[i:i+dLen], thresholdType='soft', wavelet=self.WaveletFunctions.wavelet,maxLevel=5)
-        #     denoisedData.append(temp)
-        # import itertools
-        # denoisedData = list(itertools.chain(*denoisedData))
-        # denoisedData = np.asarray(denoisedData)
-        # wavio.write('../Sound Files/Kiwi/test/Tier1/test/test/test/test_whole.wav', denoisedData, self.sampleRate, sampwidth=2)
-        # librosa.output.write_wav('Sound Files/Kiwi/test/Tier1/test/test/test', denoisedData, self.sampleRate, norm=False)
-
-        filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=species['FreqRange'][0], high=species['FreqRange'][1])
+        filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1])
         return filteredDenoisedData
 
-    def waveletSegment_train(self,fName, soundInfo={}, df=False):
+    def waveletSegment_train(self,fName, spInfo={}, df=False):
         # Let df=true (denoise during preprocess) for bittern, df=false for others
         # Load data and annotation
         self.loadData(fName)
         # print(self.annotation)
-        filteredDenoisedData = self.preprocess(soundInfo,df=df)    # skip denoising
+        filteredDenoisedData = self.preprocess(spInfo,df=df)    # skip denoising
         # print("denoising completed")
         # print("inside waveletSegment_train fs= ", self.sampleRate)
         waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
@@ -394,7 +356,7 @@ class WaveletSegment:
             testlist = listnodes[:]
             testlist.append(node)
             print("testlist: ",testlist)
-            detected_c = self.detectCalls(wpFull, self.sampleRate, listnodes=testlist, species=soundInfo,trainTest=True)
+            detected_c = self.detectCalls(wpFull, self.sampleRate, listnodes=testlist, spInfo=spInfo,trainTest=True)
 
             # update the detections
             detections = np.maximum.reduce([detected, detected_c])
@@ -425,9 +387,9 @@ class WaveletSegment:
             self.data = data
             self.sampleRate = sampleRate
 
-        filteredDenoisedData = self.preprocess(species=spInfo, df=df)
+        filteredDenoisedData = self.preprocess(spInfo=spInfo, df=df)
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
-        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, species=spInfo, trainTest=trainTest)
+        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, spInfo=spInfo, trainTest=trainTest)
 
         # Todo: remove clicks
 
@@ -454,6 +416,7 @@ class WaveletSegment:
 
     def mergeSeg(self,detected):
         # Merge the neighbours, for now wavelet segments
+        #     # **** Replace with segmenter.identifySegments(self, seg, maxgap=1, minlength=1,notSpec=False):
         indx = []
         for i in range(len(detected) - 1):
             if detected[i][1] == detected[i + 1][0]:
@@ -464,332 +427,3 @@ class WaveletSegment:
             del (detected[i + 1])
         return detected
 
-    def loadData(self,fName,trainTest=True):
-        # Load data
-        filename = fName+'.wav' #'train/kiwi/train1.wav'
-        filenameAnnotation = fName+'-sec.txt'#'train/kiwi/train1-sec.xlsx'
-        try:
-            wavobj = wavio.read(filename)
-        except:
-            print("unsupported file: ", filename)
-            pass
-        self.sampleRate = wavobj.rate
-        self.data = wavobj.data
-        if self.data.dtype is not 'float':
-            self.data = self.data.astype('float') #/ 32768.0
-        if np.shape(np.shape(self.data))[0]>1:
-            self.data = np.squeeze(self.data[:,0])
-        n=int(len(self.data)/self.sampleRate)
-
-        if trainTest==True:     #survey data don't have annotations
-            # Get the segmentation from the txt file
-            import csv
-            self.annotation = np.zeros(n)
-            count = 0
-            with open(filenameAnnotation) as f:
-                reader = csv.reader(f, delimiter="\t")
-                d = list(reader)
-            for row in range(0,n):
-                self.annotation[count]=d[row][1]
-                count += 1
-
-def batch(dirName,species,ws,listnodes,train=False,df=False):
-    import os
-    nodeList=[]
-    TP=FP=TN=FN=0
-    speciesData = json.load(open(os.path.join('Filters', species + '.txt')))
-    for root, dirs, files in os.walk(str(dirName)):
-        for filename in files:
-            if filename.endswith('.wav'):
-                filename = root + '/' + filename[:-4]
-                if not train:
-                    print("***", filename)
-                    det, tp, fp, tn, fn = ws.waveletSegment_test(fName=filename, listnodes=listnodes, spInfo=speciesData, trainTest=True,df=df)
-                    TP+=tp
-                    FP+=fp
-                    TN+=tn
-                    FN+=fn
-                else:
-                    print("***", filename)
-                    nodes = ws.waveletSegment_train(fName=filename, soundInfo=speciesData,df=df)
-                    print(nodes)
-                    nodeList=np.union1d(nodeList, nodes)
-    if train:
-        print('----- wavelet nodes for the species', nodeList)
-    else:
-        print("-----TP   FP  TN  FN")
-        print(TP, FP, TN, FN)
-
-# ws=WaveletSegment(wavelet='dmey')
-# batch('E:\AviaNZ\Sound Files\kiwi\Ponui', "Kiwi, Nth Is Brown", ws, None, train=True)
-
-#train bittern
-# batch('Sound Files/Bittern/thesis-Hatuma/train','Bittern',ws,listnodes=None,train=True)
-# bittern_nodes=[41,43,44,45,46]
-# bittern_nodes=[4, 21,43, 44, 45, 46]
-#bittern_nodes=[10,39, 40, 41, 42, 43, 44, 45, 46]
-# batch('E:/AviaNZ/Sound Files/Bittern/kessel/KA13_Oct 17-24_down','Bittern',ws,listnodes=bittern_nodes,train=False,df=True)
-# batch('E:/Employ/Halema/Survey2/Card 1/newTrain','Kiwi',ws,listnodes=None,train=True,df=False)
-# batch('E:/Employ/Halema/Survey2/Card 1/newTrain','Kiwi',ws,listnodes=None,train=False,df=False)
-
-# detect(dirName='E:/Employ/Halema/Survey2/Card 1/rerun', trainTest=False, species='Kiwi')
-
-
-## Testing e-ratio
-# ws=WaveletSegment(wavelet='dmey')
-# segments=ws.waveletSegment_test('Sound Files\Kiwi\\test\Tier1\\xx\\xx\BX23_BIRA_150107_225906', trainTest=True)
-#
-# sp = SignalProc.SignalProc(ws.data, ws.sampleRate, 256, 128)
-# ws.sg = sp.spectrogram(ws.data)
-#
-# f1 = 1100
-# f2 = 4000
-# print "eRatio2"
-# for seg in segments:
-#     e = np.sum(ws.sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, :]) /128     # whole frequency range
-#     nBand = 128  # number of frequency bands
-#     #e = np.sum(ws.sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128,
-#     #           f2 * 128 / (ws.sampleRate / 2):])  # f2:
-#     #nBand = 128 - f2 * 128 / (ws.sampleRate / 2)  # number of frequency bands
-#     e = e / nBand  # per band power
-#
-#     eBand = np.sum(ws.sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128,
-#                    f1 * 128 / (ws.sampleRate / 2):f2 * 128 / (ws.sampleRate / 2)])  # f1:f2
-#     nBand = f2 * 128 / (ws.sampleRate / 2) - f1 * 128 / (ws.sampleRate / 2)
-#     eBand = eBand / nBand
-#     r = eBand / e
-#     print seg, r
-#
-# print "eRatio1"
-# for seg in segments:
-#     #e = np.sum(ws.sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, :]) / 128  # whole frequency range
-#     #nBand = 128  # number of frequency bands
-#     e = np.sum(ws.sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128, f2 * 128 / (ws.sampleRate / 2):])  # f2:
-#     nBand = 128 - f2 * 128 / (ws.sampleRate / 2)  # number of frequency bands
-#     e = e / nBand  # per band power
-#
-#     eBand = np.sum(ws.sg[seg[0] * ws.sampleRate / 128:seg[1] * ws.sampleRate / 128,
-#                    f1 * 128 / (ws.sampleRate / 2):f2 * 128 / (ws.sampleRate / 2)])  # f1:f2
-#     nBand = f2 * 128 / (ws.sampleRate / 2) - f1 * 128 / (ws.sampleRate / 2)
-#     eBand = eBand / nBand
-#     r = eBand / e
-#     print seg, r
-
-
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test2',listnodes=listnodes1,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test2',listnodes=listnodes2,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test2',listnodes=listnodes3,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test2',listnodes=listnodes4,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test2',listnodes=listnodes5,trainTest=True)
-    #
-    #
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test3',listnodes=listnodes1,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test3',listnodes=listnodes2,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test3',listnodes=listnodes3,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test3',listnodes=listnodes4,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test3',listnodes=listnodes5,trainTest=True)
-    #
-    #
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test4',listnodes=listnodes1,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test4',listnodes=listnodes2,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test4',listnodes=listnodes3,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test4',listnodes=listnodes4,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test4',listnodes=listnodes5,trainTest=True)
-    #
-    #
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes1,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes2,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes3,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes4,trainTest=True)
-    # dummy = ws.waveletSegment_test('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/test/kiwi-test5',listnodes=listnodes5,trainTest=True)
-
-def test2():
-    ws=WaveletSegment(wavelet='dmey')
-    listnodes1 = ws.waveletSegment_train('/Users/srmarsla/Projects/AviaNZ/Wavelet Segmentation/kiwi/train/train1')
-    print(listnodes1)
-
-def test():
-    ws=WaveletSegment()
-    # listnodes2 = ws.waveletSegment_train('Sound Files/Kiwi/train/Ponui/train2')
-    # print "***", listnodes2
-    # listnodes3 = ws.waveletSegment_train('Sound Files/Kiwi/train/Ponui/train3')
-    # print "***", listnodes3
-    # listnodes4 = ws.waveletSegment_train('Sound Files/Kiwi/train/Ponui/train4')
-    # print "***", listnodes4
-    # listnodes6 = ws.waveletSegment_train('Sound Files/Kiwi/train/Ponui/train6')
-    # print "***", listnodes6
-    # listnodes8 = ws.waveletSegment_train('Sound Files/Kiwi/train/Ponui/train8')
-    # print "***", listnodes8
-    # listnodes9 = ws.waveletSegment_train('Sound Files/Kiwi/train/Taranaki/Omoana_230515_185924')
-    # # print "***", listnodes9
-    # listnodes = ws.waveletSegment_train('Sound Files/Kiwi/train/Taranaki/LK_020816_202935_p3')
-    # print "***", listnodes
-    # listnodes10 = ws.waveletSegment_train('Sound Files/Kiwi/train/Jason/110617_180001')
-    # print "***", listnodes10
-    # listnodes11 = ws.waveletSegment_train('Sound Files/Kiwi/train/Tier1/5min/CJ68_BIRD_141107_221420') # Kiwi(M)3
-    # print "***", listnodes11
-    # listnodes12 = ws.waveletSegment_train('Sound Files/Kiwi/train/Tier1/5min/CJ68_BIRM_141107_221420') # Kiwi(M)1
-    # print "***", listnodes12
-    # listnodes13 = ws.waveletSegment_train('Sound Files/Kiwi/train/Tier1/5min/CJ68_BIRX_141107_221420') # Kiwi(M)3
-    # print "***", listnodes13
-    # listnodes14 = ws.waveletSegment_train('Sound Files/Kiwi/train/Tier1/5min/CL78_BIRX_141121_022801') # Kiwi(M)2
-    # print "***", listnodes14
-    # listnodes15 = ws.waveletSegment_train('Sound Files/Kiwi/train/Tier1/CH66_BIRA_151125_012820') # Kiwi(F)3
-    # print "***", listnodes15
-    # listnodes16 = ws.waveletSegment_train('Sound Files/Kiwi/train/Tier1/CG68_BIRA_151214_004334') # Kiwi(M)4
-    # print "***", listnodes16
-
-    ## batch(ws, listnodes2, listnodes3, listnodes4, listnodes6, listnodes8)
-
-def test_listmerge():
-    # p1 = [46, 45, 43, 38]           # Ponui train2 (female)
-    p1 = [36, 38]
-    # p2 = [43, 44, 35, 36, 55]       # Ponui train3
-    p2 = [33, 35, 36, 43]
-    # p3 = [45, 46, 42, 50]           # Ponui train4 (female)
-    p3 = [45]
-    # p4 = [35, 36, 17, 43, 40, 20]   # Ponui train6
-    p4 = [35, 36, 39]
-    # p5 = [35, 36]                   # Ponui train8
-    p5 = [35, 36]
-    # h1 = [43, 36, 44, 38, 22, 40]       # Taranaki (female)
-    h1 = [38, 36, 41, 42]
-    # h2 = [55, 56, 35, 43, 40, 17]       # Taranaki
-    h2 = [17, 35, 55]
-    # j1 = [] # Jason
-    t1 = [35, 43]      # Tier 1 (15 min)
-    # t2 = [35]          # Tier 1
-    # t3 = [35, 43]      # Tier 1
-    # t4 = [44, 43, 46]  # Tier 1
-    # t5 = [44, 48]      # Tier 1 (female-fade)
-    # t6 = [35, 36]      # Tier 1
-    t6 = [44, 38, 46, 37, 34]
-
-    # listnodes=np.union1d(l1,np.union1d(l2,np.union1d(l3,np.union1d(l4,np.union1d(l5,np.union1d(l6,np.union1d(l7,np.union1d(l8,np.union1d(l9,np.union1d(l10,l11))))))))))
-            # [17.0, 20.0, 22.0, 35.0, 36.0, 38.0, 40.0, 42.0, 43.0, 44.0, 45.0, 46.0, 50.0, 55.0]
-    listnodes=np.union1d(p1,np.union1d(p2,np.union1d(p3,np.union1d(p4,np.union1d(p5,np.union1d(h1,np.union1d(h2,np.union1d(t1,np.union1d(t2,np.union1d(t3,np.union1d(t4,np.union1d(t5,t6))))))))))))
-    # [17 20 22 35 36 38 40 42 43 44 45 46 48 50 55 56]
-    ws = WaveletSegment()
-    # batch(ws, listnodes.astype(int), 'Sound Files\Kiwi\\test\Tier1')
-    batch(ws, listnodes.astype(int), 'Sound Files\Kiwi\\test\Tier1')
-
-    # listnodes1 = np.union1d(l1,np.union1d(l2,np.union1d(l3,np.union1d(l4,l5))))
-    # # Note no l4 below -> empty set
-    # listnodes2 = np.intersect1d(l1,np.intersect1d(l2,np.intersect1d(l3,l5)))
-    # listnodes3 = np.union1d(l1,np.union1d(l2,l3))
-    # listnodes4 = np.intersect1d(l1,np.intersect1d(l2,l3))
-    # a = np.arange(35,55)
-    # np.random.shuffle(a)
-    # listnodes5 = a[:6]
-    #
-    # ws = WaveletSegment()
-    # batch(ws, listnodes1, listnodes2, listnodes3, listnodes4, listnodes5)
-
-# test_listmerge()
-
-# ws = WaveletSegment()
-# dummy = ws.waveletSegment_test('Sound Files/Kiwi/train/Tier1/CG68_BIRA_151214_004334', trainTest=True)
-# dummy = ws.waveletSegment_test('Sound Files/Kiwi/train/Tier1/CH66_BIRA_151125_012820', trainTest=True)
-# dummy = ws.waveletSegment_test('Sound Files/Kiwi/train/Tier1/CJ68_BIRD_141107_221420', trainTest=True)
-# dummy = ws.waveletSegment_test('Sound Files/Kiwi/train/Tier1/CJ68_BIRM_141107_221420', trainTest=True)
-# dummy = ws.waveletSegment_test('Sound Files/Kiwi/train/Tier1/CJ68_BIRX_141107_221420', trainTest=True)
-# dummy = ws.waveletSegment_test('Sound Files/Kiwi/train/Tier1/CL78_BIRX_141121_022801', trainTest=True)
-
-def waveletSegment_train_learning(fName,species='Kiwi'):
-    ws=WaveletSegment()
-    f = np.genfromtxt("Sound Files\MLdata\wE.data",delimiter=',',dtype=None)
-    ld = len(f[0])
-    data = np.zeros((len(f),ld))
-
-    names = []
-
-    for i in range(len(f)):
-        for j in range(ld-2):
-            data[i,j] = f[i][j]
-        data[i,ld-1] = f[i][ld-1]
-        if not f[i][ld-2] in names:
-            names.append(f[i][ld-2])
-            data[i,ld-2] = len(names)
-        else:
-            data[i,ld-2] = names.index(f[i][ld-2])
-
-    # Decide on a class to be the 1 to detect
-    # It is choosing male kiwi as the positive class (10) here
-    data[:,63] = 0
-    ind = np.where(data[:,62] == 10)
-    # ind = np.where(data[:,62] == 4)
-    data[ind,63] = 1
-
-    # Compute point-biserial correlations and sort wrt it, return top nNodes
-    nodes = ws.compute_r(data[:,62],data[:,:62].transpose())
-
-    # Now for Nirosha's sorting
-    # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
-    nodes = ws.sortListByChild(np.ndarray.tolist(nodes))
-
-    # These nodes refer to the unrooted tree, so add 1 to get the real indices
-    nodes = [n + 1 for n in nodes]
-
-    # **** We actually need the real data :(
-    # Generate a full 5 level wavelet packet decomposition
-    # **** load newdata, species
-    f = np.genfromtxt("Sound Files\MLdata\data-1s.data",delimiter=',',dtype=None)
-    f = np.squeeze(np.reshape(f,(np.shape(f)[0]*np.shape(f)[1],1)))
-    #g = np.genfromtxt("Sound Files\MLdata\label-1s",delimiter=',',dtype=None)
-
-    return f, data, nodes
-
-
-def moretest():
-    ws=WaveletSegment()
-    wpFull = pywt.WaveletPacket(data=f, wavelet=ws.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
-    # Now check the F2 values and add node if it improves F2
-    listnodes = []
-    bestBetaScore = 0
-    detected = np.zeros(len(data))
-
-    for node in nodes:
-        testlist = listnodes[:]
-        testlist.append(node)
-        print(testlist)
-        detected_c = ws.detectCalls(wpFull,node,16000,n=len(data))
-        #update the detections
-        det=np.maximum.reduce([detected,detected_c])
-        fB = ws.fBetaScore(data[:,63], det)
-        if fB > bestBetaScore:
-            bestBetaScore = fB
-            #now apend the detections of node c to detected
-            detected=det
-            listnodes.append(node)
-        if bestBetaScore == 1:
-            break
-    # listnodes_all=listnodes_all.append(listnodes)
-    return listnodes
-
-# This is a basic learner using xgboost
-# It didn't seem to work well, but needs more testing
-# def waveletSegment_learn(fName=None,data=None, sampleRate=None, species='kiwi',trainTest=False):
-#     # import xgboost as xgb
-#     # from sklearn.externals import joblib
-#
-#     if species == 'Kiwi (M)':
-#         clf = clf_maleKiwi
-#     elif species == 'Kiwi (F)':
-#         clf = clf_femaleKiwi
-#     elif species == 'Ruru':
-#         clf = clf_ruru
-#
-#     # Second by second, run through the data file and compute the wavelet energy, then classify them
-#     segs = []
-#     for i in range(0,len(data),sampleRate):
-#         currentSec = data[i:(i+1)*sampleRate]
-#         # Compute wavelet energy for this second
-#         E = computeWaveletEnergy_1s(currentSec, 'dmey2')    # always calculate E on row data not denoised or bp
-#         E = np.ones((1,len(E))) * E
-#         #segs.append(int(clf.predict(E)[0]))
-#         print clf.predict(E)[0]
-#         # if int(clf.predict(E)[0]) == 1:
-#         #     segs.append([float(i)/sampleRate,float(i+sampleRate)/sampleRate])
-#         segs.append(int(clf.predict(E)[0]))
-#     print segs
-#     return segs
