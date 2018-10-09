@@ -25,7 +25,7 @@
 # TODO: Training, various code tidies (utilities, waveletsegment), tidy repository
 # TODO: Automate some of the training options
 # TODO: Think about the dictionary a bit more for option checking
-# TODO: Contrast and brightness in HR2
+# Contrast and brightness in HR2
 # Update order in context menu should be an option
 # Multiple species option sorted 
 # Config Folder to tidy things up
@@ -2679,7 +2679,7 @@ class AviaNZ(QMainWindow):
                 # Check which page is first to have segments on
                 self.currentFileSection = -1
 
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.shortBirdList, self.longBirdList, self.multipleBirds, self)
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.brightnessSlider.value(), self.contrastSlider.value(), self.shortBirdList, self.longBirdList, self.multipleBirds, self)
             # load the first image:
             self.box1id = -1
             self.humanClassifyDialog1.setSegNumbers(0, len(self.segments))
@@ -2950,7 +2950,7 @@ class AviaNZ(QMainWindow):
             self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, segments2show,
                                                                label, self.sampleRate, self.audioFormat,
                                                                self.config['incr'], self.lut, self.colourStart,
-                                                               self.colourEnd, self.config['invertColourMap'])
+                                                               self.colourEnd, self.config['invertColourMap'], self.brightnessSlider.value(), self.contrastSlider.value())
             self.humanClassifyDialog2.exec_()
             errorInds = self.humanClassifyDialog2.getValues()
             print("errors: ", errorInds, len(errorInds))
