@@ -22,7 +22,7 @@
 
 # TODO: Manual, final checks, push out
 # TODO: Manual should say DK -> bird auto. But can re-add DK if necessary
-# TODO: Training, various code tidies (utilities, waveletsegment), tidy repository
+# TODO: Training, tidy repository
 # TODO: Automate some of the training options
 # TODO: Think about the dictionary a bit more for option checking
 # Contrast and brightness in HR2
@@ -103,9 +103,9 @@ class AviaNZ(QMainWindow):
         try:
             self.FilterFiles = [f[:-4] for f in os.listdir(self.config['FiltersFolder']) if os.path.isfile(os.path.join(self.config['FiltersFolder'], f))]
         except:
-            "Folder not found, no filters loaded"
+            print("Folder not found, no filters loaded")
             self.FilterFiles = None
-        print(self.FilterFiles)
+        #print(self.FilterFiles)
 
         #try:
             #self.sppInfo = json.load(open(sppInfoFolder))
@@ -244,7 +244,7 @@ class AviaNZ(QMainWindow):
             while command!=():
                 c = command[0]
                 command = command[1:]
-                print("next command to execute is %s" % c)
+                print("Next command to execute is %s" % c)
                 if c=="denoise":
                     self.denoise()
                 elif c=="segment":
@@ -955,11 +955,11 @@ class AviaNZ(QMainWindow):
         dirNameOld = self.dirName
         fileNameOld = os.path.basename(self.filename)
         if fileName != '':
-            print("opening file %s" % fileName)
+            print("Opening file %s" % fileName)
             self.dirName = os.path.dirname(fileName)
             success = self.listLoadFile(os.path.basename(fileName))
         if success==1:
-            print("error loading file, reloading current file")
+            print("Error loading file, reloading current file")
             self.dirName = dirNameOld
             self.filename = fileNameOld
             self.listLoadFile(fileNameOld)
@@ -1172,8 +1172,6 @@ class AviaNZ(QMainWindow):
                             if len(s[4])>1:
                                 self.multipleBirds = True
 
-                print(self.Hartley)
-                print(os.path.isfile(self.filename + '.data'))
                 if self.Hartley and not os.path.isfile(self.filename + '.data'):
                     self.addRegularSegments()
 
@@ -1711,7 +1709,7 @@ class AviaNZ(QMainWindow):
         while self.listRectanglesa2[i] != sender and i<len(self.listRectanglesa2):
             i = i+1
         if i==len(self.listRectanglesa2):
-            print("segment not found!")
+            print("Segment not found!")
         else:
             if type(sender) == self.ROItype:
                 # update the box visual
@@ -1748,7 +1746,7 @@ class AviaNZ(QMainWindow):
         while self.listRectanglesa1[i] != sender and i<len(self.listRectanglesa1):
             i = i+1
         if i==len(self.listRectanglesa1):
-            print("segment not found!")
+            print("Segment not found!")
         else:
             x1 = self.convertAmpltoSpec(sender.getRegion()[0])
             x2 = self.convertAmpltoSpec(sender.getRegion()[1])
@@ -1870,7 +1868,7 @@ class AviaNZ(QMainWindow):
         the current window, can assume the other do, but have to save their times correctly.
         If a segment is too long for the current section, truncates it.
         """
-        print("segment added at %d-%d, %d-%d" % (startpoint, endpoint, self.convertYtoFreq(y1), self.convertYtoFreq(y2)))
+        print("Segment added at %d-%d, %d-%d" % (startpoint, endpoint, self.convertYtoFreq(y1), self.convertYtoFreq(y2)))
         miny = self.convertFreqtoY(self.minFreqShow)
         maxy = self.convertFreqtoY(self.maxFreqShow)
         if not saveSeg:
@@ -2771,7 +2769,7 @@ class AviaNZ(QMainWindow):
                                                    species, self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1,
                                                    self.segments[self.box1id][0], self.segments[self.box1id][1], self.minFreq, self.maxFreq)
                 else:
-                    print("segment %s missing for some reason" % self.box1id)
+                    print("Segment %s missing for some reason" % self.box1id)
 
         else:
             msg = QMessageBox()
@@ -2953,7 +2951,7 @@ class AviaNZ(QMainWindow):
                                                                self.colourEnd, self.config['invertColourMap'], self.brightnessSlider.value(), self.contrastSlider.value())
             self.humanClassifyDialog2.exec_()
             errorInds = self.humanClassifyDialog2.getValues()
-            print("errors: ", errorInds, len(errorInds))
+            print("Errors identified: ", errorInds, len(errorInds))
 
             if len(errorInds) > 0:
                 outputErrors = []
@@ -3630,7 +3628,7 @@ class AviaNZ(QMainWindow):
                 post.fundamentalFrq()  # species specific
 
             newSegments = post.segments
-            print("new segments: ", newSegments)
+            print("New segments: ", newSegments)
 
             # Generate annotation friendly output.
             if str(alg)=="Wavelets":
@@ -3662,7 +3660,7 @@ class AviaNZ(QMainWindow):
             self.lenNewSegments = len(newSegments)
             self.segmentDialog.undo.setEnabled(True)
             self.statusLeft.setText("Ready")
-        print("segmentation finished at %s" % (time.time() - opstartingtime))
+        print("Segmentation finished at %s" % (time.time() - opstartingtime))
 
     def segment_undo(self):
         """ Listener for undo button in segmentation dialog.
@@ -3688,7 +3686,7 @@ class AviaNZ(QMainWindow):
             for file in files:
                 file = os.path.join(root, file)
                 if fnmatch.fnmatch(file, self.filename[:-4] + "_*.xlsx"):
-                    print("removing file %s" % file)
+                    print("Removing file %s" % file)
                     os.remove(file)
         out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename[:-4], resolution=10, datalength=self.datalength, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
         out.excel()
@@ -3894,7 +3892,7 @@ class AviaNZ(QMainWindow):
                 bottom = max(0.1, self.minFreq, self.segments[self.box1id][2])
                 top = min(self.segments[self.box1id][3], self.maxFreq-0.1)
 
-                print("extracting samples between %d-%d Hz" % (bottom, top))
+                print("Extracting samples between %d-%d Hz" % (bottom, top))
                 start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
                 stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
                 self.setPlaySliderLimits(start, stop)
@@ -3938,7 +3936,7 @@ class AviaNZ(QMainWindow):
 
         # listener for playback finish. Note small buffer for catching up
         if eltime > (self.segmentStop-10):
-            print("stopped at %d ms" % eltime)
+            print("Stopped at %d ms" % eltime)
             self.stopPlayback()
         else:
             self.playSlider.setValue(eltime)
@@ -4499,14 +4497,6 @@ class AviaNZ(QMainWindow):
             except Exception as e:
                 print("ERROR while saving config file:")
                 print(e)
-        # TODO
-        #if self.savesppinfo == True:
-            #try:
-                #print("Saving species info file")
-                #json.dump(self.sppInfo, open(self.sppinfofile, 'w'),indent=1)
-            #except Exception as e:
-                #print("ERROR while saving species info file:")
-                #print(e)
 
         # Save the shortBirdList
         json.dump(self.shortBirdList, open(self.config['BirdListShort'], 'w'),indent=1)
