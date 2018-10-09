@@ -238,7 +238,7 @@ class postProcess:
                 ind = np.squeeze(np.where(pitch > minfreq))
                 pitch = pitch[ind]
                 if pitch.size == 0:
-                    print('segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
+                    print('Segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
                     # newSegments.remove(seg) # for now keep it
                     continue    # continue to the next seg
                 ind = ind * W / 512
@@ -247,10 +247,10 @@ class postProcess:
                 x = medfilt(pitch, 15)
                 if ind.size < 2:
                     if (pitch > self.F0[0]) and (pitch < self.F0[1]):
-                        print("kiwi ", pitch)
+                        #print("kiwi ", pitch)
                         continue    # print file, 'segment ', seg, round(pitch), ' *##kiwi found'
                     else:
-                        print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
+                        #print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
                         newSegments.remove(seg)
                 else:   # Get the individual pieces within a seg
                     syls = segment.identifySegments(ind, maxgap=10, minlength=self.minLen/2)
@@ -260,7 +260,7 @@ class postProcess:
                             # print file, 'segment ', seg, round(np.mean(pitch)), ' *## kiwi found '
                             continue
                         else:
-                            print('segment ', seg, round(np.mean(pitch)), ' *-- fundamental freq is out of range, could be noise')
+                            #print('segment ', seg, round(np.mean(pitch)), ' *-- fundamental freq is out of range, could be noise')
                             newSegments.remove(seg)
                             continue
                     flag = False
@@ -495,7 +495,7 @@ class exportSegments:
         # while everything from segments list is exported as-is.
         if len(seglist)>0:
             if len(seglist[0])==2:
-                print("using old format segment list")
+                print("Using old format segment list")
                 # convert to new format
                 for seg in seglist:
                     seg.append(0)
@@ -503,7 +503,7 @@ class exportSegments:
                     seg.append(species)
                 return(seglist)
             elif len(seglist[0])==5:
-                print("using new format segment list")
+                #print("using new format segment list")
                 return(seglist)
             else:
                 print("ERROR: incorrect segment format")
@@ -911,7 +911,7 @@ class DragViewBox(pg.ViewBox):
         self.thisIsAmpl = thisIsAmpl
 
     def mouseDragEvent(self, ev):
-        print("uncaptured drag event")
+        print("Uncaptured drag event")
         # if self.enableDrag:
         #     ## if axis is specified, event will only affect that axis.
         #     ev.accept()
@@ -1066,20 +1066,20 @@ class ControllableAudio(QAudioOutput):
 
     def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
         if not resetPause and self.state() == QAudio.SuspendedState:
-            print("resuming at: %d" % self.pauseoffset)
+            print("Resuming at: %d" % self.pauseoffset)
             self.sttime = time.time() - self.pauseoffset/1000
             self.resume()
         else:
             if not self.keepSlider or resetPause:
                 self.pressedStop()
 
-            print("starting at: %d" % self.tempin.pos())
+            print("Starting at: %d" % self.tempin.pos())
             sleep(0.2)
             # in case bar was moved under pause, we need this:
             pos = self.tempin.pos() # bytes
             pos = self.format.durationForBytes(pos) / 1000 # convert to ms
             pos = pos + start
-            print("pos: %d start: %d stop %d" %(pos, start, stop))
+            print("Pos: %d start: %d stop %d" %(pos, start, stop))
             self.filterSeg(pos, stop, audiodata)
 
     def pressedPause(self):
@@ -1149,7 +1149,7 @@ class ControllableAudio(QAudioOutput):
         self.start(self.tempin)
 
     def seekToMs(self, ms, start):
-        print("seeking to %d ms" % ms)
+        print("Seeking to %d ms" % ms)
         # start is an offset for the current view start, as it is position 0 in extracted file
         self.reset()
         self.tempin.seek(self.format.bytesForDuration((ms-start)*1000))
@@ -1304,7 +1304,7 @@ class Log(object):
                 # [freetext, species, settings, [files]]
                 # (basically I'm parsing txt into json because I'm dumb)
                 while lend<len(lines):
-                    print(lines[lend])
+                    #print(lines[lend])
                     if lines[lend][0] == "#":
                         allans.append([lines[lstart], lines[lstart+1], lines[lstart+2],
                                         lines[lstart+3 : lend]])
@@ -1318,9 +1318,9 @@ class Log(object):
                 # and compare to check if it can be resumed.
                 # store all other analyses for re-printing.
                 for a in allans:
-                    print(a)
+                    #print(a)
                     if a[1]==self.species:
-                        print("resumable analysis found")
+                        print("Resumable analysis found")
                         # do not reprint this in log
                         if a[2]==self.settings:
                             self.currentHeader = a[0]
@@ -1336,7 +1336,7 @@ class Log(object):
                 print("ERROR: could not open log at %s" % path)
 
     def appendFile(self, filename):
-        print('appending %s to log' % filename)
+        print('Appending %s to log' % filename)
         # attach file path to end of log
         self.file.write(filename)
         self.file.write("\n")

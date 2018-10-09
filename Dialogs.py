@@ -239,7 +239,7 @@ class OperatorReviewer(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        print(self.name1.text(),self.name2.text())
+        #print(self.name1.text(),self.name2.text())
         return [self.name1.text(),self.name2.text()]
 
 #======
@@ -595,7 +595,7 @@ class Segmentation(QDialog):
         elif self.prevAlg == "Median Clipping":
             self.medlabel.hide()
             self.medThr.hide()
-            print("hiding")
+            #print("hiding")
         elif self.prevAlg == "Fundamental Frequency":
             self.Fundminfreq.hide()
             self.Fundminperiods.hide()
@@ -1269,7 +1269,7 @@ class HumanClassify1(QDialog):
             maxFreq = sampleRate / 2
         self.duration = len(audiodata) / sampleRate * 1000 # in ms
 
-        print("Parent species:" , self.parent.segments[self.parent.box1id][4])
+        #print("Parent species:" , self.parent.segments[self.parent.box1id][4])
 
         # fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
@@ -1383,7 +1383,7 @@ class HumanClassify1(QDialog):
         # Update the text and store the data
         for button in self.birdbtns:
             if button.isChecked():
-                print("clicked", button.text())
+                #print("clicked", button.text())
                 if button.text() == "Other":
                     self.birds3.setEnabled(True)
                 else:
@@ -1422,13 +1422,13 @@ class HumanClassify1(QDialog):
         else:
             self.birds3.addItem(textitem)
         #self.label.append(str(textitem))
-        print(self.multipleBirds)
+        #print(self.multipleBirds)
         if self.multipleBirds:
             self.label.append(str(textitem))
         else:           
             self.label = [str(textitem)]
         self.species.setText(','.join(self.label))
-        print(self.label)
+        #print(self.label)
         self.saveConfig = True
 
     def setColourLevels(self):
@@ -1455,7 +1455,7 @@ class HumanClassify1(QDialog):
         #     self.specPlot.setLevels([self.colourStart, self.colourEnd])
 
     def getValues(self):
-        print('out',self.label)
+        #print('out',self.label)
         return [self.label, self.saveConfig, self.tbox.text()]
 
 #======
@@ -1653,7 +1653,7 @@ class HumanClassify2(QDialog):
             self.buttons[i].stopPlayback()
             if self.buttons[i].buttonClicked:
                 self.errors.append(i+self.firstSegment)
-        print(self.errors)
+        #print(self.errors)
 
         # Now find out if there are more segments to check, and remake the buttons, otherwise close
         if len(self.segments2show) > 0:

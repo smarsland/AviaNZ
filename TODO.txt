@@ -1,4 +1,50 @@
 
+Create a single segment near the start of a file to annotate weather conditions
+
+Use the short list of birds to mark calls, with optional ? 
+
+Manual review as they wish, followed by Emma using Batch Review mode. 
+
+Labels in filename?
+# ==============
+# TODO
+
+# Finish segmentation
+#   Add a minimum length of time for a segment -> make this a parameter
+#   Finish sorting out parameters for median clipping segmentation, energy segmentation
+#   Finish cross-correlation to pick out similar bits of spectrogram -> and what other methods?
+#   Add something that aggregates them -> needs planning
+
+# Interface -> inverted spectrogram does not work - spec and amp do not synchronize
+
+# Actions -> Denoise -> median filter check
+# Make the median filter on the spectrogram have params and a dialog. Other options?
+
+# Finish the raven features
+
+# Would it be good to smooth the image? Actually, lots of ideas here! Might be nice way to denoise?
+    # Median filter, smoothing, consider also grab-cut
+    # Continue to play with inverting spectrogram
+
+# Colourmaps
+    # HistogramLUTItem
+
+# Context menu different for day and night birds?
+
+# Minor:
+# Consider always resampling to 22050Hz (except when it's less in file :) )?
+# Font size to match segment size -> make it smaller, could also move it up or down as appropriate
+# Where should label be written?
+# Use intensity of colour to encode certainty?
+# If don't select something in context menu get error -> not critical
+# Colours of the segments to be visible with different colourmaps? Not important!
+
+# Look at raven and praat and luscinia -> what else is actually useful? Other annotations on graphs?
+
+# Don't really want to load the whole thing, just 5 mins, and then move through with arrows -> how?
+# This is sometimes called paging, I think. (y, sr = librosa.load(filename, offset=15.0, duration=5.0) might help. Doesn't do much for the overview through)
+
+# ===============
 # TODO for AviaNZ
 
 Tier 1 annotation - labels to use so that we can evaluate results in detail
@@ -251,14 +297,6 @@ Segmentation experiments
     Bats do keep on coming up...
 
     Generative noise model
-
-# If we do decide to move to qt5
-selecting things from QListWidget seems to have changed
-setTextColor -> setForeground
-there is no phonon -> QMultimedia
-    seek -> setPosition
-    didn't look into this further
-there is no QString -> Python strings now work
 
 # Tier 1
 (1) Segmentation that is as good as we can get it
