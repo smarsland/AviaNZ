@@ -220,13 +220,13 @@ class WaveletSegment:
     #
     #     return detected
 
-    def detectCalls(self,wp,sampleRate, listnodes=[], species=[],trainTest=False):
+    def detectCalls(self,wp,sampleRate, listnodes=[], spInfo={},trainTest=False):
         #for test recordings given the set of nodes
         # Add relevant nodes to the wavelet packet tree and then reconstruct the data
         import math
         if sampleRate==0:
             sampleRate=self.sampleRate
-        thr = species['WaveletParams'][0]
+        thr = spInfo['WaveletParams'][0]
         detected = np.zeros((int(len(wp.data)/sampleRate),len(listnodes)))
         count = 0
 
@@ -246,12 +246,12 @@ class WaveletSegment:
             # get the coefficients
             C = new_wp.reconstruct(update=True)
             # filter
-            C = self.sp.ButterworthBandpass(C, self.sampleRate, low=species['FreqRange'][0],high=species['FreqRange'][1],order=10)
+            C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0],high=spInfo['FreqRange'][1],order=10)
             C = np.abs(C)
             N = len(C)
 
             # Compute the number of samples in a window -- species specific
-            M = int(species['WaveletParams'][1] * sampleRate / 2.0)
+            M = int(spInfo['WaveletParams'][1] * sampleRate / 2.0)
             # Compute the energy curve (a la Jinnai et al. 2012)
             E = np.zeros(N)
             E[M] = np.sum(C[:2 * M+1])
@@ -322,10 +322,10 @@ class WaveletSegment:
     #     return segments
 
     # Usage functions
-    def preprocess(self, species, df=False):
+    def preprocess(self, spInfo, df=False):
         # set df=True to perform both denoise and filter
         # df=False to skip denoise
-        fs = species['SampleRate']
+        fs = spInfo['SampleRate']
 
         if self.sampleRate != fs:
             self.data = librosa.core.audio.resample(self.data, self.sampleRate, fs)
@@ -350,15 +350,15 @@ class WaveletSegment:
         # wavio.write('../Sound Files/Kiwi/test/Tier1/test/test/test/test_whole.wav', denoisedData, self.sampleRate, sampwidth=2)
         # librosa.output.write_wav('Sound Files/Kiwi/test/Tier1/test/test/test', denoisedData, self.sampleRate, norm=False)
 
-        filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=species['FreqRange'][0], high=species['FreqRange'][1])
+        filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1])
         return filteredDenoisedData
 
-    def waveletSegment_train(self,fName, soundInfo={}, df=False):
+    def waveletSegment_train(self,fName, spInfo={}, df=False):
         # Let df=true (denoise during preprocess) for bittern, df=false for others
         # Load data and annotation
         self.loadData(fName)
         # print(self.annotation)
-        filteredDenoisedData = self.preprocess(soundInfo,df=df)    # skip denoising
+        filteredDenoisedData = self.preprocess(spInfo,df=df)    # skip denoising
         # print("denoising completed")
         # print("inside waveletSegment_train fs= ", self.sampleRate)
         waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
@@ -389,7 +389,7 @@ class WaveletSegment:
             testlist = listnodes[:]
             testlist.append(node)
             print(testlist)
-            detected_c = self.detectCalls(wpFull, self.sampleRate, listnodes=testlist, soundInfo=soundInfo,trainTest=True)
+            detected_c = self.detectCalls(wpFull, self.sampleRate, listnodes=testlist, spInfo=spInfo,trainTest=True)
 
             # update the detections
             detections = np.maximum.reduce([detected, detected_c])
@@ -420,9 +420,9 @@ class WaveletSegment:
             self.data = data
             self.sampleRate = sampleRate
 
-        filteredDenoisedData = self.preprocess(species=spInfo, df=df)
+        filteredDenoisedData = self.preprocess(spInfo=spInfo, df=df)
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
-        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, species=spInfo, trainTest=trainTest)
+        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, spInfo=spInfo, trainTest=trainTest)
 
         # Todo: remove clicks
 
@@ -488,7 +488,7 @@ class WaveletSegment:
                 self.annotation[count]=d[row][1]
                 count += 1
 
-def batch(dirName,species,ws,listnodes,train=False,df=False):
+def batch(dirName,spInfo,ws,listnodes,train=False,df=False):
     import os
     nodeList=[]
     TP=FP=TN=FN=0
@@ -498,14 +498,14 @@ def batch(dirName,species,ws,listnodes,train=False,df=False):
                 filename = root + '/' + filename[:-4]
                 if not train:
                     print("***", filename)
-                    det, tp, fp, tn, fn = ws.waveletSegment_test(filename, listnodes=listnodes, species=species, trainTest=True,df=df)
+                    det, tp, fp, tn, fn = ws.waveletSegment_test(filename, listnodes=listnodes, spInfo=spInfo, trainTest=True,df=df)
                     TP+=tp
                     FP+=fp
                     TN+=tn
                     FN+=fn
                 else:
                     print("***", filename)
-                    nodes = ws.waveletSegment_train(filename, species=species,df=df)
+                    nodes = ws.waveletSegment_train(filename, spInfo=spInfo,df=df)
                     print(nodes)
                     nodeList=np.union1d(nodeList, nodes)
     if train:
