@@ -101,11 +101,11 @@ class AviaNZ(QMainWindow):
         #self.config['FiltersFolder'] = 'xx'
         print("Loading species info from folder %s" % self.config['FiltersFolder'])
         try:
-            self.FiltersFiles = [f[:-4] for f in os.listdir(self.config['FiltersFolder']) if os.path.isfile(os.path.join(self.config['FiltersFolder'], f))]
+            self.FilterFiles = [f[:-4] for f in os.listdir(self.config['FiltersFolder']) if os.path.isfile(os.path.join(self.config['FiltersFolder'], f))]
         except:
             "Folder not found, no filters loaded"
-            self.FiltersFiles = None
-        print(self.FiltersFiles)
+            self.FilterFiles = None
+        print(self.FilterFiles)
 
         #try:
             #self.sppInfo = json.load(open(sppInfoFolder))
@@ -710,7 +710,7 @@ class AviaNZ(QMainWindow):
         self.fillBirdList()
         self.menuBirdList.triggered.connect(self.birdSelectedMenu)
         self.menuBird2.triggered.connect(self.birdSelectedMenu)
-        self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
+        #self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
 
         # Make the colours that are used in the interface
         # The dark ones are to draw lines instead of boxes
@@ -2428,7 +2428,7 @@ class AviaNZ(QMainWindow):
         else:
             # This allows textual name entry
             # Ask the user for the new name, and save it
-            text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name: (as species>subsp)')
+            text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name as species, (subsp) :')
             if ok:
                 text = str(text).title()
                 self.updateText(text)
@@ -2493,9 +2493,9 @@ class AviaNZ(QMainWindow):
             self.prevBoxCol = self.ColourNone
         
 
-    def processMultipleBirdSelections(self):
+    """def processMultipleBirdSelections(self):
         # TODO??
-        pass
+        pass"""
 
     def setColourMap(self,cmap):
         """ Listener for the menu item that chooses a colour map.
@@ -3289,6 +3289,7 @@ class AviaNZ(QMainWindow):
         f0_high = []    # int(self.waveletTDialog.f0High.text())
         thr = self.waveletTDialog.thr.value()
         M = sylLen
+        speciesData = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq], 'WaveletParams': [thr, M]}
         ws = WaveletSegment.WaveletSegment()
         optimumNodes=[]
         for root, dirs, files in os.walk(str(self.dName)):
@@ -3314,13 +3315,13 @@ class AviaNZ(QMainWindow):
                                     data = data.astype('float')
                                 if fs != sampleRate:
                                     data = librosa.core.audio.resample(data, sampleRate, fs)
-                                f0_l, f0_h = self.ff(data, minLen, maxLen, minFrq, maxFrq, sampleRate)
+                                f0_l, f0_h = self.ff(data, speciesData)
                                 if f0_l != 0 and f0_h != 0:
                                     f0_low.append(f0_l)
                                     f0_high.append(f0_h)
                     # find wavelet nodes
-                    speciesDict = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq], 'F0Range': [f0_low, f0_high], 'WaveletParams': [thr, M]}
-                    nodes = ws.waveletSegment_train(wavFile, soundInfo=speciesDict,df=False)
+                    speciesData['F0Range'] = [f0_low, f0_high]
+                    nodes = ws.waveletSegment_train(wavFile, spInfo=speciesData,df=False)
                     for node in nodes:
                         if node not in optimumNodes:
                             optimumNodes.append(node)
@@ -3331,18 +3332,21 @@ class AviaNZ(QMainWindow):
             # user to enter?
             f0_low = minFrq
             f0_high = maxFrq
-        # add this filter to sppinfoFile
-        if self.saveConfig:
-            #self.sppInfo[species] = [minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M, optimumNodes]
-            speciesDict['WaveletParams'].append(optimumNodes)
+        speciesData['F0Range'] = [f0_low, f0_high]
+        speciesData['WaveletParams'].append(optimumNodes)
 
-            filename = self.config['FiltersFolder']+species+'.txt'
-            # TODO: More?
-            if isfile(filename):
-                print("File already exists, overwriting")
-            f = open(filename,'w')
-            f.write(json.dumps(speciesDict))
-            f.close()
+        #self.sppInfo[species] = [minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M, optimumNodes]
+
+        filename = os.path.join(self.config['FiltersFolder'],species+'.txt')
+        print("Saving new filter to ",filename)
+        # TODO: More?
+        if os.path.isfile(filename):
+            print("File already exists, overwriting")
+        f = open(filename,'w')
+        f.write(json.dumps(speciesData))
+        f.close()
+
+        # Add it to the Filter list
 
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
@@ -3352,10 +3356,11 @@ class AviaNZ(QMainWindow):
         msg.setWindowTitle("Detector Ready to Test!")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
-        return
+        self.FilterFiles.append(species)
+        self.waveletTDialog.close()
 
-    def ff(self, data, minLen, maxLen, minF, maxF, fs):
-        sc = SupportClasses.preProcess(audioData=data, sampleRate=fs, spInfo=[minLen,maxLen,minF, maxF, fs], df=True)  # species left empty to avoid bandpass filter
+    def ff(self, data, speciesData):
+        sc = SupportClasses.preProcess(audioData=data, spInfo=speciesData, df=True)  # species left empty to avoid bandpass filter
         data, sampleRate = sc.denoise_filter(level=10)
         sp = SignalProc.SignalProc([], 0, 512, 256)
         sgRaw = sp.spectrogram(data, 512, 256, mean_normalise=True, onesided=True, multitaper=False)
@@ -3378,7 +3383,7 @@ class AviaNZ(QMainWindow):
             f0 = pitch
             return f0,f0
         else:  # Get the individual pieces within a seg
-            syls = segment.identifySegments(ind, maxgap=10, minlength=minLen / 2)
+            syls = segment.identifySegments(ind, maxgap=10, minlength=speciesData['TimeRange'][0] / 2)
             #print("sys= ", sys)
             if syls == []:
                 return np.min(pitch), np.max(pitch)
@@ -3509,7 +3514,7 @@ class AviaNZ(QMainWindow):
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
         """
-        self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata),DOC=self.DOC, species=self.FiltersFiles)
+        self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata),DOC=self.DOC, species=self.FilterFiles)
         self.segmentDialog.show()
         self.segmentDialog.activateWindow()
         self.segmentDialog.undo.clicked.connect(self.segment_undo)

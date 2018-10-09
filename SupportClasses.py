@@ -45,9 +45,8 @@ class preProcess:
     """
     # todo: remove duplicate preprocess in 'Wavelet Segments'
 
-    def __init__(self,audioData=None, sampleRate=0, spInfo={}, df=False, wavelet='dmey2'):
+    def __init__(self,audioData=None, spInfo={}, df=False, wavelet='dmey2'):
         self.audioData=audioData
-        self.sampleRate=sampleRate
         self.spInfo=spInfo
         self.df=df
         if wavelet == 'dmey2':
@@ -71,9 +70,10 @@ class preProcess:
             f2 = self.spInfo['FreqRange'][1]
             fs = self.spInfo['SampleRate']
 
-        if self.sampleRate != fs:
-            self.audioData = librosa.core.audio.resample(self.audioData, self.sampleRate, fs)
-            self.sampleRate = fs
+        # Done before this is called
+        #if self.sampleRate != fs:
+            #self.audioData = librosa.core.audio.resample(self.audioData, self.sampleRate, fs)
+            #self.sampleRate = fs
 
         # Get the five level wavelet decomposition
         if self.df == True:
@@ -95,7 +95,7 @@ class preProcess:
         # librosa.output.write_wav('Sound Files/Kiwi/test/Tier1/test/test/test', denoisedData, self.sampleRate, norm=False)
 
         if f1 and f2:
-            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=f2)
+            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, fs, low=f1, high=f2)
             # filteredDenoisedData = self.sp.bandpassFilter(denoisedData, start=f1, end=f2, sampleRate=self.sampleRate)
         # elif species == 'Ruru':
         #     filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=7000)
@@ -104,7 +104,7 @@ class preProcess:
         else:
             filteredDenoisedData = denoisedData
 
-        return filteredDenoisedData, self.sampleRate
+        return filteredDenoisedData, fs
 
 class postProcess:
     """ This class implements few post processing methods to avoid false positives
