@@ -118,27 +118,19 @@ class AviaNZ(QMainWindow):
         #self.sppinfofile = sppinfofile
 
 
-        # Load the birdlist 
+        # Load the birdlist:
+        # long list is necessary, short list can be regenerated
+        try:
+            self.longBirdList = json.load(open(self.config['BirdListLong']))
+        except:
+            print("ERROR: failed to load long bird list")
+            sys.exit()
         try:
             self.shortBirdList = json.load(open(self.config['BirdListShort']))
         except:
-            print("Failed to load bird list")
-        
-        if self.config['BirdListLong'] == "None":
-            # If don't have a long bird list, check the length of the short bird list is OK, and otherwise split it
-            # 40 is a bit random, but 20 in a list is long enough!
-            if len(self.shortBirdList) > 40:
-                self.longBirdList = self.shortBirdList.copy()
-                self.shortBirdList = self.shortBirdList[:40]
-            else:       
-                self.longBirdList = None
-        else:
-            try:
-                self.longBirdList = json.load(open(self.config['BirdListLong']))
-            except:
-                print("Failed to load bird list")
-                self.longBirdList = None
-        #self.makeFullBirdList()
+            print("Failed to load short bird list")
+            self.shortBirdList = self.longBirdList.copy()
+            self.shortBirdList = self.shortBirdList[:max(len(self.shortBirdList), 40)]
 
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
@@ -847,12 +839,11 @@ class AviaNZ(QMainWindow):
                     bird.setChecked(True)
                 self.menuBird2.addAction(bird)
     
-            if self.longBirdList is not None:
-                self.makeFullBirdList()
-                self.showFullbirdlist = QWidgetAction(self.menuBirdList)
-                self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
-                bird = self.menuBird2.addAction(self.showFullbirdlist)
-                self.fullbirdlist.activated.connect(self.birdSelectedList)
+            self.makeFullBirdList()
+            self.showFullbirdlist = QWidgetAction(self.menuBirdList)
+            self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
+            bird = self.menuBird2.addAction(self.showFullbirdlist)
+            self.fullbirdlist.activated.connect(self.birdSelectedList)
 
     def fillFileList(self,fileName):
         """ Generates the list of files for the file listbox.
