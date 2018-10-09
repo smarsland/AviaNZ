@@ -995,7 +995,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, shortBirdList, longBirdList, multipleBirds, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, multipleBirds, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -1178,18 +1178,17 @@ class HumanClassify1(QDialog):
         self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
 
         # Brightness, and contrast sliders
-        # note: not reading self.config['brightness/contrast'] now
         self.brightnessSlider = QSlider(Qt.Horizontal)
         self.brightnessSlider.setMinimum(0)
         self.brightnessSlider.setMaximum(100)
-        self.brightnessSlider.setValue(50)
+        self.brightnessSlider.setValue(brightness)
         self.brightnessSlider.setTickInterval(1)
         self.brightnessSlider.valueChanged.connect(self.setColourLevels)
 
         self.contrastSlider = QSlider(Qt.Horizontal)
         self.contrastSlider.setMinimum(0)
         self.contrastSlider.setMaximum(100)
-        self.contrastSlider.setValue(50)
+        self.contrastSlider.setValue(contrast)
         self.contrastSlider.setTickInterval(1)
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
@@ -1466,7 +1465,7 @@ class HumanClassify2(QDialog):
     # It could be all the same species, or the ones that it is unsure about, or whatever.
 
     # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
-    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, filename=None, parent=None):
+    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, filename=None, parent=None):
         QDialog.__init__(self, parent)
 
         # from win32api import GetSystemMetrics
@@ -1498,12 +1497,45 @@ class HumanClassify2(QDialog):
         self.firstSegment = 0
         self.errors = []
 
+        # Brightness, and contrast sliders
+        self.brightnessSlider = QSlider(Qt.Horizontal)
+        self.brightnessSlider.setMinimum(0)
+        self.brightnessSlider.setMaximum(100)
+        self.brightnessSlider.setValue(brightness)
+        self.brightnessSlider.setTickInterval(1)
+        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
+
+        self.contrastSlider = QSlider(Qt.Horizontal)
+        self.contrastSlider.setMinimum(0)
+        self.contrastSlider.setMaximum(100)
+        self.contrastSlider.setValue(contrast)
+        self.contrastSlider.setTickInterval(1)
+        self.contrastSlider.valueChanged.connect(self.setColourLevels)
+
+        hboxSpecContr = QHBoxLayout()
+        labelBr = QLabel("Bright.")
+        hboxSpecContr.addWidget(labelBr)
+        hboxSpecContr.addWidget(self.brightnessSlider)
+        labelCo = QLabel("Contr.")
+        hboxSpecContr.addWidget(labelCo)
+        hboxSpecContr.addWidget(self.contrastSlider)
+
+        label1 = QLabel('Click on the images that are incorrectly labelled.')
+        label1.setFont(QtGui.QFont('SansSerif', 12))
+        species = QLabel("Species: " + label)
+        species.setFont(QtGui.QFont('SansSerif', 12))
+        #self.vboxFull.addWidget(label1)
+        vboxTop = QVBoxLayout()
+        vboxTop.setSizeConstraint(QLayout.SetMinimumSize)
+        vboxTop.addWidget(label1)
+        vboxTop.addWidget(species)
+        vboxTop.addLayout(hboxSpecContr)
+
         next = QPushButton("Next/Finish")
         next.clicked.connect(self.nextPage)
 
         if len(self.segments2show) > 0:
-            species = QLabel("Species/call type: " + label)
-            species.setFont(QtGui.QFont('SansSerif', 10))
+            #species.setFont(QtGui.QFont('SansSerif', 12))
             self.width = 0
             for ind in range(len(self.segments2show)):
                 x1 = int(self.convertAmpltoSpec(self.segments2show[ind][0]))
@@ -1517,10 +1549,10 @@ class HumanClassify2(QDialog):
             self.makeButtons(first=True)
 
             self.vboxFull = QVBoxLayout()
-            label1 = QLabel('Click on the images that are incorrectly labelled.')
-            label1.setFont(QtGui.QFont('SansSerif', 12))
-            self.vboxFull.addWidget(label1)
-            self.vboxFull.addWidget(species)
+            self.vboxFull.setSpacing(0)
+            #self.vboxFull.addLayout(hboxSpecContr)
+            self.vboxFull.addLayout(vboxTop)
+            #self.vboxFull.addWidget(species)
             self.vboxFull.addLayout(self.flowLayout)
             self.vboxFull.addWidget(next)
         else:
@@ -1531,22 +1563,24 @@ class HumanClassify2(QDialog):
 
         self.setLayout(self.vboxFull)
 
-
-    def makeButtons(self, first=False):
+    def makeButtons(self, first=False,whichOff=None):
         if first:
             segRemain = len(self.segments2show)
         # elif self.firstSegment == 0:
         #     segRemain = len(self.segments2show) - 1
         else:
             segRemain = len(self.segments2show) - self.firstSegment
+
         width = 0
         col = 0
         ind = self.firstSegment
         self.buttons = []
 
-        print("makeButtons",segRemain,self.firstSegment)
+        #print("makeButtons",segRemain,self.firstSegment)
 
-        while segRemain > 0 and col < self.h:
+        count = 0 
+        while segRemain > 0 and count<12:
+        #while segRemain > 0 and col < self.h:
             x1a = self.segments2show[ind][0]
             x2a = self.segments2show[ind][1]
             x1 = int(self.convertAmpltoSpec(x1a))
@@ -1562,8 +1596,13 @@ class HumanClassify2(QDialog):
             #     width = x2-x1
             col += 1
             self.buttons.append(SupportClasses.PicButton(0,im[0], im[1], self.audiodata[x1a:x2a], self.audioFormat, (x2a-x1a) / self.sampleRate))
+            if whichOff is None or whichOff[count] is False:
+                self.buttons[-1].buttonClicked=False
+            else:
+                self.buttons[-1].buttonClicked=True
             self.flowLayout.addWidget(self.buttons[-1])
             ind += 1
+            count += 1
 
     def convertAmpltoSpec(self, x):
         return x * self.sampleRate / self.incr
@@ -1583,6 +1622,27 @@ class HumanClassify2(QDialog):
         im2 = fn.makeQImage(im, alpha)
 
         return [im1, im2]
+
+    def setColourLevels(self):
+        """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
+        Translates the brightness and contrast values into appropriate image levels.
+        Calculation is simple.
+        """
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        # self.config['brightness'] = self.brightnessSlider.value()
+        # self.config['contrast'] = self.contrastSlider.value()
+        brightness = self.brightnessSlider.value() # self.config['brightness']
+        contrast = self.contrastSlider.value() # self.config['contrast']
+        self.colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
+        self.colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + self.colourStart
+        whichOff = []
+        for btn in reversed(self.buttons):
+            whichOff.insert(0,btn.buttonClicked)
+            self.flowLayout.removeWidget(btn)
+            # remove it from the gui
+            btn.setParent(None)
+        self.makeButtons(whichOff=whichOff)
 
     def nextPage(self):
         # Find out which buttons have been clicked (so are not correct)
