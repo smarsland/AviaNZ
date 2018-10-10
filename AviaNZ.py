@@ -25,6 +25,8 @@
 # TODO: Training, tidy repository
 # TODO: Automate some of the training options
 # TODO: Think about the dictionary a bit more for option checking
+# TODO: Manual should say how excels are managed - e.g. if someone process species e.g. ruru, kiwi and then choose 'All species' - it wipes all the species excells etc.
+# TODO: BatchProcessing, let the user define time range to process (e.g. 6pm-6am) when the recordings contain time-date information
 # Contrast and brightness in HR2
 # Update order in context menu should be an option
 # Multiple species option sorted 
@@ -1059,7 +1061,7 @@ class AviaNZ(QMainWindow):
                     self.startTime = DOCRecording.group(2)
 
                     #if int(self.startTime[:2]) > 8 or int(self.startTime[:2]) < 8:
-                    if int(self.startTime[:2]) > 18 or int(self.startTime[:2]) < 6: # 6pm to 6am
+                    if int(self.startTime[:2]) > 17 or int(self.startTime[:2]) < 7: # 6pm to 6am
                         print("Night time DOC recording")
                     else:
                         print("Day time DOC recording")
@@ -3309,8 +3311,9 @@ class AviaNZ(QMainWindow):
                                     f0_low.append(f0_l)
                                     f0_high.append(f0_h)
                     # find wavelet nodes
-                    speciesData['F0Range'] = [f0_low, f0_high]
                     nodes = ws.waveletSegment_train(wavFile, spInfo=speciesData,df=False)
+                    print(wavFile)
+                    print("Filtered nodes: ", nodes)
                     for node in nodes:
                         if node not in optimumNodes:
                             optimumNodes.append(node)
@@ -3339,7 +3342,7 @@ class AviaNZ(QMainWindow):
 
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
-        msg.setText("Training is completed! \nNow this detector will appear under wavelet segmentation. \nFirst test it on a seperate dataset before actual use. \nIf you find it does not perform well, retrain the detector \nadding more trining data and test again.")
+        msg.setText("Training is completed! \nNow this detector will appear under wavelet segmentation. \nFirst test it on a separate dataset before actual use. \nIf you find it does not perform well, retrain the detector \nby changing the thr and adding more trining data.")
         msg.setIconPixmap(QPixmap("img/Owl_done.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
         msg.setWindowTitle("Detector Ready to Test!")
@@ -3371,26 +3374,8 @@ class AviaNZ(QMainWindow):
             #print("f0=", pitch)
             f0 = pitch
             return f0,f0
-        else:  # Get the individual pieces within a seg
-            syls = segment.identifySegments(ind, maxgap=10, minlength=speciesData['TimeRange'][0] / 2)
-            #print("sys= ", sys)
-            if syls == []:
-                return np.min(pitch), np.max(pitch)
-            low = []
-            high = []
-            for s in syls:  # see if any syllable got right ff
-                s[0] = s[0] * sampleRate / float(256)
-                s[1] = s[1] * sampleRate / float(256)
-                i = np.where((ind > s[0]) & (ind < s[1]))
-                #print('i=', i)
-                #print("x[i]=",x[i])
-                if len(x[i])>0:
-                    low.append(np.min(x[i]))
-                    high.append(np.min(x[i]))
-            if len(low)>0:
-                return np.min(low), np.max(high)
-            else:
-                return 0,0
+        else:
+            return round(np.min(pitch)), round(np.max(pitch))
 
     def prepareTrainData(self):
         """ Listener for the wavelet training dialog.
