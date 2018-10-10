@@ -27,6 +27,8 @@
 # TODO: Think about the dictionary a bit more for option checking
 # TODO: Manual should say how excels are managed - e.g. if someone process species e.g. ruru, kiwi and then choose 'All species' - it wipes all the species excells etc.
 # TODO: BatchProcessing, let the user define time range to process (e.g. 6pm-6am) when the recordings contain time-date information
+# TODO: Set up a config directory where each OS can find it
+# TODO: For the birdlist changes in the settings, use config directory as default
 # Contrast and brightness in HR2
 # Update order in context menu should be an option
 # Multiple species option sorted 
@@ -100,10 +102,9 @@ class AviaNZ(QMainWindow):
             self.saveConfig = True # TODO: revise this with user permissions in mind
         self.configfile = configfile
 
-        #self.config['FiltersFolder'] = 'xx'
-        print("Loading species info from folder %s" % self.config['FiltersFolder'])
+        print("Loading species info from folder %s" % self.config['FiltersDir'])
         try:
-            self.FilterFiles = [f[:-4] for f in os.listdir(self.config['FiltersFolder']) if os.path.isfile(os.path.join(self.config['FiltersFolder'], f))]
+            self.FilterFiles = [f[:-4] for f in os.listdir(self.config['FiltersDir']) if os.path.isfile(os.path.join(self.config['FiltersDir'], f))]
         except:
             print("Folder not found, no filters loaded")
             self.FilterFiles = None
@@ -161,7 +162,7 @@ class AviaNZ(QMainWindow):
         # Whether or not the context menu allows multiple birds. 
         self.multipleBirds = self.config['MultipleSpecies']
 
-        self.dirName = self.config['dirpath']
+        self.SoundFileDir = self.config['SoundFileDir']
         self.previousFile = None
         self.focusRegion = None
         self.operator = self.config['operator']
@@ -180,9 +181,9 @@ class AviaNZ(QMainWindow):
         self.sgEqualLoudness = False
 
         # working directory
-        if not os.path.isdir(self.dirName):
+        if not os.path.isdir(self.SoundFileDir):
             print("Directory doesn't exist: making it")
-            os.makedirs(self.dirName)
+            os.makedirs(self.SoundFileDir)
 
         self.backupDatafiles()
 
@@ -190,7 +191,7 @@ class AviaNZ(QMainWindow):
         # search order: infile -> firstFile -> dialog
         # Make life easier for now: preload a birdsong
         if not os.path.isfile(firstFile):
-            firstFile = self.dirName + '/' + 'tril1.wav' #'male1.wav' # 'kiwi.wav'
+            firstFile = self.SoundFileDir + '/' + 'tril1.wav' #'male1.wav' # 'kiwi.wav'
             #firstFile = "/home/julius/Documents/kiwis/rec/birds1.wav"
 
         if not os.path.isfile(firstFile):
@@ -199,7 +200,7 @@ class AviaNZ(QMainWindow):
                 sys.exit()
             else:
                 # pop up a dialog to select file
-                firstFile, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
+                firstFile, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Wav files (*.wav)")
                 while firstFile == '':
                     msg = QMessageBox()
                     msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
@@ -209,14 +210,14 @@ class AviaNZ(QMainWindow):
                     msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                     reply = msg.exec_()
                     if reply == QMessageBox.Yes:
-                        firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Wav files (*.wav)")
+                        firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Wav files (*.wav)")
                     else:
                         sys.exit()
 
         # parse firstFile to dir and file parts
-        self.dirName = os.path.dirname(firstFile)
+        self.SoundFileDir = os.path.dirname(firstFile)
         firstFile = os.path.basename(firstFile)
-        print("Working dir set to %s" % self.dirName)
+        print("Working dir set to %s" % self.SoundFileDir)
         print("Opening file %s" % firstFile)
 
         # to keep code simpler, graphic options are created even in CLI mode
@@ -858,13 +859,13 @@ class AviaNZ(QMainWindow):
         self.listFiles.clearFocus()
         self.listFiles.clear()
 
-        if not os.path.isdir(self.dirName):
+        if not os.path.isdir(self.SoundFileDir):
             print("Directory doesn't exist: making it")
-            os.makedirs(self.dirName)
+            os.makedirs(self.SoundFileDir)
 
-        self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
-        listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
-        listOfLongFiles = QDir(self.dirName).entryList(['*_1.wav'])
+        self.listOfFiles = QDir(self.SoundFileDir).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
+        listOfDataFiles = QDir(self.SoundFileDir).entryList(['*.data'])
+        listOfLongFiles = QDir(self.SoundFileDir).entryList(['*_1.wav'])
         for file in self.listOfFiles:
             if file.fileName()[:-4]+'_1.wav' in listOfLongFiles:
                 # Ignore this entry
@@ -943,17 +944,17 @@ class AviaNZ(QMainWindow):
     def openFile(self):
         """ This handles the menu item for opening a file.
         Splits the directory name and filename out, and then passes the filename to the loader."""
-        fileName, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName,"Wav files (*.wav)")
+        fileName, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir,"Wav files (*.wav)")
         success = 1
-        dirNameOld = self.dirName
+        SoundFileDirOld = self.SoundFileDir
         fileNameOld = os.path.basename(self.filename)
         if fileName != '':
             print("Opening file %s" % fileName)
-            self.dirName = os.path.dirname(fileName)
+            self.SoundFileDir = os.path.dirname(fileName)
             success = self.listLoadFile(os.path.basename(fileName))
         if success==1:
             print("Error loading file, reloading current file")
-            self.dirName = dirNameOld
+            self.SoundFileDir = SoundFileDirOld
             self.filename = fileNameOld
             self.listLoadFile(fileNameOld)
 
@@ -967,7 +968,7 @@ class AviaNZ(QMainWindow):
         if type(current) is self.listitemtype:
             current = current.text()
 
-        fullcurrent = os.path.join(self.dirName, current)
+        fullcurrent = os.path.join(self.SoundFileDir, current)
         if not os.path.isdir(fullcurrent):
             if not os.path.isfile(fullcurrent):
                 print("File %s does not exist!" % fullcurrent)
@@ -1000,10 +1001,10 @@ class AviaNZ(QMainWindow):
         while i<len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current:
             i+=1
         if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
-            dir = QDir(self.dirName)
+            dir = QDir(self.SoundFileDir)
             dir.cd(self.listOfFiles[i].fileName())
             # Now repopulate the listbox
-            self.dirName=str(dir.absolutePath())
+            self.SoundFileDir=str(dir.absolutePath())
             #self.listFiles.clearSelection()
             #self.listFiles.clearFocus()
             #self.listFiles.clear()
@@ -1040,7 +1041,7 @@ class AviaNZ(QMainWindow):
             dlg.setWindowIcon(QIcon('img/Avianz.ico'))
             dlg.setWindowTitle('AviaNZ')
             if name is not None:
-                self.filename = self.dirName+'/'+name
+                self.filename = self.SoundFileDir+'/'+name
                 dlg += 1
 
                 # Create an instance of the Signal Processing class
@@ -3216,7 +3217,7 @@ class AviaNZ(QMainWindow):
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
             x1 = math.floor(x1 * self.config['incr']) #/ self.sampleRate
             x2 = math.floor(x2 * self.config['incr']) #/ self.sampleRate
-            filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.dirName, '*.wav')
+            filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.SoundFileDir, '*.wav')
             if filename:
                 wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
@@ -3329,7 +3330,7 @@ class AviaNZ(QMainWindow):
 
         #self.sppInfo[species] = [minLen, maxLen, minFrq, maxFrq, fs, f0_low, f0_high, thr, M, optimumNodes]
 
-        filename = os.path.join(self.config['FiltersFolder'],species+'.txt')
+        filename = os.path.join(self.config['FiltersDir'],species+'.txt')
         print("Saving new filter to ",filename)
         # TODO: More?
         if os.path.isfile(filename):
@@ -3479,7 +3480,7 @@ class AviaNZ(QMainWindow):
         """
         # [dir] = self.waveletTDialog.getValues()
         self.dName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose Folder to Process')
-        #print("Dir:", self.dirName)
+        #print("Dir:", self.SoundFileDir)
         self.waveletTDialog.w_dir.setPlainText(self.dName)
         self.waveletTDialog.w_dir.setReadOnly(True)
         self.waveletTDialog.raise_()
@@ -3544,7 +3545,7 @@ class AviaNZ(QMainWindow):
                     msg.exec_()
                     return
                 else:
-                    speciesData = json.load(open(os.path.join(self.config['FiltersFolder'], species+'.txt')))
+                    speciesData = json.load(open(os.path.join(self.config['FiltersDir'], species+'.txt')))
                     ws = WaveletSegment.WaveletSegment()
                     newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, trainTest=False)
             elif str(alg)=="Cross-Correlation":
@@ -3658,19 +3659,19 @@ class AviaNZ(QMainWindow):
                 else:
                     species.add(birdName)
         species = list(species)
-        for root, dirs, files in os.walk(str(self.dirName)):
+        for root, dirs, files in os.walk(str(self.SoundFileDir)):
             for file in files:
                 file = os.path.join(root, file)
                 if fnmatch.fnmatch(file, self.filename[:-4] + "_*.xlsx"):
                     print("Removing file %s" % file)
                     os.remove(file)
-        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, dirName=self.dirName, filename=self.filename[:-4], resolution=10, datalength=self.datalength, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
+        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, SoundFileDir=self.SoundFileDir, filename=self.filename[:-4], resolution=10, datalength=self.datalength, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
         out.excel()
         # add user notification
-        # QMessageBox.about(self, "Segments Exported", "Check this directory for the excel output: " + '\n' + self.dirName)
+        # QMessageBox.about(self, "Segments Exported", "Check this directory for the excel output: " + '\n' + self.SoundFileDir)
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
-        msg.setText("Check this directory for the excel output: " + '\n' + self.dirName)
+        msg.setText("Check this directory for the excel output: " + '\n' + self.SoundFileDir)
         msg.setIconPixmap(QPixmap("img/Owl_done.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
         msg.setWindowTitle("Segments Exported")
@@ -4065,9 +4066,10 @@ class AviaNZ(QMainWindow):
                 ]},
 
             {'name': 'Full Bird List', 'type': 'group', 'children': [
-                {'name': 'Filename', 'type': 'str', 'value': fn2,'readonly':True, 'tip': "Can be None"},
-                #{'name': 'Choose File', 'type': 'action'},
-                {'name': 'No long list', 'type': 'bool', 'value': self.config['BirdListLong'] is None or self.config['BirdListLong'] == 'None', 'tip': "If you don't have a long list of birds"}
+                #{'name': 'Filename', 'type': 'str', 'value': fn2,'readonly':True, 'tip': "Can be None"},
+                {'name': 'Filename', 'type': 'str', 'value': fn2,'readonly':True},
+                {'name': 'No long list', 'type': 'bool', 'value': self.config['BirdListLong'] is None or self.config['BirdListLong'] == 'None', 'tip': "If you don't have a long list of birds"},
+                {'name': 'Choose File', 'type': 'action'}
                 ]},
         ]
 
@@ -4187,22 +4189,23 @@ class AviaNZ(QMainWindow):
                 self.reviewer = data
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
             elif childName=='Common Bird List.Choose File':
-                filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Text files (*.txt)")
+                filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
                 if '/' in filename:
                     ind = filename[-1::-1].index('/')
                     filename = filename[-ind:]
                 self.p['Common Bird List','Filename'] = filename
                 self.config['BirdListShort'] = filename
                 self.shortBirdList = json.load(open(self.config['BirdListShort']))
-            #elif childName=='Full Bird List.Choose File':
-                #filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Text files (*.txt)")
-                #if '/' in filename:
-                    #ind = filename[-1::-1].index('/')
-                    #filename = filename[-ind:]
-                #if data is not 'None':
-                    #self.config['BirdListLong'] = filename
-                    #self.p['Full Bird List','Filename'] = filename
-                    #self.longBirdList = json.load(open(self.config['BirdListLong']))
+            elif childName=='Full Bird List.Choose File':
+                filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
+                if '/' in filename:
+                    ind = filename[-1::-1].index('/')
+                    filename = filename[-ind:]
+                if filename is not '':
+                    self.config['BirdListLong'] = filename
+                    self.p['Full Bird List','Filename'] = filename
+                    self.longBirdList = json.load(open(self.config['BirdListLong']))
+                    self.p['Full Bird List','No long list'] = False
             elif childName=='Full Bird List.No long list':
                 if param.value():
                     self.config['BirdListLong'] = 'None'
@@ -4210,13 +4213,14 @@ class AviaNZ(QMainWindow):
                     self.longBirdList = None
                 else:
                     if self.p['Full Bird List','Filename'] is None or self.p['Full Bird List','Filename'] == '' or self.p['Full Bird List','Filename'] == 'None':
-                        filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.dirName, "Text files (*.txt)")
-                        if '/' in filename:
-                            ind = filename[-1::-1].index('/')
-                            filename = filename[-ind:]
-                        self.p['Full Bird List','Filename'] = filename
-                        self.config['BirdListLong'] = filename
-                        self.longBirdList = json.load(open(self.config['BirdListLong']))
+                        filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
+                        if filename is not '':
+                            if '/' in filename:
+                                ind = filename[-1::-1].index('/')
+                                filename = filename[-ind:]
+                            self.p['Full Bird List','Filename'] = filename
+                            self.config['BirdListLong'] = filename
+                            self.longBirdList = json.load(open(self.config['BirdListLong']))
 
         self.saveConfig = True
         # Find the '/' in the fileName
@@ -4359,17 +4363,12 @@ class AviaNZ(QMainWindow):
         #     return retval
 
         if self.segmentsToSave:
-            print("Saving segments to " + self.filename)
+            print("Saving segments to " + self.filename + '.data')
             if len(self.segments) > 0:
                 if self.segments[0][0] > -1:
-                    self.segments.insert(0,
-                                         [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')),
-                                          self.operator,
-                                          self.reviewer, -1])
+                    self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, -1]) 
             else:
-                self.segments.insert(0,
-                                     [-1, str(QTime().addSecs(self.startTime).toString('hh:mm:ss')), self.operator,
-                                      self.reviewer, -1])
+                self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, -1])
 
             if isinstance(self.filename, str):
                 file = open(self.filename + '.data', 'w')
@@ -4393,7 +4392,7 @@ class AviaNZ(QMainWindow):
         dict = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq], 'F0Range': [f0_low, f0_high], 'WaveletParams': [thr, M, optimumNodes]}
 
         # Check if file exists
-        filename = self.config['FiltersFolder']+species+'.txt'
+        filename = self.config['FiltersDir']+species+'.txt'
         # TODO: More?
         if isfile(filename):
             print("File already exists, overwriting")
@@ -4482,10 +4481,10 @@ class AviaNZ(QMainWindow):
         from shutil import copyfile
         from os.path import isfile
 
-        print("Backing up files in ", self.dirName)
-        listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
+        print("Backing up files in ", self.SoundFileDir)
+        listOfDataFiles = QDir(self.SoundFileDir).entryList(['*.data'])
         for file in listOfDataFiles:
-            source = self.dirName + '/' + file
+            source = self.SoundFileDir + '/' + file
             destination = source[:-5]+".backup"
             if os.path.isfile(destination):
                 pass
