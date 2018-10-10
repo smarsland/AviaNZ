@@ -91,9 +91,10 @@ class WaveletSegment:
             print("TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB))
         else:
             print("TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%0.2f" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB))
+        #print TP, int(T), int(P), recall, precision, ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
         return fB,recall, TP,P-TP,len(annotation)-(P+T-TP), T-TP    # fB, recall, TP, FP, TN, FN
 
-    def compute_r(self,annotation,waveletCoefs,nNodes=20):
+    def compute_r(self,annotation,waveletCoefs,nNodes=10):
         """ Computes the point-biserial correlations for a set of labels and a set of wavelet coefficients.
         r = (M_p - M_q) / S * sqrt(p*q), M_p = mean for those that are 0, S = std dev overall, p = proportion that are 0.
         """
@@ -326,7 +327,7 @@ class WaveletSegment:
         waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
 
         # Compute point-biserial correlations and sort wrt it, return top nNodes
-        nodes = self.compute_r(self.annotation, waveletCoefs)
+        nodes = self.compute_r(self.annotation, waveletCoefs, nNodes=10) # Limit number of nodes to 10 and avoid getting in low level nodes
         # print(nodes)
 
         # Now for Nirosha's sorting
@@ -350,14 +351,14 @@ class WaveletSegment:
         for node in nodes:
             testlist = listnodes[:]
             testlist.append(node)
-            print(testlist)
+            print("Test list: ", testlist)
             detected_c = self.detectCalls(wpFull, self.sampleRate, listnodes=testlist, spInfo=spInfo,trainTest=True)
 
             # update the detections
             detections = np.maximum.reduce([detected, detected_c])
             fB,recall,tp,fp,tn,fn = self.fBetaScore(self.annotation, detections)
             # print("Node,", node)
-            # print("fB, recall: ", fB,recall)
+            print("fB, recall: ", fB,recall)
             if fB > bestBetaScore:
                 bestBetaScore = fB
                 bestRecall=recall
@@ -422,3 +423,31 @@ class WaveletSegment:
             del (detected[i + 1])
         return detected
 
+    def loadData(self,fName,trainTest=True):
+        # Load data
+        filename = fName+'.wav' #'train/kiwi/train1.wav'
+        filenameAnnotation = fName+'-sec.txt'#'train/kiwi/train1-sec.xlsx'
+        try:
+            wavobj = wavio.read(filename)
+        except:
+            print("unsupported file: ", filename)
+            pass
+        self.sampleRate = wavobj.rate
+        self.data = wavobj.data
+        if self.data.dtype is not 'float':
+            self.data = self.data.astype('float') #/ 32768.0
+        if np.shape(np.shape(self.data))[0]>1:
+            self.data = np.squeeze(self.data[:,0])
+        n=int(len(self.data)/self.sampleRate)
+
+        if trainTest==True:     #survey data don't have annotations
+            # Get the segmentation from the txt file
+            import csv
+            self.annotation = np.zeros(n)
+            count = 0
+            with open(filenameAnnotation) as f:
+                reader = csv.reader(f, delimiter="\t")
+                d = list(reader)
+            for row in range(0,n):
+                self.annotation[count]=d[row][1]
+                count += 1

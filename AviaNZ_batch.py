@@ -299,7 +299,15 @@ class AviaNZ_batchProcess(QMainWindow):
                     if self.filename in self.filesDone:
                         # skip the processing, but still need to update excel:
                         print("File %s processed previously, skipping" % filename)
+                        # TODO: check the following line, if skip no need to load .wav (except for getting file length for sheet3?)
+                        # TODO: Instead can we keep length of the recording as part of the meta info in [-1 ... -1]
                         self.loadFile(wipe = (self.species=="All species"))
+                        DOCRecording = re.search('(\d{6})_(\d{6})', filename)
+                        if DOCRecording:
+                            startTime = DOCRecording.group(2)
+                            sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                        else:
+                            sTime = 0
                         if self.species == 'All species':
                             out = SupportClasses.exportSegments(segments=self.segments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         else:
@@ -799,7 +807,7 @@ class AviaNZ_reviewAll(QMainWindow):
                     Night = False
                     if DOCRecording:
                         startTime = DOCRecording.group(2)
-                        if int(startTime[:2]) > 18 or int(startTime[:2]) < 6:  # 6pm to 6am as night
+                        if int(startTime[:2]) > 17 or int(startTime[:2]) < 7:  # 6pm to 6am as night
                             Night = True
                         sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
                     else:
