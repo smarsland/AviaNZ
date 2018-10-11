@@ -27,8 +27,7 @@
 # TODO: Think about the dictionary a bit more for option checking
 # TODO: Manual should say how excels are managed - e.g. if someone process species e.g. ruru, kiwi and then choose 'All species' - it wipes all the species excells etc.
 # TODO: BatchProcessing, let the user define time range to process (e.g. 6pm-6am) when the recordings contain time-date information
-# TODO: Set up a config directory where each OS can find it
-# TODO: For the birdlist changes in the settings, use config directory as default
+# Config & Filter files moved to user dirs
 # Contrast and brightness in HR2
 # Update order in context menu should be an option
 # Multiple species option sorted 
@@ -37,7 +36,7 @@
 # After batch processing, give completed message
 # TODO: Full list of next steps
 
-import sys, os, json, platform, re
+import sys, os, json, platform, re, shutil
 
 from PyQt5.QtGui import QIcon, QPixmap, QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QLineEdit, QWidgetAction, QComboBox, QTreeView
@@ -81,9 +80,9 @@ class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
 
-    def __init__(self,root=None,configfile=None,CLI=False,firstFile='', imageFile='', command=''):
-        """Initialisation of the class. Load a configuration file, or create a new one if it doesn't
-        exist. Also initialises the data structures and loads an initial file (specified explicitly)
+    def __init__(self,root=None,configdir=None,CLI=False,firstFile='', imageFile='', command=''):
+        """Initialisation of the class. Load main config and bird lists from configdir.
+        Also initialises the data structures and loads an initial file (specified explicitly)
         and sets up the window.
         One interesting configuration point is the DOC setting, which hides the more 'research' functions."""
         print("Starting AviaNZ...")
@@ -92,49 +91,46 @@ class AviaNZ(QMainWindow):
         self.root = root
         self.CLI = CLI
 
-        try:
-            print("Loading configs from file %s" % configfile)
-            self.config = json.load(open(configfile))
-            self.saveConfig = True
-        except:
-            print("Failed to load config file, using defaults")
-            self.config = json.load(open('Config/AviaNZconfig.txt'))
-            self.saveConfig = True # TODO: revise this with user permissions in mind
-        self.configfile = configfile
+        # At this point, the main config file should already be ensured to exist.
+        self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
+        print("Loading configs from file %s" % self.configfile)
+        self.config = json.load(open(self.configfile))
+        self.saveConfig = True
 
-        print("Loading species info from folder %s" % self.config['FiltersDir'])
+        # Load filters
+        filtersDir = os.path.join(configdir, self.config['FiltersDir'])
+        print("Loading species info from folder %s" % filtersDir)
         try:
-            self.FilterFiles = [f[:-4] for f in os.listdir(self.config['FiltersDir']) if os.path.isfile(os.path.join(self.config['FiltersDir'], f))]
+            self.FilterFiles = [f[:-4] for f in os.listdir(filtersDir) if os.path.isfile(os.path.join(filtersDir, f))]
         except:
-            print("Folder not found, no filters loaded")
+            print("Folder %s not found, no filters loaded" % filtersDir)
             self.FilterFiles = None
-        #print(self.FilterFiles)
 
-        #try:
-            #self.sppInfo = json.load(open(sppInfoFolder))
-            # TODO
-            #self.savesppinfo = True
-        #except:
-            #print("Failed to load spp info file, using defaults")
-            #self.sppInfo = json.load(open('sppInfo.txt'))
-            #self.savesppinfo = True # TODO: revise this with user permissions in mind
-        #self.sppinfofile = sppinfofile
-
-
-        # Load the birdlist:
-        # long list is necessary, short list can be regenerated
+        # Load the birdlists:
+        # short list is necessary, long list can be None
         try:
-            self.longBirdList = json.load(open(self.config['BirdListLong']))
+            shortblfile = os.path.join(configdir, self.config['BirdListShort'])
+            self.shortBirdList = json.load(open(shortblfile))
         except:
-            print("ERROR: failed to load long bird list")
+            print("ERROR: Failed to load short bird list from %s" % shortblfile)
             sys.exit()
-        try:
-            self.shortBirdList = json.load(open(self.config['BirdListShort']))
-        except:
-            print("Failed to load short bird list")
-            self.shortBirdList = self.longBirdList.copy()
-            self.shortBirdList = self.shortBirdList[:max(len(self.shortBirdList), 40)]
-
+        
+        if self.config['BirdListLong'] == "None":
+            # If don't have a long bird list, check the length of the short bird list is OK, and otherwise split it
+            # 40 is a bit random, but 20 in a list is long enough!
+            if len(self.shortBirdList) > 40:
+                self.longBirdList = self.shortBirdList.copy()
+                self.shortBirdList = self.shortBirdList[:40]
+            else:       
+                self.longBirdList = None
+        else:
+            try:
+                longblfile = os.path.join(configdir, self.config['BirdListLong'])
+                self.longBirdList = json.load(open(longblfile))
+            except:
+                print("Warning: failed to load long bird list from %s" % longblfile)
+                self.longBirdList = None
+            
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
         print('Locale is set to ' + QLocale().name())
@@ -4515,12 +4511,58 @@ class AviaNZ(QMainWindow):
 @click.option('-o', '--imagefile', type=click.Path(), help='If specified, a spectrogram will be saved to this file')
 @click.argument('command', nargs=-1)
 def mainlauncher(cli, infile, imagefile, command):
+    # determine config location
+    if platform.system() == 'Windows':
+        # Win
+        configdir = os.path.expandvars(os.path.join("%APPDATA%", "AviaNZ"))
+    elif platform.system() == 'Linux' or platform.system() == 'Darwin':
+        # Unix
+        configdir = os.path.expanduser("~/.avianz/")
+    else:
+        print("ERROR: what OS is this? %s" % platform.system())
+        sys.exit()
+
+    # if config files not found, copy from distributed backups:
+    # (exceptions here not handled and should always result in crashes)
+    necessaryFiles = ["AviaNZconfig.txt", "ListCommonBirds.txt", "ListDOCBirds.txt"]
+    if not os.path.isdir(configdir):
+        print("Creating config dir %s" % configdir)
+        try:
+            os.makedirs(configdir)
+        except:
+            print("ERROR: failed to make config dir")
+            sys.exit()
+    for f in necessaryFiles:
+        if not os.path.isfile(os.path.join(configdir, f)):
+            print("File %s not found in config dir, providing default" % f)
+            try:
+                shutil.copy2(os.path.join("Config", f), configdir)
+            except:
+                print("ERROR: failed to copy essential config files")
+                sys.exit()
+
+    # copy over filters to ~/.avianz/Filters/:
+    filterdir = os.path.join(configdir, "Filters/")
+    if not os.path.isdir(filterdir):
+        print("Creating filter dir %s" % filterdir)
+        os.makedirs(filterdir)
+    for f in os.listdir("Filters"):
+        ff = os.path.join("Filters", f) # Kiwi.txt
+        if not os.path.isfile(os.path.join(filterdir, f)): # ~/.avianz/Filters/Kiwi.txt
+            print("Filter %s not found, providing default" % f)
+            try:
+                shutil.copy2(ff, filterdir) # cp Filters/Kiwi.txt ~/.avianz/Filters/
+            except Exception as e:
+                print("Warning: failed to copy filter %s to %s" % (ff, filterdir))
+                print(e)
+
+    # run splash screen:
     if cli:
         print("Starting AviaNZ in CLI mode")
         if not isinstance(infile, str):
             print("ERROR: valid input file (-f) is mandatory in CLI mode!")
             sys.exit()
-        avianz = AviaNZ(configfile='Config/AviaNZconfig.txt',CLI=True,firstFile=infile, imageFile=imagefile, command=command)
+        avianz = AviaNZ(configdir=configdir,CLI=True, firstFile=infile, imageFile=imagefile, command=command)
         print("Analysis complete, closing AviaNZ")
     else:
         print("Starting AviaNZ in GUI mode")
@@ -4533,13 +4575,13 @@ def mainlauncher(cli, infile, imagefile, command):
         task = first.getValues()
 
         if task == 1:
-            avianz = AviaNZ(configfile='Config/AviaNZconfig_user.txt')
+            avianz = AviaNZ(configdir=configdir)
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==2:
             avianz = AviaNZ_batch.AviaNZ_batchProcess()
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==4:
-            avianz = AviaNZ_batch.AviaNZ_reviewAll(configfile='Config/AviaNZconfig_user.txt')
+            avianz = AviaNZ_batch.AviaNZ_reviewAll(configdir=configdir)
 
         avianz.show()
         out = app.exec_()
