@@ -221,7 +221,7 @@ class postProcess:
                 # read the sound segment and check fundamental frq.
                 data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
                 # denoise before fundamental frq. extraction
-                sc = preProcess(audioData=data, sampleRate=self.sampleRate, spInfo={}, df=True)  # species left empty to avoid bandpass filter
+                sc = preProcess(audioData=data, spInfo={}, df=True)  # species left empty to avoid bandpass filter
                 data, sampleRate = sc.denoise_filter(level=10)
 
                 sp = SignalProc.SignalProc([], 0, 512, 256)
