@@ -711,6 +711,22 @@ class TimeAxisMin(pg.AxisItem):
         self.offset = offset
         self.update()
 
+class TimeAxisSec(pg.AxisItem):
+    # Time axis (at bottom of spectrogram)
+    # Writes the time as mm:ss, and can add an offset
+    def __init__(self, *args, **kwargs):
+        super(TimeAxisSec, self).__init__(*args, **kwargs)
+        self.offset = 0
+        self.setLabel('Time', units='s')
+
+    def tickStrings(self, values, scale, spacing):
+        # Overwrite the axis tick code
+        return [QTime(0,0,0).addSecs(value+self.offset).toString('s') for value in values]
+
+    def setOffset(self,offset):
+        self.offset = offset
+        self.update()
+
 class FixedLineROI(pg.LineSegmentROI):
     def clearHandles(self):
         self.scene().removeItem(self.handles[0]['item'])
