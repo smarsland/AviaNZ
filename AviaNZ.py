@@ -80,7 +80,7 @@ class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
 
-    def __init__(self,root=None,configdir=None,CLI=False,firstFile='', imageFile='', command=''):
+    def __init__(self,root=None,configdir=None,CLI=False,cheatsheet=False,firstFile='', imageFile='', command=''):
         """Initialisation of the class. Load main config and bird lists from configdir.
         Also initialises the data structures and loads an initial file (specified explicitly)
         and sets up the window.
@@ -90,6 +90,7 @@ class AviaNZ(QMainWindow):
         super(AviaNZ, self).__init__()
         self.root = root
         self.CLI = CLI
+        self.cheatsheet = cheatsheet
 
         # At this point, the main config file should already be ensured to exist.
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
@@ -191,7 +192,7 @@ class AviaNZ(QMainWindow):
             #firstFile = "/home/julius/Documents/kiwis/rec/birds1.wav"
 
         if not os.path.isfile(firstFile):
-            if self.CLI:
+            if self.CLI and not cheatsheet:
                 print("file %s not found, exiting" % firstFile)
                 sys.exit()
             else:
@@ -231,24 +232,31 @@ class AviaNZ(QMainWindow):
 
         self.resetStorageArrays()
         if self.CLI:
-            self.loadFile(firstFile)
-            while command!=():
-                c = command[0]
-                command = command[1:]
-                print("Next command to execute is %s" % c)
-                if c=="denoise":
-                    self.denoise()
-                elif c=="segment":
-                    self.segment()
-                else:
-                    print("ERROR: %s is not a valid command" % c)
-                    sys.exit()
-            if imageFile!='':
-                # reset images to show full width if in CLI:
-                self.widthWindow.setValue(self.datalengthSec)
-                # looks unnecessary:
-                # self.p_spec.setXRange(0, self.convertAmpltoSpec(self.datalengthSec), update=True, padding=0)
-                self.saveImage(imageFile)
+            if cheatsheet:
+                files = [f for f in os.listdir('Sound Files/Batch') if f[-4:]=='.wav']
+                for f in files:
+                    self.loadFile(f)
+                    self.widthWindow.setValue(self.datalengthSec)
+                    self.saveImage(f[:-4]+'.png')
+            else:
+                self.loadFile(firstFile)
+                while command!=():
+                    c = command[0]
+                    command = command[1:]
+                    print("Next command to execute is %s" % c)
+                    if c=="denoise":
+                        self.denoise()
+                    elif c=="segment":
+                        self.segment()
+                    else:
+                        print("ERROR: %s is not a valid command" % c)
+                        sys.exit()
+                if imageFile!='':
+                    # reset images to show full width if in CLI:
+                    self.widthWindow.setValue(self.datalengthSec)
+                    # looks unnecessary:
+                    # self.p_spec.setXRange(0, self.convertAmpltoSpec(self.datalengthSec), update=True, padding=0)
+                    self.saveImage(imageFile)
         else:
             # Make the window and associated widgets
             self.setWindowTitle('AviaNZ')
@@ -1067,7 +1075,10 @@ class AviaNZ(QMainWindow):
                     self.timeaxis = SupportClasses.TimeAxisHour(orientation='bottom',linkView=self.p_ampl)
                 else:
                     self.startTime = 0
-                    self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
+                    if self.cheatsheet:
+                        self.timeaxis = SupportClasses.TimeAxisSec(orientation='bottom',linkView=self.p_ampl)
+                    else:
+                        self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
 
                 self.w_spec.addItem(self.timeaxis, row=1, col=1)
 
@@ -4507,10 +4518,11 @@ class AviaNZ(QMainWindow):
 
 @click.command()
 @click.option('-c', '--cli', is_flag=True, help='Run in command-line mode')
+@click.option('-s', '--cheatsheet', is_flag=True, help='Make the cheat sheet images')
 @click.option('-f', '--infile', type=click.Path(), help='Input wav file (mandatory in CLI mode)')
 @click.option('-o', '--imagefile', type=click.Path(), help='If specified, a spectrogram will be saved to this file')
 @click.argument('command', nargs=-1)
-def mainlauncher(cli, infile, imagefile, command):
+def mainlauncher(cli, cheatsheet, infile, imagefile, command):
     # determine config location
     if platform.system() == 'Windows':
         # Win
@@ -4559,10 +4571,10 @@ def mainlauncher(cli, infile, imagefile, command):
     # run splash screen:
     if cli:
         print("Starting AviaNZ in CLI mode")
-        if not isinstance(infile, str):
+        if not cheatsheet and not isinstance(infile, str):
             print("ERROR: valid input file (-f) is mandatory in CLI mode!")
             sys.exit()
-        avianz = AviaNZ(configdir=configdir,CLI=True, firstFile=infile, imageFile=imagefile, command=command)
+        avianz = AviaNZ(configdir=configdir,CLI=True, cheatsheet=cheatsheet, firstFile=infile, imageFile=imagefile, command=command)
         print("Analysis complete, closing AviaNZ")
     else:
         print("Starting AviaNZ in GUI mode")
