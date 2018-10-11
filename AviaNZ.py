@@ -187,12 +187,12 @@ class AviaNZ(QMainWindow):
         # INPUT FILE LOADING
         # search order: infile -> firstFile -> dialog
         # Make life easier for now: preload a birdsong
-        if not os.path.isfile(firstFile):
+        if not os.path.isfile(firstFile) and not cheatsheet:
             firstFile = self.SoundFileDir + '/' + 'tril1.wav' #'male1.wav' # 'kiwi.wav'
             #firstFile = "/home/julius/Documents/kiwis/rec/birds1.wav"
 
-        if not os.path.isfile(firstFile):
-            if self.CLI and not cheatsheet:
+        if not os.path.isfile(firstFile) and not cheatsheet:
+            if self.CLI:
                 print("file %s not found, exiting" % firstFile)
                 sys.exit()
             else:
@@ -212,10 +212,11 @@ class AviaNZ(QMainWindow):
                         sys.exit()
 
         # parse firstFile to dir and file parts
-        self.SoundFileDir = os.path.dirname(firstFile)
-        firstFile = os.path.basename(firstFile)
-        print("Working dir set to %s" % self.SoundFileDir)
-        print("Opening file %s" % firstFile)
+        if not cheatsheet:
+            self.SoundFileDir = os.path.dirname(firstFile)
+            firstFile = os.path.basename(firstFile)
+            print("Working dir set to %s" % self.SoundFileDir)
+            print("Opening file %s" % firstFile)
 
         # to keep code simpler, graphic options are created even in CLI mode
         # they're just not shown because QMainWindow.__init__ is skipped
@@ -233,11 +234,13 @@ class AviaNZ(QMainWindow):
         self.resetStorageArrays()
         if self.CLI:
             if cheatsheet:
-                files = [f for f in os.listdir('Sound Files/Batch') if f[-4:]=='.wav']
+                # use infile and imagefile as directories 
+                print(firstFile)
+                files = [f for f in os.listdir(firstFile) if f[-4:]=='.wav']
                 for f in files:
                     self.loadFile(f)
                     self.widthWindow.setValue(self.datalengthSec)
-                    self.saveImage(f[:-4]+'.png')
+                    self.saveImage(os.path.join(imageFile,f[:-4]+'.png'))
             else:
                 self.loadFile(firstFile)
                 while command!=():
