@@ -566,23 +566,18 @@ class AviaNZ_reviewAll(QMainWindow):
     # Main class for reviewing batch processing results
     # Should call HumanClassify1 somehow
 
-    def __init__(self,root=None,configfile='',minSegment=50):
+    def __init__(self,root=None,configdir='',minSegment=50):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
         super(AviaNZ_reviewAll, self).__init__()
         self.root = root
         self.dirName=""
 
-        # read config file
-        try:
-            print("Loading configs from file %s" % configfile)
-            self.config = json.load(open(configfile))
-            self.saveConfig = True
-        except:
-            print("Failed to load config file, using defaults")
-            self.config = json.load(open('AviaNZconfig.txt'))
-            self.saveConfig = True # TODO: revise this with user permissions in mind
-        self.configfile = configfile
+        # At this point, the main config file should already be ensured to exist.
+        self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
+        print("Loading configs from file %s" % self.configfile)
+        self.config = json.load(open(self.configfile))
+        self.saveConfig = True
 
         # audio things
         self.audioFormat = QAudioFormat()
