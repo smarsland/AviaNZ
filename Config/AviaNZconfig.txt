@@ -8,8 +8,8 @@
 "SoundFileDir": "./Sound Files", "secsSave": 60, "windowWidth": 6.57,
 "widthOverviewSegment": 10.0, "maxFileShow": 300, "fileOverlap": 10,
 "brightness": 50, "contrast": 50, "overlap_allowed": 5, "reviewSpecBuffer": 1,
-"BirdListShort": "Config/ListCommonBirds.txt",
-"BirdListLong": "Config/ListDOCBirds.txt",
+"BirdListShort": "ListCommonBirds.txt",
+"BirdListLong": "ListDOCBirds.txt",
 "ColourList": ["Grey", "Viridis", "Inferno", "Plasma", "Autumn", "Cool", "Bone",
                 "Copper", "Hot", "Jet", "Thermal", "Flame", "Yellowy", "Bipolar", "Spectrum"],
 "ColourSelected": [0, 0, 255, 100],
@@ -21,4 +21,4 @@
 "invertColourMap": false, "showAllPages": true, "saveCorrections": true,
 "operator": "Stephen", "reviewer": "Nirosha",
 "protocolOn": false, "protocolSize": 10, "protocolInterval": 60,
-"fs_start": 0, "fs_end": 0, "window": "Hann", "DOC": true,"FiltersDir":"./Filters"}
+"fs_start": 0, "fs_end": 0, "window": "Hann", "DOC": true,"FiltersDir":"Filters"}
