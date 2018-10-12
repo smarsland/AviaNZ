@@ -9,7 +9,6 @@
 # ignore temp files produced during analysis
 Sound Files/Noise examples/Noise_10s/*.xlsx
 Sound Files/Noise examples/Noise_10s/*.data
-Sound Files/Bittern/*.data
 
 # auto-generated cython sources have to be listed manually here:
 ext/ce_denoise.c
@@ -17,6 +16,6 @@ ext/build/
 
 # default configs - if this is not distributed
 # AviaNZconfig.txt
-Config/AviaNZconfig_user.txt
+AviaNZconfig_user.txt
 sppInfo_user.txt
-Config/ListCommonBirds.txt
+ListCommonBirds.txt
