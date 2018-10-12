@@ -410,7 +410,7 @@ class Segment:
         list = []
         list.append(blobs[0])
         for i in centroids:
-            #print(i)
+            print(i)
             # TODO: replace this with simple overlap?
             if (i - centroid)*1000 < minSegment / 2. * 10:
                 if blobs[ind[count]][0] < list[current][0]:
@@ -523,11 +523,11 @@ class Segment:
         if returnSegs:
             ind = np.squeeze(np.where(pitch > minfreq))
             segs = self.identifySegments(ind,notSpec=True)
-            #print(segs, len(ind), len(pitch))
+            print(segs, len(ind), len(pitch))
             for s in segs:
                s[0] = float(s[0])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr#W / self.window_width
                s[1] = float(s[1])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr#W / self.window_width
-            #print(segs)
+            print(segs)
             return segs, pitch, np.array(starts)
         else:
             return pitch, np.array(starts), minfreq, W
@@ -539,7 +539,6 @@ class Segment:
         from skimage.feature import match_template
 
         # seg and sg have the same $y$ size, so the result of match_template is 1D
-        #m = match_template(sg,seg)
         matches = np.squeeze(match_template(sg, seg))
 
         import peakutils
@@ -704,7 +703,7 @@ def showSegs():
     s6=s.mergeSegments(s2,s4)
     ws = WaveletSegment.WaveletSegment()
     s7= ws.waveletSegment_test(None, data, fs, None, 'Kiwi', False)
-    #print('Took {}s'.format(time() - ts))
+    print('Took {}s'.format(time() - ts))
     #s7 = s.mergeSegments(s1,s.mergeSegments(s3,s4))
 
     #s4, samp = s.segmentByFIR(0.4)

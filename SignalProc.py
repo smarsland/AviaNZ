@@ -113,7 +113,7 @@ class SignalProc:
         elif window=='Ones':
             window = np.ones(window_width)
         else:
-            print("Unknown window, using Hann")
+            print("unknown window, using Hann")
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)))
 
         if equal_loudness:
@@ -165,7 +165,7 @@ class SignalProc:
         start = max(start,0,minFreq)
         end = min(end,maxFreq,self.sampleRate/2)
 
-        #print(start,end,minFreq,maxFreq)
+        print(start,end,minFreq,maxFreq)
 
         if start == minFreq and end == maxFreq:
             print("No filter needed!")
@@ -176,15 +176,15 @@ class SignalProc:
 
         if start == minFreq:
             # Low pass
-            #print("Low")
+            print("Low")
             taps = signal.firwin(ntaps, cutoff=[end / nyquist], window=('hamming'), pass_zero=True)
         elif end == maxFreq:
             # High pass
-            #print("High")
+            print("High")
             taps = signal.firwin(ntaps, cutoff=[start / nyquist], window=('hamming'), pass_zero=False)
         else:
             # Bandpass
-            #print("Band")
+            print("Band")
             taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
         #ntaps, beta = signal.kaiserord(ripple_db, width)
         #taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)

@@ -45,8 +45,9 @@ class preProcess:
     """
     # todo: remove duplicate preprocess in 'Wavelet Segments'
 
-    def __init__(self,audioData=None, spInfo={}, df=False, wavelet='dmey2'):
+    def __init__(self,audioData=None, sampleRate=0, spInfo={}, df=False, wavelet='dmey2'):
         self.audioData=audioData
+        self.sampleRate=sampleRate
         self.spInfo=spInfo
         self.df=df
         if wavelet == 'dmey2':
@@ -70,10 +71,9 @@ class preProcess:
             f2 = self.spInfo['FreqRange'][1]
             fs = self.spInfo['SampleRate']
 
-        # Done before this is called
-        #if self.sampleRate != fs:
-            #self.audioData = librosa.core.audio.resample(self.audioData, self.sampleRate, fs)
-            #self.sampleRate = fs
+        if self.sampleRate != fs:
+            self.audioData = librosa.core.audio.resample(self.audioData, self.sampleRate, fs)
+            self.sampleRate = fs
 
         # Get the five level wavelet decomposition
         if self.df == True:
@@ -95,7 +95,7 @@ class preProcess:
         # librosa.output.write_wav('Sound Files/Kiwi/test/Tier1/test/test/test', denoisedData, self.sampleRate, norm=False)
 
         if f1 and f2:
-            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, fs, low=f1, high=f2)
+            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=f2)
             # filteredDenoisedData = self.sp.bandpassFilter(denoisedData, start=f1, end=f2, sampleRate=self.sampleRate)
         # elif species == 'Ruru':
         #     filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=7000)
@@ -104,7 +104,7 @@ class preProcess:
         else:
             filteredDenoisedData = denoisedData
 
-        return filteredDenoisedData, fs
+        return filteredDenoisedData, self.sampleRate
 
 class postProcess:
     """ This class implements few post processing methods to avoid false positives
@@ -232,7 +232,7 @@ class postProcess:
                 ind = np.squeeze(np.where(pitch > minfreq))
                 pitch = pitch[ind]
                 if pitch.size == 0:
-                    print('Segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
+                    print('segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
                     # newSegments.remove(seg) # for now keep it
                     continue    # continue to the next seg
                 ind = ind * W / 512
@@ -476,7 +476,7 @@ class exportSegments:
         # while everything from segments list is exported as-is.
         if len(seglist)>0:
             if len(seglist[0])==2:
-                print("Using old format segment list")
+                print("using old format segment list")
                 # convert to new format
                 for seg in seglist:
                     seg.append(0)
@@ -484,7 +484,7 @@ class exportSegments:
                     seg.append(species)
                 return(seglist)
             elif len(seglist[0])==5:
-                #print("using new format segment list")
+                print("using new format segment list")
                 return(seglist)
             else:
                 print("ERROR: incorrect segment format")
@@ -892,7 +892,7 @@ class DragViewBox(pg.ViewBox):
         self.thisIsAmpl = thisIsAmpl
 
     def mouseDragEvent(self, ev):
-        print("Uncaptured drag event")
+        print("uncaptured drag event")
         # if self.enableDrag:
         #     ## if axis is specified, event will only affect that axis.
         #     ev.accept()
@@ -1047,20 +1047,20 @@ class ControllableAudio(QAudioOutput):
 
     def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
         if not resetPause and self.state() == QAudio.SuspendedState:
-            print("Resuming at: %d" % self.pauseoffset)
+            print("resuming at: %d" % self.pauseoffset)
             self.sttime = time.time() - self.pauseoffset/1000
             self.resume()
         else:
             if not self.keepSlider or resetPause:
                 self.pressedStop()
 
-            print("Starting at: %d" % self.tempin.pos())
+            print("starting at: %d" % self.tempin.pos())
             sleep(0.2)
             # in case bar was moved under pause, we need this:
             pos = self.tempin.pos() # bytes
             pos = self.format.durationForBytes(pos) / 1000 # convert to ms
             pos = pos + start
-            print("Pos: %d start: %d stop %d" %(pos, start, stop))
+            print("pos: %d start: %d stop %d" %(pos, start, stop))
             self.filterSeg(pos, stop, audiodata)
 
     def pressedPause(self):
@@ -1130,7 +1130,7 @@ class ControllableAudio(QAudioOutput):
         self.start(self.tempin)
 
     def seekToMs(self, ms, start):
-        print("Seeking to %d ms" % ms)
+        print("seeking to %d ms" % ms)
         # start is an offset for the current view start, as it is position 0 in extracted file
         self.reset()
         self.tempin.seek(self.format.bytesForDuration((ms-start)*1000))
@@ -1285,7 +1285,7 @@ class Log(object):
                 # [freetext, species, settings, [files]]
                 # (basically I'm parsing txt into json because I'm dumb)
                 while lend<len(lines):
-                    #print(lines[lend])
+                    print(lines[lend])
                     if lines[lend][0] == "#":
                         allans.append([lines[lstart], lines[lstart+1], lines[lstart+2],
                                         lines[lstart+3 : lend]])
@@ -1299,9 +1299,9 @@ class Log(object):
                 # and compare to check if it can be resumed.
                 # store all other analyses for re-printing.
                 for a in allans:
-                    #print(a)
+                    print(a)
                     if a[1]==self.species:
-                        print("Resumable analysis found")
+                        print("resumable analysis found")
                         # do not reprint this in log
                         if a[2]==self.settings:
                             self.currentHeader = a[0]
@@ -1317,7 +1317,7 @@ class Log(object):
                 print("ERROR: could not open log at %s" % path)
 
     def appendFile(self, filename):
-        print('Appending %s to log' % filename)
+        print('appending %s to log' % filename)
         # attach file path to end of log
         self.file.write(filename)
         self.file.write("\n")

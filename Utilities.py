@@ -256,6 +256,30 @@ def extractSegments_batch(dirName, destination, copyName = True, species = None)
                 filename = root + '/' + filename
                 extractSegments(filename, destination, copyName=copyName, species = species)
 
+# extractSegments_batch('E:\ISABEL\Rawhiti Experiment Night Data Sorting NP\Rawhiti experiment Top recorder\Top Evening\New folder\New folder', 'E:\ISABEL\Rawhiti Experiment Night Data Sorting NP\Rawhiti experiment Top recorder\Top Evening\New folder\New folder\songss')
+
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkf-close', copyName=False, species = 'Bkf1')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkf-close', copyName=False, species = 'Bkf2')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkf-other', copyName=False, species = 'Bkf3')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkf-other', copyName=False, species = 'Bkf4')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkf-other', copyName=False, species = 'Bkf5')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkm-close', copyName=False, species = 'Bkm1')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkm-close', copyName=False, species = 'Bkm2')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkm-other', copyName=False, species = 'Bkm3')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkm-other', copyName=False, species = 'Bkm4')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkm-other', copyName=False, species = 'Bkm5')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkd-close', copyName=False, species = 'Bkd1')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkd-close', copyName=False, species = 'Bkd2')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkd-other', copyName=False, species = 'Bkd3')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkd-other', copyName=False, species = 'Bkd4')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkd-other', copyName=False, species = 'Bkd5')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkr-close', copyName=False, species = 'Bkr1')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkr-close', copyName=False, species = 'Bkr2')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkr-other', copyName=False, species = 'Bkr3')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkr-other', copyName=False, species = 'Bkr4')
+# extractSegments_batch('E:\Employ\Halema\Survey2', 'E:\AviaNZ Kiwi sound pool\Taranaki-bkr-other', copyName=False, species = 'Bkr5')
+
+
 #------------------------------------------------- code to rename the annotations e.g. Kiwi(M)1 into bkm1
 def renameAnnotation(dirName, frm, to):
     for root, dirs, files in os.walk(str(dirName)):
@@ -275,6 +299,38 @@ def renameAnnotation(dirName, frm, to):
                     file = open(str(filename), 'w')
                     json.dump(segments, file)
                     file.close()
+
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi(M)1', 'bkm1')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi(M)2', 'bkm2')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi(M)3', 'bkm3')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi(M)4', 'bkm4')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi(M)5', 'bkm5')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi(F)1', 'bkf1')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi(F)2', 'bkf2')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi(F)3', 'bkf3')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi(F)4', 'bkf4')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi(F)5', 'bkf5')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi1', 'bk1')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi2', 'bk2')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi3', 'bk3')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi4', 'bk4')
+# renameAnnotation('E:\Employ\Halema\Survey2', 'Kiwi5', 'bk5')
+
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi(M)1', 'bkm1')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi(M)2', 'bkm2')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi(M)3', 'bkm3')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi(M)4', 'bkm4')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi(M)5', 'bkm5')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi(F)1', 'bkf1')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi(F)2', 'bkf2')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi(F)3', 'bkf3')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi(F)4', 'bkf4')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi(F)5', 'bkf5')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi1', 'bk1')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi2', 'bk2')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi3', 'bk3')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi4', 'bk4')
+# renameAnnotation('F:\Isabel-Coromendal kiwi-October_2017', 'Kiwi5', 'bk5')
 
 #---------------------------generate GT batch
 def annotation2GT(wavFile,species,duration=0):
@@ -372,6 +428,30 @@ def genGT(dirName,species='Kiwi',duration=0):
                 filename = root + '/' + filename
                 annotation2GT(filename,species,duration=duration)
     print ("Generated GT")
+
+# genGT("E:\kiwi-Fiordland roroa-Sandy and Robin\GSKtrain", species='Gsk')
+# genGT("Sound Files\\test\\test", species='Kiwi',duration=300)
+# genGT('E:\Employ\Kessel ecology\Bittern-Kessels Ecology-Wiea-2017-11-19\DownSampled\KA13_Oct 17-24_down', species='Bittern',duration=900)
+# genGT('E:\Employ\Halema\Survey2', species='Kiwi',duration=900)
+# genGT('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1-new\\negative', species='Kiwi',duration=900)
+
+# ------------------------------------------------  SIPO
+# generate GT for SIPO
+# annotation2GT('E:\Rebecca SIPO\\train\Mt Cass coastal SIPO 07072012.wav.data')
+# annotation2GT('E:\Rebecca SIPO\\train\\170617_163003_train.wav.data')
+
+# Train
+# nodes= ws.waveletSegment_train('E:\Rebecca SIPO\\train\Mt Cass coastal SIPO 07072012',species='SIPO')
+# print "Nodes for SIPO: ",nodes
+# # # nodes_SIPO=[54,26,2]
+# #           = [61L, 53L, 60L, 57L]
+#
+# nodes = ws.waveletSegment_train('E:\Rebecca SIPO\\train\\170617_163003_train', species='SIPO')
+# print "Nodes for SIPO: ",nodes
+# [59L, 54L, 51L, 60L, 58L, 49L, 47L]
+
+# d=ws.waveletSegment_test(fName='E:\Rebecca SIPO\\train\Mt Cass coastal SIPO 07072012',data=None, sampleRate=None, species='SIPO',trainTest=False)
+# print d
 
 #------------------------------------------------- code to convert the anotations to excel report batch
 def genReport(dirName,species='Kiwi'):

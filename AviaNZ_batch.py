@@ -178,7 +178,7 @@ class AviaNZ_batchProcess(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
-        #print("Dir:", self.dirName)
+        print("Dir:", self.dirName)
         self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
         self.fillFileList(self.dirName)
@@ -226,7 +226,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 msg.setText(text)
                 confirmedResume = msg.exec_()
             else:
-                print("All files appear to have previous analysis results")
+                print("all files appear to have previous analysis results")
                 msg = QMessageBox()
                 msg.setIconPixmap(QPixmap("img/Owl_done.png"))
                 msg.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -319,7 +319,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         print("Opening file %s" % filename)
                         self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total))
                         if os.stat(self.filename).st_size < 100:
-                            print("Skipping empty file")
+                            print("skipping empty file")
                             self.log.appendFile(self.filename)
                             continue
 
@@ -339,7 +339,7 @@ class AviaNZ_batchProcess(QMainWindow):
                             sTime=0
 
                         if DOCRecording and self.species in ['Kiwi', 'Ruru'] and not Night:
-                            print("Skipping daytime recording")
+                            print("skipping daytime recording")
                             self.log.appendFile(self.filename)
                             continue
                         
@@ -508,7 +508,7 @@ class AviaNZ_batchProcess(QMainWindow):
             self.sampleRate=16000
             # self.audioFormat.setSampleRate(self.sampleRate)
             self.datalength = np.shape(self.audiodata)[0]
-            print("File was downsampled to %d" % self.sampleRate)
+            print("file was downsampled to %d" % self.sampleRate)
 
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
@@ -718,7 +718,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
-        #print("Dir:", self.dirName)
+        print("Dir:", self.dirName)
         self.w_dir.setPlainText(self.dirName)
         self.spList = ['All species']
         # find species names from the annotations
@@ -746,7 +746,7 @@ class AviaNZ_reviewAll(QMainWindow):
     def review(self):
         self.species = self.w_spe1.currentText()
         self.reviewer = self.w_reviewer.text()
-        print("Reviewer: ", self.reviewer)
+        print("reviewer: ", self.reviewer)
         if self.reviewer == '':
             msg = QMessageBox()
             msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
@@ -798,7 +798,7 @@ class AviaNZ_reviewAll(QMainWindow):
                     print("Opening file %s" % filename)
                     cnt=cnt+1
                     if os.stat(filename).st_size < 100:
-                        print("Skipping empty file")
+                        print("skipping empty file")
                         continue
 
                     # test day/night if it is a doc recording
@@ -827,13 +827,13 @@ class AviaNZ_reviewAll(QMainWindow):
                     self.loadFile()
                     if len(self.segments) == 0:
                         # and skip review dialog, but save the name into excel
-                        print("No segments found in file %s" % filename)
+                        print("no segments found in file %s" % filename)
                     # file has segments, so call the right review dialog:
                     elif self.species == 'All species':
                         filesuccess = self.review_all(sTime)
                     else:
                         filesuccess = self.review_single(sTime)
-                        print("File success: ", filesuccess)
+                        print("filesuccess: ", filesuccess)
 
                     # Store the output to an Excel file (no matter if review dialog exit was clean)
                     out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=[self.species], batch=True)
@@ -898,7 +898,7 @@ class AviaNZ_reviewAll(QMainWindow):
             if success == 0:
                  return(0)
             errorInds = self.humanClassifyDialog2.getValues()
-            print("Errors: ", errorInds, len(errorInds))
+            print("errors: ", errorInds, len(errorInds))
 
         outputErrors = []
         if len(errorInds) > 0:
@@ -980,7 +980,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.sampleRate=16000
             self.audioFormat.setSampleRate(self.sampleRate)
             self.datalength = np.shape(self.audiodata)[0]
-            print("File was downsampled to %d" % self.sampleRate)
+            print("file was downsampled to %d" % self.sampleRate)
 
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
@@ -1006,7 +1006,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # If there was a section without segments this would be a bit inefficient, actually no, it was wrong!
 
             # Show the next segment
-            #print(self.segments[self.box1id])
+            print(self.segments[self.box1id])
             x1nob = self.segments[self.box1id][0]
             x2nob = self.segments[self.box1id][1]
             x1 = int(self.convertAmpltoSpec(x1nob - self.config['reviewSpecBuffer']))
