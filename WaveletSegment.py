@@ -92,10 +92,9 @@ class WaveletSegment:
             print("TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%s" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB))
         else:
             print("TP=%d \tFP=%d \tTN=%d \tFN=%d \tRecall=%0.2f \tPrecision=%0.2f \tfB=%0.2f" %(TP,P-TP,len(annotation)-(P+T-TP),T-TP,recall,precision,fB))
-        #print TP, int(T), int(P), recall, precision, ((1.+beta**2)*recall*precision)/(recall + beta**2*precision)
         return fB,recall, TP,P-TP,len(annotation)-(P+T-TP), T-TP    # fB, recall, TP, FP, TN, FN
 
-    def compute_r(self,annotation,waveletCoefs,nNodes=10):
+    def compute_r(self,annotation,waveletCoefs,nNodes=20):
         """ Computes the point-biserial correlations for a set of labels and a set of wavelet coefficients.
         r = (M_p - M_q) / S * sqrt(p*q), M_p = mean for those that are 0, S = std dev overall, p = proportion that are 0.
         """
@@ -227,11 +226,7 @@ class WaveletSegment:
         import math
         if sampleRate==0:
             sampleRate=self.sampleRate
-        if species != []:
-            thr = species['WaveletParams'][0]
-        else:
-            pass
-            # TODO: during train species thr is not avaialble to read from Filters
+        thr = species['WaveletParams'][0]
         detected = np.zeros((int(len(wp.data)/sampleRate),len(listnodes)))
         count = 0
 
@@ -369,7 +364,7 @@ class WaveletSegment:
         waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
 
         # Compute point-biserial correlations and sort wrt it, return top nNodes
-        nodes = self.compute_r(self.annotation, waveletCoefs, nNodes=10) # Limit number of nodes to 10 and avoid getting in low level nodes
+        nodes = self.compute_r(self.annotation, waveletCoefs)
         # print(nodes)
 
         # Now for Nirosha's sorting
@@ -378,7 +373,7 @@ class WaveletSegment:
 
         # These nodes refer to the unrooted tree, so add 1 to get the real indices
         nodes = [n + 1 for n in nodes]
-        print("nodes: ",nodes)
+        # print(nodes)
 
         # Generate a full 5 level wavelet packet decomposition
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
@@ -393,14 +388,14 @@ class WaveletSegment:
         for node in nodes:
             testlist = listnodes[:]
             testlist.append(node)
-            print("testlist: ",testlist)
-            detected_c = self.detectCalls(wpFull, self.sampleRate, listnodes=testlist, species=soundInfo,trainTest=True)
+            print(testlist)
+            detected_c = self.detectCalls(wpFull, self.sampleRate, listnodes=testlist, soundInfo=soundInfo,trainTest=True)
 
             # update the detections
             detections = np.maximum.reduce([detected, detected_c])
             fB,recall,tp,fp,tn,fn = self.fBetaScore(self.annotation, detections)
-            print("Node,", node)
-            print("fB, recall: ", fB,recall)
+            # print("Node,", node)
+            # print("fB, recall: ", fB,recall)
             if fB > bestBetaScore:
                 bestBetaScore = fB
                 bestRecall=recall
@@ -497,21 +492,20 @@ def batch(dirName,species,ws,listnodes,train=False,df=False):
     import os
     nodeList=[]
     TP=FP=TN=FN=0
-    speciesData = json.load(open(os.path.join('Filters', species + '.txt')))
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
             if filename.endswith('.wav'):
                 filename = root + '/' + filename[:-4]
                 if not train:
                     print("***", filename)
-                    det, tp, fp, tn, fn = ws.waveletSegment_test(fName=filename, listnodes=listnodes, spInfo=speciesData, trainTest=True,df=df)
+                    det, tp, fp, tn, fn = ws.waveletSegment_test(filename, listnodes=listnodes, species=species, trainTest=True,df=df)
                     TP+=tp
                     FP+=fp
                     TN+=tn
                     FN+=fn
                 else:
                     print("***", filename)
-                    nodes = ws.waveletSegment_train(fName=filename, soundInfo=speciesData,df=df)
+                    nodes = ws.waveletSegment_train(filename, species=species,df=df)
                     print(nodes)
                     nodeList=np.union1d(nodeList, nodes)
     if train:
@@ -520,9 +514,8 @@ def batch(dirName,species,ws,listnodes,train=False,df=False):
         print("-----TP   FP  TN  FN")
         print(TP, FP, TN, FN)
 
-# ws=WaveletSegment(wavelet='dmey')
-# batch('E:\AviaNZ\Sound Files\kiwi\Ponui', "Kiwi, Nth Is Brown", ws, None, train=True)
-
+#ws=WaveletSegment(wavelet='dmey')
+# batch('Sound Files/test/test', ws, None)
 #train bittern
 # batch('Sound Files/Bittern/thesis-Hatuma/train','Bittern',ws,listnodes=None,train=True)
 # bittern_nodes=[41,43,44,45,46]
@@ -642,28 +635,20 @@ def test():
     ## batch(ws, listnodes2, listnodes3, listnodes4, listnodes6, listnodes8)
 
 def test_listmerge():
-    # p1 = [46, 45, 43, 38]           # Ponui train2 (female)
-    p1 = [36, 38]
-    # p2 = [43, 44, 35, 36, 55]       # Ponui train3
-    p2 = [33, 35, 36, 43]
-    # p3 = [45, 46, 42, 50]           # Ponui train4 (female)
-    p3 = [45]
-    # p4 = [35, 36, 17, 43, 40, 20]   # Ponui train6
-    p4 = [35, 36, 39]
-    # p5 = [35, 36]                   # Ponui train8
-    p5 = [35, 36]
-    # h1 = [43, 36, 44, 38, 22, 40]       # Taranaki (female)
-    h1 = [38, 36, 41, 42]
-    # h2 = [55, 56, 35, 43, 40, 17]       # Taranaki
-    h2 = [17, 35, 55]
+    p1 = [46, 45, 43, 38]           # Ponui train2 (female)
+    p2 = [43, 44, 35, 36, 55]       # Ponui train3
+    p3 = [45, 46, 42, 50]           # Ponui train4 (female)
+    p4 = [35, 36, 17, 43, 40, 20]   # Ponui train6
+    p5 = [35, 36]                   # Ponui train8
+    h1 = [43, 36, 44, 38, 22, 40]       # Taranaki (female)
+    h2 = [55, 56, 35, 43, 40, 17]       # Taranaki
     # j1 = [] # Jason
     t1 = [35, 43]      # Tier 1 (15 min)
-    # t2 = [35]          # Tier 1
-    # t3 = [35, 43]      # Tier 1
-    # t4 = [44, 43, 46]  # Tier 1
-    # t5 = [44, 48]      # Tier 1 (female-fade)
-    # t6 = [35, 36]      # Tier 1
-    t6 = [44, 38, 46, 37, 34]
+    t2 = [35]          # Tier 1
+    t3 = [35, 43]      # Tier 1
+    t4 = [44, 43, 46]  # Tier 1
+    t5 = [44, 48]      # Tier 1 (female-fade)
+    t6 = [35, 36]      # Tier 1
 
     # listnodes=np.union1d(l1,np.union1d(l2,np.union1d(l3,np.union1d(l4,np.union1d(l5,np.union1d(l6,np.union1d(l7,np.union1d(l8,np.union1d(l9,np.union1d(l10,l11))))))))))
             # [17.0, 20.0, 22.0, 35.0, 36.0, 38.0, 40.0, 42.0, 43.0, 44.0, 45.0, 46.0, 50.0, 55.0]
