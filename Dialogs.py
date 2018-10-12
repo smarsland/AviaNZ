@@ -1,5 +1,24 @@
-# Version 0.2 10/7/17
-# Author: Stephen Marsland
+
+#
+# This is part of the AviaNZ interface
+# Version 1.2 11/10/18
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+
+#    AviaNZ birdsong analysis program
+#    Copyright (C) 2017--2018
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
@@ -1076,28 +1095,6 @@ class HumanClassify1(QDialog):
         self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
         self.delete.setIconSize(iconSize)
 
-        # An array of check boxes and a list and a text entry box
-        # Create an array of check bixes for the most common birds (2 columns of 10 choices)
-        self.birds = QButtonGroup()
-        self.birdbtns = []
-        if self.multipleBirds:
-            for item in self.shortBirdList[:29]:
-                self.birdbtns.append(QCheckBox(item))
-                self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
-                self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
-            self.birdbtns.append(QCheckBox('Other')),
-            self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
-            self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
-        else:
-            for item in self.shortBirdList[:29]:
-                btn = QRadioButton(item)
-                self.birdbtns.append(btn)
-                self.birds.addButton(btn,len(self.birdbtns)-1)
-                btn.clicked.connect(self.radioBirdsClicked)
-            self.birdbtns.append(QRadioButton('Other')),
-            self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
-            self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
-
         # The list of less common birds
         self.birds3 = QListWidget(self)
         if self.longBirdList is not None and self.longBirdList != 'None':
@@ -1109,10 +1106,34 @@ class HumanClassify1(QDialog):
         # Explicitly add "Other" option in
         self.birds3.addItem('Other')
         self.birds3.setMaximumWidth(400)
-
-        #self.birds3.sortItems()
-
         self.birds3.itemClicked.connect(self.listBirdsClicked)
+
+        # An array of check boxes and a list and a text entry box
+        # Create an array of check bixes for the most common birds (2 columns of 10 choices)
+        self.birds = QButtonGroup()
+        self.birdbtns = []
+        if self.multipleBirds:
+            self.birds.setExclusive(False)
+            for item in self.shortBirdList[:29]:
+                self.birdbtns.append(QCheckBox(item))
+                self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
+                self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
+            self.birdbtns.append(QCheckBox('Other')),
+            self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
+            self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
+            self.birds3.setSelectionMode(QAbstractItemView.MultiSelection)
+        else:
+            self.birds.setExclusive(True)
+            for item in self.shortBirdList[:29]:
+                btn = QRadioButton(item)
+                self.birdbtns.append(btn)
+                self.birds.addButton(btn,len(self.birdbtns)-1)
+                btn.clicked.connect(self.radioBirdsClicked)
+            self.birdbtns.append(QRadioButton('Other')),
+            self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
+            self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
+            self.birds3.setSelectionMode(QAbstractItemView.SingleSelection)
+
         self.birds3.setEnabled(False)
 
         # This is the text box for missing birds
@@ -1332,20 +1353,13 @@ class HumanClassify1(QDialog):
         self.species.setText(','.join(label))
         self.birds3.clearSelection()
         self.updateButtonList()
-        if len(label)>1:
-            self.birds.setExclusive(False)
-            self.birds3.setSelectionMode(QAbstractItemView.MultiSelection)
-            for btn in self.birdbtns:
-                btn.setChecked(False)
-        else:       
-            self.birds.setExclusive(True)
-            self.birds3.setSelectionMode(QAbstractItemView.SingleSelection)
         for l in label:
             if l[-1]=='?':
                 l= l[:-1]
             if l in self.shortBirdList[:29]:
                 ind = self.shortBirdList.index(l)
                 self.birdbtns[ind].setChecked(True)
+                print(ind,l)
             else:
                 self.birdbtns[29].setChecked(True)
                 self.birds3.setEnabled(True)

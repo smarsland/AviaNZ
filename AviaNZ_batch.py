@@ -97,7 +97,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # self.w_spe1.addItems(["Kiwi", "Ruru", "Bittern", "all"])
         self.d_detection.addWidget(self.w_spe1,row=1,col=1,colspan=2)
 
-        self.w_resLabel = QLabel("  Output Resolution (secs)")
+        self.w_resLabel = QLabel("Time Resolution in Excel Output (secs)")
         self.d_detection.addWidget(self.w_resLabel, row=2, col=0)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
