@@ -493,7 +493,7 @@ class exportSegments:
         self.wb = Workbook()
         self.wb.create_sheet(title='Time Stamps', index=1)
         self.wb.create_sheet(title='Presence Absence', index=2)
-        self.wb.create_sheet(title='Per second', index=3)
+        self.wb.create_sheet(title='Per Time Period', index=3)
 
         ws = self.wb['Time Stamps']
         ws.cell(row=1, column=1, value="File Name")
@@ -510,7 +510,7 @@ class exportSegments:
         ws.cell(row=1, column=2, value="Presence/Absence")
 
         # Third sheet
-        ws = self.wb['Per second']
+        ws = self.wb['Per Time Period']
         ws.cell(row=1, column=1, value="File Name_Page")
         ws.cell(row=1, column=2, value="Presence=1, Absence=0")
 
