@@ -575,7 +575,7 @@ class exportSegments:
                 resolution_before = self.resolution
                 need_reset = True
                 self.resolution = int(math.ceil(float(self.datalength) / self.sampleRate))
-            ws = wb['Per second']
+            ws = wb['Per Time Period']
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value= str(self.resolution) + ' secs resolution')
             ft = Font(color=colors.DARKYELLOW)

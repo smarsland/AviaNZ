@@ -3677,7 +3677,7 @@ class AviaNZ(QMainWindow):
                 if fnmatch.fnmatch(file, self.filename[:-4] + "_*.xlsx"):
                     print("Removing file %s" % file)
                     os.remove(file)
-        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, SoundFileDir=self.SoundFileDir, filename=self.filename[:-4], resolution=10, datalength=self.datalength, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
+        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, filename=self.filename[:-4], resolution=10, datalength=self.datalength, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
         out.excel()
         # add user notification
         # QMessageBox.about(self, "Segments Exported", "Check this directory for the excel output: " + '\n' + self.SoundFileDir)
