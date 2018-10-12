@@ -2804,6 +2804,8 @@ class AviaNZ(QMainWindow):
         self.segments[self.box1id][4] = []
         for l in label:
             self.birdSelectedMenu(l)
+        if label==[]:
+            self.birdSelectedMenu("Don't Know")
         self.multipleBirds = multipleTemp
 
         if self.listRectanglesa2[self.box1id] is not None:
