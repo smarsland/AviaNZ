@@ -572,6 +572,7 @@ class AviaNZ_reviewAll(QMainWindow):
         super(AviaNZ_reviewAll, self).__init__()
         self.root = root
         self.dirName=""
+        self.configdir = configdir
 
         # At this point, the main config file should already be ensured to exist.
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
@@ -888,7 +889,9 @@ class AviaNZ_reviewAll(QMainWindow):
             self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments_sp,
                                            self.species, self.sampleRate, self.audioFormat,
                                            self.config['incr'], self.lut, self.colourStart,
-                                           self.colourEnd, self.config['invertColourMap'], self.filename)
+                                           self.colourEnd, self.config['invertColourMap'],
+                                           self.config['brightness'], self.config['contrast'],
+                                           filename = self.filename)
 
             success = self.humanClassifyDialog2.exec_()
             # capture Esc press or other "dirty" exit:
@@ -929,13 +932,33 @@ class AviaNZ_reviewAll(QMainWindow):
            Updates self.segments as a side effect.
            Returns 1 for clean completion, 0 for Esc press or other dirty exit.
        """
-       # Initialize the dialog for this file
-       shortBirdList = json.load(open(self.config['BirdListShort']))
-       if self.config['BirdListLong'] is not None and self.config['BirdListLong'] != "None":
-            longBirdList = json.load(open(self.config['BirdListLong']))
+       # Load the birdlists:
+       # short list is necessary, long list can be None
+       try:
+           shortblfile = os.path.join(self.configdir, self.config['BirdListShort'])
+           shortBirdList = json.load(open(shortblfile))
+       except:
+           print("ERROR: Failed to load short bird list from %s" % shortblfile)
+           sys.exit()
+
+       if self.config['BirdListLong'] == "None":
+           # If don't have a long bird list, check the length of the short bird list is OK, and otherwise split      it
+           # 40 is a bit random, but 20 in a list is long enough!
+           if len(self.shortBirdList) > 40:
+               longBirdList = self.shortBirdList.copy()
+               shortBirdList = self.shortBirdList[:40]
+           else:
+               longBirdList = None
        else:
-            longBirdList = None
-       self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], shortBirdList, longBirdList, self)
+           try:
+               longblfile = os.path.join(self.configdir, self.config['BirdListLong'])
+               longBirdList = json.load(open(longblfile))
+           except:
+               print("Warning: failed to load long bird list from %s" % longblfile)
+               longBirdList = None
+
+
+       self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], shortBirdList, longBirdList, self.config['MultipleSpecies'], self)
        self.box1id = 0
        if hasattr(self, 'dialogPos'):
            self.humanClassifyDialog1.resize(self.dialogSize)
