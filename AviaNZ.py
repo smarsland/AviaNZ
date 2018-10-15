@@ -26,7 +26,6 @@
 # TODO: Automate some of the training options
 # TODO: Think about the dictionary a bit more for option checking
 # TODO: Manual should say how excels are managed - e.g. if someone process species e.g. ruru, kiwi and then choose 'All species' - it wipes all the species excells etc.
-# TODO: BatchProcessing, let the user define time range to process (e.g. 6pm-6am) when the recordings contain time-date information
 # Config & Filter files moved to user dirs
 # Contrast and brightness in HR2
 # Update order in context menu should be an option
@@ -3597,14 +3596,10 @@ class AviaNZ(QMainWindow):
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
             # post process to remove short segments, wind, rain, and use F0 check.
-            if species == "Bittern": # bitten booms are treated differently
+            if species == "Bittern" or species_cc == "Bittern": # bitten booms are treated differently
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                   segments=newSegments, spInfo=speciesData)
-            elif species_cc == "Bittern":
-                print("New segs 1: ", newSegments)
-                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, spInfo=speciesData)
-            elif species == "All species" or species_cc == 'Choose species...':
+            elif species == "All species" and species_cc == 'Choose species...':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
                 post.wind()
                 post.rainClick()
