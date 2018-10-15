@@ -131,6 +131,10 @@ class AviaNZ(QMainWindow):
                 print("Warning: failed to load long bird list from %s" % longblfile)
                 self.longBirdList = None
             
+        # Noise level details
+        self.noiseLevel = None
+        self.noiseTypes = []
+
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
         print('Locale is set to ' + QLocale().name())
@@ -357,7 +361,8 @@ class AviaNZ(QMainWindow):
         if not self.Hartley:
             actionMenu.addSeparator()
             actionMenu.addAction("Denoise",self.showDenoiseDialog,"Ctrl+N")
-        #actionMenu.addAction("Find matches",self.findMatches)
+            actionMenu.addAction("Add metadata about noise", self.addNoiseData)
+            #actionMenu.addAction("Find matches",self.findMatches)
             actionMenu.addSeparator()
             self.showFundamental = actionMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
             self.showFundamental.setCheckable(True)
@@ -384,6 +389,7 @@ class AviaNZ(QMainWindow):
             actionMenu.addSeparator()
             actionMenu.addAction("Export segments to Excel",self.exportSeg)
             actionMenu.addSeparator()
+
         if not self.DOC and not self.Hartley:
             actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
         actionMenu.addSeparator()
@@ -996,6 +1002,10 @@ class AviaNZ(QMainWindow):
                 if len(self.previousFile)>0:
                     self.previousFile = self.previousFile[0]
 
+            # Check if user requires noise data
+            if self.config['RequireNoiseData'] and self.noiseLevel is None:
+                self.addNoiseData()
+
             self.saveSegments()
 
         self.previousFile = current
@@ -1157,6 +1167,13 @@ class AviaNZ(QMainWindow):
                         if self.segments[0][0] == -1:
                             self.operator = self.segments[0][2]
                             self.reviewer = self.segments[0][3]
+                            # This could probably do with more error checking
+                            if type(self.segments[0][4]) is int:
+                                self.noiseLevel = None
+                                self.noiseTypes = []
+                            else:
+                                self.noiseLevel = self.segments[0][4][0]
+                                self.noiseTypes = self.segments[0][4][1]
                             del self.segments[0]
                     if len(self.segments) > 0:
                         for s in self.segments:
@@ -2992,7 +3009,7 @@ class AviaNZ(QMainWindow):
                         self.segmentsToSave = True
                 id += 1
             # Todo: update excel? hopefully it's not necessary (1) there is 'export to excel' option
-            # (2) correcponding excel might be in a parent directory, so locating it correctly is tricky and creating anoher excel in the same level as sound file is extra cost.
+            # (2) corresponding excel might be in a parent directory, so locating it correctly is tricky and creating anoher excel in the same level as sound file is extra cost.
             self.saveSegments()
             # for seg in self.segments:
             #     self.updateLabel(self.segments[self.box1id][4])
@@ -3966,6 +3983,19 @@ class AviaNZ(QMainWindow):
         self.setOperatorReviewerDialog.close()
         self.segmentsToSave = True
 
+    def addNoiseData(self):
+        """ Listener for the adding metadata about noise action """
+        self.getNoiseDataDialog = Dialogs.addNoiseData(self.noiseLevel, self.noiseTypes)
+        self.getNoiseDataDialog.activate.clicked.connect(self.getNoiseData)
+        self.getNoiseDataDialog.exec()
+
+    def getNoiseData(self):
+        """ Collect data about the noise from the dialog """
+        self.noiseLevel, self.noiseTypes = self.getNoiseDataDialog.getNoiseData()
+        print(self.noiseLevel,self.noiseTypes)
+        self.getNoiseDataDialog.close()
+        self.segmentsToSave = True
+        
     def saveImage(self, imageFile=''):
         import pyqtgraph.exporters as pge
         exporter = pge.ImageExporter(self.w_spec.scene())
@@ -4016,6 +4046,7 @@ class AviaNZ(QMainWindow):
             {'name': 'Maximise window on startup', 'type': 'bool', 'value': self.config['StartMaximized']},
             {'name': 'Dynamically reorder bird list' , 'type': 'bool', 'value': self.config['ReorderList']},
             {'name': 'Default to multiple species', 'type': 'bool', 'value': self.config['MultipleSpecies'], 'readonly': hasMultipleSegments},
+            {'name': 'Require noise data', 'type': 'bool', 'value': self.config['RequireNoiseData']},
 
             {'name': 'Annotation', 'type': 'group', 'children': [
                 {'name': 'Annotation overview cell length', 'type': 'float',
@@ -4132,6 +4163,8 @@ class AviaNZ(QMainWindow):
                 self.config['ReorderList'] = data
             elif childName == 'Default to multiple species':
                 self.config['MultipleSpecies'] = data
+            elif childName == 'Require noise data':
+                self.config['RequireNoiseData'] = data
             elif childName=='Human classify.Save corrections':
                 self.config['saveCorrections'] = data
             elif childName=='Common Bird List.Filename':
@@ -4373,9 +4406,9 @@ class AviaNZ(QMainWindow):
             print("Saving segments to " + self.filename + '.data')
             if len(self.segments) > 0:
                 if self.segments[0][0] > -1:
-                    self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, -1]) 
+                    self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]]) 
             else:
-                self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, -1])
+                self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]])
 
             if isinstance(self.filename, str):
                 file = open(self.filename + '.data', 'w')
@@ -4447,7 +4480,12 @@ class AviaNZ(QMainWindow):
 
     def restart(self):
         """ Listener for the restart option, which uses exit(1) to restart the program at the splash screen """
-        print("Quitting")
+        print("Restarting")
+
+        # Check if user requires noise data
+        if self.config['RequireNoiseData'] and self.noiseLevel is None:
+            self.addNoiseData()
+
         self.saveSegments()
         if self.saveConfig == True:
             try:
@@ -4471,6 +4509,11 @@ class AviaNZ(QMainWindow):
         """
 
         print("Quitting")
+
+        # Check if user requires noise data
+        if self.config['RequireNoiseData'] and self.noiseLevel is None:
+            self.addNoiseData()
+
         self.saveSegments()
         if self.saveConfig == True:
             try:

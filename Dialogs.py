@@ -262,6 +262,113 @@ class OperatorReviewer(QDialog):
         return [self.name1.text(),self.name2.text()]
 
 #======
+class addNoiseData(QDialog):
+    # Class for the noise data dialog box
+    # TODO: Options are hard-coded for now. Does it matter?
+    def __init__(self, noiseLevel, noiseTypes, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Noise Information')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setMinimumWidth(320)
+
+        print(noiseLevel,noiseTypes)
+        HBox1 = QVBoxLayout()
+        levelLabel = QLabel("Level of Noise")
+        HBox1.addWidget(levelLabel)
+        self.level = QButtonGroup()
+        self.btnLow = QRadioButton('Low')
+        self.level.addButton(self.btnLow)
+        if noiseLevel == 'Low':
+            self.btnLow.setChecked(True)
+        HBox1.addWidget(self.btnLow)
+        self.btnMed = QRadioButton('Medium')
+        self.level.addButton(self.btnMed)
+        if noiseLevel == 'Medium':
+            self.btnLow.setChecked(True)
+        HBox1.addWidget(self.btnMed)
+        self.btnHigh = QRadioButton('High')
+        self.level.addButton(self.btnHigh)
+        if noiseLevel == 'High':
+            self.btnLow.setChecked(True)
+        HBox1.addWidget(self.btnHigh)
+        self.btnTerrible = QRadioButton('Terrible')
+        self.level.addButton(self.btnTerrible)
+        HBox1.addWidget(self.btnTerrible)
+        if noiseLevel == 'Terrible':
+            self.btnLow.setChecked(True)
+
+        self.activate = QPushButton("Set")
+        HBox1.addWidget(self.activate)
+
+        HBox2 = QVBoxLayout()
+        typesLabel = QLabel("Types of Noise")
+        HBox2.addWidget(typesLabel)
+        self.types = QButtonGroup()
+        self.types.setExclusive(False)
+        self.btns = []
+
+        self.btns.append(QCheckBox('Rain'))
+        self.types.addButton(self.btns[0])
+        HBox2.addWidget(self.btns[0])
+        if 'Rain' in noiseTypes:
+            self.btns[0].setChecked(True)
+
+        self.btns.append(QCheckBox('Wind'))
+        self.types.addButton(self.btns[1])
+        HBox2.addWidget(self.btns[1])
+        if 'Wind' in noiseTypes:
+            self.btns[1].setChecked(True)
+
+        self.btns.append(QCheckBox('Wind Gusts'))
+        self.types.addButton(self.btns[2])
+        HBox2.addWidget(self.btns[2])
+        if 'Wind Gusts' in noiseTypes:
+            self.btns[2].setChecked(True)
+
+        self.btns.append(QCheckBox('Waves/water'))
+        self.types.addButton(self.btns[3])
+        HBox2.addWidget(self.btns[3])
+        if 'Waves/water' in noiseTypes:
+            self.btns[3].setChecked(True)
+
+        self.btns.append(QCheckBox('Insects'))
+        self.types.addButton(self.btns[4])
+        HBox2.addWidget(self.btns[4])
+        if 'Insects' in noiseTypes:
+            self.btns[4].setChecked(True)
+
+        self.btns.append(QCheckBox('People'))
+        self.types.addButton(self.btns[5])
+        HBox2.addWidget(self.btns[5])
+        if 'People' in noiseTypes:
+            self.btns[5].setChecked(True)
+
+        self.btns.append(QCheckBox('Other'))
+        self.types.addButton(self.btns[6])
+        HBox2.addWidget(self.btns[6])
+        if 'Other' in noiseTypes:
+            self.btns[6].setChecked(True)
+
+        Box = QHBoxLayout()
+        Box.setAlignment(Qt.AlignTop)
+        Box.addLayout(HBox1)
+        Box.addLayout(HBox2)
+
+        # Now put everything into the frame
+        self.setLayout(Box)
+
+    def getNoiseData(self):
+        #print(self.name1.text(),self.name2.text())
+        if self.level.checkedButton() is None:
+            self.btnLow.setChecked(True)
+        types = []
+        for btn in self.btns:
+            if btn.isChecked():
+                types.append(btn.text())
+        
+        return [self.level.checkedButton().text(),types]
+
+#======
 class WaveletTrain(QDialog):
     # Class for the segmentation dialog box
     # TODO: add the wavelet params
