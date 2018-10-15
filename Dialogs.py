@@ -1610,7 +1610,7 @@ class HumanClassify2(QDialog):
             #     width = x2-x1
             col += 1
             self.buttons.append(SupportClasses.PicButton(0,im[0], im[1], self.audiodata[x1a:x2a], self.audioFormat, (x2a-x1a) / self.sampleRate))
-            if whichOff is None or whichOff[count] is False:
+            if whichOff is None or whichOff==[] or whichOff[count] is False:
                 self.buttons[-1].buttonClicked=False
             else:
                 self.buttons[-1].buttonClicked=True
