@@ -27,8 +27,8 @@
  "Robin (NZ)",
  "Rook",
  "Saddleback (Nth Is)",
- "Silvereye"
+ "Silvereye",
  "Skylark",
  "Sparrow (House)",
- "Starling",
+ "Starling"
 ]
