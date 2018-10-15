@@ -62,13 +62,11 @@ class AviaNZ_batchProcess(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setFixedSize(800,500)
+        self.setFixedSize(870,550)
 
         # Make the docks
-        self.d_detection = Dock("Automatic Detection",size=(500,500))
-        # self.d_detection.hideTitleBar()
-
-        self.d_files = Dock("File list", size=(270, 500))
+        self.d_detection = Dock("Automatic Detection",size=(600,550))
+        self.d_files = Dock("File list", size=(270, 550))
 
         self.area.addDock(self.d_detection,'right')
         self.area.addDock(self.d_files, 'left')
@@ -87,23 +85,28 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_speLabel1 = QLabel("  Select Species")
         self.d_detection.addWidget(self.w_speLabel1,row=1,col=0)
         self.w_spe1 = QComboBox()
-        # print(self.sppInfo)
-
-
         spp = [*self.FilterFiles]
         # spp = []
         spp.insert(0, "All species")
         self.w_spe1.addItems(spp)
-        # self.w_spe1.addItems(["Kiwi", "Ruru", "Bittern", "all"])
         self.d_detection.addWidget(self.w_spe1,row=1,col=1,colspan=2)
 
-        self.w_resLabel = QLabel("Time Resolution in Excel Output (secs)")
+        self.w_resLabel = QLabel("  Time Resolution in Excel Output (secs)")
         self.d_detection.addWidget(self.w_resLabel, row=2, col=0)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
         self.w_res.setSingleStep(5)
         self.w_res.setValue(60)
         self.d_detection.addWidget(self.w_res, row=2, col=1, colspan=2)
+
+        self.w_timeWindow = QLabel("  Choose Time Window (from-to)")
+        self.d_detection.addWidget(self.w_timeWindow, row=4, col=0)
+        self.w_timeStart = QTimeEdit()
+        self.w_timeStart.setDisplayFormat('hh:mm:ss')
+        self.d_detection.addWidget(self.w_timeStart, row=4, col=1)
+        self.w_timeEnd = QTimeEdit()
+        self.w_timeEnd.setDisplayFormat('hh:mm:ss')
+        self.d_detection.addWidget(self.w_timeEnd, row=4, col=2)
 
         self.w_processButton = QPushButton("&Process Folder")
         self.w_processButton.clicked.connect(self.detect)
@@ -200,7 +203,7 @@ class AviaNZ_batchProcess(QMainWindow):
             self.method = "Default"
         else:
             self.method = "Wavelets"
-        
+
         # directory found, so find any .wav files
         total=0
         for root, dirs, files in os.walk(str(self.dirName)):
@@ -290,6 +293,9 @@ class AviaNZ_batchProcess(QMainWindow):
                     os.remove(os.path.join(root, filename))
 
         # MAIN PROCESSING starts here
+        # Read the time window to process
+        timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
+        timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
         with pg.BusyCursor():
             for root, dirs, files in os.walk(str(self.dirName)):
                 for filename in files:
@@ -325,23 +331,31 @@ class AviaNZ_batchProcess(QMainWindow):
                             self.log.appendFile(self.filename)
                             continue
 
-                        # test day/night if it is a doc recording
-                        Night = False
+                        # test the selected time window if it is a doc recording
+                        inWindow = False
 
                         DOCRecording = re.search('(\d{6})_(\d{6})', filename)
                         if DOCRecording:
                             startTime = DOCRecording.group(2)
-                            if int(startTime[:2]) > 18 or int(startTime[:2]) < 6:  # 6pm to 6am as night
-                                Night = True
-                                sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                            sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                            if timeWindow_s == timeWindow_e:
+                                inWindow = True
+                            elif timeWindow_s < timeWindow_e:
+                                if sTime >= timeWindow_s and sTime <= timeWindow_e:
+                                    inWindow = True
+                                else:
+                                    inWindow = False
                             else:
-                                Night = False
-                                sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                                if sTime >= timeWindow_s or sTime <= timeWindow_e:
+                                    inWindow = True
+                                else:
+                                    inWindow = False
                         else:
                             sTime=0
+                            inWindow = True
 
-                        if DOCRecording and self.species in ['Kiwi', 'Ruru'] and not Night:
-                            print("Skipping daytime recording")
+                        if DOCRecording and not inWindow:
+                            print("Skipping out-of-time-window recording")
                             self.log.appendFile(self.filename)
                             continue
                         
@@ -633,7 +647,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_spe1.addItems(self.spList)
         self.d_detection.addWidget(self.w_spe1,row=2,col=1,colspan=2)
 
-        self.w_resLabel = QLabel("  Output Resolution (secs)")
+        self.w_resLabel = QLabel("  Time Resolution in Excel Output (secs)")
         self.d_detection.addWidget(self.w_resLabel, row=3, col=0)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
@@ -799,18 +813,11 @@ class AviaNZ_reviewAll(QMainWindow):
                         print("Skipping empty file")
                         continue
 
-                    # test day/night if it is a doc recording
-                    Night = False
                     if DOCRecording:
                         startTime = DOCRecording.group(2)
-                        if int(startTime[:2]) > 17 or int(startTime[:2]) < 7:  # 6pm to 6am as night
-                            Night = True
                         sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
                     else:
                         sTime = 0
-
-                    if DOCRecording and self.species in ['Kiwi', 'Ruru'] and not Night:
-                        continue
 
                     self.statusBar().showMessage("Reviewing file " + str(cnt) + "/" + str(total) + "...")
                     # load segments

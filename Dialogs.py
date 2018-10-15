@@ -422,7 +422,7 @@ class Segmentation(QDialog):
         else:
             self.prevAlg = "Default"
         self.undo = QPushButton("Undo")
-        self.resLabel = QLabel("Output Resolution (secs)")
+        self.resLabel = QLabel("Time Resolution in Excel Output (secs)")
         self.res = QSpinBox()
         self.res.setRange(1, 600)
         self.res.setSingleStep(5)
