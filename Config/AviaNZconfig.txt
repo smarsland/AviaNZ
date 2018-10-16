@@ -2,6 +2,7 @@
 "drawingRightBtn": true, "specMouseAction": 3,
 "StartMaximized": true,
 "MultipleSpecies": true,
+"RequireNoiseData": false,
 "DOC": true,
 "Hartley": false,
 "ReorderList": true,
