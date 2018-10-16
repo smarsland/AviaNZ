@@ -31,6 +31,8 @@ We really want feedback on it, particularly what works and what doesn't, how you
 
 \section{Getting Started}
 
+{\em In contrast to previous versions, this version of AviaNZ does not require you to run it as administrator in Windows. It places some files in the home directory of your computer; in \texttt{C:/Users/username/AppData/Roaming/AviaNZ} for Windows and \texttt{~/.avianz} for Mac and Linux.}
+
 When the program loads, you are presented with three options in the following start-up screen:
 
 \begin{figure}[h!]
@@ -51,7 +53,7 @@ The program automatically loads the first 5 minutes of a file.
 
 \begin{figure}[h!]
 \centering
-\includegraphics[width=.8\textwidth]{Figs/avianzinterface.pdf}
+\includegraphics[width=.8\textwidth]{Figs/AviaNZInterface.pdf}
 \caption{The interface for manual birdsong annotation and analysis.}
 \label{main}
 \end{figure}
@@ -85,7 +87,7 @@ In addition, there are two extra parts to the interface:
 
 \subsection{Spectrogram and Amplitude}
 
-\item The two main plots (Amplitude and Spectrogram; 6 and 7) show a section of a sound file. The part you are looking at is highlighted in blue in the top (Overview: 2) picture. Sometimes people only want to look at the spectrogram. If you are one of these people, in the Interface menu there is an option `Show amplitude plot', which is initially ticked. Click on it to remove the tick and the amplitude plot will vanish. If you change your mind, choose the option again. You can also hide the list of files (12) and the annotation overview (3) in the same way. 
+\item The two main plots (Amplitude and Spectrogram; 6 and 7) show a section of a sound file. The part you are looking at is highlighted in blue in the top (Overview: 2) picture. Sometimes people only want to look at the spectrogram. If you are one of these people, in the Appearance menu there is an option `Show amplitude plot', which is initially ticked. Click on it to remove the tick and the amplitude plot will vanish. If you change your mind, choose the option again. You can also hide the list of files (12) and the annotation overview (3) in the same way. AviaNZ will remember your choice in future uses.
 
 \item Sometimes spectrograms don't look good initially, for example because of high noise. You can modify the brightness and contrast of the spectrogram using the two sliders marked 15 in the figure. You can also use a different colour scheme, and invert the colour map (swap black and white), by choosing the relevant options in the Appearance menu. 
 
@@ -201,12 +203,13 @@ These options will mostly provide dialog boxes that ask you to make choices.
 \begin{description}
 \item [Delete all segments] Does what it says. 
 \item [Denoise] Runs some programs that try to get rid of the noise in the sound file so that the birdcalls are easier to see. 
+\item [Add metadata about noise] Allows the user to specify if the sound file is particularly corrupted by noise, and also to identify the type(s) if known. This can be an optional datafield, or made compulsory for each file by choosing the appropriate option in the `Interface settings'.
 \item [Show fundamental frequency] Plots an estimate of the fundamental frequency for each call as a red line on the spectrogram.
 \item [Segment] You can ask the computer to segment the calls automatically. 
 We currently provide 3 options, and you can try them to see how well they work.
 %\item [Find Matches] If you select a segment (so that its box is green) and then press this button the program will look for others that are similar. It does not currently deal well with nosie. 
 %\item [Filter Spectrogram] This tries to clean the spectrogram for easier viewing.
-\item [Human Review] These two options provide two different ways to view the segments and their labels for easier checking. The option to Show all pages (under Interface options) decides on whether to view segments in an entire file, or just the current 5 minutes of it. 
+\item [Human Review] These two options provide two different ways to view the segments and their labels for easier checking. The option to Show all pages (in `Interface settings') decides on whether to view segments in an entire file, or just the current 5 minutes of it. 
 	\begin{description}
 	\item [Human Review [All segments]] This option shows the segments one-by-one in time order (Figure~\ref{check1}).
 	\begin{figure}
@@ -216,7 +219,7 @@ We currently provide 3 options, and you can try them to see how well they work.
 	\label{check1}
 	\end{figure}
 	To play the segment, click on the play button. Green bars mark the limits of current segment, and a couple of seconds of context are provided around it. You can also change the spectrogram brightness to make it easier to review. If the label is correct, click on the green tick, which will make the next image load. If not, select the correct label before clicking the tick button. If you have allowed multiple species selection you can pick several options. To delete a segment, click on the red dustbin button. To move back to the previous one, click the back arrow; note that this will not save your current changes. 
-	\item [Human Review [Choose species]] This option asks you to choose a bird from those found in the current file. For each segment that is wrongly labelled, click on its picture (the colour map will change). These segments will be deleted (Figure~\ref{check2}). By default, the program will automatically save the corrections in a temporary folder so that they can be used to help us improve these classifications in the future. You can stop this behaviour in the Interface settings interface. You can change the brightness and contrast here as well, and also play the sounds by hovering on the image, and then clicking on the play button when it appears. 
+	\item [Human Review [Choose species]] This option asks you to choose a bird from those found in the current file. For each segment that is wrongly labelled, click on its picture (the colour map will change). These segments will be deleted (Figure~\ref{check2}). By default, the program will automatically save the corrections in a temporary folder so that they can be used to help us improve these classifications in the future. You can stop this behaviour in the `Interface settings' interface. You can change the brightness and contrast here as well, and also play the sounds by hovering on the image, and then clicking on the play button when it appears. 
 	\begin{figure}
 	\centering
 	\includegraphics[width=.4\textwidth]{Figs/Check2}
