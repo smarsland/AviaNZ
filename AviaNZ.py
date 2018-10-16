@@ -1847,6 +1847,7 @@ class AviaNZ(QMainWindow):
         # min is to remove possible rounding error
         inds = int(self.convertAmpltoSpec(startpoint) / self.widthOverviewSegment)
         inde = min(int(self.convertAmpltoSpec(endpoint) / self.widthOverviewSegment),len(self.overviewSegments)-1)
+        print("refreshing")
 
         if species is None or "Don't Know" in species or type(species) is int or len(species)==0:
             brush = self.ColourNone
@@ -3826,7 +3827,7 @@ class AviaNZ(QMainWindow):
                         label = WaveletSegment.computeWaveletEnergy(self.audiodata[self.segments[i][0]:self.segments[i][1]],wavelet='dmey2')
                         self.updateText(label,i)
                     else:
-                        for sec in range(np.ceil(seglength)):
+                        for sec in range(math.ceil(seglength)):
                             label = WaveletSegment.computeWaveletEnergy(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]],wavelet='dmey2')
                             # TODO: Check if the labels match, decide what to do if not
                         self.updateText(label,i)
