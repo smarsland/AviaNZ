@@ -31,21 +31,38 @@ int main(int argc, char *argv[]){
                 exit(1);
         }
 
-        // read header
+        // read header in two parts:
+        // up to metadata and after
         WavHeader header;
         fread(&header, sizeof(WavHeader), 1, infile);
+
+        WavHeader2 header2;
+        fread(&header2, sizeof(WavHeader2), 1, infile);
+
+        printf("Read %u MB of data, %u channels sampled at %u Hz, %d bit depth\n", header.ChunkSize/1024/1024, header.NumChannels, header.SampleRate, header.BitsPerSample);
+
+        // SM2 recorders produce a wamd metadata chunk:
+        if(header2.Subchunk2ID==1684889975){ // wamd as uint32
+                printf("-- metadata found, skipping %d bytes --\n", header2.Subchunk2Size);
+                fseek(infile, header2.Subchunk2Size, SEEK_CUR);
+                fread(&header2, sizeof(WavHeader2), 1, infile);
+                printf("Subchunk2ID %u\n", header2.Subchunk2ID); // should be 1635017060 for data
+                printf("Data size: %u bytes\n", header2.Subchunk2Size);
+        }
+
+        // init new headers for output files
         WavHeader headerN;
         headerN = header;
+        WavHeader2 headerN2;
+        headerN2 = header2;
         
-        printf("Read %u MB of data, %u channels sampled at %u Hz\n", header.ChunkSize/1024/1024, header.NumChannels, header.SampleRate);
-
-        int numsecs = header.Subchunk2Size / header.ByteRate + (header.Subchunk2Size % header.ByteRate !=0);
+        int numsecs = header2.Subchunk2Size / header.ByteRate + (header2.Subchunk2Size % header.ByteRate !=0);
         int numfiles = numsecs / t + (numsecs % t !=0);
-        printf("File will be split into %d files of %d seconds\n", numfiles, t);
+        printf("%d s of input will be split into %d files of %d s\n", numsecs, numfiles, t);
 
         // read in part of file
         int BUFSIZE = header.ByteRate; // 1 second
-        printf("reading chunks of %d bytes\n", BUFSIZE);
+        printf("-- reading chunks of %d bytes --\n", BUFSIZE);
         char linebuf[BUFSIZE];
         strcpy(outfilestem, argv[2]);
         outfilestem[strlen(outfilestem)-4] = '\0';
@@ -61,10 +78,11 @@ int main(int argc, char *argv[]){
                 // file opened, so read and copy second-by-second:
                 // TO CHANGE: 5-8 ChunkSize
                 // 41-44 Subchunk2Size
-                int secstowrite = (header.Subchunk2Size/BUFSIZE < t*(f+1) ? header.Subchunk2Size/BUFSIZE : t*(f+1) );
-                headerN.Subchunk2Size = (secstowrite-t*f) * header.ByteRate;
-                headerN.ChunkSize = 36 + headerN.Subchunk2Size;
+                int secstowrite = (header2.Subchunk2Size/BUFSIZE < t*(f+1) ? header2.Subchunk2Size/BUFSIZE : t*(f+1) );
+                headerN2.Subchunk2Size = (secstowrite-t*f) * header.ByteRate;
+                headerN.ChunkSize = 36 + headerN2.Subchunk2Size;
                 fwrite(&headerN, sizeof(WavHeader), 1, outfile);
+                fwrite(&headerN2, sizeof(WavHeader2), 1, outfile);
 
                 for(int i=t*f; i<secstowrite; i++){
                         fread(linebuf, BUFSIZE, 1, infile);
@@ -72,10 +90,10 @@ int main(int argc, char *argv[]){
                 }
 
                 // final remainder of <1 s:
-                if(header.Subchunk2Size % BUFSIZE > 0){
-                        fread(linebuf, header.Subchunk2Size % BUFSIZE, 1, infile);
-                        printf("read last %d bytes\n", header.Subchunk2Size % BUFSIZE);
-                        fwrite(linebuf, header.Subchunk2Size % BUFSIZE, 1, outfile);
+                if(header2.Subchunk2Size/BUFSIZE < t*(f+1)){
+                        fread(linebuf, header2.Subchunk2Size % BUFSIZE, 1, infile);
+                        printf("read last %d bytes\n", header2.Subchunk2Size % BUFSIZE);
+                        fwrite(linebuf, header2.Subchunk2Size % BUFSIZE, 1, outfile);
                 }
 
                 fclose(outfile);

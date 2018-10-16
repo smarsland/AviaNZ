@@ -14,6 +14,9 @@ typedef struct WavHeader {
   uint32_t ByteRate;
   uint16_t BlockAlign;
   uint16_t BitsPerSample;
+} WavHeader;
+
+typedef struct WavHeader2 {
   uint32_t Subchunk2ID;
   uint32_t Subchunk2Size;
-} WavHeader;
+} WavHeader2;
