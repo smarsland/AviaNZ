@@ -827,8 +827,15 @@ class AviaNZ(QMainWindow):
         self.menuBird2.clear()
 
         for item in self.shortBirdList[:20]:
+            # Add ? marks if Ctrl menu is called
             if unsure and item != "Don't Know":
                 item = item+'?'
+
+            # Transform > marks
+            pos = item.find('>')
+            if pos > -1:
+                item = item[:pos] + ' (' + item[pos+1:] + ')'
+
             bird = self.menuBirdList.addAction(item)
             bird.setCheckable(True)
             if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
@@ -837,8 +844,14 @@ class AviaNZ(QMainWindow):
         self.menuBirdList.addMenu(self.menuBird2)
         if self.Hartley:
             for item in self.shortBirdList[20:]:
+                # Add ? marks if Ctrl menu is called
                 if unsure and item != "Don't Know" and item != "Other":
                     item = item+'?'
+                # Transform > marks
+                pos = item.find('>')
+                if pos > -1:
+                    item = item[:pos] + ' (' + item[pos+1:] + ')'
+    
                 bird = self.menuBird2.addAction(item)
                 bird.setCheckable(True)
                 if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
@@ -846,8 +859,14 @@ class AviaNZ(QMainWindow):
                 self.menuBird2.addAction(bird)
         else:
             for item in self.shortBirdList[20:40]:
+                # Add ? marks if Ctrl menu is called
                 if unsure and item != "Don't Know" and item != "Other":
                     item = item+'?'
+                # Transform > marks
+                pos = item.find('>')
+                if pos > -1:
+                    item = item[:pos] + ' (' + item[pos+1:] + ')'
+    
                 bird = self.menuBird2.addAction(item)
                 bird.setCheckable(True)
                 if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
@@ -1847,7 +1866,6 @@ class AviaNZ(QMainWindow):
         # min is to remove possible rounding error
         inds = int(self.convertAmpltoSpec(startpoint) / self.widthOverviewSegment)
         inde = min(int(self.convertAmpltoSpec(endpoint) / self.widthOverviewSegment),len(self.overviewSegments)-1)
-        print("refreshing")
 
         if species is None or "Don't Know" in species or type(species) is int or len(species)==0:
             brush = self.ColourNone
