@@ -3323,12 +3323,12 @@ class AviaNZ(QMainWindow):
         """
         # TODO: Needs work
         species = str(self.waveletTDialog.species.currentText()).title()
-        M = float(self.waveletTDialog.avgSyllen.text())
+        M = 0.25    #TODO: vary M and plot
         minLen = float(self.waveletTDialog.minlen.text())
         maxLen = float(self.waveletTDialog.maxlen.text())
-        minFrq = int(self.waveletTDialog.fLow.text())
-        maxFrq = int(self.waveletTDialog.fHigh.text())
-        fs = int(self.waveletTDialog.fs.text())
+        minFrq = int(self.waveletTDialog.fLow.value())
+        maxFrq = int(self.waveletTDialog.fHigh.value())
+        fs = int(self.waveletTDialog.fs.value())
         f0_low = []     # int(self.waveletTDialog.f0Low.text())
         f0_high = []    # int(self.waveletTDialog.f0High.text())
         # thr = self.waveletTDialog.thr.value()
@@ -3413,22 +3413,14 @@ class AviaNZ(QMainWindow):
         print("TPR: ", TPR)
         print("FPR: ", FPR)
         print("Nodes: ", optimumNodes)
-
-        # self.waveletTDialog.ROC_plot.plotItem.plot(FPR, TPR)
-        # self.waveletTDialog.ROC_plot.setYRange(0, 1, padding=0.01)
-        # self.waveletTDialog.ROC_plot.setXRange(0, 1, padding=0.01)
-        # self.waveletTDialog.ROC_plot.setLabel('bottom', 'Time', 'Seconds')
-        # self.waveletTDialog.ROC_plot.setLabel('left', 'Frequency')
-        #
-        # self.waveletTDialog.ROC_plot.setLimits(minXRange=0)
-        # self.waveletTDialog.ROC_plot.setLimits(xMin=0, xMax=1)
-        # self.waveletTDialog.ROC_plot.setMouseEnabled(x=True, y=False)
+        self.thr = 0.5
+        self.optimumNodesSel = []
 
         import matplotlib.pyplot as plt
         from mpldatacursor import datacursor
         import matplotlib.ticker as mtick
         fig, ax = plt.subplots()
-        curve = ax.plot(FPR, TPR, color='green', marker='o', linestyle='dashed', linewidth=2, markersize=10)
+        ax.plot(FPR, TPR, color='green', marker='o', linestyle='dashed', linewidth=2, markersize=10,picker=5)
         datacursor(display='multiple', draggable=True)
         ax.set_title('Click on ROC curve to choose TPR and FPR')
         ax.set_xlabel('False Positive Rate (FPR)')
@@ -3437,13 +3429,29 @@ class AviaNZ(QMainWindow):
         ax.set_xbound(0, 1)
         ax.yaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
         ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
+        def onclick(event):
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            xdata = event.xdata
+            ydata = event.ydata
+            msg.setText('Confirm %d% Sensitivity with %d% FPR?' % (ydata*100, xdata*100))
+            msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setWindowTitle("Confirm")
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.Yes:
+                ind = np.where(TPR == ydata) # TODO: Get the closest or stop clicking outside points?
+                self.thr = thrs[ind]
+                self.optimumNodesSel = optimumNodes[ind]
+                plt.close()
+        cid = fig.canvas.mpl_connect('button_press_event', onclick)
         plt.show()
 
-        thr = 0.5 #TODO: Read the point the user select on the plot and convert it to thr
         speciesData['F0Range'] = [f0_low, f0_high]
-        speciesData['WaveletParams'].append(thr)
+        speciesData['WaveletParams'].append(self.thr)
         speciesData['WaveletParams'].append(M)
-        speciesData['WaveletParams'].append(optimumNodes[0])    # TODO: replace with the nodes of seletec thr
+        speciesData['WaveletParams'].append(self.optimumNodesSel)    # TODO: replace with the nodes of seleted thr
 
         filename = os.path.join(self.config['FiltersDir'],species+'.txt')
         print("Saving new filter to ",filename)
@@ -3521,12 +3529,14 @@ class AviaNZ(QMainWindow):
                     f_low.append(metaData[2])
                     f_high.append(metaData[3])
                     fs.append(metaData[4])
-        self.waveletTDialog.avgSyllen.setText('1')
-        self.waveletTDialog.minlen.setText(str(np.min(len_min)))
-        self.waveletTDialog.maxlen.setText(str(np.max(len_max)))
-        self.waveletTDialog.fLow.setText(str(int(np.min(f_low))))
-        self.waveletTDialog.fHigh.setText(str(int(np.max(f_high))))
-        self.waveletTDialog.fs.setText(str(int(np.min(fs))))
+        self.waveletTDialog.minlen.setText(str(round(np.min(len_min),2)))
+        self.waveletTDialog.maxlen.setText(str(round(np.max(len_max),2)))
+        self.waveletTDialog.fHigh.setRange(0, int(np.max(fs)))
+        self.waveletTDialog.fLow.setValue(int(np.min(f_low)))
+        self.waveletTDialog.fHigh.setRange(0, int(np.max(fs)))
+        self.waveletTDialog.fHigh.setValue(int(np.max(f_high)))
+        self.waveletTDialog.fs.setValue(int(np.min(fs)))
+        self.waveletTDialog.fs.setRange(0, 32000)
         self.waveletTDialog.note_step2.setText('Above fields propagated using training data.\nAdjust if required.')
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)

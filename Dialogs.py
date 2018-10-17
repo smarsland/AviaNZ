@@ -414,25 +414,40 @@ class WaveletTrain(QDialog):
         self.hBox_step2 = QHBoxLayout()
         self.Step1Label2 = QLabel('Step 2: Train')
         self.Step1Label2.setFont(QtGui.QFont('TimesNewRoman', 12))
-        self.avgSyllen = QLineEdit(self)
-        self.avgSyllen.setText('')
-        self.form1_step2.addRow('Avg. syl length (secs)', self.avgSyllen)
         self.minlen = QLineEdit(self)
         self.minlen.setText('')
         self.form1_step2.addRow('Min call length (secs)', self.minlen)
         self.maxlen = QLineEdit(self)
         self.maxlen.setText('')
         self.form1_step2.addRow('Max call length (secs)', self.maxlen)
-        self.fLow = QLineEdit(self)
-        self.fLow.setText('')
+        self.fLow = QSlider(Qt.Horizontal)
+        self.fLow.setTickPosition(QSlider.TicksBelow)
+        self.fLow.setTickInterval(2000)
+        self.fLow.setRange(0, 32000)
+        self.fLow.setSingleStep(100)
+        self.fLow.valueChanged.connect(self.fLowChange)
+        self.fLowtext = QLabel('')
+        self.form1_step2.addRow('', self.fLowtext)
         self.form1_step2.addRow('Lower frq. (Hz)', self.fLow)
-        self.fHigh = QLineEdit(self)
-        self.fHigh.setText('')
+        self.fHigh = QSlider(Qt.Horizontal)
+        self.fHigh.setTickPosition(QSlider.TicksBelow)
+        self.fHigh.setTickInterval(2000)
+        self.fHigh.setRange(0, 32000)
+        self.fHigh.setSingleStep(100)
+        self.fHigh.valueChanged.connect(self.fHighChange)
+        self.fHightext = QLabel('')
+        self.form1_step2.addRow('', self.fHightext)
         self.form1_step2.addRow('Higher frq. (Hz)', self.fHigh)
-        self.fsLabel = QLabel('Preferred sampling frq. (Hz)')
-        self.fs = QLineEdit(self)
-        self.fs.setText('')
+        self.fs = QSlider(Qt.Horizontal)
+        self.fs.setTickPosition(QSlider.TicksBelow)
+        self.fs.setTickInterval(2000)
+        self.fs.setRange(0, 32000)
+        self.fs.setSingleStep(1000)
+        self.fs.valueChanged.connect(self.fsChange)
+        self.fstext = QLabel('')
+        self.form1_step2.addRow('', self.fstext)
         self.form1_step2.addRow('Preferred sampling frq. (Hz)', self.fs)
+
         self.train = QPushButton('Train')
         self.train.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
         self.hBox_step2.addStretch(1)
@@ -447,7 +462,6 @@ class WaveletTrain(QDialog):
         self.layout_step2.addWidget(self.note_step2)
         self.layout_step2.addStretch(1)
         self.layout_step2.addLayout(self.hBox_step2)
-
         # Step3 - test
         self.layout_step3 = QVBoxLayout()
         self.form1_step3 = QFormLayout()
@@ -478,6 +492,15 @@ class WaveletTrain(QDialog):
         self.layout.addWidget(self.blank)
         self.layout.addLayout(self.layout_step3)
         self.setLayout(self.layout)
+
+    def fLowChange(self,value):
+        self.fLowtext.setText(str(value))
+
+    def fHighChange(self,value):
+        self.fHightext.setText(str(value))
+
+    def fsChange(self,value):
+        self.fstext.setText(str(value))
 
     def fillFileList(self,dirName, train=True):
         """ Generates the list of files for the file listbox.
