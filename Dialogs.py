@@ -365,7 +365,7 @@ class addNoiseData(QDialog):
         for btn in self.btns:
             if btn.isChecked():
                 types.append(btn.text())
-        
+
         return [self.level.checkedButton().text(),types]
 
 #======
@@ -379,132 +379,138 @@ class WaveletTrain(QDialog):
         self.setWindowTitle('Wavelet Training')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(450)
-        self.setMinimumHeight(600)
-
-        self.Step1Label1 = QLabel("Step 1:")
+        self.setMinimumHeight(450)
+        # Step1 - prepare for traiing
+        self.layout_step1 = QVBoxLayout()
+        self.form1_step1 = QFormLayout()
+        self.form2_step1 = QFormLayout()
+        self.hBox_step1 = QHBoxLayout()
+        self.blank = QLabel('      ')
+        self.Step1Label1 = QLabel('Step 1: Prepare')
         self.Step1Label1.setFont(QtGui.QFont('TimesNewRoman', 12))
-        self.loadLabel = QLabel("Load your training data")
-        self.browse = QPushButton("Browse")
-        self.w_dir = QPlainTextEdit()
-        self.w_dir.setFixedHeight(50)
-        self.w_dir.setPlainText('<data path>')
-        self.w_dir.setStyleSheet(
-        """QPlainTextEdit {background-color: #FFFFFF;
-                           color: grey;
-                           font-family: TimesNewRoman;}""")
-
-        hBox_browse = QHBoxLayout()
-        hBox_browse.addWidget(self.loadLabel)
-        hBox_browse.addWidget(self.browse)
-
-        self.Step1Label2 = QLabel("Step 2:")
+        self.browse = QPushButton('Browse')
+        self.form1_step1.addRow('Load data', self.browse)
+        self.listFiles = QListWidget()
+        self.listFiles.setMinimumWidth(150)
+        self.form1_step1.addRow(' ', self.listFiles)
+        self.species = QComboBox()  # fill during browse
+        self.species.addItems(['Choose species...'])
+        self.form2_step1.addRow('Species   ', self.species)
+        self.genGT = QPushButton('Prepare for Training')
+        self.genGT.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.hBox_step1.addStretch(1)
+        self.hBox_step1.addWidget(self.genGT)
+        # Step1 layout
+        self.layout_step1.addWidget( self.Step1Label1)
+        self.layout_step1.addWidget(self.blank)
+        self.layout_step1.addLayout(self.form1_step1)
+        self.layout_step1.addWidget(self.blank)
+        self.layout_step1.addLayout(self.form2_step1)
+        self.layout_step1.addStretch(1)
+        self.layout_step1.addLayout(self.hBox_step1)
+        # Step2 - actual training
+        self.layout_step2 = QVBoxLayout()
+        self.form1_step2 = QFormLayout()
+        self.hBox_step2 = QHBoxLayout()
+        self.Step1Label2 = QLabel('Step 2: Train')
         self.Step1Label2.setFont(QtGui.QFont('TimesNewRoman', 12))
-
-        self.spLabel = QLabel("Species (as given in annotation)")
-        self.species = QLineEdit(self)
-        hBox_spName = QHBoxLayout()
-        hBox_spName.addWidget(self.spLabel)
-        hBox_spName.addWidget(self.species)
-
-        self.GTLabel = QLabel("Prepare for training")
-        self.genGT = QPushButton("Prepare")
-        hBox_prepare = QHBoxLayout()
-        hBox_prepare.addWidget(self.GTLabel)
-        hBox_prepare.addWidget(self.genGT)
-
-        self.Step1Label3 = QLabel("Step 3:")
-        self.Step1Label3.setFont(QtGui.QFont('TimesNewRoman', 12))
-
-        # Todo: read this species info from the training annotations, need to check how reliable though. F0 seems easy to capture reliably.
-        # for now user to study the calls and input values
-        self.avgSyllenLabel = QLabel("Avg. syl length (secs)")
         self.avgSyllen = QLineEdit(self)
-        self.avgSyllen.setText('1')
-        self.minlenLabel = QLabel("Min call length (secs)")
+        self.avgSyllen.setText('')
+        self.form1_step2.addRow('Avg. syl length (secs)', self.avgSyllen)
         self.minlen = QLineEdit(self)
-        self.minlen.setText('10')
-        self.maxlenLabel = QLabel("Max call length (secs)")
+        self.minlen.setText('')
+        self.form1_step2.addRow('Min call length (secs)', self.minlen)
         self.maxlen = QLineEdit(self)
-        self.maxlen.setText('30')
-        self.flowLabel = QLabel("Lower frq. (Hz)")
+        self.maxlen.setText('')
+        self.form1_step2.addRow('Max call length (secs)', self.maxlen)
         self.fLow = QLineEdit(self)
-        self.fLow.setText('500')
-        self.fhighLabel = QLabel("Higher frq. (Hz)")
+        self.fLow.setText('')
+        self.form1_step2.addRow('Lower frq. (Hz)', self.fLow)
         self.fHigh = QLineEdit(self)
-        self.fHigh.setText('7000')
-        self.fsLabel = QLabel("Preferred sampling frq. (Hz)")
+        self.fHigh.setText('')
+        self.form1_step2.addRow('Higher frq. (Hz)', self.fHigh)
+        self.fsLabel = QLabel('Preferred sampling frq. (Hz)')
         self.fs = QLineEdit(self)
-        self.fs.setText('16000')
-        # self.f0LowLabel = QLabel("Lower fund. frq. (Hz)")
-        # self.f0Low = QLineEdit(self)
-        # self.f0HighLabel = QLabel("Higher fund. frq. (Hz)")
-        # self.f0High = QLineEdit(self)
-        self.thrLabel = QLabel("Set threshold")
-        self.thr = QDoubleSpinBox()
-        self.thr.setRange(0.1, 1)
-        self.thr.setSingleStep(0.05)
-        self.thr.setDecimals(2)
-        self.thr.setValue(0.5)
+        self.fs.setText('')
+        self.form1_step2.addRow('Preferred sampling frq. (Hz)', self.fs)
+        self.train = QPushButton('Train')
+        self.train.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.hBox_step2.addStretch(1)
+        self.hBox_step2.addWidget(self.train)
+        # Step2 layout
+        self.layout_step2.addWidget(self.Step1Label2)
+        self.layout_step2.addWidget(self.blank)
+        self.layout_step2.addLayout(self.form1_step2)
+        self.note_step2 = QLabel(' ')
+        self.layout_step2.addWidget(self.blank)
+        self.layout_step2.addWidget(self.blank)
+        self.layout_step2.addWidget(self.note_step2)
+        self.layout_step2.addStretch(1)
+        self.layout_step2.addLayout(self.hBox_step2)
 
-        vBox_avgSylLen = QVBoxLayout()
-        vBox_avgSylLen.addWidget(self.avgSyllenLabel)
-        vBox_avgSylLen.addWidget(self.avgSyllen)
-        vBox_minLen = QVBoxLayout()
-        vBox_minLen.addWidget(self.minlenLabel)
-        vBox_minLen.addWidget(self.minlen)
-        vBox_maxLen = QVBoxLayout()
-        vBox_maxLen.addWidget(self.maxlenLabel)
-        vBox_maxLen.addWidget(self.maxlen)
-        vBox_frqLow = QVBoxLayout()
-        vBox_frqLow.addWidget(self.flowLabel)
-        vBox_frqLow.addWidget(self.fLow)
-        vBox_frqHigh = QVBoxLayout()
-        vBox_frqHigh.addWidget(self.fhighLabel)
-        vBox_frqHigh.addWidget(self.fHigh)
-        vBox_fs = QVBoxLayout()
-        vBox_fs.addWidget(self.fsLabel)
-        vBox_fs.addWidget(self.fs)
-        # vBox_f0Low = QVBoxLayout()
-        # vBox_f0Low.addWidget(self.f0LowLabel)
-        # vBox_f0Low.addWidget(self.f0Low)
-        # vBox_f0High = QVBoxLayout()
-        # vBox_f0High.addWidget(self.f0HighLabel)
-        # vBox_f0High.addWidget(self.f0High)
-        vBox_thr = QVBoxLayout()
-        vBox_thr.addWidget(self.thrLabel)
-        vBox_thr.addWidget(self.thr)
+        # Step3 - test
+        self.layout_step3 = QVBoxLayout()
+        self.form1_step3 = QFormLayout()
+        self.hBox_step3 = QHBoxLayout()
+        self.Step1Label3 = QLabel('Step 3: Test')
+        self.Step1Label3.setFont(QtGui.QFont('TimesNewRoman', 12))
+        self.browseTest = QPushButton('Browse')
+        self.form1_step3.addRow('Load data', self.browseTest)
+        self.listFilesTest = QListWidget()
+        self.listFiles.setMinimumWidth(150)
+        self.form1_step3.addRow(' ', self.listFilesTest)
+        self.test = QPushButton('Test')
+        self.test.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.hBox_step3.addStretch(1)
+        self.hBox_step3.addWidget(self.test)
+        # Step3 layout
+        self.layout_step3.addWidget(self.Step1Label3)
+        self.layout_step3.addWidget(self.blank)
+        self.layout_step3.addLayout(self.form1_step3)
+        self.layout_step3.addStretch(1)
+        self.layout_step3.addLayout(self.hBox_step3)
 
-        hBox_train = QHBoxLayout()
-        # hBox2.addLayout(hBox_spp)
-        hBox_train.addLayout(vBox_avgSylLen)
-        hBox_train.addLayout(vBox_minLen)
-        hBox_train.addLayout(vBox_maxLen)
-        hBox_train.addLayout(vBox_frqLow)
-        hBox_train.addLayout(vBox_frqHigh)
-        hBox_train.addLayout(vBox_fs)
-        # hBox_train.addLayout(vBox_f0Low)
-        # hBox_train.addLayout(vBox_f0High)
-        hBox_train.addLayout(vBox_thr)
+        # Put together
+        self.layout = QHBoxLayout()
+        self.layout.addLayout(self.layout_step1)
+        self.layout.addWidget(self.blank)
+        self.layout.addLayout(self.layout_step2)
+        self.layout.addWidget(self.blank)
+        self.layout.addLayout(self.layout_step3)
+        self.setLayout(self.layout)
 
-        self.trainLabel = QLabel("Train to detect species")
-        self.train = QPushButton("Train")
-        hBox_train2= QHBoxLayout()
-        hBox_train2.addWidget(self.trainLabel)
-        hBox_train2.addWidget(self.train)
+    def fillFileList(self,dirName, train=True):
+        """ Generates the list of files for the file listbox.
+        fileName - currently opened file (marks it in the list).
+        Most of the work is to deal with directories in that list.
+        It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
+        red in the list, and the second to know if the files are long."""
 
-        Box = QVBoxLayout()
-        Box.addWidget(self.Step1Label1)
-        Box.addLayout(hBox_browse)
-        Box.addWidget(self.w_dir)
-        Box.addWidget(self.Step1Label2)
-        Box.addLayout(hBox_spName)
-        # Box.addLayout(hBox2)
-        Box.addLayout(hBox_prepare)
-        Box.addWidget(self.Step1Label3)
-        Box.addLayout(hBox_train)
-        Box.addLayout(hBox_train2)
-        # Now put everything into the frame
-        self.setLayout(Box)
+        # if not os.path.isdir(self.dirName):
+        #     print("Directory doesn't exist: making it")
+        #     os.makedirs(self.dirName)
+
+        if train:
+            self.listFiles.clear()
+        else:
+            self.listFilesTest.clear()
+        self.listOfFiles = QDir(dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
+        listOfDataFiles = QDir(dirName).entryList(['*.data'])
+        listOfLongFiles = QDir(dirName).entryList(['*_1.wav'])
+        for file in self.listOfFiles:
+            if file.fileName()[:-4]+'_1.wav' in listOfLongFiles:
+                # Ignore this entry
+                pass
+            else:
+                # If there is a .data version, colour the name red to show it has been labelled
+                if train:
+                    item = QListWidgetItem(self.listFiles)
+                else:
+                    item = QListWidgetItem(self.listFilesTest)
+                self.listitemtype = type(item)
+                item.setText(file.fileName())
+                if file.fileName()+'.data' in listOfDataFiles:
+                    item.setForeground(Qt.red)
 
 #======
 class Segmentation(QDialog):

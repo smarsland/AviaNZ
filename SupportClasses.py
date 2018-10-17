@@ -234,22 +234,18 @@ class postProcess:
                     print('Segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
                     # newSegments.remove(seg) # for now keep it
                     continue    # continue to the next seg
-                ind = ind * W / 512
-                x = (pitch * 2. / sampleRate * np.shape(sgRaw)[1]).astype('int')
-                from scipy.signal import medfilt
-                x = medfilt(pitch, 15)
                 if ind.size < 2:
                     if (pitch > self.F0[0]) and (pitch < self.F0[1]):
                         # print("Match with F0 of the bird, ", pitch)
                         continue
                     else:
-                        #print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
+                        print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
                         newSegments.remove(seg)
                 else:   # Get the individual pieces within a seg
                     if (np.mean(pitch) > self.F0[0]) and (np.mean(pitch) < self.F0[1]):
                         continue
                     else:
-                        # print('segment ', seg, round(np.mean(pitch)), ' *-- fundamental freq is out of range, could be noise')
+                        print('segment* ', seg, round(np.mean(pitch)), pitch, np.median(pitch), ' *-- fundamental freq is out of range, could be noise')
                         newSegments.remove(seg)
                         continue
         self.segments = newSegments

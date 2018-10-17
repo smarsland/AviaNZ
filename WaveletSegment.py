@@ -368,7 +368,7 @@ class WaveletSegment:
             if bestBetaScore == 1 or bestRecall == 1:
                 break
 
-        return listnodes
+        return listnodes, [tp,fp,tn,fn]
 
     def waveletSegment_test(self,fName=None, data=None, sampleRate=None, listnodes = None, spInfo={}, trainTest=False, df=False):
         # Load the relevant list of nodes
