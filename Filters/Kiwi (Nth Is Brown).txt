@@ -1,0 +1,8 @@
+{ 
+  "Name": "Kiwi, Nth Is Brown", 
+  "SampleRate": 16000,
+  "TimeRange": [10, 30],
+  "FreqRange": [1100, 7000], 
+  "F0Range": [1200, 4200], 
+  "WaveletParams": [0.5, 0.6, [34 , 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 55]]
+}
