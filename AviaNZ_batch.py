@@ -85,8 +85,12 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_speLabel1 = QLabel("  Select Species")
         self.d_detection.addWidget(self.w_speLabel1,row=1,col=0)
         self.w_spe1 = QComboBox()
+        # read filter list, replace subsp marks with brackets
         spp = [*self.FilterFiles]
-        # spp = []
+        for sp in spp:
+            ind = sp.find('>')
+            if ind > -1:
+                sp = sp[:ind] + ' (' + sp[pos+1:] + ')'
         spp.insert(0, "All species")
         self.w_spe1.addItems(spp)
         self.d_detection.addWidget(self.w_spe1,row=1,col=1,colspan=2)
