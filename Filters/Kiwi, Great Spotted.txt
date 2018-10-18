@@ -1,8 +1,0 @@
-{ 
-  "Name": "Kiwi, Great Spotted", 
-  "SampleRate": 16000,
-  "TimeRange": [2, 25],
-  "FreqRange": [900, 7000],
-  "F0Range": [850, 4500], 
-  "WaveletParams": [0.25, 0.6, [35, 38, 43, 44, 52, 54]]
-}
