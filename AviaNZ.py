@@ -92,6 +92,7 @@ class AviaNZ(QMainWindow):
         self.cheatsheet = cheatsheet
 
         # At this point, the main config file should already be ensured to exist.
+        self.configdir = configdir
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
         print("Loading configs from file %s" % self.configfile)
         self.config = json.load(open(self.configfile))
@@ -2481,7 +2482,7 @@ class AviaNZ(QMainWindow):
                     self.longBirdList = sorted(self.longBirdList, key=str.lower)
                     self.longBirdList.remove('Unidentifiable')
                     self.longBirdList.append('Unidentifiable')
-                    json.dump(self.longBirdList, open(self.config['BirdListLong'], 'w'),indent=1)
+                    json.dump(self.longBirdList, open(os.path.join(self.configdir, self.config['BirdListLong']), 'w'),indent=1)
                     
                     # self.saveConfig = True
 
@@ -2875,7 +2876,7 @@ class AviaNZ(QMainWindow):
                 self.longBirdList = sorted(self.longBirdList, key=str.lower)
                 self.longBirdList.remove('Unidentifiable')
                 self.longBirdList.append('Unidentifiable')
-                json.dump(self.longBirdList, open(self.config['BirdListLong'], 'w'),indent=1)
+                json.dump(self.longBirdList, open(os.path.join(self.configdir, self.config['BirdListLong']), 'w'),indent=1)
 
         # Todo: boxid[4] has been updated so this if doesn't effect? added update label to else but not the ideal sol
         if label != self.segments[self.box1id][4]:
@@ -2897,7 +2898,7 @@ class AviaNZ(QMainWindow):
                 self.longBirdList = sorted(self.longBirdList, key=str.lower)
                 self.longBirdList.remove('Unidentifiable')
                 self.longBirdList.append('Unidentifiable')
-                json.dump(self.longBirdList, open(self.config['BirdListLong'], 'w'),indent=1)
+                json.dump(self.longBirdList, open(os.path.join(self.configdir, self.config['BirdListLong']), 'w'),indent=1)
         elif '?' in ''.join(label):
             # Remove the question mark, since the user has agreed
             for i in range(len(self.segments[self.box1id][4])):
@@ -4641,7 +4642,7 @@ class AviaNZ(QMainWindow):
                 print(e)
 
         # Save the shortBirdList
-        json.dump(self.shortBirdList, open(self.config['BirdListShort'], 'w'),indent=1)
+        json.dump(self.shortBirdList, open(os.path.join(self.configdir, self.config['BirdListShort']), 'w'),indent=1)
         QApplication.exit(1)
         
     def closeEvent(self, event):
@@ -4669,7 +4670,7 @@ class AviaNZ(QMainWindow):
                 print(e)
 
         # Save the shortBirdList
-        json.dump(self.shortBirdList, open(self.config['BirdListShort'], 'w'),indent=1)
+        json.dump(self.shortBirdList, open(os.path.join(self.configdir, self.config['BirdListShort']), 'w'),indent=1)
         QApplication.quit()
 
     def backupDatafiles(self):
