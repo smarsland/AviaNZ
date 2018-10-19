@@ -1076,30 +1076,45 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
+        self.humanClassifyDialog1.stopPlayback()
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
+
         if len(checkText) > 0:
             if label != checkText:
                 label = str(checkText)
                 self.humanClassifyDialog1.birdTextEntered()
-                # self.saveConfig = True
-            #self.humanClassifyDialog1.tbox.setText('')
+        if len(checkText) > 0:
+            if text in self.longBirdList:
+                pass
+            else:
+                self.longBirdList.append(text)
+                self.longBirdList = sorted(self.longBirdList, key=str.lower)
+                self.longBirdList.remove('Unidentifiable')
+                self.longBirdList.append('Unidentifiable')
+                json.dump(self.longBirdList, open(os.path.join(self.configdir, self.config['BirdListLong']), 'w'),indent=1)
 
         if label != self.segments[self.box1id][4]:
             if self.config['saveCorrections']:
                 # Save the correction
                 outputError = [self.segments[self.box1id], label]
                 file = open(self.filename + '.corrections', 'a')
-                json.dump(outputError, file)
+                json.dump(outputError, file, indent=1)
                 file.close()
 
             # Update the label on the box if it is in the current page
             self.segments[self.box1id][4] = label
 
             if self.saveConfig:
-                self.config['BirdList'].append(label)
-        elif len(label)>0 and label[-1] == '?':
+                self.longBirdList.append(text)
+                self.longBirdList = sorted(self.longBirdList, key=str.lower)
+                self.longBirdList.remove('Unidentifiable')
+                self.longBirdList.append('Unidentifiable')
+                json.dump(self.longBirdList, open(os.path.join(self.configdir, self.config['BirdListLong']), 'w'),indent=1)
+        elif '?' in ''.join(label):
             # Remove the question mark, since the user has agreed
-            self.segments[self.box1id][4] = label[:-1]
+            for i in range(len(self.segments[self.box1id][4])):
+                if self.segments[self.box1id][4][i][-1] == '?':
+                    self.segments[self.box1id][4][i] = self.segments[self.box1id][4][i][:-1] 
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)

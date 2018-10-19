@@ -3267,7 +3267,7 @@ class AviaNZ(QMainWindow):
             x2 = math.floor(x2 * self.config['incr']) #/ self.sampleRate
             filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.SoundFileDir, '*.wav')
             if filename:
-                wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
+                wavio.write(str(filename) + '.wav', self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(os.path.basename(self.filename))
 
@@ -4017,7 +4017,7 @@ class AviaNZ(QMainWindow):
                 stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
 
                 self.setPlaySliderLimits(start, stop)
-                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.media_obj.filterSeg(start, stop, self.audiodata)
@@ -4043,7 +4043,7 @@ class AviaNZ(QMainWindow):
                 start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
                 stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
                 self.setPlaySliderLimits(start, stop)
-                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+                self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
 
@@ -4150,8 +4150,8 @@ class AviaNZ(QMainWindow):
             imageFile, drop = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
         try:
             # works but requires devel (>=0.11) version of pyqtgraph:
-            exporter.export(imageFile)
-            print("Exporting spectrogram to file %s" % imageFile)
+            exporter.export(imageFile + '.png')
+            print("Exporting spectrogram to file %s.wav" % imageFile)
         except:
             print("Failed to save image")
 
