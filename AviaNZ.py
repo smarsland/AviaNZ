@@ -4180,6 +4180,7 @@ class AviaNZ(QMainWindow):
                     {'Mark segments by clicking' : 1, 'Mark boxes by clicking' : 2, 'Mark boxes by dragging' : 3},
                  'value': self.config['specMouseAction']}
             ]},
+
             {'name': 'Paging', 'type': 'group', 'children': [
                 {'name': 'Page size', 'type': 'float', 'value': self.config['maxFileShow'], 'limits': (5, 900),
                  'step': 5,
@@ -4188,11 +4189,6 @@ class AviaNZ(QMainWindow):
                  'step': 2,
                  'suffix': ' sec'},
             ]},
-
-            {'name': 'Maximise window on startup', 'type': 'bool', 'value': self.config['StartMaximized']},
-            {'name': 'Dynamically reorder bird list' , 'type': 'bool', 'value': self.config['ReorderList']},
-            {'name': 'Default to multiple species', 'type': 'bool', 'value': self.config['MultipleSpecies'], 'readonly': hasMultipleSegments},
-            {'name': 'Require noise data', 'type': 'bool', 'value': self.config['RequireNoiseData']},
 
             {'name': 'Annotation', 'type': 'group', 'children': [
                 {'name': 'Annotation overview cell length', 'type': 'float',
@@ -4220,6 +4216,24 @@ class AviaNZ(QMainWindow):
                 ]}
             ]},
 
+            {'name': 'Bird List', 'type': 'group', 'children': [
+                {'name': 'Common Bird List', 'type': 'group', 'children': [
+                    # {'name': 'Filename', 'type': 'text', 'value': self.config['BirdListShort']},
+                    {'name': 'Filename', 'type': 'str', 'value': fn1, 'readonly': True},
+                    {'name': 'Choose File', 'type': 'action'},
+                ]},
+                {'name': 'Full Bird List', 'type': 'group', 'children': [
+                    # {'name': 'Filename', 'type': 'str', 'value': fn2,'readonly':True, 'tip': "Can be None"},
+                    {'name': 'Filename', 'type': 'str', 'value': fn2, 'readonly': True},
+                    {'name': 'No long list', 'type': 'bool',
+                     'value': self.config['BirdListLong'] is None or self.config['BirdListLong'] == 'None',
+                     'tip': "If you don't have a long list of birds"},
+                    {'name': 'Choose File', 'type': 'action'}
+                ]},
+                {'name': 'Dynamically reorder bird list', 'type': 'bool', 'value': self.config['ReorderList']},
+                {'name': 'Default to multiple species', 'type': 'bool', 'value': self.config['MultipleSpecies'],
+                 'readonly': hasMultipleSegments},
+            ]},
             {'name': 'Human classify', 'type': 'group', 'children': [
                 {'name': 'Save corrections', 'type': 'bool', 'value': self.config['saveCorrections'],
                  'tip': "This helps the developers"},
@@ -4241,20 +4255,8 @@ class AviaNZ(QMainWindow):
                 {'name': 'Reviewer', 'type': 'str', 'value': self.config['reviewer'],
                  'tip': "Person name"},
             ]},
-
-
-            {'name': 'Common Bird List', 'type': 'group', 'children': [
-                #{'name': 'Filename', 'type': 'text', 'value': self.config['BirdListShort']},
-                {'name': 'Filename', 'type': 'str', 'value': fn1,'readonly':True},
-                {'name': 'Choose File', 'type': 'action'},
-                ]},
-
-            {'name': 'Full Bird List', 'type': 'group', 'children': [
-                #{'name': 'Filename', 'type': 'str', 'value': fn2,'readonly':True, 'tip': "Can be None"},
-                {'name': 'Filename', 'type': 'str', 'value': fn2,'readonly':True},
-                {'name': 'No long list', 'type': 'bool', 'value': self.config['BirdListLong'] is None or self.config['BirdListLong'] == 'None', 'tip': "If you don't have a long list of birds"},
-                {'name': 'Choose File', 'type': 'action'}
-                ]},
+            {'name': 'Maximise window on startup', 'type': 'bool', 'value': self.config['StartMaximized']},
+            {'name': 'Require noise data', 'type': 'bool', 'value': self.config['RequireNoiseData']},
         ]
 
         ## Create tree of Parameter objects
@@ -4266,7 +4268,7 @@ class AviaNZ(QMainWindow):
         self.t.show()
         self.t.setWindowTitle('AviaNZ - Interface Settings')
         self.t.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.t.setFixedSize(520, 800)
+        self.t.setFixedSize(520, 900)
 
     def changeParams(self,param, changes):
         """ Update the config and the interface if anything changes in the tree
@@ -4305,17 +4307,17 @@ class AviaNZ(QMainWindow):
                 self.config['StartMaximized'] = data
                 if data:
                     self.showMaximized()
-            elif childName == 'Dynamically reorder bird list':
+            elif childName == 'Bird List.Dynamically reorder bird list':
                 self.config['ReorderList'] = data
-            elif childName == 'Default to multiple species':
+            elif childName == 'Bird List.Default to multiple species':
                 self.config['MultipleSpecies'] = data
             elif childName == 'Require noise data':
                 self.config['RequireNoiseData'] = data
             elif childName=='Human classify.Save corrections':
                 self.config['saveCorrections'] = data
-            elif childName=='Common Bird List.Filename':
+            elif childName=='Bird List.Common Bird List.Filename':
                 self.config['BirdListShort'] = data
-            elif childName=='Full Bird List.Filename':
+            elif childName=='Bird List.Full Bird List.Filename':
                 self.config['BirdListLong'] = data
             elif childName=='Annotation.Segment colours.Confirmed segments':
                 rgbaNamed = list(data.getRgb())
