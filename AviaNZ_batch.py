@@ -170,7 +170,7 @@ class AviaNZ_batchProcess(QMainWindow):
         msg = QMessageBox()
         msg.setIconPixmap(QPixmap("img\AviaNZ.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
-        msg.setText("The AviaNZ Program, v1.1 (August 2018)")
+        msg.setText("The AviaNZ Program, v1.3 (October 2018)")
         msg.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         msg.setWindowTitle("About")
         msg.setStandardButtons(QMessageBox.Ok)
