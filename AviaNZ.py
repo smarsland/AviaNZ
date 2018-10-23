@@ -1,7 +1,7 @@
 # AviaNZ.py
 #
 # This is the main class for the AviaNZ interface
-# Version 0.12 16/8/18
+# Version 1.3 23/10/18
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
 #    AviaNZ birdsong analysis program
@@ -20,19 +20,11 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# TODO: Manual, final checks, push out
-# TODO: Manual should say DK -> bird auto. But can re-add DK if necessary
-# TODO: Training, tidy repository
-# TODO: Automate some of the training options
-# TODO: Think about the dictionary a bit more for option checking
-# TODO: Manual should say how excels are managed - e.g. if someone process species e.g. ruru, kiwi and then choose 'All species' - it wipes all the species excells etc.
-# Config & Filter files moved to user dirs
-# Contrast and brightness in HR2
-# Update order in context menu should be an option
-# Multiple species option sorted 
-# Config Folder to tidy things up
-# Instead of sppinfo: Filters folder with file per species, internal dictionary
-# After batch processing, give completed message
+# TODO: Make green font bolder for the cheatsheet options, check the trim is OK
+# TODO: Automate some of the training options, also the extra filters
+# TODO: And the false positive graph
+# TODO: Think about the filter dictionary a bit more for option checking, and adding new options
+# TODO: Sort out the segmentation code, particularly wrt merging sets of segments
 # TODO: Full list of next steps
 
 import sys, os, json, platform, re, shutil
@@ -89,7 +81,7 @@ class AviaNZ(QMainWindow):
         super(AviaNZ, self).__init__()
         self.root = root
         self.CLI = CLI
-        self.cheatsheet = cheatsheet
+        self.cheatsheet = True #cheatsheet
 
         # At this point, the main config file should already be ensured to exist.
         self.configdir = configdir
@@ -240,11 +232,12 @@ class AviaNZ(QMainWindow):
             if cheatsheet:
                 # use infile and imagefile as directories 
                 print(firstFile)
+                self.SoundFileDir = firstFile
                 files = [f for f in os.listdir(firstFile) if f[-4:]=='.wav']
                 for f in files:
                     self.loadFile(f)
                     self.widthWindow.setValue(self.datalengthSec)
-                    self.saveImage(os.path.join(imageFile,f[:-4]+'.png'))
+                    self.saveImage(os.path.join(imageFile,f[:-4]))
             else:
                 self.loadFile(firstFile)
                 while command!=():
@@ -283,7 +276,7 @@ class AviaNZ(QMainWindow):
             self.listLoadFile(firstFile)
             #self.previousFile = firstFile
 
-        if self.DOC:
+        if self.DOC and not self.cheatsheet:
             self.setOperatorReviewerDialog()
 
 
@@ -413,7 +406,7 @@ class AviaNZ(QMainWindow):
         msg = QMessageBox()
         msg.setIconPixmap(QPixmap("img\AviaNZ.png"))
         msg.setWindowIcon(QIcon('img/Avianz.ico'))
-        msg.setText("The AviaNZ Program, v1.1 (August 2018)")
+        msg.setText("The AviaNZ Program, v1.3 (October 2018)")
         msg.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         msg.setWindowTitle("About")
         msg.setStandardButtons(QMessageBox.Ok)
@@ -425,13 +418,13 @@ class AviaNZ(QMainWindow):
         # TODO: manual is not distributed as pdf now
         import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.1.pdf')
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.3.pdf')
 
     def showCheatSheet(self):
         """ Show the cheat sheet of sample spectrograms (a pdf file)"""
         import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/CheatSheet.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/CheatSheet_v1.1.pdf')
+        webbrowser.open_new(r'http://avianz.net/docs/CheatSheet_v1.3.pdf')
 
     def createFrame(self):
         """ Creates the main window.
@@ -499,7 +492,8 @@ class AviaNZ(QMainWindow):
         self.ampaxis.setLabel('')
 
         self.specaxis = pg.AxisItem(orientation='left')
-        self.w_spec.addItem(self.specaxis,row=0,col=0)
+        if not self.cheatsheet:
+            self.w_spec.addItem(self.specaxis,row=0,col=0)
         self.specaxis.linkToView(self.p_spec)
         self.specaxis.setWidth(w=65)
 
@@ -973,6 +967,14 @@ class AviaNZ(QMainWindow):
             self.p_spec.removeItem(r)
         self.segmentPlots=[]
 
+        # Cheatsheet: remove the freq labels
+        if self.cheatsheet and hasattr(self,'label1'):
+            self.p_spec.removeItem(self.label1)
+            self.p_spec.removeItem(self.label2)
+            self.p_spec.removeItem(self.label3)
+            self.p_spec.removeItem(self.label4)
+            self.p_spec.removeItem(self.label5)
+
     def openFile(self):
         """ This handles the menu item for opening a file.
         Splits the directory name and filename out, and then passes the filename to the loader."""
@@ -1086,7 +1088,8 @@ class AviaNZ(QMainWindow):
 
                 self.currentFileSection = 0
 
-                if hasattr(self, 'timeaxis'):
+                if hasattr(self, 'timeaxis') and not self.cheatsheet:
+                    # TODO: Add another flag -- might want for cheatsheet?
                     self.w_spec.removeItem(self.timeaxis)
 
                 # Check if the filename is in standard DOC format
@@ -1112,7 +1115,9 @@ class AviaNZ(QMainWindow):
                     else:
                         self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
 
-                self.w_spec.addItem(self.timeaxis, row=1, col=1)
+                if not self.cheatsheet:
+                    # TODO: Add another flag -- might want for cheatsheet?
+                    self.w_spec.addItem(self.timeaxis, row=1, col=1)
 
                 # This next line is a hack to make the axis update
                 #self.changeWidth(self.widthWindow.value())
@@ -1610,30 +1615,59 @@ class AviaNZ(QMainWindow):
         FreqRange = self.maxFreqShow-self.minFreqShow
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
         SpecRange = FreqRange/height
-        self.specaxis.setTicks([[(0,round(self.minFreqShow/1000, 2)),
+        
+        if self.cheatsheet:
+            offset=6
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(0)
+            self.label1 = pg.TextItem(html=txt, color='g', anchor=(0,0))
+            self.p_spec.addItem(self.label1)
+            self.label1.setPos(0,0+offset)
+
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(FreqRange//4000)
+            self.label2 = pg.TextItem(html=txt, color='g', anchor=(0,0))
+            self.p_spec.addItem(self.label2)
+            self.label2.setPos(0,SpecRange/4+offset)
+
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(FreqRange//2000)
+            self.label3 = pg.TextItem(html=txt, color='g', anchor=(0,0))
+            self.p_spec.addItem(self.label3)
+            self.label3.setPos(0,SpecRange/2+offset)
+
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(3*FreqRange//4000)
+            self.label4 = pg.TextItem(html=txt, color='g', anchor=(0,0))
+            self.p_spec.addItem(self.label4)
+            self.label4.setPos(0,3*SpecRange/4+offset)
+
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(FreqRange//1000)
+            self.label5 = pg.TextItem(html=txt, color='g', anchor=(0,0))
+            self.p_spec.addItem(self.label5)
+            self.label5.setPos(0,SpecRange+offset)
+        else:
+            self.specaxis.setTicks([[(0,round(self.minFreqShow/1000, 2)),
                                  (SpecRange/4,round(self.minFreqShow/1000+FreqRange/4000, 2)),
                                  (SpecRange/2,round(self.minFreqShow/1000+FreqRange/2000, 2)),
                                  (3*SpecRange/4,round(self.minFreqShow/1000+3*FreqRange/4000, 2)),
                                  (SpecRange,round(self.minFreqShow/1000+FreqRange/1000, 2))]])
-        self.specaxis.setLabel('kHz')
+            self.specaxis.setLabel('kHz')
 
         self.updateOverview()
         self.textpos = int((self.maxFreqShow-self.minFreqShow)/height) #+ self.config['textoffset']
 
         # If there are segments, show them
-        for count in range(len(self.segments)):
-            if self.segments[count][2] == 0 and self.segments[count][3] == 0:
-                self.addSegment(self.segments[count][0], self.segments[count][1],0,0,self.segments[count][4],False,count,remaking)
-            else:
-                self.addSegment(self.segments[count][0], self.segments[count][1],self.convertFreqtoY(self.segments[count][2]),self.convertFreqtoY(self.segments[count][3]),self.segments[count][4],False,count,remaking)
+        if not self.cheatsheet:
+            for count in range(len(self.segments)):
+                if self.segments[count][2] == 0 and self.segments[count][3] == 0:
+                    self.addSegment(self.segments[count][0], self.segments[count][1],0,0,self.segments[count][4],False,count,remaking)
+                else:
+                    self.addSegment(self.segments[count][0], self.segments[count][1],self.convertFreqtoY(self.segments[count][2]),self.convertFreqtoY(self.segments[count][3]),self.segments[count][4],False,count,remaking)
 
-        #self.drawProtocolMarks()
+            #self.drawProtocolMarks()
 
-        # This is the moving bar for the playback
-        if not hasattr(self,'bar'):
-            self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
-        self.p_spec.addItem(self.bar, ignoreBounds=True)
-        self.bar.sigPositionChangeFinished.connect(self.barMoved)
+            # This is the moving bar for the playback
+            if not hasattr(self,'bar'):
+                self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
+            self.p_spec.addItem(self.bar, ignoreBounds=True)
+            self.bar.sigPositionChangeFinished.connect(self.barMoved)
 
         if self.extra:
             # Extra stuff to show test plots
