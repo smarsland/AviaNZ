@@ -44,7 +44,7 @@ def loadFile(filename):
             datalengthSec = datalength / sampleRate
             #print("Length of file is ", datalengthSec, " seconds (", datalength, "samples) loaded from ", fileLength / sampleRate, "seconds (", fileLength, " samples) with sample rate ",sampleRate, " Hz.")
 
-        return segments, audiodata, sampleRate, minFreq, maxFreq, datalength
+        return segments, audiodata, sampleRate, minFreq, maxFreq, datalengthSec
 
 def save_selected_sound(audiodata,sampleRate,t1,t2,filename):
         # t1, t2 in seconds
@@ -68,7 +68,7 @@ def make_zooniverse(species,infile,outfile):
     filecount = 0
     for f in files:
         segmentcount = 0
-        segments, audiodata, sampleRate, minFreq, maxFreq, datalength = loadFile(infile+f)
+        segments, audiodata, sampleRate, minFreq, maxFreq, datalengthSec = loadFile(infile+f)
 
         if segments is None:
             pass
@@ -82,6 +82,9 @@ def make_zooniverse(species,infile,outfile):
                         if s[0] - excess < 0:
                             t1 = 0
                             t2 = 10
+                        elif s[1] + excess > datalengthSec
+                            t2 = datalengthSec
+                            t1 = t2 - 10
                         else:
                             t1 = s[0] - excess
                             t2 = s[1] + excess
@@ -91,6 +94,7 @@ def make_zooniverse(species,infile,outfile):
                         segmentcount += 1
                     else:
                         # Otherwise, take the first 10s and the last 10s as 2 segments
+                        # TODO: Maybe take a bit out of the middle?
                         filename = outfile+"_"+str(filecount)+"_"+str(segmentcount)
                         save_selected_sound(audiodata,sampleRate,s[0],s[0]+10,filename)
                         filename = outfile+"_"+str(filecount)+"_"+str(segmentcount+1)
@@ -98,5 +102,42 @@ def make_zooniverse(species,infile,outfile):
                         segmentcount += 2
     
         filecount += 1
+
+# TODO: Check this, get username, password, filename, project
+# TODO: What else is needed in csv file?
+def upload(infile,species):
+    #import magic
+    #magic.Magic(magic_file='C:\\Users\\J Woods\\AppData\\Local\\Programs\\Python\\Python36-32\\Lib\\site-packages\\magic\\libmagic\\magic')
+    import panoptes_client
+
+    csvfile = open(os.path.join(infile,species+'.csv'),'w')
+    csvfile.write('audio,image\n')
+
+    #Connect to Zooniverse
+    panoptes_client.Panoptes.connect(username='',password='')
+    project = panoptes_client.project.Project.find('')
+    subjectset = panoptes_client.subject_set.SubjectSet(raw={}, etag=None)
+    subjectset.links.project = project
+    subjectset.display_name = species+'_autoupload_'
+    subjectset.save()
+    
+    files = [f for f in os.listdir(infile) if f[-4:]=='.mp3']
+
+    subjectgroup = []
+    for f in files:
+        subject = panoptes_client.subject.Subject()
+        subject.links.project = project
+        subject.add_location(os.path.join(infile,f)) 
+        subject.add_location(os.path.join(infile,f[:-4]+'.png'))
+
+        subject.metadata.update({'#audio': f, "#image": f[:-4]+'.png'})
+        csvfile.write(f+','+f[:-4]+'.png\n')
+
+        subject.save()
+        subjectgroup.append(subject)
+    subjectset.add(subjectgroup)
+    csvfile.close()
+
+
 
 make_zooniverse()
