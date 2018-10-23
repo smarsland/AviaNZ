@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#define __USE_XOPEN
+#include <time.h>
+#include <locale.h>
 #include "SplitWav.h"
 
 
@@ -13,7 +16,7 @@
 int main(int argc, char *argv[]){
         // parse arguments
         FILE *infile, *outfile;
-        char outfilestem[strlen(argv[2])], outfilename[strlen(argv[2])];
+        char outfilestem[strlen(argv[2])], outfilename[strlen(argv[2])+5];
 
         if(argc != 4){
                 fprintf(stderr, "ERROR: script needs 3 arguments, %d supplied.\n", argc-1);
@@ -64,10 +67,37 @@ int main(int argc, char *argv[]){
         int BUFSIZE = header.ByteRate; // 1 second
         printf("-- reading chunks of %d bytes --\n", BUFSIZE);
         char linebuf[BUFSIZE];
+
+        // parse file name
         strcpy(outfilestem, argv[2]);
         outfilestem[strlen(outfilestem)-4] = '\0';
+
+        // parse time stamp
+        int timestamp;
+        struct tm timestruc;
+        char timestr[17];
+        setlocale(LC_ALL,"/QSYS.LIB/EN_US.LOCALE");
+        if (strptime(outfilestem+strlen(outfilestem)-15, "%Y%m%d_%H%M%S", &timestruc) == NULL) {
+                printf("no timestamp detected\n");
+                timestamp = 0;
+        } else {
+                printf("timestamp detected\n");
+                timestamp = 1;
+                outfilestem[strlen(outfilestem)-15] = '\0';
+                (&timestruc)->tm_isdst = 0;
+        }
+
         for(int f=0; f<numfiles; f++){
-                sprintf(outfilename, "%s_%d.wav", outfilestem, f);
+                // if filename had time, change it
+                // otherwise name output _0.wav etc
+                if (timestamp==0){
+                        sprintf(outfilename, "%s_%d.wav", outfilestem, f);
+                } else {
+                        mktime(&timestruc);
+                        strftime(timestr, 17, "%Y%m%d_%H%M%S", &timestruc);
+                        sprintf(outfilename, "%s%s.wav", outfilestem, timestr);
+                        (&timestruc)->tm_sec += t;
+                }
                 printf("sending output to file %d/%d, %s\n", f+1, numfiles, outfilename);
                 outfile = fopen(outfilename, "wb");
                 if (outfile == NULL){

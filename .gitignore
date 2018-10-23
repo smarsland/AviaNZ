@@ -2,6 +2,7 @@
 *.pyc
 # ignore compiled C objects
 *.so
+SplitWav
 
 # vim swap files
 *.swp
