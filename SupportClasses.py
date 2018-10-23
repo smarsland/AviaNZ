@@ -158,7 +158,7 @@ class postProcess:
                 continue
         self.segments = newSegments
 
-    def wind(self, Tmean_wind = 1e-8):
+    def wind(self, Tmean_wind = 1e-8, sppSpecific = True):
         """
         delete wind corrupted segments (targeting moderate wind and above) if no sign of kiwi (check len)
         Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
@@ -190,13 +190,13 @@ class postProcess:
                     a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
                 # std_a_wind = np.std(a_wind)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
                 if mean_a_wind > Tmean_wind:
-                    if secs > self.minLen:  # just check duration
+                    if sppSpecific and secs > self.minLen:  # just check duration given species
                         continue
                     else:
                         newSegments.remove(seg)
         self.segments = newSegments
 
-    def rainClick(self):
+    def rainClick(self, sppSpecific = True):
         """
         delete random clicks e.g. rain. Check for sign of kiwi (len)
         """
@@ -222,7 +222,7 @@ class postProcess:
                 mfcc /= np.max(np.abs(mfcc), axis=0)
                 mfcc1 = mfcc[1, :]  # mfcc1 of the segment
                 if np.min(mfcc1) < thr:
-                    if secs > self.minLen:  # just check duration>10 sec
+                    if sppSpecific and secs > self.minLen:  # just check duration>10 sec
                         continue
                     else:
                         newSegments.remove(seg)

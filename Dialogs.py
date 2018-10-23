@@ -448,7 +448,6 @@ class WaveletTrain(QDialog):
         self.fstext = QLabel('')
         self.form1_step2.addRow('', self.fstext)
         self.form1_step2.addRow('Preferred sampling frq. (Hz)', self.fs)
-
         self.train = QPushButton('Train')
         self.train.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
         self.hBox_step2.addStretch(1)
@@ -482,6 +481,9 @@ class WaveletTrain(QDialog):
         self.layout_step3.addWidget(self.Step1Label3)
         self.layout_step3.addWidget(self.blank)
         self.layout_step3.addLayout(self.form1_step3)
+        self.layout_step3.addWidget(self.blank)
+        self.note_step3 = QLabel(' ')
+        self.layout_step3.addWidget(self.note_step3)
         self.layout_step3.addStretch(1)
         self.layout_step3.addLayout(self.hBox_step3)
 

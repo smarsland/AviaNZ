@@ -3342,7 +3342,6 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog.show()
         self.waveletTDialog.activateWindow()
         self.dName=None
-        # self.waveletTDialog.undo.clicked.connect(self.segment_undo)
         self.waveletTDialog.browse.clicked.connect(self.browseTrainData)
         self.waveletTDialog.genGT.clicked.connect(self.prepareTrainData)
         self.waveletTDialog.train.clicked.connect(self.trainWavelet)
@@ -3350,15 +3349,62 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog.test.clicked.connect(self.testWavelet)
 
     def testWavelet(self):
-        # TODO
-        pass
+        if hasattr(self, 'dNameTest'):
+            if hasattr(self, 'species'):
+                speciesData = json.load(open(os.path.join(self.config['FiltersDir'], self.species + '.txt')))
+                TP = 0
+                FP = 0
+                TN = 0
+                FN = 0
+                speciesData = json.load(open(os.path.join('Filters', self.species + '.txt')))
+                ws = WaveletSegment.WaveletSegment()
+                for root, dirs, files in os.walk(str(self.dNameTest)):
+                    for file in files:
+                        if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
+                            wavFile = root + '/' + file
+                            metaData = self.annotation2GT(wavFile, self.species)
+                            Segments, tp1, fp1, tn1, fn1 = ws.waveletSegment_test(fName=wavFile[:-4], data=None, sampleRate=None, spInfo=speciesData, trainTest=True)
+                            print(tp1, fp1, tn1, fn1)
+                            TP += tp1
+                            FP += fp1
+                            TN += tn1
+                            FN += fn1
+                if TP+FN != 0:
+                    recall = TP/(TP+FN)
+                else:
+                    recall = 0
+                if TP+FP != 0:
+                    precision = TP/(TP+FP)
+                else:
+                    precision = 0
+                if TN+FP != 0:
+                    specificity = TN/(TN+FP)
+                else:
+                    specificity = 0
+                accuracy = (TP+TN)/(TP+FP+TN+FN)
+                self.waveletTDialog.note_step3.setText('Detection summary:TPR:%.2f%%, FPR:%.2f%%\nRecall:%.2f%% -- Precision:%.2f%% -- Specificity:%.2f%% -- Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
+            else:
+                msg = QMessageBox()
+                msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+                msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                msg.setText("Please train the detector first!")
+                msg.setWindowTitle("Train first")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec_()
+        else:
+            msg = QMessageBox()
+            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setText("Please specify testing data")
+            msg.setWindowTitle("Testing data")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
 
     def trainWavelet(self):
         """ Listener for the wavelet training dialog.
         """
         # TODO: Needs work
-        species = str(self.waveletTDialog.species.currentText()).title()
-        M = 0.25    #TODO: vary M and plot
+        self.species = str(self.waveletTDialog.species.currentText()).title()
         minLen = float(self.waveletTDialog.minlen.text())
         maxLen = float(self.waveletTDialog.maxlen.text())
         minFrq = int(self.waveletTDialog.fLow.value())
@@ -3366,10 +3412,8 @@ class AviaNZ(QMainWindow):
         fs = int(self.waveletTDialog.fs.value())
         f0_low = []     # int(self.waveletTDialog.f0Low.text())
         f0_high = []    # int(self.waveletTDialog.f0High.text())
-        # thr = self.waveletTDialog.thr.value()
-        speciesData = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq]}
+        speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq]}
         ws = WaveletSegment.WaveletSegment()
-        # optimumNodes=[]
         # calculate f0_low and f0_high from GT
         for root, dirs, files in os.walk(str(self.dName)):
             for file in files:
@@ -3383,7 +3427,7 @@ class AviaNZ(QMainWindow):
                         for seg in segments:
                             if seg[0] == -1:
                                 continue
-                            elif seg[4][0].title() == species:
+                            elif seg[4][0].title() == self.species:
                                 secs = seg[1] - seg[0]
                                 wavobj = wavio.read(wavFile+'.wav', nseconds=secs, offset=seg[0])
                                 data = wavobj.data
@@ -3398,13 +3442,6 @@ class AviaNZ(QMainWindow):
                                 if f0_l != 0 and f0_h != 0:
                                     f0_low.append(f0_l)
                                     f0_high.append(f0_h)
-                    # # find wavelet nodes
-                    # nodes = ws.waveletSegment_train(wavFile, spInfo=speciesData,df=False)
-                    # print(wavFile)
-                    # print("Filtered nodes: ", nodes)
-                    # for node in nodes:
-                    #     if node not in optimumNodes:
-                    #         optimumNodes.append(node)
         if len(f0_low) > 0 and len(f0_high) > 0:
             f0_low = np.min(f0_low)
             f0_high = np.max(f0_high)
@@ -3413,51 +3450,58 @@ class AviaNZ(QMainWindow):
             f0_low = minFrq
             f0_high = maxFrq
 
-        # Find wavelet nodes for different thrs
-        optimumNodes = []
-        TPR = []
-        FPR = []
-        thrs = np.linspace(0, 1, num=3)
-        for thr in thrs:
-            speciesData = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
-                           'FreqRange': [minFrq, maxFrq], 'WaveletParams': [thr, M]}
-            optimumNodes_thr = []
-            TP = FP = TN = FN = 0
-            for root, dirs, files in os.walk(str(self.dName)):
-                for file in files:
-                    if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
-                        wavFile = root + '/' + file[:-4]
-                        nodes, stats = ws.waveletSegment_train(wavFile, spInfo=speciesData, df=False)
-                        TP += stats[0]
-                        FP += stats[1]
-                        TN += stats[2]
-                        FN += stats[3]
-                        print(wavFile)
-                        print("Filtered nodes: ", nodes)
-                        for node in nodes:
-                            if node not in optimumNodes_thr:
-                                optimumNodes_thr.append(node)
-            TPR_thr = TP/(TP+FN)
-            FPR_thr = 1 - TN/(FP+TN)
-            TPR.append(TPR_thr)
-            FPR.append(FPR_thr)
-            optimumNodes.append(optimumNodes_thr)
+        # Change M and threshold then plot
+        M_range = np.linspace(0.25, 2.0, num=8)
+        thr_range = np.linspace(0, 1, num=11)
+        optimumNodes_M = []
+        TPR_M = []
+        FPR_M = []
+        for M in M_range:
+            # Find wavelet nodes for different thresholds
+            optimumNodes = []
+            TPR = []
+            FPR = []
+            for thr in thr_range:
+                speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
+                               'FreqRange': [minFrq, maxFrq], 'WaveletParams': [thr, M]}
+                optimumNodes_thr = []
+                TP = FP = TN = FN = 0
+                for root, dirs, files in os.walk(str(self.dName)):
+                    for file in files:
+                        if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
+                            wavFile = root + '/' + file[:-4]
+                            nodes, stats = ws.waveletSegment_train(wavFile, spInfo=speciesData, df=False)
+                            TP += stats[0]
+                            FP += stats[1]
+                            TN += stats[2]
+                            FN += stats[3]
+                            print(wavFile)
+                            print("Filtered nodes: ", nodes)
+                            for node in nodes:
+                                if node not in optimumNodes_thr:
+                                    optimumNodes_thr.append(node)
+                TPR_thr = TP/(TP+FN)
+                FPR_thr = 1 - TN/(FP+TN)
+                TPR.append(TPR_thr)
+                FPR.append(FPR_thr)
+                optimumNodes.append(optimumNodes_thr)
+            TPR_M.append(TPR)
+            FPR_M.append(FPR)
+            optimumNodes_M.append(optimumNodes)
 
-        # Plot AUC and let the user to choose thr
-        print("Thr: ", thrs)
-        print("TPR: ", TPR)
-        print("FPR: ", FPR)
-        print("Nodes: ", optimumNodes)
-        self.thr = 0.5
+        # Plot AUC and let the user to choose threshold and M
+        self.thr = 0.5 # default, get updated when user double-clicks on ROC curve
+        self.M = 0.25  # default, get updated when user double-clicks on ROC curve
         self.optimumNodesSel = []
 
         import matplotlib.pyplot as plt
         from mpldatacursor import datacursor
         import matplotlib.ticker as mtick
         fig, ax = plt.subplots()
-        ax.plot(FPR, TPR, color='green', marker='o', linestyle='dashed', linewidth=2, markersize=10,picker=5)
+        for i in range(len(M_range)):
+            ax.plot(FPR_M[i], TPR_M[i], marker='o', linestyle='dashed', linewidth=2, markersize=10, picker=5)
         datacursor(display='multiple', draggable=True)
-        ax.set_title('Click on ROC curve to choose TPR and FPR')
+        ax.set_title('Click to see and double click to choose TPR and FPR')
         ax.set_xlabel('False Positive Rate (FPR)')
         ax.set_ylabel('True Positive Rate (TPR)')
         ax.set_ybound(0, 1)
@@ -3465,49 +3509,61 @@ class AviaNZ(QMainWindow):
         ax.yaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
         ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
         def onclick(event):
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
-            xdata = event.xdata
-            ydata = event.ydata
-            msg.setText('Confirm %d% Sensitivity with %d% FPR?' % (ydata*100, xdata*100))
-            msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
-            msg.setWindowIcon(QIcon('img/Avianz.ico'))
-            msg.setWindowTitle("Confirm")
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            reply = msg.exec_()
-            if reply == QMessageBox.Yes:
-                ind = np.where(TPR == ydata) # TODO: Get the closest or stop clicking outside points?
-                self.thr = thrs[ind]
-                self.optimumNodesSel = optimumNodes[ind]
-                plt.close()
+            if event.dblclick:
+                fpr = event.xdata
+                tpr = event.ydata
+                print("fpr, tpr: ",fpr, tpr)
+                if tpr is not None and fpr is not None:
+                    msg = QMessageBox()
+                    msg.setIcon(QMessageBox.Information)
+                    msg.setText('Confirm %d%% Sensitivity with %d%% FPR?' % (tpr*100, fpr*100))
+                    msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
+                    msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                    msg.setWindowTitle("Confirm")
+                    msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                    reply = msg.exec_()
+                    if reply == QMessageBox.Yes:
+                        # TODO: Interpolate?, currently get the closest point
+                        TPRmin_M = []
+                        for i in range(len(M_range)):
+                            TPRmin = [np.abs(x - tpr) for x in TPR_M[i]]
+                            TPRmin_M.append(TPRmin)
+                        # Choose M
+                        M_min = [np.min(x) for x in TPRmin_M]
+                        ind = np.argmin(M_min)
+                        self.M = M_range[ind]
+                        # Choose threshold
+                        ind_thr = np.argmin(TPRmin_M[ind])
+                        self.thr = thr_range[ind_thr]
+                        self.optimumNodesSel = optimumNodes_M[ind][ind_thr]
+                        plt.close()
+                        speciesData['F0Range'] = [f0_low, f0_high]
+                        speciesData['WaveletParams'].clear()
+                        speciesData['WaveletParams'].append(self.thr)
+                        speciesData['WaveletParams'].append(self.M)
+                        speciesData['WaveletParams'].append(self.optimumNodesSel)
+
+                        filename = os.path.join(self.config['FiltersDir'], self.species + '.txt')
+                        print("Saving new filter to ", filename)
+                        # TODO: More?
+                        if os.path.isfile(filename):
+                            print("File already exists, overwriting")
+                        f = open(filename, 'w')
+                        f.write(json.dumps(speciesData))
+                        f.close()
+                        # Add it to the Filter list
+                        msg = QMessageBox()
+                        msg.setIcon(QMessageBox.Information)
+                        msg.setText("Training completed!\nFollow Step 3 and test on a separate dataset before actual use.")
+                        msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+                        msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                        msg.setWindowTitle("Training completed!")
+                        msg.setStandardButtons(QMessageBox.Ok)
+                        msg.exec_()
+                        self.FilterFiles.append(self.species)
         cid = fig.canvas.mpl_connect('button_press_event', onclick)
         plt.show()
-
-        speciesData['F0Range'] = [f0_low, f0_high]
-        speciesData['WaveletParams'].append(self.thr)
-        speciesData['WaveletParams'].append(M)
-        speciesData['WaveletParams'].append(self.optimumNodesSel)    # TODO: replace with the nodes of seleted thr
-
-        filename = os.path.join(self.config['FiltersDir'],species+'.txt')
-        print("Saving new filter to ",filename)
-        # TODO: More?
-        if os.path.isfile(filename):
-            print("File already exists, overwriting")
-        f = open(filename,'w')
-        f.write(json.dumps(speciesData))
-        f.close()
-
-        # Add it to the Filter list
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
-        msg.setText("Follow Step 3 and test on a separate test dataset before actual use.")
-        msg.setIconPixmap(QPixmap("img/Owl_done.png"))
-        msg.setWindowIcon(QIcon('img/Avianz.ico'))
-        msg.setWindowTitle("Training completed!")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
-        self.FilterFiles.append(species)
-        # self.waveletTDialog.close()
+        # plt.raise_()
 
     def ff(self, data, speciesData):
         sc = SupportClasses.preProcess(audioData=data, spInfo=speciesData, df=True)  # species left empty to avoid bandpass filter
@@ -3795,8 +3851,8 @@ class AviaNZ(QMainWindow):
                                                   segments=newSegments, spInfo=speciesData)
             elif species == "All species" and species_cc == 'Choose species...':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
-                post.wind()
-                post.rainClick()
+                post.wind(sppSpecific=False)
+                post.rainClick(sppSpecific=False)
             else:
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                   segments=newSegments, spInfo=speciesData)
