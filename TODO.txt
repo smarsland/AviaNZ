@@ -1,11 +1,12 @@
 
-Create a single segment near the start of a file to annotate weather conditions
+* Segmentation options, especially merging, to be sorted (see below)
+* The full set of features to be implemented, checked, and then used
+* Finalise the zooniverse bits
+* Use the spectrogram inversion code to (a) change pitch, (b) clean the file as an image and reconvert
+* Wigner-Villes Distribution code (eventually cython)
+* New fundamental frequency algorithm
+* More thought about how we decide and encode certainty (certainly is, certainly isn't)
 
-Use the short list of birds to mark calls, with optional ? 
-
-Manual review as they wish, followed by Emma using Batch Review mode. 
-
-Labels in filename?
 # ==============
 # TODO
 
