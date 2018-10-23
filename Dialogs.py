@@ -1,7 +1,8 @@
 
 #
 # This is part of the AviaNZ interface
-# Version 1.2 11/10/18
+# Holds most of the code for the various dialog boxes
+# Version 1.3 23/10/18
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
 #    AviaNZ birdsong analysis program
