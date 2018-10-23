@@ -8,9 +8,7 @@ SplitWav
 *.swp
 
 # ignore temp files produced during analysis
-Sound Files/Noise examples/Noise_10s/*.xlsx
-Sound Files/Noise examples/Noise_10s/*.data
-Sound Files/Bittern/*.data
+Sound Files/*
 
 # auto-generated cython sources have to be listed manually here:
 ext/ce_denoise.c
