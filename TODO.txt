@@ -1,6 +1,11 @@
 
+* changelog and readme
+* What else is on the git repository as issues?
+
 * Segmentation options, especially merging, to be sorted (see below)
 * The full set of features to be implemented, checked, and then used
+* LSTM and CNN plus other learners
+* tSNE and PCA
 * Finalise the zooniverse bits
 * Use the spectrogram inversion code to (a) change pitch, (b) clean the file as an image and reconvert
 * Wigner-Villes Distribution code (eventually cython)
@@ -133,32 +138,19 @@ NP Sort out 1 version of code for excel exporting with 1 minute presence/absence
 NP Check manual
     #Done
 
-BOTH: Decide that v1.0 is ready -- check stability, tidy the segmenters and denoisers options
-# denoisers are done, there are two versions (DOC and ALL)
-# do we need "show inverted spec"? anyway it is in ALL version and works only one direction
-
 We should start to decide what makes a specialised filter
     Mingap, minlength
     Threshold for segmenters
     Wavelet nodes
     Trained classifiers
 
-(1) SRM Update the manual lots
 (2) SRM And the video!
-(3) All Check it's really stable
-(4) What else are we adding? Or removing?
-    DOC version
-(5) SRM Add wavelet segmentation to best
 (6) SRM Multiprocessing where possible
     It made things slower!
 (7) NP Classify segments
     (i) Wavelets better version
     (ii) Learning based on whatever (check Raven features)
     (iii) SRM Wavelet energy features
-(8) NP Parameter setting
-
-Exporter for mac but scipy.misc for Windows - it works fine, but doesn't show the segments on Windows
-# fixed by switching to dev version of pyqtgraph = using exporter always
 
 # What we want from the Tier 1 output:
 Presence or absence at some time resolution (e.g., 1 min, or 5 mins)
@@ -198,27 +190,12 @@ get name from standard files and use it
 
 NP:
 
-*** Ensure saving of the config file and the data files on Windows
-# done
-
 Test the idea of using the wavelet nodes with either
     (a or b or c) and not (d or e)
     (a and (b or c))
     or maybe both :)
     Will have to count the number of times each occurs
     Idea is to reduce (i) misclassifications, (2) crickets, (3) wide-band clicks, (4) rain
-
-Make a pretty (simple) version of the Process File dialog
-#Done, but seems like I have to add more features to this interface
-    (1) add a help (manual)
-    (2) Check if the folder has been processed halfway in a previous go find the new starting point rather than starting from first file
-    (3) Train wavelet to detect wind and rain so that the user can run this detector to see the proportion of useful data
-        (e.g. SIPO dataset is rainy, so almost all the recordings turned out to be positive due to rain)
-
-Enable parameter setting
-#done
-
-Raven features
 
 Denoising experiments
     -> short time better than long?
@@ -233,9 +210,6 @@ Segmentation experiments
 
     NP: Read mp3 files
 # SM: pysox
-
-    NP: Make it possible to change parameters (look into pyqtgraph ParameterTree)
-    done
 
     ??: What to do with stereo sound? How about consistent sample rates?
 
