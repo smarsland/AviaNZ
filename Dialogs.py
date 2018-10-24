@@ -381,7 +381,8 @@ class WaveletTrain(QDialog):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(450)
         self.setMinimumHeight(450)
-        # Step1 - prepare for traiing
+
+        # Step1 - prepare for training
         self.layout_step1 = QVBoxLayout()
         self.form1_step1 = QFormLayout()
         self.form2_step1 = QFormLayout()
@@ -399,6 +400,7 @@ class WaveletTrain(QDialog):
         self.form2_step1.addRow('Species   ', self.species)
         self.genGT = QPushButton('Prepare for Training')
         self.genGT.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.genGT.setEnabled(False)
         self.hBox_step1.addStretch(1)
         self.hBox_step1.addWidget(self.genGT)
         # Step1 layout
@@ -409,6 +411,7 @@ class WaveletTrain(QDialog):
         self.layout_step1.addLayout(self.form2_step1)
         self.layout_step1.addStretch(1)
         self.layout_step1.addLayout(self.hBox_step1)
+
         # Step2 - actual training
         self.layout_step2 = QVBoxLayout()
         self.form1_step2 = QFormLayout()
@@ -450,6 +453,7 @@ class WaveletTrain(QDialog):
         self.form1_step2.addRow('Preferred sampling frq. (Hz)', self.fs)
         self.train = QPushButton('Train')
         self.train.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.train.setEnabled(False)
         self.hBox_step2.addStretch(1)
         self.hBox_step2.addWidget(self.train)
         # Step2 layout
@@ -462,6 +466,7 @@ class WaveletTrain(QDialog):
         self.layout_step2.addWidget(self.note_step2)
         self.layout_step2.addStretch(1)
         self.layout_step2.addLayout(self.hBox_step2)
+
         # Step3 - test
         self.layout_step3 = QVBoxLayout()
         self.form1_step3 = QFormLayout()
@@ -475,6 +480,7 @@ class WaveletTrain(QDialog):
         self.form1_step3.addRow(' ', self.listFilesTest)
         self.test = QPushButton('Test')
         self.test.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.test.setEnabled(False)
         self.hBox_step3.addStretch(1)
         self.hBox_step3.addWidget(self.test)
         # Step3 layout
