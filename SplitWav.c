@@ -1,7 +1,7 @@
+#define _XOPEN_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#define __USE_XOPEN
 #include <time.h>
 #include <locale.h>
 #include "SplitWav.h"
@@ -87,7 +87,8 @@ int main(int argc, char *argv[]){
                 (&timestruc)->tm_isdst = 0;
         }
 
-        for(int f=0; f<numfiles; f++){
+        int f;
+        for(f=0; f<numfiles; f++){
                 // if filename had time, change it
                 // otherwise name output _0.wav etc
                 if (timestamp==0){
@@ -114,7 +115,8 @@ int main(int argc, char *argv[]){
                 fwrite(&headerN, sizeof(WavHeader), 1, outfile);
                 fwrite(&headerN2, sizeof(WavHeader2), 1, outfile);
 
-                for(int i=t*f; i<secstowrite; i++){
+                int i;
+                for(i=t*f; i<secstowrite; i++){
                         fread(linebuf, BUFSIZE, 1, infile);
                         fwrite(linebuf, BUFSIZE, 1, outfile);
                 }
