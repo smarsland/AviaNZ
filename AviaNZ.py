@@ -27,6 +27,9 @@
 # TODO: Full list of next steps
 
 import sys, os, json, platform, re, shutil
+from shutil import copyfile
+from os.path import isfile
+from openpyxl import load_workbook, Workbook
 
 from PyQt5.QtGui import QIcon, QPixmap, QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QLineEdit, QWidgetAction, QComboBox, QTreeView
@@ -35,6 +38,8 @@ from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 
 import wavio
 import numpy as np
+from scipy.signal import medfilt
+from scipy.ndimage.filters import median_filter
 
 import pyqtgraph as pg
 pg.setConfigOption('background','w')
@@ -43,6 +48,7 @@ pg.setConfigOption('antialias',True)
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.dockarea import *
 import pyqtgraph.functions as fn
+import pyqtgraph.exporters as pge
 
 import SupportClasses as SupportClasses
 import Dialogs as Dialogs
@@ -57,12 +63,15 @@ import fnmatch
 import librosa
 
 from openpyxl import load_workbook, Workbook
+import matplotlib.pyplot as plt
+from mpldatacursor import datacursor
+import matplotlib.ticker as mtick
 
 from pyqtgraph.parametertree import Parameter, ParameterTree 
 
 import locale, time
 
-import click
+import click, webbrowser, colourMaps, copy, math
 
 print("Package import complete.")
 
@@ -90,12 +99,12 @@ class AviaNZ(QMainWindow):
         self.saveConfig = True
 
         # Load filters
-        filtersDir = os.path.join(configdir, self.config['FiltersDir'])
-        print("Loading species info from folder %s" % filtersDir)
+        self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
+        print("Loading species info from folder %s" % self.filtersDir)
         try:
-            self.FilterFiles = [f[:-4] for f in os.listdir(filtersDir) if os.path.isfile(os.path.join(filtersDir, f))]
+            self.FilterFiles = [f[:-4] for f in os.listdir(self.filtersDir) if os.path.isfile(os.path.join(self.filtersDir, f))]
         except:
-            print("Folder %s not found, no filters loaded" % filtersDir)
+            print("Folder %s not found, no filters loaded" % self.filtersDir)
             self.FilterFiles = None
 
         # Load the birdlists:
@@ -414,14 +423,11 @@ class AviaNZ(QMainWindow):
 
     def showHelp(self):
         """ Show the user manual (a pdf file)"""
-        # TODO: manual is not distributed as pdf now
-        import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
         webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.3.pdf')
 
     def showCheatSheet(self):
         """ Show the cheat sheet of sample spectrograms (a pdf file)"""
-        import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/CheatSheet.pdf'))
         webbrowser.open_new(r'http://avianz.net/docs/CheatSheet_v1.3.pdf')
 
@@ -1428,7 +1434,6 @@ class AviaNZ(QMainWindow):
                 ind = ind*W/(self.config['window_width'])
                 x = (pitch*2/self.sampleRate*np.shape(self.sg)[1]).astype('int')
 
-                from scipy.signal import medfilt
                 x = medfilt(x,15)
 
                 # Get the individual pieces
@@ -1465,7 +1470,6 @@ class AviaNZ(QMainWindow):
         # TODO: Play with this
         with pg.BusyCursor():
             self.statusLeft.setText("Filtering...")
-            from scipy.ndimage.filters import median_filter
             median_filter(self.sg,size=(100,20))
             self.specPlot.setImage(self.sg)
             self.statusLeft.setText("Ready")
@@ -2574,7 +2578,6 @@ class AviaNZ(QMainWindow):
         """
         self.config['cmap'] = cmap
 
-        import colourMaps
         pos, colour, mode = colourMaps.colourMaps(cmap)
 
         cmap = pg.ColorMap(pos, colour,mode)
@@ -2964,7 +2967,6 @@ class AviaNZ(QMainWindow):
     def humanRevDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
         """
-        import copy
         if len(self.segments)==0 or self.box1id == len(self.segments) or len(self.listRectanglesa2)==0:
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
@@ -3278,7 +3280,6 @@ class AviaNZ(QMainWindow):
         """ Listener for 'Save selected sound' menu item.
         choose destination and give it a name
         """
-        import math
         if self.box1id is None or self.box1id == -1:
             print("No box selected")
             msg = QMessageBox()
@@ -3350,12 +3351,12 @@ class AviaNZ(QMainWindow):
     def testWavelet(self):
         if hasattr(self, 'dNameTest'):
             if hasattr(self, 'species'):
-                speciesData = json.load(open(os.path.join(self.config['FiltersDir'], self.species + '.txt')))
+                speciesData = json.load(open(os.path.join(self.filtersDir, self.species + '.txt')))
                 TP = 0
                 FP = 0
                 TN = 0
                 FN = 0
-                speciesData = json.load(open(os.path.join('Filters', self.species + '.txt')))
+                # speciesData = json.load(open(os.path.join('Filters', self.species + '.txt')))
                 ws = WaveletSegment.WaveletSegment()
                 for root, dirs, files in os.walk(str(self.dNameTest)):
                     for file in files:
@@ -3455,47 +3456,48 @@ class AviaNZ(QMainWindow):
         optimumNodes_M = []
         TPR_M = []
         FPR_M = []
-        for M in M_range:
-            # Find wavelet nodes for different thresholds
-            optimumNodes = []
-            TPR = []
-            FPR = []
-            for thr in thr_range:
-                speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
-                               'FreqRange': [minFrq, maxFrq], 'WaveletParams': [thr, M]}
-                optimumNodes_thr = []
-                TP = FP = TN = FN = 0
-                for root, dirs, files in os.walk(str(self.dName)):
-                    for file in files:
-                        if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
-                            wavFile = root + '/' + file[:-4]
-                            nodes, stats = ws.waveletSegment_train(wavFile, spInfo=speciesData, df=False)
-                            TP += stats[0]
-                            FP += stats[1]
-                            TN += stats[2]
-                            FN += stats[3]
-                            print(wavFile)
-                            print("Filtered nodes: ", nodes)
-                            for node in nodes:
-                                if node not in optimumNodes_thr:
-                                    optimumNodes_thr.append(node)
-                TPR_thr = TP/(TP+FN)
-                FPR_thr = 1 - TN/(FP+TN)
-                TPR.append(TPR_thr)
-                FPR.append(FPR_thr)
-                optimumNodes.append(optimumNodes_thr)
-            TPR_M.append(TPR)
-            FPR_M.append(FPR)
-            optimumNodes_M.append(optimumNodes)
+        iterNum = 1
+        with pg.BusyCursor():
+            for M in M_range:
+                # Find wavelet nodes for different thresholds
+                optimumNodes = []
+                TPR = []
+                FPR = []
+                for thr in thr_range:
+                    speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
+                                   'FreqRange': [minFrq, maxFrq], 'WaveletParams': [thr, M]}
+                    optimumNodes_thr = []
+                    TP = FP = TN = FN = 0
+                    for root, dirs, files in os.walk(str(self.dName)):
+                        for file in files:
+                            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
+                                wavFile = root + '/' + file[:-4]
+                                nodes, stats = ws.waveletSegment_train(wavFile, spInfo=speciesData, df=False)
+                                TP += stats[0]
+                                FP += stats[1]
+                                TN += stats[2]
+                                FN += stats[3]
+                                print("Iteration %d/%d\n" % (iterNum, len(M_range)*len(thr_range)))
+                                print("Filtered nodes: ", nodes)
+                                print("Parameters: ", thr, M)
+                                for node in nodes:
+                                    if node not in optimumNodes_thr:
+                                        optimumNodes_thr.append(node)
+                    TPR_thr = TP/(TP+FN)
+                    FPR_thr = 1 - TN/(FP+TN)
+                    TPR.append(TPR_thr)
+                    FPR.append(FPR_thr)
+                    optimumNodes.append(optimumNodes_thr)
+                    iterNum += 1
+                TPR_M.append(TPR)
+                FPR_M.append(FPR)
+                optimumNodes_M.append(optimumNodes)
 
         # Plot AUC and let the user to choose threshold and M
         self.thr = 0.5 # default, get updated when user double-clicks on ROC curve
         self.M = 0.25  # default, get updated when user double-clicks on ROC curve
         self.optimumNodesSel = []
 
-        import matplotlib.pyplot as plt
-        from mpldatacursor import datacursor
-        import matplotlib.ticker as mtick
         fig, ax = plt.subplots()
         for i in range(len(M_range)):
             ax.plot(FPR_M[i], TPR_M[i], marker='o', linestyle='dashed', linewidth=2, markersize=10, picker=5)
@@ -3542,7 +3544,7 @@ class AviaNZ(QMainWindow):
                         speciesData['WaveletParams'].append(self.M)
                         speciesData['WaveletParams'].append(self.optimumNodesSel)
 
-                        filename = os.path.join(self.config['FiltersDir'], self.species + '.txt')
+                        filename = os.path.join(self.filtersDir, self.species + '.txt')
                         print("Saving new filter to ", filename)
                         # TODO: More?
                         if os.path.isfile(filename):
@@ -3598,8 +3600,8 @@ class AviaNZ(QMainWindow):
             msg = QMessageBox()
             msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
-            msg.setText("Please specify trainig data!")
-            msg.setWindowTitle("Taining data")
+            msg.setText("Please specify training data!")
+            msg.setWindowTitle("Training data")
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
             return
@@ -3621,13 +3623,15 @@ class AviaNZ(QMainWindow):
                     fs.append(metaData[4])
         self.waveletTDialog.minlen.setText(str(round(np.min(len_min),2)))
         self.waveletTDialog.maxlen.setText(str(round(np.max(len_max),2)))
-        self.waveletTDialog.fHigh.setRange(0, int(np.max(fs)))
+        self.waveletTDialog.fLow.setRange(0, int(np.max(fs)))
         self.waveletTDialog.fLow.setValue(int(np.min(f_low)))
         self.waveletTDialog.fHigh.setRange(0, int(np.max(fs)))
         self.waveletTDialog.fHigh.setValue(int(np.max(f_high)))
         self.waveletTDialog.fs.setValue(int(np.min(fs)))
         self.waveletTDialog.fs.setRange(0, 32000)
         self.waveletTDialog.note_step2.setText('Above fields propagated using training data.\nAdjust if required.')
+        self.waveletTDialog.train.setEnabled(True)        
+
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
         msg.setText("Follow Step 2 to complete training.")
@@ -3643,7 +3647,6 @@ class AviaNZ(QMainWindow):
         This generates the ground truth for a given sound file
         Given the AviaNZ annotation, returns the ground truth as a txt file
         """
-        import math
         datFile = wavFile + '.data'
         eFile = datFile[:-9] + '-sec.txt'
         if duration == 0:
@@ -3737,6 +3740,7 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog.species.addItems(spList)
         # self.waveletTDialog.w_dir.setReadOnly(True)
         self.waveletTDialog.fillFileList(self.dName)
+        self.waveletTDialog.genGT.setEnabled(True)
         self.waveletTDialog.raise_()
 
     def browseTestData(self):
@@ -3744,6 +3748,7 @@ class AviaNZ(QMainWindow):
         """
         self.dNameTest = QtGui.QFileDialog.getExistingDirectory(self, 'Choose Folder to Test')
         self.waveletTDialog.fillFileList(self.dNameTest, False)
+        self.waveletTDialog.test.setEnabled(True)
         self.waveletTDialog.raise_()
 
     def segmentationDialog(self):
@@ -3805,7 +3810,7 @@ class AviaNZ(QMainWindow):
                     msg.exec_()
                     return
                 else:
-                    speciesData = json.load(open(os.path.join(self.config['FiltersDir'], species+'.txt')))
+                    speciesData = json.load(open(os.path.join(self.filtersDir, species+'.txt')))
                     ws = WaveletSegment.WaveletSegment()
                     newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, trainTest=False)
             elif str(alg)=="Cross-Correlation":
@@ -4232,7 +4237,6 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = True
         
     def saveImage(self, imageFile=''):
-        import pyqtgraph.exporters as pge
         exporter = pge.ImageExporter(self.w_spec.scene())
 
         if imageFile=='':
@@ -4677,7 +4681,6 @@ class AviaNZ(QMainWindow):
 
     # TODO: Move this to SupportClasses, or just delete?
     def exportToExcel_Hartley(self):
-        from openpyxl import load_workbook, Workbook
         eFile = self.filename[:-4] + '_output.xlsx'
 
         wb = Workbook()
@@ -4765,9 +4768,6 @@ class AviaNZ(QMainWindow):
         QApplication.quit()
 
     def backupDatafiles(self):
-        from shutil import copyfile
-        from os.path import isfile
-
         print("Backing up files in ", self.SoundFileDir)
         listOfDataFiles = QDir(self.SoundFileDir).entryList(['*.data'])
         for file in listOfDataFiles:
