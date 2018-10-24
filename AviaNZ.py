@@ -20,7 +20,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# TODO: Make green font bolder for the cheatsheet options, check the trim is OK
 # TODO: Automate some of the training options, also the extra filters
 # TODO: And the false positive graph
 # TODO: Think about the filter dictionary a bit more for option checking, and adding new options
@@ -81,7 +80,7 @@ class AviaNZ(QMainWindow):
         super(AviaNZ, self).__init__()
         self.root = root
         self.CLI = CLI
-        self.cheatsheet = True #cheatsheet
+        self.cheatsheet = cheatsheet
 
         # At this point, the main config file should already be ensured to exist.
         self.configdir = configdir

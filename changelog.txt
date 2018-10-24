@@ -1,0 +1,12 @@
+
+Version 1.3
+
+Various minor bug fixes
+Filters folder with file per species based on an internal dictionary
+Config & Filters moved to user dirs
+Contrast and brightness in Human Review 2
+Update order in context menu is an option
+Multiple species option included
+After batch processing, give completed message
+Can restart program simply
+Command line mode to make cheat sheet files
