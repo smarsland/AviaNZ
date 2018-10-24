@@ -340,15 +340,14 @@ class WaveletSegment:
         # Let df=true (denoise during preprocess) for bittern, df=false for others
         # Load data and annotation
         self.loadData(fName)
-        # print(self.annotation)
+        # (preprocess only requires SampleRate and FreqRange from spInfo)
         filteredDenoisedData = self.preprocess(spInfo,df=df)    # skip denoising
         # print("denoising completed")
-        # print("inside waveletSegment_train fs= ", self.sampleRate)
+
         waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
 
         # Compute point-biserial correlations and sort wrt it, return top nNodes
         nodes = self.compute_r(self.annotation, waveletCoefs, nNodes=10) # Limit number of nodes to 10 and avoid getting in low level nodes
-        # print(nodes)
 
         # Now for Nirosha's sorting
         # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
@@ -379,7 +378,7 @@ class WaveletSegment:
             fB,recall,tp,fp,tn,fn = self.fBetaScore(self.annotation, detections)
             # print("Node,", node)
             print("fB, recall: ", fB,recall)
-            if fB > bestBetaScore:
+            if fB is not None and fB > bestBetaScore:
                 bestBetaScore = fB
                 bestRecall=recall
                 # now apend the detections of node c to detected
