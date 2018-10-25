@@ -3351,7 +3351,13 @@ class AviaNZ(QMainWindow):
     def testWavelet(self):
         if hasattr(self, 'dNameTest'):
             if hasattr(self, 'species'):
-                speciesData = json.load(open(os.path.join(self.filtersDir, self.species + '.txt')))
+                ind = self.species.find('>')
+                if ind != -1:
+                    species = self.species.replace('>', '(')
+                    species = species + ')'
+                else:
+                    species = self.species
+                speciesData = json.load(open(os.path.join(self.filtersDir, species + '.txt')))
                 TP = 0
                 FP = 0
                 TN = 0
@@ -3452,7 +3458,7 @@ class AviaNZ(QMainWindow):
 
         # Change M and threshold then plot
         M_range = np.linspace(0.25, 2.0, num=2)
-        thr_range = np.linspace(0, 1, num=3)
+        thr_range = np.linspace(0, 1, num=2)
         optimumNodes_M = []
         TPR_M = []
         FPR_M = []
@@ -3544,24 +3550,54 @@ class AviaNZ(QMainWindow):
                         speciesData['WaveletParams'].append(self.M)
                         speciesData['WaveletParams'].append(self.optimumNodesSel)
 
-                        filename = os.path.join(self.filtersDir, self.species + '.txt')
-                        print("Saving new filter to ", filename)
+                        ind = self.species.find('>')
+                        if ind != -1:
+                            species = self.species.replace('>', '(')
+                            species = species + ')'
+                        else:
+                            species = self.species
+                        filename = os.path.join(self.filtersDir, species + '.txt')
                         if os.path.isfile(filename):
-                            print("File already exists, overwriting")
-                        f = open(filename, 'w')
-                        f.write(json.dumps(speciesData))
-                        f.close()
-                        # Add it to the Filter list
-                        msg = QMessageBox()
-                        msg.setIcon(QMessageBox.Information)
-                        msg.setText("Training completed!\nFollow Step 3 and test on a separate dataset before actual use.")
-                        msg.setIconPixmap(QPixmap("img/Owl_done.png"))
-                        msg.setWindowIcon(QIcon('img/Avianz.ico'))
-                        msg.setWindowTitle("Training completed!")
-                        msg.setStandardButtons(QMessageBox.Ok)
-                        msg.exec_()
-                        self.FilterFiles.append(self.species)
-                        self.waveletTDialog.test.setEnabled(True)
+                            msg = QMessageBox()
+                            msg.setIcon(QMessageBox.Information)
+                            # Add it to the Filter list
+                            msg.setText('Are you sure you want to replace the existing filter?')
+                            msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
+                            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                            msg.setWindowTitle('Save Filter')
+                            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                            reply = msg.exec_()
+                            if reply == QMessageBox.Yes:
+                                print("Saving new filter to ", filename)
+                                f = open(filename, 'w')
+                                f.write(json.dumps(speciesData))
+                                f.close()
+                                msg = QMessageBox()
+                                msg.setIcon(QMessageBox.Information)
+                                msg.setText('Training completed!\nFollow Step 3 and test on a separate dataset before actual use.')
+                                msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+                                msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                                msg.setWindowTitle('Training completed!')
+                                msg.setStandardButtons(QMessageBox.Ok)
+                                msg.exec_()
+                                self.FilterFiles.append(self.species)
+                                self.waveletTDialog.test.setEnabled(True)
+                        else:
+                            print("Saving new filter to ", filename)
+                            f = open(filename, 'w')
+                            f.write(json.dumps(speciesData))
+                            f.close()
+                            # Add it to the Filter list
+                            msg = QMessageBox()
+                            msg.setIcon(QMessageBox.Information)
+                            msg.setText("Training completed!\nFollow Step 3 and test on a separate dataset before actual use.")
+                            msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+                            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                            msg.setWindowTitle("Training completed!")
+                            msg.setStandardButtons(QMessageBox.Ok)
+                            msg.exec_()
+                            self.FilterFiles.append(self.species)
+                            self.waveletTDialog.test.setEnabled(True)
         cid = fig.canvas.mpl_connect('button_press_event', onclick)
         plt.show()
         # plt.raise_()
@@ -4468,37 +4504,39 @@ class AviaNZ(QMainWindow):
                 self.config['reviewer'] = data
                 self.reviewer = data
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
-            elif childName=='Common Bird List.Choose File':
+            elif childName=='Bird List.Common Bird List.Choose File':
                 filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
+                if filename is not '':
+                    self.config['BirdListShort'] = filename
+                    self.shortBirdList = json.load(open(self.config['BirdListShort']))
                 if '/' in filename:
                     ind = filename[-1::-1].index('/')
                     filename = filename[-ind:]
-                self.p['Common Bird List','Filename'] = filename
-                self.config['BirdListShort'] = filename
-                self.shortBirdList = json.load(open(self.config['BirdListShort']))
-            elif childName=='Full Bird List.Choose File':
+                self.p['Bird List','Common Bird List', 'Filename'] = filename
+            elif childName=='Bird List.Full Bird List.Choose File':
                 filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
+                if filename is not '':
+                    self.config['BirdListLong'] = filename
+                    self.longBirdList = json.load(open(self.config['BirdListLong']))
                 if '/' in filename:
                     ind = filename[-1::-1].index('/')
                     filename = filename[-ind:]
                 if filename is not '':
-                    self.config['BirdListLong'] = filename
-                    self.p['Full Bird List','Filename'] = filename
-                    self.longBirdList = json.load(open(self.config['BirdListLong']))
-                    self.p['Full Bird List','No long list'] = False
-            elif childName=='Full Bird List.No long list':
+                    self.p['Bird List','Full Bird List','Filename'] = filename
+                    self.p['Bird List','Full Bird List','No long list'] = False
+            elif childName=='Bird List.Full Bird List.No long list':
                 if param.value():
                     self.config['BirdListLong'] = 'None'
-                    self.p['Full Bird List','Filename'] = 'None'
+                    self.p['Bird List','Full Bird List','Filename'] = 'None'
                     self.longBirdList = None
                 else:
-                    if self.p['Full Bird List','Filename'] is None or self.p['Full Bird List','Filename'] == '' or self.p['Full Bird List','Filename'] == 'None':
+                    if self.p['Bird List','Full Bird List','Filename'] is None or self.p['Bird List','Full Bird List','Filename'] == '' or self.p['Bird List','Full Bird List','Filename'] == 'None':
                         filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
                         if filename is not '':
                             if '/' in filename:
                                 ind = filename[-1::-1].index('/')
                                 filename = filename[-ind:]
-                            self.p['Full Bird List','Filename'] = filename
+                            self.p['Bird List','Full Bird List','Filename'] = filename
                             self.config['BirdListLong'] = filename
                             self.longBirdList = json.load(open(self.config['BirdListLong']))
 
