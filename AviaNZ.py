@@ -3502,7 +3502,7 @@ class AviaNZ(QMainWindow):
         for i in range(len(M_range)):
             ax.plot(FPR_M[i], TPR_M[i], marker='o', linestyle='dashed', linewidth=2, markersize=10, picker=5)
         datacursor(display='multiple', draggable=True)
-        ax.set_title('Click to see and double click to choose TPR and FPR')
+        ax.set_title('Double click to choose TPR and FPR')
         ax.set_xlabel('False Positive Rate (FPR)')
         ax.set_ylabel('True Positive Rate (TPR)')
         ax.set_ybound(0, 1)
@@ -3520,7 +3520,7 @@ class AviaNZ(QMainWindow):
                     msg.setText('Confirm %d%% Sensitivity with %d%% FPR?' % (tpr*100, fpr*100))
                     msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
                     msg.setWindowIcon(QIcon('img/Avianz.ico'))
-                    msg.setWindowTitle("Confirm")
+                    msg.setWindowTitle("Tolerance")
                     msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                     reply = msg.exec_()
                     if reply == QMessageBox.Yes:
@@ -3546,12 +3546,11 @@ class AviaNZ(QMainWindow):
 
                         filename = os.path.join(self.filtersDir, self.species + '.txt')
                         print("Saving new filter to ", filename)
-                        # TODO: More?
                         if os.path.isfile(filename):
                             print("File already exists, overwriting")
                         f = open(filename, 'w')
                         f.write(json.dumps(speciesData))
-                        f.close()
+                        f.clststusose()
                         # Add it to the Filter list
                         msg = QMessageBox()
                         msg.setIcon(QMessageBox.Information)
@@ -3562,6 +3561,7 @@ class AviaNZ(QMainWindow):
                         msg.setStandardButtons(QMessageBox.Ok)
                         msg.exec_()
                         self.FilterFiles.append(self.species)
+                        self.waveletTDialog.test.setEnabled(True)
         cid = fig.canvas.mpl_connect('button_press_event', onclick)
         plt.show()
         # plt.raise_()
@@ -3738,7 +3738,6 @@ class AviaNZ(QMainWindow):
                                             spList.append(birdName)
         self.waveletTDialog.species.clear()
         self.waveletTDialog.species.addItems(spList)
-        # self.waveletTDialog.w_dir.setReadOnly(True)
         self.waveletTDialog.fillFileList(self.dName)
         self.waveletTDialog.genGT.setEnabled(True)
         self.waveletTDialog.raise_()
