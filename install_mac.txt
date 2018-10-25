@@ -9,6 +9,7 @@ conda install -c quantopian intervaltree
 conda install -c dgursoy pywavelets
 conda install -c anaconda scikit-learn scikit-image openpyxl
 conda install -c conda-forge librosa spectrum peakutils
+conda install -c bjornfjohansson mpldatacursor
 
 If there are any errors after any of the lines, copy the text and email it to me
 
