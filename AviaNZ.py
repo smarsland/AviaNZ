@@ -64,7 +64,7 @@ import librosa
 
 from openpyxl import load_workbook, Workbook
 import matplotlib.pyplot as plt
-from mpldatacursor import datacursor
+# from mpldatacursor import datacursor
 import matplotlib.ticker as mtick
 
 from pyqtgraph.parametertree import Parameter, ParameterTree 
@@ -3416,49 +3416,65 @@ class AviaNZ(QMainWindow):
         minFrq = int(self.waveletTDialog.fLow.value())
         maxFrq = int(self.waveletTDialog.fHigh.value())
         fs = int(self.waveletTDialog.fs.value())
-        f0_low = []     # int(self.waveletTDialog.f0Low.text())
-        f0_high = []    # int(self.waveletTDialog.f0High.text())
+        rain = self.waveletTDialog.rain.checkState()
+        ff = self.waveletTDialog.ff.checkState()
+        if self.waveletTDialog.wind.checkState() == 0:
+            wind = False
+        else:
+            wind = True
+        if self.waveletTDialog.rain.checkState() == 0:
+            rain = False
+        else:
+            rain = True
+        if self.waveletTDialog.ff.checkState() == 0:
+            ff = False
+        else:
+            ff = True
+        print("wind, rain, ff:", wind, rain, ff)
         speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq]}
         ws = WaveletSegment.WaveletSegment()
         # calculate f0_low and f0_high from GT
-        for root, dirs, files in os.walk(str(self.dName)):
-            for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
-                    wavFile = root + '/' + file[:-4]
-                    datFile = root + '/' + file + '.data'
-                    # calculate f0_low and f0_high from GT
-                    if os.path.isfile(datFile):
-                        with open(datFile) as f:
-                            segments = json.load(f)
-                        for seg in segments:
-                            if seg[0] == -1:
-                                continue
-                            elif seg[4][0].title() == self.species:
-                                secs = seg[1] - seg[0]
-                                wavobj = wavio.read(wavFile+'.wav', nseconds=secs, offset=seg[0])
-                                data = wavobj.data
-                                if np.shape(np.shape(data))[0] > 1:
-                                    data = data[:, 0]
-                                sampleRate = wavobj.rate
-                                if data is not 'float':
-                                    data = data.astype('float')
-                                if fs != sampleRate:
-                                    data = librosa.core.audio.resample(data, sampleRate, fs)
-                                f0_l, f0_h = self.ff(data, speciesData)
-                                if f0_l != 0 and f0_h != 0:
-                                    f0_low.append(f0_l)
-                                    f0_high.append(f0_h)
-        if len(f0_low) > 0 and len(f0_high) > 0:
-            f0_low = np.min(f0_low)
-            f0_high = np.max(f0_high)
-        else:
-            # user to enter?
-            f0_low = minFrq
-            f0_high = maxFrq
+        if ff:
+            f0_low = []     # int(self.waveletTDialog.f0Low.text())
+            f0_high = []    # int(self.waveletTDialog.f0High.text())
+            for root, dirs, files in os.walk(str(self.dName)):
+                for file in files:
+                    if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
+                        wavFile = root + '/' + file[:-4]
+                        datFile = root + '/' + file + '.data'
+                        # calculate f0_low and f0_high from GT
+                        if os.path.isfile(datFile):
+                            with open(datFile) as f:
+                                segments = json.load(f)
+                            for seg in segments:
+                                if seg[0] == -1:
+                                    continue
+                                elif seg[4][0].title() == self.species:
+                                    secs = seg[1] - seg[0]
+                                    wavobj = wavio.read(wavFile+'.wav', nseconds=secs, offset=seg[0])
+                                    data = wavobj.data
+                                    if np.shape(np.shape(data))[0] > 1:
+                                        data = data[:, 0]
+                                    sampleRate = wavobj.rate
+                                    if data is not 'float':
+                                        data = data.astype('float')
+                                    if fs != sampleRate:
+                                        data = librosa.core.audio.resample(data, sampleRate, fs)
+                                    f0_l, f0_h = self.ff(data, speciesData)
+                                    if f0_l != 0 and f0_h != 0:
+                                        f0_low.append(f0_l)
+                                        f0_high.append(f0_h)
+            if len(f0_low) > 0 and len(f0_high) > 0:
+                f0_low = np.min(f0_low)
+                f0_high = np.max(f0_high)
+            else:
+                # user to enter?
+                f0_low = minFrq
+                f0_high = maxFrq
 
         # Change M and threshold then plot
-        M_range = np.linspace(0.25, 2.0, num=2)
-        thr_range = np.linspace(0, 1, num=2)
+        M_range = np.linspace(0.25, 2.0, num=3)
+        thr_range = np.linspace(0, 1, num=8)
         optimumNodes_M = []
         TPR_M = []
         FPR_M = []
@@ -3504,17 +3520,20 @@ class AviaNZ(QMainWindow):
         self.M = 0.25  # default, get updated when user double-clicks on ROC curve
         self.optimumNodesSel = []
 
+        plt.style.use('ggplot')
         fig, ax = plt.subplots()
         for i in range(len(M_range)):
             ax.plot(FPR_M[i], TPR_M[i], marker='o', linestyle='dashed', linewidth=2, markersize=10, picker=5)
-        datacursor(display='multiple', draggable=True)
+        # datacursor(display='multiple', draggable=True)
         ax.set_title('Double click to choose TPR and FPR')
         ax.set_xlabel('False Positive Rate (FPR)')
         ax.set_ylabel('True Positive Rate (TPR)')
+        fig.canvas.set_window_title('ROC Curve')
         ax.set_ybound(0, 1)
         ax.set_xbound(0, 1)
         ax.yaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
         ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
+        # plt.get_current_fig_manager().window.setWindowIcon(QtGui.QIcon('img/Avianz.ico'))
         def onclick(event):
             if event.dblclick:
                 fpr = event.xdata
@@ -3544,7 +3563,11 @@ class AviaNZ(QMainWindow):
                         self.thr = thr_range[ind_thr]
                         self.optimumNodesSel = optimumNodes_M[ind][ind_thr]
                         plt.close()
-                        speciesData['F0Range'] = [f0_low, f0_high]
+                        speciesData['wind'] = wind
+                        speciesData['rain'] = rain
+                        speciesData['FundFrq'] = ff
+                        if ff:
+                            speciesData['F0Range'] = [f0_low, f0_high]
                         speciesData['WaveletParams'].clear()
                         speciesData['WaveletParams'].append(self.thr)
                         speciesData['WaveletParams'].append(self.M)
