@@ -3451,8 +3451,8 @@ class AviaNZ(QMainWindow):
             f0_high = maxFrq
 
         # Change M and threshold then plot
-        M_range = np.linspace(0.25, 2.0, num=8)
-        thr_range = np.linspace(0, 1, num=11)
+        M_range = np.linspace(0.25, 2.0, num=2)
+        thr_range = np.linspace(0, 1, num=4)
         optimumNodes_M = []
         TPR_M = []
         FPR_M = []
@@ -3550,7 +3550,7 @@ class AviaNZ(QMainWindow):
                             print("File already exists, overwriting")
                         f = open(filename, 'w')
                         f.write(json.dumps(speciesData))
-                        f.clststusose()
+                        f.close()
                         # Add it to the Filter list
                         msg = QMessageBox()
                         msg.setIcon(QMessageBox.Information)
@@ -3628,7 +3628,7 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog.fHigh.setRange(0, int(np.max(fs)))
         self.waveletTDialog.fHigh.setValue(int(np.max(f_high)))
         self.waveletTDialog.fs.setValue(int(np.min(fs)))
-        self.waveletTDialog.fs.setRange(0, 32000)
+        self.waveletTDialog.fs.setRange(0, int(np.min(fs)))
         self.waveletTDialog.note_step2.setText('Above fields propagated using training data.\nAdjust if required.')
         self.waveletTDialog.train.setEnabled(True)        
 
