@@ -18,6 +18,7 @@ PyWavelets==0.5.2
 scikits.talkbox==0.2.5
 #skimage==0.0
 scikit_learn==0.19.2
+mpldatacursor==0.6.2
 
 # MANUAL:
 # pip install PyWavelets # in case above doesn't work

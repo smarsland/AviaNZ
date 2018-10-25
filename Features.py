@@ -532,7 +532,7 @@ def spectral_derivs()
     # TODO: Check this
     fm = np.arctan(np.max(td,axis=0) / np.max(fd,axis=0) + 0.1)
 
-    spectral_deriv = td*np.sin(fm) + fd*np.cos(fm)
+    spectral_deriv = -td*np.sin(fm) + fd*np.cos(fm)
     
     fullspec = np.concatenate((ft1,ft1[-2:0:-1,:]), axis=0)
     tmp = np.fft.ifft(np.log(np.abs(fullspec)),axis=0)
