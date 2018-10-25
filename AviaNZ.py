@@ -3623,9 +3623,9 @@ class AviaNZ(QMainWindow):
                     fs.append(metaData[4])
         self.waveletTDialog.minlen.setText(str(round(np.min(len_min),2)))
         self.waveletTDialog.maxlen.setText(str(round(np.max(len_max),2)))
-        self.waveletTDialog.fLow.setRange(0, int(np.max(fs)))
+        self.waveletTDialog.fLow.setRange(0, int(np.max(fs))/2)
         self.waveletTDialog.fLow.setValue(int(np.min(f_low)))
-        self.waveletTDialog.fHigh.setRange(0, int(np.max(fs)))
+        self.waveletTDialog.fHigh.setRange(0, int(np.max(fs))/2)
         self.waveletTDialog.fHigh.setValue(int(np.max(f_high)))
         self.waveletTDialog.fs.setValue(int(np.min(fs)))
         self.waveletTDialog.fs.setRange(0, int(np.min(fs)))
@@ -3660,7 +3660,7 @@ class AviaNZ(QMainWindow):
         GT[:][2] = ''
         GT[:][3] = ''
         # fHigh and fLow for text boxes
-        fLow = sampleRate
+        fLow = sampleRate/2
         fHigh = 0
         lenMin = duration
         lenMax =0
