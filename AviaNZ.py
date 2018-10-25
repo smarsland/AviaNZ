@@ -3382,7 +3382,7 @@ class AviaNZ(QMainWindow):
                 else:
                     specificity = 0
                 accuracy = (TP+TN)/(TP+FP+TN+FN)
-                self.waveletTDialog.note_step3.setText('Detection summary:TPR:%.2f%%, FPR:%.2f%%\nRecall:%.2f%% -- Precision:%.2f%% -- Specificity:%.2f%% -- Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
+                self.waveletTDialog.note_step3.setText('Detection summary:TPR:%.2f%%, FPR:%.2f%%\nRecall:%.2f%%\nPrecision:%.2f%%\nSpecificity:%.2f%%\nAccuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
             else:
                 msg = QMessageBox()
                 msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
@@ -3452,7 +3452,7 @@ class AviaNZ(QMainWindow):
 
         # Change M and threshold then plot
         M_range = np.linspace(0.25, 2.0, num=2)
-        thr_range = np.linspace(0, 1, num=4)
+        thr_range = np.linspace(0, 1, num=3)
         optimumNodes_M = []
         TPR_M = []
         FPR_M = []
@@ -3669,13 +3669,12 @@ class AviaNZ(QMainWindow):
             with open(datFile) as f:
                 segments = json.load(f)
             for seg in segments:
-                # print("seg: ", seg)
-                # print(species, seg[4])
                 if seg[0] == -1:
                     continue
-                if not re.search(species.title(), seg[4][0].title()):
+                if not species.title() in seg[4]:
                     continue
                 else:
+                    print("lenMin, seg[1]-seg[0]", lenMin, seg[1]-seg[0])
                     if lenMin > seg[1]-seg[0]:
                         lenMin = seg[1]-seg[0]
                     if lenMax < seg[1]-seg[0]:
@@ -3711,6 +3710,7 @@ class AviaNZ(QMainWindow):
                     f.write(item)
                 f.write('\n')
             f.write('\n')
+        print(lenMin, lenMax, fLow, fHigh, sampleRate)
         return [lenMin, lenMax, fLow, fHigh, sampleRate]
 
     def browseTrainData(self):
