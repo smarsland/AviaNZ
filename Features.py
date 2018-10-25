@@ -513,37 +513,39 @@ def spectral_derivs()
     if np.shape(np.shape(data))[0] > 1:
         data = data[:, 0]
 
-    sp = SignalProc.SignalProc(sampleRate=fs, window_width=256, incr=128)
-    sg = sp.spectrogram(data, multitaper=True, window_width=256, incr=128, window='Hann')
-        starts = range(0, len(datacopy) - window_width, incr)
-        if multitaper:
-            from spectrum import dpss, pmtm
-            [tapers, eigen] = dpss(window_width, 2.5, 4)
-            counter = 0
-            sg = np.zeros((len(starts),window_width // 2))
-            for start in starts:
-                Sk, weights, eigen = pmtm(datacopy[start:start + window_width], v=tapers, e=eigen, show=False)
+    #sp = SignalProc.SignalProc(sampleRate=fs, window_width=256, incr=128)
+    #sg = sp.spectrogram(data, multitaper=True, window_width=256, incr=128, window='Hann')
+    starts = range(0, len(data) - window_width, incr)
+    from spectrum import dpss, pmtm
+    [tapers, eigen] = dpss(window_width, 2.5, 4)
+    ft1 = np.zeros((len(starts), window_width))
+    ft2 = np.zeros((len(starts), window_width))
+    for i in starts:
+        ft1[i // incr, :] = tapers[:,0] * data[i:i + window_width]
+        ft2[i // incr, :] = tapers[:,1] * data[i:i + window_width]
+    ft1 = np.fft.fft(ft1)
+    ft2 = np.fft.fft(ft2)
 
-    td = -r1*r2 - (i1*i2)
-    fd = i1*r2 - r1*i2
+    td = -np.real(ft1)*np.real(ft2) - np.imag(ft1)*np.imag(ft2)
+    fd = np.imag(ft1)*np.real(ft2) - np.real(ft1)*np.imag(ft2)
 
-    # TODO: Correct axis?
-    fm = np.arctan(np.max(tf,axis=0) / np.max(fd,axis=0) + 0.1)
+    # TODO: Check this
+    fm = np.arctan(np.max(td,axis=0) / np.max(fd,axis=0) + 0.1)
 
-    spectral_deriv = tf*np.sin(fm) + fd*np.cos(fm)
+    spectral_deriv = td*np.sin(fm) + fd*np.cos(fm)
     
-    fullspec = np.concatenate((sg,sg[-2:0:-1,:]), axis=0)
-    tmp = np.ifft(np.log(np.abs(fullspec)),axis=0)
-    tmp = tmp.real[24:nfft//2 + 1]
+    fullspec = np.concatenate((ft1,ft1[-2:0:-1,:]), axis=0)
+    tmp = np.fft.ifft(np.log(np.abs(fullspec)),axis=0)
+    tmp = tmp.real[24:window_width//2 + 1]
     goodnessOfPitch = np.max(tmp,axis=0)
 
-    spectral_continuity
+    #spectral_continuity
 
     freq_contours = np.abs(spectral_deriv)
     rthr = 0.3*np.mean(freq_contours,axis=0)
     cthr = 100*np.median(freq_contours,axis=1)
 
-    mask = ((freq_contours <= rth[None,:]) | (freq_contours <= cth[:,None]))
+    mask = ((freq_contours <= rthr[None,:]) | (freq_contours <= cthr[:,None]))
     spectral_deriv[mask] = -0.1
 
     sd = spectral_deriv * np.roll(spectral_deriv,1,0) 
@@ -551,12 +553,12 @@ def spectral_derivs()
     freq_contours = np.full(spectral_deriv.shape,False,dtype=np.bool)
     freq_contours[y,x] = True
 
-    from sklearn.measure import label, regionprops
-    lab = label(freq_contours,connectivity = contours.ndim)
+    from skimage.measure import label, regionprops
+    lab = label(freq_contours,connectivity = freq_contours.ndim)
     props = regionprops(lab)
 
-    mask = np.zeros(contours.shape, dtype=np.int32)
-    continuity = np.zeros(contours.shape)
+    mask = np.zeros(freq_contours.shape, dtype=np.int32)
+    continuity = np.zeros(freq_contours.shape)
     
     for p in props:
         npixels = len(p.coords)
