@@ -102,6 +102,7 @@ import wavio
 # Spectral statistics
 # Frequency modulation
 # Linear Predictive Coding -> from scikits.talkbox import lpc (see also audiolazy) Librosa?
+# Spectral derivative
 
 # Fundamental frequency -- yin? (de Cheveigne and Kawahara 2002)
 # Add something that plots some of these to help playing, so that I can understand the librosa things, etc.
@@ -139,6 +140,11 @@ class Features:
         mfcc -= np.mean(mfcc,axis=0)
         mfcc /= np.max(np.abs(mfcc),axis=0)
 
+        # Or:
+        melBasis = librosa.filters.mel(self.sampleRate)
+        melSpec = np.dot(melBasis,data)
+
+
         return mfcc
 
     def get_chroma(self):
@@ -162,9 +168,10 @@ class Features:
         s2 = librosa.feature.spectral_centroid(self.data,self.sampleRate)
         s3 = librosa.feature.spectral_contrast(self.data,self.sampleRate)
         s4 = librosa.feature.spectral_rolloff(self.data,self.sampleRate)
+        s5 = librosa.feature.spectral_flatness(self.data,self.sampleRate)
 
         zcr = librosa.feature.zero_crossing_rate(self.data,self.sampleRate)
-        return [s1,s2,s3,s4,zcr]
+        return [s1,s2,s3,s4,s5,zcr]
 
     def get_lpc(self,data,order=44):
         # Use talkbox to get the linear predictive coding
@@ -298,38 +305,6 @@ class Features:
 
     def computeCorrelation(self):
         scipy.signal.fftconvolve(a, b, mode='same')
-
-def testFeatures():
-    import wavio
-    wavobj = wavio.read('Sound Files/tril1.wav')
-    fs = wavobj.rate
-    data = wavobj.data
-
-    if data.dtype is not 'float':
-        data = data.astype('float') # / 32768.0
-
-    if np.shape(np.shape(data))[0] > 1:
-        data = data[:, 0]
-
-    sp = SignalProc.SignalProc(sampleRate=fs, window_width=256, incr=128)
-    # The next lines are to get a spectrogram that *should* precisely match the Raven one
-    #sg = sp.spectrogram(data, multitaper=False, window_width=256, incr=128, window='Ones')
-    #sg = sg ** 2
-    sg = sp.spectrogram(data, multitaper=False, window_width=256, incr=128, window='Hann')
-
-    f = Features(data,fs,256,128)
-
-    features = []
-    # Loop over the segments (and time slices within?)
-    features.append([f.get_Raven_spectrogram_measurements(sg=sg,fs=fs,window_width=256,f1=0,f2=np.shape(sg)[1],t1=0,t2=np.shape(sg)[0]),f.get_Raven_robust_measurements(sg,fs,0,np.shape(sg)[1],0,np.shape(sg)[0]),f.get_Raven_waveform_measurements(data,fs,0,len(data)),f.weiner_entropy(data)])
-
-    # Will need to think about feature vector length for the librosa features, since they are on fixed windows
-    f.get_chroma()
-    f.get_mfcc()
-    f.get_tonnetz()
-    f.get_spectral_features()
-    f.get_lpc(data,order=44)
-    # DCT
 
 
 def mfcc(y1,y2,y3,sr1,sr2,sr3,yTest,srTest):
@@ -493,3 +468,107 @@ def isKiwi_dtw_mfcc(dirName, yTest, srTest):
 
 # dList=isKiwi_dtw_mfcc("Sound Files/dtw_mfcc/kiwi/kiwimale", yTest,srTest)
 #print dList
+
+def testFeatures():
+    import wavio
+    wavobj = wavio.read('Sound Files/tril1.wav')
+    fs = wavobj.rate
+    data = wavobj.data
+
+    if data.dtype is not 'float':
+        data = data.astype('float') # / 32768.0
+
+    if np.shape(np.shape(data))[0] > 1:
+        data = data[:, 0]
+
+    sp = SignalProc.SignalProc(sampleRate=fs, window_width=256, incr=128)
+    # The next lines are to get a spectrogram that *should* precisely match the Raven one
+    #sg = sp.spectrogram(data, multitaper=False, window_width=256, incr=128, window='Ones')
+    #sg = sg ** 2
+    sg = sp.spectrogram(data, multitaper=False, window_width=256, incr=128, window='Hann')
+
+    f = Features(data,fs,256,128)
+
+    features = []
+    # Loop over the segments (and time slices within?)
+    features.append([f.get_Raven_spectrogram_measurements(sg=sg,fs=fs,window_width=256,f1=0,f2=np.shape(sg)[1],t1=0,t2=np.shape(sg)[0]),f.get_Raven_robust_measurements(sg,fs,0,np.shape(sg)[1],0,np.shape(sg)[0]),f.get_Raven_waveform_measurements(data,fs,0,len(data)),f.weiner_entropy(data)])
+
+    # Will need to think about feature vector length for the librosa features, since they are on fixed windows
+    f.get_chroma()
+    f.get_mfcc()
+    f.get_tonnetz()
+    f.get_spectral_features()
+    f.get_lpc(data,order=44)
+    # DCT
+
+def spectral_derivs()
+    import wavio
+    wavobj = wavio.read('Sound Files/tril1.wav')
+    fs = wavobj.rate
+    data = wavobj.data
+
+    if data.dtype is not 'float':
+        data = data.astype('float') # / 32768.0
+
+    if np.shape(np.shape(data))[0] > 1:
+        data = data[:, 0]
+
+    sp = SignalProc.SignalProc(sampleRate=fs, window_width=256, incr=128)
+    sg = sp.spectrogram(data, multitaper=True, window_width=256, incr=128, window='Hann')
+        starts = range(0, len(datacopy) - window_width, incr)
+        if multitaper:
+            from spectrum import dpss, pmtm
+            [tapers, eigen] = dpss(window_width, 2.5, 4)
+            counter = 0
+            sg = np.zeros((len(starts),window_width // 2))
+            for start in starts:
+                Sk, weights, eigen = pmtm(datacopy[start:start + window_width], v=tapers, e=eigen, show=False)
+
+    td = -r1*r2 - (i1*i2)
+    fd = i1*r2 - r1*i2
+
+    # TODO: Correct axis?
+    fm = np.arctan(np.max(tf,axis=0) / np.max(fd,axis=0) + 0.1)
+
+    spectral_deriv = tf*np.sin(fm) + fd*np.cos(fm)
+    
+    fullspec = np.concatenate((sg,sg[-2:0:-1,:]), axis=0)
+    tmp = np.ifft(np.log(np.abs(fullspec)),axis=0)
+    tmp = tmp.real[24:nfft//2 + 1]
+    goodnessOfPitch = np.max(tmp,axis=0)
+
+    spectral_continuity
+
+    freq_contours = np.abs(spectral_deriv)
+    rthr = 0.3*np.mean(freq_contours,axis=0)
+    cthr = 100*np.median(freq_contours,axis=1)
+
+    mask = ((freq_contours <= rth[None,:]) | (freq_contours <= cth[:,None]))
+    spectral_deriv[mask] = -0.1
+
+    sd = spectral_deriv * np.roll(spectral_deriv,1,0) 
+    y,x = np.where((sd < 0) & (spectral_deriv < 0))
+    freq_contours = np.full(spectral_deriv.shape,False,dtype=np.bool)
+    freq_contours[y,x] = True
+
+    from sklearn.measure import label, regionprops
+    lab = label(freq_contours,connectivity = contours.ndim)
+    props = regionprops(lab)
+
+    mask = np.zeros(contours.shape, dtype=np.int32)
+    continuity = np.zeros(contours.shape)
+    
+    for p in props:
+        npixels = len(p.coords)
+        continuity[(p.coords[:,0],p.coords[:,1])] = np.max(p.coords[:,1])-np.min(p.coords[:,1])
+        if npixels > 5:
+            mask[(p.coords[:,0],p.coords[:,1])] = npixels
+        else:
+            mask[(p.coords[:,0],p.coords[:,1])] = 0
+
+    maxrow = np.argmax(mask,axis=0)
+    maxcol = np.arange(0,mask.shape[1])
+    maxcont = mask[maxrow,maxcol]
+    continuityAtMax = continuity[maxrow,maxcol]
+    continuityFrame = continuityAtMax/maxcont*100
+    continuityFrame[np.where(np.isnan(continuityFrame))] = 0
