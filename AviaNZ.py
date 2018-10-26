@@ -63,8 +63,8 @@ import fnmatch
 import librosa
 
 from openpyxl import load_workbook, Workbook
+import matplotlib.markers as mks
 import matplotlib.pyplot as plt
-# from mpldatacursor import datacursor
 import matplotlib.ticker as mtick
 
 from pyqtgraph.parametertree import Parameter, ParameterTree 
@@ -3388,7 +3388,7 @@ class AviaNZ(QMainWindow):
                 else:
                     specificity = 0
                 accuracy = (TP+TN)/(TP+FP+TN+FN)
-                self.waveletTDialog.note_step3.setText('Detection summary:TPR:%.2f%%, FPR:%.2f%%\nRecall:%.2f%%\nPrecision:%.2f%%\nSpecificity:%.2f%%\nAccuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
+                self.waveletTDialog.note_step3.setText(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
             else:
                 msg = QMessageBox()
                 msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
@@ -3430,7 +3430,7 @@ class AviaNZ(QMainWindow):
             ff = False
         else:
             ff = True
-        print("wind, rain, ff:", wind, rain, ff)
+        # print("wind, rain, ff:", wind, rain, ff)
         speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq]}
         ws = WaveletSegment.WaveletSegment()
         # calculate f0_low and f0_high from GT
@@ -3473,8 +3473,8 @@ class AviaNZ(QMainWindow):
                 f0_high = maxFrq
 
         # Change M and threshold then plot
-        M_range = np.linspace(0.25, 2.0, num=3)
-        thr_range = np.linspace(0, 1, num=8)
+        M_range = np.linspace(0.25, 2.0, num=2)
+        thr_range = np.linspace(0, 1, num=3)
         optimumNodes_M = []
         TPR_M = []
         FPR_M = []
@@ -3521,10 +3521,14 @@ class AviaNZ(QMainWindow):
         self.optimumNodesSel = []
 
         plt.style.use('ggplot')
+        valid_markers = ([item[0] for item in mks.MarkerStyle.markers.items() if
+                          item[1] is not 'nothing' and not item[1].startswith('tick') and not item[1].startswith(
+                              'caret')])
+        markers = np.random.choice(valid_markers, len(M_range)*len(thr_range), replace=False)
         fig, ax = plt.subplots()
         for i in range(len(M_range)):
-            ax.plot(FPR_M[i], TPR_M[i], marker='o', linestyle='dashed', linewidth=2, markersize=10, picker=5)
-        # datacursor(display='multiple', draggable=True)
+            ax.plot(FPR_M[i], TPR_M[i], marker=markers[i])
+            # ax.plot(FPR_M[i], TPR_M[i], marker=markers[i], linestyle='dashed', linewidth=2, markersize=10, picker=5)
         ax.set_title('Double click to choose TPR and FPR')
         ax.set_xlabel('False Positive Rate (FPR)')
         ax.set_ylabel('True Positive Rate (TPR)')
@@ -3545,7 +3549,7 @@ class AviaNZ(QMainWindow):
                     msg.setText('Confirm %d%% Sensitivity with %d%% FPR?' % (tpr*100, fpr*100))
                     msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
                     msg.setWindowIcon(QIcon('img/Avianz.ico'))
-                    msg.setWindowTitle("Tolerance")
+                    msg.setWindowTitle('Set Tolerance')
                     msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                     reply = msg.exec_()
                     if reply == QMessageBox.Yes:
@@ -3563,8 +3567,8 @@ class AviaNZ(QMainWindow):
                         self.thr = thr_range[ind_thr]
                         self.optimumNodesSel = optimumNodes_M[ind][ind_thr]
                         plt.close()
-                        speciesData['wind'] = wind
-                        speciesData['rain'] = rain
+                        speciesData['Wind'] = wind
+                        speciesData['Rain'] = rain
                         speciesData['FundFrq'] = ff
                         if ff:
                             speciesData['F0Range'] = [f0_low, f0_high]
@@ -3584,7 +3588,7 @@ class AviaNZ(QMainWindow):
                             msg = QMessageBox()
                             msg.setIcon(QMessageBox.Information)
                             # Add it to the Filter list
-                            msg.setText('Are you sure you want to replace the existing filter?')
+                            msg.setText('Are you sure you want to Overwrite the existing filter\nfor %s?' %(species))
                             msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
                             msg.setWindowIcon(QIcon('img/Avianz.ico'))
                             msg.setWindowTitle('Save Filter')
@@ -3672,7 +3676,6 @@ class AviaNZ(QMainWindow):
         for root, dirs, files in os.walk(str(self.dName)):
             for file in files:
                 if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
-                    #annotation to GT (generate _1sec.txt GT)
                     wavFile = root + '/' + file
                     metaData = self.annotation2GT(wavFile, species)
                     len_min.append(metaData[0])
@@ -3825,45 +3828,41 @@ class AviaNZ(QMainWindow):
             self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata))
 
         opstartingtime = time.time()
-        print("Segmenting requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
+        print('Segmenting requested at ' + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
 
         self.segmentsToSave = True
         # TODO: Currently just gives them all the label "Don't Know"
         [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution,species_cc] = self.segmentDialog.getValues()
         with pg.BusyCursor():
             species = str(species)
-            # if species=='Choose species...':
-            #     species='All species'
-            #if not hasattr(self,'seg'):
-            #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
-            self.statusLeft.setText("Segmenting...")
-            if str(alg) == "Default":
+            self.statusLeft.setText('Segmenting...')
+            if str(alg) == 'Default':
                 newSegments = self.seg.bestSegments()
-            elif str(alg) == "Median Clipping":
+            elif str(alg) == 'Median Clipping':
                 newSegments = self.seg.medianClip(float(str(medThr)), minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg) == "Harma":
+            elif str(alg) == 'Harma':
                 newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg) == "Power":
+            elif str(alg) == 'Power':
                 newSegments = self.seg.segmentByPower(float(str(PowerThr)))
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg) == "Onsets":
+            elif str(alg) == 'Onsets':
                 newSegments = self.seg.onsets()
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg) == "Fundamental Frequency":
+            elif str(alg) == 'Fundamental Frequency':
                 newSegments, pitch, times = self.seg.yin(int(str(minfreq)),int(str(minperiods)),float(str(Yinthr)),int(str(window)),returnSegs=True)
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg) == "FIR":
+            elif str(alg) == 'FIR':
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg)=="Wavelets":
-                if species == 'Choose species...':    # Ask the species
+            elif str(alg)=='Wavelets':
+                if species == 'Choose species...':
                     msg = QMessageBox()
-                    msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+                    msg.setIconPixmap(QPixmap('img/Owl_warning.png'))
                     msg.setWindowIcon(QIcon('img/Avianz.ico'))
-                    msg.setText("Please select your species!")
-                    msg.setWindowTitle("Select Species")
+                    msg.setText('Please select your species!')
+                    msg.setWindowTitle('Select Species')
                     msg.setStandardButtons(QMessageBox.Ok)
                     msg.exec_()
                     return
@@ -3871,14 +3870,14 @@ class AviaNZ(QMainWindow):
                     speciesData = json.load(open(os.path.join(self.filtersDir, species+'.txt')))
                     ws = WaveletSegment.WaveletSegment()
                     newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, trainTest=False)
-            elif str(alg)=="Cross-Correlation":
+            elif str(alg)=='Cross-Correlation':
                 if species_cc != 'Choose species...':
                     # need to load template/s
                     newSegments = self.findMatches(float(str(CCThr1)), species_cc)
                 else:
                     newSegments = self.findMatches(float(str(CCThr1)))
 
-            print("new segments: ", newSegments)
+            print('Segments: ', newSegments)
             # print "to excel", newSegments
                 # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
                 # # but ML is extremely slow and crappy. So I decided to use just the wavelets
@@ -3908,29 +3907,29 @@ class AviaNZ(QMainWindow):
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
             # post process to remove short segments, wind, rain, and use F0 check.
-            if species == "Bittern" or species_cc == "Bittern": # bitten booms are treated differently
-                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, spInfo=speciesData)
-            elif species == "All species" and species_cc == 'Choose species...':
+            if species == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
                 post.wind(sppSpecific=False)
                 post.rainClick(sppSpecific=False)
             else:
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                   segments=newSegments, spInfo=speciesData)
-                post.short()  # species specific
-                post.wind()
-                print("after wind: ", post.segments)
-                post.rainClick()
-                print("after rain: ", post.segments)
-                post.fundamentalFrq()  # species specific
-                print("after ff: ", post.segments)
+                post.short()  #TODO: keep 'deleteShort' in filter file?
+                if speciesData['Wind']:
+                    post.wind()
+                    print('After wind: ', post.segments)
+                if speciesData['Rain']:
+                    post.rainClick()
+                    print('After rain: ', post.segments)
+                if speciesData['FundFrq']:
+                    post.fundamentalFrq()
+                    print('After ff: ', post.segments)
 
             newSegments = post.segments
-            print("New segments: ", newSegments)
+            print("After post processing: ", newSegments)
 
             # Generate annotation friendly output.
-            if str(alg)=="Wavelets":
+            if str(alg)=='Wavelets':
                  if len(newSegments)>0:
                     y1 = self.convertFreqtoY(speciesData['FreqRange'][0]/2)
                     y2 = self.convertFreqtoY(speciesData['SampleRate']/2)
@@ -3940,7 +3939,7 @@ class AviaNZ(QMainWindow):
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
                                         [species.title() + "?"],index=-1)
                         self.segmentsToSave = True
-            elif str(alg)=="Cross-Correlation" and species_cc != 'Choose species...':
+            elif str(alg)=='Cross-Correlation' and species_cc != 'Choose species...':
                 if len(newSegments) > 0:
                     y1 = self.convertFreqtoY(speciesData['FreqRange'][0]/2)
                     y2 = self.convertFreqtoY(speciesData['SampleRate']/2)
@@ -3958,8 +3957,8 @@ class AviaNZ(QMainWindow):
 
             self.lenNewSegments = len(newSegments)
             self.segmentDialog.undo.setEnabled(True)
-            self.statusLeft.setText("Ready")
-        print("Segmentation finished at %s" % (time.time() - opstartingtime))
+            self.statusLeft.setText('Ready')
+        print('Segmentation finished at %s' % (time.time() - opstartingtime))
 
     def segment_undo(self):
         """ Listener for undo button in segmentation dialog.
@@ -4707,7 +4706,7 @@ class AviaNZ(QMainWindow):
             print("Saving segments to " + self.filename + '.data')
             if len(self.segments) > 0:
                 if self.segments[0][0] > -1:
-                    self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]]) 
+                    self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]])
             else:
                 self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]])
 
