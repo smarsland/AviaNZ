@@ -20,7 +20,7 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import os, re, platform, fnmatch
+import os, re, platform, fnmatch, sys
 
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -387,30 +387,6 @@ class AviaNZ_batchProcess(QMainWindow):
                         
                         # ALL SYSTEMS GO: process this file
                         self.loadFile(wipe = (self.species=="All species"))
-
-                        # print self.algs.itemText(self.algs.currentIndex())
-                        # if self.algs.currentText() == "Amplitude":
-                        #     newSegments = self.seg.segmentByAmplitude(float(str(self.ampThr.text())))
-                        # elif self.algs.currentText() == "Median Clipping":
-                        #     newSegments = self.seg.medianClip(float(str(self.medThr.text())))
-                        #     #print newSegments
-                        # elif self.algs.currentText() == "Harma":
-                        #     newSegments = self.seg.Harma(float(str(self.HarmaThr1.text())),float(str(self.HarmaThr2.text())))
-                        # elif self.algs.currentText() == "Power":
-                        #     newSegments = self.seg.segmentByPower(float(str(self.PowerThr.text())))
-                        # elif self.algs.currentText() == "Onsets":
-                        #     newSegments = self.seg.onsets()
-                        #     #print newSegments
-                        # elif self.algs.currentText() == "Fundamental Frequency":
-                        #     newSegments, pitch, times = self.seg.yin(int(str(self.Fundminfreq.text())),int(str(self.Fundminperiods.text())),float(str(self.Fundthr.text())),int(str(self.Fundwindow.text())),returnSegs=True)
-                        #     print newSegments
-                        # elif self.algs.currentText() == "FIR":
-                        #     print float(str(self.FIRThr1.text()))
-                        #     # newSegments = self.seg.segmentByFIR(0.1)
-                        #     newSegments = self.seg.segmentByFIR(float(str(self.FIRThr1.text())))
-                        #     # print newSegments
-                        # elif self.algs.currentText()=='Wavelets':
-                        # print("Species: ", self.species)
                         if self.species!='All species':
                             # wipe same species:
                             self.segments[:] = [s for s in self.segments if self.species not in s[4] and self.species+'?' not in s[4]]
@@ -424,46 +400,39 @@ class AviaNZ_batchProcess(QMainWindow):
                             newSegments=self.seg.bestSegments()
 
                         # post process to remove short segments, wind, rain, and use F0 check.
-                        if self.species == "Bittern":
-                            post = SupportClasses.postProcess(audioData=self.audiodata,
-                                                              sampleRate=self.sampleRate,
-                                                              segments=newSegments, spInfo=speciesData)
-                        elif self.species == "All species":
-                            post = SupportClasses.postProcess(audioData=self.audiodata,
-                                                              sampleRate=self.sampleRate,
+                        if self.species == 'All species':
+                            post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                               segments=newSegments, spInfo={})
-                            post.wind()
-                            post.rainClick()
+                            post.wind(sppSpecific=False)
+                            post.rainClick(sppSpecific=False)
                         else:
-                            post = SupportClasses.postProcess(audioData=self.audiodata,
-                                                              sampleRate=self.sampleRate,
-                                                              segments=newSegments,
-                                                              spInfo=speciesData)
-                            # print ("After wavelets: ", post.segments)
-                            post.short()  # species specific
-                            # print ("After short: ", post.segments)
-                            post.wind()
-                            # print ("After wind: ", post.segments)
-                            post.rainClick()
-                            print ("After rain: ", post.segments)
-                            post.fundamentalFrq()  # species specific
-                            print ("After ff: ", post.segments)
+                            post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                                                              segments=newSegments, spInfo=speciesData)
+                            post.short()  # TODO: keep 'deleteShort' in filter file?
+                            if speciesData['Wind']:
+                                post.wind()
+                                # print('After wind: ', post.segments)
+                            if speciesData['Rain']:
+                                post.rainClick()
+                                # print('After rain: ', post.segments)
+                            if speciesData['FundFrq']:
+                                post.fundamentalFrq()
+                                # print('After ff: ', post.segments)
                         newSegments = post.segments
 
-                        # Save the excel
+                        # Save the excel and the annotation
                         if self.species == 'All species':
-                            out = SupportClasses.exportSegments(segments=[], segmentstoCheck=newSegments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                            out = SupportClasses.exportSegments(segments=[], segmentstoCheck=newSegments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength/self.sampleRate, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         else:
-                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=newSegments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=newSegments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength/self.sampleRate, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", sampleRate_species=speciesData['SampleRate'], fRange=speciesData['FreqRange'], batch=True)
                         out.excel()
-                        # Save the annotation
                         out.saveAnnotation()
                         # Log success for this file
                         self.log.appendFile(self.filename)
             self.log.file.close()
             self.statusBar().showMessage("Processed all %d files" % total)
             msg = QMessageBox()
-            msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+            msg.setIconPixmap(QPixmap("img/Owl_done.png"))
             msg.setWindowIcon(QIcon('img/Avianz.ico'))
             msg.setText("Finished processing. Would you like to return to the start screen?")
             msg.setWindowTitle("Finished")
@@ -890,13 +859,22 @@ class AviaNZ_reviewAll(QMainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         if filesuccess == 1:
             msg.setIconPixmap(QPixmap("img/Owl_done.png"))
-            msg.setText("All files checked")
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setText("All files checked. Would you like to return to the start screen?")
             msg.setWindowTitle("Finished")
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.Yes:
+                QApplication.exit(1)
         else:
             msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
-            msg.setText("Review stopped at file %s of %s" % (cnt, total))
-            msg.setWindowTitle("Review stopped")
-        msg.exec_()
+            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+            msg.setText("Review stopped at file %s of %s.\nWould you like to return to the start screen?" % (cnt, total))
+            msg.setWindowTitle('Review stopped')
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.Yes:
+                QApplication.exit(1)
 
     def review_single(self, sTime):
         """ Initializes all species dialog.

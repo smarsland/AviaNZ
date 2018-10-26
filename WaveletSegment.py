@@ -377,7 +377,7 @@ class WaveletSegment:
             detections = np.maximum.reduce([detected, detected_c])
             fB,recall,tp,fp,tn,fn = self.fBetaScore(self.annotation, detections)
             # print("Node,", node)
-            print("fB, recall: ", fB,recall)
+            # print("fB, recall: ", fB,recall)
             if fB is not None and fB > bestBetaScore:
                 bestBetaScore = fB
                 bestRecall=recall
