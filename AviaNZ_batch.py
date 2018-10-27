@@ -63,6 +63,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.root = root
         self.dirName=[]
 
+        # TODO: read filters from user location
         try:
             self.FilterFiles = [f[:-4] for f in os.listdir('Filters') if os.path.isfile(os.path.join('Filters', f))]
         except:
@@ -415,7 +416,7 @@ class AviaNZ_batchProcess(QMainWindow):
                             if speciesData['Rain']:
                                 post.rainClick()
                                 # print('After rain: ', post.segments)
-                            if speciesData['FundFrq']:
+                            if speciesData['F0']:
                                 post.fundamentalFrq()
                                 # print('After ff: ', post.segments)
                         newSegments = post.segments
