@@ -457,7 +457,7 @@ class WaveletSegment:
             self.data = self.data.astype('float') #/ 32768.0
         if np.shape(np.shape(self.data))[0]>1:
             self.data = np.squeeze(self.data[:,0])
-        n=int(len(self.data)/self.sampleRate)
+        n=int(np.ceil(len(self.data)/self.sampleRate))
 
         if trainTest==True:     #survey data don't have annotations
             # Get the segmentation from the txt file

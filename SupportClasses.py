@@ -138,7 +138,8 @@ class postProcess:
         self.segments = segments
         if spInfo != {}:
             self.minLen = spInfo['TimeRange'][0]
-            self.F0 = spInfo['F0Range']
+            if spInfo['F0']:
+                self.F0 = spInfo['F0Range']
         else:
             self.minLen = 0
         # self.confirmedSegments = []  # post processed detections with confidence TP
@@ -678,7 +679,7 @@ class exportSegments:
             # Save the file
             wb.save(str(self.eFile))
 
-    def saveAnnotation(self, f1=0, f2=0, fs=0):
+    def saveAnnotation(self):
         # Save annotations - batch processing
         annotation = []
         # annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), self.operator, self.reviewer, -1])
