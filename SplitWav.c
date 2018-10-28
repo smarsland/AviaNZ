@@ -43,6 +43,10 @@ int main(int argc, char *argv[]){
         fread(&header2, sizeof(WavHeader2), 1, infile);
 
         printf("Read %u MB of data, %u channels sampled at %u Hz, %d bit depth\n", header.ChunkSize/1024/1024, header.NumChannels, header.SampleRate, header.BitsPerSample);
+        if(header.ChunkSize<1000 | header.ChunkID!=1179011410){
+                fprintf(stderr, "ERROR: file empty or header malformed\n");
+                exit(1);
+        }
 
         // SM2 recorders produce a wamd metadata chunk:
         if(header2.Subchunk2ID==1684889975){ // wamd as uint32
@@ -76,7 +80,8 @@ int main(int argc, char *argv[]){
         int timestamp;
         struct tm timestruc;
         char timestr[17];
-        setlocale(LC_ALL,"/QSYS.LIB/EN_US.LOCALE");
+        setlocale(LC_ALL,"/QSYS.LIB/EN_NZ.LOCALE");
+        printf("%s\n", argv[1]);
         if (strptime(outfilestem+strlen(outfilestem)-15, "%Y%m%d_%H%M%S", &timestruc) == NULL) {
                 printf("no timestamp detected\n");
                 timestamp = 0;
@@ -84,7 +89,15 @@ int main(int argc, char *argv[]){
                 printf("timestamp detected\n");
                 timestamp = 1;
                 outfilestem[strlen(outfilestem)-15] = '\0';
-                (&timestruc)->tm_isdst = 0;
+                // dealing wiht DST: just enforce original hour
+                // i.e. recorders don't update their clocks,
+                // so just make sure the output time is continuous.
+                int orighour = (&timestruc)->tm_hour;
+                mktime(&timestruc);
+                if ((&timestruc)->tm_hour != orighour){
+                        printf("adjusting hour to %d for DST\n", orighour);
+                        (&timestruc)->tm_hour = orighour;
+                }
         }
 
         int f;
