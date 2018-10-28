@@ -3450,48 +3450,20 @@ class AviaNZ(QMainWindow):
             f0_low = minFrq
             f0_high = maxFrq
 
-        # Change M and threshold then plot
-        M_range = np.linspace(0.25, 2.0, num=2)
-        thr_range = np.linspace(0, 1, num=4)
-        optimumNodes_M = []
-        TPR_M = []
-        FPR_M = []
-        iterNum = 1
+        # Get detection measures over all M,thr combinations
         with pg.BusyCursor():
-            for M in M_range:
-                # Find wavelet nodes for different thresholds
-                optimumNodes = []
-                TPR = []
-                FPR = []
-                for thr in thr_range:
-                    speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
-                                   'FreqRange': [minFrq, maxFrq], 'WaveletParams': [thr, M]}
-                    optimumNodes_thr = []
-                    TP = FP = TN = FN = 0
-                    for root, dirs, files in os.walk(str(self.dName)):
-                        for file in files:
-                            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
-                                wavFile = root + '/' + file[:-4]
-                                nodes, stats = ws.waveletSegment_train(wavFile, spInfo=speciesData, df=False)
-                                TP += stats[0]
-                                FP += stats[1]
-                                TN += stats[2]
-                                FN += stats[3]
-                                print("Iteration %d/%d\n" % (iterNum, len(M_range)*len(thr_range)))
-                                print("Filtered nodes: ", nodes)
-                                print("Parameters: ", thr, M)
-                                for node in nodes:
-                                    if node not in optimumNodes_thr:
-                                        optimumNodes_thr.append(node)
-                    TPR_thr = TP/(TP+FN)
-                    FPR_thr = 1 - TN/(FP+TN)
-                    TPR.append(TPR_thr)
-                    FPR.append(FPR_thr)
-                    optimumNodes.append(optimumNodes_thr)
-                    iterNum += 1
-                TPR_M.append(TPR)
-                FPR_M.append(FPR)
-                optimumNodes_M.append(optimumNodes)
+            speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
+                           'FreqRange': [minFrq, maxFrq], 'WaveletParams': [0.5, 1]} # last params are thr, M
+            # returns 2d lists of nodes over M x thr, or stats over M x thr
+            thrList = np.linspace(0,1,num=5)
+            MList = np.linspace(0.25, 2.0, num=5)
+            nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, df=False)
+            print("Filtered nodes: ", nodes)
+
+            TPR = TP/(TP+FN)
+            FPR = 1 - TN/(FP+TN)
+            print("TP rate: ", TPR)
+            print("FP rate: ", FPR)
 
         # Plot AUC and let the user to choose threshold and M
         self.thr = 0.5 # default, get updated when user double-clicks on ROC curve
@@ -3499,8 +3471,9 @@ class AviaNZ(QMainWindow):
         self.optimumNodesSel = []
 
         fig, ax = plt.subplots()
-        for i in range(len(M_range)):
-            ax.plot(FPR_M[i], TPR_M[i], marker='o', linestyle='dashed', linewidth=2, markersize=10, picker=5)
+        for i in range(len(MList)):
+            # each line - different M (rows of result arrays)
+            ax.plot(FPR[i], TPR[i], marker='o', linestyle='dashed', linewidth=2, markersize=10, picker=5)
         datacursor(display='multiple', draggable=True)
         ax.set_title('Double click to choose TPR and FPR')
         ax.set_xlabel('False Positive Rate (FPR)')
@@ -3511,13 +3484,13 @@ class AviaNZ(QMainWindow):
         ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
         def onclick(event):
             if event.dblclick:
-                fpr = event.xdata
-                tpr = event.ydata
-                print("fpr, tpr: ",fpr, tpr)
-                if tpr is not None and fpr is not None:
+                fpr_cl = event.xdata
+                tpr_cl = event.ydata
+                print("fpr_cl, tpr_cl: ",fpr_cl, tpr_cl)
+                if tpr_cl is not None and fpr_cl is not None:
                     msg = QMessageBox()
                     msg.setIcon(QMessageBox.Information)
-                    msg.setText('Confirm %d%% Sensitivity with %d%% FPR?' % (tpr*100, fpr*100))
+                    msg.setText('Confirm %d%% Sensitivity with %d%% FPR?' % (tpr_cl*100, fpr_cl*100))
                     msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
                     msg.setWindowIcon(QIcon('img/Avianz.ico'))
                     msg.setWindowTitle("Tolerance")
@@ -3525,18 +3498,14 @@ class AviaNZ(QMainWindow):
                     reply = msg.exec_()
                     if reply == QMessageBox.Yes:
                         # TODO: Interpolate?, currently get the closest point
-                        TPRmin_M = []
-                        for i in range(len(M_range)):
-                            TPRmin = [np.abs(x - tpr) for x in TPR_M[i]]
-                            TPRmin_M.append(TPRmin)
-                        # Choose M
-                        M_min = [np.min(x) for x in TPRmin_M]
-                        ind = np.argmin(M_min)
-                        self.M = M_range[ind]
-                        # Choose threshold
-                        ind_thr = np.argmin(TPRmin_M[ind])
-                        self.thr = thr_range[ind_thr]
-                        self.optimumNodesSel = optimumNodes_M[ind][ind_thr]
+                        # get M and thr for closest point
+                        distarr = (tpr_cl - TPR)**2 + (fpr_cl - FPR)**2
+                        M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
+                        self.M = M_range[M_min_ind]
+                        self.thr = thr_range[thr_min_ind]
+                        # Get nodes for closest point
+                        self.optimumNodesSel = nodes[M_min_ind][thr_min_ind]
+
                         plt.close()
                         speciesData['F0Range'] = [f0_low, f0_high]
                         speciesData['WaveletParams'].clear()
