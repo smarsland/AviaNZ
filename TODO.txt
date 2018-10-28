@@ -6,10 +6,22 @@
 * The full set of features to be implemented, checked, and then used
 * LSTM and CNN plus other learners
 * tSNE and PCA
-* Finalise the zooniverse bits
+
+* For cheatsheet and zooniverse
+    -> sort out data
+    -> make the files
+    -> Cheatsheet: make the webpage
+    -> Zooniverse: 
+        -> What data?
+        -> Picture of animal
+        -> Sample files
+        -> Put the data into the web portal
+
 * Use the spectrogram inversion code to (a) change pitch, (b) clean the file as an image and reconvert
+
 * Wigner-Villes Distribution code (eventually cython)
 * New fundamental frequency algorithm
+
 * More thought about how we decide and encode certainty (certainly is, certainly isn't)
 
 # ==============

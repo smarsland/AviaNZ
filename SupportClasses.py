@@ -138,7 +138,8 @@ class postProcess:
         self.segments = segments
         if spInfo != {}:
             self.minLen = spInfo['TimeRange'][0]
-            self.F0 = spInfo['F0Range']
+            if spInfo['F0']:
+                self.F0 = spInfo['F0Range']
         else:
             self.minLen = 0
         # self.confirmedSegments = []  # post processed detections with confidence TP
@@ -248,7 +249,7 @@ class postProcess:
                 segment = Segment.Segment(data, sgRaw, sp, sampleRate, 512, 256)
                 pitch, y, minfreq, W = segment.yin(minfreq=100)
                 ind = np.squeeze(np.where(pitch > minfreq))
-                pitch = pitch[ind]
+                pitch = pitch[ind]  # TODO: why this ff is markedly different to ff seen in the spectrogram??
                 if pitch.size == 0:
                     print('Segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
                     # newSegments.remove(seg) # for now keep it
@@ -260,13 +261,12 @@ class postProcess:
                     else:
                         print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
                         newSegments.remove(seg)
-                else:   # Get the individual pieces within a seg
-                    if (np.mean(pitch) > self.F0[0]) and (np.mean(pitch) < self.F0[1]):
+                elif (np.mean(pitch) > self.F0[0]) and (np.mean(pitch) < self.F0[1]):
                         continue
-                    else:
-                        print('segment* ', seg, round(np.mean(pitch)), pitch, np.median(pitch), ' *-- fundamental freq is out of range, could be noise')
-                        newSegments.remove(seg)
-                        continue
+                else:
+                    print('segment* ', seg, round(np.mean(pitch)), pitch, np.median(pitch), ' *-- fundamental freq is out of range, could be noise')
+                    # newSegments.remove(seg)   # Fix the above and enable this
+                    continue
         self.segments = newSegments
 
     # ***no use of the rest of the functions in this class for the moment.
@@ -455,7 +455,7 @@ class exportSegments:
 
     """
 
-    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species=["Don't Know"], startTime=0, dirName='', filename='',datalength=0,sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1, batch=False):
+    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species=["Don't Know"], startTime=0, dirName='', filename='', datalength=0, sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1, fRange=[0, 0], noiseLevel=None, noiseTypes=[], sampleRate_species=0, batch=False):
 
         self.species=species
         # convert 2-col lists to 5-col lists, if needed
@@ -480,6 +480,10 @@ class exportSegments:
         self.operator = operator
         self.reviewer = reviewer
         self.minLen = minLen
+        self.fRange = fRange
+        self.noiseLevel = noiseLevel
+        self.noiseTypes = noiseTypes
+        self.sampleRate_species = sampleRate_species
         self.batch = batch
 
     def correctSegFormat(self, seglist, species):
@@ -678,13 +682,18 @@ class exportSegments:
     def saveAnnotation(self):
         # Save annotations - batch processing
         annotation = []
-        annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), self.operator, self.reviewer, -1])
+        # annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), self.operator, self.reviewer, -1])
+        annotation.append([-1, self.datalength, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]])
+        y1 = self.fRange[0]/2
+        y2 = self.sampleRate_species/2
+        if y2 > self.sampleRate/2:
+            y2 = self.sampleRate/2-self.sampleRate*0.01
         for seg in self.confirmedSegments:
-            annotation.append([float(seg[0]), float(seg[1]), float(seg[2]), float(seg[3]), seg[4]])
+            annotation.append([float(seg[0]), float(seg[1]), y1, y2, seg[4]])
         for seg in self.segmentstoCheck:
-            annotation.append([float(seg[0]), float(seg[1]), float(seg[2]), float(seg[3]), seg[4]])
+            annotation.append([float(seg[0]), float(seg[1]), y1, y2, seg[4]])
         for seg in self.segments:
-            annotation.append([float(seg[0]), float(seg[1]), float(seg[2]), float(seg[3]), seg[4]])
+            annotation.append([float(seg[0]), float(seg[1]), y1, y2, seg[4]])
 
         if isinstance(self.filename, str):
             file = open(self.filename + '.data', 'w')
