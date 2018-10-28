@@ -23,6 +23,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 import scipy.signal as signal
+import scipy.fftpack as fft
 import spectrum
 
 class SignalProc:
@@ -162,7 +163,8 @@ class SignalProc:
             ft = np.zeros((len(starts), window_width))
             for i in starts:
                 ft[i // incr, :] = window * datacopy[i:i + window_width]
-            ft = np.fft.fft(ft)
+            ft = fft.fft(ft)
+            #ft = np.fft.fft(ft)
             if onesided:
                 sg = np.absolute(ft[:, :window_width // 2])
             else:
@@ -332,7 +334,8 @@ class SignalProc:
                 spectral_slice = sg[i]
 
             # Don't need fftshift due to different impl.
-            wave_est = np.real(np.fft.ifft(spectral_slice))[::-1]
+            wave_est = np.real(fft.ifft(spectral_slice))[::-1]
+            #wave_est = np.real(np.fft.ifft(spectral_slice))[::-1]
             if calculate_offset and i > 0:
                 offset_size = size - incr
                 if offset_size <= 0:

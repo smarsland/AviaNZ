@@ -63,8 +63,8 @@ import fnmatch
 import librosa
 
 from openpyxl import load_workbook, Workbook
+import matplotlib.markers as mks
 import matplotlib.pyplot as plt
-from mpldatacursor import datacursor
 import matplotlib.ticker as mtick
 
 from pyqtgraph.parametertree import Parameter, ParameterTree 
@@ -3351,24 +3351,16 @@ class AviaNZ(QMainWindow):
     def testWavelet(self):
         if hasattr(self, 'dNameTest'):
             if hasattr(self, 'species'):
-                speciesData = json.load(open(os.path.join(self.filtersDir, self.species + '.txt')))
-                TP = 0
-                FP = 0
-                TN = 0
-                FN = 0
-                # speciesData = json.load(open(os.path.join('Filters', self.species + '.txt')))
+                ind = self.species.find('>')
+                if ind != -1:
+                    species = self.species.replace('>', '(')
+                    species = species + ')'
+                else:
+                    species = self.species
+                speciesData = json.load(open(os.path.join(self.filtersDir, species + '.txt')))
                 ws = WaveletSegment.WaveletSegment()
-                for root, dirs, files in os.walk(str(self.dNameTest)):
-                    for file in files:
-                        if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
-                            wavFile = root + '/' + file
-                            metaData = self.annotation2GT(wavFile, self.species)
-                            Segments, tp1, fp1, tn1, fn1 = ws.waveletSegment_test(fName=wavFile[:-4], data=None, sampleRate=None, spInfo=speciesData, trainTest=True)
-                            print(tp1, fp1, tn1, fn1)
-                            TP += tp1
-                            FP += fp1
-                            TN += tn1
-                            FN += fn1
+                Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, data=None, sampleRate=None, spInfo=speciesData, trainTest=True)
+                print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
                 if TP+FN != 0:
                     recall = TP/(TP+FN)
                 else:
@@ -3381,8 +3373,9 @@ class AviaNZ(QMainWindow):
                     specificity = TN/(TN+FP)
                 else:
                     specificity = 0
-                accuracy = (TP+TN)/(TP+FP+TN+FN)
-                self.waveletTDialog.note_step3.setText('Detection summary:TPR:%.2f%%, FPR:%.2f%%\nRecall:%.2f%% -- Precision:%.2f%% -- Specificity:%.2f%% -- Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
+                if TP+FP+TN+FN != 0:
+                    accuracy = (TP+TN)/(TP+FP+TN+FN)
+                    self.waveletTDialog.note_step3.setText(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
             else:
                 msg = QMessageBox()
                 msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
@@ -3410,53 +3403,67 @@ class AviaNZ(QMainWindow):
         minFrq = int(self.waveletTDialog.fLow.value())
         maxFrq = int(self.waveletTDialog.fHigh.value())
         fs = int(self.waveletTDialog.fs.value())
-        f0_low = []     # int(self.waveletTDialog.f0Low.text())
-        f0_high = []    # int(self.waveletTDialog.f0High.text())
+        if self.waveletTDialog.wind.checkState() == 0:
+            wind = False
+        else:
+            wind = True
+        if self.waveletTDialog.rain.checkState() == 0:
+            rain = False
+        else:
+            rain = True
+        if self.waveletTDialog.ff.checkState() == 0:
+            ff = False
+        else:
+            ff = True
+        # print("wind, rain, ff:", wind, rain, ff)
         speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq]}
         ws = WaveletSegment.WaveletSegment()
         # calculate f0_low and f0_high from GT
-        for root, dirs, files in os.walk(str(self.dName)):
-            for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
-                    wavFile = root + '/' + file[:-4]
-                    datFile = root + '/' + file + '.data'
-                    # calculate f0_low and f0_high from GT
-                    if os.path.isfile(datFile):
-                        with open(datFile) as f:
-                            segments = json.load(f)
-                        for seg in segments:
-                            if seg[0] == -1:
-                                continue
-                            elif seg[4][0].title() == self.species:
-                                secs = seg[1] - seg[0]
-                                wavobj = wavio.read(wavFile+'.wav', nseconds=secs, offset=seg[0])
-                                data = wavobj.data
-                                if np.shape(np.shape(data))[0] > 1:
-                                    data = data[:, 0]
-                                sampleRate = wavobj.rate
-                                if data is not 'float':
-                                    data = data.astype('float')
-                                if fs != sampleRate:
-                                    data = librosa.core.audio.resample(data, sampleRate, fs)
-                                f0_l, f0_h = self.ff(data, speciesData)
-                                if f0_l != 0 and f0_h != 0:
-                                    f0_low.append(f0_l)
-                                    f0_high.append(f0_h)
-        if len(f0_low) > 0 and len(f0_high) > 0:
-            f0_low = np.min(f0_low)
-            f0_high = np.max(f0_high)
-        else:
-            # user to enter?
-            f0_low = minFrq
-            f0_high = maxFrq
+        if ff:
+            f0_low = []     # int(self.waveletTDialog.f0Low.text())
+            f0_high = []    # int(self.waveletTDialog.f0High.text())
+            for root, dirs, files in os.walk(str(self.dName)):
+                for file in files:
+                    if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
+                        wavFile = root + '/' + file[:-4]
+                        datFile = root + '/' + file + '.data'
+                        # calculate f0_low and f0_high from GT
+                        if os.path.isfile(datFile):
+                            with open(datFile) as f:
+                                segments = json.load(f)
+                            for seg in segments:
+                                if seg[0] == -1:
+                                    continue
+                                elif seg[4][0].title() == self.species:
+                                    secs = seg[1] - seg[0]
+                                    wavobj = wavio.read(wavFile+'.wav', nseconds=secs, offset=seg[0])
+                                    data = wavobj.data
+                                    if np.shape(np.shape(data))[0] > 1:
+                                        data = data[:, 0]
+                                    sampleRate = wavobj.rate
+                                    if data is not 'float':
+                                        data = data.astype('float')
+                                    if fs != sampleRate:
+                                        data = librosa.core.audio.resample(data, sampleRate, fs)
+                                    f0_l, f0_h = self.ff(data, speciesData)
+                                    if f0_l != 0 and f0_h != 0:
+                                        f0_low.append(f0_l)
+                                        f0_high.append(f0_h)
+            if len(f0_low) > 0 and len(f0_high) > 0:
+                f0_low = np.min(f0_low)
+                f0_high = np.max(f0_high)
+            else:
+                # user to enter?
+                f0_low = minFrq
+                f0_high = maxFrq
 
         # Get detection measures over all M,thr combinations
         with pg.BusyCursor():
             speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
                            'FreqRange': [minFrq, maxFrq], 'WaveletParams': [0.5, 1]} # last params are thr, M
             # returns 2d lists of nodes over M x thr, or stats over M x thr
-            thrList = np.linspace(0,1,num=5)
-            MList = np.linspace(0.25, 2.0, num=5)
+            thrList = np.linspace(0,1,num=3)
+            MList = np.linspace(0.25, 1.5, num=3)
             nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, df=False)
             print("Filtered nodes: ", nodes)
 
@@ -3470,18 +3477,25 @@ class AviaNZ(QMainWindow):
         self.M = 0.25  # default, get updated when user double-clicks on ROC curve
         self.optimumNodesSel = []
 
+        plt.style.use('ggplot')
+        valid_markers = ([item[0] for item in mks.MarkerStyle.markers.items() if
+                          item[1] is not 'nothing' and not item[1].startswith('tick') and not item[1].startswith(
+                              'caret')])
+        markers = np.random.choice(valid_markers, len(MList)*len(thrList), replace=False)
         fig, ax = plt.subplots()
         for i in range(len(MList)):
             # each line - different M (rows of result arrays)
-            ax.plot(FPR[i], TPR[i], marker='o', linestyle='dashed', linewidth=2, markersize=10, picker=5)
-        datacursor(display='multiple', draggable=True)
-        ax.set_title('Double click to choose TPR and FPR')
+            ax.plot(FPR[i], TPR[i], marker=markers[i], label='M='+str(MList[i]))
+        ax.set_title('Double click to choose TPR and FPR and set tolerance')
         ax.set_xlabel('False Positive Rate (FPR)')
         ax.set_ylabel('True Positive Rate (TPR)')
+        fig.canvas.set_window_title('ROC Curve - %s' % (self.species))
         ax.set_ybound(0, 1)
         ax.set_xbound(0, 1)
         ax.yaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
         ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
+        ax.legend()
+        # plt.get_current_fig_manager().window.setWindowIcon(QtGui.QIcon('img/Avianz.ico'))
         def onclick(event):
             if event.dblclick:
                 fpr_cl = event.xdata
@@ -3493,7 +3507,7 @@ class AviaNZ(QMainWindow):
                     msg.setText('Confirm %d%% Sensitivity with %d%% FPR?' % (tpr_cl*100, fpr_cl*100))
                     msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
                     msg.setWindowIcon(QIcon('img/Avianz.ico'))
-                    msg.setWindowTitle("Tolerance")
+                    msg.setWindowTitle('Set Tolerance - %s' % (self.species))
                     msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                     reply = msg.exec_()
                     if reply == QMessageBox.Yes:
@@ -3501,36 +3515,70 @@ class AviaNZ(QMainWindow):
                         # get M and thr for closest point
                         distarr = (tpr_cl - TPR)**2 + (fpr_cl - FPR)**2
                         M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
-                        self.M = M_range[M_min_ind]
-                        self.thr = thr_range[thr_min_ind]
+                        self.M = MList[M_min_ind]
+                        self.thr = thrList[thr_min_ind]
                         # Get nodes for closest point
                         self.optimumNodesSel = nodes[M_min_ind][thr_min_ind]
 
                         plt.close()
-                        speciesData['F0Range'] = [f0_low, f0_high]
+                        speciesData['Wind'] = wind
+                        speciesData['Rain'] = rain
+                        speciesData['F0'] = ff
+                        if ff:
+                            speciesData['F0Range'] = [f0_low, f0_high]
                         speciesData['WaveletParams'].clear()
                         speciesData['WaveletParams'].append(self.thr)
                         speciesData['WaveletParams'].append(self.M)
                         speciesData['WaveletParams'].append(self.optimumNodesSel)
 
-                        filename = os.path.join(self.filtersDir, self.species + '.txt')
-                        print("Saving new filter to ", filename)
+                        ind = self.species.find('>')
+                        if ind != -1:
+                            species = self.species.replace('>', '(')
+                            species = species + ')'
+                        else:
+                            species = self.species
+                        filename = os.path.join(self.filtersDir, species + '.txt')
                         if os.path.isfile(filename):
-                            print("File already exists, overwriting")
-                        f = open(filename, 'w')
-                        f.write(json.dumps(speciesData))
-                        f.close()
-                        # Add it to the Filter list
-                        msg = QMessageBox()
-                        msg.setIcon(QMessageBox.Information)
-                        msg.setText("Training completed!\nFollow Step 3 and test on a separate dataset before actual use.")
-                        msg.setIconPixmap(QPixmap("img/Owl_done.png"))
-                        msg.setWindowIcon(QIcon('img/Avianz.ico'))
-                        msg.setWindowTitle("Training completed!")
-                        msg.setStandardButtons(QMessageBox.Ok)
-                        msg.exec_()
-                        self.FilterFiles.append(self.species)
-                        self.waveletTDialog.test.setEnabled(True)
+                            msg = QMessageBox()
+                            msg.setIcon(QMessageBox.Information)
+                            # Add it to the Filter list
+                            msg.setText('Are you sure you want to Overwrite the existing filter\nfor %s?' %(species))
+                            msg.setIconPixmap(QPixmap("img/Owl_thinking.png"))
+                            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                            msg.setWindowTitle('Save Filter')
+                            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                            reply = msg.exec_()
+                            if reply == QMessageBox.Yes:
+                                print("Saving new filter to ", filename)
+                                f = open(filename, 'w')
+                                f.write(json.dumps(speciesData))
+                                f.close()
+                                msg = QMessageBox()
+                                msg.setIcon(QMessageBox.Information)
+                                msg.setText('Training completed!\nFollow Step 3 and test on a separate dataset before actual use.')
+                                msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+                                msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                                msg.setWindowTitle('Training completed!')
+                                msg.setStandardButtons(QMessageBox.Ok)
+                                msg.exec_()
+                                self.FilterFiles.append(self.species)
+                                self.waveletTDialog.test.setEnabled(True)
+                        else:
+                            print("Saving new filter to ", filename)
+                            f = open(filename, 'w')
+                            f.write(json.dumps(speciesData))
+                            f.close()
+                            # Add it to the Filter list
+                            msg = QMessageBox()
+                            msg.setIcon(QMessageBox.Information)
+                            msg.setText("Training completed!\nFollow Step 3 and test on a separate dataset before actual use.")
+                            msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+                            msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                            msg.setWindowTitle("Training completed!")
+                            msg.setStandardButtons(QMessageBox.Ok)
+                            msg.exec_()
+                            self.FilterFiles.append(self.species)
+                            self.waveletTDialog.test.setEnabled(True)
         cid = fig.canvas.mpl_connect('button_press_event', onclick)
         plt.show()
         # plt.raise_()
@@ -3582,7 +3630,6 @@ class AviaNZ(QMainWindow):
         for root, dirs, files in os.walk(str(self.dName)):
             for file in files:
                 if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
-                    #annotation to GT (generate _1sec.txt GT)
                     wavFile = root + '/' + file
                     metaData = self.annotation2GT(wavFile, species)
                     len_min.append(metaData[0])
@@ -3592,9 +3639,9 @@ class AviaNZ(QMainWindow):
                     fs.append(metaData[4])
         self.waveletTDialog.minlen.setText(str(round(np.min(len_min),2)))
         self.waveletTDialog.maxlen.setText(str(round(np.max(len_max),2)))
-        self.waveletTDialog.fLow.setRange(0, int(np.max(fs)))
+        self.waveletTDialog.fLow.setRange(0, int(np.min(fs))/2)
         self.waveletTDialog.fLow.setValue(int(np.min(f_low)))
-        self.waveletTDialog.fHigh.setRange(0, int(np.max(fs)))
+        self.waveletTDialog.fHigh.setRange(0, int(np.min(fs))/2)
         self.waveletTDialog.fHigh.setValue(int(np.max(f_high)))
         self.waveletTDialog.fs.setValue(int(np.min(fs)))
         self.waveletTDialog.fs.setRange(0, int(np.min(fs)))
@@ -3622,14 +3669,14 @@ class AviaNZ(QMainWindow):
             wavobj = wavio.read(wavFile)
             sampleRate = wavobj.rate
             data = wavobj.data
-            duration = int(len(data) / sampleRate)  # number of secs
+            duration = int(np.ceil(len(data) / sampleRate))  # number of secs
         GT = np.zeros((duration, 4))
         GT = GT.tolist()
         GT[:][1] = str(0)
         GT[:][2] = ''
         GT[:][3] = ''
         # fHigh and fLow for text boxes
-        fLow = sampleRate
+        fLow = sampleRate/2
         fHigh = 0
         lenMin = duration
         lenMax =0
@@ -3638,13 +3685,12 @@ class AviaNZ(QMainWindow):
             with open(datFile) as f:
                 segments = json.load(f)
             for seg in segments:
-                # print("seg: ", seg)
-                # print(species, seg[4])
                 if seg[0] == -1:
                     continue
-                if not re.search(species.title(), seg[4][0].title()):
+                if not species.title() in seg[4]:
                     continue
                 else:
+                    # print("lenMin, seg[1]-seg[0]", lenMin, seg[1]-seg[0])
                     if lenMin > seg[1]-seg[0]:
                         lenMin = seg[1]-seg[0]
                     if lenMax < seg[1]-seg[0]:
@@ -3680,6 +3726,7 @@ class AviaNZ(QMainWindow):
                     f.write(item)
                 f.write('\n')
             f.write('\n')
+        # print(lenMin, lenMax, fLow, fHigh, sampleRate)
         return [lenMin, lenMax, fLow, fHigh, sampleRate]
 
     def browseTrainData(self):
@@ -3714,6 +3761,7 @@ class AviaNZ(QMainWindow):
     def browseTestData(self):
         """ Listener for the wavelet training dialog.
         """
+        self.waveletTDialog.note_step3.clear()
         self.dNameTest = QtGui.QFileDialog.getExistingDirectory(self, 'Choose Folder to Test')
         self.waveletTDialog.fillFileList(self.dNameTest, False)
         self.waveletTDialog.test.setEnabled(True)
@@ -3735,60 +3783,56 @@ class AviaNZ(QMainWindow):
             self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata))
 
         opstartingtime = time.time()
-        print("Segmenting requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
+        print('Segmenting requested at ' + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
 
         self.segmentsToSave = True
         # TODO: Currently just gives them all the label "Don't Know"
         [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution,species_cc] = self.segmentDialog.getValues()
         with pg.BusyCursor():
             species = str(species)
-            # if species=='Choose species...':
-            #     species='All species'
-            #if not hasattr(self,'seg'):
-            #    self.seg = Segment.Segment(self.audiodata,sgRaw,self.sp,self.sampleRate,self.config['minSegment'],self.config['window_width'],self.config['incr'])
-            self.statusLeft.setText("Segmenting...")
-            if str(alg) == "Default":
+            self.statusLeft.setText('Segmenting...')
+            if str(alg) == 'Default':
                 newSegments = self.seg.bestSegments()
-            elif str(alg) == "Median Clipping":
+            elif str(alg) == 'Median Clipping':
                 newSegments = self.seg.medianClip(float(str(medThr)), minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg) == "Harma":
+            elif str(alg) == 'Harma':
                 newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg) == "Power":
+            elif str(alg) == 'Power':
                 newSegments = self.seg.segmentByPower(float(str(PowerThr)))
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg) == "Onsets":
+            elif str(alg) == 'Onsets':
                 newSegments = self.seg.onsets()
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg) == "Fundamental Frequency":
+            elif str(alg) == 'Fundamental Frequency':
                 newSegments, pitch, times = self.seg.yin(int(str(minfreq)),int(str(minperiods)),float(str(Yinthr)),int(str(window)),returnSegs=True)
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg) == "FIR":
+            elif str(alg) == 'FIR':
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg)=="Wavelets":
-                if species == 'Choose species...':    # Ask the species
+            elif str(alg)=='Wavelets':
+                if species == 'Choose species...':
                     msg = QMessageBox()
-                    msg.setIconPixmap(QPixmap("img/Owl_warning.png"))
+                    msg.setIconPixmap(QPixmap('img/Owl_warning.png'))
                     msg.setWindowIcon(QIcon('img/Avianz.ico'))
-                    msg.setText("Please select your species!")
-                    msg.setWindowTitle("Select Species")
+                    msg.setText('Please select your species!')
+                    msg.setWindowTitle('Select Species')
                     msg.setStandardButtons(QMessageBox.Ok)
                     msg.exec_()
                     return
                 else:
                     speciesData = json.load(open(os.path.join(self.filtersDir, species+'.txt')))
                     ws = WaveletSegment.WaveletSegment()
-                    newSegments = ws.waveletSegment_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, trainTest=False)
-            elif str(alg)=="Cross-Correlation":
+                    newSegments = ws.waveletSegment_test(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, trainTest=False)
+            elif str(alg)=='Cross-Correlation':
                 if species_cc != 'Choose species...':
                     # need to load template/s
                     newSegments = self.findMatches(float(str(CCThr1)), species_cc)
                 else:
                     newSegments = self.findMatches(float(str(CCThr1)))
 
-            print("new segments: ", newSegments)
+            print('Segments: ', newSegments)
             # print "to excel", newSegments
                 # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
                 # # but ML is extremely slow and crappy. So I decided to use just the wavelets
@@ -3818,29 +3862,29 @@ class AviaNZ(QMainWindow):
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
 
             # post process to remove short segments, wind, rain, and use F0 check.
-            if species == "Bittern" or species_cc == "Bittern": # bitten booms are treated differently
-                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, spInfo=speciesData)
-            elif species == "All species" and species_cc == 'Choose species...':
+            if species == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
                 post.wind(sppSpecific=False)
                 post.rainClick(sppSpecific=False)
             else:
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                   segments=newSegments, spInfo=speciesData)
-                post.short()  # species specific
-                post.wind()
-                print("after wind: ", post.segments)
-                post.rainClick()
-                print("after rain: ", post.segments)
-                post.fundamentalFrq()  # species specific
-                print("after ff: ", post.segments)
+                post.short()  #TODO: keep 'deleteShort' in filter file?
+                if speciesData['Wind']:
+                    post.wind()
+                    print('After wind: ', post.segments)
+                if speciesData['Rain']:
+                    post.rainClick()
+                    print('After rain: ', post.segments)
+                if speciesData['F0']:
+                    post.fundamentalFrq()
+                    print('After ff: ', post.segments)
 
             newSegments = post.segments
-            print("New segments: ", newSegments)
+            print("After post processing: ", newSegments)
 
             # Generate annotation friendly output.
-            if str(alg)=="Wavelets":
+            if str(alg)=='Wavelets':
                  if len(newSegments)>0:
                     y1 = self.convertFreqtoY(speciesData['FreqRange'][0]/2)
                     y2 = self.convertFreqtoY(speciesData['SampleRate']/2)
@@ -3850,7 +3894,7 @@ class AviaNZ(QMainWindow):
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
                                         [species.title() + "?"],index=-1)
                         self.segmentsToSave = True
-            elif str(alg)=="Cross-Correlation" and species_cc != 'Choose species...':
+            elif str(alg)=='Cross-Correlation' and species_cc != 'Choose species...':
                 if len(newSegments) > 0:
                     y1 = self.convertFreqtoY(speciesData['FreqRange'][0]/2)
                     y2 = self.convertFreqtoY(speciesData['SampleRate']/2)
@@ -3868,8 +3912,8 @@ class AviaNZ(QMainWindow):
 
             self.lenNewSegments = len(newSegments)
             self.segmentDialog.undo.setEnabled(True)
-            self.statusLeft.setText("Ready")
-        print("Segmentation finished at %s" % (time.time() - opstartingtime))
+            self.statusLeft.setText('Ready')
+        print('Segmentation finished at %s' % (time.time() - opstartingtime))
 
     def segment_undo(self):
         """ Listener for undo button in segmentation dialog.
@@ -4437,37 +4481,39 @@ class AviaNZ(QMainWindow):
                 self.config['reviewer'] = data
                 self.reviewer = data
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
-            elif childName=='Common Bird List.Choose File':
+            elif childName=='Bird List.Common Bird List.Choose File':
                 filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
+                if filename is not '':
+                    self.config['BirdListShort'] = filename
+                    self.shortBirdList = json.load(open(self.config['BirdListShort']))
                 if '/' in filename:
                     ind = filename[-1::-1].index('/')
                     filename = filename[-ind:]
-                self.p['Common Bird List','Filename'] = filename
-                self.config['BirdListShort'] = filename
-                self.shortBirdList = json.load(open(self.config['BirdListShort']))
-            elif childName=='Full Bird List.Choose File':
+                self.p['Bird List','Common Bird List', 'Filename'] = filename
+            elif childName=='Bird List.Full Bird List.Choose File':
                 filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
+                if filename is not '':
+                    self.config['BirdListLong'] = filename
+                    self.longBirdList = json.load(open(self.config['BirdListLong']))
                 if '/' in filename:
                     ind = filename[-1::-1].index('/')
                     filename = filename[-ind:]
                 if filename is not '':
-                    self.config['BirdListLong'] = filename
-                    self.p['Full Bird List','Filename'] = filename
-                    self.longBirdList = json.load(open(self.config['BirdListLong']))
-                    self.p['Full Bird List','No long list'] = False
-            elif childName=='Full Bird List.No long list':
+                    self.p['Bird List','Full Bird List','Filename'] = filename
+                    self.p['Bird List','Full Bird List','No long list'] = False
+            elif childName=='Bird List.Full Bird List.No long list':
                 if param.value():
                     self.config['BirdListLong'] = 'None'
-                    self.p['Full Bird List','Filename'] = 'None'
+                    self.p['Bird List','Full Bird List','Filename'] = 'None'
                     self.longBirdList = None
                 else:
-                    if self.p['Full Bird List','Filename'] is None or self.p['Full Bird List','Filename'] == '' or self.p['Full Bird List','Filename'] == 'None':
+                    if self.p['Bird List','Full Bird List','Filename'] is None or self.p['Bird List','Full Bird List','Filename'] == '' or self.p['Bird List','Full Bird List','Filename'] == 'None':
                         filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
                         if filename is not '':
                             if '/' in filename:
                                 ind = filename[-1::-1].index('/')
                                 filename = filename[-ind:]
-                            self.p['Full Bird List','Filename'] = filename
+                            self.p['Bird List','Full Bird List','Filename'] = filename
                             self.config['BirdListLong'] = filename
                             self.longBirdList = json.load(open(self.config['BirdListLong']))
 
@@ -4615,7 +4661,7 @@ class AviaNZ(QMainWindow):
             print("Saving segments to " + self.filename + '.data')
             if len(self.segments) > 0:
                 if self.segments[0][0] > -1:
-                    self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]]) 
+                    self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]])
             else:
                 self.segments.insert(0, [-1, self.datalengthSec, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]])
 
