@@ -468,6 +468,22 @@ class WaveletTrain(QDialog):
         self.hBox2_step2.addWidget(self.rain)
         self.hBox2_step2.addWidget(self.ff_label)
         self.hBox2_step2.addWidget(self.ff)
+
+        # thr and M spinboxes
+        self.hBox3_step2 = QHBoxLayout()
+        self.setthr = QSpinBox()
+        self.setthr_label = QLabel("thr iterations")
+        self.setM = QSpinBox()
+        self.setM_label = QLabel("M iterations")
+        self.setthr.setMinimum(1)
+        self.setM.setMinimum(1)
+        self.setthr.setMaximum(20)
+        self.setM.setMaximum(20)
+        self.hBox3_step2.addWidget(self.setthr_label)
+        self.hBox3_step2.addWidget(self.setthr)
+        self.hBox3_step2.addWidget(self.setM_label)
+        self.hBox3_step2.addWidget(self.setM)
+
         self.train = QPushButton('Train')
         self.train.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
         self.train.setEnabled(False)
@@ -483,6 +499,7 @@ class WaveletTrain(QDialog):
         self.layout_step2.addWidget(self.note_step2)
         self.layout_step2.addWidget(self.blank)
         self.layout_step2.addLayout(self.hBox2_step2)
+        self.layout_step2.addLayout(self.hBox3_step2)
         self.layout_step2.addStretch(1)
         self.layout_step2.addLayout(self.hBox_step2)
 

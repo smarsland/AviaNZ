@@ -3396,7 +3396,6 @@ class AviaNZ(QMainWindow):
     def trainWavelet(self):
         """ Listener for the wavelet training dialog.
         """
-        # TODO: Needs work
         self.species = str(self.waveletTDialog.species.currentText()).title()
         minLen = float(self.waveletTDialog.minlen.text())
         maxLen = float(self.waveletTDialog.maxlen.text())
@@ -3462,8 +3461,8 @@ class AviaNZ(QMainWindow):
             speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
                            'FreqRange': [minFrq, maxFrq], 'WaveletParams': [0.5, 1]} # last params are thr, M
             # returns 2d lists of nodes over M x thr, or stats over M x thr
-            thrList = np.linspace(0,1,num=3)
-            MList = np.linspace(0.25, 1.5, num=3)
+            thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
+            MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
             nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, df=False)
             print("Filtered nodes: ", nodes)
 
