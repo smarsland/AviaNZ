@@ -3359,7 +3359,7 @@ class AviaNZ(QMainWindow):
                     species = self.species
                 speciesData = json.load(open(os.path.join(self.filtersDir, species + '.txt')))
                 ws = WaveletSegment.WaveletSegment()
-                Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, data=None, sampleRate=None, spInfo=speciesData, trainTest=True)
+                Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None, spInfo=speciesData)
                 print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
                 if TP+FN != 0:
                     recall = TP/(TP+FN)
@@ -3824,7 +3824,7 @@ class AviaNZ(QMainWindow):
                 else:
                     speciesData = json.load(open(os.path.join(self.filtersDir, species+'.txt')))
                     ws = WaveletSegment.WaveletSegment()
-                    newSegments = ws.waveletSegment_test(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, trainTest=False)
+                    newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData)
             elif str(alg)=='Cross-Correlation':
                 if species_cc != 'Choose species...':
                     # need to load template/s

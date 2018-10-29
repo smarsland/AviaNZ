@@ -72,13 +72,14 @@ class WaveletSegment:
             data = self.data
             sampleRate = self.sampleRate
 
-        n = int(len(data)/sampleRate)
+        n = math.ceil(len(data)/sampleRate)
 
         coefs = np.zeros((2**(nlevels+1)-2, n))
         for t in range(n):
             E = []
             for level in range(1,nlevels+1):
-                wp = pywt.WaveletPacket(data=data[t * sampleRate:(t + 1) * sampleRate], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=level)
+                end = min(len(data), (t+1)*sampleRate)
+                wp = pywt.WaveletPacket(data=data[t * sampleRate:end], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=level)
                 e = np.array([np.sum(n.data**2) for n in wp.get_level(level, "natural")])
                 if np.sum(e)>0:
                     e = 100.0*e/np.sum(e)
@@ -242,7 +243,7 @@ class WaveletSegment:
     #
     #     return detected
 
-    def detectCalls(self, wp, sampleRate, listnodes=[], thr=None, M=None, spInfo={},trainTest=False):
+    def detectCalls(self, wp, sampleRate, listnodes=[], thr=None, M=None, spInfo={}):
         """ Given a parameter combination (thr x M) and a wavelet packet tree:
             take relevant nodes from the wavelet packet tree, reconstruct the data from it,
             identify detections based on thr and M.
@@ -295,10 +296,10 @@ class WaveletSegment:
         #thresholds[np.where(waveletCoefs>32)] = 0.3936 + 0.1829*np.log2(np.where(waveletCoefs>32))
 
         # If there is a call anywhere in the window, report it as a call
-        detected = np.zeros(int(N/sampleRate))
+        detected = np.zeros(math.ceil(N/sampleRate))
         j = 0
         for i in range(0,N-sampleRate,sampleRate):
-            detected[j] = np.any(E[i:max(i+sampleRate, N)]>threshold)
+            detected[j] = np.any(E[i:min(i+sampleRate, N)]>threshold)
             j+=1
         print("ch in 5", time.time() - st)
 
@@ -404,7 +405,8 @@ class WaveletSegment:
                     newDetections = np.array([])
                     for fileId in range(len(self.audioList)):
                         wp = pywt.WaveletPacket(data=self.audioList[fileId], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
-                        detected_c = self.detectCalls(wp, self.sampleRate, listnodes=testlist, thr=thrList[indext], M=MList[indexM], spInfo=spInfo, trainTest=True)
+                        detected_c = self.detectCalls(wp, self.sampleRate, listnodes=testlist, thr=thrList[indext], M=MList[indexM], spInfo=spInfo)
+                        detected_c = detected_c[0:math.ceil(len(self.audioList[fileId])/self.sampleRate)]
                         newDetections = np.concatenate((newDetections, detected_c))
                         # memory cleanup:
                         wp = []
@@ -441,48 +443,49 @@ class WaveletSegment:
             finalnodes.append(finalnodesT)
         return finalnodes, tpa, fpa, tna, fna
 
-    def waveletSegment_test(self,dirName=None, data=None, sampleRate=None, listnodes = None, spInfo={}, trainTest=False, df=False):
-        print("Wavelet testing with annotation")
-        print(np.sum(self.annotation==1), np.sum(self.annotation==0))
-
+    def waveletSegment_test(self,dirName, sampleRate=None, listnodes = None, spInfo={}, df=False):
         # Load the relevant list of nodes
         if listnodes is None:
             nodes = spInfo['WaveletParams'][2]
         else:
             nodes = listnodes
 
-        if dirName != None:
-            # clear storage for multifile processing
-            self.annotation = []
-            self.audioList = []
+        # clear storage for multifile processing
+        self.annotation = []
+        self.audioList = []
+        detected = np.array([])
 
-            # populate storage
-            for root, dirs, files in os.walk(str(dirName)):
-                for file in files:
-                    if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
-                        wavFile = root + '/' + file[:-4]
-                        # Load data and annotation
-                        # (preprocess only requires SampleRate and FreqRange from spInfo)
-                        self.loadData(wavFile, trainTest)
-                        filteredDenoisedData = self.preprocess(spInfo,df=df)
-                        self.audioList.append(filteredDenoisedData)
-        else:
-            self.data = data
-            self.sampleRate = sampleRate
-            filteredDenoisedData = self.preprocess(spInfo=spInfo, df=df)
+        # populate storage
+        for root, dirs, files in os.walk(str(dirName)):
+            for file in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
+                    wavFile = root + '/' + file[:-4]
+                    # Load data and annotation
+                    # (preprocess only requires SampleRate and FreqRange from spInfo)
+                    self.loadData(wavFile)
+                    filteredDenoisedData = self.preprocess(spInfo,df=df)
+                    self.audioList.append(filteredDenoisedData)
 
-        wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
-        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, spInfo=spInfo, trainTest=trainTest)
+        # remember to convert main structures to np arrays
+        self.annotation = np.array(self.annotation)
+
+        # wavelet decomposition and call detection
+        for fileId in range(len(self.audioList)):
+            wp = pywt.WaveletPacket(data=self.audioList[fileId], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
+            detected_c = self.detectCalls(wp, self.sampleRate, listnodes=nodes, spInfo=spInfo)
+            detected_c = detected_c[0:math.ceil(len(self.audioList[fileId])/self.sampleRate)]
+            detected = np.concatenate((detected, detected_c))
+            # memory cleanup:
+            wp = []
+            del wp
+            gc.collect()
+
+        print("Testing with %s positive and %s negative annotations" %(np.sum(self.annotation==1), np.sum(self.annotation==0)))
 
         # Todo: remove clicks
 
-        if trainTest:
-            if np.all(self.annotation==0):
-                return detected, 0, 0, 0, 0
-            else:
-                fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
-
         # merge neighbours in order to convert the detections into segments
+        # note: detected np[0 1 1 1] becomes [[1,3]]
         detected = np.where(detected > 0)
         if np.shape(detected)[1] > 1:
             detected = self.identifySegments(np.squeeze(detected))
@@ -493,11 +496,47 @@ class WaveletSegment:
             detected = []
         detected = self.mergeSeg(detected)
 
-        if trainTest==True:
-            return detected, TP, FP, TN, FN
+        if np.all(self.annotation==0):
+            return detected, 0, 0, 0, 0
         else:
-            return detected
+            # flatten [[1,3], [5,6]] -> [1,2,5]
+            detectedI = [t for s in detected for t in range(s[0], s[1])]
+            # [1,2,5] -> [0,1,1,0,0,1,0]
+            detectedA = np.zeros(len(self.annotation))
+            detectedA[detectedI] = 1
+            fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detectedA)
+            return detected, TP, FP, TN, FN
 
+    def waveletSegment(self, data=None, sampleRate=None, listnodes = None, spInfo={}, df=False):
+        # Simplest function for denoising one file. Moved from waveletSegment_test(trainTest=False, dirName=None)
+        # Load the relevant list of nodes
+        if listnodes is None:
+            nodes = spInfo['WaveletParams'][2]
+        else:
+            nodes = listnodes
+
+        self.data = data
+        self.sampleRate = sampleRate
+        filteredDenoisedData = self.preprocess(spInfo=spInfo, df=df)
+        
+        # WP decomposition
+        wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
+
+        # Segment detection and neighbour merging
+        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, spInfo=spInfo)
+        # merge neighbours in order to convert the detections into segments
+        # note: detected np[0 1 1 1] becomes [[1,3]]
+        detected = np.where(detected > 0)
+        if np.shape(detected)[1] > 1:
+            detected = self.identifySegments(np.squeeze(detected))
+        elif np.shape(detected)[1] == 1:
+            detected = np.array(detected).flatten().tolist()
+            detected = self.identifySegments(detected)
+        else:
+            detected = []
+        detected = self.mergeSeg(detected)
+        return detected
+        
     def mergeSeg(self,detected):
         # Merge the neighbours, for now wavelet segments
         #     # **** Replace with segmenter.identifySegments(self, seg, maxgap=1, minlength=1,notSpec=False):
@@ -511,7 +550,7 @@ class WaveletSegment:
             del (detected[i + 1])
         return detected
 
-    def loadData(self,fName,trainTest=True):
+    def loadData(self,fName):
         # Load data
         filename = fName+'.wav' #'train/kiwi/train1.wav'
         filenameAnnotation = fName+'-sec.txt'#'train/kiwi/train1-sec.txt'
@@ -526,24 +565,23 @@ class WaveletSegment:
             self.data = self.data.astype('float') #/ 32768.0
         if np.shape(np.shape(self.data))[0]>1:
             self.data = np.squeeze(self.data[:,0])
-        n=int(len(self.data)/self.sampleRate)
+        n=math.ceil(len(self.data)/self.sampleRate)
 
         fileAnnotations = []
-        if trainTest==True:     #survey data don't have annotations
-            # Get the segmentation from the txt file
-            with open(filenameAnnotation) as f:
-                reader = csv.reader(f, delimiter="\t")
-                d = list(reader)
-            d = d[:-1]
-            if len(d) != n:
-                print("ERROR: annotation length %d does not match file duration %d!" %(len(d), n))
-                self.annotation = None
-                return
-            # for each second, store 0/1 presence:
-            sum = 0
-            for row in d:
-                fileAnnotations.append(int(row[1]))
-                sum += int(row[1])
-            # annotations are stored in two formats: per-file and all
-            self.annotation.extend(fileAnnotations)
-            print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
+        # Get the segmentation from the txt file
+        with open(filenameAnnotation) as f:
+            reader = csv.reader(f, delimiter="\t")
+            d = list(reader)
+        d = d[:-1]
+        if len(d) != n:
+            print("ERROR: annotation length %d does not match file duration %d!" %(len(d), n))
+            self.annotation = None
+            return
+        # for each second, store 0/1 presence:
+        sum = 0
+        for row in d:
+            fileAnnotations.append(int(row[1]))
+            sum += int(row[1])
+        # annotations are stored in two formats: per-file and all
+        self.annotation.extend(fileAnnotations)
+        print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
