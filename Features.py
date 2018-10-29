@@ -179,9 +179,10 @@ class Features:
         coefs = lpc(data,order)
         return coefs[0]
 
-    def wiener_entropy(self,data):
+    def wiener_entropy(self,sg):
         # Also known as spectral flatness, geometric mean divided by arithmetic mean of power
-        return np.exp(1.0/len(data) * np.sum(np.log(data))) / (1.0/len(data) * np.sum(data))
+        # TODO: Check
+        return  np.sum(np.log(sg),0)/np.shape(sg)[0] - np.log(np.sum(sg,0)/np.shape(sg)[0])
 
     # The Raven Features (27 of them)
     # Frequency: 5%, 25%, centre, 75%, 95%, peak, max
@@ -491,7 +492,7 @@ def testFeatures():
 
     features = []
     # Loop over the segments (and time slices within?)
-    features.append([f.get_Raven_spectrogram_measurements(sg=sg,fs=fs,window_width=256,f1=0,f2=np.shape(sg)[1],t1=0,t2=np.shape(sg)[0]),f.get_Raven_robust_measurements(sg,fs,0,np.shape(sg)[1],0,np.shape(sg)[0]),f.get_Raven_waveform_measurements(data,fs,0,len(data)),f.weiner_entropy(data)])
+    features.append([f.get_Raven_spectrogram_measurements(sg=sg,fs=fs,window_width=256,f1=0,f2=np.shape(sg)[1],t1=0,t2=np.shape(sg)[0]),f.get_Raven_robust_measurements(sg,fs,0,np.shape(sg)[1],0,np.shape(sg)[0]),f.get_Raven_waveform_measurements(data,fs,0,len(data)),f.wiener_entropy(sg)])
 
     # Will need to think about feature vector length for the librosa features, since they are on fixed windows
     f.get_chroma()
@@ -501,8 +502,13 @@ def testFeatures():
     f.get_lpc(data,order=44)
     # DCT
 
-def spectral_derivs()
+def get_SAP_features(K=2)
+    """ Compute the Sound Analysis Pro features, i.e., Wiener entropy, spectral derivative, and their variants"""
+    # TODO: Make sure shape is the right way round everywhere, check the diffs are the right way round
+    # TODO: Compute the continuity
     import wavio
+    from scipy.fftpack import fft
+    from spectrum import dpss, pmt,
     wavobj = wavio.read('Sound Files/tril1.wav')
     fs = wavobj.rate
     data = wavobj.data
@@ -513,64 +519,65 @@ def spectral_derivs()
     if np.shape(np.shape(data))[0] > 1:
         data = data[:, 0]
 
-    #sp = SignalProc.SignalProc(sampleRate=fs, window_width=256, incr=128)
-    #sg = sp.spectrogram(data, multitaper=True, window_width=256, incr=128, window='Hann')
+    # Compute the set of multi-tapered spectrograms
     starts = range(0, len(data) - window_width, incr)
-    from spectrum import dpss, pmtm
-    [tapers, eigen] = dpss(window_width, 2.5, 4)
-    ft1 = np.zeros((len(starts), window_width))
-    ft2 = np.zeros((len(starts), window_width))
-    for i in starts:
-        ft1[i // incr, :] = tapers[:,0] * data[i:i + window_width]
-        ft2[i // incr, :] = tapers[:,1] * data[i:i + window_width]
-    ft1 = np.fft.fft(ft1)
-    ft2 = np.fft.fft(ft2)
-
-    td = -np.real(ft1)*np.real(ft2) - np.imag(ft1)*np.imag(ft2)
-    fd = np.imag(ft1)*np.real(ft2) - np.real(ft1)*np.imag(ft2)
-
-    # TODO: Check this
-    fm = np.arctan(np.max(td,axis=0) / np.max(fd,axis=0) + 0.1)
-
-    spectral_deriv = -td*np.sin(fm) + fd*np.cos(fm)
+    [tapers, eigen] = dpss(window_width, 2.5, K)
+    sg = np.zeros((len(starts), window_width,K),dtype=complex)
+    for k in range(K):
+        for i in starts:
+            sg[i // incr, :,k] = tapers[:,k] * data[i:i + window_width]
+        sg[:,:,k] = fft(sg[:,:,k])
+    sg = sg[:,window_width//2:,:]
     
-    fullspec = np.concatenate((ft1,ft1[-2:0:-1,:]), axis=0)
-    tmp = np.fft.ifft(np.log(np.abs(fullspec)),axis=0)
-    tmp = tmp.real[24:window_width//2 + 1]
-    goodnessOfPitch = np.max(tmp,axis=0)
+    # Spectral derivative is the real part of exp(i \phi) \sum_ k s_k conj(s_{k+1}) where s_k is the k-th tapered spectrogram
+    # and \phi is the direction of maximum change (tan inverse of the ratio of pure time and pure frequency components)
+    S = np.sum(sg[:,:,:-1]*np.conj(sg[:,:,1:]),axis=2)
+    timederiv = np.real(S)
+    freqderiv = np.real(1j*S)
+    
+    # Frequency modulation is the angle $\pi/2 - direction of max change$
+    fm = np.arctan(np.max(timederiv**2,axis=0) / np.max(freqderiv**2,axis=0))
+    spectral_deriv = -timederiv*np.sin(fm) + freqderiv*np.cos(fm)
+
+    sg = np.sum(np.real(sg*np.conj(sg)),axis=2)
+    
+    goodness_of_pitch = np.max(np.abs(fft(spectral_deriv/sg, axis=0)),axis=0)
 
     #spectral_continuity
 
-    freq_contours = np.abs(spectral_deriv)
-    rthr = 0.3*np.mean(freq_contours,axis=0)
-    cthr = 100*np.median(freq_contours,axis=1)
+    # Compute the zero crossings of the spectral derivative in all directions
+    # Pixel is a contour pixel if it is at a zero crossing and both neighbouring pixels in that direction are > threshold
+    sdt = spectral_deriv * np.roll(spectral_deriv,1,0) 
+    sdf = spectral_deriv * np.roll(spectral_deriv,1,1) 
+    sdtf = spectral_deriv * np.roll(spectral_deriv,1,(0,1)) 
+    sdft = spectral_deriv * np.roll(spectral_deriv,(1,-1),(0,1)) 
+    indt,indf = np.where(((sdt < 0) | (sdf < 0) | (sdtf < 0) | (sdft < 0)) & (spectral_deriv < 0))
 
-    mask = ((freq_contours <= rthr[None,:]) | (freq_contours <= cthr[:,None]))
-    spectral_deriv[mask] = -0.1
+    # Noise reduction using a threshold
+    we = np.abs(wiener_entropy(sg))
+    freqs = sampleRate//2 / np.shape(spectral_deriv)[1] * (np.arange(np.shape(spectral_deriv)[1])+1)
 
-    sd = spectral_deriv * np.roll(spectral_deriv,1,0) 
-    y,x = np.where((sd < 0) & (spectral_deriv < 0))
-    freq_contours = np.full(spectral_deriv.shape,False,dtype=np.bool)
-    freq_contours[y,x] = True
+    # Mean frequency
+    mf = np.sum(freqs * (timederiv**2 + freqderiv**2),axis=1)/np.sum(timederiv**2 + freqderiv**2,axis=1)
 
-    from skimage.measure import label, regionprops
-    lab = label(freq_contours,connectivity = freq_contours.ndim)
-    props = regionprops(lab)
+    # Given a time and frequency bin
+    # TODO: Note hack parameter
+    # TODO: Check the dtf and dft are the right way round
 
-    mask = np.zeros(freq_contours.shape, dtype=np.int32)
-    continuity = np.zeros(freq_contours.shape)
-    
-    for p in props:
-        npixels = len(p.coords)
-        continuity[(p.coords[:,0],p.coords[:,1])] = np.max(p.coords[:,1])-np.min(p.coords[:,1])
-        if npixels > 5:
-            mask[(p.coords[:,0],p.coords[:,1])] = npixels
-        else:
-            mask[(p.coords[:,0],p.coords[:,1])] = 0
-
-    maxrow = np.argmax(mask,axis=0)
-    maxcol = np.arange(0,mask.shape[1])
-    maxcont = mask[maxrow,maxcol]
-    continuityAtMax = continuity[maxrow,maxcol]
-    continuityFrame = continuityAtMax/maxcont*100
-    continuityFrame[np.where(np.isnan(continuityFrame))] = 0
+    contours = np.zeros(np.shape(spectral_deriv))
+    for i in range(len(indf)):
+        f = indf[i]
+        t = indt[i]
+        if (t>0) & (t<(np.shape(sg)[0]-1)) & (f>0) & (f<(np.shape(sg)[1]-1)): 
+            thr = 0.3*we[t]/np.abs(freqs[f] - mf[t])
+            if (sdt[t,f]<0) & (sg[t-1,f]>thr) & (sg[t+1,f]>thr):
+                contours[t,f] = 1
+            if (sdf[t,f] < 0) & (sg[t,f-1]>thr) & (sg[t,f+1]>thr):
+                contours[t,f] = 1
+            if (sdtf[t,f] < 0) & (sg[t-1,f-1]>thr) & (sg[t+1,f+1]>thr):
+                contours[t,f] = 1
+            if (sdft[t,f] < 0) & (sg[t-1,f+1]>thr) & (sg[t-1,f+1]>thr):
+                contours[t,f] = 1
+            
+    # Now compute the continuity over time, freq as mean duration of contours in window, mean frequency range
+    return np.squeeze(spectral_deriv), goodness_of_pitch, contours, we
