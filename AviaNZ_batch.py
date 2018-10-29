@@ -393,7 +393,7 @@ class AviaNZ_batchProcess(QMainWindow):
                             self.segments[:] = [s for s in self.segments if self.species not in s[4] and self.species+'?' not in s[4]]
                             ws = WaveletSegment.WaveletSegment()
                             speciesData = json.load(open(os.path.join('Filters', self.species+'.txt')))
-                            newSegments = ws.waveletSegment_test(fName=None, data=self.audiodata, sampleRate= self.sampleRate, spInfo=speciesData, trainTest=False)
+                            newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData)
                         else:
                             # wipe all segments:
                             self.segments = []
