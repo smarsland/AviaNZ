@@ -64,10 +64,11 @@ class preProcess:
     """
     # todo: remove duplicate preprocess in 'Wavelet Segments'
 
-    def __init__(self,audioData=None, spInfo={}, df=False, wavelet='dmey2'):
-        self.audioData=audioData
-        self.spInfo=spInfo
-        self.df=df
+    def __init__(self,audioData=None, spInfo={}, d=False, f=True, wavelet='dmey2'):
+        self.audioData = audioData
+        self.spInfo = spInfo
+        self.d = d  # denoise
+        self.f = f  # band-pass
         if wavelet == 'dmey2':
             [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
             self.wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
@@ -89,37 +90,14 @@ class preProcess:
             f2 = self.spInfo['FreqRange'][1]
             fs = self.spInfo['SampleRate']
 
-        # Done before this is called
-        #if self.sampleRate != fs:
-            #self.audioData = librosa.core.audio.resample(self.audioData, self.sampleRate, fs)
-            #self.sampleRate = fs
-
         # Get the five level wavelet decomposition
-        if self.df == True:
+        if self.d:
             denoisedData = self.WaveletFunctions.waveletDenoise(self.audioData, thresholdType='soft', wavelet=self.wavelet,maxLevel=level)
         else:
             denoisedData=self.audioData  # this is to avoid washing out very fade calls during the denoising
 
-        # # Denoise each 10 secs and merge
-        # denoisedData = []
-        # n = len(self.data)
-        # dLen=10*self.sampleRate
-        # for i in range(0,n,dLen):
-        #     temp = self.WaveletFunctions.waveletDenoise(self.data[i:i+dLen], thresholdType='soft', wavelet=self.WaveletFunctions.wavelet,maxLevel=5)
-        #     denoisedData.append(temp)
-        # import itertools
-        # denoisedData = list(itertools.chain(*denoisedData))
-        # denoisedData = np.asarray(denoisedData)
-        # wavio.write('../Sound Files/Kiwi/test/Tier1/test/test/test/test_whole.wav', denoisedData, self.sampleRate, sampwidth=2)
-        # librosa.output.write_wav('Sound Files/Kiwi/test/Tier1/test/test/test', denoisedData, self.sampleRate, norm=False)
-
-        if f1 and f2:
+        if self.f:
             filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, fs, low=f1, high=f2)
-            # filteredDenoisedData = self.sp.bandpassFilter(denoisedData, start=f1, end=f2, sampleRate=self.sampleRate)
-        # elif species == 'Ruru':
-        #     filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=f1, high=7000)
-        # elif species == 'Sipo':
-        #     filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=1200, high=3800)
         else:
             filteredDenoisedData = denoisedData
 
@@ -229,7 +207,7 @@ class postProcess:
                         newSegments.remove(seg)
         self.segments = newSegments
 
-    def fundamentalFrq(self):
+    def fundamentalFrq(self, fileName, speciesData):
         '''
         Check for fundamental frequency of the segments, discard the segments that do not indicate the species.
         '''
@@ -239,17 +217,28 @@ class postProcess:
                 continue
             else:
                 # read the sound segment and check fundamental frq.
-                data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
+                secs = int(seg[1] - seg[0])
+                # Got to read from the source instead of using self.audioData - ff is wrong if you use self.audioData somehow
+                # data = self.audioData[int(seg[0]*speciesData['SampleRate']):int(seg[1]*speciesData['SampleRate'])]
+                wavobj = wavio.read(fileName, nseconds=secs, offset=seg[0])
+                data = wavobj.data
+                if np.shape(np.shape(data))[0] > 1:
+                    data = data[:, 0]
+                sampleRate = wavobj.rate
+                if data is not 'float':
+                    data = data.astype('float')
+                if speciesData['SampleRate'] != sampleRate:
+                    data = librosa.core.audio.resample(data, sampleRate, speciesData['SampleRate'])
                 # denoise before fundamental frq. extraction
-                sc = preProcess(audioData=data, spInfo={}, df=True)  # species left empty to avoid bandpass filter
+                sc = preProcess(audioData=data, spInfo=speciesData, d=True, f=False)  # avoid bandpass filter
                 data, sampleRate = sc.denoise_filter(level=10)
-
-                sp = SignalProc.SignalProc([], 0, 512, 256)
-                sgRaw = sp.spectrogram(data, 512, 256, mean_normalise=True, onesided=True, multitaper=False)
-                segment = Segment.Segment(data, sgRaw, sp, sampleRate, 512, 256)
+                sp = SignalProc.SignalProc([], 0, 256, 128)
+                sgRaw = sp.spectrogram(data, 256, 128, mean_normalise=True, onesided=True, multitaper=False)
+                segment = Segment.Segment(data, sgRaw, sp, sampleRate, 256, 128)
                 pitch, y, minfreq, W = segment.yin(minfreq=100)
                 ind = np.squeeze(np.where(pitch > minfreq))
-                pitch = pitch[ind]  # TODO: why this ff is markedly different to ff seen in the spectrogram??
+                pitch = pitch[ind]
+                print(seg, pitch)
                 if pitch.size == 0:
                     print('Segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
                     # newSegments.remove(seg) # for now keep it
@@ -265,7 +254,7 @@ class postProcess:
                         continue
                 else:
                     print('segment* ', seg, round(np.mean(pitch)), pitch, np.median(pitch), ' *-- fundamental freq is out of range, could be noise')
-                    # newSegments.remove(seg)   # Fix the above and enable this
+                    newSegments.remove(seg)
                     continue
         self.segments = newSegments
 
