@@ -369,6 +369,9 @@ class AviaNZ(QMainWindow):
             self.showFundamental = actionMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
             self.showFundamental.setCheckable(True)
             self.showFundamental.setChecked(False)
+            self.showSpectral = actionMenu.addAction("Show spectral derivative", self.showSpectralDeriv)
+            self.showSpectral.setCheckable(True)
+            self.showSpectral.setChecked(False)
 
         if not self.DOC and not self.Hartley:
             actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
@@ -1250,6 +1253,7 @@ class AviaNZ(QMainWindow):
                     self.audiodata_backup = None
                 if not self.Hartley:
                     self.showFundamental.setChecked(False)
+                    self.showSpectral.setChecked(False)
                 if not self.DOC and not self.Hartley:
                     self.showInvSpec.setChecked(False)
 
@@ -1446,12 +1450,28 @@ class AviaNZ(QMainWindow):
                     s[1] = s[1] * self.sampleRate / self.config['incr']
                     i = np.where((ind>s[0]) & (ind<s[1]))
                     self.segmentPlots.append(pg.PlotDataItem())
-                    self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=2))
+                    self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=3))
                     self.p_spec.addItem(self.segmentPlots[-1])
             else:
                 self.statusLeft.setText("Removing fundamental frequency...")
                 for r in self.segmentPlots:
                     self.p_spec.removeItem(r)
+            self.statusLeft.setText("Ready")
+
+    def showSpectralDeriv(self):
+        with pg.BusyCursor():
+            if self.showSpectral.isChecked():
+                self.statusLeft.setText("Drawing spectral derivative...")
+                sd = self.sp.spectral_derivative(self.audiodata,self.sampleRate,self.config['window_width'],self.config['incr'],2,10.0)
+
+                self.derivPlot = pg.ScatterPlotItem() 
+                x,y = np.where(sd>0)
+                self.derivPlot.setData(x,y,pen=pg.mkPen('b',width=5))
+                
+                self.p_spec.addItem(self.derivPlot)
+            else:
+                self.statusLeft.setText("Removing spectral derivative...")
+                self.p_spec.removeItem(self.derivPlot)
             self.statusLeft.setText("Ready")
 
     def showInvertedSpectrogram(self):
