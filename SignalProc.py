@@ -158,7 +158,7 @@ class SignalProc:
             sg = np.fliplr(sg)
         else:
             if need_even:
-                starts = np.hstack((starts, np.zeros((window_width - len(datacopy) % window_width))))
+                starts = np.hstack((starts, np.zeros((window_width - len(datacopy) % window_width),dtype=int)))
 
             ft = np.zeros((len(starts), window_width))
             for i in starts:
@@ -274,9 +274,9 @@ class SignalProc:
         oldIncr = self.incr
         self.incr = int(self.window_width/4.)
         sg = self.spectrogram(self.data)
-        # sgi = self.invertSpectrogram(sg,self.window_width,self.incr)
-        # self.incr = oldIncr
-        # sg = self.spectrogram(sgi)
+        sgi = self.invertSpectrogram(sg,self.window_width,self.incr)
+        self.incr = oldIncr
+        sg = self.spectrogram(sgi)
         # sgi = sgi.astype('int16')
         # wavfile.write('test.wav',self.sampleRate, sgi)
         # wavio.write('test.wav',sgi,self.sampleRate)
@@ -291,10 +291,9 @@ class SignalProc:
         sg_best = copy.deepcopy(sg)
         for i in range(nits):
             sgi = self.invert_spectrogram(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0))
-        est = self.spectrogram(sgi, onesided=False,need_even=True)
-        phase = est / np.maximum(np.max(sg)/1E8, np.abs(est))
-
-        sg_best = sg * phase[:len(sg)]
+            est = self.spectrogram(sgi, window_width, incr, onesided=False,need_even=True)
+            phase = est / np.maximum(np.max(sg)/1E8, np.abs(est))
+            sg_best = sg * phase[:len(sg)]
         sgi = self.invert_spectrogram(sg_best, incr, calculate_offset=True,set_zero_phase=False)
         return np.real(sgi)
 
@@ -316,9 +315,9 @@ class SignalProc:
         Language Processing, 08/2007.
         """
         size = int(np.shape(sg)[1] // 2)
-        wave = np.zeros((np.shape(sg)[0] * incr + size))
+        wave = np.zeros((np.shape(sg)[0] * incr + size),dtype='float64')
         # Getting overflow warnings with 32 bit...
-        wave = wave.astype('float64')
+        #wave = wave.astype('float64')
         total_windowing_sum = np.zeros((np.shape(sg)[0] * incr + size))
         window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
 
@@ -333,43 +332,21 @@ class SignalProc:
                 # already complex
                 spectral_slice = sg[i]
 
-            # Don't need fftshift due to different impl.
             wave_est = np.real(fft.ifft(spectral_slice))[::-1]
-            #wave_est = np.real(np.fft.ifft(spectral_slice))[::-1]
             if calculate_offset and i > 0:
                 offset_size = size - incr
                 if offset_size <= 0:
-                    print("WARNING: Large step size >50\% detected! "
-                          "This code works best with high overlap - try "
-                          "with 75% or greater")
+                    print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
                     offset_size = incr
-                offset = self.xcorr_offset(wave[wave_start:wave_start + offset_size],
-                                      wave_est[est_start:est_start + offset_size])
+                offset = self.xcorr_offset(wave[wave_start:wave_start + offset_size], wave_est[est_start:est_start + offset_size])
             else:
                 offset = 0
-            wave[wave_start:wave_end] += window * wave_est[
-                est_start - offset:est_end - offset]
+            wave[wave_start:wave_end] += window * wave_est[est_start - offset:est_end - offset]
             total_windowing_sum[wave_start:wave_end] += window
         wave = np.real(wave) / (total_windowing_sum + 1E-6)
         return wave
 
     def xcorr_offset(self,x1, x2):
-        """
-        Under MSR-LA License
-        Based on MATLAB implementation from Spectrogram Inversion Toolbox
-        References
-        ----------
-        D. Griffin and J. Lim. Signal estimation from modified
-        short-time Fourier transform. IEEE Trans. Acoust. Speech
-        Signal Process., 32(2):236-243, 1984.
-        Malcolm Slaney, Daniel Naar and Richard F. Lyon. Auditory
-        Model Inversion for Sound Separation. Proc. IEEE-ICASSP,
-        Adelaide, 1994, II.77-80.
-        Xinglei Zhu, G. Beauregard, L. Wyse. Real-Time Signal
-        Estimation from Modified Short-Time Fourier Transform
-        Magnitude Spectra. IEEE Transactions on Audio Speech and
-        Language Processing, 08/2007.
-        """
         x1 = x1 - x1.mean()
         x2 = x2 - x2.mean()
         frame_size = len(x2)
@@ -377,8 +354,7 @@ class SignalProc:
         corrs = np.convolve(x1.astype('float32'), x2[::-1].astype('float32'))
         corrs[:half] = -1E30
         corrs[-half:] = -1E30
-        offset = corrs.argmax() - len(x1)
-        return offset
+        return corrs.argmax() - len(x1)
 
     def medianFilter(self,data=None,width=11):
         # Median Filtering
@@ -395,14 +371,76 @@ class SignalProc:
 
         return mData
 
-    def spectralDerivatives(self):
-        # Easy version -- compute horizontal and vertical derivatives
-        sg = self.spectrogram(self.data)
-        sgderivh = np.roll(sg,-1,axis=0)-sg
-        sgderivh -= np.min(sgderivh)
-        sgderivv = np.roll(sg,-1,axis=1)-sg
-        sgderivv -= np.min(sgderivv)
-        sgderivb = np.sqrt(sgderivh**2 + sgderivv**2)
+    # Could be either features of signal processing things. Anyway, they are here -- spectral derivatives and extensions
+    def wiener_entropy(self,sg):
+        return np.sum(np.log(sg),1)/np.shape(sg)[1] - np.log(np.sum(sg,1)/np.shape(sg)[1])
 
-        return sgderivh, sgderivv, sgderivb
+    def mean_frequency(self,sampleRate,timederiv,freqderiv):
+        freqs = sampleRate//2 / np.shape(timederiv)[1] * (np.arange(np.shape(timederiv)[1])+1)
+        mf = np.sum(freqs * (timederiv**2 + freqderiv**2),axis=1)/np.sum(timederiv**2 + freqderiv**2,axis=1)
+        return freqs,mf
 
+    def goodness_of_pitch(self,spectral_deriv,sg):
+        return np.max(np.abs(fft.fft(spectral_deriv/sg, axis=0)),axis=0)
+
+    def spectral_derivative(self,data,sampleRate,window_width,incr,K=2,threshold=0.5,returnAll=False):
+        """ Compute the spectral derivative """
+        from spectrum import dpss
+
+        # Compute the set of multi-tapered spectrograms
+        starts = range(0, len(data) - window_width, incr)
+        [tapers, eigen] = dpss(window_width, 2.5, K)
+        sg = np.zeros((len(starts), window_width,K),dtype=complex)
+        for k in range(K):
+            for i in starts:
+                sg[i // incr, :,k] = tapers[:,k] * data[i:i + window_width]
+            sg[:,:,k] = fft.fft(sg[:,:,k])
+        sg = sg[:,window_width//2:,:]
+        
+        # Spectral derivative is the real part of exp(i \phi) \sum_ k s_k conj(s_{k+1}) where s_k is the k-th tapered spectrogram
+        # and \phi is the direction of maximum change (tan inverse of the ratio of pure time and pure frequency components)
+        S = np.sum(sg[:,:,:-1]*np.conj(sg[:,:,1:]),axis=2)
+        timederiv = np.real(S)
+        freqderiv = np.imag(S)
+        
+        # Frequency modulation is the angle $\pi/2 - direction of max change$
+        fm = np.arctan(np.max(timederiv**2,axis=0) / np.max(freqderiv**2,axis=0))
+        spectral_deriv = -timederiv*np.sin(fm) + freqderiv*np.cos(fm)
+
+        sg = np.sum(np.real(sg*np.conj(sg)),axis=2)
+        sg /= np.max(sg)
+        
+        # Suppress the noise (spectral continuity)
+    
+        # Compute the zero crossings of the spectral derivative in all directions
+        # Pixel is a contour pixel if it is at a zero crossing and both neighbouring pixels in that direction are > threshold
+        sdt = spectral_deriv * np.roll(spectral_deriv,1,0) 
+        sdf = spectral_deriv * np.roll(spectral_deriv,1,1) 
+        sdtf = spectral_deriv * np.roll(spectral_deriv,1,(0,1)) 
+        sdft = spectral_deriv * np.roll(spectral_deriv,(1,-1),(0,1)) 
+        indt,indf = np.where(((sdt < 0) | (sdf < 0) | (sdtf < 0) | (sdft < 0)) & (spectral_deriv < 0))
+    
+        # Noise reduction using a threshold
+        we = np.abs(self.wiener_entropy(sg))
+        freqs,mf = self.mean_frequency(sampleRate,timederiv,freqderiv)
+
+        # Given a time and frequency bin
+        contours = np.zeros(np.shape(spectral_deriv))
+        for i in range(len(indf)):
+            f = indf[i]
+            t = indt[i]
+            if (t>0) & (t<(np.shape(sg)[0]-1)) & (f>0) & (f<(np.shape(sg)[1]-1)): 
+                thr = threshold*we[t]/np.abs(freqs[f] - mf[t])
+                if (sdt[t,f]<0) & (sg[t-1,f]>thr) & (sg[t+1,f]>thr):
+                    contours[t,f] = 1
+                if (sdf[t,f] < 0) & (sg[t,f-1]>thr) & (sg[t,f+1]>thr):
+                    contours[t,f] = 1
+                if (sdtf[t,f] < 0) & (sg[t-1,f-1]>thr) & (sg[t+1,f+1]>thr):
+                    contours[t,f] = 1
+                if (sdft[t,f] < 0) & (sg[t-1,f+1]>thr) & (sg[t-1,f+1]>thr):
+                    contours[t,f] = 1
+
+        if returnAll:
+            return spectral_deriv, sg, fm, we, mf, np.fliplr(contours)
+        else:
+            return np.fliplr(contours)
