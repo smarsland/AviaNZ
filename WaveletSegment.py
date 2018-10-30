@@ -49,7 +49,9 @@ class WaveletSegment:
 
     def __init__(self,data=[],sampleRate=0,wavelet='dmey2',annotation=[],mingap=0.3,minlength=0.2):
         self.annotation = annotation
-        self.waveletCoefs = []
+        # init empty array for waveletCoefs. Level coef should be passed here if not hardcoded
+        nlevels=5
+        self.waveletCoefs = np.array([]).reshape(2**(nlevels+1)-2, 0)
         self.audioList = []
         if data != []:
             self.data = data
@@ -357,13 +359,12 @@ class WaveletSegment:
                     filteredDenoisedData = self.preprocess(spInfo,df=df)
                     self.audioList.append(filteredDenoisedData)
                     # Compute energy in each WP node and store
-                    self.waveletCoefs.extend(self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate))
+                    self.waveletCoefs = np.column_stack((self.waveletCoefs, self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)))
                     print("ch 1, loading completed", time.time() - opstartingtime)
 
         # Compute point-biserial correlations and sort wrt it, return top nNodes
         # (limit number of nodes to 10 and avoid getting in low level nodes)
         self.annotation = np.array(self.annotation)
-        self.waveletCoefs = np.array(self.waveletCoefs)
         nodes = self.compute_r(self.annotation, self.waveletCoefs, nNodes=10)
 
         # Now for Nirosha's sorting
