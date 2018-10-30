@@ -348,6 +348,7 @@ class WaveletSegment:
             1 min wav ~= 3.7 MB, 1h ~= 220 MB, so storing ~10 h isn't a problem on any desktop.
         """
         opstartingtime = time.time()
+        self.annotation = []
         # 1. Load each file, generate point-biserial correlations for the nodes.
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
