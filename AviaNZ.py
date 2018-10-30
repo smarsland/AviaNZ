@@ -3583,11 +3583,12 @@ class AviaNZ(QMainWindow):
         # plt.raise_()
 
     def ff(self, data, speciesData):
-        sc = SupportClasses.preProcess(audioData=data, spInfo=speciesData, df=True)  # species left empty to avoid bandpass filter
+        # TODO: fs in speciesData could not be the actual fs of the audio, does it matter?
+        sc = SupportClasses.preProcess(audioData=data, spInfo=speciesData, d=True, f=False)  # avoid bandpass filter
         data, sampleRate = sc.denoise_filter(level=10)
-        sp = SignalProc.SignalProc([], 0, 512, 256)
-        sgRaw = sp.spectrogram(data, 512, 256, mean_normalise=True, onesided=True, multitaper=False)
-        segment = Segment.Segment(data, sgRaw, sp, sampleRate, 512, 256)
+        sp = SignalProc.SignalProc([], 0, 256, 128) #SignalProc.SignalProc([], 0, 512, 256)
+        sgRaw = sp.spectrogram(data, 256, 128, mean_normalise=True, onesided=True, multitaper=False)
+        segment = Segment.Segment(data, sgRaw, sp, sampleRate, 256, 128)
         pitch, y, minfreq, W = segment.yin(minfreq=100)
         ind = np.squeeze(np.where(pitch > minfreq))
         pitch = pitch[ind]
@@ -3643,7 +3644,7 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog.fHigh.setRange(0, int(np.min(fs))/2)
         self.waveletTDialog.fHigh.setValue(int(np.max(f_high)))
         self.waveletTDialog.fs.setValue(int(np.min(fs)))
-        self.waveletTDialog.fs.setRange(0, int(np.min(fs)))
+        self.waveletTDialog.fs.setRange(0, int(np.min(fs))/2)
         self.waveletTDialog.note_step2.setText('Above fields propagated using training data.\nAdjust if required.')
         self.waveletTDialog.train.setEnabled(True)        
 
@@ -3859,7 +3860,6 @@ class AviaNZ(QMainWindow):
                 # # convert these segments to [start,end] format
                 # newSegmentsDef=self.binary2seg(newSegmentsDef)
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
-
             # post process to remove short segments, wind, rain, and use F0 check.
             if species == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
@@ -3876,7 +3876,7 @@ class AviaNZ(QMainWindow):
                     post.rainClick()
                     print('After rain: ', post.segments)
                 if speciesData['F0']:
-                    post.fundamentalFrq()
+                    post.fundamentalFrq(self.filename, speciesData)
                     print('After ff: ', post.segments)
 
             newSegments = post.segments
