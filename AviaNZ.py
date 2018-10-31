@@ -79,7 +79,7 @@ class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
 
-    def __init__(self,root=None,configdir=None,CLI=False,cheatsheet=False,firstFile='', imageFile='', command=''):
+    def __init__(self,root=None,configdir=None,CLI=False,cheatsheet=False,zooniverse=False,firstFile='', imageFile='', command=''):
         """Initialisation of the class. Load main config and bird lists from configdir.
         Also initialises the data structures and loads an initial file (specified explicitly)
         and sets up the window.
@@ -90,6 +90,7 @@ class AviaNZ(QMainWindow):
         self.root = root
         self.CLI = CLI
         self.cheatsheet = cheatsheet
+        self.zooniverse = zooniverse
 
         # At this point, the main config file should already be ensured to exist.
         self.configdir = configdir
@@ -191,11 +192,11 @@ class AviaNZ(QMainWindow):
         # INPUT FILE LOADING
         # search order: infile -> firstFile -> dialog
         # Make life easier for now: preload a birdsong
-        if not os.path.isfile(firstFile) and not cheatsheet:
+        if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
             firstFile = self.SoundFileDir + '/' + 'tril1.wav' #'male1.wav' # 'kiwi.wav'
             #firstFile = "/home/julius/Documents/kiwis/rec/birds1.wav"
 
-        if not os.path.isfile(firstFile) and not cheatsheet:
+        if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
             if self.CLI:
                 print("file %s not found, exiting" % firstFile)
                 sys.exit()
@@ -216,7 +217,7 @@ class AviaNZ(QMainWindow):
                         sys.exit()
 
         # parse firstFile to dir and file parts
-        if not cheatsheet:
+        if not cheatsheet and not zooniverse:
             self.SoundFileDir = os.path.dirname(firstFile)
             firstFile = os.path.basename(firstFile)
             print("Working dir set to %s" % self.SoundFileDir)
@@ -237,7 +238,7 @@ class AviaNZ(QMainWindow):
 
         self.resetStorageArrays()
         if self.CLI:
-            if cheatsheet:
+            if cheatsheet or zooniverse:
                 # use infile and imagefile as directories 
                 print(firstFile)
                 self.SoundFileDir = firstFile
@@ -284,7 +285,7 @@ class AviaNZ(QMainWindow):
             self.listLoadFile(firstFile)
             #self.previousFile = firstFile
 
-        if self.DOC and not self.cheatsheet:
+        if self.DOC and not cheatsheet and not zooniverse:
             self.setOperatorReviewerDialog()
 
 
@@ -430,7 +431,7 @@ class AviaNZ(QMainWindow):
         webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.3.pdf')
 
     def showCheatSheet(self):
-        """ Show the cheat sheet of sample spectrograms (a pdf file)"""
+        """ Show the cheatsheet of sample spectrograms (a pdf file)"""
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/CheatSheet.pdf'))
         webbrowser.open_new(r'http://avianz.net/docs/CheatSheet_v1.3.pdf')
 
@@ -500,7 +501,7 @@ class AviaNZ(QMainWindow):
         self.ampaxis.setLabel('')
 
         self.specaxis = pg.AxisItem(orientation='left')
-        if not self.cheatsheet:
+        if not self.zooniverse:
             self.w_spec.addItem(self.specaxis,row=0,col=0)
         self.specaxis.linkToView(self.p_spec)
         self.specaxis.setWidth(w=65)
@@ -976,7 +977,7 @@ class AviaNZ(QMainWindow):
         self.segmentPlots=[]
 
         # Cheatsheet: remove the freq labels
-        if self.cheatsheet and hasattr(self,'label1'):
+        if self.zooniverse and hasattr(self,'label1'):
             self.p_spec.removeItem(self.label1)
             self.p_spec.removeItem(self.label2)
             self.p_spec.removeItem(self.label3)
@@ -1096,8 +1097,7 @@ class AviaNZ(QMainWindow):
 
                 self.currentFileSection = 0
 
-                if hasattr(self, 'timeaxis') and not self.cheatsheet:
-                    # TODO: Add another flag -- might want for cheatsheet?
+                if hasattr(self, 'timeaxis') and not self.zooniverse:
                     self.w_spec.removeItem(self.timeaxis)
 
                 # Check if the filename is in standard DOC format
@@ -1123,8 +1123,7 @@ class AviaNZ(QMainWindow):
                     else:
                         self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
 
-                if not self.cheatsheet:
-                    # TODO: Add another flag -- might want for cheatsheet?
+                if not self.zooniverse:
                     self.w_spec.addItem(self.timeaxis, row=1, col=1)
 
                 # This next line is a hack to make the axis update
@@ -1639,7 +1638,7 @@ class AviaNZ(QMainWindow):
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
         SpecRange = FreqRange/height
         
-        if self.cheatsheet:
+        if self.zooniverse:
             offset=6
             txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(0)
             self.label1 = pg.TextItem(html=txt, color='g', anchor=(0,0))
@@ -1677,7 +1676,7 @@ class AviaNZ(QMainWindow):
         self.textpos = int((self.maxFreqShow-self.minFreqShow)/height) #+ self.config['textoffset']
 
         # If there are segments, show them
-        if not self.cheatsheet:
+        if not self.cheatsheet and not self.zooniverse:
             for count in range(len(self.segments)):
                 if self.segments[count][2] == 0 and self.segments[count][3] == 0:
                     self.addSegment(self.segments[count][0], self.segments[count][1],0,0,self.segments[count][4],False,count,remaking)
@@ -4275,7 +4274,7 @@ class AviaNZ(QMainWindow):
         try:
             # works but requires devel (>=0.11) version of pyqtgraph:
             exporter.export(imageFile + '.png')
-            print("Exporting spectrogram to file %s.wav" % imageFile)
+            print("Exporting spectrogram to file %s.png" % imageFile)
         except:
             print("Failed to save image")
 
@@ -4831,11 +4830,12 @@ class AviaNZ(QMainWindow):
 
 @click.command()
 @click.option('-c', '--cli', is_flag=True, help='Run in command-line mode')
-@click.option('-s', '--cheatsheet', is_flag=True, help='Make the cheat sheet images')
+@click.option('-s', '--cheatsheet', is_flag=True, help='Make the cheatsheet images')
+@click.option('-z', '--zooniverse', is_flag=True, help='Make the Zooniverse images and sounds')
 @click.option('-f', '--infile', type=click.Path(), help='Input wav file (mandatory in CLI mode)')
 @click.option('-o', '--imagefile', type=click.Path(), help='If specified, a spectrogram will be saved to this file')
 @click.argument('command', nargs=-1)
-def mainlauncher(cli, cheatsheet, infile, imagefile, command):
+def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
     # determine config location
     if platform.system() == 'Windows':
         # Win
@@ -4884,10 +4884,10 @@ def mainlauncher(cli, cheatsheet, infile, imagefile, command):
     # run splash screen:
     if cli:
         print("Starting AviaNZ in CLI mode")
-        if not cheatsheet and not isinstance(infile, str):
+        if not cheatsheet and not zooniverse and not isinstance(infile, str):
             print("ERROR: valid input file (-f) is mandatory in CLI mode!")
             sys.exit()
-        avianz = AviaNZ(configdir=configdir,CLI=True, cheatsheet=cheatsheet, firstFile=infile, imageFile=imagefile, command=command)
+        avianz = AviaNZ(configdir=configdir,CLI=True, cheatsheet=cheatsheet, zooniverse=zooniverse, firstFile=infile, imageFile=imagefile, command=command)
         print("Analysis complete, closing AviaNZ")
     else:
         print("Starting AviaNZ in GUI mode")
