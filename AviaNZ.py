@@ -1037,6 +1037,8 @@ class AviaNZ(QMainWindow):
             if self.config['RequireNoiseData'] and self.noiseLevel is None:
                 self.addNoiseData()
 
+            # setting this to True forces initial save
+            self.segmentsToSave = True
             self.saveSegments()
 
         self.previousFile = current
@@ -4659,7 +4661,6 @@ class AviaNZ(QMainWindow):
             self.box1id = -1
 
     def saveSegments(self):
-        # TODO: Fix this up to include quitting stuff
         """ Save the segmentation data as a json file.
         Name of the file is the name of the wave file + .data"""
 
