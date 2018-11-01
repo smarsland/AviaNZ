@@ -1184,10 +1184,14 @@ class AviaNZ(QMainWindow):
                         self.nFileSections = int(np.ceil(self.fileLength/self.datalength))
                         self.prev5mins.setEnabled(False)
                         self.next5mins.setEnabled(True)
+                        self.movePrev5minsKey.setEnabled(False)
+                        self.moveNext5minsKey.setEnabled(True)
                     else:
                         self.nFileSections = 1
                         self.prev5mins.setEnabled(False)
                         self.next5mins.setEnabled(False)
+                        self.movePrev5minsKey.setEnabled(False)
+                        self.moveNext5minsKey.setEnabled(False)
 
                 if self.nFileSections == 1:
                     self.placeInFileLabel.setText('')
@@ -2670,8 +2674,10 @@ class AviaNZ(QMainWindow):
         """
         self.currentFileSection -= 1
         self.next5mins.setEnabled(True)
+        self.moveNext5minsKey.setEnabled(True)
         if self.currentFileSection <= 0:
             self.prev5mins.setEnabled(False)
+            self.movePrev5minsKey.setEnabled(False)
         self.prepare5minMove()
 
     def moveNext5mins(self):
@@ -2681,8 +2687,10 @@ class AviaNZ(QMainWindow):
         """
         self.currentFileSection += 1
         self.prev5mins.setEnabled(True)
+        self.movePrev5minsKey.setEnabled(True)
         if self.currentFileSection >= self.nFileSections-1:
             self.next5mins.setEnabled(False)
+            self.moveNext5minsKey.setEnabled(False)
         self.prepare5minMove()
 
     def scroll(self):
@@ -2739,6 +2747,8 @@ class AviaNZ(QMainWindow):
             self.prepare5minMove()
             self.next5mins.setEnabled(True)
             self.prev5mins.setEnabled(False)
+            self.moveNext5minsKey.setEnabled(True)
+            self.movePrev5minsKey.setEnabled(False)
 
     def humanClassifyDialog1(self):
         """ Create the dialog that shows calls to the user for verification.
