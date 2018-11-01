@@ -1647,22 +1647,22 @@ class AviaNZ(QMainWindow):
             self.p_spec.addItem(self.label1)
             self.label1.setPos(0,0+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(FreqRange//4000)
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//4000))
             self.label2 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label2)
             self.label2.setPos(0,SpecRange/4+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(FreqRange//2000)
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//2000))
             self.label3 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label3)
             self.label3.setPos(0,SpecRange/2+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(3*FreqRange//4000)
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(3*FreqRange//4000))
             self.label4 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label4)
             self.label4.setPos(0,3*SpecRange/4+offset)
 
-            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(FreqRange//1000)
+            txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(int(FreqRange//1000))
             self.label5 = pg.TextItem(html=txt, color='g', anchor=(0,0))
             self.p_spec.addItem(self.label5)
             self.label5.setPos(0,SpecRange+offset)
