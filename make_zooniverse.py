@@ -82,7 +82,7 @@ def make_zooniverse(species,infile,outfile):
                         if s[0] - excess < 0:
                             t1 = 0
                             t2 = 10
-                        elif s[1] + excess > datalengthSec
+                        elif s[1] + excess > datalengthSec:
                             t2 = datalengthSec
                             t1 = t2 - 10
                         else:
