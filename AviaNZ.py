@@ -31,8 +31,8 @@ from shutil import copyfile
 from os.path import isfile
 from openpyxl import load_workbook, Workbook
 
-from PyQt5.QtGui import QIcon, QPixmap, QStandardItemModel, QStandardItem
-from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QLineEdit, QWidgetAction, QComboBox, QTreeView
+from PyQt5.QtGui import QIcon, QPixmap, QStandardItemModel, QStandardItem, QKeySequence
+from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QLineEdit, QWidgetAction, QComboBox, QTreeView, QShortcut
 from PyQt5.QtCore import Qt, QDir, QTime, QTimer, QPoint, QPointF, QLocale, QFile, QIODevice, QLine, QModelIndex
 from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 
@@ -581,15 +581,6 @@ class AviaNZ(QMainWindow):
         self.rightBtn.clicked.connect(self.moveRight)
         self.w_overview.addWidget(self.rightBtn,row=0,col=1)
 
-        # Button to move to the next file in the list
-        self.nextFileBtn=QToolButton()
-        self.nextFileBtn.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSkipForward))
-        #self.connect(self.nextFileBtn, SIGNAL('clicked()'), self.openNextFile)
-        self.nextFileBtn.clicked.connect(self.openNextFile)
-        self.nextFileBtn.setToolTip("Open next file")
-        self.w_files.addWidget(self.nextFileBtn,row=0,col=1)
-        #self.w_overview.addWidget(self.nextFileBtn,row=1,colspan=2)
-
         # Buttons to move to next/previous five minutes
         self.prev5mins=QToolButton()
         self.prev5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekBackward))
@@ -605,6 +596,23 @@ class AviaNZ(QMainWindow):
         self.w_overview.addWidget(self.next5mins,row=2,col=1)
         self.placeInFileLabel = QLabel('')
         self.w_overview.addWidget(self.placeInFileLabel,row=1,colspan=2)
+
+        # Corresponding keyboard shortcuts:
+        self.moveLeftKey = QShortcut(QKeySequence(Qt.Key_Left), self)
+        self.moveLeftKey.activated.connect(self.moveLeft)
+        self.moveRightKey = QShortcut(QKeySequence(Qt.Key_Right), self)
+        self.moveRightKey.activated.connect(self.moveRight)
+        self.movePrev5minsKey = QShortcut(QKeySequence("Shift+Left"), self)
+        self.movePrev5minsKey.activated.connect(self.movePrev5mins)
+        self.moveNext5minsKey = QShortcut(QKeySequence("Shift+Right"), self)
+        self.moveNext5minsKey.activated.connect(self.moveNext5mins)
+
+        # Button to move to the next file in the list
+        self.nextFileBtn=QToolButton()
+        self.nextFileBtn.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSkipForward))
+        self.nextFileBtn.clicked.connect(self.openNextFile)
+        self.nextFileBtn.setToolTip("Open next file")
+        self.w_files.addWidget(self.nextFileBtn,row=0,col=1)
 
         # The buttons inside the controls dock
         self.playButton = QtGui.QToolButton()
