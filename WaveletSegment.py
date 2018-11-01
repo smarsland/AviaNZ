@@ -261,6 +261,10 @@ class WaveletSegment:
 
         # Reconstruct data from a limited WP tree
         new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
+        for level in range(wp.maxlevel+1):
+            for n in new_wp.get_level(level, 'natural'):
+                n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+
         print("ch detectcalls 1 prebuilt tree", time.time() - st)
         for index in listnodes:
             binNodeId = self.WaveletFunctions.ConvertWaveletNodeName(index)
