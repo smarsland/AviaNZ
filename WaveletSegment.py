@@ -313,6 +313,67 @@ class WaveletSegment:
         # detected[-1]=0
         return detected
 
+    def detectCalls_sep(self,wp,sampleRate, listnodes=[], spInfo={},trainTest=False):
+        #for test recordings given the set of nodes
+        # Add relevant nodes to the wavelet packet tree and then reconstruct the data
+        if sampleRate==0:
+            sampleRate=self.sampleRate
+        thr = spInfo['WaveletParams'][0]
+        detected = np.zeros((int(len(wp.data)/sampleRate),len(listnodes)))
+        count = 0
+
+        for index in listnodes:
+            new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
+            for level in range(wp.maxlevel+1):
+                for n in new_wp.get_level(level, 'natural'):
+                    n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+
+            bin = self.WaveletFunctions.ConvertWaveletNodeName(index)
+            new_wp[bin] = wp[bin].data
+
+            # # Get the coefficients
+            # C = np.abs(new_wp.reconstruct(update=True))
+            # get the coefficients
+            C = new_wp.reconstruct(update=True)
+            # filter
+            C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0],high=spInfo['FreqRange'][1],order=10)
+            C = np.abs(C)
+            N = len(C)
+
+            # Compute the number of samples in a window -- species specific
+
+            M = int(spInfo['WaveletParams'][1] * sampleRate / 2.0)
+            # Compute the energy curve (a la Jinnai et al. 2012)
+            E = ce.EnergyCurve(C, M)
+
+            # thrLevel=len(bin)
+            # if thrLevel==1 or thrLevel==2 or thrLevel==3:
+            #     threshold = np.mean(C) + np.std(C)*thr
+            # elif thrLevel == 4:
+            #     threshold = np.mean(C) + np.std(C) * thr/2
+            # elif thrLevel == 5:
+            #     threshold = np.mean(C) + np.std(C) * thr/4
+            threshold = np.mean(C) + np.std(C) * thr
+            # if species.title() == 'Bittern':
+            #     threshold = 0.3936 + 0.1829 * (math.log(len(C),10) / math.log(2,10));
+
+            # bittern
+            # TODO: test
+            #thresholds[np.where(waveletCoefs<=32)] = 0
+            #thresholds[np.where(waveletCoefs>32)] = 0.3936 + 0.1829*np.log2(np.where(waveletCoefs>32))
+
+            # If there is a call anywhere in the window, report it as a call
+            j = 0
+            for i in range(0,N-sampleRate,sampleRate):
+                detected[j, count] = np.any(E[i:min(i+sampleRate, N)]>threshold)
+                j+=1
+            count += 1
+
+        detected= np.max(detected,axis=1)
+        # detected[0]=0       # to avoid two FPs usually occur at the start and end of the recording
+        # detected[-1]=0
+        return detected
+
     def identifySegments(self, seg): #, maxgap=1, minlength=1):
     # TODO: *** Replace with segmenter.checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0)
         segments = []
@@ -341,7 +402,117 @@ class WaveletSegment:
         filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1])
         return filteredDenoisedData
 
-    def waveletSegment_train(self, dirName, thrList, MList, spInfo={}, df=False):
+
+    #### TWO VERSIONS OF MAIN TRAINING CALLER FOLLOW HERE ####
+    def waveletSegment_train(self, dirName, thrList, MList, spInfo={}, df=False, trainPerFile=False):
+        if trainPerFile:
+            return self.waveletSegment_train_sep(dirName, thrList, MList, spInfo, df)
+        else:
+            return self.waveletSegment_train_joint(dirName, thrList, MList, spInfo, df)
+
+    def waveletSegment_train_sep(self, dirName, thrList, MList, spInfo={}, df=False):
+        shape = (len(MList), len(thrList))
+        tpa = np.zeros(shape)
+        fpa = np.zeros(shape)
+        tna = np.zeros(shape)
+        fna = np.zeros(shape)
+        finalnodes = []
+        iterNum = 0
+
+        for indexM in range(len(MList)):
+            M = MList[indexM]
+            finalnodesT = []
+
+            for indext in range(len(thrList)):
+                thr = thrList[indext]
+                spInfo['WaveletParams'] = [thr, M]
+                optimumNodes_thr = []
+                tp = fp = tn = fn = 0
+                for root, dirs, files in os.walk(str(dirName)):
+                    for file in files:
+                        if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
+                            wavFile = root + '/' + file[:-4]
+                            print('Current:', wavFile)
+                            # TODO change function
+                            nodes, stats = self.ws_train_sep_internal(wavFile, spInfo=spInfo, df=False)
+                            tp += stats[0]
+                            fp += stats[1]
+                            tn += stats[2]
+                            fn += stats[3]
+
+                            print("Iteration %d/%d\n" % (iterNum, len(MList)*len(thrList)))
+                            print("Filtered nodes: ", nodes)
+                            print("Parameters: ", M, thr)
+                            # extend list of nodes for this t x M setting
+                            for node in nodes:
+                                if node not in optimumNodes_thr:
+                                    optimumNodes_thr.append(node)
+
+                # one iteration done, store results
+                iterNum += 1
+                finalnodesT.append(optimumNodes_thr)
+                tpa[indexM, indext] = tp
+                fpa[indexM, indext] = fp
+                tna[indexM, indext] = tn
+                fna[indexM, indext] = fn
+                print("Iteration t = %d, M = %d, num %d complete\n" %(thr, M, iterNum))
+
+            # one row done, store nodes
+            finalnodes.append(finalnodesT)
+        return finalnodes, tpa, fpa, tna, fna
+
+    def ws_train_sep_internal(self, fName, spInfo={}, df=False):
+        # Load data and annotation
+        self.loadData(fName, trainPerFile=True)
+
+        # (preprocess only requires SampleRate and FreqRange from spInfo)
+        filteredDenoisedData = self.preprocess(spInfo,df=df)    # skip denoising
+
+        waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
+
+        # Compute point-biserial correlations and sort wrt it, return top nNodes
+        nodes = self.compute_r(self.annotation, waveletCoefs, nNodes=10) # Limit number of nodes to 10 and avoid getting in low level nodes
+
+        # Now for Nirosha's sorting
+        # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
+        nodes = self.sortListByChild(np.ndarray.tolist(nodes))
+
+        # These nodes refer to the unrooted tree, so add 1 to get the real indices
+        nodes = [n + 1 for n in nodes]
+
+        # Generate a full 5 level wavelet packet decomposition
+        wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
+
+        # Now check the F2 values and add node if it improves F2
+        listnodes = []
+        bestBetaScore = 0
+        bestRecall=0
+        m = int(len(filteredDenoisedData) / self.sampleRate)
+        detected = np.zeros(m)
+
+        for node in nodes:
+            testlist = listnodes[:]
+            testlist.append(node)
+            print("Test list: ", testlist)
+            detected_c = self.detectCalls_sep(wpFull, self.sampleRate, listnodes=testlist, spInfo=spInfo,trainTest=True)
+
+            # update the detections
+            detections = np.maximum.reduce([detected, detected_c])
+            fB,recall,tp,fp,tn,fn = self.fBetaScore(self.annotation, detections)
+            # print("Node,", node)
+            # print("fB, recall: ", fB,recall)
+            if fB is not None and fB > bestBetaScore:
+                bestBetaScore = fB
+                bestRecall=recall
+                # now apend the detections of node c to detected
+                detected = detections
+                listnodes.append(node)
+            if bestBetaScore == 1 or bestRecall == 1:
+                break
+
+        return listnodes, [tp,fp,tn,fn]
+
+    def waveletSegment_train_joint(self, dirName, thrList, MList, spInfo={}, df=False):
         """ Take list of files and other parameters,
             load files, compute correlation for wavelets,
             perform grid search over thr and M parameters,
@@ -357,10 +528,10 @@ class WaveletSegment:
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
                 if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
-                    wavFile = root + '/' + file[:-4]
-                    self.loadData(wavFile)
                     # Load data and annotation
                     # (preprocess only requires SampleRate and FreqRange from spInfo)
+                    wavFile = root + '/' + file[:-4]
+                    self.loadData(wavFile)
                     filteredDenoisedData = self.preprocess(spInfo,df=df)
                     self.audioList.append(filteredDenoisedData)
                     # Compute energy in each WP node and store
@@ -556,7 +727,7 @@ class WaveletSegment:
             del (detected[i + 1])
         return detected
 
-    def loadData(self,fName):
+    def loadData(self,fName, trainPerFile=False):
         # Load data
         filename = fName+'.wav' #'train/kiwi/train1.wav'
         filenameAnnotation = fName+'-sec.txt'#'train/kiwi/train1-sec.txt'
@@ -583,11 +754,16 @@ class WaveletSegment:
             print("ERROR: annotation length %d does not match file duration %d!" %(len(d), n))
             self.annotation = None
             return
+
         # for each second, store 0/1 presence:
         sum = 0
         for row in d:
             fileAnnotations.append(int(row[1]))
             sum += int(row[1])
-        # annotations are stored in two formats: per-file and all
-        self.annotation.extend(fileAnnotations)
+
+        # TWO VERSIONS FOR COMPATIBILITY WITH BOTH TRAINING LOOPS:
+        if trainPerFile:
+            self.annotation = np.array(fileAnnotations)
+        else:
+            self.annotation.extend(fileAnnotations)
         print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))

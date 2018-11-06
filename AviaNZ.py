@@ -91,6 +91,7 @@ class AviaNZ(QMainWindow):
         self.CLI = CLI
         self.cheatsheet = cheatsheet
         self.zooniverse = zooniverse
+        self.trainPerFile = True
 
         # At this point, the main config file should already be ensured to exist.
         self.configdir = configdir
@@ -1991,6 +1992,8 @@ class AviaNZ(QMainWindow):
                 print("Warning: a segment was not shown")
                 show = False
             else:
+                startpoint = startpoint - timeRangeStart
+                endpoint = endpoint - timeRangeStart
                 show = True
         else:
             self.segmentsToSave = True
@@ -3492,7 +3495,7 @@ class AviaNZ(QMainWindow):
             # returns 2d lists of nodes over M x thr, or stats over M x thr
             thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
             MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
-            nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, df=False)
+            nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, df=False, trainPerFile=self.trainPerFile)
             print("Filtered nodes: ", nodes)
 
             TPR = TP/(TP+FN)
