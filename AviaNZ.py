@@ -1991,6 +1991,8 @@ class AviaNZ(QMainWindow):
                 print("Warning: a segment was not shown")
                 show = False
             else:
+                startpoint = startpoint - timeRangeStart
+                endpoint = endpoint - timeRangeStart
                 show = True
         else:
             self.segmentsToSave = True
