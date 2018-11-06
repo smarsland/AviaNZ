@@ -1987,23 +1987,11 @@ class AviaNZ(QMainWindow):
             timeRangeStart = self.startRead
             timeRangeEnd = min(self.startRead + self.lenRead, self.fileLength / self.sampleRate)
 
-            if startpoint >= timeRangeStart and endpoint <= timeRangeEnd:
-                show = True
-                # Put the startpoint and endpoint in the right range
-                startpoint = startpoint - timeRangeStart
-                endpoint = endpoint - timeRangeStart
-            elif startpoint >= timeRangeStart and endpoint > timeRangeEnd:
-                startpoint = startpoint - timeRangeStart
-                endpoint = timeRangeEnd - timeRangeStart
-                show = True
-            elif startpoint < timeRangeStart and endpoint >= timeRangeEnd:
-                startpoint = 0
-                endpoint = endpoint - timeRangeStart
-                show = True
-            else:
-                # not sure why these shouldn't be shown?
+            if (startpoint < timeRangeStart and endpoint < timeRangeStart) or (startpoint > timeRangeEnd and endpoint > timeRangeEnd):
                 print("Warning: a segment was not shown")
                 show = False
+            else:
+                show = True
         else:
             self.segmentsToSave = True
             show = True
