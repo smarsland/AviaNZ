@@ -1140,7 +1140,8 @@ class ControllableAudio(QAudioOutput):
 
         # write filtered output to a BytesIO buffer
         self.tempout = io.BytesIO()
-        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale='none', sampwidth=self.format.sampleSize() // 8)
+        # NOTE: scale=None rescales using data minimum/max. Use scale="none" if this causes weird playback sound issues.
+        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale=None, sampwidth=self.format.sampleSize() // 8)
 
         # copy BytesIO@write to QBuffer@read for playing
         self.temparr = QByteArray(self.tempout.getvalue()[44:])
