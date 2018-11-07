@@ -487,7 +487,7 @@ class WaveletSegment:
         listnodes = []
         bestBetaScore = 0
         bestRecall=0
-        m = int(len(filteredDenoisedData) / self.sampleRate)
+        m = int(np.ceil(len(filteredDenoisedData) / self.sampleRate))
         detected = np.zeros(m)
 
         for node in nodes:
@@ -495,7 +495,8 @@ class WaveletSegment:
             testlist.append(node)
             print("Test list: ", testlist)
             detected_c = self.detectCalls_sep(wpFull, self.sampleRate, listnodes=testlist, spInfo=spInfo,trainTest=True)
-
+            if len(detected_c)<len(self.annotation):
+                detected_c = np.append(detected_c, [0])
             # update the detections
             detections = np.maximum.reduce([detected, detected_c])
             fB,recall,tp,fp,tn,fn = self.fBetaScore(self.annotation, detections)

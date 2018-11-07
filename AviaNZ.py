@@ -3676,7 +3676,7 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog.fHigh.setRange(0, int(np.min(fs))/2)
         self.waveletTDialog.fHigh.setValue(int(np.max(f_high)))
         self.waveletTDialog.fs.setValue(int(np.min(fs)))
-        self.waveletTDialog.fs.setRange(0, int(np.min(fs))/2)
+        self.waveletTDialog.fs.setRange(0, int(np.min(fs)))
         self.waveletTDialog.note_step2.setText('Above fields propagated using training data.\nAdjust if required.')
         self.waveletTDialog.train.setEnabled(True)        
 
