@@ -186,66 +186,7 @@ class WaveletSegment:
 
         return newlist
 
-    # def detectCalls(self,wp,node,sampleRate=0,n=300,species='Kiwi',thr=0):
-    #     """ For a given node of the wavelet tree, make the tree, detect calls """
-    #     # TODO: Pass in (or load) a species-specific threshold and use that
-    #
-    #     if sampleRate==0:
-    #         sampleRate=self.sampleRate
-    #
-    #     if thr==0:
-    #         if species.title() == 'Sipo':
-    #             thr = 0.25
-    #         else:
-    #             thr = 1.0
-    #
-    #     # Add relevant nodes to the wavelet packet tree and then reconstruct the data
-    #     new_wp = pywt.WaveletPacket(data=None, wavelet=self.WaveletFunctions.wavelet, mode='symmetric')
-    #
-    #     for level in range(wp.maxlevel + 1):
-    #         for n in new_wp.get_level(level, 'natural'):
-    #             n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
-    #
-    #     bin = self.WaveletFunctions.ConvertWaveletNodeName(node)
-    #     new_wp[bin] = wp[bin].data
-    #
-    #     # Get the coefficients
-    #     C = np.abs(new_wp.reconstruct(update=True))
-    #     N = len(C)
-    #
-    #     # Compute the number of samples in a window -- species specific
-    #     # TODO: set M in relation to the call length, M can make a big difference in results
-    #     if species.title()=='Sipo':
-    #         M=int(0.2*sampleRate/2.0)
-    #     else:
-    #         M = int(0.8*sampleRate/2.0)
-    #     #print M
-    #
-    #     # Compute the energy curve (a la Jinnai et al. 2012)
-    #     E = np.zeros(N)
-    #     E[M] = np.sum(C[:2 * M+1])
-    #     for i in range(M + 1, N - M):
-    #         E[i] = E[i - 1] - C[i - M - 1] + C[i + M]
-    #     E = E / (2. * M)
-    #
-    #     threshold = np.mean(C) + np.std(C)*thr
-    #
-    #     # bittern
-    #     # TODO: test
-    #     #thresholds[np.where(waveletCoefs<=32)] = 0
-    #     #thresholds[np.where(waveletCoefs>32)] = 0.3936 + 0.1829*np.log2(np.where(waveletCoefs>32))
-    #
-    #     # If there is a call anywhere in the window, report it as a call
-    #     E = np.where(E<threshold, 0, 1)
-    #     detected = np.zeros(n)
-    #     j = 0
-    #     for i in range(0,N-sampleRate,sampleRate):
-    #         detected[j] = np.max(E[i:i+sampleRate])
-    #         j+=1
-    #
-    #     return detected
-
-    def detectCalls(self, wp, sampleRate, listnodes=[], thr=None, M=None, spInfo={}):
+    def detectCalls(self, wp, sampleRate, listnodes=[], thr=None, M=None, spInfo={}, withzeros=True):
         """ Given a parameter combination (thr x M) and a wavelet packet tree:
             take relevant nodes from the wavelet packet tree, reconstruct the data from it,
             identify detections based on thr and M.
@@ -261,9 +202,10 @@ class WaveletSegment:
 
         # Reconstruct data from a limited WP tree
         new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
-        for level in range(wp.maxlevel+1):
-            for n in new_wp.get_level(level, 'natural'):
-                n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+        if withzeros:
+            for level in range(wp.maxlevel+1):
+                for n in new_wp.get_level(level, 'natural'):
+                    n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
 
         print("ch detectcalls 1 prebuilt tree", time.time() - st)
         for index in listnodes:
@@ -285,21 +227,7 @@ class WaveletSegment:
         # Compute the energy curve (a la Jinnai et al. 2012)
         E = ce.EnergyCurve(C, M)
 
-        # thrLevel=len(bin)
-        # if thrLevel==1 or thrLevel==2 or thrLevel==3:
-        #     threshold = np.mean(C) + np.std(C)*thr
-        # elif thrLevel == 4:
-        #     threshold = np.mean(C) + np.std(C) * thr/2
-        # elif thrLevel == 5:
-        #     threshold = np.mean(C) + np.std(C) * thr/4
         threshold = np.mean(C) + np.std(C) * thr
-        # if species.title() == 'Bittern':
-        #     threshold = 0.3936 + 0.1829 * (math.log(len(C),10) / math.log(2,10));
-
-        # bittern
-        # TODO: test
-        #thresholds[np.where(waveletCoefs<=32)] = 0
-        #thresholds[np.where(waveletCoefs>32)] = 0.3936 + 0.1829*np.log2(np.where(waveletCoefs>32))
 
         # If there is a call anywhere in the window, report it as a call
         detected = np.zeros(math.ceil(N/sampleRate))
@@ -309,69 +237,86 @@ class WaveletSegment:
             j+=1
         print("ch in 5", time.time() - st)
 
-        # detected[0]=0       # to avoid two FPs usually occur at the start and end of the recording
-        # detected[-1]=0
         return detected
 
-    def detectCalls_sep(self,wp,sampleRate, listnodes=[], spInfo={},trainTest=False):
-        #for test recordings given the set of nodes
-        # Add relevant nodes to the wavelet packet tree and then reconstruct the data
+    # USE THIS FUNCTION FOR TESTING AND ACTUAL USE. FOR TRAINING USE detectCalls_sep
+    def detectCalls1(self,wp,sampleRate, listnodes=[], spInfo={}, withzeros=True):
+        # For a recording (not for training) and the set of nodes
+        # Regenerate the signal from each node and threshold
+        # Output detections (OR version)
         if sampleRate==0:
             sampleRate=self.sampleRate
         thr = spInfo['WaveletParams'][0]
-        detected = np.zeros((int(len(wp.data)/sampleRate),len(listnodes)))
+        # Compute the number of samples in a window -- species specific
+        M = int(spInfo['WaveletParams'][1] * sampleRate / 2.0)
+        detected = np.zeros((int(np.ceil(len(wp.data)/sampleRate)),len(listnodes)))
         count = 0
 
         for index in listnodes:
             new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
-            for level in range(wp.maxlevel+1):
-                for n in new_wp.get_level(level, 'natural'):
-                    n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+            if withzeros:
+                for level in range(wp.maxlevel+1):
+                    for n in new_wp.get_level(level, 'natural'):
+                        n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
 
             bin = self.WaveletFunctions.ConvertWaveletNodeName(index)
             new_wp[bin] = wp[bin].data
 
-            # # Get the coefficients
-            # C = np.abs(new_wp.reconstruct(update=True))
-            # get the coefficients
+            # Get the coefficients
             C = new_wp.reconstruct(update=True)
-            # filter
+            # Filter
             C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0],high=spInfo['FreqRange'][1],order=10)
             C = np.abs(C)
             N = len(C)
-
-            # Compute the number of samples in a window -- species specific
-
-            M = int(spInfo['WaveletParams'][1] * sampleRate / 2.0)
             # Compute the energy curve (a la Jinnai et al. 2012)
             E = ce.EnergyCurve(C, M)
-
-            # thrLevel=len(bin)
-            # if thrLevel==1 or thrLevel==2 or thrLevel==3:
-            #     threshold = np.mean(C) + np.std(C)*thr
-            # elif thrLevel == 4:
-            #     threshold = np.mean(C) + np.std(C) * thr/2
-            # elif thrLevel == 5:
-            #     threshold = np.mean(C) + np.std(C) * thr/4
+            # Compute threshold
             threshold = np.mean(C) + np.std(C) * thr
-            # if species.title() == 'Bittern':
-            #     threshold = 0.3936 + 0.1829 * (math.log(len(C),10) / math.log(2,10));
-
-            # bittern
-            # TODO: test
-            #thresholds[np.where(waveletCoefs<=32)] = 0
-            #thresholds[np.where(waveletCoefs>32)] = 0.3936 + 0.1829*np.log2(np.where(waveletCoefs>32))
-
             # If there is a call anywhere in the window, report it as a call
             j = 0
             for i in range(0,N-sampleRate,sampleRate):
                 detected[j, count] = np.any(E[i:min(i+sampleRate, N)]>threshold)
                 j+=1
             count += 1
-
         detected= np.max(detected,axis=1)
-        # detected[0]=0       # to avoid two FPs usually occur at the start and end of the recording
-        # detected[-1]=0
+        return detected
+
+    def detectCalls_sep(self, wp, sampleRate, index, spInfo={}, withzeros=True):
+        # For training
+        # Regenerate the signal from the node and threshold
+        # Output detection
+        if sampleRate==0:
+            sampleRate=self.sampleRate
+        thr = spInfo['WaveletParams'][0]
+        # Compute the number of samples in a window -- species specific
+        M = int(spInfo['WaveletParams'][1] * sampleRate / 2.0)
+        detected = np.zeros(int(np.ceil(len(wp.data)/sampleRate)))
+
+        new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
+        if withzeros:
+            for level in range(wp.maxlevel+1):
+                for n in new_wp.get_level(level, 'natural'):
+                    n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+
+        bin = self.WaveletFunctions.ConvertWaveletNodeName(index)
+        new_wp[bin] = wp[bin].data
+
+        # Get the coefficients
+        C = new_wp.reconstruct(update=True)
+        # Filter
+        C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0],high=spInfo['FreqRange'][1],order=10)
+        C = np.abs(C)
+        N = len(C)
+        # Compute the energy curve (a la Jinnai et al. 2012)
+        E = ce.EnergyCurve(C, M)
+        # Compute threshold
+        threshold = np.mean(C) + np.std(C) * thr
+
+        # If there is a call anywhere in the window, report it as a call
+        j = 0
+        for i in range(0,N-sampleRate,sampleRate):
+            detected[j] = np.any(E[i:min(i+sampleRate, N)]>threshold)
+            j+=1
         return detected
 
     def identifySegments(self, seg): #, maxgap=1, minlength=1):
@@ -404,116 +349,128 @@ class WaveletSegment:
 
 
     #### TWO VERSIONS OF MAIN TRAINING CALLER FOLLOW HERE ####
-    def waveletSegment_train(self, dirName, thrList, MList, spInfo={}, df=False, trainPerFile=False):
+    def waveletSegment_train(self, dirName, thrList, MList, spInfo={}, df=False, trainPerFile=False, withzeros=True):
         if trainPerFile:
-            return self.waveletSegment_train_sep(dirName, thrList, MList, spInfo, df)
+            return self.waveletSegment_train_sep(dirName, thrList, MList, spInfo, df, withzeros=withzeros)
         else:
-            return self.waveletSegment_train_joint(dirName, thrList, MList, spInfo, df)
+            return self.waveletSegment_train_joint(dirName, thrList, MList, spInfo, df, withzeros=withzeros)
 
-    def waveletSegment_train_sep(self, dirName, thrList, MList, spInfo={}, df=False):
+    def waveletSegment_train_sep(self, dirName, thrList, MList, spInfo={}, df=False, withzeros=True):
+        """ Take list of files and other parameters,
+             load files, compute wavelet coefficients and reuse them in each (M, thr) combination,
+             perform grid search over thr and M parameters,
+             do a stepwise search for best nodes.
+         """
+        opstartingtime = time.time()
+        self.annotation = []
+        self.filelengths = []
+        # 1. Load each file, generate wavelet coeeficients
+        for root, dirs, files in os.walk(str(dirName)):
+            for file in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
+                    # Load data and annotation
+                    # (preprocess only requires SampleRate and FreqRange from spInfo)
+                    wavFile = root + '/' + file[:-4]
+                    self.loadData(wavFile, trainPerFile=False)
+                    filteredDenoisedData = self.preprocess(spInfo, df=df)
+                    self.audioList.append(filteredDenoisedData)
+                    # Compute energy in each WP node and store
+                    self.waveletCoefs = np.column_stack(
+                        (self.waveletCoefs, self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)))
+                    print("ch 1, loading completed", time.time() - opstartingtime)
+        self.annotation = np.array(self.annotation)
+
+        # Output structure: 1. 2d list of [nodes]
+        # (1st d runs over M, 2nd d runs over thr)
+        # 2-5. 2d np arrays of TP/FP/TN/FN
         shape = (len(MList), len(thrList))
         tpa = np.zeros(shape)
         fpa = np.zeros(shape)
         tna = np.zeros(shape)
         fna = np.zeros(shape)
         finalnodes = []
-        iterNum = 0
 
+        # Grid search over M x thr x Files
         for indexM in range(len(MList)):
-            M = MList[indexM]
             finalnodesT = []
-
+            M = MList[indexM]
             for indext in range(len(thrList)):
                 thr = thrList[indext]
                 spInfo['WaveletParams'] = [thr, M]
-                optimumNodes_thr = []
-                tp = fp = tn = fn = 0
-                for root, dirs, files in os.walk(str(dirName)):
-                    for file in files:
-                        if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
-                            wavFile = root + '/' + file[:-4]
-                            print('Current:', wavFile)
-                            # TODO change function
-                            nodes, stats = self.ws_train_sep_internal(wavFile, spInfo=spInfo, df=False)
-                            tp += stats[0]
-                            fp += stats[1]
-                            tn += stats[2]
-                            fn += stats[3]
+                # Accumulate tp,fp,tn,fn for the set of files for this M and thr
+                tpacc = 0
+                fpacc = 0
+                tnacc = 0
+                fnacc =0
+                nodesacc = []
+                for indexF in range(len(self.filelengths)):
+                    if indexF == 0:
+                        annotation = self.annotation[0:self.filelengths[indexF]]
+                        waveletCoefs = self.waveletCoefs[:, 0:self.filelengths[indexF]]
+                    else:
+                        annotation = self.annotation[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF+1]))]
+                        waveletCoefs = self.waveletCoefs[:, int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF+1]))]
+                    # Limit number of nodes to 10 and avoid getting in low level nodes
+                    nodes = self.compute_r(annotation, waveletCoefs, nNodes=10)
+                    # Now for Nirosha's sorting
+                    # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
+                    nodes = self.sortListByChild(np.ndarray.tolist(nodes))
 
-                            print("Iteration %d/%d\n" % (iterNum, len(MList)*len(thrList)))
-                            print("Filtered nodes: ", nodes)
-                            print("Parameters: ", M, thr)
-                            # extend list of nodes for this t x M setting
-                            for node in nodes:
-                                if node not in optimumNodes_thr:
-                                    optimumNodes_thr.append(node)
+                    # These nodes refer to the un-rooted tree, so add 1 to get the real indices
+                    nodes = [n + 1 for n in nodes]
 
+                    # Generate a full 5 level wavelet packet decomposition
+                    wp = pywt.WaveletPacket(data=self.audioList[indexF], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
+
+                    # Now check the F2 values and add node if it improves F2
+                    listnodes = []
+                    bestBetaScore = 0
+                    bestRecall = 0
+                    detected = np.zeros(self.filelengths[indexF])
+
+                    for node in nodes:
+                        testlist = listnodes[:]
+                        testlist.append(node)
+                        print("Test list: ", testlist)
+                        detected_c = self.detectCalls_sep(wp, self.sampleRate, index=node, spInfo=spInfo, withzeros=withzeros)
+                        if len(detected_c)<len(annotation):
+                            detected_c = np.append(detected_c, [0])
+                        # Update the detections
+                        detections = np.maximum.reduce([detected, detected_c])
+                        fB, recall, tp, fp, tn, fn = self.fBetaScore(annotation, detections)
+                        if fB is not None and fB > bestBetaScore: # Keep this node and update fB, recall, detected, and optimum nodes
+                            bestBetaScore = fB
+                            bestRecall = recall
+                            detected = detections
+                            listnodes.append(node)
+                        if bestBetaScore == 1 or bestRecall == 1:
+                            break
+                    # Memory cleanup:
+                    wp = []
+                    del wp
+                    gc.collect()
+
+                    nodesacc.append(listnodes)
+                    tpacc += tp
+                    tnacc += tn
+                    fpacc += fp
+                    fnacc += fn
+                    print("Iteration f %d/%d complete" % (indexF + 1, len(self.filelengths)))
                 # one iteration done, store results
-                iterNum += 1
-                finalnodesT.append(optimumNodes_thr)
-                tpa[indexM, indext] = tp
-                fpa[indexM, indext] = fp
-                tna[indexM, indext] = tn
-                fna[indexM, indext] = fn
-                print("Iteration t = %d, M = %d, num %d complete\n" %(thr, M, iterNum))
-
-            # one row done, store nodes
+                nodesacc = [y for x in nodesacc for y in x]
+                nodesacc = list(set(nodesacc))
+                finalnodesT.append(nodesacc)
+                tpa[indexM, indext] = tpacc
+                fpa[indexM, indext] = fpacc
+                tna[indexM, indext] = tnacc
+                fna[indexM, indext] = fnacc
+                print("Iteration t %d/%d complete\n----------------" % (indext + 1, len(thrList)))
+            # One row done, store nodes
             finalnodes.append(finalnodesT)
+            print("Iteration M %d/%d complete\n----------------\n----------------" % (indexM + 1, len(MList)))
         return finalnodes, tpa, fpa, tna, fna
 
-    def ws_train_sep_internal(self, fName, spInfo={}, df=False):
-        # Load data and annotation
-        self.loadData(fName, trainPerFile=True)
-
-        # (preprocess only requires SampleRate and FreqRange from spInfo)
-        filteredDenoisedData = self.preprocess(spInfo,df=df)    # skip denoising
-
-        waveletCoefs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)
-
-        # Compute point-biserial correlations and sort wrt it, return top nNodes
-        nodes = self.compute_r(self.annotation, waveletCoefs, nNodes=10) # Limit number of nodes to 10 and avoid getting in low level nodes
-
-        # Now for Nirosha's sorting
-        # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
-        nodes = self.sortListByChild(np.ndarray.tolist(nodes))
-
-        # These nodes refer to the unrooted tree, so add 1 to get the real indices
-        nodes = [n + 1 for n in nodes]
-
-        # Generate a full 5 level wavelet packet decomposition
-        wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
-
-        # Now check the F2 values and add node if it improves F2
-        listnodes = []
-        bestBetaScore = 0
-        bestRecall=0
-        m = int(np.ceil(len(filteredDenoisedData) / self.sampleRate))
-        detected = np.zeros(m)
-
-        for node in nodes:
-            testlist = listnodes[:]
-            testlist.append(node)
-            print("Test list: ", testlist)
-            detected_c = self.detectCalls_sep(wpFull, self.sampleRate, listnodes=testlist, spInfo=spInfo,trainTest=True)
-            if len(detected_c)<len(self.annotation):
-                detected_c = np.append(detected_c, [0])
-            # update the detections
-            detections = np.maximum.reduce([detected, detected_c])
-            fB,recall,tp,fp,tn,fn = self.fBetaScore(self.annotation, detections)
-            # print("Node,", node)
-            # print("fB, recall: ", fB,recall)
-            if fB is not None and fB > bestBetaScore:
-                bestBetaScore = fB
-                bestRecall=recall
-                # now apend the detections of node c to detected
-                detected = detections
-                listnodes.append(node)
-            if bestBetaScore == 1 or bestRecall == 1:
-                break
-
-        return listnodes, [tp,fp,tn,fn]
-
-    def waveletSegment_train_joint(self, dirName, thrList, MList, spInfo={}, df=False):
+    def waveletSegment_train_joint(self, dirName, thrList, MList, spInfo={}, df=False, withzeros=True):
         """ Take list of files and other parameters,
             load files, compute correlation for wavelets,
             perform grid search over thr and M parameters,
@@ -525,6 +482,7 @@ class WaveletSegment:
         """
         opstartingtime = time.time()
         self.annotation = []
+        self.filelengths = []
         # 1. Load each file, generate point-biserial correlations for the nodes.
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
@@ -583,7 +541,7 @@ class WaveletSegment:
                     newDetections = np.array([])
                     for fileId in range(len(self.audioList)):
                         wp = pywt.WaveletPacket(data=self.audioList[fileId], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
-                        detected_c = self.detectCalls(wp, self.sampleRate, listnodes=testlist, thr=thrList[indext], M=MList[indexM], spInfo=spInfo)
+                        detected_c = self.detectCalls(wp, self.sampleRate, listnodes=testlist, thr=thrList[indext], M=MList[indexM], spInfo=spInfo, withzeros=withzeros)
                         detected_c = detected_c[0:math.ceil(len(self.audioList[fileId])/self.sampleRate)]
                         newDetections = np.concatenate((newDetections, detected_c))
                         # memory cleanup:
@@ -767,4 +725,5 @@ class WaveletSegment:
             self.annotation = np.array(fileAnnotations)
         else:
             self.annotation.extend(fileAnnotations)
+            self.filelengths.append(n)
         print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
