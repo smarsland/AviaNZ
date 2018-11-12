@@ -3734,7 +3734,7 @@ class AviaNZ(QMainWindow):
                     type = species.title()
                     quality = ''
                     s = int(math.floor(seg[0]))
-                    e = int(math.ceil(seg[1]))
+                    e = min(duration, int(math.ceil(seg[1])))
                     #print("start and end: ", s, e)
                     for i in range(s, e):
                         GT[i][1] = str(1)
