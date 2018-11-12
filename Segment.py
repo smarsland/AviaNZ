@@ -24,6 +24,8 @@
 import numpy as np
 import scipy.ndimage as spi
 import skimage
+import time
+import ce_denoise as ce
 
 class Segment:
     """ This class implements six forms of segmentation for the AviaNZ interface:
@@ -469,6 +471,7 @@ class Segment:
         """ Segmentation by computing the fundamental frequency.
         Uses the Yin algorithm of de Cheveigne and Kawahara (2002)
         """
+        st = time.time()
         if self.data.dtype == 'int16':
             data = self.data.astype(float)/32768.0
         else:
@@ -484,34 +487,16 @@ class Segment:
             W = minwin
         # Make life easier, and make W be a function of the spectrogram window width
         W = int(round(W/self.window_width)*self.window_width)
-        #print "W ",W, W/2
         pitch = np.zeros((int((len(data) - 2 * W) * 2. / W) + 1))
-
-        # Compute squared diff between signal and shift
-        # sd = np.zeros(W)
-        # for tau in range(1,W):
-        #    sd[tau] = np.sum((data[:W] - data[tau:tau+W])**2)
 
         ints = np.arange(1, W)
         starts = range(0, len(data) - 2 * W, W // 2)
 
+        data2 = np.zeros(len(data))
+        data2[:] = data[:]
         for i in starts:
             # Compute squared diff between signal and shift
-            sd = np.zeros(W)
-            for tau in range(1, W):
-                sd[tau] = np.sum((data[i:i + W] - data[i + tau:i + tau + W]) ** 2)
-
-                # If not using window
-                # if i>0:
-                # for tau in range(1,W):
-                # sd[tau] -= np.sum((data[i-1] - data[i-1+tau])**2)
-                # sd[tau] += np.sum((data[i+W] - data[i+W+tau])**2)
-
-            # Compute cumulative mean of normalised diff
-            d = np.zeros(W)
-            d[0] = 1
-            # TODO: sometimes all np.cumsum(sd[1;]) == 0 ??
-            d[1:] = sd[1:] * ints / np.cumsum(sd[1:])
+            d = ce.FundFreqYin(data2, W, i, ints)
 
             tau = 1
             notFound = True

@@ -15,6 +15,9 @@ cdef extern from "ce_functions.h":
 cdef extern from "ce_functions.h":
         void ce_energycurve(double *arrE, double *arrC, int N, int M)
 
+cdef extern from "ce_functions.h":
+        void ce_sumsquares(double *arr, int W, double *out)
+
 def BestTree(wp,threshold,costfn='threshold'):
         """ Compute the best wavelet tree using one of three cost functions: threshold, entropy, or SURE.
         Scores each node and uses those scores to identify new leaves of the tree by working up the tree.
@@ -115,3 +118,24 @@ def EnergyCurve(C, M):
         ce_energycurve(<double*> np.PyArray_DATA(E), <double*> np.PyArray_DATA(C), N, M)
         return E
 
+def FundFreqYin(data, W, i, ints):
+        sd = np.zeros(W)
+        data = data[i:]
+        # Compute sum of squared diff (autocorrelation)
+        ce_sumsquares(<double*> np.PyArray_DATA(data), W, <double*> np.PyArray_DATA(sd))
+
+        # If not using window, instead:
+        # for tau in range(1, W): 
+            # if i>0:
+            # for tau in range(1,W):
+            # sd[tau] -= np.sum((data[i-1] - data[i-1+tau])**2)
+            # sd[tau] += np.sum((data[i+W] - data[i+W+tau])**2)
+
+        # Compute cumulative mean of normalised diff
+        d = np.zeros(W)
+        d[0] = 1 
+        # TODO: sometimes all np.cumsum(sd[1;]) == 0 ??
+        d[1:] = sd[1:] * ints / np.cumsum(sd[1:])
+
+        return d
+ 
