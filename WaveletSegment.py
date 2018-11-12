@@ -29,6 +29,7 @@ import json, time, os, math, csv, gc
 import SignalProc
 import Segment
 from ext import ce_denoise as ce
+import psutil
 
 # Nirosha's approach of simultaneous segmentation and recognition using wavelets
     # (0) Bandpass filter with different parameters for each species
@@ -252,8 +253,8 @@ class WaveletSegment:
         detected = np.zeros((int(np.ceil(len(wp.data)/sampleRate)),len(listnodes)))
         count = 0
 
+        new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
         for index in listnodes:
-            new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
             if withzeros:
                 for level in range(wp.maxlevel+1):
                     for n in new_wp.get_level(level, 'natural'):
@@ -281,7 +282,7 @@ class WaveletSegment:
         detected= np.max(detected,axis=1)
         return detected
 
-    def detectCalls_sep(self, wp, sampleRate, index, spInfo={}, withzeros=True):
+    def detectCalls_sep(self, new_wp, wp, sampleRate, index, spInfo={}, withzeros=True):
         # For training
         # Regenerate the signal from the node and threshold
         # Output detection
@@ -292,7 +293,6 @@ class WaveletSegment:
         M = int(spInfo['WaveletParams'][1] * sampleRate / 2.0)
         detected = np.zeros(int(np.ceil(len(wp.data)/sampleRate)))
 
-        new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
         if withzeros:
             for level in range(wp.maxlevel+1):
                 for n in new_wp.get_level(level, 'natural'):
@@ -317,6 +317,8 @@ class WaveletSegment:
         for i in range(0,N-sampleRate,sampleRate):
             detected[j] = np.any(E[i:min(i+sampleRate, N)]>threshold)
             j+=1
+        del C
+        gc.collect()
         return detected
 
     def identifySegments(self, seg): #, maxgap=1, minlength=1):
@@ -428,11 +430,12 @@ class WaveletSegment:
                     bestRecall = 0
                     detected = np.zeros(self.filelengths[indexF])
 
+                    new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
                     for node in nodes:
                         testlist = listnodes[:]
                         testlist.append(node)
                         print("Test list: ", testlist)
-                        detected_c = self.detectCalls_sep(wp, self.sampleRate, index=node, spInfo=spInfo, withzeros=withzeros)
+                        detected_c = self.detectCalls_sep(new_wp, wp, self.sampleRate, index=node, spInfo=spInfo, withzeros=withzeros)
                         if len(detected_c)<len(annotation):
                             detected_c = np.append(detected_c, [0])
                         # Update the detections
