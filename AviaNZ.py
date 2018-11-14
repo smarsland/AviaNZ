@@ -91,6 +91,7 @@ class AviaNZ(QMainWindow):
         self.CLI = CLI
         self.cheatsheet = cheatsheet
         self.zooniverse = zooniverse
+        self.trainPerFile = True
 
         # At this point, the main config file should already be ensured to exist.
         self.configdir = configdir
@@ -3494,7 +3495,7 @@ class AviaNZ(QMainWindow):
             # returns 2d lists of nodes over M x thr, or stats over M x thr
             thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
             MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
-            nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, df=False)
+            nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, df=False, trainPerFile=self.trainPerFile)
             print("Filtered nodes: ", nodes)
 
             TPR = TP/(TP+FN)
@@ -3675,7 +3676,7 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog.fHigh.setRange(0, int(np.min(fs))/2)
         self.waveletTDialog.fHigh.setValue(int(np.max(f_high)))
         self.waveletTDialog.fs.setValue(int(np.min(fs)))
-        self.waveletTDialog.fs.setRange(0, int(np.min(fs))/2)
+        self.waveletTDialog.fs.setRange(0, int(np.min(fs)))
         self.waveletTDialog.note_step2.setText('Above fields propagated using training data.\nAdjust if required.')
         self.waveletTDialog.train.setEnabled(True)        
 
@@ -3733,7 +3734,7 @@ class AviaNZ(QMainWindow):
                     type = species.title()
                     quality = ''
                     s = int(math.floor(seg[0]))
-                    e = int(math.ceil(seg[1]))
+                    e = min(duration, int(math.ceil(seg[1])))
                     #print("start and end: ", s, e)
                     for i in range(s, e):
                         GT[i][1] = str(1)
