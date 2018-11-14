@@ -78,3 +78,14 @@ void ce_energycurve(double *arrE, double *arrC, int N, int M)
                 arrE[i] = arrE[i] / (2 * M);
         }
 }
+
+// Sum-of-squared differences loop for Yin's fund. freq. calculation
+void ce_sumsquares(double *arr, int W, double *out){
+        double diff;
+        for(int tau=1; tau<W; tau++){
+                for(int j=0; j<W; j++){
+                        diff = arr[j] - arr[tau + j];
+                        out[tau] += diff * diff;
+                }
+        }
+}
