@@ -253,8 +253,8 @@ class WaveletSegment:
         detected = np.zeros((int(np.ceil(len(wp.data)/sampleRate)),len(listnodes)))
         count = 0
 
-        new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
         for index in listnodes:
+            new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
             if withzeros:
                 for level in range(wp.maxlevel+1):
                     for n in new_wp.get_level(level, 'natural'):
