@@ -3391,7 +3391,7 @@ class AviaNZ(QMainWindow):
                     species = self.species
                 speciesData = json.load(open(os.path.join(self.filtersDir, species + '.txt')))
                 ws = WaveletSegment.WaveletSegment()
-                Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None, spInfo=speciesData)
+                Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None, spInfo=speciesData, withzeros=True)
                 print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
                 if TP+FN != 0:
                     recall = TP/(TP+FN)
@@ -3490,13 +3490,22 @@ class AviaNZ(QMainWindow):
 
         # Get detection measures over all M,thr combinations
         with pg.BusyCursor():
+            opstartingtime = time.time()
             speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
-                           'FreqRange': [minFrq, maxFrq], 'WaveletParams': [0.5, 1]} # last params are thr, M
+                           'FreqRange': [minFrq, maxFrq]}
             # returns 2d lists of nodes over M x thr, or stats over M x thr
             thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
             MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
-            nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, df=False, trainPerFile=self.trainPerFile)
+            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData,
+                                                                            df=False, trainPerFile=True, withzeros=True, mergeTrees=False)
+            # Remove any negatively correlated nodes
+            for lst in nodes:
+                for sub_lst in lst:
+                    for item in sub_lst:
+                        if item in negative_nodes:
+                            sub_lst.remove(item)
             print("Filtered nodes: ", nodes)
+            print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
 
             TPR = TP/(TP+FN)
             FPR = 1 - TN/(FP+TN)
@@ -3512,7 +3521,7 @@ class AviaNZ(QMainWindow):
         valid_markers = ([item[0] for item in mks.MarkerStyle.markers.items() if
                           item[1] is not 'nothing' and not item[1].startswith('tick') and not item[1].startswith(
                               'caret')])
-        markers = np.random.choice(valid_markers, len(MList)*len(thrList), replace=False)
+        markers = np.random.choice(valid_markers, len(MList), replace=False)
         fig, ax = plt.subplots()
         for i in range(len(MList)):
             # each line - different M (rows of result arrays)

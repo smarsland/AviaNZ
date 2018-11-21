@@ -318,14 +318,15 @@ def testTrainers2(dName, withzeros):
 # testTrainers2('E:\AviaNZ\Sound Files\LSK\\train', withzeros=True)
 
 # Test the new version of training
-def testTrainers(dName, trainPerFile=True, withzeros=False):
+def testTrainers(dName, species, f1, f2, trainPerFile=True, withzeros=False, mergeTrees=False, cleanNodelist=False):
     # Hard code meta data
-    species = "Kiwi (Little Spotted)"
+    # species = "Kiwi (Little Spotted)"
+    species = species
     fs = 16000
     minLen = 6
     maxLen = 32
-    minFrq = 1200
-    maxFrq = 8000
+    minFrq = f1
+    maxFrq = f2
     wind = True
     rain = True
     ff = False
@@ -336,12 +337,20 @@ def testTrainers(dName, trainPerFile=True, withzeros=False):
     speciesData = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
                    'FreqRange': [minFrq, maxFrq]}  # last params are thr, M
     # returns 2d lists of nodes over M x thr, or stats over M x thr
-    thrList = np.linspace(0, 1, 5)
-    MList = np.linspace(0.25, 1.5, 3)
+    thrList = np.linspace(0, 1, 5)  # np.linspace(0, 1, 5)
+    MList = np.linspace(0.25, 1.5, 3)  # np.linspace(0.25, 1.5, 3)
     ws = WaveletSegment.WaveletSegment()
-    nodes, TP, FP, TN, FN = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, df=False, trainPerFile=trainPerFile, withzeros=withzeros)
+    nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, df=False, trainPerFile=trainPerFile, withzeros=withzeros, mergeTrees=mergeTrees)
     print("Filtered nodes: ", nodes)
-
+    print("Negative nodes: ", negative_nodes)
+    # Remove any negatively correlated nodes
+    if cleanNodelist:
+        for lst in nodes:
+            for sub_lst in lst:
+                for item in sub_lst:
+                    if item in negative_nodes:
+                        sub_lst.remove(item)
+        print("Filtered nodes after cleaning: ", nodes)
     TPR = TP / (TP + FN)
     FPR = 1 - TN / (FP + TN)
     print("TP rate: ", TPR)
@@ -352,7 +361,7 @@ def testTrainers(dName, trainPerFile=True, withzeros=False):
     valid_markers = ([item[0] for item in mks.MarkerStyle.markers.items() if
                       item[1] is not 'nothing' and not item[1].startswith('tick') and not item[1].startswith(
                           'caret')])
-    markers = np.random.choice(valid_markers, len(MList) * len(thrList), replace=False)
+    markers = np.random.choice(valid_markers, len(MList), replace=False)
     fig, ax = plt.subplots()
     for i in range(len(MList)):
         # each line - different M (rows of result arrays)
@@ -374,6 +383,7 @@ def testTrainers(dName, trainPerFile=True, withzeros=False):
             # TODO: Interpolate?, currently get the closest point
             # get M and thr for closest point
             distarr = (tpr_cl - TPR) ** 2 + (fpr_cl - FPR) ** 2
+            print(distarr)
             M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
             M = MList[M_min_ind]
             thr = thrList[thr_min_ind]
@@ -398,4 +408,29 @@ def testTrainers(dName, trainPerFile=True, withzeros=False):
     cid = fig.canvas.mpl_connect('button_press_event', onclick)
     plt.show()
 
-# testTrainers('E:\AviaNZ\Sound Files\LSK\\train', trainPerFile=False, withzeros=True)
+# Test the trained detector on test data
+def testWavelet(dName, species, withzeros):
+    speciesData = json.load(open(os.path.join(dName, species + '.txt')))
+    opstartingtime = time.time()
+    ws = WaveletSegment.WaveletSegment()
+    Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, sampleRate=None, spInfo=speciesData, withzeros=withzeros, savedetections=True)
+    print("TESTING COMPLETED IN ", time.time() - opstartingtime)
+    print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
+    if TP+FN != 0:
+        recall = TP/(TP+FN)
+    else:
+        recall = 0
+    if TP+FP != 0:
+        precision = TP/(TP+FP)
+    else:
+        precision = 0
+    if TN+FP != 0:
+        specificity = TN/(TN+FP)
+    else:
+        specificity = 0
+    if TP+FP+TN+FN != 0:
+        accuracy = (TP+TN)/(TP+FP+TN+FN)
+    print(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
+
+# testTrainers('E:\Chapter5\DATASETS\\field\\ruru\\train', "Morepork", 800, 7000, trainPerFile=True, withzeros=True, mergeTrees=False, cleanNodelist=True)
+# testWavelet('E:\AviaNZ_qt4\Sound Files\Kiwi\\test\Tier1 dataset\positive', "Kiwi (Nth Is Brown)", withzeros=True)
