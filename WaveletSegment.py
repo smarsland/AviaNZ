@@ -30,6 +30,7 @@ import SignalProc
 import Segment
 from ext import ce_denoise as ce
 import psutil
+import copy
 
 # Nirosha's approach of simultaneous segmentation and recognition using wavelets
     # (0) Bandpass filter with different parameters for each species
@@ -80,8 +81,8 @@ class WaveletSegment:
         coefs = np.zeros((2**(nlevels+1)-2, n))
         for t in range(n):
             E = []
+            end = min(len(data), (t + 1) * sampleRate)
             for level in range(1,nlevels+1):
-                end = min(len(data), (t+1)*sampleRate)
                 wp = pywt.WaveletPacket(data=data[t * sampleRate:end], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=level)
                 e = np.array([np.sum(n.data**2) for n in wp.get_level(level, "natural")])
                 if np.sum(e)>0:
@@ -132,9 +133,9 @@ class WaveletSegment:
             r[count] = (np.mean(waveletCoefs[count,w1]) - np.mean(waveletCoefs[count,w0]))/np.std(waveletCoefs[count,:]) * np.sqrt(len(w0)*len(w1))/len(annotation)
 
         order = np.argsort(r)
-        order = order[-1:-nNodes-1:-1]
+        order_positive = order[-1:-nNodes-1:-1]
 
-        return order
+        return order_positive, order[0:nNodes]
 
     def sortListByChild(self,order):
         """ Inputs is a list sorted into order of correlation.
@@ -187,7 +188,7 @@ class WaveletSegment:
 
         return newlist
 
-    def detectCalls(self, wp, sampleRate, listnodes=[], thr=None, M=None, spInfo={}, withzeros=True):
+    def detectCalls1(self, wp, sampleRate, listnodes=[], thr=None, M=None, spInfo={}, withzeros=True):
         """ Given a parameter combination (thr x M) and a wavelet packet tree:
             take relevant nodes from the wavelet packet tree, reconstruct the data from it,
             identify detections based on thr and M.
@@ -241,7 +242,7 @@ class WaveletSegment:
         return detected
 
     # USE THIS FUNCTION FOR TESTING AND ACTUAL USE. FOR TRAINING USE detectCalls_sep
-    def detectCalls1(self,wp,sampleRate, listnodes=[], spInfo={}, withzeros=True):
+    def detectCalls(self,wp,sampleRate, listnodes=[], spInfo={}, withzeros=True):
         # For a recording (not for training) and the set of nodes
         # Regenerate the signal from each node and threshold
         # Output detections (OR version)
@@ -263,7 +264,7 @@ class WaveletSegment:
             bin = self.WaveletFunctions.ConvertWaveletNodeName(index)
             new_wp[bin] = wp[bin].data
 
-            # Get the coefficients
+            # Reconstruct the signal
             C = new_wp.reconstruct(update=True)
             # Filter
             C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0],high=spInfo['FreqRange'][1],order=10)
@@ -351,11 +352,242 @@ class WaveletSegment:
 
 
     #### TWO VERSIONS OF MAIN TRAINING CALLER FOLLOW HERE ####
-    def waveletSegment_train(self, dirName, thrList, MList, spInfo={}, df=False, trainPerFile=False, withzeros=True):
-        if trainPerFile:
+    def waveletSegment_train(self, dirName, thrList, MList, spInfo={}, df=False, trainPerFile=False, withzeros=True, mergeTrees=False):
+        if trainPerFile and mergeTrees:
+            return self.waveletSegment_train_treemerge(dirName, thrList, MList, spInfo, df, withzeros=withzeros)
+        elif trainPerFile:
             return self.waveletSegment_train_sep(dirName, thrList, MList, spInfo, df, withzeros=withzeros)
         else:
             return self.waveletSegment_train_joint(dirName, thrList, MList, spInfo, df, withzeros=withzeros)
+
+    def waveletSegment_train_treemerge(self, dirName, thrList, MList, spInfo={}, df=False, withzeros=True):
+        """ Take list of files and other parameters,
+             load files and propagate two trees: +ve and -ve annotations
+             perform grid search over thr and M parameters,
+             do a stepwise search for best nodes.
+         """
+        opstartingtime = time.time()
+        self.annotation = []
+        self.filelengths = []
+        # 1. Load the first file to prepare empty tree
+        for root, dirs, files in os.walk(str(dirName)):
+            for file in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0:
+                    # Load data and annotation
+                    # (preprocess only requires SampleRate and FreqRange from spInfo)
+                    wavFile = root + '/' + file[:-4]
+                    self.loadData(wavFile, trainPerFile=True, wavOnly=True)
+                    filteredDenoisedData = self.preprocess(spInfo, df=df)
+                    # Create a tree with the first second
+                    wp = pywt.WaveletPacket(data=filteredDenoisedData[0: self.sampleRate], wavelet=self.WaveletFunctions.wavelet, mode='symmetric',
+                                                  maxlevel=5)
+                    # Create empty trees
+                    wp_merge_pos = pywt.WaveletPacket(data=None, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
+                    if withzeros:
+                        for level in range(6):
+                            for n in wp_merge_pos.get_level(level, 'natural'):
+                                n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+
+                    wp_merge_neg = pywt.WaveletPacket(data=None, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
+                    if withzeros:
+                        for level in range(6):
+                            for n in wp_merge_neg.get_level(level, 'natural'):
+                                n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+                    print('Created empty trees')
+                    # Memory cleanup:
+                    wp = []
+                    del wp
+                    gc.collect()
+                    break
+
+        # 2. Load each file, propagate two trees from +ve and -ve seconds
+        print('Propagating two trees...')
+        for root, dirs, files in os.walk(str(dirName)):
+            for file in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
+                    wavFile = root + '/' + file
+                    datFile = root + '/' + file + '.data'  # 'train/kiwi/train1-sec.txt'
+                    if os.path.isfile(datFile):
+                        with open(datFile) as f:
+                            segments = json.load(f)
+                        for seg in segments:
+                            if seg[0] == -1:
+                                continue
+                            if not spInfo['Name'].title() in seg[4]:
+                                try:
+                                    secs = seg[1] - seg[0]
+                                    wavobj = wavio.read(wavFile, nseconds=secs, offset=seg[0])
+                                except:
+                                    print("unsupported file: ", wavFile)
+                                    pass
+                                self.sampleRate = wavobj.rate
+                                self.data = wavobj.data
+                                if self.data.dtype is not 'float':
+                                    self.data = self.data.astype('float')  # / 32768.0
+                                if np.shape(np.shape(self.data))[0] > 1:
+                                    self.data = np.squeeze(self.data[:, 0])
+                                filteredDenoisedData = self.preprocess(spInfo, df=df)
+                                # read second by second and propergate tree
+                                n = math.floor(len(filteredDenoisedData) / self.sampleRate)
+                                for t in range(n):
+                                    end = min(len(filteredDenoisedData), (t + 1) * self.sampleRate)
+                                    for level in range(1, 6):  # 5 levels
+                                        wp = pywt.WaveletPacket(data=filteredDenoisedData[t * self.sampleRate:end],
+                                                                wavelet=self.WaveletFunctions.wavelet, mode='symmetric',
+                                                                maxlevel=level)
+                                        for node in wp.get_level(level, 'natural'):
+                                            wp_merge_neg[node.path].data += np.abs(node.data)
+                                        # Memory cleanup:
+                                        wp = []
+                                        del wp
+                                        gc.collect()
+                            else:
+                                try:
+                                    secs = np.floor(seg[1] - seg[0])
+                                    wavobj = wavio.read(wavFile, nseconds=secs, offset=seg[0])
+                                except:
+                                    print("unsupported file: ", wavFile)
+                                    pass
+                                self.sampleRate = wavobj.rate
+                                self.data = wavobj.data
+                                if self.data.dtype is not 'float':
+                                    self.data = self.data.astype('float')  # / 32768.0
+                                if np.shape(np.shape(self.data))[0] > 1:
+                                    self.data = np.squeeze(self.data[:, 0])
+                                filteredDenoisedData = self.preprocess(spInfo, df=df)
+                                # read second by second and propergate tree
+                                n = math.floor(len(filteredDenoisedData) / self.sampleRate)
+                                for t in range(n):
+                                    end = min(len(filteredDenoisedData), (t + 1) * self.sampleRate)
+                                    for level in range(1, 6):  # 5 levels
+                                        wp = pywt.WaveletPacket(data=filteredDenoisedData[t * self.sampleRate:end],
+                                                                wavelet=self.WaveletFunctions.wavelet, mode='symmetric',
+                                                                maxlevel=level)
+                                        for node in wp.get_level(level, 'natural'):
+                                            wp_merge_pos[node.path].data += np.abs(node.data)
+                                        # Memory cleanup:
+                                        wp = []
+                                        del wp
+                                        gc.collect()
+        # 3. Energy of the merged trees
+        E = []
+        nNodes = 10 # Consider level 5 nodes only, top 10 nodes
+        print('Finding top 10 nodes...')
+        for level in range(5,6):
+            e = np.array([np.sum(n.data) for n in wp_merge_pos.get_level(level, "natural")])
+            if np.sum(e)>0:
+                e = 100.0*e/np.sum(e)
+            E = np.concatenate((E, e),axis=0)
+        order = np.argsort(E)
+        order_positive = order[-1:-nNodes - 1:-1]
+        nodes_pos = [n + 31 for n in order_positive]
+
+        E = []
+        nNodes = 10 # Consider level 5 nodes only, top 10 nodes
+        for level in range(5,6):
+            e = np.array([np.sum(n.data) for n in wp_merge_neg.get_level(level, "natural")])
+            if np.sum(e)>0:
+                e = 100.0*e/np.sum(e)
+            E = np.concatenate((E, e),axis=0)
+        order = np.argsort(E)
+        order_negative = order[-1:-nNodes - 1:-1]
+        nodes_neg = [n + 31 for n in order_negative]
+        print('nodes_pos: ', nodes_pos)
+        print('nodes_neg: ',nodes_neg)
+
+        # 3. Load each file for grid search
+        for root, dirs, files in os.walk(str(dirName)):
+            for file in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
+                    # Load data and annotation
+                    # (preprocess only requires SampleRate and FreqRange from spInfo)
+                    wavFile = root + '/' + file[:-4]
+                    self.loadData(wavFile, trainPerFile=False)
+                    filteredDenoisedData = self.preprocess(spInfo, df=df)
+                    self.audioList.append(filteredDenoisedData)
+                    print("ch 1, loading completed", time.time() - opstartingtime)
+        self.annotation = np.array(self.annotation)
+
+        # 4. Grid search
+        # Output structure: 1. 2d list of [nodes]
+        # (1st d runs over M, 2nd d runs over thr)
+        # 2-5. 2d np arrays of TP/FP/TN/FN
+        shape = (len(MList), len(thrList))
+        tpa = np.zeros(shape)
+        fpa = np.zeros(shape)
+        tna = np.zeros(shape)
+        fna = np.zeros(shape)
+        finalnodes = []
+
+        # Grid search over M x thr x Files
+        print('Grid search...')
+        for indexM in range(len(MList)):
+            finalnodesT = []
+            M = MList[indexM]
+            for indext in range(len(thrList)):
+                thr = thrList[indext]
+                spInfo['WaveletParams'] = [thr, M]
+                # Accumulate tp,fp,tn,fn for the set of files for this M and thr
+                tpacc = 0
+                fpacc = 0
+                tnacc = 0
+                fnacc =0
+                nodesacc = []
+                for indexF in range(len(self.filelengths)):
+                    if indexF == 0:
+                        annotation = self.annotation[0:self.filelengths[indexF]]
+                    else:
+                        annotation = self.annotation[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF+1]))]
+                    # Generate a full 5 level wavelet packet decomposition
+                    wp = pywt.WaveletPacket(data=self.audioList[indexF], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
+                    # Now check the F2 values and add node if it improves F2
+                    listnodes = []
+                    bestBetaScore = 0
+                    bestRecall = 0
+                    detected = np.zeros(self.filelengths[indexF])
+
+                    new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
+                    for node in nodes_pos:
+                        testlist = listnodes[:]
+                        testlist.append(node)
+                        print("Test list: ", testlist)
+                        detected_c = self.detectCalls_sep(new_wp, wp, self.sampleRate, index=node, spInfo=spInfo, withzeros=withzeros)
+                        if len(detected_c)<len(annotation):
+                            detected_c = np.append(detected_c, [0])
+                        # Update the detections
+                        detections = np.maximum.reduce([detected, detected_c])
+                        fB, recall, tp, fp, tn, fn = self.fBetaScore(annotation, detections)
+                        if fB is not None and fB > bestBetaScore: # Keep this node and update fB, recall, detected, and optimum nodes
+                            bestBetaScore = fB
+                            bestRecall = recall
+                            detected = detections
+                            listnodes.append(node)
+                        if bestBetaScore == 1 or bestRecall == 1:
+                            break
+                    # Memory cleanup:
+                    wp = []
+                    del wp
+                    gc.collect()
+
+                    nodesacc.append(listnodes)
+                    tpacc += tp
+                    tnacc += tn
+                    fpacc += fp
+                    fnacc += fn
+                    print("Iteration f %d/%d complete" % (indexF + 1, len(self.filelengths)))
+                # one iteration done, store results
+                nodesacc = [y for x in nodesacc for y in x]
+                nodesacc = list(set(nodesacc))
+                finalnodesT.append(nodesacc)
+                tpa[indexM, indext] = tpacc
+                fpa[indexM, indext] = fpacc
+                tna[indexM, indext] = tnacc
+                fna[indexM, indext] = fnacc
+                print("Iteration t %d/%d complete\n----------------" % (indext + 1, len(thrList)))
+            # One row done, store nodes
+            finalnodes.append(finalnodesT)
+            print("Iteration M %d/%d complete\n----------------\n----------------" % (indexM + 1, len(MList)))
+        return finalnodes, tpa, fpa, tna, fna, nodes_neg
 
     def waveletSegment_train_sep(self, dirName, thrList, MList, spInfo={}, df=False, withzeros=True):
         """ Take list of files and other parameters,
@@ -369,7 +601,7 @@ class WaveletSegment:
         # 1. Load each file, generate wavelet coeeficients
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files:
                     # Load data and annotation
                     # (preprocess only requires SampleRate and FreqRange from spInfo)
                     wavFile = root + '/' + file[:-4]
@@ -391,6 +623,7 @@ class WaveletSegment:
         tna = np.zeros(shape)
         fna = np.zeros(shape)
         finalnodes = []
+        negative_nodes = []
 
         # Grid search over M x thr x Files
         for indexM in range(len(MList)):
@@ -413,7 +646,11 @@ class WaveletSegment:
                         annotation = self.annotation[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF+1]))]
                         waveletCoefs = self.waveletCoefs[:, int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF+1]))]
                     # Limit number of nodes to 10 and avoid getting in low level nodes
-                    nodes = self.compute_r(annotation, waveletCoefs, nNodes=10)
+                    nodes, nodes_neg = self.compute_r(annotation, waveletCoefs, nNodes=10)
+                    # Keep track of negative correlated nodes
+                    for n in nodes_neg:
+                        if not n in negative_nodes:
+                            negative_nodes.append(n)
                     # Now for Nirosha's sorting
                     # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
                     nodes = self.sortListByChild(np.ndarray.tolist(nodes))
@@ -471,7 +708,9 @@ class WaveletSegment:
             # One row done, store nodes
             finalnodes.append(finalnodesT)
             print("Iteration M %d/%d complete\n----------------\n----------------" % (indexM + 1, len(MList)))
-        return finalnodes, tpa, fpa, tna, fna
+        # Convert negative correlated nodes
+        negative_nodes = [n + 1 for n in negative_nodes]
+        return finalnodes, tpa, fpa, tna, fna, negative_nodes
 
     def waveletSegment_train_joint(self, dirName, thrList, MList, spInfo={}, df=False, withzeros=True):
         """ Take list of files and other parameters,
@@ -544,7 +783,7 @@ class WaveletSegment:
                     newDetections = np.array([])
                     for fileId in range(len(self.audioList)):
                         wp = pywt.WaveletPacket(data=self.audioList[fileId], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
-                        detected_c = self.detectCalls(wp, self.sampleRate, listnodes=testlist, thr=thrList[indext], M=MList[indexM], spInfo=spInfo, withzeros=withzeros)
+                        detected_c = self.detectCalls1(wp, self.sampleRate, listnodes=testlist, thr=thrList[indext], M=MList[indexM], spInfo=spInfo, withzeros=withzeros)
                         detected_c = detected_c[0:math.ceil(len(self.audioList[fileId])/self.sampleRate)]
                         newDetections = np.concatenate((newDetections, detected_c))
                         # memory cleanup:
@@ -582,7 +821,7 @@ class WaveletSegment:
             finalnodes.append(finalnodesT)
         return finalnodes, tpa, fpa, tna, fna
 
-    def waveletSegment_test(self,dirName, sampleRate=None, listnodes = None, spInfo={}, df=False):
+    def waveletSegment_test(self,dirName, sampleRate=None, listnodes = None, spInfo={}, df=False, withzeros=True, savedetections=False):
         # Load the relevant list of nodes
         if listnodes is None:
             nodes = spInfo['WaveletParams'][2]
@@ -592,12 +831,14 @@ class WaveletSegment:
         # clear storage for multifile processing
         self.annotation = []
         self.audioList = []
+        self.filelengths = []
+        self.filenames = []
         detected = np.array([])
 
         # populate storage
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files:
                     wavFile = root + '/' + file[:-4]
                     # Load data and annotation
                     # (preprocess only requires SampleRate and FreqRange from spInfo)
@@ -607,44 +848,44 @@ class WaveletSegment:
 
         # remember to convert main structures to np arrays
         self.annotation = np.array(self.annotation)
+        print("Testing with %s positive and %s negative annotations" % (np.sum(self.annotation == 1), np.sum(self.annotation == 0)))
 
         # wavelet decomposition and call detection
         for fileId in range(len(self.audioList)):
+            print('Processing file # ', fileId + 1)
             wp = pywt.WaveletPacket(data=self.audioList[fileId], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
-            detected_c = self.detectCalls(wp, self.sampleRate, listnodes=nodes, spInfo=spInfo)
-            detected_c = detected_c[0:math.ceil(len(self.audioList[fileId])/self.sampleRate)]
+            detected_c = self.detectCalls(wp, self.sampleRate, listnodes=nodes, spInfo=spInfo, withzeros=withzeros)
+            # detected_c = detected_c[0:math.ceil(len(self.audioList[fileId])/self.sampleRate)]
             detected = np.concatenate((detected, detected_c))
+            # Generate .data for this file
+            # Merge neighbours in order to convert the detections into segments
+            # Note: detected np[0 1 1 1] becomes [[1,3]]
+            if savedetections:
+                detected_c = np.where(detected_c > 0)
+                if np.shape(detected_c)[1] > 1:
+                    detected_c = self.identifySegments(np.squeeze(detected_c))
+                elif np.shape(detected_c)[1] == 1:
+                    detected_c = np.array(detected_c).flatten().tolist()
+                    detected_c = self.identifySegments(detected_c)
+                else:
+                    detected_c = []
+                detected_c = self.mergeSeg(detected_c)
+                for item in detected_c:
+                    item[0] = int(item[0])
+                    item[1] = int(item[1])
+                    item = item.append(spInfo['FreqRange'][0])
+                for item in detected_c:
+                    item = item.append(spInfo['FreqRange'][1])
+                for item in detected_c:
+                    item = item.append(spInfo['Name'])
+                file = open(str(self.filenames[fileId]) + '.data', 'w')
+                json.dump(detected_c, file)
             # memory cleanup:
             wp = []
             del wp
             gc.collect()
-
-        print("Testing with %s positive and %s negative annotations" %(np.sum(self.annotation==1), np.sum(self.annotation==0)))
-
-        # Todo: remove clicks
-
-        # merge neighbours in order to convert the detections into segments
-        # note: detected np[0 1 1 1] becomes [[1,3]]
-        detected = np.where(detected > 0)
-        if np.shape(detected)[1] > 1:
-            detected = self.identifySegments(np.squeeze(detected))
-        elif np.shape(detected)[1] == 1:
-            detected = np.array(detected).flatten().tolist()
-            detected = self.identifySegments(detected)
-        else:
-            detected = []
-        detected = self.mergeSeg(detected)
-
-        if np.all(self.annotation==0):
-            return detected, 0, 0, 0, 0
-        else:
-            # flatten [[1,3], [5,6]] -> [1,2,5]
-            detectedI = [t for s in detected for t in range(s[0], s[1])]
-            # [1,2,5] -> [0,1,1,0,0,1,0]
-            detectedA = np.zeros(len(self.annotation))
-            detectedA[detectedI] = 1
-            fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detectedA)
-            return detected, TP, FP, TN, FN
+        fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
+        return detected, TP, FP, TN, FN
 
     def waveletSegment(self, data=None, sampleRate=None, listnodes = None, spInfo={}, df=False):
         # Simplest function for denoising one file. Moved from waveletSegment_test(trainTest=False, dirName=None)
@@ -689,7 +930,7 @@ class WaveletSegment:
             del (detected[i + 1])
         return detected
 
-    def loadData(self,fName, trainPerFile=False):
+    def loadData(self,fName, trainPerFile=False, wavOnly=False):
         # Load data
         filename = fName+'.wav' #'train/kiwi/train1.wav'
         filenameAnnotation = fName+'-sec.txt'#'train/kiwi/train1-sec.txt'
@@ -706,27 +947,30 @@ class WaveletSegment:
             self.data = np.squeeze(self.data[:,0])
         n=math.ceil(len(self.data)/self.sampleRate)
 
-        fileAnnotations = []
-        # Get the segmentation from the txt file
-        with open(filenameAnnotation) as f:
-            reader = csv.reader(f, delimiter="\t")
-            d = list(reader)
-        d = d[:-1]
-        if len(d) != n:
-            print("ERROR: annotation length %d does not match file duration %d!" %(len(d), n))
-            self.annotation = None
-            return
+        if not wavOnly:
+            fileAnnotations = []
+            # Get the segmentation from the txt file
+            with open(filenameAnnotation) as f:
+                reader = csv.reader(f, delimiter="\t")
+                d = list(reader)
+            if d[-1]==[]:
+                d = d[:-1]
+            if len(d) != n:
+                print("ERROR: annotation length %d does not match file duration %d!" %(len(d), n))
+                self.annotation = None
+                return
 
-        # for each second, store 0/1 presence:
-        sum = 0
-        for row in d:
-            fileAnnotations.append(int(row[1]))
-            sum += int(row[1])
+            # for each second, store 0/1 presence:
+            sum = 0
+            for row in d:
+                fileAnnotations.append(int(row[1]))
+                sum += int(row[1])
 
-        # TWO VERSIONS FOR COMPATIBILITY WITH BOTH TRAINING LOOPS:
-        if trainPerFile:
-            self.annotation = np.array(fileAnnotations)
-        else:
-            self.annotation.extend(fileAnnotations)
-            self.filelengths.append(n)
-        print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
+            # TWO VERSIONS FOR COMPATIBILITY WITH BOTH TRAINING LOOPS:
+            if trainPerFile:
+                self.annotation = np.array(fileAnnotations)
+            else:
+                self.annotation.extend(fileAnnotations)
+                self.filelengths.append(n)
+                # self.filenames.append(filename)
+            print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
