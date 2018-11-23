@@ -63,45 +63,43 @@ def make_zooniverse(species,infile,outfile):
 #infile = "Sound Files/Batch/"
 #outfile = "TestOut/KNIB"
 
-    files = [f for f in os.listdir(infile) if f[-4:]=='.wav']
+    # Read folders and sub-folders
+    for root, dirs, files in os.walk(infile):
+        for f in files:
+            if f[-4:]=='.wav' and f + '.data' in files:
+                segmentcount = 1
+                segments, audiodata, sampleRate, minFreq, maxFreq, datalengthSec = loadFile(os.path.join(root, f))
 
-    filecount = 0
-    for f in files:
-        segmentcount = 0
-        segments, audiodata, sampleRate, minFreq, maxFreq, datalengthSec = loadFile(infile+f)
+                if segments is None:
+                    pass
+                else:
+                    for s in segments:
+                        # Check for segments with correct label
+                        if species in s[4] or species+'?' in s[4]:
+                            if s[1] - s[0] < 10:
+                                # If segment is less than 10s, put it evenly in the middle
+                                excess = (10 - s[1] + s[0]) / 2
+                                if s[0] - excess < 0:
+                                    t1 = 0
+                                    t2 = 10
+                                elif s[1] + excess > datalengthSec:
+                                    t2 = datalengthSec
+                                    t1 = t2 - 10
+                                else:
+                                    t1 = s[0] - excess
+                                    t2 = s[1] + excess
 
-        if segments is None:
-            pass
-        else:
-            for s in segments:
-                # Check for segments with correct label
-                if species in s[4] or species+'?' in s[4]:
-                    if s[1] - s[0] < 10:
-                        # If segment is less than 10s, put it evenly in the middle
-                        excess = (10 - s[1] + s[0]) / 2
-                        if s[0] - excess < 0:
-                            t1 = 0
-                            t2 = 10
-                        elif s[1] + excess > datalengthSec:
-                            t2 = datalengthSec
-                            t1 = t2 - 10
-                        else:
-                            t1 = s[0] - excess
-                            t2 = s[1] + excess
-                
-                        filename = outfile+"_"+str(filecount)+"_"+str(segmentcount)
-                        save_selected_sound(audiodata,sampleRate,t1,t2,filename)
-                        segmentcount += 1
-                    else:
-                        # Otherwise, take the first 10s and the last 10s as 2 segments
-                        # TODO: Maybe take a bit out of the middle?
-                        filename = outfile+"_"+str(filecount)+"_"+str(segmentcount)
-                        save_selected_sound(audiodata,sampleRate,s[0],s[0]+10,filename)
-                        filename = outfile+"_"+str(filecount)+"_"+str(segmentcount+1)
-                        save_selected_sound(audiodata,sampleRate,s[1]-10,s[1],filename)
-                        segmentcount += 2
-    
-        filecount += 1
+                                filename = outfile+str(f[:-4])+"_"+str(segmentcount)
+                                save_selected_sound(audiodata,sampleRate,t1,t2,filename)
+                                segmentcount += 1
+                            else:
+                                # Otherwise, take the first 10s and the last 10s as 2 segments
+                                # TODO: Maybe take a bit out of the middle?
+                                filename = outfile+str(f[:-4])+"_"+str(segmentcount)
+                                save_selected_sound(audiodata,sampleRate,s[0],s[0]+10,filename)
+                                filename = outfile+str(f[:-4])+"_"+str(segmentcount+1)
+                                save_selected_sound(audiodata,sampleRate,s[1]-10,s[1],filename)
+                                segmentcount += 2
 
 # TODO: Check this, get username, password, filename, project
 # TODO: What else is needed in csv file?
