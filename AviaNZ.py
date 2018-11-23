@@ -3497,7 +3497,7 @@ class AviaNZ(QMainWindow):
             thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
             MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
             nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData,
-                                                                            df=False, trainPerFile=True, withzeros=True, mergeTrees=False)
+                                                                            d=False, f=True, trainPerFile=True, withzeros=True, mergeTrees=False)
             # Remove any negatively correlated nodes
             for lst in nodes:
                 for sub_lst in lst:
