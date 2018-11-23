@@ -332,9 +332,10 @@ class WaveletSegment:
         return segments
 
     # Usage functions
-    def preprocess(self, spInfo, df=False):
+    def preprocess(self, spInfo, d=False, f=False):
         # set df=True to perform both denoise and filter
-        # df=False to skip denoise
+        # d=False to skip denoise
+        # f=False to skip filtering
         fs = spInfo['SampleRate']
 
         if self.sampleRate != fs:
@@ -342,25 +343,28 @@ class WaveletSegment:
             self.sampleRate = fs
 
         # Get the five level wavelet decomposition
-        if df == True:
+        if d == True:
             denoisedData = self.WaveletFunctions.waveletDenoise(self.data, thresholdType='soft', wavelet=self.WaveletFunctions.wavelet,maxLevel=5)
         else:
             denoisedData=self.data  # this is to avoid washing out very fade calls during the denoising
 
-        filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1])
+        if f == True:
+            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, self.sampleRate, low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1])
+        else:
+            filteredDenoisedData = denoisedData
         return filteredDenoisedData
 
 
     #### TWO VERSIONS OF MAIN TRAINING CALLER FOLLOW HERE ####
-    def waveletSegment_train(self, dirName, thrList, MList, spInfo={}, df=False, trainPerFile=False, withzeros=True, mergeTrees=False):
+    def waveletSegment_train(self, dirName, thrList, MList, spInfo={}, d=False, f=False, trainPerFile=False, withzeros=True, mergeTrees=False):
         if trainPerFile and mergeTrees:
-            return self.waveletSegment_train_treemerge(dirName, thrList, MList, spInfo, df, withzeros=withzeros)
+            return self.waveletSegment_train_treemerge(dirName, thrList, MList, spInfo, d, f, withzeros=withzeros)
         elif trainPerFile:
-            return self.waveletSegment_train_sep(dirName, thrList, MList, spInfo, df, withzeros=withzeros)
+            return self.waveletSegment_train_sep(dirName, thrList, MList, spInfo, d, f, withzeros=withzeros)
         else:
-            return self.waveletSegment_train_joint(dirName, thrList, MList, spInfo, df, withzeros=withzeros)
+            return self.waveletSegment_train_joint(dirName, thrList, MList, spInfo, d, f, withzeros=withzeros)
 
-    def waveletSegment_train_treemerge(self, dirName, thrList, MList, spInfo={}, df=False, withzeros=True):
+    def waveletSegment_train_treemerge(self, dirName, thrList, MList, spInfo={}, d=False, f=False, withzeros=True):
         """ Take list of files and other parameters,
              load files and propagate two trees: +ve and -ve annotations
              perform grid search over thr and M parameters,
@@ -377,7 +381,7 @@ class WaveletSegment:
                     # (preprocess only requires SampleRate and FreqRange from spInfo)
                     wavFile = root + '/' + file[:-4]
                     self.loadData(wavFile, trainPerFile=True, wavOnly=True)
-                    filteredDenoisedData = self.preprocess(spInfo, df=df)
+                    filteredDenoisedData = self.preprocess(spInfo, d=d, f=f)
                     # Create a tree with the first second
                     wp = pywt.WaveletPacket(data=filteredDenoisedData[0: self.sampleRate], wavelet=self.WaveletFunctions.wavelet, mode='symmetric',
                                                   maxlevel=5)
@@ -589,7 +593,7 @@ class WaveletSegment:
             print("Iteration M %d/%d complete\n----------------\n----------------" % (indexM + 1, len(MList)))
         return finalnodes, tpa, fpa, tna, fna, nodes_neg
 
-    def waveletSegment_train_sep(self, dirName, thrList, MList, spInfo={}, df=False, withzeros=True):
+    def waveletSegment_train_sep(self, dirName, thrList, MList, spInfo={}, d=False, f=False, withzeros=True):
         """ Take list of files and other parameters,
              load files, compute wavelet coefficients and reuse them in each (M, thr) combination,
              perform grid search over thr and M parameters,
@@ -606,7 +610,7 @@ class WaveletSegment:
                     # (preprocess only requires SampleRate and FreqRange from spInfo)
                     wavFile = root + '/' + file[:-4]
                     self.loadData(wavFile, trainPerFile=False)
-                    filteredDenoisedData = self.preprocess(spInfo, df=df)
+                    filteredDenoisedData = self.preprocess(spInfo, d=d, f=f)
                     self.audioList.append(filteredDenoisedData)
                     # Compute energy in each WP node and store
                     self.waveletCoefs = np.column_stack(
@@ -632,12 +636,9 @@ class WaveletSegment:
             for indext in range(len(thrList)):
                 thr = thrList[indext]
                 spInfo['WaveletParams'] = [thr, M]
-                # Accumulate tp,fp,tn,fn for the set of files for this M and thr
-                tpacc = 0
-                fpacc = 0
-                tnacc = 0
-                fnacc =0
+                # Accumulate nodes for the set of files for this M and thr
                 nodesacc = []
+                detected_all = []
                 for indexF in range(len(self.filelengths)):
                     if indexF == 0:
                         annotation = self.annotation[0:self.filelengths[indexF]]
@@ -690,20 +691,19 @@ class WaveletSegment:
                     del wp
                     gc.collect()
 
+                    detected_all = np.concatenate((detected_all, detected))
                     nodesacc.append(listnodes)
-                    tpacc += tp
-                    tnacc += tn
-                    fpacc += fp
-                    fnacc += fn
                     print("Iteration f %d/%d complete" % (indexF + 1, len(self.filelengths)))
-                # one iteration done, store results
+                # One iteration done, store results
                 nodesacc = [y for x in nodesacc for y in x]
                 nodesacc = list(set(nodesacc))
                 finalnodesT.append(nodesacc)
-                tpa[indexM, indext] = tpacc
-                fpa[indexM, indext] = fpacc
-                tna[indexM, indext] = tnacc
-                fna[indexM, indext] = fnacc
+                # Get the measures with the selected node set for this threshold and M over the set of files
+                fB, recall, tp, fp, tn, fn = self.fBetaScore(self.annotation, detected_all)
+                tpa[indexM, indext] = tp
+                fpa[indexM, indext] = fp
+                tna[indexM, indext] = tn
+                fna[indexM, indext] = fn
                 print("Iteration t %d/%d complete\n----------------" % (indext + 1, len(thrList)))
             # One row done, store nodes
             finalnodes.append(finalnodesT)
@@ -821,7 +821,7 @@ class WaveletSegment:
             finalnodes.append(finalnodesT)
         return finalnodes, tpa, fpa, tna, fna
 
-    def waveletSegment_test(self,dirName, sampleRate=None, listnodes = None, spInfo={}, df=False, withzeros=True, savedetections=False):
+    def waveletSegment_test(self,dirName, sampleRate=None, listnodes = None, spInfo={}, d=False, f=False, withzeros=True, savedetections=False):
         # Load the relevant list of nodes
         if listnodes is None:
             nodes = spInfo['WaveletParams'][2]
@@ -842,8 +842,8 @@ class WaveletSegment:
                     wavFile = root + '/' + file[:-4]
                     # Load data and annotation
                     # (preprocess only requires SampleRate and FreqRange from spInfo)
-                    self.loadData(wavFile)
-                    filteredDenoisedData = self.preprocess(spInfo,df=df)
+                    self.loadData(wavFile, savedetections=savedetections)
+                    filteredDenoisedData = self.preprocess(spInfo,d=d, f=f)
                     self.audioList.append(filteredDenoisedData)
 
         # remember to convert main structures to np arrays
@@ -930,7 +930,7 @@ class WaveletSegment:
             del (detected[i + 1])
         return detected
 
-    def loadData(self,fName, trainPerFile=False, wavOnly=False):
+    def loadData(self,fName, trainPerFile=False, wavOnly=False, savedetections=False):
         # Load data
         filename = fName+'.wav' #'train/kiwi/train1.wav'
         filenameAnnotation = fName+'-sec.txt'#'train/kiwi/train1-sec.txt'
@@ -972,5 +972,6 @@ class WaveletSegment:
             else:
                 self.annotation.extend(fileAnnotations)
                 self.filelengths.append(n)
-                # self.filenames.append(filename)
+            if savedetections:
+                self.filenames.append(filename)
             print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))

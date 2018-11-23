@@ -318,11 +318,11 @@ def testTrainers2(dName, withzeros):
 # testTrainers2('E:\AviaNZ\Sound Files\LSK\\train', withzeros=True)
 
 # Test the new version of training
-def testTrainers(dName, species, f1, f2, trainPerFile=True, withzeros=False, mergeTrees=False, cleanNodelist=False):
+def testTrainers(dName, species, f1, f2, fs, trainPerFile=True, withzeros=False, mergeTrees=False, cleanNodelist=False):
     # Hard code meta data
     # species = "Kiwi (Little Spotted)"
     species = species
-    fs = 16000
+    fs = fs
     minLen = 6
     maxLen = 32
     minFrq = f1
@@ -338,9 +338,9 @@ def testTrainers(dName, species, f1, f2, trainPerFile=True, withzeros=False, mer
                    'FreqRange': [minFrq, maxFrq]}  # last params are thr, M
     # returns 2d lists of nodes over M x thr, or stats over M x thr
     thrList = np.linspace(0, 1, 5)  # np.linspace(0, 1, 5)
-    MList = np.linspace(0.25, 1.5, 3)  # np.linspace(0.25, 1.5, 3)
+    MList = np.linspace(0.25, 1, 4)  # np.linspace(0.25, 1.5, 3)
     ws = WaveletSegment.WaveletSegment()
-    nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, df=False, trainPerFile=trainPerFile, withzeros=withzeros, mergeTrees=mergeTrees)
+    nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=False, f=True, trainPerFile=trainPerFile, withzeros=withzeros, mergeTrees=mergeTrees)
     print("Filtered nodes: ", nodes)
     print("Negative nodes: ", negative_nodes)
     # Remove any negatively correlated nodes
@@ -409,11 +409,11 @@ def testTrainers(dName, species, f1, f2, trainPerFile=True, withzeros=False, mer
     plt.show()
 
 # Test the trained detector on test data
-def testWavelet(dName, species, withzeros):
+def testWavelet(dName, species, withzeros, savedetections):
     speciesData = json.load(open(os.path.join(dName, species + '.txt')))
     opstartingtime = time.time()
     ws = WaveletSegment.WaveletSegment()
-    Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, sampleRate=None, spInfo=speciesData, withzeros=withzeros, savedetections=True)
+    Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, sampleRate=None, spInfo=speciesData, d=False, f=True, withzeros=withzeros, savedetections=savedetections)
     print("TESTING COMPLETED IN ", time.time() - opstartingtime)
     print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
     if TP+FN != 0:
@@ -432,5 +432,5 @@ def testWavelet(dName, species, withzeros):
         accuracy = (TP+TN)/(TP+FP+TN+FN)
     print(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
 
-# testTrainers('E:\Chapter5\DATASETS\\field\\ruru\\train', "Morepork", 800, 7000, trainPerFile=True, withzeros=True, mergeTrees=False, cleanNodelist=True)
-# testWavelet('E:\AviaNZ_qt4\Sound Files\Kiwi\\test\Tier1 dataset\positive', "Kiwi (Nth Is Brown)", withzeros=True)
+# testTrainers('E:\Chapter5\DATASETS\\field\\ruru\\train', "Morepork", f1=600, f2=7000, fs=16000, trainPerFile=True, withzeros=True, mergeTrees=False, cleanNodelist=True)
+# testWavelet('E:\Chapter5\DATASETS\\field\\ruru\\test', "Morepork", withzeros=True, savedetections=True)
