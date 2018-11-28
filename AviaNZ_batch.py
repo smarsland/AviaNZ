@@ -404,17 +404,19 @@ class AviaNZ_batchProcess(QMainWindow):
                         if self.species == 'All species':
                             post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                               segments=newSegments, spInfo={})
-                            post.wind(sppSpecific=False)
-                            post.rainClick(sppSpecific=False)
+                            post.wind()
+                            post.rainClick()
                         else:
                             post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                               segments=newSegments, spInfo=speciesData)
                             post.short()  # TODO: keep 'deleteShort' in filter file?
                             if speciesData['Wind']:
-                                post.wind()
+                                pass
+                                # post.wind() - omitted in sppSpecific cases
                                 # print('After wind: ', post.segments)
                             if speciesData['Rain']:
-                                post.rainClick()
+                                pass
+                                # post.rainClick() - omitted in sppSpecific cases
                                 # print('After rain: ', post.segments)
                             if speciesData['F0']:
                                 post.fundamentalFrq()
