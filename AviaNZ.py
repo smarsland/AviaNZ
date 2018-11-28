@@ -3895,8 +3895,11 @@ class AviaNZ(QMainWindow):
             # post process to remove short segments, wind, rain, and use F0 check.
             if species == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
-                post.wind(sppSpecific=False)
+                print(post.segments)
+                post.wind(Tmean_wind = 20, sppSpecific=False)
+                print('After wind: ', post.segments)
                 post.rainClick(sppSpecific=False)
+                print('After rain: ', post.segments)
             else:
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                   segments=newSegments, spInfo=speciesData)
