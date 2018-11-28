@@ -48,14 +48,19 @@ int main(int argc, char *argv[]){
                 exit(1);
         }
 
-        // SM2 recorders produce a wamd metadata chunk:
-        if(header2.Subchunk2ID==1684889975){ // wamd as uint32
-                printf("-- metadata found, skipping %d bytes --\n", header2.Subchunk2Size);
+        while (header2.Subchunk2ID!=1635017060){
+                // SM2 recorders produce a wamd metadata chunk:
+                if(header2.Subchunk2ID==1684889975){ // wamd as uint32
+                       printf("-- metadata found, skipping %d bytes --\n", header2.Subchunk2Size);
+                // _junk_ chunks for gibbon and other recordings:
+                } else {
+                        printf("-- unexpected chunk found, skipping %d bytes --\n", header2.Subchunk2Size);
+                }
                 fseek(infile, header2.Subchunk2Size, SEEK_CUR);
                 fread(&header2, sizeof(WavHeader2), 1, infile);
-                printf("Subchunk2ID %u\n", header2.Subchunk2ID); // should be 1635017060 for data
-                printf("Data size: %u bytes\n", header2.Subchunk2Size);
         }
+        printf("Subchunk2ID %u\n", header2.Subchunk2ID); // should be 1635017060 for data
+        printf("Data size: %u bytes\n", header2.Subchunk2Size);
 
         // init new headers for output files
         WavHeader headerN;
