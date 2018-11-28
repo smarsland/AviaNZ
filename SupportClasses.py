@@ -137,7 +137,7 @@ class postProcess:
                 continue
         self.segments = newSegments
 
-    def wind(self, Tmean_wind = 1e-8, sppSpecific = True):
+    def wind(self, Tmean_wind = 1e-8):
         """
         delete wind corrupted segments (targeting moderate wind and above) if no sign of kiwi (check len)
         Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
@@ -145,14 +145,17 @@ class postProcess:
         newSegments = copy.deepcopy(self.segments)
         wind_lower = 2.0 * 100 / self.sampleRate
         wind_upper = 2.0 * 250 / self.sampleRate
-        print("wind limits:")
-        print(wind_lower, wind_upper)
 
         for seg in self.segments:
             if seg[0] == -1:
                 continue
-            else:  # read the sound segment and check for wind
+            # read the sound segment and check for wind
+            else:
                 secs = seg[1] - seg[0]
+                # keep if really long segment
+                if secs > self.minLen:
+                    continue
+
                 data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
 
                 f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
@@ -166,10 +169,8 @@ class postProcess:
                 # std_a_wind = np.std(a_wind)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
                 print(mean_a_wind)
                 if mean_a_wind > Tmean_wind:
-                    if sppSpecific and secs > self.minLen:  # just check duration given species
-                        continue
-                    else:
-                        newSegments.remove(seg)
+                    newSegments.remove(seg)
+
         # if you want to check out the power spectrum:
         # import matplotlib.pyplot as plt
         # plt.semilogy(f, p)
@@ -179,7 +180,7 @@ class postProcess:
         # plt.show()
         self.segments = newSegments
 
-    def rainClick(self, sppSpecific = True):
+    def rainClick(self):
         """
         delete random clicks e.g. rain. Check for sign of kiwi (len)
         """
@@ -198,6 +199,8 @@ class postProcess:
                     continue
                 else:
                     secs = seg[1] - seg[0]
+                    if secs > self.minLen:  # just check duration>10 sec
+                        continue
                     data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
                 mfcc = librosa.feature.mfcc(data, self.sampleRate)
                 # Normalise
@@ -205,10 +208,7 @@ class postProcess:
                 mfcc /= np.max(np.abs(mfcc), axis=0)
                 mfcc1 = mfcc[1, :]  # mfcc1 of the segment
                 if np.min(mfcc1) < thr:
-                    if sppSpecific and secs > self.minLen:  # just check duration>10 sec
-                        continue
-                    else:
-                        newSegments.remove(seg)
+                    newSegments.remove(seg)
         self.segments = newSegments
 
     def fundamentalFrq(self, fileName, speciesData):
