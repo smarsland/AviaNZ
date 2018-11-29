@@ -430,7 +430,7 @@ class WaveletSegment:
                                     self.data = self.data.astype('float')  # / 32768.0
                                 if np.shape(np.shape(self.data))[0] > 1:
                                     self.data = np.squeeze(self.data[:, 0])
-                                filteredDenoisedData = self.preprocess(spInfo, df=df)
+                                filteredDenoisedData = self.preprocess(spInfo, d=d, f=f)
                                 # read second by second and propergate tree
                                 n = math.floor(len(filteredDenoisedData) / self.sampleRate)
                                 for t in range(n):
@@ -458,7 +458,7 @@ class WaveletSegment:
                                     self.data = self.data.astype('float')  # / 32768.0
                                 if np.shape(np.shape(self.data))[0] > 1:
                                     self.data = np.squeeze(self.data[:, 0])
-                                filteredDenoisedData = self.preprocess(spInfo, df=df)
+                                filteredDenoisedData = self.preprocess(spInfo, d=d, f=f)
                                 # read second by second and propergate tree
                                 n = math.floor(len(filteredDenoisedData) / self.sampleRate)
                                 for t in range(n):
@@ -507,7 +507,7 @@ class WaveletSegment:
                     # (preprocess only requires SampleRate and FreqRange from spInfo)
                     wavFile = root + '/' + file[:-4]
                     self.loadData(wavFile, trainPerFile=False)
-                    filteredDenoisedData = self.preprocess(spInfo, df=df)
+                    filteredDenoisedData = self.preprocess(spInfo, d=d, f=f)
                     self.audioList.append(filteredDenoisedData)
                     print("ch 1, loading completed", time.time() - opstartingtime)
         self.annotation = np.array(self.annotation)
@@ -733,7 +733,7 @@ class WaveletSegment:
                     # (preprocess only requires SampleRate and FreqRange from spInfo)
                     wavFile = root + '/' + file[:-4]
                     self.loadData(wavFile)
-                    filteredDenoisedData = self.preprocess(spInfo,df=df)
+                    filteredDenoisedData = self.preprocess(spInfo,d=d, f=f)
                     self.audioList.append(filteredDenoisedData)
                     # Compute energy in each WP node and store
                     self.waveletCoefs = np.column_stack((self.waveletCoefs, self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate)))
@@ -887,7 +887,7 @@ class WaveletSegment:
         fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
         return detected, TP, FP, TN, FN
 
-    def waveletSegment(self, data=None, sampleRate=None, listnodes = None, spInfo={}, df=False):
+    def waveletSegment(self, data=None, sampleRate=None, listnodes = None, spInfo={}, d=False, f=False):
         # Simplest function for denoising one file. Moved from waveletSegment_test(trainTest=False, dirName=None)
         # Load the relevant list of nodes
         if listnodes is None:
@@ -897,7 +897,7 @@ class WaveletSegment:
 
         self.data = data
         self.sampleRate = sampleRate
-        filteredDenoisedData = self.preprocess(spInfo=spInfo, df=df)
+        filteredDenoisedData = self.preprocess(spInfo=spInfo, d=d, f=f)
         
         # WP decomposition
         wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)

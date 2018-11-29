@@ -38,6 +38,7 @@ from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 
 import wavio
 import numpy as np
+from scipy import signal
 from scipy.signal import medfilt
 from scipy.ndimage.filters import median_filter
 
@@ -159,8 +160,7 @@ class AviaNZ(QMainWindow):
         
         self.DOC = self.config['DOC']
         self.Hartley = self.config['Hartley']
-        #self.extra = self.config['extra']
-        self.extra = False
+        self.extra = "none"
 
         # Whether or not the context menu allows multiple birds. 
         self.multipleBirds = self.config['MultipleSpecies']
@@ -337,22 +337,34 @@ class AviaNZ(QMainWindow):
             if colour==self.config['cmap']:
                 cm.setChecked(True)
             receiver = lambda checked, cmap=colour: self.setColourMap(cmap)
-            #self.connect(cm, SIGNAL("triggered()"), receiver)
             cm.triggered.connect(receiver)
             colGroup.addAction(cm)
         self.invertcm = specMenu.addAction("Invert colour map",self.invertColourMap)
         self.invertcm.setCheckable(True)
         self.invertcm.setChecked(self.config['invertColourMap'])
 
+        # specMenu.addSeparator()
+        specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
+
         if not self.DOC and not self.Hartley:
             self.showInvSpec = specMenu.addAction("Show inverted spectrogram", self.showInvertedSpectrogram)
             self.showInvSpec.setCheckable(True)
             self.showInvSpec.setChecked(False)
 
-        # specMenu.addSeparator()
-        specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
+            specMenu.addSeparator()
+            extraMenu = specMenu.addMenu("Diagnostic plots")
+            extraGroup = QActionGroup(self)
+            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy"]:
+                em = extraMenu.addAction(ename)
+                em.setCheckable(True)
+                if ename == self.extra:
+                    em.setChecked(True)
+                receiver = lambda checked, ename=ename: self.setExtraPlot(ename)
+                em.triggered.connect(receiver)
+                extraGroup.addAction(em)
 
         specMenu.addSeparator()
+
         self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
         self.readonly.setCheckable(True)
         self.readonly.setChecked(self.config['readOnly'])
@@ -453,16 +465,14 @@ class AviaNZ(QMainWindow):
         self.d_spec = Dock("Spectrogram",size=(1200,300))
         self.d_controls = Dock("Controls",size=(40,100))
         self.d_files = Dock("Files",size=(40,200))
-        if self.extra:
-            self.d_plot = Dock("Plots",size=(1200,150))
+        self.d_plot = Dock("Plots",size=(1200,150))
 
         self.area.addDock(self.d_files,'left')
         self.area.addDock(self.d_overview,'right',self.d_files)
         self.area.addDock(self.d_ampl,'bottom',self.d_overview)
         self.area.addDock(self.d_spec,'bottom',self.d_ampl)
         self.area.addDock(self.d_controls,'bottom',self.d_files)
-        if self.extra:
-            self.area.addDock(self.d_plot,'bottom',self.d_spec)
+        self.area.addDock(self.d_plot,'bottom',self.d_spec)
 
         # Put content widgets in the docks
         self.w_overview = pg.LayoutWidget()
@@ -486,15 +496,13 @@ class AviaNZ(QMainWindow):
         self.w_spec.addItem(self.p_spec,row=0,col=1)
         self.d_spec.addWidget(self.w_spec)
 
-        if self.extra:
-            self.w_plot = pg.GraphicsLayoutWidget()
-            self.p_plot = self.w_plot.addViewBox(enableMouse=False,enableMenu=False)
-            self.w_plot.addItem(self.p_plot,row=0,col=1)
-            self.d_plot.addWidget(self.w_plot)
+        self.w_plot = pg.GraphicsLayoutWidget()
+        self.p_plot = self.w_plot.addViewBox(enableMouse=False,enableMenu=False)
+        self.w_plot.addItem(self.p_plot,row=0,col=1)
+        self.d_plot.addWidget(self.w_plot)
 
         # The axes
         # Time axis has to go separately in loadFile
-
         self.ampaxis = pg.AxisItem(orientation='left')
         self.w_ampl.addItem(self.ampaxis,row=0,col=0)
         self.ampaxis.linkToView(self.p_ampl)
@@ -507,13 +515,15 @@ class AviaNZ(QMainWindow):
         self.specaxis.linkToView(self.p_spec)
         self.specaxis.setWidth(w=65)
 
-        if self.extra:
-            # Plot window also needs an axis to make them line up
-            self.plotaxis = pg.AxisItem(orientation='left')
-            self.w_plot.addItem(self.plotaxis,row=0,col=0)
-            self.plotaxis.linkToView(self.p_plot)
-            self.plotaxis.setWidth(w=65)
-            self.plotaxis.setLabel('')
+        # Plot window also needs an axis to make them line up
+        self.plotaxis = pg.AxisItem(orientation='left')
+        self.w_plot.addItem(self.plotaxis,row=0,col=0)
+        self.plotaxis.linkToView(self.p_plot)
+        self.plotaxis.setWidth(w=65)
+        self.plotaxis.setLabel('')
+
+        # Hide diagnostic plot window until requested
+        self.d_plot.hide()
 
         # The print out at the bottom of the spectrogram with data in
         self.pointData = pg.TextItem(color=(255,0,0),anchor=(0,0))
@@ -531,30 +541,6 @@ class AviaNZ(QMainWindow):
         self.p_ampl.addItem(self.amplPlot)
         self.specPlot = pg.ImageItem()
         self.p_spec.addItem(self.specPlot)
-
-        if self.extra:
-            self.plotPlot = pg.PlotDataItem()
-            self.p_plot.addItem(self.plotPlot)
-            self.plotPlot2 = pg.PlotDataItem()
-            self.p_plot.addItem(self.plotPlot2)
-            self.plotPlot3 = pg.PlotDataItem()
-            self.p_plot.addItem(self.plotPlot3)
-            self.plotPlot4 = pg.PlotDataItem()
-            self.p_plot.addItem(self.plotPlot4)
-            self.plotPlot5 = pg.PlotDataItem()
-            self.p_plot.addItem(self.plotPlot5)
-            self.plotPlot6 = pg.PlotDataItem()
-            self.p_plot.addItem(self.plotPlot6)
-            self.plotPlot7 = pg.PlotDataItem()
-            self.p_plot.addItem(self.plotPlot7)
-            self.plotPlot8 = pg.PlotDataItem()
-            self.p_plot.addItem(self.plotPlot8)
-            self.plotPlot9 = pg.PlotDataItem()
-            self.p_plot.addItem(self.plotPlot9)
-            self.plotPlot10 = pg.PlotDataItem()
-            self.p_plot.addItem(self.plotPlot10)
-            self.plotPlot11 = pg.PlotDataItem()
-            self.p_plot.addItem(self.plotPlot11)
 
         # Connect up the listeners
         self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
@@ -1621,7 +1607,7 @@ class AviaNZ(QMainWindow):
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.p_spec.setXRange(minX, maxX, padding=0)
 
-        if self.extra:
+        if self.extra != "none":
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
@@ -1645,6 +1631,7 @@ class AviaNZ(QMainWindow):
         self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
         self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
         #self.specPlot.setImage(self.sg)
+        self.setExtraPlot(self.extra)
 
         self.setColourMap(self.config['cmap'])
         self.setColourLevels()
@@ -1708,10 +1695,126 @@ class AviaNZ(QMainWindow):
             self.p_spec.addItem(self.bar, ignoreBounds=True)
             self.bar.sigPositionChangeFinished.connect(self.barMoved)
 
-        if self.extra:
-            # Extra stuff to show test plots
+        QApplication.processEvents()
+
+    def setExtraPlot(self, plotname):
+        """ Reacts to menu clicks and updates or hides diagnostic plot window."""
+        self.extra = plotname
+
+        # clear plot before updating/proceeding
+        try:
+            # self.p_plot.removeItem(self.plotExtra)
+            self.p_plot.clear()
+        except Exception as e:
+            print(e)
+
+        if self.extra != "none":
+            self.d_plot.show()
+        else:
+            self.d_plot.hide()
+
+        # if self.extra == "wcorr" or self.extra == "wsc":
+            # self.plotPlot2 = pg.PlotDataItem()
+            # self.p_plot.addItem(self.plotPlot2)
+            # self.plotPlot4 = pg.PlotDataItem()
+            # self.p_plot.addItem(self.plotPlot4)
+            # self.plotPlot5 = pg.PlotDataItem()
+            # self.p_plot.addItem(self.plotPlot5)
+            # self.plotPlot6 = pg.PlotDataItem()
+            # self.p_plot.addItem(self.plotPlot6)
+            # self.plotPlot7 = pg.PlotDataItem()
+            # self.p_plot.addItem(self.plotPlot7)
+            # self.plotPlot8 = pg.PlotDataItem()
+            # self.p_plot.addItem(self.plotPlot8)
+
+        # plot wavelet scalogram
+        if self.extra == "Wavelet scalogram":
+            self.plotExtra = pg.ImageItem()
+            self.p_plot.addItem(self.plotExtra)
+
+            ws = WaveletSegment.WaveletSegment(self.audiodata, self.sampleRate)
+            e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
+            # e is 2^nlevels x nseconds
+
+            pos, colour, mode = colourMaps.colourMaps("Inferno")
+            cmap = pg.ColorMap(pos, colour,mode)
+            lut = cmap.getLookupTable(0.0, 1.0, 256)
+            self.plotExtra.setLookupTable(lut)
+            self.plotExtra.setImage(e.T)
+            self.plotaxis.setLabel('Wavelet node')
+
+        # plot wc correlations
+        if self.extra == "Wavelet correlations":
+            self.plotExtra = pg.ImageItem()
+            self.p_plot.addItem(self.plotExtra)
+
+            ws = WaveletSegment.WaveletSegment(self.audiodata, self.sampleRate)
+            e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
+            annotation = np.zeros(np.shape(e)[1])
+            for s in self.segments:
+                annotation[math.floor(s[0]):math.ceil(s[1])] = 1
+            w0 = np.where(annotation==0)[0]
+            w1 = np.where(annotation==1)[0]
+    
+            r = np.zeros((64, np.shape(e)[1]))
+            for count in range(62):
+                # just compute_r from WaveletSegment
+                corr = (np.mean(e[count,w1]) - np.mean(e[count,w0]))/np.std(e[count,:]) * np.sqrt(len(w0)*len(w1))/len(annotation)
+                # map a long vector of rs to different image areas
+                level = int(math.log(count+2, 2))
+                node = count+2 - 2**level
+                r[node * 2**(6-level) : (node+1) * 2**(6-level), level] = corr
+            r[:,0] = np.linspace(np.min(r), np.max(r), num = 64)
+
+            pos, colour, mode = colourMaps.colourMaps("Viridis")
+            cmap = pg.ColorMap(pos, colour,mode)
+            lut = cmap.getLookupTable(0.0, 1.0, 256)
+            self.plotExtra.setLookupTable(lut)
+            self.plotExtra.setImage(r.T)
+            self.plotaxis.setLabel('Frequency bin')
+
+        # plot energy in "wind" band
+        if self.extra == "Wind energy":
+            #self.plotExtra = pg.PlotDataItem()
+            #self.p_plot.addItem(self.plotExtra)
+
+            # compute following PostProcess.wind()
+            we_mean = np.zeros(int(self.datalengthSec))
+            we_std = np.zeros(int(self.datalengthSec))
+            for w in range(int(self.datalengthSec)):
+                data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
+                f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
+                limsup = int(p.__len__() * 2 * 250 / self.sampleRate)
+                liminf = int(p.__len__() * 2 * 100 / self.sampleRate)
+                a_wind = p[liminf:limsup]
+                we_mean[w] = np.mean(a_wind)
+                we_std[w] = np.std(a_wind)
+
+            self.plotExtra = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean)
+            self.plotExtra.setPen(fn.mkPen(color='k', width=2))
+            self.plotExtra2 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean+we_std)
+            self.plotExtra2.setPen(fn.mkPen('r'))
+            self.plotExtra3 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean-we_std)
+            self.plotExtra3.setPen(fn.mkPen('r'))
+            self.plotaxis.setLabel('Mean (SD) power, V^2/Hz')
+            self.p_plot.addItem(self.plotExtra)
+            self.p_plot.addItem(self.plotExtra2)
+            self.p_plot.addItem(self.plotExtra3)
+
+            # mean = np.mean(e[1,:])
+            # std = np.std(e[1,:])
+            # thr = mean + 2.5 * std
+            # thr = np.ones((1, 100)) * thr
+            # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100, endpoint=True), thr[0,:])
+            # self.plotPlot7.setPen(fn.mkPen('c'))
+            
+            # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
+            # self.plotPlot4.setPen(fn.mkPen('g'))
+            # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[0,:])
+            # self.plotPlot5.setPen(fn.mkPen('b'))
+
             #self.plotPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
-            pproc = SupportClasses.postProcess(self.audiodata,self.sampleRate)
+            # pproc = SupportClasses.postProcess(self.audiodata,self.sampleRate)
             #energy, e = pproc.detectClicks()
             #energy, e = pproc.eRatioConfd()
             #if len(clicks)>0:
@@ -1725,9 +1828,6 @@ class AviaNZ(QMainWindow):
             # # Call MFCC in Features and plot some of them :)
             # ff = Features.Features(self.audiodata,self.sampleRate)
             # e = ff.get_mfcc()
-            # print np.shape(e)
-            # print np.sum(e, axis=0)
-            # print e[0,:]
             #
             # # self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),np.sum(e,axis=0))
             # # self.plotPlot.setPen(fn.mkPen('k'))
@@ -1763,7 +1863,7 @@ class AviaNZ(QMainWindow):
             # # self.plotPlot11.setPen(fn.mkPen('c'))
 
             # # plot eRatio
-            post = SupportClasses.postProcess(self.audiodata, self.sampleRate, [])
+            # post = SupportClasses.postProcess(self.audiodata, self.sampleRate, [])
             # e = post.eRatioConfd([], AviaNZ_extra=True)
             # # print np.shape(e)
             # # print e[0]
@@ -1771,47 +1871,7 @@ class AviaNZ(QMainWindow):
             # self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e[0])[0],endpoint=True),e[0])
             # self.plotPlot.setPen(fn.mkPen('b'))
 
-            # # plot wind/rain
-            # wind, rain, mean_rain = post.wind()
-            # wind = np.ones((1,100))*wind
-            # # rain = np.ones((1,100))*rain    # rain is SNR
-            # # thr = np.ones((1,100))*3.5      # rain SNR thr is 3.5
-            # # mean_rain = np.ones((1, 100)) * mean_rain
-            # # mean_rain_thr = np.ones((1,100)) * 1e-6     # rain mean thr is 1e-6
-            # wind_thr = np.ones((1, 100)) * 1e-8
-            # # print np.shape(wind)
-            # # print rain[0,:]
-            # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind[0,:])
-            # self.plotPlot3.setPen(fn.mkPen('r'))
-            # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), wind_thr[0,:])
-            # self.plotPlot4.setPen(fn.mkPen('k'))
-            # # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain[0,:])
-            # # self.plotPlot5.setPen(fn.mkPen('b'))
-            # # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100,endpoint=True), mean_rain_thr[0,:])
-            # # self.plotPlot6.setPen(fn.mkPen('g'))
 
-            # # plot wavelet
-            # ws = WaveletSegment.WaveletSegment(self.audiodata, self.sampleRate)
-            # e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
-            # print np.shape(e)
-            # print np.shape(e)[1]
-            # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[1,:])
-            # self.plotPlot3.setPen(fn.mkPen('r'))
-            # mean = np.mean(e[1,:])
-            # std = np.std(e[1,:])
-            # thr = mean + 2.5 * std
-            # thr = np.ones((1, 100)) * thr
-            # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100, endpoint=True), thr[0,:])
-            # self.plotPlot7.setPen(fn.mkPen('c'))
-            #
-            # # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
-            # # self.plotPlot4.setPen(fn.mkPen('g'))
-            # # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[0,:])
-            # # self.plotPlot5.setPen(fn.mkPen('b'))
-            # # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[14,:])
-            # # self.plotPlot6.setPen(fn.mkPen('k'))
-
-        QApplication.processEvents()
 
     def updateRegion_spec(self):
         """ This is the listener for when a segment box is changed in the spectrogram.
