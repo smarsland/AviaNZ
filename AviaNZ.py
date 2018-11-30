@@ -2745,8 +2745,13 @@ class AviaNZ(QMainWindow):
         """
         minsg = np.min(self.sg)
         maxsg = np.max(self.sg)
-        self.config['brightness'] = self.brightnessSlider.value()
+
+        if self.config['invertColourMap']:
+            self.config['brightness'] = self.brightnessSlider.value()
+        else:
+            self.config['brightness'] = 100-self.brightnessSlider.value()
         self.config['contrast'] = self.contrastSlider.value()
+
         self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
         self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
