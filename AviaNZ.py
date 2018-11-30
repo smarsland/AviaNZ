@@ -355,7 +355,7 @@ class AviaNZ(QMainWindow):
             specMenu.addSeparator()
             extraMenu = specMenu.addMenu("Diagnostic plots")
             extraGroup = QActionGroup(self)
-            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Filter band energy"]:
+            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Filter band energy", "Filtered spectrogram"]:
                 em = extraMenu.addAction(ename)
                 em.setCheckable(True)
                 if ename == self.extra:
@@ -1608,8 +1608,10 @@ class AviaNZ(QMainWindow):
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.p_spec.setXRange(minX, maxX, padding=0)
 
-        if self.extra != "none":
+        if self.extra != "none" and self.extra != "Filtered spectrogram":
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
+        if self.extra == "Filtered spectrogram":
+            self.p_plot.setXRange(minX, maxX, padding=0)
         # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
         self.pointData.setPos(minX,0)
@@ -1806,74 +1808,103 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra2)
             self.p_plot.addItem(self.plotExtra3)
 
-        # plot energy in bands of some particular trained filter:
-        if self.extra == "Filter band energy":
-            Ez = np.zeros(int(self.datalengthSec))
-            EzCurved = np.zeros(int(self.datalengthSec))
-            EzCurved2 = np.zeros(int(self.datalengthSec))
-            EzCurved3 = np.zeros(int(self.datalengthSec))
+        # plot spectrogram of only the filtered band:
+        if self.extra == "Filtered spectrogram":
+            self.plotExtra = pg.ImageItem()
+            self.p_plot.addItem(self.plotExtra)
+
             WF = WaveletFunctions.WaveletFunctions(data=None, wavelet='dmey2', maxLevel=5)
             new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+            wp = pywt.WaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
 
+            # zero-out wp tree
+            for level in range(6):
+                for n in new_wp.get_level(level, 'natural'):
+                    n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+            for index in [35, 37, 44]:
+                index = WF.ConvertWaveletNodeName(index)
+                new_wp[index] = wp[index].data
+            
+            C = new_wp.reconstruct()
+            sgRaw = self.sp.spectrogram(C)
+            maxsg = np.min(sgRaw)
+            tempsp = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+
+            pos, colour, mode = colourMaps.colourMaps("Inferno")
+            cmap = pg.ColorMap(pos, colour,mode)
+            lut = cmap.getLookupTable(0.0, 1.0, 256)
+            self.plotExtra.setLookupTable(lut)
+            self.plotExtra.setImage(tempsp)
+            #minX, maxX = self.overviewImageRegion.getRegion()
+            #self.p_plot.setXRange(minX, maxX, padding=0)
+            self.plotaxis.setLabel('Frequency bins')
+             
+
+        # plot energy in bands of some particular trained filter:
+        if self.extra == "Filter band energy":
+            Ejoint = np.zeros(int(self.datalengthSec))
+            Esep = np.zeros((3, int(self.datalengthSec)))
+            WF = WaveletFunctions.WaveletFunctions(data=None, wavelet='dmey2', maxLevel=5)
+            new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+            from ext import ce_denoise
+            M = 0.25
+ 
             # as in detectCalls:
             for w in range(int(self.datalengthSec)):
                 # decompose 1s of signal
                 data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
                 wp = pywt.WaveletPacket(data=data, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
-
+ 
                 # zero-out wp tree
                 for level in range(6):
                     for n in new_wp.get_level(level, 'natural'):
                         n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
-
-                # reconstruct from bands
-                for index in [31]:
+ 
+                # reconstruct from bands, separately
+                r = 0 
+                for index in [35, 37, 44]:
                     index = WF.ConvertWaveletNodeName(index)
                     new_wp[index] = wp[index].data
+ 
+                    C = new_wp.reconstruct(update=True)
+                    C = np.abs(C)
+
+                    E = ce_denoise.EnergyCurve(C, int(M * self.sampleRate / 2)) 
+
+                    # re-zero for next pass
+                    new_wp[index].data = np.zeros(len(wp[index].data))
+ 
+                    # normalize energy, so that we don't need to hardcode thr 
+                    Esep[r,w] = (np.max(E) - np.mean(C)) / np.std(C)
+                    r = r + 1 
+ 
+                # reconstruct from bands, jointly
+                for index in [35, 37, 44]:
+                    index = WF.ConvertWaveletNodeName(index)
+                    new_wp[index] = wp[index].data
+ 
                 C = new_wp.reconstruct(update=True)
                 C = np.abs(C)
-                from ext import ce_denoise
-                M = 0.025
-                E = ce_denoise.EnergyCurve(C, int(M * self.sampleRate / 2))
-                M = 0.25
-                E2 = ce_denoise.EnergyCurve(C, int(M * self.sampleRate / 2))
-                M = 1.5
-                E3 = ce_denoise.EnergyCurve(C, int(M * self.sampleRate / 2))
+                E = ce_denoise.EnergyCurve(C, int(M * self.sampleRate / 2)) 
 
-                # normalize energy, so that we don't need to hardcode thr
-                Ez[w] = (np.max(C) - np.mean(C)) / np.std(C)
-                EzCurved[w] = (np.max(E) - np.mean(C)) / np.std(C)
-                EzCurved2[w] = (np.max(E2) - np.mean(C)) / np.std(C)
-                EzCurved3[w] = (np.max(E3) - np.mean(C)) / np.std(C)
+                # normalize energy, so that we don't need to hardcode thr 
+                Ejoint[w] = (np.max(E) - np.mean(C)) / np.std(C)
 
             # plot
-            self.plotExtra = pg.PlotDataItem(np.arange(self.datalengthSec), Ez)
-            self.plotExtra.setPen(fn.mkPen(color='k', width=1))
-            self.plotExtra2 = pg.PlotDataItem(np.arange(self.datalengthSec), EzCurved)
-            self.plotExtra2.setPen(fn.mkPen(color='r', width=1))
-            self.plotExtra3 = pg.PlotDataItem(np.arange(self.datalengthSec), EzCurved2)
-            self.plotExtra3.setPen(fn.mkPen(color='r', width=1.5))
-            self.plotExtra4 = pg.PlotDataItem(np.arange(self.datalengthSec), EzCurved3)
-            self.plotExtra4.setPen(fn.mkPen(color='r', width=2))
+            self.plotExtra = pg.PlotDataItem(np.arange(int(self.datalengthSec)), Ejoint)
+            self.plotExtra.setPen(fn.mkPen(color='k', width=2))
+            self.plotExtra2 = pg.PlotDataItem(np.arange(int(self.datalengthSec)), Esep[0,:])
+            self.plotExtra2.setPen(fn.mkPen(color=(255,0,0), width=1))
+            self.plotExtra3 = pg.PlotDataItem(np.arange(int(self.datalengthSec)), Esep[1,:])
+            self.plotExtra3.setPen(fn.mkPen(color=(255,80,0), width=1))
+            self.plotExtra4 = pg.PlotDataItem(np.arange(int(self.datalengthSec)), Esep[2,:])
+            self.plotExtra4.setPen(fn.mkPen(color=(255,160,0), width=1))
             self.p_plot.addItem(self.plotExtra)
             self.p_plot.addItem(self.plotExtra2)
             self.p_plot.addItem(self.plotExtra3)
             self.p_plot.addItem(self.plotExtra4)
             self.plotaxis.setLabel('Power Z-score')
 
-            # mean = np.mean(e[1,:])
-            # std = np.std(e[1,:])
-            # thr = mean + 2.5 * std
-            # thr = np.ones((1, 100)) * thr
-            # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100, endpoint=True), thr[0,:])
-            # self.plotPlot7.setPen(fn.mkPen('c'))
-            
-            # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
-            # self.plotPlot4.setPen(fn.mkPen('g'))
-            # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[0,:])
-            # self.plotPlot5.setPen(fn.mkPen('b'))
-
-            #self.plotPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
             # pproc = SupportClasses.postProcess(self.audiodata,self.sampleRate)
             #energy, e = pproc.detectClicks()
             #energy, e = pproc.eRatioConfd()
