@@ -12,7 +12,7 @@ Cython==0.28.4
 click==6.7
 spectrum==0.7.3
 PyQt5==5.11.2
-PyWavelets==0.5.2
+PyWavelets==1.0.1
 scikits.talkbox==0.2.5
 #skimage==0.0
 scikit_learn==0.19.2
