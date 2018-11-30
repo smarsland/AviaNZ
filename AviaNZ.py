@@ -62,6 +62,7 @@ import WaveletFunctions
 import AviaNZ_batch
 import fnmatch
 import librosa
+import pywt
 
 from openpyxl import load_workbook, Workbook
 import matplotlib.markers as mks
@@ -354,7 +355,7 @@ class AviaNZ(QMainWindow):
             specMenu.addSeparator()
             extraMenu = specMenu.addMenu("Diagnostic plots")
             extraGroup = QActionGroup(self)
-            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy"]:
+            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Filter band energy"]:
                 em = extraMenu.addAction(ename)
                 em.setCheckable(True)
                 if ename == self.extra:
@@ -1748,6 +1749,10 @@ class AviaNZ(QMainWindow):
             self.plotExtra = pg.ImageItem()
             self.p_plot.addItem(self.plotExtra)
 
+            # preprocess
+            data = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
+            data = self.sp.ButterworthBandpass(data, self.sampleRate, 100, 16000)
+
             ws = WaveletSegment.WaveletSegment(self.audiodata, self.sampleRate)
             e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
             annotation = np.zeros(np.shape(e)[1])
@@ -1765,6 +1770,9 @@ class AviaNZ(QMainWindow):
                 node = count+2 - 2**level
                 r[node * 2**(6-level) : (node+1) * 2**(6-level), level] = corr
             r[:,0] = np.linspace(np.min(r), np.max(r), num = 64)
+            # propagate along x
+            for tmult in range(10, len(annotation)):
+                r[:,tmult] = r[:,tmult-10]
 
             pos, colour, mode = colourMaps.colourMaps("Viridis")
             cmap = pg.ColorMap(pos, colour,mode)
@@ -1775,9 +1783,6 @@ class AviaNZ(QMainWindow):
 
         # plot energy in "wind" band
         if self.extra == "Wind energy":
-            #self.plotExtra = pg.PlotDataItem()
-            #self.p_plot.addItem(self.plotExtra)
-
             # compute following PostProcess.wind()
             we_mean = np.zeros(int(self.datalengthSec))
             we_std = np.zeros(int(self.datalengthSec))
@@ -1800,6 +1805,61 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
             self.p_plot.addItem(self.plotExtra2)
             self.p_plot.addItem(self.plotExtra3)
+
+        # plot energy in bands of some particular trained filter:
+        if self.extra == "Filter band energy":
+            Ez = np.zeros(int(self.datalengthSec))
+            EzCurved = np.zeros(int(self.datalengthSec))
+            EzCurved2 = np.zeros(int(self.datalengthSec))
+            EzCurved3 = np.zeros(int(self.datalengthSec))
+            WF = WaveletFunctions.WaveletFunctions(data=None, wavelet='dmey2', maxLevel=5)
+            new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+
+            # as in detectCalls:
+            for w in range(int(self.datalengthSec)):
+                # decompose 1s of signal
+                data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
+                wp = pywt.WaveletPacket(data=data, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+
+                # zero-out wp tree
+                for level in range(6):
+                    for n in new_wp.get_level(level, 'natural'):
+                        n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+
+                # reconstruct from bands
+                for index in [31]:
+                    index = WF.ConvertWaveletNodeName(index)
+                    new_wp[index] = wp[index].data
+                C = new_wp.reconstruct(update=True)
+                C = np.abs(C)
+                from ext import ce_denoise
+                M = 0.025
+                E = ce_denoise.EnergyCurve(C, int(M * self.sampleRate / 2))
+                M = 0.25
+                E2 = ce_denoise.EnergyCurve(C, int(M * self.sampleRate / 2))
+                M = 1.5
+                E3 = ce_denoise.EnergyCurve(C, int(M * self.sampleRate / 2))
+
+                # normalize energy, so that we don't need to hardcode thr
+                Ez[w] = (np.max(C) - np.mean(C)) / np.std(C)
+                EzCurved[w] = (np.max(E) - np.mean(C)) / np.std(C)
+                EzCurved2[w] = (np.max(E2) - np.mean(C)) / np.std(C)
+                EzCurved3[w] = (np.max(E3) - np.mean(C)) / np.std(C)
+
+            # plot
+            self.plotExtra = pg.PlotDataItem(np.arange(self.datalengthSec), Ez)
+            self.plotExtra.setPen(fn.mkPen(color='k', width=1))
+            self.plotExtra2 = pg.PlotDataItem(np.arange(self.datalengthSec), EzCurved)
+            self.plotExtra2.setPen(fn.mkPen(color='r', width=1))
+            self.plotExtra3 = pg.PlotDataItem(np.arange(self.datalengthSec), EzCurved2)
+            self.plotExtra3.setPen(fn.mkPen(color='r', width=1.5))
+            self.plotExtra4 = pg.PlotDataItem(np.arange(self.datalengthSec), EzCurved3)
+            self.plotExtra4.setPen(fn.mkPen(color='r', width=2))
+            self.p_plot.addItem(self.plotExtra)
+            self.p_plot.addItem(self.plotExtra2)
+            self.p_plot.addItem(self.plotExtra3)
+            self.p_plot.addItem(self.plotExtra4)
+            self.plotaxis.setLabel('Power Z-score')
 
             # mean = np.mean(e[1,:])
             # std = np.std(e[1,:])
