@@ -1821,7 +1821,7 @@ class AviaNZ(QMainWindow):
             for level in range(6):
                 for n in new_wp.get_level(level, 'natural'):
                     n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
-            for index in [35, 37, 44]:
+            for index in [37, 40, 55]:
                 index = WF.ConvertWaveletNodeName(index)
                 new_wp[index] = wp[index].data
             
@@ -1862,7 +1862,7 @@ class AviaNZ(QMainWindow):
  
                 # reconstruct from bands, separately
                 r = 0 
-                for index in [35, 37, 44]:
+                for index in [37,40,55]:
                     index = WF.ConvertWaveletNodeName(index)
                     new_wp[index] = wp[index].data
  
@@ -1879,7 +1879,7 @@ class AviaNZ(QMainWindow):
                     r = r + 1 
  
                 # reconstruct from bands, jointly
-                for index in [35, 37, 44]:
+                for index in [37, 40, 55]:
                     index = WF.ConvertWaveletNodeName(index)
                     new_wp[index] = wp[index].data
  
@@ -3647,8 +3647,8 @@ class AviaNZ(QMainWindow):
             # returns 2d lists of nodes over M x thr, or stats over M x thr
             thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
             MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
-            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData,
-                                                                            d=False, f=True, trainPerFile=True, withzeros=True, mergeTrees=False)
+            # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
+            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recmulti")
             # Remove any negatively correlated nodes
             for lst in nodes:
                 for sub_lst in lst:
