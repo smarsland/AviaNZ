@@ -274,6 +274,7 @@ class SignalProc:
         oldIncr = self.incr
         self.incr = int(self.window_width/4.)
         sg = self.spectrogram(self.data)
+        print(np.shape(sg))
         sgi = self.invertSpectrogram(sg,self.window_width,self.incr)
         self.incr = oldIncr
         sg = self.spectrogram(sgi)
