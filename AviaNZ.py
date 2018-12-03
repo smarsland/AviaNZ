@@ -1821,7 +1821,7 @@ class AviaNZ(QMainWindow):
             for level in range(6):
                 for n in new_wp.get_level(level, 'natural'):
                     n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
-            for index in [37, 40, 55]:
+            for index in [35, 37, 40]:
                 index = WF.ConvertWaveletNodeName(index)
                 new_wp[index] = wp[index].data
             
@@ -1862,7 +1862,7 @@ class AviaNZ(QMainWindow):
  
                 # reconstruct from bands, separately
                 r = 0 
-                for index in [37,40,55]:
+                for index in [35,37,40]:
                     index = WF.ConvertWaveletNodeName(index)
                     new_wp[index] = wp[index].data
  
@@ -1879,7 +1879,7 @@ class AviaNZ(QMainWindow):
                     r = r + 1 
  
                 # reconstruct from bands, jointly
-                for index in [37, 40, 55]:
+                for index in [35, 37, 40]:
                     index = WF.ConvertWaveletNodeName(index)
                     new_wp[index] = wp[index].data
  
@@ -3373,7 +3373,7 @@ class AviaNZ(QMainWindow):
                     depth = None
                 else:
                     depth = int(str(depth))
-                self.audiodata = self.sp.bandpassFilter(self.audiodata,int(str(start)),int(str(end)))
+                self.audiodata = self.sp.bandpassFilter(self.audiodata,start=int(str(start)),end=int(str(end)))
                 self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
             elif str(alg) == "Wavelets --> Bandpass" and not self.DOC:
                 if thrType is True:

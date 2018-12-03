@@ -366,7 +366,11 @@ class WaveletSegment:
         """ Main caller of wavelet training, called from AviaNZ.py and _batch.py.
             Used as an entry point for switching between various training methods,
             so just passes the arguments to the right training method and returns all the results."""
-        self.loadDirectory(dirName, spInfo, d, f)
+
+        # for reconstructing filters, all audio currently is stored in RAM
+        # ("high memory" mode)
+        keepaudio = (feature=="recsep" or feature=="recmulti")
+        self.loadDirectory(dirName, spInfo, d, f, keepaudio)
 
         # Argument _feature_ will determine which detectCalls function is used:
         # feature=="ethr":
@@ -379,19 +383,24 @@ class WaveletSegment:
         # feature=="recmulti":
             # "2" - reconstruct signal from all selected nodes, threshold over that
 
+        # energies are stored in self.waveletCoefs,
+        # or can be read-in from the export file.
+        
         return self.waveletSegment_train_sep(thrList, MList, spInfo, feature)
 
-    def loadDirectory(self, dirName, spInfo, denoise, filter):
+    def loadDirectory(self, dirName, spInfo, denoise, filter, keepaudio):
         """ (moved out from individual training functions)
 
             Finds and reads wavs from directory dirName. 
             Computes a WP and stores the node energies for each second.
             Computes and stores the WC-annotation correlations.
-            
-            Denoise and Filter args are passed to preprocessing.
 
-            Results: self.annotation, filelengths, audioList, waveletCoefs, nodeCorrs arrays.
-            TODO: consider when we need to store the raw audio files, and when only the energies."""
+            Denoise and Filter args are passed to preprocessing.
+            keepaudio arg controls whether audio is stored (needed for reconstructing signal).
+
+            Results: self.annotation, filelengths, [audioList,] waveletCoefs, nodeCorrs arrays.
+            waveletCoefs also exported to a file.
+            """
 
         nlevels=5
         self.annotation = []
@@ -412,7 +421,8 @@ class WaveletSegment:
                     # note: preprocessing is a side effect on self.data
                     # (preprocess only requires SampleRate and FreqRange from spInfo)
                     filteredDenoisedData = self.preprocess(spInfo, d=denoise, f=filter)
-                    self.audioList.append(filteredDenoisedData)
+                    if keepaudio:
+                        self.audioList.append(filteredDenoisedData)
 
                     # Compute energy in each WP node and store
                     currWCs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate) 
@@ -425,6 +435,7 @@ class WaveletSegment:
                     print("file loaded in", time.time() - opstartingtime)
 
         self.annotation = np.array(self.annotation)
+        np.savetxt(os.path.join(dirName, "energies.tsv"), self.waveletCoefs, delimiter="\t")
         print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(self.annotation), len(self.annotation)))
         
     def waveletSegment_train_sep(self, thrList, MList, spInfo={}, feature=None):
