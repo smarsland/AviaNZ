@@ -187,8 +187,9 @@ class WaveletFunctions:
                 # Note that it assumes that the whole list is backwards
                 parent = (working[0] - 1) // 2
                 p = self.ConvertWaveletNodeName(parent)
+                names = [self.ConvertWaveletNodeName(working[0]), self.ConvertWaveletNodeName(working[1])]
 
-                new_wp[p].data = pywt.idwt(new_wp[self.ConvertWaveletNodeName(working[1])].data,new_wp[self.ConvertWaveletNodeName(working[0])].data, wavelet)[:len(new_wp[p].data)]
+                new_wp[p].data = pywt.idwt(new_wp[names[1]].data, new_wp[names[0]].data, wavelet)[:len(new_wp[p].data)]
 
                 # Delete these two nodes from working
                 working = np.delete(working, 1)
