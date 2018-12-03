@@ -434,3 +434,64 @@ def testWavelet(dName, species, withzeros, savedetections):
 
 # testTrainers('E:\Chapter5\DATASETS\\field\\ruru\\train', "Morepork", f1=600, f2=7000, fs=16000, trainPerFile=True, withzeros=True, mergeTrees=False, cleanNodelist=True)
 # testWavelet('E:\Chapter5\DATASETS\\field\\ruru\\test', "Morepork", withzeros=True, savedetections=True)
+
+import math
+def y(t):
+    sines = math.sin(30*math.pi*t) + math.sin(60*math.pi*t) + math.sin(90*math.pi*t) + math.sin(120*math.pi*t) + math.sin(180*math.pi*t)
+    rest = 2*math.exp(-30*t) * math.sin(260*math.pi*t)
+    if (t>0 and t<0.125) or (t>0.3725 and t<0.5) or (t>0.7475 and t<5.1175):
+        return sines
+    else:
+        return sines+rest
+
+def sampley(fs=400, nump=2048):
+    out = np.zeros(nump)
+    for p in range(nump):
+        out[p] = y(p/400)
+    return out
+
+import matplotlib
+import matplotlib.pyplot as plt
+def ploty(y, name):
+    xs = np.arange(0, y.size)/400
+
+    ws = np.fft.fft(y)
+    fbins = np.fft.fftfreq(y.size, d=1/400)
+
+    fig, ax = plt.subplots(2, 1)
+    ax[0].plot(xs,y)
+    ws[np.where(ws<0)] = 0
+    ax[1].plot(fbins, ws)
+    ax[0].set(xlabel='time, s', ylabel='signal', title=name)
+    ax[0].set(xlabel='freq, Hz', ylabel='signal')
+
+import pywt
+def gety():
+    ys = sampley()
+    ploty(ys, "original")
+
+    wp = pywt.WaveletPacket(data=ys, wavelet='db4')
+
+    new_wp = pywt.WaveletPacket(data=None, wavelet='db4')
+    new_wp['a'] = wp['a'].data
+    recy = new_wp.reconstruct()
+    afilt = np.fft.fft(recy)
+    abins = np.fft.fftfreq(len(wp['a'].data), d=1/400)
+    todrop = np.where(abins < len(wp['a'].data)/4) or np.where(abins > 3*len(wp['a'].data)/4)
+    afilt[todrop] = 0
+    recy = np.fft.ifft(afilt)
+    ploty(recy, "a")
+
+    new_wp = pywt.WaveletPacket(data=None, wavelet='db4')
+    #new_wp['a'] = np.zeros(len(wp['a'].data))
+    new_wp['d'] = wp['d'].data
+    recy = new_wp.reconstruct()
+    afilt = np.fft.fft(recy)
+    abins = np.fft.fftfreq(len(wp['d'].data), d=1/400)
+    todrop = np.where(abins < len(wp['d'].data)/4) or np.where(abins > 3*len(wp['d'].data)/4)
+    afilt[todrop] = 0
+    recy = np.fft.ifft(afilt)
+    ploty(recy, "d")
+
+    plt.show()
+    
