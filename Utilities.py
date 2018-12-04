@@ -220,7 +220,7 @@ def delEmpAnn(dir):
                 elif len(segments)==1 and segments[0][0]==-1:
                     os.remove(annotation)
 
-# delEmpAnn('E:\Tier1-2014-15 batch1')
+# delEmpAnn('E:\Tier1-2014-15 batch1\CF20_acoustics_2014')
 
 #------------------------------------------------- code to extract segments
 def extractSegments(wavFile, destination, copyName, species):
@@ -602,3 +602,42 @@ def batch_fB(dirName,species,length):
     else:
         print ("-----TP   FP  TN  FN")
         print (TP, FP, TN, FN)
+
+#--------------------------------------------------------- Find min, max, total duration
+def length(dirName):
+    """
+
+    """
+    durations = []
+    for root, dirs, files in os.walk(str(dirName)):
+        for filename in files:
+            if filename.endswith('.wav'):
+                filename = root + '/' + filename
+                wavobj = wavio.read(filename)
+                sampleRate = wavobj.rate
+                data = wavobj.data
+                duration = len(data) / sampleRate  # number of secs
+                durations.append(duration)
+    print("min duration: ", min(durations), " secs")
+    print("max duration: ", max(durations), " secs")
+    print("mean duration: ", np.mean(durations), " secs")
+    print("median duration: ", np.median(durations), " secs")
+    print("total duration: ", sum(durations), " secs")
+
+# length('D:\Cheetsheet\DOC_Tier1_nocturnal_sounds\BIRDS')
+
+# ------------------------------------------------MP3 to WAV conversion
+def mp3ToWav(dirName):
+    """
+
+    """
+    from os import path
+    from pydub import AudioSegment
+    for root, dirs, files in os.walk(str(dirName)):
+        for filename in files:
+            if filename.endswith('.mp3'):
+                src = root + '/' + filename
+                sound = AudioSegment.from_mp3(src)
+                sound.export(src[:-4]+'.wav', format="wav")
+
+# mp3ToWav('D:\Cheetsheet\\test')
