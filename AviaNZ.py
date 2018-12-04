@@ -244,11 +244,14 @@ class AviaNZ(QMainWindow):
                 # use infile and imagefile as directories 
                 print(firstFile)
                 self.SoundFileDir = firstFile
-                files = [f for f in os.listdir(firstFile) if f[-4:]=='.wav']
-                for f in files:
-                    self.loadFile(f)
-                    self.widthWindow.setValue(self.datalengthSec)
-                    self.saveImage(os.path.join(imageFile,f[:-4]))
+                # Read folders and sub-folders
+                for root, dirs, files in os.walk(firstFile):
+                    for f in files:
+                        if f[-4:] == '.wav':
+                            print(os.path.join(root, f))
+                            self.loadFile(os.path.join(root, f))
+                            self.widthWindow.setValue(60)  # self.datalengthSec)
+                            self.saveImage(os.path.join(root, f[:-4]))
             else:
                 self.loadFile(firstFile)
                 while command!=():
@@ -1088,12 +1091,18 @@ class AviaNZ(QMainWindow):
             dlg.setWindowIcon(QIcon('img/Avianz.ico'))
             dlg.setWindowTitle('AviaNZ')
             if name is not None:
-                self.filename = self.SoundFileDir+'/'+name
+                if not self.cheatsheet:
+                    self.filename = self.SoundFileDir+'/'+name
+                else:
+                    self.filename = name
                 dlg += 1
 
                 # Create an instance of the Signal Processing class
                 if not hasattr(self, 'sp'):
-                    self.sp = SignalProc.SignalProc([],0,self.config['window_width'],self.config['incr'])
+                    if self.cheatsheet:
+                        self.sp = SignalProc.SignalProc([],0,512,256)
+                    else:
+                        self.sp = SignalProc.SignalProc([], 0, self.config['window_width'], self.config['incr'])
 
                 self.currentFileSection = 0
 
@@ -4417,6 +4426,8 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = True
         
     def saveImage(self, imageFile=''):
+        if self.cheatsheet:
+            self.showMaximized() # for nice spec images
         exporter = pge.ImageExporter(self.w_spec.scene())
 
         if imageFile=='':
