@@ -1814,9 +1814,10 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
 
             WF = WaveletFunctions.WaveletFunctions(data=None, wavelet='dmey2', maxLevel=5)
-            new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
-            wp = pywt.WaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+            wp = WF.AntialiasWaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+            #wp = pywt.WaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
 
+            new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
             # zero-out wp tree
             for level in range(6):
                 for n in new_wp.get_level(level, 'natural'):
