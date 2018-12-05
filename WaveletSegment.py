@@ -435,7 +435,11 @@ class WaveletSegment:
                     print("file loaded in", time.time() - opstartingtime)
 
         self.annotation = np.array(self.annotation)
-        np.savetxt(os.path.join(dirName, "energies.tsv"), self.waveletCoefs, delimiter="\t")
+        # Prepare WC data and annotation targets into a matrix for saving
+        WC = np.transpose(self.waveletCoefs)
+        ann = np.reshape(self.annotation,(len(self.annotation),1))
+        MLdata = np.append(WC, ann, axis=1)
+        np.savetxt(os.path.join(dirName, "energies.tsv"), MLdata, delimiter="\t")
         print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(self.annotation), len(self.annotation)))
         
     def waveletSegment_train_sep(self, thrList, MList, spInfo={}, feature=None):
