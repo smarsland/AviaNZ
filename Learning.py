@@ -19,7 +19,7 @@ class Learning:
     # This class implements various learning algorithms for the AviaNZ interface
     # Mostly based on scikit-learn
 
-    def __init__(self,features,labels,testFraction=0.4):
+    def __init__(self,features,labels,testFraction=0.6):
         from sklearn.model_selection import train_test_split
         from sklearn.preprocessing import StandardScaler
         features = StandardScaler().fit_transform(features)
@@ -188,5 +188,41 @@ def testLearning2():
     learners.performTest(model)
     model = learners.trainXGBoost()
     learners.performTest(model)
+    model = learners.trainGMM()
+    learners.performTest(model)
+
+
+def testLearning3():
+    # Wavelet energy
+    import Learning
+    import pandas as pd
+    d = pd.read_csv('D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train\energies.tsv', sep="\t", header=None)
+    data = d.values
+    learners = Learning.Learning(data[:,0:-1], data[:,-1])
+    print("MLP--------------------------------")
+    model = learners.trainMLP()
+    learners.performTest(model)
+    print("kNN--------------------------------")
+    model = learners.trainKNN()
+    learners.performTest(model)
+    print("SVM--------------------------------")
+    model = learners.trainSVM()
+    learners.performTest(model)
+    print("GP--------------------------------")
+    model = learners.trainGP()
+    learners.performTest(model)
+    print("DT--------------------------------")
+    model = learners.trainDecisionTree()
+    learners.performTest(model)
+    print("RF--------------------------------")
+    model = learners.trainRandomForest()
+    learners.performTest(model)
+    print("Boosting--------------------------------")
+    model = learners.trainBoosting()
+    learners.performTest(model)
+    print("XGB--------------------------------")
+    model = learners.trainXGBoost()
+    learners.performTest(model)
+    print("GMM--------------------------------")
     model = learners.trainGMM()
     learners.performTest(model)
