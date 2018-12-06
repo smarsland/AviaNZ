@@ -3,6 +3,7 @@
 
 import numpy as np
 import sklearn as sk
+import WaveletSegment
 
 # TODO:
 # Put some stuff in here!
@@ -31,7 +32,28 @@ class Learning:
         testError = np.mean(self.testTgt.ravel() == testOut.ravel()) * 100
 
         print("Testing error: ",testError)
-        print(confusion_matrix(self.testTgt,testOut))
+
+        # Get the performance metrics
+        ws = WaveletSegment.WaveletSegment()
+        fB, recall, TP, FP, TN, FN = ws.fBetaScore(self.testTgt, testOut)
+
+        # Risk metric
+        Risk_grand = np.shape(np.where(abs(self.testTgt-testOut)==1))[1]/len(self.testTgt)
+        Risk_FN = (self.testTgt-testOut).tolist().count(1)
+        Risk_FP = (self.testTgt-testOut).tolist().count(-1)
+        Risk_weighted = (2*Risk_FN+Risk_FP)/(3*len(self.testTgt))
+        # Risk_weighted=((1.+2**2)*Risk_FN*Risk_FP)/(Risk_FN + 2**2*Risk_FP)
+        print("Risk M grand: ", Risk_grand*100)
+        print("Risk M FN: ", Risk_FN*100/len(self.testTgt))
+        print("Risk M FP: ", Risk_FP*100/len(self.testTgt))
+        print("Risk M weighted (R2): ", Risk_weighted*100)
+        
+        CM = confusion_matrix(self.testTgt,testOut)
+        print(CM)
+        # TP=CM[1][1]
+        # TN = CM[0][0]
+        # FP=CM[0][1]
+        # FN=CM[1][0]
 
     def trainMLP(self):
     #def trainMLP(self,structure,learningrate,epochs):
@@ -196,9 +218,35 @@ def testLearning3():
     # Wavelet energy
     import Learning
     import pandas as pd
+    # import random
     d = pd.read_csv('D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train\energies.tsv', sep="\t", header=None)
     data = d.values
-    learners = Learning.Learning(data[:,0:-1], data[:,-1])
+
+    # # Balance data set
+    # targets = data[:, -1]
+    # data = data[:, 0:-1]
+    # posTargetInd = np.where(targets == 1)
+    # negTargetInd = np.where(targets == 0)
+    # # randomly select n negative rows
+    # n = np.shape(posTargetInd)[1]
+    # negTargetInd = negTargetInd[0][0:n]
+    # inds = list(posTargetInd[0]) + list(negTargetInd)
+    # data = data[inds, :]
+    # targets = targets[inds]
+    # learners = Learning.Learning(data, targets)
+
+    # Learn with all 62 nodes
+    learners = Learning.Learning(data[:, 0:-1], data[:, -1])
+    # OR learn with optimum nodes, for kiwi it is [35, 43, 36, 45]
+    kiwiNodes = [35, 43, 36, 45]
+    kiwiNodes = [n - 1 for n in kiwiNodes]
+    nodes = list(range(63))
+    nonKiwiNodes = list(set(nodes) - set(kiwiNodes))
+    # print(nonKiwiNodes)
+    # learners = Learning.Learning(data[:, kiwiNodes], data[:, -1])
+    # learners = Learning.Learning(data[:, nonKiwiNodes], data[:, -1])
+    # learners = Learning.Learning(data[:, 33:61], data[:, -1])
+
     print("MLP--------------------------------")
     model = learners.trainMLP()
     learners.performTest(model)
@@ -226,3 +274,5 @@ def testLearning3():
     print("GMM--------------------------------")
     model = learners.trainGMM()
     learners.performTest(model)
+
+testLearning3()
