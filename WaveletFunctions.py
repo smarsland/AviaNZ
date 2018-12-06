@@ -23,6 +23,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 import pywt
+import scipy.fftpack as fft
 from ext import ce_denoise as ce
 
 class WaveletFunctions:
@@ -282,3 +283,48 @@ class WaveletFunctions:
             mat[j]=leafNodes[0][leaf].data
             j=j+1
         return mat
+
+    def AntialiasWaveletPacket(self,data,wavelet,mode,maxlevel):
+        wp_final = pywt.WaveletPacket(data=None, wavelet=wavelet,mode=mode,maxlevel=maxlevel)
+        wp_final[''] = data
+
+        for parent in range(2**maxlevel-1):
+            print(parent, np.shape(wp_final[self.ConvertWaveletNodeName(parent)].data))
+            wp_temp = pywt.WaveletPacket(data=wp_final[self.ConvertWaveletNodeName(parent)].data, wavelet=wavelet,mode=mode,maxlevel=1)
+            l = len(wp_temp[''].data)
+
+            # Get new approximation reconstruction
+            new_wp = pywt.WaveletPacket(data=None, wavelet=wavelet,mode=mode,maxlevel=1)
+            # This doesn't help!
+            #for level in range(new_wp.maxlevel + 1):
+                #for n in new_wp.get_level(level, 'natural'):
+                    #n.data = np.zeros(len(wp_temp.get_level(level, 'natural')[0].data))
+
+            new_wp['a'] = wp_temp['a'].data
+            a = new_wp.reconstruct(update=False)
+            #print('a')
+            ft = fft.fft(a,len(a))
+            #print('b',len(a),l,len(new_wp['a'].data))
+            ft[l//8:] = 0
+            #ft[l//4:3*l//4] = 0
+            data = np.real(fft.ifft(ft))
+            #data = data[0::2]
+            #print('c', self.ConvertWaveletNodeName(parent)+'a')
+            new_wp = pywt.WaveletPacket(data=data, wavelet=wavelet,mode=mode,maxlevel=1)
+            wp_final[self.ConvertWaveletNodeName(parent)+'a'] = new_wp['a'].data
+           
+            # Get new detail reconstruction
+            new_wp = pywt.WaveletPacket(data=None, wavelet=wavelet,mode=mode,maxlevel=1)
+            new_wp['d'] = wp_temp['d'].data
+            d = new_wp.reconstruct(update=False)
+            ft = fft.fft(d)
+            #ft[:l//4] = 0
+            #ft[3*l//4:] = 0
+            ft[:] = 0
+            data = np.real(fft.ifft(ft))
+            #data = data[0::2]
+            new_wp = pywt.WaveletPacket(data=data, wavelet=wavelet,mode=mode,maxlevel=1)
+            wp_final[self.ConvertWaveletNodeName(parent)+'d'] = new_wp['d'].data
+
+        return wp_final
+
