@@ -1814,19 +1814,25 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
 
             WF = WaveletFunctions.WaveletFunctions(data=None, wavelet='dmey2', maxLevel=5)
-            wp = WF.AntialiasWaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
-            #wp = pywt.WaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+            # #wp = WF.AntialiasWaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+            # wp = pywt.WaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
 
-            new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+            # new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
             # zero-out wp tree
-            for level in range(6):
-                for n in new_wp.get_level(level, 'natural'):
-                    n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
-            for index in [35, 37, 40]:
-                index = WF.ConvertWaveletNodeName(index)
-                new_wp[index] = wp[index].data
+            #for level in range(1):
+            #    for n in new_wp.get_level(level, 'natural'):
+            #        n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+            #for index in [35, 37, 40]:
+            #    index = WF.ConvertWaveletNodeName(index)
+            #    new_wp[index] = wp[index].data
+            # cover the rest:
+            # for index in ['aadad', 'aaddd', 'adaaa', 'adad', 'aaa', 'add', 'd']:
+            #    new_wp[index] = wp[index].data
+            wp = WF.WaveletPacket(self.audiodata, WF.wavelet, 5, 'symmetric', True)
+            C = WF.reconstructWP2(wp, WF.wavelet, 35) + WF.reconstructWP2(wp, WF.wavelet, 37) + WF.reconstructWP2(wp, WF.wavelet, 40)
             
-            C = new_wp.reconstruct()
+            #C = WF.reconstructWPT(new_wp, WF.wavelet, [2, 7, 9, 10, 17, 18]).data
+            #C = new_wp.reconstruct()
             sgRaw = self.sp.spectrogram(C)
             maxsg = np.min(sgRaw)
             tempsp = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
