@@ -355,7 +355,7 @@ class AviaNZ(QMainWindow):
             specMenu.addSeparator()
             extraMenu = specMenu.addMenu("Diagnostic plots")
             extraGroup = QActionGroup(self)
-            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Filter band energy", "Filtered spectrogram"]:
+            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Filter band energy", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
                 em = extraMenu.addAction(ename)
                 em.setCheckable(True)
                 if ename == self.extra:
@@ -1608,9 +1608,9 @@ class AviaNZ(QMainWindow):
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.p_spec.setXRange(minX, maxX, padding=0)
 
-        if self.extra != "none" and self.extra != "Filtered spectrogram":
+        if self.extra != "none" and "Filtered spectrogram" not in self.extra:
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
-        if self.extra == "Filtered spectrogram":
+        if "Filtered spectrogram" in self.extra:
             self.p_plot.setXRange(minX, maxX, padding=0)
         # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
@@ -1809,30 +1809,26 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra3)
 
         # plot spectrogram of only the filtered band:
-        if self.extra == "Filtered spectrogram":
+        if self.extra == "Filtered spectrogram, new + AA" or self.extra == "Filtered spectrogram, new" or self.extra == "Filtered spectrogram, old":
             self.plotExtra = pg.ImageItem()
             self.p_plot.addItem(self.plotExtra)
 
             WF = WaveletFunctions.WaveletFunctions(data=None, wavelet='dmey2', maxLevel=5)
-            # #wp = WF.AntialiasWaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
-            # wp = pywt.WaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
 
-            # new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
-            # zero-out wp tree
-            #for level in range(1):
-            #    for n in new_wp.get_level(level, 'natural'):
-            #        n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
-            #for index in [35, 37, 40]:
-            #    index = WF.ConvertWaveletNodeName(index)
-            #    new_wp[index] = wp[index].data
-            # cover the rest:
-            # for index in ['aadad', 'aaddd', 'adaaa', 'adad', 'aaa', 'add', 'd']:
-            #    new_wp[index] = wp[index].data
-            wp = WF.WaveletPacket(self.audiodata, WF.wavelet, 5, 'symmetric', True)
-            C = WF.reconstructWP2(wp, WF.wavelet, 35) + WF.reconstructWP2(wp, WF.wavelet, 37) + WF.reconstructWP2(wp, WF.wavelet, 40)
-            
-            #C = WF.reconstructWPT(new_wp, WF.wavelet, [2, 7, 9, 10, 17, 18]).data
-            #C = new_wp.reconstruct()
+            if self.extra == "Filtered spectrogram, new + AA":
+                wp = WF.WaveletPacket(self.audiodata, WF.wavelet, 5, 'symmetric', True)
+                C = WF.reconstructWP2(wp, WF.wavelet, 20, True) #+ WF.reconstructWP2(wp, WF.wavelet, 45, True) + WF.reconstructWP2(wp, WF.wavelet, 47, True)
+            if self.extra == "Filtered spectrogram, new":
+                wp = WF.WaveletPacket(self.audiodata, WF.wavelet, 5, 'symmetric', False)
+                C = WF.reconstructWP2(wp, WF.wavelet, 20, True) #+ WF.reconstructWP2(wp, WF.wavelet, 45, False) + WF.reconstructWP2(wp, WF.wavelet, 47, False)
+            if self.extra == "Filtered spectrogram, old":
+                wp = pywt.WaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+                new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+                for index in [20]:
+                    index = WF.ConvertWaveletNodeName(index)
+                    new_wp[index] = wp[index].data
+                C = new_wp.reconstruct()
+
             sgRaw = self.sp.spectrogram(C)
             maxsg = np.min(sgRaw)
             tempsp = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
