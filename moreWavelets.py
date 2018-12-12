@@ -6,7 +6,7 @@ import scipy.fftpack as fft
 t = np.linspace(0,5+47/400,2048)
 
 sines = np.sin(30*np.pi*t) + np.sin(60*np.pi*t) + np.sin(90*np.pi*t) + np.sin(120*np.pi*t) + np.sin(180*np.pi*t)
-rest = 6*np.sin(260*np.pi*t) + exp(-10*t) #2*np.exp(-30*t) * np.sin(260*np.pi*t)
+rest = 2*np.exp(-30*t) * np.sin(260*np.pi*t)
 inds = np.where(t>0.5) and np.where(t<0.7475)
 sines[inds] += rest[inds]
 inds = np.where(t>0.125) and np.where(t<0.3725)

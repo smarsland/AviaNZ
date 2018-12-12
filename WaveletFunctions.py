@@ -174,13 +174,28 @@ class WaveletFunctions:
         return listleaves
 
     def graycode(self, n):
-        """ Returns a Gray permutation of n -
+        """ Returns a MODIFIED Gray permutation of n -
             which corresponds to the frequncy band of position n."""
-        if n>0:
-            hipow = 2**(math.floor(math.log2(n)))
-            return(hipow + self.graycode(2*hipow - n - 1))
-        return(0)
+        # convert number to binary repr string:
+        n = bin(n)[2:]
+        out = ''
+        # never flip first bit
+        toflip = False
+        while n!='':
+            # store leftmost bit or its complement to output
+            if toflip:
+                out = out + str(1-int(n[0]))
+            else:
+                out = out + n[0]    
+            # strip leftmost bit
+            n = n[1:]
+            # if this bit was 1, flip next bit
+            if out[-1]=='1':
+                toflip = True
+            else:
+                toflip = False
 
+        return(int(out, 2))
 
     def WaveletPacket(self, data, wv, maxlevel, mode='symmetric', antialias=False):
         """ Reimplementation of pywt.WaveletPacket, but allowing for antialias
@@ -218,8 +233,8 @@ class WaveletFunctions:
 
             l = len(data)
             # make A_j+1 and D_j+1 (of length l)
-            nexta = np.convolve(data, wv.dec_lo, 'same')
-            nextd = np.convolve(data, wv.dec_hi, 'same')
+            nexta = np.convolve(data, wv.dec_lo, 'same')[1:-1]
+            nextd = np.convolve(data, wv.dec_hi, 'same')[1:-1]
 
             # antialias A_j+1
             if antialias:
@@ -240,7 +255,7 @@ class WaveletFunctions:
 
         return(tree)
 
-    def reconstructWP2(self, wp, wv, node):
+    def reconstructWP2(self, wp, wv, node, antialias=False):
         """ Inverse of WaveletPacket: returns the signal from a single node. """
         data = wp[node]
         lvl = math.floor(math.log2(node+1))
@@ -264,19 +279,25 @@ class WaveletFunctions:
                 datau = np.zeros(2*len(data))
                 datau[0::2] = data
                 data = datau
+                # trim ends to correct reconstruction length
+                data = data[len(wv.rec_hi)//2-1 : -(len(wv.rec_lo)//2-1)]
+            # trim ends again (so all levels get 2*flen trim, top one gets 1*flen)
+            data = data[len(wv.rec_hi)//2-1 : -(len(wv.rec_lo)//2-1)]
             node = (node-1)//2
             lvl = lvl - 1
-        # wipe images
-        ft = fft.fft(data)
-        l = len(ft)
-        # to keep: [nodepos/numnodes : (nodepos+1)/numnodes] x Fs
-        # (same for negative freqs)
-        ft[ : l*nodepos//numnodes] = 0
-        ft[l*(nodepos+1)//numnodes : -l*(nodepos+1)//numnodes] = 0
-        # indexing [-0:] wipes everything
-        if nodepos!=0:
-            ft[-l*nodepos//numnodes : ] = 0
-        data = np.real(fft.ifft(ft))
+
+        if antialias:
+            # wipe images
+            ft = fft.fft(data)
+            l = len(ft)
+            # to keep: [nodepos/numnodes : (nodepos+1)/numnodes] x Fs
+            # (same for negative freqs)
+            ft[ : l*nodepos//numnodes] = 0
+            ft[l*(nodepos+1)//numnodes : -l*(nodepos+1)//numnodes] = 0
+            # indexing [-0:] wipes everything
+            if nodepos!=0:
+                ft[-l*nodepos//numnodes : ] = 0
+            data = np.real(fft.ifft(ft))
         return(data)
 
 
@@ -409,48 +430,4 @@ class WaveletFunctions:
             mat[j]=leafNodes[0][leaf].data
             j=j+1
         return mat
-
-    def AntialiasWaveletPacket(self,data,wavelet,mode,maxlevel):
-        wp_final = pywt.WaveletPacket(data=None, wavelet=wavelet,mode=mode,maxlevel=maxlevel)
-        wp_final[''] = data
-
-        for parent in range(2**maxlevel-1):
-            print(parent, np.shape(wp_final[self.ConvertWaveletNodeName(parent)].data))
-            wp_temp = pywt.WaveletPacket(data=wp_final[self.ConvertWaveletNodeName(parent)].data, wavelet=wavelet,mode=mode,maxlevel=1)
-            l = len(wp_temp[''].data)
-
-            # Get new approximation reconstruction
-            new_wp = pywt.WaveletPacket(data=None, wavelet=wavelet,mode=mode,maxlevel=1)
-            # This doesn't help!
-            #for level in range(new_wp.maxlevel + 1):
-                #for n in new_wp.get_level(level, 'natural'):
-                    #n.data = np.zeros(len(wp_temp.get_level(level, 'natural')[0].data))
-
-            new_wp['a'] = wp_temp['a'].data
-            a = new_wp.reconstruct(update=False)
-            #print('a')
-            ft = fft.fft(a,len(a))
-            #print('b',len(a),l,len(new_wp['a'].data))
-            #ft[l//8:] = 0
-            ft[l//4:3*l//4] = 0
-            data = np.real(fft.ifft(ft))
-            #data = data[0::2]
-            #print('c', self.ConvertWaveletNodeName(parent)+'a')
-            new_wp = pywt.WaveletPacket(data=data, wavelet=wavelet,mode=mode,maxlevel=1)
-            wp_final[self.ConvertWaveletNodeName(parent)+'a'] = new_wp['a'].data
-           
-            # Get new detail reconstruction
-            new_wp = pywt.WaveletPacket(data=None, wavelet=wavelet,mode=mode,maxlevel=1)
-            new_wp['d'] = wp_temp['d'].data
-            d = new_wp.reconstruct(update=False)
-            ft = fft.fft(d)
-            ft[:l//4] = 0
-            ft[3*l//4:] = 0
-            #ft[:] = 0
-            data = np.real(fft.ifft(ft))
-            #data = data[0::2]
-            new_wp = pywt.WaveletPacket(data=data, wavelet=wavelet,mode=mode,maxlevel=1)
-            wp_final[self.ConvertWaveletNodeName(parent)+'d'] = new_wp['d'].data
-
-        return wp_final
 
