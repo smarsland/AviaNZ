@@ -322,6 +322,49 @@ class WaveletSegment:
         gc.collect()
         return detected
 
+    def detectCalls_aa(self, wp, sampleRate, nodes, spInfo={}, C=None):
+        # For training. ANTIALIASED version of detectCalls_sep
+        # Regenerate the signal from the node and threshold
+        # Output detection
+        # Accepts nodes argument as list or as single node
+        # C - can take in cached C for quick processing of loops like [1], [1,2],...
+
+        if sampleRate==0:
+            sampleRate=self.sampleRate
+        thr = spInfo['WaveletParams'][0]
+        # Compute the number of samples in a window -- species specific
+        M = int(spInfo['WaveletParams'][1] * sampleRate / 2.0)
+
+        # put WC from test node(s) on the new tree
+        for index in nodes:
+            if C is None:
+                C = self.WaveletFunctions.reconstructWP2(wp, self.WaveletFunctions.wavelet, index, True)[:len(wp[0])]
+            else:
+                print("Current C starts with", C[:10])
+                C = C + self.WaveletFunctions.reconstructWP2(wp, self.WaveletFunctions.wavelet, index, True)[:len(wp[0])]
+        # store this reconstruction. If node is accepted, it will be cached.
+        self.tempC = copy.deepcopy(C)
+
+        # Filter
+        C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0],high=spInfo['FreqRange'][1],order=10)
+        C = np.abs(C)
+        N = len(C)
+        detected = np.zeros(int(np.ceil(N/sampleRate)))
+
+        # Compute the energy curve (a la Jinnai et al. 2012)
+        E = ce.EnergyCurve(C, M)
+        # Compute threshold
+        threshold = np.mean(C) + np.std(C) * thr
+
+        # If there is a call anywhere in the window, report it as a call
+        j = 0
+        for i in range(0,N-sampleRate,sampleRate):
+            detected[j] = np.any(E[i:min(i+sampleRate, N)]>threshold)
+            j+=1
+        del C
+        gc.collect()
+        return detected
+
     def detectCalls_en(self, data, sampleRate, nodes):
         # Arguments: wp - WP decomposition of current file
         # Computes energies (DxN array, where D-depth, N-number of blocks)
@@ -369,7 +412,7 @@ class WaveletSegment:
 
         # for reconstructing filters, all audio currently is stored in RAM
         # ("high memory" mode)
-        keepaudio = (feature=="recsep" or feature=="recmulti")
+        keepaudio = (feature=="recsep" or feature=="recmulti" or feature=="recaa")
         self.loadDirectory(dirName, spInfo, d, f, keepaudio)
 
         # Argument _feature_ will determine which detectCalls function is used:
@@ -504,8 +547,12 @@ class WaveletSegment:
                         wp = pywt.WaveletPacket(data=self.audioList[indexF], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
                         # Allocate memory for new WP
                         new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
+                    if feature=="recaa":
+                        # Generate a full 5 level ANTIALIASED wavelet packet decomposition
+                        wp = self.WaveletFunctions.WaveletPacket(data=self.audioList[indexF], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
 
                     # stepwise search for best node combination:
+                    self.cachedC = None
                     for node in nodes:
                         testlist = listnodes[:]
                         testlist.append(node)
@@ -514,9 +561,11 @@ class WaveletSegment:
                         # either reconstruct separately from each node, or from all together:
                         ## TODO: other methods can be implemented as different detectCalls functions
                         if feature=="recsep":
-                            detected_c = self.detectCalls_sep(new_wp, wp, self.sampleRate, nodes=testlist, spInfo=spInfo)
-                        if feature=="recmulti":
                             detected_c = self.detectCalls_sep(new_wp, wp, self.sampleRate, nodes=[node], spInfo=spInfo)
+                        if feature=="recmulti":
+                            detected_c = self.detectCalls_sep(new_wp, wp, self.sampleRate, nodes=testlist, spInfo=spInfo)
+                        if feature=="recaa":
+                            detected_c = self.detectCalls_aa(wp, self.sampleRate, nodes=[node], spInfo=spInfo, C=self.cachedC)
                         if feature=="ethr" or feature=="elearn":
                             print("not implemented yet")
                             # Non-reconstructing detectors:
@@ -524,17 +573,26 @@ class WaveletSegment:
                             detected_c = self.detectCalls_sep(new_wp, wp, self.sampleRate, nodes=[node], spInfo=spInfo)
 
                         # adjust for rounding errors:
-                        if len(detected_c)<len(annotation):
+                        if len(detected_c)<len(detected):
                             detected_c = np.append(detected_c, [0])
+                        if len(detected_c)>len(detected):
+                            detected_c = detected_c[:len(detected)]
 
-                        # Update the detections
-                        detections = np.maximum.reduce([detected, detected_c])
+                        if feature!="recmulti":
+                            # Merge the detections from current node with those from previous nodes
+                            detections = np.maximum.reduce([detected, detected_c])
+                        else:
+                            # If multiple nodes are used, don't need to merge with sublists
+                            detections = detected_c
+
                         fB, recall, tp, fp, tn, fn = self.fBetaScore(annotation, detections)
                         if fB is not None and fB > bestBetaScore: # Keep this node and update fB, recall, detected, and optimum nodes
                             bestBetaScore = fB
                             bestRecall = recall
                             detected = detections
                             listnodes.append(node)
+                            # store current signal reconstruction in cache
+                            self.cachedC = self.tempC
                         if bestBetaScore == 1 or bestRecall == 1:
                             break
 

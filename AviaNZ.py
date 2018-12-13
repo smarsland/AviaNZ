@@ -1817,14 +1817,18 @@ class AviaNZ(QMainWindow):
 
             if self.extra == "Filtered spectrogram, new + AA":
                 wp = WF.WaveletPacket(self.audiodata, WF.wavelet, 5, 'symmetric', True)
-                C = WF.reconstructWP2(wp, WF.wavelet, 20, True) #+ WF.reconstructWP2(wp, WF.wavelet, 45, True) + WF.reconstructWP2(wp, WF.wavelet, 47, True)
+                C = WF.reconstructWP2(wp, WF.wavelet, 35, True)[:len(self.audiodata)]
+                for node in [36, 8, 41, 43, 45]:
+                    C = C + WF.reconstructWP2(wp, WF.wavelet, node, True)[:len(C)]
             if self.extra == "Filtered spectrogram, new":
                 wp = WF.WaveletPacket(self.audiodata, WF.wavelet, 5, 'symmetric', False)
-                C = WF.reconstructWP2(wp, WF.wavelet, 20, True) #+ WF.reconstructWP2(wp, WF.wavelet, 45, False) + WF.reconstructWP2(wp, WF.wavelet, 47, False)
+                C = WF.reconstructWP2(wp, WF.wavelet, 35, True)[:len(self.audiodata)]
+                for node in [36, 8, 41, 43, 45]:
+                    C = C + WF.reconstructWP2(wp, WF.wavelet, node, True)[:len(C)]
             if self.extra == "Filtered spectrogram, old":
                 wp = pywt.WaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
                 new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
-                for index in [20]:
+                for index in [35, 36, 8, 41, 43, 45]:
                     index = WF.ConvertWaveletNodeName(index)
                     new_wp[index] = wp[index].data
                 C = new_wp.reconstruct()
@@ -3651,7 +3655,7 @@ class AviaNZ(QMainWindow):
             thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
             MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
-            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recmulti")
+            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recaa")
             # Remove any negatively correlated nodes
             for lst in nodes:
                 for sub_lst in lst:

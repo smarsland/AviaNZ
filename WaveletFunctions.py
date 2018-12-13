@@ -197,7 +197,7 @@ class WaveletFunctions:
 
         return(int(out, 2))
 
-    def WaveletPacket(self, data, wv, maxlevel, mode='symmetric', antialias=False):
+    def WaveletPacket(self, data, wavelet, maxlevel, mode='symmetric', antialias=False):
         """ Reimplementation of pywt.WaveletPacket, but allowing for antialias
             following Strang & Nguyen (1996) or
             An anti-aliasing algorithm for discrete wavelet transform. Jianguo Yang & S.T. Park (2003) or
@@ -211,13 +211,13 @@ class WaveletFunctions:
             5. antialias - on/off switch
         """
         # filter length for extension modes
-        flen = max(len(wv.dec_lo), len(wv.dec_hi), len(wv.rec_lo), len(wv.rec_hi))
+        flen = max(len(wavelet.dec_lo), len(wavelet.dec_hi), len(wavelet.rec_lo), len(wavelet.rec_hi))
         # this tree will store non-downsampled coefs for reconstruction
         tree = [data]
         if mode!='symmetric':
             print("ERROR: only symmetric WP mode implemented so far")
             return
-        
+
         # loop over possible parent nodes
         for node in range(2**maxlevel-1):
             # retrieve parent node from J level
@@ -233,8 +233,8 @@ class WaveletFunctions:
 
             l = len(data)
             # make A_j+1 and D_j+1 (of length l)
-            nexta = np.convolve(data, wv.dec_lo, 'same')[1:-1]
-            nextd = np.convolve(data, wv.dec_hi, 'same')[1:-1]
+            nexta = np.convolve(data, wavelet.dec_lo, 'same')[1:-1]
+            nextd = np.convolve(data, wavelet.dec_hi, 'same')[1:-1]
 
             # antialias A_j+1
             if antialias:
@@ -252,6 +252,8 @@ class WaveletFunctions:
                 nextd = np.real(fft.ifft(ft))
             # store D before downsampling
             tree.append(nextd)
+
+            print("Node ", node, " complete.")
 
         return(tree)
 
