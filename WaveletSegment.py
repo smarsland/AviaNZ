@@ -30,7 +30,7 @@ import SignalProc
 import Segment
 from ext import ce_denoise as ce
 import psutil
-import copy, tempfile, pickle
+import copy, pickle, tempfile
 
 # Nirosha's approach of simultaneous segmentation and recognition using wavelets
     # (0) Bandpass filter with different parameters for each species
@@ -359,7 +359,7 @@ class WaveletSegment:
         M = int(spInfo['WaveletParams'][1] * sampleRate / 2.0)
 
         # put WC from test node(s) on the new tree
-        C = self.WaveletFunctions.reconstructWP2(wp, self.WaveletFunctions.wavelet, node, True)[:len(wp[0])]
+        C = self.WaveletFunctions.reconstructWP2(wp, self.WaveletFunctions.wavelet, node, True)
 
         # The following can be used for caching - just pass C as argument,
         # and copy tempC to cachedC on good node addition.
@@ -457,9 +457,9 @@ class WaveletSegment:
         # # TODO: start training by generating and storing WPs for all files
         # not sure if this is useful for other modes, but definitely needed for recaafull
         if feature=="recaa":
-            self.generateWPs(self.WaveletFunctions.wavelet, 5, wpmode="new")
+            self.tempfiles = self.generateWPs(self.WaveletFunctions.wavelet, 5, wpmode="new")
         if feature=="recaafull":
-            self.generateWPs(self.WaveletFunctions.wavelet, 5, wpmode="aa")
+            self.tempfiles = self.generateWPs(self.WaveletFunctions.wavelet, 5, wpmode="aa")
 
         # energies are stored in self.waveletCoefs,
         # or can be read-in from the export file.
@@ -529,8 +529,8 @@ class WaveletSegment:
             1. wavelet object
             2. maxlevel
             3. wpmode ("pywt", "new", "aa")
+            Returns a list of file paths
         """
-
         # For each file:
         files = list()
         for indexF in range(len(self.filelengths)):
@@ -545,24 +545,29 @@ class WaveletSegment:
             if wpmode=="aa":
                 wp = self.WaveletFunctions.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric', maxlevel=maxlevel, antialias=True)
 
-            files.append(tempfile.NamedTemporaryFile(prefix="avianz_wp"+str(indexF), suffix=""))
-            
             # No need to store everything:
-            # # Find 10 most positively correlated nodes
-            # nodeCorrs = self.nodeCorrs[:, indexF]
-            # nodes = np.flip(np.argsort(nodeCorrs)[-10:])
+            # Find 10 most positively correlated nodes
+            nodeCorrs = self.nodeCorrs[:, indexF]
+            goodnodes = np.flip(np.argsort(nodeCorrs)[-10:])
+            goodnodes = [n + 1 for n in goodnodes]
 
-            # # Keep track of negative correlated nodes
-            # negative_nodes.extend(np.argsort(nodeCorrs)[:10])
             # set other nodes to 0
+            for ni in range(len(wp)):
+                if ni not in goodnodes:
+                    print("dropped node", ni)
+                    wp[ni] = [0]
 
-            pickle.dump(wp, files[indexF])
-            files[indexF].flush()
+            # save:
+            files.append(os.path.join(tempfile.gettempdir(), "avianz_wp"+str(indexF)))
+            file = open(files[indexF], 'w+b')
+            pickle.dump(wp, file)
+            file.flush()
+            file.close()
             wp = []
             del wp
-            print("saved WP to file", files[indexF].name)
+            print("saved WP to file", files[indexF])
 
-        # then: pickle.load(open(files[indexF].name, 'rb')); optionally, os.remove(f.name)
+        return(files)
 
     def waveletSegment_train_sep(self, thrList, MList, spInfo={}, feature=None):
         """ Take list of files and other parameters,
@@ -618,6 +623,7 @@ class WaveletSegment:
                     bestBetaScore = 0
                     bestRecall = 0
                     detected = np.zeros(self.filelengths[indexF])
+                    wp = []
 
                     # prepare for reconstructing detectors
                     if feature=="recsep" or feature=="recmulti":
@@ -625,10 +631,17 @@ class WaveletSegment:
                         wp = pywt.WaveletPacket(data=self.audioList[indexF], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
                         # Allocate memory for new WP
                         new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
-                    if feature=="recaa" or feature=="recaafull":
-                        # Generate a full 5 level ANTIALIASED wavelet packet decomposition
-                        wp = self.WaveletFunctions.WaveletPacket(data=self.audioList[indexF], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5, antialias=False)
-                        # TODO: recaafull requires antialias=True, but is slow. Can't cache because memory. Should implement reading from external txt.
+                    # Generate a full 5 level wavelet packet decomposition, "our way"
+                    #if feature=="recaa":
+                    #    wp = self.WaveletFunctions.WaveletPacket(data=self.audioList[indexF], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5, antialias=False)
+
+                    # Read a full 5 level packet decomposition from antialiased results
+                    if feature=="recaafull" or feature=="recaa":
+                        print("reading WP from file", self.tempfiles[indexF])
+                        file = open(self.tempfiles[indexF], 'rb')
+                        wp = pickle.load(file)
+                        file.close()
+                        # TODO: os.remove(file)
 
                     # stepwise search for best node combination:
                     for node in nodes:
