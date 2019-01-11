@@ -138,4 +138,3 @@ def FundFreqYin(data, W, i, ints):
         d[1:] = sd[1:] * ints / np.cumsum(sd[1:])
 
         return d
- 
