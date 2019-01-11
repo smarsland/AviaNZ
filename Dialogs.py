@@ -1550,6 +1550,9 @@ class HumanClassify1(QDialog):
                     if '(' in l:
                         ind = l.index('(')
                         l = l[:ind-1] + ">" + l[ind+1:-1]
+                if l not in self.longBirdList:
+                    self.longBirdList.append(l)
+                    self.saveConfig = True
                 ind = self.longBirdList.index(l)
                 self.birds3.item(ind).setSelected(True)
 

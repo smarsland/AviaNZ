@@ -244,8 +244,7 @@ class WaveletSegment:
 
         # Compute the energy curve (a la Jinnai et al. 2012)
         E = ce.EnergyCurve(C, M)
-
-        threshold = np.mean(C) + np.std(C) * thr
+        threshold = np.exp(np.mean(np.log(C)) + np.std(np.log(C)) * thr)
 
         # If there is a call anywhere in the window, report it as a call
         detected = np.zeros(math.ceil(N/sampleRate))
@@ -289,7 +288,7 @@ class WaveletSegment:
             # Compute the energy curve (a la Jinnai et al. 2012)
             E = ce.EnergyCurve(C, M)
             # Compute threshold
-            threshold = np.mean(C) + np.std(C) * thr
+            threshold = np.exp(np.mean(np.log(C)) + np.std(np.log(C)) * thr)
             # If there is a call anywhere in the window, report it as a call
             j = 0
             for i in range(0,N-sampleRate,sampleRate):
@@ -330,7 +329,7 @@ class WaveletSegment:
         # Compute the energy curve (a la Jinnai et al. 2012)
         E = ce.EnergyCurve(C, M)
         # Compute threshold
-        threshold = np.mean(C) + np.std(C) * thr
+        threshold = np.exp(np.mean(np.log(C)) + np.std(np.log(C)) * thr)
 
         # If there is a call anywhere in the window, report it as a call
         j = 0
@@ -341,7 +340,7 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    def detectCalls_aa(self, wp, sampleRate, node, spInfo={}):
+    def detectCalls_aa(self, wp, sampleRate, node, spInfo={}, annots=None):
         """
         For training. ANTIALIASED version of detectCalls_sep.
         Regenerates the signal from the node and threshold.
@@ -350,8 +349,8 @@ class WaveletSegment:
         2. sampleRate - integer
         3. node - will reconstruct signal from this single node
         4. spInfo - for passing thr, M, and frequency range
+        5. annotation - for calculating noise properties during training
         """
-
         if sampleRate==0:
             sampleRate=self.sampleRate
         thr = spInfo['WaveletParams'][0]
@@ -374,8 +373,12 @@ class WaveletSegment:
 
         # Compute the energy curve (a la Jinnai et al. 2012)
         E = ce.EnergyCurve(C, M)
-        # Compute threshold
-        threshold = np.mean(C) + np.std(C) * thr
+        # Compute threshold using mean & sd from non-call sections
+        if annots is not None:
+            C = C[:len(annots)*sampleRate]
+            C = C[np.repeat(annots==0, sampleRate)]
+        C = np.log(C)
+        threshold = np.exp(np.mean(C) + np.std(C) * thr)
 
         # If there is a call anywhere in the window, report it as a call
         j = 0
@@ -410,6 +413,7 @@ class WaveletSegment:
         fs = spInfo['SampleRate']
 
         if self.sampleRate != fs:
+            print("Resampling from", self.sampleRate, "to", fs)
             self.data = librosa.core.audio.resample(self.data, self.sampleRate, fs)
             self.sampleRate = fs
 
@@ -463,8 +467,8 @@ class WaveletSegment:
 
         # energies are stored in self.waveletCoefs,
         # or can be read-in from the export file.
-        
-        return self.waveletSegment_train_sep(thrList, MList, spInfo, feature)
+        res = self.waveletSegment_train_sep(thrList, MList, spInfo, feature)
+        return res
 
     def loadDirectory(self, dirName, spInfo, denoise, filter, keepaudio, wpmode):
         """ (moved out from individual training functions)
@@ -554,7 +558,6 @@ class WaveletSegment:
             # set other nodes to 0
             for ni in range(len(wp)):
                 if ni not in goodnodes:
-                    print("dropped node", ni)
                     wp[ni] = [0]
 
             # save:
@@ -579,7 +582,7 @@ class WaveletSegment:
              1. 2d list of [nodes]
                  (1st d runs over M, 2nd d runs over thr)
              2-5. 2d np arrays of TP/FP/TN/FN
-         """
+        """
         shape = (len(MList), len(thrList))
         tpa = np.zeros(shape)
         fpa = np.zeros(shape)
@@ -649,19 +652,22 @@ class WaveletSegment:
                         testlist.append(node)
                         print("Test list: ", testlist)
 
-                        # either reconstruct separately from each node, or from all together:
-                        ## TODO: other methods can be implemented as different detectCalls functions
+                        # detect calls, using signal reconstructed from current node (recsep),
+                        # current + all nodes in the filter together (recmulti),
+                        # current node with antialias (freq squashing + non-downsampled tree, recaa...),
+                        # or no reconstruction, just energy-based detection (ethr...)
                         if feature=="recsep":
-                            detected_c = self.detectCalls_sep(new_wp, wp, self.sampleRate, nodes=[node], spInfo=spInfo)
+                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=[node], spInfo=spInfo)
                         if feature=="recmulti":
-                            detected_c = self.detectCalls_sep(new_wp, wp, self.sampleRate, nodes=testlist, spInfo=spInfo)
+                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=testlist, spInfo=spInfo)
                         if feature=="recaa" or feature=="recaafull":
-                            detected_c = self.detectCalls_aa(wp, self.sampleRate, node=node, spInfo=spInfo)
+                            detected_c = self.detectCalls_aa(wp, spInfo['SampleRate'], node=node, spInfo=spInfo, annots=annotation)
                         if feature=="ethr" or feature=="elearn":
                             print("not implemented yet")
+                            # TODO
                             # Non-reconstructing detectors:
                             # detected_c = self.detectCalls_en(self.audioList[indexF], self.sampleRate, nodes=testlist)
-                            detected_c = self.detectCalls_sep(new_wp, wp, self.sampleRate, nodes=[node], spInfo=spInfo)
+                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=[node], spInfo=spInfo)
 
                         # adjust for rounding errors:
                         if len(detected_c)<len(detected):
@@ -1120,23 +1126,64 @@ class WaveletSegment:
         fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
         return detected, TP, FP, TN, FN
 
-    def waveletSegment(self, data=None, sampleRate=None, listnodes = None, spInfo={}, d=False, f=False):
+    def waveletSegment(self, data=None, sampleRate=None, listnodes = None, spInfo={}, d=False, f=False, wpmode='pywt'):
         # Simplest function for denoising one file. Moved from waveletSegment_test(trainTest=False, dirName=None)
+        # Args:
+        # 1. data (waveform)
+        # 2. sample rate
+        # 3. list of nodes, or empty to use species filter from spInfo
+        # 4-5. d & f - passed to preprocessing
+        # 6. WP style ("pywt"-pywt, "new"-our non-downsampled, "aa"-our fully AA'd)
+
         # Load the relevant list of nodes
         if listnodes is None:
-            nodes = spInfo['WaveletParams'][2]
-        else:
-            nodes = listnodes
+            listnodes = spInfo['WaveletParams'][2]
 
         self.data = data
         self.sampleRate = sampleRate
         filteredDenoisedData = self.preprocess(spInfo=spInfo, d=d, f=f)
         
-        # WP decomposition
-        wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5)
+        nlevels=5
+        if wpmode == "pywt":
+            # generate a WP from the entire file
+            wpFull = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=nlevels)
+            # detect calls on blocks (1 s resolution)
+            detected = self.detectCalls(wpFull, self.sampleRate, listnodes=listnodes, spInfo=spInfo)
+        else:
+            # AA'd WP modes have a performance drop when reconstructing big data chunks,
+            # so files above some limit are split:
+            maxnumsamples = 300 * 16000
+            chunk = 0
+            detected = []
+            while len(filteredDenoisedData) > chunk * maxnumsamples:
+                # extract a chunk of data
+                start = chunk*maxnumsamples
+                end = min(len(filteredDenoisedData), (chunk+1)*maxnumsamples)
+                print("Working on samples %d - %d" % (start, end))
 
-        # Segment detection and neighbour merging
-        detected = self.detectCalls(wpFull, self.sampleRate, listnodes=nodes, spInfo=spInfo)
+                # generate WP
+                if wpmode == "new":
+                    wpFull = self.WaveletFunctions.WaveletPacket(data=filteredDenoisedData[start:end], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=nlevels, antialias=False)
+                if wpmode == "aa":
+                    wpFull = self.WaveletFunctions.WaveletPacket(data=filteredDenoisedData[start:end], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=nlevels, antialias=True)
+
+                # detect calls on blocks (1 s resolution) for each node
+                detected_chunk = np.zeros(int( (end-start) / self.sampleRate ))
+                for node in listnodes:
+                    detected_thisnode = self.detectCalls_aa(wpFull, self.sampleRate, node, spInfo=spInfo, annots=None)
+                    # adjust for rounding errors:
+                    if len(detected_thisnode)<len(detected_chunk):
+                        detected_thisnode = np.append(detected_thisnode, [0])
+                    if len(detected_thisnode)>len(detected_chunk):
+                        detected_thisnode = detected_thisnode[:len(detected_chunk)]
+                        
+                    # Concat (OR) with detections from previous nodes:
+                    detected_chunk = np.maximum.reduce([detected_chunk, detected_thisnode])
+
+                # Concat with detections from previous chunks:
+                detected = np.concatenate((detected, detected_chunk))
+                chunk = chunk+1
+
         # merge neighbours in order to convert the detections into segments
         # note: detected np[0 1 1 1] becomes [[1,3]]
         detected = np.where(detected > 0)

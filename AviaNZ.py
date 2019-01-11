@@ -1764,12 +1764,14 @@ class AviaNZ(QMainWindow):
             w1 = np.where(annotation==1)[0]
     
             r = np.zeros((64, np.shape(e)[1]))
+            WF = WaveletFunctions.WaveletFunctions(data=None, wavelet='dmey2', maxLevel=5)
             for count in range(62):
                 # just compute_r from WaveletSegment
                 corr = (np.mean(e[count,w1]) - np.mean(e[count,w0]))/np.std(e[count,:]) * np.sqrt(len(w0)*len(w1))/len(annotation)
                 # map a long vector of rs to different image areas
                 level = int(math.log(count+2, 2))
                 node = count+2 - 2**level
+                node = WF.graycode(node)
                 r[node * 2**(6-level) : (node+1) * 2**(6-level), level] = corr
             r[:,0] = np.linspace(np.min(r), np.max(r), num = 64)
             # propagate along x
@@ -1815,20 +1817,32 @@ class AviaNZ(QMainWindow):
 
             WF = WaveletFunctions.WaveletFunctions(data=None, wavelet='dmey2', maxLevel=5)
 
+            try:
+                plotNodes = json.load(open(os.path.join(self.filtersDir, 'plotnodes.txt')))
+            except:
+                print("Couldn't load file, using default list")
+                plotNodes = [35, 36, 8, 41, 43, 45]
+
+            # resample
+            if self.sampleRate != 16000:
+                audiodata = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
+            else:
+                audiodata = self.audiodata
+            
             if self.extra == "Filtered spectrogram, new + AA":
-                wp = WF.WaveletPacket(self.audiodata, WF.wavelet, 5, 'symmetric', True)
-                C = WF.reconstructWP2(wp, WF.wavelet, 35, True)[:len(self.audiodata)]
-                for node in [36, 8, 41, 43, 45]:
+                wp = WF.WaveletPacket(audiodata, WF.wavelet, 5, 'symmetric', True)
+                C = WF.reconstructWP2(wp, WF.wavelet, plotNodes[0], True)[:len(self.audiodata)]
+                for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(wp, WF.wavelet, node, True)[:len(C)]
             if self.extra == "Filtered spectrogram, new":
-                wp = WF.WaveletPacket(self.audiodata, WF.wavelet, 5, 'symmetric', False)
-                C = WF.reconstructWP2(wp, WF.wavelet, 35, True)[:len(self.audiodata)]
-                for node in [36, 8, 41, 43, 45]:
+                wp = WF.WaveletPacket(audiodata, WF.wavelet, 5, 'symmetric', False)
+                C = WF.reconstructWP2(wp, WF.wavelet, plotNodes[0], True)[:len(self.audiodata)]
+                for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(wp, WF.wavelet, node, True)[:len(C)]
             if self.extra == "Filtered spectrogram, old":
-                wp = pywt.WaveletPacket(data=self.audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
+                wp = pywt.WaveletPacket(data=audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
                 new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
-                for index in [35, 36, 8, 41, 43, 45]:
+                for index in plotNodes:
                     index = WF.ConvertWaveletNodeName(index)
                     new_wp[index] = wp[index].data
                 C = new_wp.reconstruct()
@@ -1849,67 +1863,49 @@ class AviaNZ(QMainWindow):
 
         # plot energy in bands of some particular trained filter:
         if self.extra == "Filter band energy":
-            Ejoint = np.zeros(int(self.datalengthSec))
-            Esep = np.zeros((3, int(self.datalengthSec)))
             WF = WaveletFunctions.WaveletFunctions(data=None, wavelet='dmey2', maxLevel=5)
-            new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
             from ext import ce_denoise
-            M = 0.25
+            M = 1.5
  
+            # resample
+            if self.sampleRate != 16000:
+                audiodata = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
+            else:
+                audiodata = self.audiodata
+
             # as in detectCalls:
-            for w in range(int(self.datalengthSec)):
-                # decompose 1s of signal
-                data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
-                wp = pywt.WaveletPacket(data=data, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
- 
-                # zero-out wp tree
-                for level in range(6):
-                    for n in new_wp.get_level(level, 'natural'):
-                        n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
- 
-                # reconstruct from bands, separately
-                r = 0 
-                for index in [35,37,40]:
-                    index = WF.ConvertWaveletNodeName(index)
-                    new_wp[index] = wp[index].data
- 
-                    C = new_wp.reconstruct(update=True)
-                    C = np.abs(C)
+            try:
+                plotNodes = json.load(open(os.path.join(self.filtersDir, 'plotnodes.txt')))
+            except:
+                print("Couldn't load file, using default list")
+                plotNodes = [35, 36, 8, 41, 43, 45]
 
-                    E = ce_denoise.EnergyCurve(C, int(M * self.sampleRate / 2)) 
+            Esep = np.zeros((len(plotNodes), int(self.datalengthSec)))
 
-                    # re-zero for next pass
-                    new_wp[index].data = np.zeros(len(wp[index].data))
- 
-                    # normalize energy, so that we don't need to hardcode thr 
-                    Esep[r,w] = (np.max(E) - np.mean(C)) / np.std(C)
-                    r = r + 1 
- 
-                # reconstruct from bands, jointly
-                for index in [35, 37, 40]:
-                    index = WF.ConvertWaveletNodeName(index)
-                    new_wp[index] = wp[index].data
- 
-                C = new_wp.reconstruct(update=True)
+            # decompose signal
+            wp = WF.WaveletPacket(audiodata, WF.wavelet, 5, 'symmetric', False)
+
+            # reconstruct from bands, separately
+            r = 0 
+            for node in plotNodes:
+                C = WF.reconstructWP2(wp, WF.wavelet, node, False)
                 C = np.abs(C)
                 E = ce_denoise.EnergyCurve(C, int(M * self.sampleRate / 2)) 
 
-                # normalize energy, so that we don't need to hardcode thr 
-                Ejoint[w] = (np.max(E) - np.mean(C)) / np.std(C)
+                # get max E for each second
+                for w in range(int(self.datalengthSec)):
+                    # normalize energy, so that we don't need to hardcode thr 
+                    Esep[r,w] = (np.max(E[w*16000 : (w+1)*16000]) - np.mean(C)) / np.std(C)
 
-            # plot
-            self.plotExtra = pg.PlotDataItem(np.arange(int(self.datalengthSec)), Ejoint)
-            self.plotExtra.setPen(fn.mkPen(color='k', width=2))
-            self.plotExtra2 = pg.PlotDataItem(np.arange(int(self.datalengthSec)), Esep[0,:])
-            self.plotExtra2.setPen(fn.mkPen(color=(255,0,0), width=1))
-            self.plotExtra3 = pg.PlotDataItem(np.arange(int(self.datalengthSec)), Esep[1,:])
-            self.plotExtra3.setPen(fn.mkPen(color=(255,80,0), width=1))
-            self.plotExtra4 = pg.PlotDataItem(np.arange(int(self.datalengthSec)), Esep[2,:])
-            self.plotExtra4.setPen(fn.mkPen(color=(255,160,0), width=1))
-            self.p_plot.addItem(self.plotExtra)
-            self.p_plot.addItem(self.plotExtra2)
-            self.p_plot.addItem(self.plotExtra3)
-            self.p_plot.addItem(self.plotExtra4)
+                # plot
+                self.plotExtra = pg.PlotDataItem(np.arange(int(self.datalengthSec)), Esep[r,:])
+                self.plotExtra.setPen(fn.mkPen(color=(255*r//len(plotNodes),0,0), width=1))
+                self.p_plot.addItem(self.plotExtra)
+                self.plotExtra2 = pg.TextItem(color=(255*r//len(plotNodes), 0, 0), text=str(node))
+                self.p_plot.addItem(self.plotExtra2)
+                self.plotExtra2.setPos(1, Esep[r,1])
+                r = r + 1 
+ 
             self.plotaxis.setLabel('Power Z-score')
 
             # pproc = SupportClasses.postProcess(self.audiodata,self.sampleRate)
@@ -3907,6 +3903,12 @@ class AviaNZ(QMainWindow):
                         GT[i][1] = str(1)
                         GT[i][2] = type
                         GT[i][3] = quality
+
+        # Empty files cannot be used now, and lead to problems
+        if len(GT)==0:
+            print("ERROR: no calls for this species in file", datFile)
+            return
+
         for line in GT:
             if line[1] == 0.0:
                 line[1] = '0'
@@ -4023,7 +4025,7 @@ class AviaNZ(QMainWindow):
                 else:
                     speciesData = json.load(open(os.path.join(self.filtersDir, species+'.txt')))
                     ws = WaveletSegment.WaveletSegment()
-                    newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData)
+                    newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, wpmode="new")
             elif str(alg)=='Cross-Correlation':
                 if species_cc != 'Choose species...':
                     # need to load template/s
@@ -5085,7 +5087,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
             avianz = AviaNZ(configdir=configdir)
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==2:
-            avianz = AviaNZ_batch.AviaNZ_batchProcess()
+            avianz = AviaNZ_batch.AviaNZ_batchProcess(configdir=configdir)
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==4:
             avianz = AviaNZ_batch.AviaNZ_reviewAll(configdir=configdir)
