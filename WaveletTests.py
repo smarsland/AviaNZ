@@ -340,7 +340,7 @@ def testTrainers(dName, species, f1, f2, fs, trainPerFile=True, withzeros=False,
     thrList = np.linspace(0, 1, 5)  # np.linspace(0, 1, 5)
     MList = np.linspace(0.25, 1, 4)  # np.linspace(0.25, 1.5, 3)
     ws = WaveletSegment.WaveletSegment()
-    nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature='elearn')
+    nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature='recsep')
     print("Filtered nodes: ", nodes)
     print("Negative nodes: ", negative_nodes)
     # Remove any negatively correlated nodes
@@ -432,8 +432,8 @@ def testWavelet(dName, species, withzeros, savedetections):
         accuracy = (TP+TN)/(TP+FP+TN+FN)
     print(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
 
-testTrainers('D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train', "BKiwi", f1=1000, f2=8000, fs=16000, trainPerFile=True, withzeros=True, mergeTrees=False, cleanNodelist=True)
-# testWavelet('E:\Chapter5\DATASETS\\field\\ruru\\test', "Morepork", withzeros=True, savedetections=True)
+# testTrainers('D:\\Nirosha\CHAPTER5\kiwi\\tier1\\negative\segmentsAfterFilter1_v1\\noise', "BKiwi", f1=1000, f2=8000, fs=16000, trainPerFile=True, withzeros=True, mergeTrees=False, cleanNodelist=True)
+# testWavelet('D:\\Nirosha\CHAPTER5\kiwi\\tier1\\negative\set3', "BKiwi", withzeros=True, savedetections=True)
 
 import math
 def y(t):

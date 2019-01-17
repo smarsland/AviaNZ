@@ -61,7 +61,7 @@ class WaveletSegment:
         self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=data, wavelet=wavelet,maxLevel=20)
         self.segmenter = Segment.Segment(data, None, self.sp, sampleRate, window_width=256, incr=128, mingap=mingap, minlength=minlength)
 
-    def computeWaveletEnergy(self,data=None,sampleRate=0,nlevels=5, wpmode="pywt"):
+    def computeWaveletEnergy(self,data=None,sampleRate=0,nlevels=5, wpmode="pywt", extractedCalls=False):
         """ Computes the energy of the nodes in the wavelet packet decomposition
         Args:
         1. data (waveform)
@@ -78,6 +78,10 @@ class WaveletSegment:
             sampleRate = self.sampleRate
 
         n = math.ceil(len(data)/sampleRate)
+
+        if extractedCalls:
+            data = data[sampleRate:len(data)-sampleRate]    # remove the margin of the extracted calls
+            n = math.ceil(len(data) / sampleRate)
 
         coefs = np.zeros((2**(nlevels+1)-2, n))
         # for each second:
@@ -297,6 +301,8 @@ class WaveletSegment:
                 j+=1
             count += 1
         detected= np.max(detected,axis=1)
+        del C
+        gc.collect()
         return detected
 
     def detectCalls_sep(self, new_wp, wp, sampleRate, nodes, spInfo={}):
@@ -488,13 +494,20 @@ class WaveletSegment:
         self.waveletCoefs = np.array([]).reshape(2**(nlevels+1)-2, 0)
         self.nodeCorrs = np.array([]).reshape(2**(nlevels+1)-2, 0)
 
+        extractedCalls = True   # used only for saving energies from extracted calls (NI kiwi pool) with no annotations
+        # extractedCalls = False
+
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files or file.endswith('.wav') and extractedCalls and os.stat(root + '/' + file).st_size > 150:
                     opstartingtime = time.time()
                     wavFile = root + '/' + file[:-4]
+                    print(wavFile)
                     # adds to annotation and filelength arrays, sets self.data:
-                    self.loadData(wavFile, trainPerFile=False)
+                    if extractedCalls:
+                        self.loadData(wavFile, trainPerFile=False, wavOnly=True)
+                    else:
+                        self.loadData(wavFile, trainPerFile=False)
 
                     # denoise and store actual audio data:
                     # note: preprocessing is a side effect on self.data
@@ -504,12 +517,16 @@ class WaveletSegment:
                         self.audioList.append(filteredDenoisedData)
 
                     # Compute energy in each WP node and store
-                    currWCs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate, 5, wpmode)
+                    currWCs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate, 5, wpmode, extractedCalls=False)
                     self.waveletCoefs = np.column_stack((self.waveletCoefs, currWCs))
                     # Compute all WC-annot correlations and store
-                    currAnnot = np.array(self.annotation[-self.filelengths[-1]:])
-                    self.nodeCorrs = np.column_stack(
-                        (self.nodeCorrs, self.compute_r(currAnnot, currWCs)))
+                    if extractedCalls:
+                        currAnnot = np.zeros((math.ceil(len(filteredDenoisedData) / self.sampleRate), 1))
+                        self.annotation.extend(currAnnot)
+                    else:
+                        currAnnot = np.array(self.annotation[-self.filelengths[-1]:])
+                        self.nodeCorrs = np.column_stack(
+                            (self.nodeCorrs, self.compute_r(currAnnot, currWCs)))
 
                     print("file loaded in", time.time() - opstartingtime)
 
@@ -1075,6 +1092,7 @@ class WaveletSegment:
                     wavFile = root + '/' + file[:-4]
                     # Load data and annotation
                     # (preprocess only requires SampleRate and FreqRange from spInfo)
+                    print(wavFile)
                     self.loadData(wavFile, savedetections=savedetections)
                     filteredDenoisedData = self.preprocess(spInfo,d=d, f=f)
                     self.audioList.append(filteredDenoisedData)

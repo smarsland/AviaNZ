@@ -139,12 +139,13 @@ def tag2data(dir,birdlist):
                 troot = tree.getroot()
                 for elem in troot:
                     sp = spDict[int(elem[0].text)]
-                    annotation.append([float(elem[1].text),float(elem[1].text)+float(elem[2].text),0,0,sp])
+                    annotation.append([float(elem[1].text),float(elem[1].text)+float(elem[2].text),500,7500,sp])
                 annotation.insert(0,[-1, startTime, "Doc_Operator", "Doc_Reviewer", -1])
                 file = open(tagFile[:-4] + '.wav.data', 'w')
                 json.dump(annotation, file)
 
-# tag2data('E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset\DOC annotations\North_Island_tags_2011_16','E:\AviaNZ\Sound Files\Kiwi\\test\Tier1 dataset\DOC annotations\Freebird_species_ list.xlsx')
+
+# tag2data('D:\AviaNZ\Sound Files\Fiordland kiwi\Fiordland_kiwi_training_data_Aug2018\.session','D:\AviaNZ\Sound Files\Tier1\Freebird_species_list.xlsx')
 
 # what was deleted by Fund frq. filter?
 def genDiffAnnotation(dir1, dir2):  # e.g. dir1 is Filter3 and dir2 is Filter4
@@ -220,7 +221,7 @@ def delEmpAnn(dir):
                 elif len(segments)==1 and segments[0][0]==-1:
                     os.remove(annotation)
 
-# delEmpAnn('E:\Tier1-2014-15 batch1')
+# delEmpAnn('E:\Tier1_batch3_RH')
 
 #------------------------------------------------- code to extract segments
 def extractSegments(wavFile, destination, copyName, species):
@@ -253,7 +254,7 @@ def extractSegments(wavFile, destination, copyName, species):
                     e = int(seg[1] * sampleRate)
                     temp = data[s:e]
                     wavio.write(filename, temp.astype('int16'), sampleRate, scale='dtype-limits', sampwidth=2)
-                elif species == seg[4]:   # extract only specific calls - extracted sounds are saved with with the original file name followed by an index starting 1
+                elif species == seg[4][0]:   # extract only specific calls - extracted sounds are saved with with the original file name followed by an index starting 1
                     ind = wavFile.rindex('/')
                     ind2 = wavFile.rindex('\\')
                     filename = destination + '\\' + str(wavFile[ind2+1:ind]) + '-' + str(wavFile[ind + 1:-4]) + '-' + str(seg[4]) + '-' + str(cnt) + '.wav'
@@ -279,6 +280,10 @@ def extractSegments_batch(dirName, destination, copyName = True, species = None)
             if filename.endswith('.wav') and filename+'.data' in files:
                 filename = root + '/' + filename
                 extractSegments(filename, destination, copyName=copyName, species = species)
+
+
+# extractSegments_batch('D:\\Nirosha\CHAPTER5\kiwi\\tier1\\negative',
+#                       'D:\\Nirosha\CHAPTER5\kiwi\\tier1\\negative\segmentsAfterFilter1_v1', copyName=False, species=None)
 
 #------------------------------------------------- code to rename the annotations e.g. Kiwi(M)1 into bkm1
 def renameAnnotation(dirName, frm, to):
@@ -308,6 +313,7 @@ def annotation2GT(wavFile,species,duration=0):
     """
     # wavFile=datFile[:-5]
     datFile=wavFile+'.data'
+    print(datFile)
     eFile = datFile[:-9]+'-sec.txt'
     if duration ==0:
         wavobj = wavio.read(wavFile)
@@ -320,7 +326,7 @@ def annotation2GT(wavFile,species,duration=0):
     GT[:][2]=''
     GT[:][3]=''
     if os.path.isfile(datFile):
-        print (datFile)
+        # print(datFile)
         with open(datFile) as f:
             segments = json.load(f)
         for seg in segments:
@@ -328,15 +334,18 @@ def annotation2GT(wavFile,species,duration=0):
                 continue
             # x = re.search(species, str(seg[4]))
             # print x
-            if not re.search(species, seg[4]):
+            # if not re.search('Kiwi', seg[4][0]):
+            if not 'Kiwi' in seg[4]:
+                if seg[4][0][-1]=='?':
+                    print("**", wavFile)
                 continue
-            elif species=='Kiwi' or 'Gsk':
+            elif species=='Kiwi (Nth Is Brown)' or 'Kiwi' or 'Kiwi_Tokoeka_Haast' or 'Kiwi_Brown' or 'Kiwi_spp' or 'Kiwi_Okarito_Brown' or 'Kiwi_Tokoeka_Stewart_Is':
                 # check M/F
-                if '(M)' in str(seg[4]):        # if re.search('(M)', seg[4]):
+                if '(M)' in str(seg[4][0]):        # if re.search('(M)', seg[4]):
                     type = 'M'
-                elif '(F)' in str(seg[4]):      #if re.search('(F)', seg[4]):
+                elif '(F)' in str(seg[4][0]):      #if re.search('(F)', seg[4]):
                     type='F'
-                elif '(D)' in str(seg[4]):
+                elif '(D)' in str(seg[4][0]):
                     type='D'
                 else:
                     type='K'
@@ -350,15 +359,15 @@ def annotation2GT(wavFile,species,duration=0):
                     type=''
 
             # check quality
-            if re.search('1', seg[4]):
+            if re.search('1', seg[4][0]):
                 quality = '*****'   # v close
-            elif re.search('2', seg[4]):
+            elif re.search('2', seg[4][0]):
                 quality = '****'    # close
-            elif re.search('3', seg[4]):
+            elif re.search('3', seg[4][0]):
                 quality = '***' # fade
-            elif re.search('4', seg[4]):
+            elif re.search('4', seg[4][0]):
                 quality = '**'  # v fade
-            elif re.search('5', seg[4]):
+            elif re.search('5', seg[4][0]):
                 quality = '*'   # v v fade
             else:
                 quality = ''
@@ -369,20 +378,22 @@ def annotation2GT(wavFile,species,duration=0):
                 GT[i][1] = str(1)
                 GT[i][2] = type
                 GT[i][3] = quality
-    for line in GT:
-        if line[1]==0.0:
-            line[1]='0'
-        if line[2]==0.0:
-            line[2]=''
-        if line[3]==0.0:
-            line[3]=''
-    # now save GT as a .txt file
-    for i in range(1, duration + 1):
-        GT[i-1][0]=str(i)   # add time as the first column to make GT readable
-    out = file(eFile, "w")
-    for line in GT:
-        print >> out, "\t".join(line)
-    out.close()
+        for line in GT:
+            if line[1]==0.0:
+                line[1]='0'
+            if line[2]==0.0:
+                line[2]=''
+            if line[3]==0.0:
+                line[3]=''
+
+        # now save GT as a .txt file
+        for i in range(1, duration + 1):
+            GT[i-1][0]=str(i)   # add time as the first column to make GT readable
+        out = open(eFile, "w")
+        for line in GT:
+            out.write("\t".join(line))
+            out.write("\n")
+        out.close()
 
 def genGT(dirName,species='Kiwi',duration=0):
     """
@@ -395,7 +406,10 @@ def genGT(dirName,species='Kiwi',duration=0):
             if filename.endswith('.wav'):
                 filename = root + '/' + filename
                 annotation2GT(filename,species,duration=duration)
-    print ("Generated GT")
+    print("Generated GT")
+
+
+# genGT('D:\AviaNZ\Sound Files\Fiordland kiwi\Fiordland_kiwi_training_data_Aug2018', species='Kiwi', duration=900)
 
 #------------------------------------------------- code to convert the anotations to excel report batch
 def genReport(dirName,species='Kiwi'):
@@ -409,8 +423,8 @@ def genReport(dirName,species='Kiwi'):
     ws.cell(row=1, column=1, value="File name")
     ws.cell(row=1, column=2, value="start")
     ws.cell(row=1, column=3, value="end")
-    ws.cell(row=1, column=4, value="M/F")
-    ws.cell(row=1, column=5, value="quality")
+    ws.cell(row=1, column=4, value="M/F/D")
+    # ws.cell(row=1, column=5, value="quality")
     r = 2
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
@@ -442,13 +456,13 @@ def genReport(dirName,species='Kiwi'):
                     print (datetime.timedelta(seconds=startTime))
 
                 c = 1
-                ws.cell(row=r, column=c, value=str(fName[:-9]))
+                ws.cell(row=r, column=c, value=str(filename[26:-9]))
                 c = c + 1
                 for seg in segments:
                     if seg[0] == -1:
                         continue
-                    x = re.search('Kiwi', seg[4])
-                    if not re.search('Kiwi', seg[4]):
+                    x = re.search('Kiwi', seg[4][0])
+                    if not re.search('Kiwi', seg[4][0]):
                         continue
                     s = int(math.floor(seg[0]))
                     s = datetime.timedelta(seconds=startTime+s)
@@ -459,28 +473,29 @@ def genReport(dirName,species='Kiwi'):
                     c=c+1
                     ws.cell(row=r, column=c, value=str(e))
                     c = c + 1
-                    if len(seg[4])==5:                          # 'Kiwi?' and 'Kiwi5'
+                    if len(seg[4][0])==19:                          # 'Kiwi?' and 'Kiwi5'
                         gend='K'
-                        if str(seg[4][4])=='?':
-                            quality = ''
-                        elif int(seg[4][4]) == 1 or int(seg[4][4]) == 2 or int(seg[4][4]) == 3 or int(seg[4][4]) == 4 or int(seg[4][4]) == 5 or int(seg[4][4]) == 6:
-                            quality = '*' * int(seg[4][4])
-                    elif len(seg[4])==6:                        # 'Kiwi5?'
-                        gend='?'
-                        quality = '*' * int(seg[4][4])
-                    elif len(seg[4]) == 8:                      # 'Kiwi(M)1'
-                        gend = seg[4][5]
-                        quality = '*' * int(seg[4][7])
+                        # if str(seg[4][4])=='?':
+                            # quality = ''
+                        # elif int(seg[4][0][-1]) == 1 or int(seg[4][0][-1]) == 2 or int(seg[4][0][-1]) == 3 or int(seg[4][0][-1]) == 4 or int(seg[4][0][-1]) == 5 or int(seg[4][0][-1]) == 6:
+                        #     quality = '*' * int(seg[4][0][-1])
+                    else:
+                        gend=seg[4][0][-1]
+                        # quality = '*' * int(seg[4][0][-1])
+                    # elif len(seg[4]) == 8:                      # 'Kiwi(M)1'
+                    #     gend = seg[4][0][5]
+                    #     quality = '*' * int(seg[4][7])
                     ws.cell(row=r, column=c, value=gend)
-                    c = c + 1
-                    ws.cell(row=r, column=c, value = quality)
+                    # c = c + 1
+                    # ws.cell(row=r, column=c, value = quality)
                     c = 2
                     r = r + 1
-                # r = r + 1
+                c = 1
+                r = r + 1
     wb.save(str(eFile))
     print ("Generated Report")
 
-# genReport('E:\Employ\Halema\Survey2\Card 4',species='Kiwi')
+# genReport('D:\\Nirosha\Kiwi_TBA_Jason\TR_KM_03',species='Kiwi')
 #genReport('G:\Isabel-Summit Forest (Northland)-Karen Lucich 22-11-17\Kiwi Recorder card 5',species='Kiwi')
 
 def genReportBittern(dirName):
@@ -602,3 +617,144 @@ def batch_fB(dirName,species,length):
     else:
         print ("-----TP   FP  TN  FN")
         print (TP, FP, TN, FN)
+
+# ----------------------------------------------Randomly select n files (Fiordland annotation for training)
+def selectRandom(dirName, n, outDir):
+    import random
+    import os, shutil
+    from shutil import copyfile
+    # Get the complete file list
+    filelist = []
+    filelist2 = []
+    for root, dirs, files in os.walk(str(dirName)):
+        for filename in files:
+            if filename.endswith('.wav'):
+                filelist2.append(filename)
+                filename = root + '/' + filename
+                filelist.append(filename)
+    # Randomly select n files and copy them to out folder
+    ind = list(range(len(filelist)))
+    random.shuffle(ind)
+    inds = ind[0:n]
+    selctedFiles = []
+    selctedFiles2 = []
+    for index in inds:
+        selctedFiles.append(filelist[index])
+        selctedFiles2.append(filelist2[index])
+    for name in selctedFiles:
+        print(name)
+    for i in range(n):
+        src = selctedFiles[i]
+        dst = outDir + '\\' + src[42:].replace("\\", "_")
+        dst = dst.replace("/", "_")
+        copyfile(src, dst)
+
+# selectRandom('F:\Fiordland_kiwi_2018_DOC(James Motimer)', 100, 'E:\Fiordlandkiwi_100_RH_set2')
+
+# ----------------------------------------------Copy .wav, .txt, .data when all the three items in the src to a
+# ----------------------------------------------selected destination, otherwise skip
+def copyBatch(src, dst):
+    from shutil import copyfile
+    for root, dirs, files in os.walk(str(src)):
+        for file in files:
+            if file.endswith('.wav') and file[:-4] + '-sec.txt' in files and file + '.data' in files:
+                # copy them
+                srcwav = root + '\\' + file
+                srctxt = root + '\\' + file[:-4] + '-sec.txt'
+                srcdata = root + '\\' + file + '.data'
+                dstwav = dst + '\\' + root[62:].replace("\\", "_") + file
+                dsttxt = dst + '\\' + root[62:].replace("\\", "_") + file[:-4] + '-sec.txt'
+                dstdata = dst + '\\' + root[62:].replace("\\", "_") + file + '.data'
+                copyfile(srcwav, dstwav)
+                copyfile(srcdata, dstdata)
+                copyfile(srctxt, dsttxt)
+
+# copyBatch('E:\Bittern-Kessels Ecology-Wiea-2017-11-13\DownSampled+Reprot', 'D:\\Nirosha\CHAPTER5\\bittern\\train_national\Kessel')
+
+def batch_proc(dirName, species='BKiwi'):
+    import WaveletSegment
+    import SignalProc
+    import Segment
+    import SupportClasses
+    import pywt
+    speciesData = json.load(open(os.path.join('Filters', 'BKiwi' + '.txt')))
+    cnt = 0
+    for root, dirs, files in os.walk(str(dirName)):
+        for file in files:
+            Night = False
+            DOCRecording = re.search('(\d{6})_(\d{6})', file)
+            if DOCRecording:
+                startTime = DOCRecording.group(2)
+                if int(startTime[:2]) > 17 or int(startTime[
+                                                  :2]) < 6:  # if int(startTime[:2]) > 18 or int(startTime[:2]) < 6:   #   6pm to 6am as night
+                    Night = True
+            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0:
+                if file + '.data' not in files:  # skip already processed files
+                    filename = root + '/' + file
+                    # load wav and annotation
+                    wSeg = WaveletSegment.WaveletSegment()
+                    wSeg.loadData(fName=filename[:-4], wavOnly=True)
+                    datalength = np.shape(wSeg.data)[0]
+                    if species != 'all':
+                        import librosa
+                        if (species == 'BKiwi' or species == 'Ruru') and wSeg.sampleRate != 16000:
+                            wSeg.data = librosa.core.audio.resample(wSeg.data, wSeg.sampleRate, 16000)
+                            wSeg.sampleRate = 16000
+                            datalength = np.shape(wSeg.data)[0]
+
+                        # ws = WaveletSegment.WaveletSegment(species=species, annotation=annotation)
+                        cnt = cnt+1
+                        print(cnt, filename)
+                        nodes = speciesData['WaveletParams'][2]
+                        detected = np.array([])
+
+                        filteredDenoisedData = wSeg.preprocess(speciesData, d=False, f=True)
+
+                        wp = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=wSeg.WaveletFunctions.wavelet,
+                                                mode='symmetric', maxlevel=5)
+                        detected_c = wSeg.detectCalls(wp, wSeg.sampleRate, listnodes=nodes, spInfo=speciesData,
+                                                      withzeros=True)
+                        detected_c = np.where(detected_c > 0)
+                        if np.shape(detected_c)[1] > 1:
+                            detected_c = wSeg.identifySegments(np.squeeze(detected_c))
+                        elif np.shape(detected_c)[1] == 1:
+                            detected_c = np.array(detected_c).flatten().tolist()
+                            detected_c = wSeg.identifySegments(detected_c)
+                        else:
+                            detected_c = []
+                        detected_c = wSeg.mergeSeg(detected_c)
+                        for item in detected_c:
+                            item[0] = int(item[0])
+                            item[1] = int(item[1])
+                            item = item.append(speciesData['FreqRange'][0])
+                        for item in detected_c:
+                            item = item.append(speciesData['FreqRange'][1])
+                        for item in detected_c:
+                            item = item.append(speciesData['Name'])
+                        file = open(str(filename) + '.data', 'w')
+                        json.dump(detected_c, file)
+
+
+# batch_proc(dirName='E:\HaastTokoeka-Heath\AR4')
+
+# batch_proc(dirName='E:\\test')
+
+
+#------------------------------------- sort noises from Tier1 to sub-dirs
+def sort_noiseSegs(dirName, dst):
+    from shutil import copyfile
+    for root, dirs, files in os.walk(str(dirName)):
+        for file in files:
+            if file.endswith('.wav') and file + '.data' in files:
+                with open(root + '\\' + file + '.data') as f:
+                    segments = json.load(f)
+                    for seg in segments:
+                        if seg[0] == -1:
+                            continue
+                        else:
+                            # copy the file to the corresponding sub-folder
+                            srcwav = root + '\\' + file
+                            dstwav = dst + '\\' + seg[4][0] + '\\' + file
+                            copyfile(srcwav, dstwav)
+
+# sort_noiseSegs('E:\Tier1-2015-16\A_FP_examples\segments', 'E:\Tier1-2015-16\A_FP_examples\Segs')

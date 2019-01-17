@@ -1036,7 +1036,7 @@ class AviaNZ(QMainWindow):
                 self.addNoiseData()
 
             # setting this to True forces initial save
-            self.segmentsToSave = True
+            # self.segmentsToSave = True
             self.saveSegments()
 
         self.previousFile = current
@@ -3491,7 +3491,7 @@ class AviaNZ(QMainWindow):
             x2 = math.floor(x2 * self.config['incr']) #/ self.sampleRate
             filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.SoundFileDir, '*.wav')
             if filename:
-                wavio.write(str(filename) + '.wav', self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
+                wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(os.path.basename(self.filename))
 
@@ -4021,6 +4021,7 @@ class AviaNZ(QMainWindow):
                     msg.exec_()
                     return
                 else:
+                    # print(os.path.join(self.filtersDir, species+'.txt'))
                     speciesData = json.load(open(os.path.join(self.filtersDir, species+'.txt')))
                     ws = WaveletSegment.WaveletSegment()
                     newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData)
@@ -4060,6 +4061,10 @@ class AviaNZ(QMainWindow):
                 # newSegmentsDef=self.binary2seg(newSegmentsDef)
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
             # post process to remove short segments, wind, rain, and use F0 check.
+            # post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+            #                                   segments=newSegments, spInfo={})
+            # post.wind_plot()
+
             if species == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
                 print(post.segments)
