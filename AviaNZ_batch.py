@@ -392,8 +392,10 @@ class AviaNZ_batchProcess(QMainWindow):
                             # wipe same species:
                             self.segments[:] = [s for s in self.segments if self.species not in s[4] and self.species+'?' not in s[4]]
                             ws = WaveletSegment.WaveletSegment()
+                            # TODO: read the filter from Appdata
                             speciesData = json.load(open(os.path.join('Filters', self.species+'.txt')))
                             newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData)
+                            # print(newSegments)
                         else:
                             # wipe all segments:
                             self.segments = []
@@ -419,7 +421,8 @@ class AviaNZ_batchProcess(QMainWindow):
                                 # post.rainClick() - omitted in sppSpecific cases
                                 # print('After rain: ', post.segments)
                             if speciesData['F0']:
-                                post.fundamentalFrq()
+                                pass
+                                # post.fundamentalFrq()
                                 # print('After ff: ', post.segments)
                         newSegments = post.segments
 
