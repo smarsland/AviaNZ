@@ -56,18 +56,24 @@ import json, copy
 class AviaNZ_batchProcess(QMainWindow):
     # Main class for batch processing
 
-    def __init__(self,root=None,minSegment=50):
+    def __init__(self, root=None, configdir='', minSegment=50):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
         super(AviaNZ_batchProcess, self).__init__()
         self.root = root
         self.dirName=[]
 
-        # TODO: read filters from user location
+        # read config and filters from user location
+        self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
+        print("Loading configs from file %s" % self.configfile)
+        self.config = json.load(open(self.configfile))
+        self.saveConfig = True
+
+        self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         try:
-            self.FilterFiles = [f[:-4] for f in os.listdir('Filters') if os.path.isfile(os.path.join('Filters', f))]
+            self.FilterFiles = [f[:-4] for f in os.listdir(self.filtersDir) if os.path.isfile(os.path.join(self.filtersDir, f))]
         except:
-            "Folder not found, no filters loaded"
+            print("Folder %s not found, no filters loaded" % self.filtersDir)
             self.FilterFiles = None
 
         # Make the window and associated widgets
@@ -392,10 +398,8 @@ class AviaNZ_batchProcess(QMainWindow):
                             # wipe same species:
                             self.segments[:] = [s for s in self.segments if self.species not in s[4] and self.species+'?' not in s[4]]
                             ws = WaveletSegment.WaveletSegment()
-                            # TODO: read the filter from Appdata
-                            speciesData = json.load(open(os.path.join('Filters', self.species+'.txt')))
-                            newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData)
-                            # print(newSegments)
+                            speciesData = json.load(open(os.path.join(self.filtersDir, self.species+'.txt')))
+                            newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, wpmode="new")
                         else:
                             # wipe all segments:
                             self.segments = []
@@ -421,8 +425,7 @@ class AviaNZ_batchProcess(QMainWindow):
                                 # post.rainClick() - omitted in sppSpecific cases
                                 # print('After rain: ', post.segments)
                             if speciesData['F0']:
-                                pass
-                                # post.fundamentalFrq()
+                                post.fundamentalFrq()
                                 # print('After ff: ', post.segments)
                         newSegments = post.segments
 
@@ -648,13 +651,40 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_spe1.addItems(self.spList)
         self.d_detection.addWidget(self.w_spe1,row=2,col=1,colspan=2)
 
-        self.w_resLabel = QLabel("  Time Resolution in Excel Output (secs)")
+        self.w_resLabel = QLabel("  Time Resolution in Excel Output (s)")
         self.d_detection.addWidget(self.w_resLabel, row=3, col=0)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
         self.w_res.setSingleStep(5)
         self.w_res.setValue(60)
         self.d_detection.addWidget(self.w_res, row=3, col=1, colspan=2)
+
+        # sliders to select min/max frequencies for ALL SPECIES only
+        self.fLow = QSlider(Qt.Horizontal)
+        self.fLow.setTickPosition(QSlider.TicksBelow)
+        self.fLow.setTickInterval(500)
+        self.fLow.setRange(0, 5000)
+        self.fLow.setSingleStep(100)
+        self.fLowtext = QLabel('  Show freq. above (Hz)')
+        self.fLowvalue = QLabel('0')
+        receiverL = lambda value: self.fLowvalue.setText(str(value))
+        self.fLow.valueChanged.connect(receiverL)
+        self.fHigh = QSlider(Qt.Horizontal)
+        self.fHigh.setTickPosition(QSlider.TicksBelow)
+        self.fHigh.setTickInterval(1000)
+        self.fHigh.setRange(4000, 32000)
+        self.fHigh.setSingleStep(250)
+        self.fHightext = QLabel('  Show freq. below (Hz)')
+        self.fHighvalue = QLabel('4000')
+        receiverH = lambda value: self.fHighvalue.setText(str(value))
+        self.fHigh.valueChanged.connect(receiverH)
+        # add sliders to dock
+        self.d_detection.addWidget(self.fLowtext, row=4, col=0)
+        self.d_detection.addWidget(self.fLow, row=4, col=1)
+        self.d_detection.addWidget(self.fLowvalue, row=4, col=2)
+        self.d_detection.addWidget(self.fHightext, row=5, col=0)
+        self.d_detection.addWidget(self.fHigh, row=5, col=1)
+        self.d_detection.addWidget(self.fHighvalue, row=5, col=2)
 
         self.w_processButton = QPushButton("&Review Folder")
         self.w_processButton.clicked.connect(self.review)
@@ -1022,6 +1052,15 @@ class AviaNZ_reviewAll(QMainWindow):
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
             self.sp = SignalProc.SignalProc()
+
+        # Filter the audiodata based on initial sliders
+        minFreq = max(self.fLow.value(), 0)
+        maxFreq = min(self.fHigh.value(), self.sampleRate//2)
+        if maxFreq - minFreq < 100:
+            print("ERROR: less than 100 Hz band set for spectrogram")
+            return
+        print("Filtering samples to %d - %d Hz" % (minFreq, maxFreq))
+        self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, minFreq, maxFreq)
 
         # Get the data for the spectrogram
         self.sgRaw = self.sp.spectrogram(self.audiodata, window_width=256, incr=128, window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
