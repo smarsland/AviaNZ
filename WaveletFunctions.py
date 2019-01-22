@@ -25,6 +25,7 @@ import numpy as np
 import pywt
 import math
 import scipy.fftpack as fft
+import time
 from ext import ce_denoise as ce
 
 class WaveletFunctions:
@@ -210,6 +211,10 @@ class WaveletFunctions:
             4. mode - symmetric by default, as in pywt.WaveletPacket
             5. antialias - on/off switch
         """
+        if len(data)>310*16000 and antialias:
+            print("ERROR: processing files larger than 5 min in slow antialiasing mode is disabled. Enable this only if you are ready to wait.")
+            return
+
         # filter length for extension modes
         flen = max(len(wavelet.dec_lo), len(wavelet.dec_hi), len(wavelet.rec_lo), len(wavelet.rec_hi))
         # this tree will store non-downsampled coefs for reconstruction
@@ -253,13 +258,18 @@ class WaveletFunctions:
             # store D before downsampling
             tree.append(nextd)
 
-            print("Node ", node, " complete.")
+            if antialias:
+                print("Node ", node, " complete.")
 
         return(tree)
 
     def reconstructWP2(self, wp, wv, node, antialias=False):
-        """ Inverse of WaveletPacket: returns the signal from a single node. """
+        """ Inverse of WaveletPacket: returns the signal from a single node.
+            Expects our homebrew (non-downsampled) WP.
+            Antialias option controls freq squashing in final step.
+        """
         data = wp[node]
+
         lvl = math.floor(math.log2(node+1))
         # position of node in its level (0-based)
         nodepos = node - (2**lvl - 1)
@@ -268,6 +278,7 @@ class WaveletFunctions:
         # positive freq is split into bands 0:1/2^lvl, 1:2/2^lvl,...
         # same for negative freq, so in total 2^lvl * 2 bands.
         numnodes = 2**(lvl+1)
+
         while lvl!=0:
             # convolve with rec filter
             if node%2 == 0:
@@ -288,6 +299,11 @@ class WaveletFunctions:
             node = (node-1)//2
             lvl = lvl - 1
 
+        if len(data)>310*16000 and antialias:
+            print("Size of signal to be reconstructed is", len(data))
+            print("ERROR: processing of big data chunks is currently disabled. Recommend splitting files to below 5 min chunks. Enable this only if you are ready to wait.")
+            return
+
         if antialias:
             # wipe images
             ft = fft.fft(data)
@@ -300,6 +316,7 @@ class WaveletFunctions:
             if nodepos!=0:
                 ft[-l*nodepos//numnodes : ] = 0
             data = np.real(fft.ifft(ft))
+
         return(data)
 
 
