@@ -443,7 +443,7 @@ class WaveletSegment:
 
         # for reconstructing filters, all audio currently is stored in RAM
         # ("high memory" mode)
-        keepaudio = (feature=="recsep" or feature=="recmulti" or feature=="recaa")
+        keepaudio = (feature=="recsep" or feature=="recmulti" or feature=="recaa" or feature=="recaafull")
         # recommend using wpmode="new", because it is fast and almost alias-free.
         self.loadDirectory(dirName, spInfo, d, f, keepaudio, "new")
 
@@ -485,6 +485,7 @@ class WaveletSegment:
 
             Denoise and Filter args are passed to preprocessing.
             keepaudio arg controls whether audio is stored (needed for reconstructing signal).
+                Otherwise only energies (matrix of 62 x duration in s) will be stored.
             wpmode selects WP decomposition function ("pywt", "new"-our but not AA'd, "aa"-our AA'd)
 
             Results: self.annotation, filelengths, [audioList,] waveletCoefs, nodeCorrs arrays.
