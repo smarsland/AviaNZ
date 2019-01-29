@@ -3547,8 +3547,8 @@ class AviaNZ(QMainWindow):
                 ws = WaveletSegment.WaveletSegment()
                 # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
                 window = 1
-                inc = 1
-                Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None, spInfo=speciesData, withzeros=True,window=window, inc=inc)
+                inc = 0.5
+                Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None, spInfo=speciesData, withzeros=True,window=window,inc=inc)
                 #Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None,spInfo=speciesData, withzeros=True)
                 print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
                 if TP+FN != 0:
@@ -3657,8 +3657,8 @@ class AviaNZ(QMainWindow):
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window=1
-            inc=1
-            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recsep",window=window,inc=inc)
+            inc=0.5
+            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recaa",window=window,inc=inc)
             #nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList,spInfo=speciesData, d=False, f=True, feature="recaafull")
             # Remove any negatively correlated nodes
             for lst in nodes:
