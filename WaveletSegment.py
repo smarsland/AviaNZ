@@ -44,6 +44,7 @@ import copy, pickle, tempfile
 # (6) Classify as call if OR of (5) is true
 
 # Virginia: added window overlap
+# NOTE: inc is supposed to be a "fair" fraction of window
 
 # TODO: Inconsisient about symmlots of or zeros for the wavelet packet
 # TODO: This still needs lots of tidying up
@@ -64,7 +65,7 @@ class WaveletSegment:
         self.segmenter = Segment.Segment(data, None, self.sp, sampleRate, window_width=256, incr=128, mingap=mingap,
                                          minlength=minlength)
 
-    def computeWaveletEnergy(self, data=None, sampleRate=0, nlevels=5, wpmode="pywt", window=1, inc=None):
+    def computeWaveletEnergy(self, data=None, sampleRate=0, nlevels=5, wpmode="pywt", window=1):
         """ Computes the energy of the nodes in the wavelet packet decomposition
         Args:
         1. data (waveform)
@@ -78,38 +79,34 @@ class WaveletSegment:
         """
 
         # Virginia changes:
-        # Added window and inc input
+        # Added window input
         # Window is window length in sec.
-        # Inc is increment length in sec.
-        # Energy is calculated on slifing windows
+        # Energy is calculated on a window base
 
-        # Virginia in no inc I set it equal to window
-        if inc==None:
-            inc=window
+        # This function works on window
+
 
         if data is None:
             data = self.data
             sampleRate = self.sampleRate
 
-        n = math.ceil(len(data) / sampleRate)
-        #Virginia:number of sliding windows
-        N=int(math.ceil((n-window)/inc))+1
-
         #Virginia: number of samples in window
-        win_samp=int(math.ceil(window*sampleRate))
-        #Virginia: number of sample in increment
-        inc_samp=int(math.ceil(inc*sampleRate))
+        win_sr=int(math.ceil(window*sampleRate))
 
-        #Virginia: changed columns dimension -> must be equal to number of sliding window
-        coefs = np.zeros((2 ** (nlevels + 1) - 2, N))
+        n = math.ceil(len(data) / win_sr)
 
-        #Virginia-> for each sliding window:
+
+
+        #Virginia: changed columns dimension -> must be equal to number of windows
+        coefs = np.zeros((2 ** (nlevels + 1) - 2, n))
+
+        #Virginia-> for each window:
         # start is the sample start of a window
         #end is the sample end of a window
         start=0 #inizialization
-        for t in range(N):
+        for t in range(n):
             E = []
-            end = min(len(data), start+win_samp)
+            end = min(len(data), start+win_sr)
             # generate a WP
             if wpmode == "pywt":
                 wp = pywt.WaveletPacket(data=data[start:end], wavelet=self.WaveletFunctions.wavelet,
@@ -135,7 +132,85 @@ class WaveletSegment:
                     e = 100.0 * e / np.sum(e)
                 E = np.concatenate((E, e), axis=0)
             #Virginia:update start
-            start+=inc_samp
+            start+=win_sr
+            coefs[:, t] = E
+        return coefs
+
+    # Virginia: this function to work with sliding windows
+    def computeWaveletEnergy2(self, data=None, sampleRate=0, nlevels=5, wpmode="pywt", window=1, inc=0.5):
+        """ Computes the energy of the nodes in the wavelet packet decomposition
+        Args:
+        1. data (waveform)
+        2. sample rate
+        3. max levels for WP decomposition
+        4. WP style ("pywt"-pywt, "new"-our non-downsampled, "aa"-our fully AA'd)
+        There are 62 coefficients up to level 5 of the wavelet tree (without root), and 300 seconds [N sliding window]
+        in 5 mins
+        Hence coefs would then be a 62*300 matrix [62*N matrix]
+        The energy is the sum of the squares of the data in each node divided by the total in that level of the tree as a percentage.
+        """
+
+        # Virginia changes:
+        # Added window and inc input
+        # Window is window length in sec.
+        # Inc is increment length in sec.
+        # Energy is calculated on sliding windows
+        # the window is a "centered" window
+
+        if data is None:
+            data = self.data
+            sampleRate = self.sampleRate
+
+        #Virginia: number of samples in window
+        win_sr=int(math.ceil(window*sampleRate))
+        # half-window length in samples
+        win_sr2=int(math.ceil(win_sr/2))
+        #Virginia: number of sample in increment
+        inc_sr=int(math.ceil(inc*sampleRate))
+
+        n = math.ceil(len(data) / sampleRate)
+        #Virginia:number of windows + number of center of length increment
+        N=int(math.ceil(len(data)/inc_sr))
+
+        #Virginia: changed columns dimension -> must be equal to number of sliding window
+        coefs = np.zeros((2 ** (nlevels + 1) - 2, N))
+
+        #Virginia-> for each sliding window:
+        # start is the sample start of a window
+        # center is the sample "center" of a window
+        #end is the sample end of a window
+        #The window is supposed to be "centered" so we must be careful with starting and ending windows
+        center=0 #inizialization
+        for t in range(N):
+            E = []
+            start=max(0,center-win_sr2)
+            end = min(len(data), center+win_sr2)
+            # generate a WP
+            if wpmode == "pywt":
+                wp = pywt.WaveletPacket(data=data[start:end], wavelet=self.WaveletFunctions.wavelet,
+                                        mode='symmetric', maxlevel=nlevels)
+            if wpmode == "new":
+                wp = self.WaveletFunctions.WaveletPacket(data=data[start:end],
+                                                         wavelet=self.WaveletFunctions.wavelet, mode='symmetric',
+                                                         maxlevel=nlevels, antialias=False)
+            if wpmode == "aa":
+                wp = self.WaveletFunctions.WaveletPacket(data=data[start:end],
+                                                         wavelet=self.WaveletFunctions.wavelet, mode='symmetric',
+                                                         maxlevel=nlevels, antialias=True)
+
+            # Calculate energies
+            for level in range(1, nlevels + 1):
+                if wpmode == "pywt":
+                    lvlnodes = wp.get_level(level, "natural")
+                    e = np.array([np.sum(n.data ** 2) for n in lvlnodes])
+                else:
+                    lvlnodes = wp[2 ** level - 1:2 ** (level + 1) - 1]
+                    e = np.array([np.sum(n ** 2) for n in lvlnodes])
+                if np.sum(e) > 0:
+                    e = 100.0 * e / np.sum(e)
+                E = np.concatenate((E, e), axis=0)
+            #Virginia:update start
+            center+=inc_sr
             coefs[:, t] = E
         return coefs
 
@@ -181,26 +256,14 @@ class WaveletSegment:
             1. annotation - np.array of length n, where n - number of blocks (with resolution length) in file
             2. waveletCoefs - np.array of DxN, where D - number of nodes in WP (62 for lvl 5) N= number of sliding windows
         """
-        # Virginia: change because annotations and waveletCoefs have different legths
-        # Added resol and window input ->maybe do another function
-        # At the moment increment is supposed to be a fraction of the window
 
-        # Virginia: reshape annotations
-        n=len(annotation) # Virginia: annotation length
-        N=np.shape(waveletCoefs)[1] # Virginia: number of sliding windows
-        ann=np.zeros(N,1)
-        step=int(window/resol) #Virginia:it works even if window=resol
-        for i in range(0,n):
-            #Virginia: if there is at least a 1 in the window the whole window is set equal to one
-            if np.any(np.isin(annotation[i:i+step],1)):
-                ann[i]=1
-        w0 = np.where(ann == 0)[0]
-        w1 = np.where(ann == 1)[0]
+        w0 = np.where(annotation == 0)[0]
+        w1 = np.where(annotation == 1)[0]
 
         r = np.zeros(np.shape(waveletCoefs)[0])
         for node in range(len(r)):
             r[node] = (np.mean(waveletCoefs[(node, w1)]) - np.mean(waveletCoefs[(node, w0)])) / np.std(
-                waveletCoefs[node, :]) * np.sqrt(len(w0) * len(w1)) / len(ann)
+                waveletCoefs[node, :]) * np.sqrt(len(w0) * len(w1)) / len(annotation)
 
         return r
 
@@ -363,16 +426,25 @@ class WaveletSegment:
         return detected
 
     # USE THIS FUNCTION FOR TESTING AND ACTUAL USE. FOR TRAINING USE detectCalls_sep
-    def detectCalls(self, wp, sampleRate, listnodes=[], spInfo={}, withzeros=True):
+    def detectCalls(self, wp, sampleRate, listnodes=[], spInfo={}, withzeros=True,window=1):
         # For a recording (not for training) and the set of nodes
         # Regenerate the signal from each node and threshold
         # Output detections (OR version)
+
+        # Virginia: added window input
+        # window -> window length in seconds
+        # this function works on NOT overlapping windows
+
         if sampleRate == 0:
             sampleRate = self.sampleRate
         thr = spInfo['WaveletParams'][0]
         # Compute the number of samples in a window -- species specific
-        M = int(spInfo['WaveletParams'][1] * sampleRate / 2.0)
-        detected = np.zeros((int(np.ceil(len(wp.data) / sampleRate)), len(listnodes)))
+        #Virginia window length in samples
+        win_sr=int(math.ceil(window*sampleRate))
+        #Virginia: changed sampleRate with win_sr
+        M = int(spInfo['WaveletParams'][1] * win_sr / 2.0)
+        # Virginia: number of segments = number of windows
+        detected = np.zeros((int(np.ceil(len(wp.data) / win_sr)), len(listnodes)))
         count = 0
 
         for index in listnodes:
@@ -397,14 +469,82 @@ class WaveletSegment:
             # Compute threshold
             threshold = np.exp(np.mean(np.log(C)) + np.std(np.log(C)) * thr)
             # If there is a call anywhere in the window, report it as a call
+            # Virginia: changed loop range to work with window length
             j = 0
-            for i in range(0, N - sampleRate, sampleRate):
-                detected[j, count] = np.any(E[i:min(i + sampleRate, N)] > threshold)
+            for i in range(0, N - win_sr, win_sr):
+                detected[j, count] = np.any(E[i:min(i + win_sr, N)] > threshold)
                 j += 1
             count += 1
         detected = np.max(detected, axis=1)
         return detected
 
+    # Virginia: this function works with sliding overlapping windows
+    def detectCalls2(self, wp, sampleRate, listnodes=[], spInfo={}, withzeros=True, window=1, inc=0.5):
+        # For a recording (not for training) and the set of nodes
+        # Regenerate the signal from each node and threshold
+        # Output detections (OR version)
+
+        # Virginia: added window and increment input
+        # window -> window length in seconds
+        # inc -> increment length in seconds
+        # It compute energy in "centered" window. the detection is supposed happen in the center
+
+        if sampleRate == 0:
+            sampleRate = self.sampleRate
+        thr = spInfo['WaveletParams'][0]
+        # Compute the number of samples in a window -- species specific
+
+        # Virginia window length in samples
+        win_sr = int(math.ceil(window * sampleRate))
+        # Half window length in samples
+        win_sr2= int(math.ceil(win_sr))
+        #Increment length in samples
+        inc_sr = int(math.ceil(inc * sampleRate))
+        # Virginia: changed sampleRate with win_sr
+        M = int(spInfo['WaveletParams'][1] * win_sr / 2.0)
+        # Virginia: number of segmnets = number of centeres of length inc
+        nw= int(np.ceil(len(wp.data) / inc_sr))
+        detected = np.zeros((nw, len(listnodes)))
+
+        count = 0
+        for index in listnodes:
+            new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
+            if withzeros:
+                for level in range(wp.maxlevel + 1):
+                    for n in new_wp.get_level(level, 'natural'):
+                        n.data = np.zeros(len(wp.get_level(level, 'natural')[0].data))
+
+            bin = self.WaveletFunctions.ConvertWaveletNodeName(index)
+            new_wp[bin] = wp[bin].data
+
+            # Reconstruct the signal
+            C = new_wp.reconstruct(update=True)
+            # Filter
+            C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1],
+                                            order=10)
+            C = np.abs(C)
+            N = len(C)
+            # Compute the energy curve (a la Jinnai et al. 2012)
+            E = ce.EnergyCurve(C, M)
+            # Compute threshold
+            threshold = np.exp(np.mean(np.log(C)) + np.std(np.log(C)) * thr)
+            # If there is a call anywhere in the window, report it as a call
+            #Virginia-> for each sliding window:
+            # start is the sample start of a window
+            # center is the sample "center" of a window
+            #end is the sample end of a window
+            #The window is supposed to be "centered" so we must be careful with starting and ending windows
+            center=0 #inizialization
+            for j in range(nw):
+                start = max(0, center - win_sr2)
+                end = min(N, center + win_sr2)
+                detected[j, count] = np.any(E[start:end] > threshold)
+                center+=inc_sr
+            count += 1
+        detected = np.max(detected, axis=1)
+        return detected
+
+    # Virginia: this function work with NOT overlapping window
     def detectCalls_sep(self, new_wp, wp, sampleRate, nodes, spInfo={},window=1):
         # For training
         # Regenerate the signal from the node and threshold
@@ -413,11 +553,6 @@ class WaveletSegment:
 
         #Virginia: changed input, added window and inc
         # window -> window length in sec
-        # inc -> increment length in sec
-
-        # Virginia: if no inc it is set equal to window
-        #if inc==None:
-        #    inc=window
 
         if sampleRate == 0:
             sampleRate = self.sampleRate
@@ -457,16 +592,15 @@ class WaveletSegment:
         #But it works on window base
         #Does it makes sense to work on sliding windows?
         j = 0
-        for i in range(0, N - win_sr, win_sr):
-            detected[j] = np.any(E[i:min(i + win_sr, N)] > threshold)
-            j += 1
+        for i in range(0,N-sampleRate,sampleRate):
+            detected[j] = np.any(E[i:min(i+sampleRate, N)]>threshold)
+            j+=1
         del C
         gc.collect()
         return detected
 
-    # Virginia: added this cone function in case I'll build a detenction function with sliding windows
-
-    def detectCalls_sep2(self, new_wp, wp, sampleRate, nodes, spInfo={},window=1, inc=None):
+    # Virginia: this function work with overlapping sliding window
+    def detectCalls_sep2(self, new_wp, wp, sampleRate, nodes, spInfo={},window=1, inc=0.5):
         # For training
         # Regenerate the signal from the node and threshold
         # Output detection
@@ -474,11 +608,8 @@ class WaveletSegment:
 
         #Virginia: changed input, added window and inc
         # window -> window length in sec
-        # inc -> increment length in sec
-
-        # Virginia: if no inc it is set equal to window
-        if inc==None:
-            inc=window
+        # inc -> increment length in seconds
+        # It compute energy in "centered" window. the detection is supposed happen in the center
 
         if sampleRate == 0:
             sampleRate = self.sampleRate
@@ -486,11 +617,17 @@ class WaveletSegment:
 
         #Virginia: added window sample rate
         win_sr= int(math.ceil(window*sampleRate))
+        # Half window length in samples
+        win_sr2= int(math.ceil(win_sr))
+        #Increment length in samples
+        inc_sr = int(math.ceil(inc * sampleRate))
+
         # Compute the number of samples in a window -- species specific
         # Virginia: changed sampleRate with win_sr
         M = int(spInfo['WaveletParams'][1] * win_sr / 2.0)
-        #Virginia: num segment = number window
-        detected = np.zeros(int(np.ceil(len(wp.data) / win_sr)))
+        # Virginia: number of segmnets = number of centeres of length inc
+        nw=int(np.ceil(len(wp.data) / inc_sr))
+        detected = np.zeros(nw)
 
         for level in range(wp.maxlevel + 1):
             for n in new_wp.get_level(level, 'natural'):
@@ -514,13 +651,17 @@ class WaveletSegment:
         threshold = np.exp(np.mean(np.log(C)) + np.std(np.log(C)) * thr)
 
         # If there is a call anywhere in the window, report it as a call
-        #Virginia this work on NOT sliding window.
-        #But it works on window base
-        #Does it makes sense to work on sliding windows?
-        j = 0
-        for i in range(0, N - win_sr, win_sr):
-            detected[j] = np.any(E[i:min(i + win_sr, N)] > threshold)
-            j += 1
+        # Virginia-> for each sliding window:
+        # start is the sample start of a window
+        # center is the sample "center" of a window
+        # end is the sample end of a window
+        # The window is supposed to be "centered" so we must be careful with starting and ending windows
+        center = 0  # inizialization
+        for j in range(nw):
+            start = max(0, center - win_sr2)
+            end = min(N, center + win_sr2)
+            detected[j] = np.any(E[start:end] > threshold)
+            center += inc_sr
         del C
         gc.collect()
         return detected
@@ -590,8 +731,8 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    # Virginia: added this cone function in case I'll build a detenction function with sliding windows
-    def detectCalls_aa(self, wp, sampleRate, node, spInfo={}, annots=None, window=1):
+    # Virginia: this function works with OVERLAPPING sliding windows
+    def detectCalls_aa2(self, wp, sampleRate, node, spInfo={}, annots=None, window=1,inc=0.5):
         """
         For training. ANTIALIASED version of detectCalls_sep.
         Regenerates the signal from the node and threshold.
@@ -604,15 +745,22 @@ class WaveletSegment:
         """
 
         # Virginia changes
-        # Added window input.
+        # Added window and increment input.
         # Window is window length in seconds
-        # Changed detection to work on window base
+        #inc is increment length in seconds
+        # Changed detection to work with sliding overlapping window
+        # It compute energy in "centered" window. the detection is supposed happen in the center
 
         if sampleRate == 0:
             sampleRate = self.sampleRate
 
         # Virginia: added window sample rate
         win_sr = int(math.ceil(window * sampleRate))
+        # Half window length in samples
+        win_sr2 = int(math.ceil(win_sr))
+        # Increment length in samples
+        inc_sr = int(math.ceil(inc * sampleRate))
+
         thr = spInfo['WaveletParams'][0]
         # Compute the number of samples in a window -- species specific
         # Virginia: changed sampleRate with win_sr
@@ -631,27 +779,32 @@ class WaveletSegment:
                                         order=10)
         C = np.abs(C)
         N = len(C)
-        #Virginia: number of segment is equal to number of windows
-        detected = np.zeros(int(np.ceil(N / win_sr)))
+        # Virginia: number of segments = number of centeres of length inc
+        nw=int(np.ceil(N / inc_sr))
+        detected = np.zeros(nw)
 
         # Compute the energy curve (a la Jinnai et al. 2012)
         E = ce.EnergyCurve(C, M)
         # Compute threshold using mean & sd from non-call sections
-        # Virginia: changed the base. I'm using win_sr as a base, hope it makes sense
+        # Virginia: changed the base. I'm using inc_sr as a base, hope it makes sense
         if annots is not None:
-            C = C[:len(annots) * win_sr]
-            C = C[np.repeat(annots == 0, win_sr)]
+            C = C[:len(annots) * inc_sr]
+            C = C[np.repeat(annots == 0, inc_sr)]
         C = np.log(C)
         threshold = np.exp(np.mean(C) + np.std(C) * thr)
 
         # If there is a call anywhere in the window, report it as a call
-        #Virginia this work on NOT sliding window.
-        #But it works on window base
-        #Does it makes sense to work on sliding windows?
-        j = 0
-        for i in range(0, N - win_sr, win_sr):
-            detected[j] = np.any(E[i:min(i + win_sr, N)] > threshold)
-            j += 1
+        # Virginia-> for each sliding window:
+        # start is the sample start of a window
+        # center is the sample "center" of a window
+        # end is the sample end of a window
+        # The window is supposed to be "centered" so we must be careful with starting and ending windows
+        center = 0  # inizialization
+        for j in range(nw):
+            start = max(0, center - win_sr2)
+            end = min(N, center + win_sr2)
+            detected[j] = np.any(E[start:end] > threshold)
+            center += inc_sr
         del C
         gc.collect()
         return detected
@@ -709,10 +862,6 @@ class WaveletSegment:
         # inc is increment length in sec.
         # Default values set to window=1 and inc=None
 
-        # Virginia: if no inc I set i equal to window -> no overlap
-        if inc==None:
-            inc=window
-
         # for reconstructing filters, all audio currently is stored in RAM
         # ("high memory" mode)
         keepaudio = (feature=="recsep" or feature=="recmulti" or feature=="recaa" or feature=="recaafull")
@@ -765,19 +914,18 @@ class WaveletSegment:
         # Virginia changes:
         # input changed: added window and inc for window's and increment's length in sec.
         # Default values setted as window=1 and inc=None
-        # added self.annotation2 if sliding windows-> annotation with window base
 
-        #Virginia: if no inc I set it equal to window
+        #Virginia: if no inc I set resol equal to window, otherwise it is equal to inc
         if inc==None:
-            inc=window
-
-        # Virginia: added resolution variable as the basic unit for annotation
-        resol=inc
+            resol=window
+        else:
+            resol=inc
 
         nlevels = 5
         self.annotation = []
-        if inc!=window:
-            self.annotation2=[]
+        #Virginia: added but then changed. Keeped if needed in future
+        #if inc!=window:
+        #    self.annotation2=[]
         self.filelengths = []
         self.audioList = []
         self.waveletCoefs = np.array([]).reshape(2 ** (nlevels + 1) - 2, 0)
@@ -800,8 +948,11 @@ class WaveletSegment:
                         self.audioList.append(filteredDenoisedData)
 
                     # Compute energy in each WP node and store
-                    # Virginia: added window and inc input
-                    currWCs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate, 5, wpmode, window=window, inc=inc)
+                    # Virginia: 2 different functions. One works with increment and the other without.
+                    if inc==None:
+                        currWCs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate, 5, wpmode, window=window)
+                    else:
+                        currWCs = self.computeWaveletEnergy2(filteredDenoisedData, self.sampleRate, 5, wpmode, window=window, inc=inc)
                     self.waveletCoefs = np.column_stack((self.waveletCoefs, currWCs))
                     # Compute all WC-annot correlations and store
                     currAnnot = np.array(self.annotation[-self.filelengths[-1]:])
@@ -881,13 +1032,8 @@ class WaveletSegment:
         # Added window and increment input
         # Window = window length in seconds
         # inc= increment length in seconds
-        # Version 1: detenction made on NOT OVERLAPPING  windows
+        # If there is inc I call other functions to work with overlapping windows
 
-        #Virginia if no increment I set it equal to window
-        if inc==None:
-            inc=window
-        # Virginia I define resolution: it is the basic unit of annotation
-        resol=inc
 
 
         shape = (len(MList), len(thrList))
@@ -911,11 +1057,13 @@ class WaveletSegment:
                 # loop over files:
                 for indexF in range(len(self.filelengths)):
                     # load the annots and WCs for this file
-                    #Virginia: if sliding window we take self.annotation2
-                    if inc!=window:
-                        annotation = self.annotation2[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF + 1]))]
-                    else:
-                        annotation = self.annotation[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF + 1]))]
+
+                    #Virginia: added before: keeped if needed in future
+                    #if inc!=window:
+                    #    annotation = self.annotation2[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF + 1]))]
+                    #else:
+
+                    annotation = self.annotation[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF + 1]))]
 
                     # Find 10 most positively correlated nodes
                     nodeCorrs = self.nodeCorrs[:, indexF]
@@ -968,25 +1116,41 @@ class WaveletSegment:
                         # current + all nodes in the filter together (recmulti),
                         # current node with antialias (freq squashing + non-downsampled tree, recaa...),
                         # or no reconstruction, just energy-based detection (ethr...)
-                        # Virginia: added window and increment input
-                        # NB: Maybe 2 versions needed of detectCalls
-                        if feature == "recsep":
-                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=[node],
-                                                              spInfo=spInfo, window=window, inc=inc)
-                        if feature == "recmulti":
-                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=testlist,
-                                                              spInfo=spInfo, window=window, inc=inc)
-                        if feature == "recaa" or feature == "recaafull":
-                            detected_c = self.detectCalls_aa(wp, spInfo['SampleRate'], node=node, spInfo=spInfo,
-                                                             annots=annotation, window=window, inc=inc)
-                            #Virginia: changed input annotation2 CHECK
-                        if feature == "ethr" or feature == "elearn":
-                            print("not implemented yet")
-                            # TODO
-                            # Non-reconstructing detectors:
-                            # detected_c = self.detectCalls_en(self.audioList[indexF], self.sampleRate, nodes=testlist)
-                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=[node],
-                                                              spInfo=spInfo, window=window, inc=inc)
+                        # Virginia: 2 versions needed of detectCalls, one works with overlap the other no
+                        if inc==None:
+                            if feature == "recsep":
+                                detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=[node],
+                                                                  spInfo=spInfo, window=window)
+                            if feature == "recmulti":
+                               detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=testlist,
+                                                                 spInfo=spInfo, window=window)
+                            if feature == "recaa" or feature == "recaafull":
+                               detected_c = self.detectCalls_aa(wp, spInfo['SampleRate'], node=node, spInfo=spInfo,
+                                                                 annots=annotation, window=window)
+                            if feature == "ethr" or feature == "elearn":
+                                print("not implemented yet")
+                                # TODO
+                                # Non-reconstructing detectors:
+                                # detected_c = self.detectCalls_en(self.audioList[indexF], self.sampleRate, nodes=testlist)
+                                detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=[node],
+                                                                  spInfo=spInfo, window=window)
+                        else:
+                            if feature == "recsep":
+                                detected_c = self.detectCalls_sep2(new_wp, wp, spInfo['SampleRate'], nodes=[node],
+                                                                  spInfo=spInfo, window=window,inc=inc)
+                            if feature == "recmulti":
+                                detected_c = self.detectCalls_sep2(new_wp, wp, spInfo['SampleRate'], nodes=testlist,
+                                                                  spInfo=spInfo, window=window,inc=inc)
+                            if feature == "recaa" or feature == "recaafull":
+                                detected_c = self.detectCalls_aa2(wp, spInfo['SampleRate'], node=node, spInfo=spInfo,
+                                                                 annots=annotation, window=window,inc=inc)
+                            if feature == "ethr" or feature == "elearn":
+                                print("not implemented yet")
+                                # TODO
+                                # Non-reconstructing detectors:
+                                # detected_c = self.detectCalls_en(self.audioList[indexF], self.sampleRate, nodes=testlist)
+                                detected_c = self.detectCalls_sep2(new_wp, wp, spInfo['SampleRate'], nodes=[node],
+                                                                  spInfo=spInfo, window=window, inc=inc)
 
                         #Virginia: I'm supposing that detection are of the same length of annaotation on a window base
                         # adjust for rounding errors:
@@ -1025,172 +1189,12 @@ class WaveletSegment:
                 nodesacc = list(set(nodesacc))
                 finalnodesT.append(nodesacc)
                 # Get the measures with the selected node set for this threshold and M over the set of files
-                #Virginia if sliding  window I use self.annotation2
-                if inc!=window:
-                    fB, recall, tp, fp, tn, fn = self.fBetaScore(self.annotation2, detected_all)
-                else:
-                    fB, recall, tp, fp, tn, fn = self.fBetaScore(self.annotation, detected_all)
-                tpa[indexM, indext] = tp
-                fpa[indexM, indext] = fp
-                tna[indexM, indext] = tn
-                fna[indexM, indext] = fn
-                print("Iteration t %d/%d complete\n----------------" % (indext + 1, len(thrList)))
-            # One row done, store nodes
-            finalnodes.append(finalnodesT)
-            print("Iteration M %d/%d complete\n----------------\n----------------" % (indexM + 1, len(MList)))
-        # Convert negative correlated nodes
-        negative_nodes = [n + 1 for n in negative_nodes]
-        # reduce to unique nodes:
-        negative_nodes = set(negative_nodes)
-        negative_nodes = list(negative_nodes)
-        print("Negative nodes:", negative_nodes)
-        return finalnodes, tpa, fpa, tna, fna, negative_nodes
 
-    def waveletSegment_train_sep2(self, thrList, MList, spInfo={}, feature=None, window=1, inc=None):
-        """ Take list of files and other parameters,
-             load files, compute wavelet coefficients and reuse them in each (M, thr) combination,
-             perform grid search over thr and M parameters,
-             do a stepwise search for best nodes.
-             Output structure:
-             1. 2d list of [nodes]
-                 (1st d runs over M, 2nd d runs over thr)
-             2-5. 2d np arrays of TP/FP/TN/FN
-        """
-        # Virginia changes
-        # Added window and increment input
-        # Window = window length in seconds
-        # inc= increment length in seconds
-        # Version 2
+                # Virginia: Added because it could be useful. Keeped for the future
+                #if inc!=window:
+                #    fB, recall, tp, fp, tn, fn = self.fBetaScore(self.annotation2, detected_all)
+                #else:
 
-        shape = (len(MList), len(thrList))
-        tpa = np.zeros(shape)
-        fpa = np.zeros(shape)
-        tna = np.zeros(shape)
-        fna = np.zeros(shape)
-        finalnodes = []
-        negative_nodes = []
-
-        # Grid search over M x thr x Files
-        for indexM in range(len(MList)):
-            finalnodesT = []
-            M = MList[indexM]
-            for indext in range(len(thrList)):
-                thr = thrList[indext]
-                spInfo['WaveletParams'] = [thr, M]
-                # Accumulate nodes for the set of files for this M and thr
-                nodesacc = []
-                detected_all = []
-                # loop over files:
-                for indexF in range(len(self.filelengths)):
-                    # load the annots and WCs for this file
-                    annotation = self.annotation[
-                                 int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF + 1]))]
-
-                    # Find 10 most positively correlated nodes
-                    nodeCorrs = self.nodeCorrs[:, indexF]
-                    nodes = np.flip(np.argsort(nodeCorrs)[-10:])
-
-                    # Keep track of negative correlated nodes
-                    negative_nodes.extend(np.argsort(nodeCorrs)[:10])
-
-                    # Now for Nirosha's sorting
-                    # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
-                    nodes = self.sortListByChild(np.ndarray.tolist(nodes))
-
-                    # These nodes refer to the un-rooted tree, so add 1 to get the real indices
-                    nodes = [n + 1 for n in nodes]
-
-                    # Now check the F2 values and add node if it improves F2
-                    listnodes = []
-                    bestBetaScore = 0
-                    bestRecall = 0
-                    detected = np.zeros(self.filelengths[indexF])
-                    wp = []
-
-                    # prepare for reconstructing detectors
-                    if feature == "recsep" or feature == "recmulti":
-                        # Generate a full 5 level wavelet packet decomposition
-                        wp = pywt.WaveletPacket(data=self.audioList[indexF], wavelet=self.WaveletFunctions.wavelet,
-                                                mode='symmetric', maxlevel=5)
-                        # Allocate memory for new WP
-                        new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric',
-                                                    maxlevel=wp.maxlevel)
-                    # Generate a full 5 level wavelet packet decomposition, "our way"
-                    # if feature=="recaa":
-                    #    wp = self.WaveletFunctions.WaveletPacket(data=self.audioList[indexF], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5, antialias=False)
-
-                    # Read a full 5 level packet decomposition from antialiased results
-                    if feature == "recaafull" or feature == "recaa":
-                        print("reading WP from file", self.tempfiles[indexF])
-                        file = open(self.tempfiles[indexF], 'rb')
-                        wp = pickle.load(file)
-                        file.close()
-                        # TODO: os.remove(file)
-
-                    # stepwise search for best node combination:
-                    for node in nodes:
-                        testlist = listnodes[:]
-                        testlist.append(node)
-                        print("Test list: ", testlist)
-
-                        # detect calls, using signal reconstructed from current node (recsep),
-                        # current + all nodes in the filter together (recmulti),
-                        # current node with antialias (freq squashing + non-downsampled tree, recaa...),
-                        # or no reconstruction, just energy-based detection (ethr...)
-                        # Virginia: added window and increment input
-                        if feature == "recsep":
-                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=[node],
-                                                              spInfo=spInfo, window=window, inc=inc)
-                        if feature == "recmulti":
-                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=testlist,
-                                                              spInfo=spInfo, window=window, inc=inc)
-                        if feature == "recaa" or feature == "recaafull":
-                            detected_c = self.detectCalls_aa(wp, spInfo['SampleRate'], node=node, spInfo=spInfo,
-                                                             annots=annotation, window=window, inc=inc)
-                        if feature == "ethr" or feature == "elearn":
-                            print("not implemented yet")
-                            # TODO
-                            # Non-reconstructing detectors:
-                            # detected_c = self.detectCalls_en(self.audioList[indexF], self.sampleRate, nodes=testlist)
-                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=[node],
-                                                              spInfo=spInfo, window=window, inc=inc)
-
-                        # adjust for rounding errors:
-                        if len(detected_c) < len(detected):
-                            detected_c = np.append(detected_c, [0])
-                        if len(detected_c) > len(detected):
-                            detected_c = detected_c[:len(detected)]
-
-                        if feature == "recmulti":
-                            # If multiple nodes are used, don't need to merge with sublists
-                            detections = detected_c
-                        else:
-                            # Merge the detections from current node with those from previous nodes
-                            detections = np.maximum.reduce([detected, detected_c])
-
-                        fB, recall, tp, fp, tn, fn = self.fBetaScore(annotation, detections)
-                        if fB is not None and fB > bestBetaScore:  # Keep this node and update fB, recall, detected, and optimum nodes
-                            bestBetaScore = fB
-                            bestRecall = recall
-                            detected = detections
-                            listnodes.append(node)
-                        if bestBetaScore == 1 or bestRecall == 1:
-                            break
-
-                    # Memory cleanup:
-                    wp = []
-                    del wp
-                    gc.collect()
-
-                    detected_all = np.concatenate((detected_all, detected))
-                    nodesacc.append(listnodes)
-                    print("Iteration f %d/%d complete" % (indexF + 1, len(self.filelengths)))
-
-                # One iteration done, store results
-                nodesacc = [y for x in nodesacc for y in x]
-                nodesacc = list(set(nodesacc))
-                finalnodesT.append(nodesacc)
-                # Get the measures with the selected node set for this threshold and M over the set of files
                 fB, recall, tp, fp, tn, fn = self.fBetaScore(self.annotation, detected_all)
                 tpa[indexM, indext] = tp
                 fpa[indexM, indext] = fp
@@ -1207,6 +1211,7 @@ class WaveletSegment:
         negative_nodes = list(negative_nodes)
         print("Negative nodes:", negative_nodes)
         return finalnodes, tpa, fpa, tna, fna, negative_nodes
+
 
     def waveletSegment_train_treemerge(self, dirName, thrList, MList, spInfo={}, d=False, f=False, withzeros=True):
         """ Take list of files and other parameters,
@@ -1562,12 +1567,13 @@ class WaveletSegment:
         # Added window and inc input
         # window -> window length in seconds
         # Inc -> increment length in seconds
+        # Resol is the base of the annotations
 
-        # Virginia: if no increment it is set equal of window
+        # Virginia: if no increment I set resol equal of window otherwise it is equal to inc
         if inc==None:
-            inc=window
-        #Virginia: resolution defined equal to  inc
-        resol=inc
+            resol=window
+        else:
+            resol=inc
         # Load the relevant list of nodes
         if listnodes is None:
             nodes = spInfo['WaveletParams'][2]
@@ -1576,9 +1582,9 @@ class WaveletSegment:
 
         # clear storage for multifile processing
         self.annotation = []
-        # In case  of sliding window I read two annotation : one in resolution scale, one in window scale
-        if inc!=window:
-            self.annotation2 =[]
+        # Virginia: Added because it could be useful. Keeped for the future
+        #if inc!=window:
+         #   self.annotation2 =[]
         self.audioList = []
         self.filelengths = []
         self.filenames = []
@@ -1596,21 +1602,26 @@ class WaveletSegment:
                     self.audioList.append(filteredDenoisedData)
 
         # remember to convert main structures to np arrays
-        if inc!=window:
-            self.annotation2 = np.array(self.annotation2)
-            print("Testing with %s positive and %s negative annotations" % (np.sum(self.annotation2 == 1), np.sum(self.annotation2 == 0)))
-        else:
-            self.annotation = np.array(self.annotation)
-            print("Testing with %s positive and %s negative annotations" % (np.sum(self.annotation == 1), np.sum(self.annotation == 0)))
+
+        # Virginia: Added because it could be useful. Keeped for the future
+        #if inc!=window:
+        #    self.annotation2 = np.array(self.annotation2)
+        #    print("Testing with %s positive and %s negative annotations" % (np.sum(self.annotation2 == 1), np.sum(self.annotation2 == 0)))
+        #else:
+
+        self.annotation = np.array(self.annotation)
+        print("Testing with %s positive and %s negative annotations" % (np.sum(self.annotation == 1), np.sum(self.annotation == 0)))
 
         # wavelet decomposition and call detection
         for fileId in range(len(self.audioList)):
             print('Processing file # ', fileId + 1)
             wp = pywt.WaveletPacket(data=self.audioList[fileId], wavelet=self.WaveletFunctions.wavelet,
                                     mode='symmetric', maxlevel=5)
-            #Virginia added window input
-            #check if needed to add increment
-            detected_c = self.detectCalls(wp, self.sampleRate, listnodes=nodes, spInfo=spInfo, withzeros=withzeros, window=window)
+            #Virginia: it call 2 different functions depending if it works with or without overlapping windows
+            if inc==None:
+                detected_c = self.detectCalls(wp, self.sampleRate, listnodes=nodes, spInfo=spInfo, withzeros=withzeros, window=window)
+            else:
+                detected_c = self.detectCalls2(wp, self.sampleRate, listnodes=nodes, spInfo=spInfo, withzeros=withzeros, window=window,inc=inc)
             # detected_c = detected_c[0:math.ceil(len(self.audioList[fileId])/self.sampleRate)]
             detected = np.concatenate((detected, detected_c))
             # Generate .data for this file
@@ -1640,11 +1651,11 @@ class WaveletSegment:
             wp = []
             del wp
             gc.collect()
-        # Virginia if sliding  window I use self.annotation2
-        if inc != window:
-            fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation2, detected)
-        else:
-            fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
+        # Virginia: Added because it could be useful. Keeped for the future
+        #if inc != window:
+        #    fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation2, detected)
+        #else:
+        fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
         return detected, TP, FP, TN, FN
 
     def waveletSegment(self, data=None, sampleRate=None, listnodes=None, spInfo={}, d=False, f=False, wpmode='pywt'):
@@ -1777,32 +1788,32 @@ class WaveletSegment:
                 sum += int(row[1])
 
             # TWO VERSIONS FOR COMPATIBILITY WITH BOTH TRAINING LOOPS:
-            #Virginia: added annotation2 in case of sliding window to have annotation on a window base
             if trainPerFile:
                 self.annotation = np.array(fileAnnotations)
-                if resol != window:
-                    step = int(window / resol)
-                    N1 = len(fileAnnotations)
-                    N2 = int(math.ceil(N1 / step))
-                    annotation2 = np.zeros(N2)
-                    for indexA in range(N2):
-                        if np.any(fileAnnotations[indexA * step:min(indexA * (step + 1), N1)]):
-                            annotation2[indexA] = 1
-                    self.annotation2=np.array(annotation2)
+                # Virginia: Added because it could be useful. Keeped for the future
+                #if resol != window:
+                #    step = int(window / resol)
+                #    N1 = len(fileAnnotations)
+                #    N2 = int(math.ceil(N1 / step))
+                #    annotation2 = np.zeros(N2)
+                #    for indexA in range(N2):
+                #        if np.any(fileAnnotations[indexA * step:min(indexA * (step + 1), N1)]):
+                #            annotation2[indexA] = 1
+                #    self.annotation2=np.array(annotation2)
 
             else:
                 self.annotation.extend(fileAnnotations)
-                if resol != window:
-                    step = int(window / resol)
-                    N1 = len(fileAnnotations)
-                    N2 = int(math.ceil(N1 / step))
-                    annotation2 = np.zeros(N2)
-                    for indexA in range(N2):
-                        if np.any(fileAnnotations[indexA * step:min(indexA * (step + 1), N1)]):
-                            annotation2[indexA] = 1
-                    self.annotation2.extend(annotation2)
+                # Virginia: Added because it could be useful. Keeped for the future
+                #if resol != window:
+                #    step = int(window / resol)
+                 #   N1 = len(fileAnnotations)
+                 #   N2 = int(math.ceil(N1 / step))
+                 #   annotation2 = np.zeros(N2)
+                #    for indexA in range(N2):
+                #        if np.any(fileAnnotations[indexA * step:min(indexA * (step + 1), N1)]):
+                #            annotation2[indexA] = 1
+                #    self.annotation2.extend(annotation2)
                 self.filelengths.append(n)
             if savedetections:
                 self.filenames.append(filename)
-            print(
-                "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
+            print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
