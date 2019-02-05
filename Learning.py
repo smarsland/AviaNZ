@@ -9,6 +9,7 @@ import pandas as pd
 import random
 from joblib import dump, load
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import ShuffleSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix
 from sklearn.neural_network import MLPClassifier
@@ -26,6 +27,9 @@ from sklearn.model_selection import learning_curve
 from sklearn.model_selection import validation_curve
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import cross_val_score
+import json, time, os, math, csv, gc, wavio
+import WaveletSegment
+import librosa
 
 
 # TODO:
@@ -43,9 +47,7 @@ class Learning:
     # This class implements various learning algorithms for the AviaNZ interface
     # Mostly based on scikit-learn
 
-    def __init__(self, features, labels, testFraction=0.6):
-        # from sklearn.model_selection import train_test_split
-        # from sklearn.preprocessing import StandardScaler
+    def __init__(self, features, labels, testFraction=0.4):
         features = StandardScaler().fit_transform(features)
         if testFraction == 1:
             self.test = features
@@ -57,29 +59,15 @@ class Learning:
             self.train, self.test, self.trainTgt, self.testTgt = train_test_split(features, labels, test_size=testFraction, shuffle=True)
 
     def performTest(self, model):
-        # from sklearn.metrics import confusion_matrix
         testOut = model.predict(self.test)
         testError = np.mean(self.testTgt.ravel() == testOut.ravel()) * 100
 
         print("Testing error: ", testError)
         CM = confusion_matrix(self.testTgt, testOut)
         print(CM)
-        # Get the performance metrics
-        ws = WaveletSegment.WaveletSegment()
-        fB, recall, TP, FP, TN, FN = ws.fBetaScore(self.testTgt, testOut)
-        # Risk_grand = np.shape(np.where(abs(self.testTgt-testOut)==1))[1]/len(self.testTgt)
-        Risk_FN = (self.testTgt-testOut).tolist().count(1)
-        Risk_FP = (self.testTgt-testOut).tolist().count(-1)
-        Risk_weighted = (2*Risk_FN+Risk_FP)/(3*len(self.testTgt))
-        # Risk_weighted=((1.+2**2)*Risk_FN*Risk_FP)/(Risk_FN + 2**2*Risk_FP)
-        # print("Risk M grand: ", Risk_grand*100)
-        print("Risk M FN: ", Risk_FN*100/len(self.testTgt))
-        print("Risk M FP: ", Risk_FP*100/len(self.testTgt))
-        print("Risk M weighted (R2): ", Risk_weighted*100)
 
     def trainMLP(self, structure=(100,), learningrate=0.001, solver='adam', epochs=200, alpha=1, shuffle=True,
                  early_stopping=False):
-        # from sklearn.neural_network import MLPClassifier
         model = MLPClassifier(hidden_layer_sizes=structure, solver=solver, alpha=alpha, max_iter=epochs,
                               learning_rate_init=learningrate, shuffle=shuffle, early_stopping=early_stopping)
         model.fit(self.train, self.trainTgt)
@@ -91,8 +79,6 @@ class Learning:
         return model
 
     def trainKNN(self, K=3):
-        # from sklearn.neighbors import KNeighborsClassifier
-
         model = KNeighborsClassifier(K)
         model.fit(self.train, self.trainTgt)
 
@@ -103,8 +89,6 @@ class Learning:
         return model
 
     def trainSVM(self, kernel, C, gamma):
-        # from sklearn.svm import SVC
-        # model = SVC(kernel=kernel, C=C)
         model = SVC(kernel=kernel, C=C, gamma=gamma)
         model.fit(self.train, self.trainTgt)
 
@@ -115,8 +99,6 @@ class Learning:
         return model
 
     def trainGP(self,kernel="RBF", param=1.0):
-        # from sklearn.gaussian_process import GaussianProcessClassifier
-        # from sklearn.gaussian_process.kernels import RBF
         model = GaussianProcessClassifier(1.0 * RBF(1.0))
         model.fit(self.train,self.trainTgt)
 
@@ -127,8 +109,6 @@ class Learning:
         return model
 
     def trainDecisionTree(self, maxDepth=5):
-        # from sklearn.tree import DecisionTreeClassifier
-
         model = DecisionTreeClassifier(max_depth=maxDepth)
         model.fit(self.train, self.trainTgt)
 
@@ -139,7 +119,6 @@ class Learning:
         return model
 
     def trainRandomForest(self, maxDepth=5, nTrees=10, maxFeatures=2):
-        # from sklearn.ensemble import RandomForestClassifier
         model = RandomForestClassifier(max_depth=maxDepth, n_estimators=nTrees, max_features=maxFeatures)
         model.fit(self.train, self.trainTgt)
 
@@ -150,7 +129,6 @@ class Learning:
         return model
     
     def trainBoosting(self, n_estimators=100):
-        # from sklearn.ensemble import AdaBoostClassifier
         model = AdaBoostClassifier(n_estimators=n_estimators)
         model.fit(self.train,self.trainTgt)
 
@@ -161,7 +139,6 @@ class Learning:
         return model
 
     def trainXGBoost(self, nRounds=10):
-        # import xgboost as xgb
         model = xgb.XGBClassifier().fit(self.train, self.trainTgt)
     
         trainOut = model.predict(self.train)
@@ -171,8 +148,6 @@ class Learning:
         return model
 
     def trainGMM(self, nClasses=2, covType='spherical', maxIts=20):
-        # from sklearn.mixture import GaussianMixture
-
         model = GaussianMixture(n_components=nClasses, covariance_type=covType, max_iter=maxIts)
         model.means_init = np.array([self.train[self.trainTgt == i].mean(axis=0) for i in range(nClasses)])
         model.fit(self.train, self.trainTgt)
@@ -186,12 +161,11 @@ class Learning:
 #For each sound class an ensemble of randomized decision trees (sklearn.ensemble.ExtraTreesRegressor) is applied. The number of estimators is chosen to be twice the number of selected features per class but not greater than 500. The winning solution considers 4 features when looking for the best split and requires a minimum of 3 samples to split an internal node.
 
 # Diagnostic plots
-class Validation:
+class Validate:
     # This class implements cross-validation and learning curves for the AviaNZ interface
     # based on scikit-learn
 
     def __init__(self, estimator, title, features, labels, param_name=None, param_range=None,scoring=None):
-        from sklearn.model_selection import ShuffleSplit
         features = StandardScaler().fit_transform(features)
         # Cross validation with 100 iterations to get smoother mean test and train
         # score curves, each time with 20% data randomly selected as a v
@@ -318,9 +292,13 @@ class Validation:
         return plt
 
 def learninigCurve(dataFile, clf, score=None):
-    ''' Choose a classifier and plot the learning curve '''
+    ''' Choose a classifier and plot the learning curve
+    dataFile: dataset including features and targets
+    clf: classifier to consider
+    score: customise the scoring (default in sklearn is 'accuracy')
+    '''
 
-    # Create fB score
+    # Let's use fB(F2) score
     if score is None:
         from sklearn.metrics import fbeta_score, make_scorer
         score = make_scorer(fbeta_score, beta=2)
@@ -344,7 +322,6 @@ def learninigCurve(dataFile, clf, score=None):
     indices = np.arange(targets.shape[0])
     np.random.shuffle(indices)
     data, targets = data[indices], targets[indices]
-    # Choose an estimator
     if clf == 'GaussianNB':
         from sklearn.naive_bayes import GaussianNB
         estimator = GaussianNB()
@@ -368,15 +345,19 @@ def learninigCurve(dataFile, clf, score=None):
     elif clf == 'GMM':
         estimator = GaussianMixture(n_components=2, covariance_type='spherical', max_iter=20)
     title = "Learning Curves - " + clf
-    v = Validation(estimator, title, data, targets, scoring=score)
+    v = Validate(estimator, title, data, targets, scoring=score)
     plt = v.plot_learning_curve()
     plt.show()
 
 def validationCurve(dataFile, clf, nClasses=2, score=None):
-    # Plot validation curve
-    # Score against different values for a selected hyperparameter to see the influence of a single hyperparameter
+    ''' Choose a classifier and plot the validation curve
+    Score against different values for a selected hyperparameter to see the influence of a single hyperparameter
+    dataFile: dataset including features and targets
+    clf: classifier to consider
+    score: customise the scoring (default in sklearn is 'accuracy')
+    '''
 
-    # Create fB score
+    # Let's use fB(F2) score
     if score is None:
         from sklearn.metrics import fbeta_score, make_scorer
         score = make_scorer(fbeta_score, beta=2)
@@ -414,7 +395,6 @@ def validationCurve(dataFile, clf, nClasses=2, score=None):
     indices = np.arange(targets.shape[0])
     np.random.shuffle(indices)
     data, targets = data[indices], targets[indices]
-    # Choose an estimator
     if clf == 'GaussianNB':
         from sklearn.naive_bayes import GaussianNB
         estimator = GaussianNB()
@@ -446,11 +426,18 @@ def validationCurve(dataFile, clf, nClasses=2, score=None):
         estimator = GaussianMixture(n_components=2, covariance_type='spherical', max_iter=20)
 
     title = "Validation Curves - " + clf
-    v = Validation(estimator, title, data, targets, param_name=param_name, param_range=param_range, scoring=score)
+    v = Validate(estimator, title, data, targets, param_name=param_name, param_range=param_range, scoring=score)
     plt = v.plot_validation_curve()
     plt.show()
 
-def fit_GridSearchCV(dataFile, clf, nClasses):
+def fit_GridSearchCV(dataFile, clf, nClasses=2):
+    '''
+    Grid search over specified parameter values for a classifier and return the best
+    :param dataFile: dataset including features and targets
+    :param clf: classifier
+    :param nClasses: 2 if binary classification (number of classes)
+    :return: the best estimator
+    '''
     d = pd.read_csv(dataFile, sep="\t", header=None)
     data = d.values
 
@@ -588,12 +575,52 @@ def testLearning2():
     model = learners.trainGMM()
     learners.performTest(model)
 
+def TrainClassifier(dir, species, feature, clf=None):
+    '''
+    Use wavelet energy/MFCC as features, train, and save the classifiers for later use
+    Recommended to use fit_GridSearchCV and plot validation/learning curves to determine hyper-parameter values
+    and see how learning improves with more data, at what point it gets stable
+    Choose what features to show to the classifier. Currently lots of variations of WE and MFCC.
+    (1) Wavelet Energies - All 62 nodes, extracted from raw recordings (feature = 'weraw_all')
+    (2) Wavelet Energies - Limit nodes to match frequency range of the species, extracted from raw recordings
+    (3) Wavelet Energies - Limit to optimum nodes for species, extracted from raw recordings
 
-def testLearning3(dirName, species, clf=None):
+    (4) Wavelet Energies - All 62 nodes, extracted with bandpass filter
+    (5) Wavelet Energies - Limit nodes to match frequency range of the species, extracted with bandpass filter
+    (6) Wavelet Energies - Limit to optimum nodes for species, extracted with bandpass filter
+
+    (7) Wavelet Energies - All 62 nodes, extracted from denoised
+    (8) Wavelet Energies - Limit nodes to match frequency range of the species, extracted from denoised
+    (9) Wavelet Energies - Limit to optimum nodes for species, extracted from denoised
+
+    (10) Wavelet Energies - All 62 nodes, extracted from denoised + bandpassed
+    (11) Wavelet Energies - Limit nodes to match frequency range of the species, extracted from denoised + bandpassed
+    (12) Wavelet Energies - Limit to optimum nodes for species, extracted from denoised + bandpassed
+
+    (13) MFCC - Full range extracted from raw ('mfccraw_all')
+    (14) MFCC - Limit to match frquency range of the species extracted from raw ('mfccraw_band')
+    (15) MFCC - Full range extracted from bandpassed ('mfccbp_all')
+    (16) MFCC - Limit to match frquency range of the species extracted from bandpassed
+    (17) MFCC - Full range extracted from denoised
+    (18) MFCC - Limit to match frquency range of the species extracted from denoised
+    (19) MFCC - Full range extracted from bandpassed + denoised
+    (20) MFCC - Limit to match frquency range of the species extracted from bandpassed + denoised
+
+    :param dir: path to the dataset
+    :param species: species name so that the classifier can be saved accordingly
+    :param feature: 'WEraw_all', 'WEraw_band', 'WEraw_spnodes',
+                    'WEbp_all', 'WEbp_band', 'WEbp_spnodes',
+                    'WEd_all', 'WEd_band', 'WEd_spnodes',
+                    'WEbpd_all', 'WEbpd_band', 'WEbpd_spnodes',
+                    'MFCCraw_all', 'mfccraw_band',
+                    'MFCCbp_all', 'mfccbp_band',
+                    'MFCCd_all', 'MFCCd_band',
+                    'MFCCbpd_all', 'MFCCbpd_band'
+    :param clf: name of the classifier to train
+    :return: save the trained classifier in dirName e.g. kiwi_SVM.joblib
     '''
-    Use wavelet energy as features, train and save the classifiers
-    '''
-    d = pd.read_csv(dirName+'\energies.tsv', sep="\t", header=None)
+    # Read previously stored data as required
+    d = pd.read_csv(dir + '\\' + species + '_' + feature + '.tsv', sep="\t", header=None)
     data = d.values
 
     # Balance the data set
@@ -610,8 +637,8 @@ def testLearning3(dirName, species, clf=None):
     inds = posTargetInd + negTargetInd
     data = data[inds, :]
     targets = targets[inds]
-    # Learn with all 62 nodes
-    learners = Learning(data, targets, testFraction=0)  # use whole data set for training
+
+    learners = Learning(data, targets, testFraction=0.4)  # use whole data set for training
     # OR learn with optimum nodes, for kiwi it is [35, 43, 36, 45]
     # kiwiNodes = [35, 43, 36, 45]
     # kiwiNodes = [34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 55]
@@ -623,110 +650,118 @@ def testLearning3(dirName, species, clf=None):
     # learners = Learning(data[:, nonKiwiNodes], data[:, -1])
     # learners = Learning(data[:, 33:61], data[:, -1])
 
-    if clf == None:
+    if clf == None: # then train all the classifiers (expensive option)
         print("MLP--------------------------------")
         model = learners.trainMLP(structure=(100,), learningrate=0.001, solver='adam', epochs=200, alpha=1,
                                   shuffle=True, early_stopping=False)
         # Save the model
-        dump(model, dirName+'\\'+species+'_MLP.joblib')
-        # learners.performTest(model)
+        dump(model, dir+'\\'+species+'_'+feature+'_MLP.joblib')
+        learners.performTest(model)
         print("kNN--------------------------------")
         model = learners.trainKNN()
         # Save the model
-        dump(model, dirName+'\\'+species+'_kNN.joblib')
-        # learners.performTest(model)
+        dump(model, dir+'\\'+species+'_'+feature+'_kNN.joblib')
+        learners.performTest(model)
         print("SVM--------------------------------")
         model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0077)
         # Save the model
-        dump(model, dirName+'\\'+species+'_SVM.joblib')
-        # learners.performTest(model)
+        dump(model, dir+'\\'+species+'_'+feature+'_SVM.joblib')
+        learners.performTest(model)
         print("GP--------------------------------")
         model = learners.trainGP()
         # Save the model
-        dump(model, dirName+'\\'+species+'_GP.joblib')
-        # learners.performTest(model)
+        dump(model, dir+'\\'+species+'_'+feature+'_GP.joblib')
+        learners.performTest(model)
         print("DT--------------------------------")
         model = learners.trainDecisionTree()
         # Save the model
-        dump(model, dirName+'\\'+species+'_DT.joblib')
-        # learners.performTest(model)
+        dump(model, dir+'\\'+species+'_'+feature+'_DT.joblib')
+        learners.performTest(model)
         print("RF--------------------------------")
         model = learners.trainRandomForest()
         # Save the model
-        dump(model, dirName+'\\'+species+'_RF.joblib')
-        # learners.performTest(model)
+        dump(model, dir+'\\'+species+'_'+feature+'_RF.joblib')
+        learners.performTest(model)
         print("Boosting--------------------------------")
         model = learners.trainBoosting()
         # Save the model
-        dump(model, dirName+'\\'+species+'_Boost.joblib')
-        # learners.performTest(model)
+        dump(model, dir+'\\'+species+'_'+feature+'_Boost.joblib')
+        learners.performTest(model)
         print("XGB--------------------------------")
         model = learners.trainXGBoost()
         # Save the model
-        dump(model, dirName+'\\'+species+'_XGB.joblib')
-        # learners.performTest(model)
+        dump(model, dir+'\\'+species+'_'+feature+'_XGB.joblib')
+        learners.performTest(model)
         print("GMM--------------------------------")
         model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
         # Save the model
-        dump(model, dirName+'\\'+species+'_GMM.joblib')
-        # learners.performTest(model)
+        dump(model, dir+'\\'+species+'_'+feature+'_GMM.joblib')
+        learners.performTest(model)
         print("######################################################")
     elif clf == 'MLP':
         print("MLP--------------------------------")
         model = learners.trainMLP(structure=(250, ), learningrate=0.001, solver='adam', epochs=200, alpha=1,
                                   shuffle=True, early_stopping=True)
         # Save the model
-        dump(model, dirName + '\\' + species + '_' + clf + '.joblib')
+        dump(model, dir+'\\'+species+'_'+feature + '_' + clf + '.joblib')
     elif clf == 'kNN':
         print("kNN--------------------------------")
         model = learners.trainKNN()
         # Save the model
-        dump(model, dirName+'\\'+species+'_kNN.joblib')
+        dump(model, dir+'\\'+species+'_'+feature+'_kNN.joblib')
     elif clf == 'SVM':
         print("SVM--------------------------------")
         model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0077)
         # Save the model
-        dump(model, dirName+'\\'+species+'_SVM.joblib')
+        dump(model, dir+'\\'+species+'_'+feature+'_SVM.joblib')
     elif clf == 'GP':
         print("GP--------------------------------")
         model = learners.trainGP()
         # Save the model
-        dump(model, dirName+'\\'+species+'_GP.joblib')
+        dump(model, dir+'\\'+species+'_'+feature+'_GP.joblib')
     elif clf == 'DT':
         print("DT--------------------------------")
         model = learners.trainDecisionTree()
         # Save the model
-        dump(model, dirName+'\\'+species+'_DT.joblib')
+        dump(model, dir+'\\'+species+'_'+feature+'_DT.joblib')
     elif clf == 'RF':
         print("RF--------------------------------")
         model = learners.trainRandomForest()
         # Save the model
-        dump(model, dirName+'\\'+species+'_RF.joblib')
+        dump(model, dir+'\\'+species+'_'+feature+'_RF.joblib')
     elif clf == 'Boost':
         print("Boosting--------------------------------")
         model = learners.trainBoosting()
         # Save the model
-        dump(model, dirName+'\\'+species+'_Boost.joblib')
+        dump(model, dir+'\\'+species+'_'+feature+'_Boost.joblib')
     elif clf == 'XGB':
         print("XGB--------------------------------")
         model = learners.trainXGBoost()
         # Save the model
-        dump(model, dirName+'\\'+species+'_XGB.joblib')
+        dump(model, dir+'\\'+species+'_'+feature+'_XGB.joblib')
     elif clf == 'GMM':
         print("GMM--------------------------------")
         model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
         # Save the model
-        dump(model, dirName+'\\'+species+'_GMM.joblib')
+        dump(model, dir+'\\'+species+'_'+feature+'_GMM.joblib')
     if clf:
         # Save the model
-        dump(model, dirName + '\\' + species + '_' + clf + '.joblib')
+        dump(model, dir + '\\' + species + '_' + clf + '.joblib')
+        learners.performTest(model)
 
-def testClassifiers(dir_clf, dir_test, species, clf=None):
+def testClassifiers(dir_clf, dir_test, species, feature, clf=None):
     '''
-    Load previously trained classifiers and test on new data.
-    dirName has the classifiers to use
+    Load previously trained classifiers and test on a completely new data set.
+    :param dir_clf: path to the saved classifiers
+    :param dir_test: path to the test dataset
+    :param species: species name
+    :param feature: 'WEraw_all', 'WEraw_band', 'WEraw_spnodes' ...
+    :param clf: classifier name e.g. 'SVM'
+
+    :return: print out confusion matrix
     '''
-    d = pd.read_csv(dir_test+'\energies.tsv', sep="\t", header=None)
+    # read test dataset
+    d = pd.read_csv(dir_test+'\\' + species + '_' + feature + '.tsv', sep="\t", header=None)
     data = d.values
     # Test with all 62 nodes
     learners = Learning(data[:, 0:-1], data[:, -1], testFraction=1)     # use all data for testing
@@ -773,7 +808,167 @@ def testClassifiers(dir_clf, dir_test, species, clf=None):
         model = load(dir_clf + '\\' + species + '_' + clf + '.joblib')
         learners.performTest(model)
 
+def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
+    '''
+    Generates different data sets for ML - variations of WE and MFCC
+    Can be continuous wav files or extracted segments
+    Continuous files + GT annotations OR
+    Extracted segments + tell if they are TPs or not
+    :param dir_src: path to the directory with recordings + GT annotations
+    :param feature: 'WEraw_all', 'WEbp_all', 'WEd_all', 'WEbpd_all', 'MFCCraw_all', 'MFCCbp_all', 'MFCCd_all',
+                    'MFCCbpd_all',
+                    'WE+MFCCraw_all', 'WE+MFCCbp_all', 'WE+MFCCd_all', 'WE+MFCCbpd_all'
+    :param species: species name (should be able to find species filter in dir_src)
+    :param filemode: 'long', 'segpos', 'segneg'
+    :param wpmode: 'pywt' or 'new' or 'aa'
+    :param dir_out: path to the output dir
 
+    :return: saves the data file to out-dir
+    '''
+
+    annotation = []
+    if 'WE' in feature:
+        nlevels = 5
+        waveletCoefs = np.array([]).reshape(2**(nlevels+1)-2, 0)
+    if 'MFCC' in feature:
+        n_mfcc = 24
+        delta = False
+        MFCC = np.array([]).reshape(0, n_mfcc*32)
+    # Find the species filter
+    speciesData = json.load(open(os.path.join(dir_src, species + '.txt')))
+
+    for root, dirs, files in os.walk(str(dir_src)):
+        for file in files:
+            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files or file.endswith('.wav') and filemode!='long' and os.stat(root + '/' + file).st_size > 150:
+                opstartingtime = time.time()
+                wavFile = root + '/' + file[:-4]
+                print(wavFile)
+                data, currentannotation, sampleRate = loadData(wavFile, filemode)
+
+                ws = WaveletSegment.WaveletSegment(data=data, sampleRate=sampleRate)
+                if feature == 'WEraw_all' or feature == 'MFCCraw_all' or feature == 'WE+MFCCraw_all':
+                    data = ws.preprocess(speciesData, d=False, f=False)
+                elif feature == 'WEbp_all' or feature == 'MFCCbp_all' or feature == 'WE+MFCCbp_all':
+                    data = ws.preprocess(speciesData, d=False, f=True)
+                elif feature == 'WEd_all' or feature == 'MFCCd_all' or feature == 'WE+MFCCd_all':
+                    data = ws.preprocess(speciesData, d=True, f=False)
+                elif feature == 'WEbpd_all' or feature == 'MFCCbpd_all' or feature == 'WE+MFCCbpd_all':
+                    data = ws.preprocess(speciesData, d=True, f=True)
+
+                # Compute energy in each WP node and store
+                if 'WE' in feature:
+                    currWCs = ws.computeWaveletEnergy(data=data, sampleRate=ws.sampleRate, nlevels=nlevels,
+                                                      wpmode=wpmode, extractedCalls=False)
+                    waveletCoefs = np.column_stack((waveletCoefs, currWCs))
+                if 'MFCC' in feature:
+                    currMFCC = computeMFCC(data=data, sampleRate=ws.sampleRate, n_mfcc=24, delta=delta)
+                    MFCC = np.concatenate((MFCC, currMFCC), axis=0)
+                annotation.extend(currentannotation)
+                print("file loaded in", time.time() - opstartingtime)
+
+    annotation = np.array(annotation)
+    ann = np.reshape(annotation, (len(annotation), 1))
+    if 'WE' in feature and 'MFCC' not in feature:
+        # Prepare WC data and annotation targets into a matrix for saving
+        WC = np.transpose(waveletCoefs)
+        # ann = np.reshape(annotation,(len(annotation),1))
+        MLdata = np.append(WC, ann, axis=1)
+    elif 'MFCC' in feature and 'WE' not in feature:
+        # ann = np.reshape(annotation, (len(annotation), 1))
+        MLdata = np.append(MFCC, ann, axis=1)
+    elif 'WE' in feature and 'MFCC' in feature:
+        WC = np.transpose(waveletCoefs)
+        WE_MFCC = np.append(WC, MFCC, axis=1)
+        MLdata = np.append(WE_MFCC, ann, axis=1)
+    np.savetxt(os.path.join(dir_out, species + '_' + feature + '.tsv'), MLdata, delimiter="\t")
+    print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(annotation), len(annotation)))
+
+def loadData(fName, filemode):
+    '''
+    Load wav and GT for ML data set generation
+    :param fName:
+    :param filemode: 'long' or 'segpos' or 'segneg'
+    :return: audio data, GT, sampleRate
+    '''
+    filename = fName+'.wav'
+    filenameAnnotation = fName+'-sec.txt'
+    try:
+        wavobj = wavio.read(filename)
+    except:
+        print("unsupported file: ", filename)
+        pass
+    sampleRate = wavobj.rate
+    data = wavobj.data
+    if data.dtype is not 'float':
+        data = data.astype('float') #/ 32768.0
+    if np.shape(np.shape(data))[0]>1:
+        data = np.squeeze(data[:,0])
+    n = math.ceil(len(data)/sampleRate)
+
+    if filemode=='long':
+        # GT from the txt file
+        fileAnnotation = []
+        with open(filenameAnnotation) as f:
+            reader = csv.reader(f, delimiter="\t")
+            d = list(reader)
+        if d[-1]==[]:
+            d = d[:-1]
+        if len(d) != n:
+            print("ERROR: annotation length %d does not match file duration %d!" %(len(d), n))
+            return
+        # for each second, store 0/1 presence:
+        sum = 0
+        for row in d:
+            fileAnnotation.append(int(row[1]))
+            sum += int(row[1])
+    elif filemode=='segpos':
+        fileAnnotation = np.ones((math.ceil(len(data) / sampleRate), 1))
+    elif filemode=='segneg':
+        fileAnnotation = np.zeros((math.ceil(len(data) / sampleRate), 1))
+    return data, np.array(fileAnnotation), sampleRate
+
+def computeMFCC(data, sampleRate, n_mfcc, delta):
+    '''
+    Compute MFCC for each second of data and return as a matrix
+    :param data: audio data
+    :param sampleRate: sample rate
+    :param delta: True/False
+    :return: MFCC metrix
+    '''
+    n = math.ceil(len(data) / sampleRate)
+    mfcc=np.zeros((n, n_mfcc*32))
+    i = 0
+    for t in range(n):
+        end = min(len(data), (t + 1) * sampleRate)
+        mfcc1 = librosa.feature.mfcc(y=data[t * sampleRate:end], sr=sampleRate, n_mfcc=n_mfcc, n_fft=2048,
+                                        hop_length=512)  # n_fft=10240, hop_length=2560
+        if delta:
+            mfcc1_delta = librosa.feature.delta(mfcc1)
+            mfcc1 = np.concatenate((mfcc1, mfcc1_delta), axis=0)
+        # Normalize
+        mfcc1 -= np.mean(mfcc1, axis=0)
+        mfcc1 /= np.max(np.abs(mfcc1), axis=0)
+        mfcc1 = np.reshape(mfcc1, np.shape(mfcc1)[0] * np.shape(mfcc1)[1])
+        mfcc1 = mfcc1.flatten()
+        mfcc[i, :] = mfcc1
+    return mfcc
+
+
+# generateDataset(dir_src="D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train", feature='WE+MFCCraw_all', species='Kiwi (Nth Is Brown)',filemode='long', wpmode='new', dir_out="D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train")
+# TrainClassifier('D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train', 'Kiwi (Nth Is Brown)', 'WEraw_all', clf='kNN')
+
+
+
+
+
+
+
+
+
+
+
+
+# IGNORE THE CODE BELOW FOR NOW
 def testScoring():
     from sklearn import svm, datasets
     from sklearn.model_selection import cross_val_score
@@ -955,8 +1150,8 @@ def brownKiwi_segmentbased_test(clf=None, dir_clf="D:\\Nirosha\CHAPTER5\kiwi\\br
         model = load(dir_clf + '\\' + species + '_' + clf + '.joblib')
         learners.performTest(model)
 
-brownKiwi_segmentbased_train('XGB')
-brownKiwi_segmentbased_test(clf='XGB')
+# brownKiwi_segmentbased_train('XGB')
+# brownKiwi_segmentbased_test(clf='XGB')
 
 # validationCurve(dataFile='D:\\Nirosha\CHAPTER5\kiwi\\brown_segmentbased\energies_train.tsv', clf='MLP', nClasses=3, score='accuracy')
 # learninigCurve('D:\\nirosha\CHAPTER5\kiwi\\brown\\train-national\energies.tsv', 'XGB')

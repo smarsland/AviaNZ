@@ -3545,7 +3545,11 @@ class AviaNZ(QMainWindow):
                     species = self.species
                 speciesData = json.load(open(os.path.join(self.filtersDir, species + '.txt')))
                 ws = WaveletSegment.WaveletSegment()
-                Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None, spInfo=speciesData, withzeros=True)
+                # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
+                window = 1
+                inc = None
+                Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None, spInfo=speciesData, withzeros=True,window=window,inc=inc)
+                #Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None,spInfo=speciesData, withzeros=True)
                 print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
                 if TP+FN != 0:
                     recall = TP/(TP+FN)
@@ -3648,10 +3652,14 @@ class AviaNZ(QMainWindow):
             speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
                            'FreqRange': [minFrq, maxFrq]}
             # returns 2d lists of nodes over M x thr, or stats over M x thr
-            thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
+            thrList = np.linspace(0.1, 1, num=self.waveletTDialog.setthr.value())
             MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
-            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recaa")
+            # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
+            window=1
+            inc= None
+            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recaa",window=window,inc=inc)
+            #nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList,spInfo=speciesData, d=False, f=True, feature="recaafull")
             # Remove any negatively correlated nodes
             for lst in nodes:
                 for sub_lst in lst:
@@ -3757,6 +3765,27 @@ class AviaNZ(QMainWindow):
                                 msg.exec_()
                                 self.FilterFiles.append(self.species)
                                 self.waveletTDialog.test.setEnabled(True)
+                            else:
+                                # TODO: decide how to save the new filter when you don't want to overwrite
+                                # previous filter (or forgot to rename previous filter before coming to this
+                                # point and no need to loose all the heavy work done with grid search
+                                filename = filename[:-4] + '_new.txt'
+                                print("Saving new filter to ", filename[:-4] + '_new.txt', " (have to rename new filter)")
+                                f = open(filename, 'w')
+                                f.write(json.dumps(speciesData))
+                                f.close()
+                                # Add it to the Filter list
+                                msg = QMessageBox()
+                                msg.setIcon(QMessageBox.Information)
+                                msg.setText(
+                                    "Training completed! (but the filter saved with a new name)\nFollow Step 3 and test on a separate dataset before actual use.")
+                                msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+                                msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                                msg.setWindowTitle("Training completed!")
+                                msg.setStandardButtons(QMessageBox.Ok)
+                                msg.exec_()
+                                self.FilterFiles.append(self.species)
+                                self.waveletTDialog.test.setEnabled(True)
                         else:
                             print("Saving new filter to ", filename)
                             f = open(filename, 'w')
@@ -3858,8 +3887,11 @@ class AviaNZ(QMainWindow):
         This generates the ground truth for a given sound file
         Given the AviaNZ annotation, returns the ground truth as a txt file
         """
+        # TODO: Allow empty files (no target calls) when testing but not when training - a flag
+        #       Species combobox should compatible with labels in annotations, e.g. show Kiwi (Nth Is Brown) when
+        #       variations of it exists Kiwi (Nth Is Brown)(M)1, Kiwi (Nth Is Brown)(M)2 etc.
         datFile = wavFile + '.data'
-        eFile = datFile[:-9] + '-sec.txt'
+        eFile = datFile[:-9] + '-1sec.txt'
         if duration == 0:
             wavobj = wavio.read(wavFile)
             sampleRate = wavobj.rate
@@ -4023,7 +4055,6 @@ class AviaNZ(QMainWindow):
                     msg.exec_()
                     return
                 else:
-                    # print(os.path.join(self.filtersDir, species+'.txt'))
                     speciesData = json.load(open(os.path.join(self.filtersDir, species+'.txt')))
                     ws = WaveletSegment.WaveletSegment()
                     newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, wpmode="new")
@@ -4063,10 +4094,6 @@ class AviaNZ(QMainWindow):
                 # newSegmentsDef=self.binary2seg(newSegmentsDef)
                 # newSegmentsPb=self.binary2seg(newSegmentsPb)
             # post process to remove short segments, wind, rain, and use F0 check.
-            # post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-            #                                   segments=newSegments, spInfo={})
-            # post.wind_plot()
-
             if species == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
                 print(post.segments)
@@ -4463,7 +4490,7 @@ class AviaNZ(QMainWindow):
             imageFile, drop = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
         try:
             # works but requires devel (>=0.11) version of pyqtgraph:
-            exporter.export(imageFile + '.png')
+            exporter.export(imageFile)
             print("Exporting spectrogram to file %s.png" % imageFile)
         except:
             print("Failed to save image")
