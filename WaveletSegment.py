@@ -449,6 +449,7 @@ class WaveletSegment:
             end = min(N, center + win_sr2)
             detected[j] = np.any(E[start:end] > threshold)
             center += inc_sr #Virginia: corrected
+            center += inc_sr #Virginia: corrected
         del C
         gc.collect()
         return detected
