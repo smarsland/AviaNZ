@@ -306,7 +306,7 @@ def renameAnnotation(dirName, frm, to):
                     file.close()
 
 #---------------------------generate GT batch
-def annotation2GT(wavFile,species,duration=0):
+def annotation2GT(wavFile, species, duration=0):
     """
     This generates the ground truth for a given sound file (currently for kiwi and bittern).
     Given the AviaNZ annotation, returns the ground truth as a txt file
@@ -314,81 +314,81 @@ def annotation2GT(wavFile,species,duration=0):
     # wavFile=datFile[:-5]
     datFile=wavFile+'.data'
     print(datFile)
-    eFile = datFile[:-9]+'-sec.txt'
-    if duration ==0:
+    eFile = datFile[:-9]+'-1sec.txt'
+    if duration == 0:
         wavobj = wavio.read(wavFile)
         sampleRate = wavobj.rate
         data = wavobj.data
-        duration=len(data)/sampleRate   # number of secs
-    GT=np.zeros((duration,4))
+        duration = len(data)/sampleRate   # number of secs
+    GT=np.zeros((duration, 4))
     GT=GT.tolist()
-    GT[:][1]=str(0)
-    GT[:][2]=''
-    GT[:][3]=''
+    GT[:][1] = str(0)
+    GT[:][2] = ''
+    GT[:][3] = ''
     if os.path.isfile(datFile):
         # print(datFile)
         with open(datFile) as f:
             segments = json.load(f)
         for seg in segments:
-            if seg[0]==-1:
+            if seg[0] == -1:
                 continue
             # x = re.search(species, str(seg[4]))
             # print x
             # if not re.search('Kiwi', seg[4][0]):
-            if not 'Kiwi' in seg[4]:
+            if not 'Kiwi' in seg[4][0]:
                 if seg[4][0][-1]=='?':
                     print("**", wavFile)
                 continue
-            elif species=='Kiwi (Nth Is Brown)' or 'Kiwi' or 'Kiwi_Tokoeka_Haast' or 'Kiwi_Brown' or 'Kiwi_spp' or 'Kiwi_Okarito_Brown' or 'Kiwi_Tokoeka_Stewart_Is':
+            elif species == 'Kiwi (Nth Is Brown)' or species == 'Kiwi' or species == 'Kiwi_Tokoeka_Haast' or species == 'Kiwi_Brown' or species == 'Kiwi_spp' or species == 'Kiwi_Okarito_Brown' or species == 'Kiwi_Tokoeka_Stewart_Is':
                 # check M/F
                 if '(M)' in str(seg[4][0]):        # if re.search('(M)', seg[4]):
                     type = 'M'
                 elif '(F)' in str(seg[4][0]):      #if re.search('(F)', seg[4]):
-                    type='F'
+                    type = 'F'
                 elif '(D)' in str(seg[4][0]):
-                    type='D'
+                    type = 'D'
                 else:
-                    type='K'
-            elif species=='Bittern':
+                    type = 'K'
+            elif species == 'Bittern':
                 # check boom/inhalation
                 if '(B)' in str(seg[4]):
                     type = 'B'
                 elif '(I)' in str(seg[4]):
-                    type='I'
+                    type = 'I'
                 else:
-                    type=''
+                    type = ''
 
             # check quality
             if re.search('1', seg[4][0]):
-                quality = '*****'   # v close
+                quality = '1'   # v close
             elif re.search('2', seg[4][0]):
-                quality = '****'    # close
+                quality = '2'    # close
             elif re.search('3', seg[4][0]):
-                quality = '***' # fade
+                quality = '3'   # fade
             elif re.search('4', seg[4][0]):
-                quality = '**'  # v fade
+                quality = '4'  # v fade
             elif re.search('5', seg[4][0]):
-                quality = '*'   # v v fade
+                quality = '5'   # v v fade
             else:
                 quality = ''
 
             s=int(math.floor(seg[0]))
             e=int(math.ceil(seg[1]))
-            for i in range(s,e):
+            for i in range(s, e):
                 GT[i][1] = str(1)
                 GT[i][2] = type
                 GT[i][3] = quality
         for line in GT:
-            if line[1]==0.0:
-                line[1]='0'
-            if line[2]==0.0:
-                line[2]=''
-            if line[3]==0.0:
-                line[3]=''
+            if line[1] == 0.0:
+                line[1] = '0'
+            if line[2] == 0.0:
+                line[2] = ''
+            if line[3] == 0.0:
+                line[3] = ''
 
         # now save GT as a .txt file
         for i in range(1, duration + 1):
-            GT[i-1][0]=str(i)   # add time as the first column to make GT readable
+            GT[i-1][0] = str(i)   # add time as the first column to make GT readable
         out = open(eFile, "w")
         for line in GT:
             out.write("\t".join(line))
@@ -409,7 +409,7 @@ def genGT(dirName,species='Kiwi',duration=0):
     print("Generated GT")
 
 
-# genGT('D:\AviaNZ\Sound Files\Fiordland kiwi\Fiordland_kiwi_training_data_Aug2018', species='Kiwi', duration=900)
+# genGT('D:\\Nirosha\CHAPTER5\DATASETS\\NIbrownkiwi\Ponui_train', species='Kiwi', duration=300)
 
 #------------------------------------------------- code to convert the anotations to excel report batch
 def genReport(dirName,species='Kiwi'):

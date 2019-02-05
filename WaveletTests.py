@@ -193,132 +193,9 @@ def reconWPT():
     sg = sp.spectrogram(data,sampleRate)
     pl.imshow(10.*np.log10(sg).T)
 
-# Test previous code with and without zeroing the tree, save the filters and compare
-def testTrainers2(dName, withzeros):
-    # Hard code meta data
-    species = "Kiwi (Little Spotted)"
-    fs = 16000
-    minLen = 6
-    maxLen = 32
-    minFrq = 1200
-    maxFrq = 8000
-    wind = True
-    rain = True
-    ff = False
-    f0_low = 0
-    f0_high = 0
-
-    # Define the depth of grid
-    M_range = np.linspace(0.25, 1.5, num=3)
-    thr_range = np.linspace(0, 1, num=5)
-
-    optimumNodes_M = []
-    TPR_M = []
-    FPR_M = []
-    iterNum = 1
-    ws = WaveletSegment2.WaveletSegment()   # refers old version
-
-    opstartingtime = time.time()
-    for M in M_range:
-        print('------ Now M:', M)
-        # Find wavelet nodes for different thresholds
-        optimumNodes = []
-        TPR = []
-        FPR = []
-        for thr in thr_range:
-            speciesData = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
-                           'FreqRange': [minFrq, maxFrq], 'WaveletParams': [thr, M]}
-            optimumNodes_thr = []
-            TP = FP = TN = FN = 0
-            for root, dirs, files in os.walk(str(dName)):
-                for file in files:
-                    if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files:
-                        wavFile = root + '/' + file[:-4]
-                        nodes, stats = ws.waveletSegment_train(wavFile, spInfo=speciesData, df=False, withzeros=withzeros)
-                        TP += stats[0]
-                        FP += stats[1]
-                        TN += stats[2]
-                        FN += stats[3]
-                        print('Current:', wavFile)
-                        print("Parameters: M, Thr ", M, thr)
-                        print("Filtered nodes for current file: ", nodes)
-                        print("Iteration %d/%d" % (iterNum, len(M_range) * len(thr_range)))
-                        for node in nodes:
-                            if node not in optimumNodes_thr:
-                                optimumNodes_thr.append(node)
-            TPR_thr = TP / (TP + FN)
-            FPR_thr = 1 - TN / (FP + TN)
-            TPR.append(TPR_thr)
-            FPR.append(FPR_thr)
-            optimumNodes.append(optimumNodes_thr)
-            iterNum += 1
-        TPR_M.append(TPR)
-        FPR_M.append(FPR)
-        optimumNodes_M.append(optimumNodes)
-    print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
-    print(TPR_M)
-    print(FPR_M)
-    print(optimumNodes_M)
-
-    # Plot AUC and let the user to choose threshold and M
-    plt.style.use('ggplot')
-    valid_markers = ([item[0] for item in mks.MarkerStyle.markers.items() if
-                      item[1] is not 'nothing' and not item[1].startswith('tick') and not item[1].startswith(
-                          'caret')])
-    markers = np.random.choice(valid_markers, len(M_range) * len(thr_range), replace=False)
-    fig, ax = plt.subplots()
-    for i in range(len(M_range)):
-        ax.plot(FPR_M[i], TPR_M[i], marker=markers[i], label='M=' + str(M_range[i]))
-    ax.set_title('Double click and set Tolerance')
-    ax.set_xlabel('False Positive Rate (FPR)')
-    ax.set_ylabel('True Positive Rate (TPR)')
-    fig.canvas.set_window_title('ROC Curve - %s' % (species))
-    ax.set_ybound(0, 1)
-    ax.set_xbound(0, 1)
-    ax.yaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
-    ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
-    ax.legend()
-    def onclick(event):
-        if event.dblclick:
-            fpr_cl = event.xdata
-            tpr_cl = event.ydata
-            print("fpr_cl, tpr_cl: ", fpr_cl, tpr_cl)
-            # TODO: Interpolate?, currently get the closest point
-            TPRmin_M = []
-            for i in range(len(M_range)):
-                TPRmin = [np.abs(x - tpr_cl) for x in TPR_M[i]]
-                TPRmin_M.append(TPRmin)
-            # Choose M
-            M_min = [np.min(x) for x in TPRmin_M]
-            ind = np.argmin(M_min)
-            M = M_range[ind]
-            # Choose threshold
-            ind_thr = np.argmin(TPRmin_M[ind])
-            thr = thr_range[ind_thr]
-            optimumNodesSel = optimumNodes_M[ind][ind_thr]
-            plt.close()
-            speciesData['Wind'] = wind
-            speciesData['Rain'] = rain
-            speciesData['F0'] = ff
-            if ff:
-                speciesData['F0Range'] = [f0_low, f0_high]
-            speciesData['WaveletParams'].clear()
-            speciesData['WaveletParams'].append(thr)
-            speciesData['WaveletParams'].append(M)
-            speciesData['WaveletParams'].append(optimumNodesSel)
-            # Save it
-            filename = dName + '\\' + species + '.txt'
-            print("Saving new filter to ", filename)
-            f = open(filename, 'w')
-            f.write(json.dumps(speciesData))
-            f.close()
-    cid = fig.canvas.mpl_connect('button_press_event', onclick)
-    plt.show()
-
-# testTrainers2('E:\AviaNZ\Sound Files\LSK\\train', withzeros=True)
 
 # Test the new version of training
-def testTrainers(dName, species, f1, f2, fs, trainPerFile=True, withzeros=False, mergeTrees=False, cleanNodelist=False):
+def testTrainers(dName, species, f1, f2, fs, cleanNodelist=False, feature='recsep'):
     # Hard code meta data
     # species = "Kiwi (Little Spotted)"
     species = species
@@ -337,10 +214,12 @@ def testTrainers(dName, species, f1, f2, fs, trainPerFile=True, withzeros=False,
     speciesData = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
                    'FreqRange': [minFrq, maxFrq]}  # last params are thr, M
     # returns 2d lists of nodes over M x thr, or stats over M x thr
-    thrList = np.linspace(0, 1, 5)  # np.linspace(0, 1, 5)
+    # thrList = np.linspace(0, 1, 5)  # np.linspace(0, 1, 5)
+    # MList = np.linspace(0.25, 1, 4)  # np.linspace(0.25, 1.5, 3)
+    thrList = np.linspace(0, 1, 5)
     MList = np.linspace(0.25, 1, 4)  # np.linspace(0.25, 1.5, 3)
     ws = WaveletSegment.WaveletSegment()
-    nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature='recsep')
+    nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature=feature)
     print("Filtered nodes: ", nodes)
     print("Negative nodes: ", negative_nodes)
     # Remove any negatively correlated nodes
@@ -432,8 +311,8 @@ def testWavelet(dName, species, withzeros, savedetections):
         accuracy = (TP+TN)/(TP+FP+TN+FN)
     print(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
 
-# testTrainers('D:\\Nirosha\CHAPTER5\kiwi\\tier1\\negative\segmentsAfterFilter1_v1\\noise', "BKiwi", f1=1000, f2=8000, fs=16000, trainPerFile=True, withzeros=True, mergeTrees=False, cleanNodelist=True)
-# testWavelet('D:\\Nirosha\CHAPTER5\kiwi\\tier1\\negative\set3', "BKiwi", withzeros=True, savedetections=True)
+testTrainers('D:\\Nirosha\CHAPTER5\DATASETS\\NIbrownkiwi\Train\Ponui-train', "Kiwi", f1=1000, f2=8000, fs=16000, cleanNodelist=True, feature="recaa")
+# testWavelet('D:\\Nirosha\CHAPTER5\AnotatedDataset_Thesis_NP\S 5.5 Audio and annotation. Brown kiwi\\test', "Kiwi (Nth Is Brown)", withzeros=True, savedetections=False)
 
 import math
 def y(t):
@@ -494,4 +373,3 @@ def gety():
     ploty(recy, "d")
 
     plt.show()
-    
