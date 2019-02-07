@@ -122,7 +122,7 @@ class WaveletSegment:
         #We are working with sliding windows starting from the file start
         start=0 #inizialization
         #Virginia: the loop works on the resolution scale to adjust with annotations
-        for t in range(0,N,step, step):
+        for t in range(0,N,step):
             E = []
             end = min(len(data), start+win_sr)
             # generate a WP
@@ -151,12 +151,15 @@ class WaveletSegment:
                 E = np.concatenate((E, e), axis=0)
             #Virginia:update start
             start+=inc_sr # Virginia: corrected
-            coefs[:, t:t+step] = E
+            for T in range(t,t+step):
+                coefs[:, T] = E
         return coefs
 
 
     def fBetaScore(self, annotation, predicted, beta=2):
         """ Computes the beta scores given two sets of predictions """
+        #print('fBetaScore')
+        #print((len(annotation),len(predicted)))
         TP = np.sum(np.where((annotation == 1) & (predicted == 1), 1, 0))
         T = np.sum(annotation)
         P = np.sum(predicted)
@@ -198,7 +201,8 @@ class WaveletSegment:
             1. annotation - np.array of length n, where n - number of blocks (with resolution length) in file
             2. waveletCoefs - np.array of DxN, where D - number of nodes in WP (62 for lvl 5) N= number of sliding windows
         """
-
+        #print('compute_r')
+        #print((len(annotation),np.shape(waveletCoefs)))
         w0 = np.where(annotation == 0)[0]
         w1 = np.where(annotation == 1)[0]
 
@@ -360,6 +364,9 @@ class WaveletSegment:
         step_w=int(math.ceil(window/resol)) #window length in resolution scale
         step_inc=int(math.ceil(inc/resol)) #increment length in resolution scale
 
+        #print('detectCalls')
+        #print((nw,na))
+
         count = 0
         for index in listnodes:
             new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
@@ -451,6 +458,9 @@ class WaveletSegment:
         detect_ann=np.zeros(na) #aqnnotation
         step_w=int(math.ceil(window/resol)) #window length in resolution scale
         step_inc=int(math.ceil(inc/resol)) #increment length in resolution scale
+
+        #print('detectCalls_sep')
+        #print((nw, na))
 
         for level in range(wp.maxlevel + 1):
             for n in new_wp.get_level(level, 'natural'):
@@ -562,6 +572,9 @@ class WaveletSegment:
         detect_ann=np.zeros(na) #aqnnotation
         step_w=int(math.ceil(window/resol)) #window length in resolution scale
         step_inc=int(math.ceil(inc/resol)) #increment length in resolution scale
+
+        #print('detectCalls_aa')
+        #print((nw, na))
 
         # Compute the energy curve (a la Jinnai et al. 2012)
         E = ce.EnergyCurve(C, M)
@@ -1059,7 +1072,7 @@ class WaveletSegment:
         # Added resol input as basic unit for read annotation file
         filename = fName + '.wav'  # 'train/kiwi/train1.wav'
         # Virginia: added resol for identify annotation txt
-        filenameAnnotation = fName + '-res'+str(resol)+'sec.txt'  # 'train/kiwi/train1-1sec.txt'
+        filenameAnnotation = fName + '-res'+str(resol)+'sec.txt'  # 'train/kiwi/train1-res1sec.txt'
         try:
             wavobj = wavio.read(filename)
         except:

@@ -3658,7 +3658,7 @@ class AviaNZ(QMainWindow):
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window=1
             inc= None
-            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recaa",window=window,inc=inc)
+            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recmulti",window=window,inc=inc)
             #nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList,spInfo=speciesData, d=False, f=True, feature="recaafull")
             # Remove any negatively correlated nodes
             for lst in nodes:
