@@ -3,7 +3,7 @@
 "StartMaximized": true,
 "MultipleSpecies": true,
 "RequireNoiseData": false,
-"DOC": false,
+"DOC": true,
 "Hartley": false,
 "ReorderList": true,
 "SoundFileDir": "./Sound Files", "secsSave": 60, "windowWidth": 6.57,
