@@ -26,7 +26,7 @@ def detect(dirName='',trainTest=False, species=''):
                 startTime = DOCRecording.group(2)
                 if int(startTime[:2]) > 17 or int(startTime[:2]) < 6:   #if int(startTime[:2]) > 18 or int(startTime[:2]) < 6:   #   6pm to 6am as night
                     Night=True
-            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and (Night or not DOCRecording): # avoid day recordings and files with no data (Tier 1 has 0Kb .wavs)
+            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0: # and (Night or not DOCRecording): # avoid day recordings and files with no data (Tier 1 has 0Kb .wavs)
                 if file + '.data' not in files:  # skip already processed files
                     filename = root + '/' + file
                     # load wav and annotation

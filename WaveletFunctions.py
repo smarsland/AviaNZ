@@ -418,7 +418,7 @@ class WaveletFunctions:
         new_wp = ce.ThresholdNodes(self, wp, bestleaves, threshold, thresholdType)
 
         # Reconstruct the internal nodes and the data
-        new_wp = self.reconstructWPT(new_wp,wp.wavelet,bestleaves)
+        new_wp = self.reconstructWPT(new_wp,wp,wp.wavelet,bestleaves)
 
         return new_wp[''].data
 

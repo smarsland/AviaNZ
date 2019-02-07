@@ -193,6 +193,7 @@ def reconWPT():
     sg = sp.spectrogram(data,sampleRate)
     pl.imshow(10.*np.log10(sg).T)
 
+
 # Test previous code with and without zeroing the tree, save the filters and compare
 def testTrainers2(dName, withzeros):
     # Hard code meta data
@@ -317,8 +318,9 @@ def testTrainers2(dName, withzeros):
 
 # testTrainers2('E:\AviaNZ\Sound Files\LSK\\train', withzeros=True)
 
+
 # Test the new version of training
-def testTrainers(dName, species, f1, f2, fs, trainPerFile=True, withzeros=False, mergeTrees=False, cleanNodelist=False):
+def testTrainers(dName, species, f1, f2, fs, cleanNodelist=False, feature='recsep'):
     # Hard code meta data
     # species = "Kiwi (Little Spotted)"
     species = species
@@ -327,8 +329,10 @@ def testTrainers(dName, species, f1, f2, fs, trainPerFile=True, withzeros=False,
     maxLen = 32
     minFrq = f1
     maxFrq = f2
+
     wind = False
     rain = False
+
     ff = False
     f0_low = 0
     f0_high = 0
@@ -337,13 +341,15 @@ def testTrainers(dName, species, f1, f2, fs, trainPerFile=True, withzeros=False,
     speciesData = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
                    'FreqRange': [minFrq, maxFrq]}  # last params are thr, M
     # returns 2d lists of nodes over M x thr, or stats over M x thr
-    thrList = np.linspace(0, 1, 2)  # np.linspace(0, 1, 5)
-    MList = np.linspace(0.25, 1, 1)  # np.linspace(0.25, 1.5, 3)
+
+    thrList = np.linspace(0, 1, 5)  # np.linspace(0, 1, 5)
+    MList = np.linspace(0.25, 1, 4)  # np.linspace(0.25, 1.5, 3)
     #Virginia: added window and increment
     window = 1
     inc= None
     ws = WaveletSegment.WaveletSegment()
     nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature='recsep',window=window, inc=inc)
+
     print("Filtered nodes: ", nodes)
     print("Negative nodes: ", negative_nodes)
     # Remove any negatively correlated nodes
@@ -413,6 +419,7 @@ def testTrainers(dName, species, f1, f2, fs, trainPerFile=True, withzeros=False,
 
 # Test the trained detector on test data
 def testWavelet(dName, species, withzeros, savedetections):
+
     #speciesData = json.load(open(os.path.join(dName, species + '.txt')))
     speciesData = json.load(open(os.path.join(dName, species + '.txt')))
     opstartingtime = time.time()
@@ -439,8 +446,10 @@ def testWavelet(dName, species, withzeros, savedetections):
         accuracy = (TP+TN)/(TP+FP+TN+FN)
     print(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
 
-testTrainers('/home/listanvirg/Data/train', "K", f1=1000, f2=8000, fs=16000, trainPerFile=True, withzeros=True, mergeTrees=False, cleanNodelist=True)
-testWavelet('/home/listanvirg/Data/test', "K", withzeros=True, savedetections=True)
+
+testTrainers('D:\\Nirosha\CHAPTER5\DATASETS\\NIbrownkiwi\Train\Ponui-train', "Kiwi", f1=1000, f2=8000, fs=16000, cleanNodelist=True, feature="recaa")
+# testWavelet('D:\\Nirosha\CHAPTER5\AnotatedDataset_Thesis_NP\S 5.5 Audio and annotation. Brown kiwi\\test', "Kiwi (Nth Is Brown)", withzeros=True, savedetections=False)
+
 
 import math
 def y(t):
@@ -502,3 +511,4 @@ def gety():
 
     plt.show()
     
+

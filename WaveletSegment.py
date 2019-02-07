@@ -90,6 +90,9 @@ class WaveletSegment:
         #Virginia: to made everything work if no increment it became equal to window
         if inc==None:
             inc=window
+            resol=window
+        else:
+            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
 
         if data is None:
             data = self.data
@@ -98,12 +101,16 @@ class WaveletSegment:
         #Virginia: number of samples in window
         win_sr=int(math.ceil(window*sampleRate))
         # half-window length in samples
-        win_sr2=int(math.ceil(win_sr/2))
+        #win_sr2=int(math.ceil(win_sr/2))
         #Virginia: number of sample in increment
         inc_sr=math.ceil(inc*sampleRate)
+        #Virginia: number of samples in resolution
+        resol_sr = math.ceil(resol * sampleRate)
+        #Virginia: needed to generate coef of the same size of annotations
+        step=int(inc/resol) #
 
-        #Virginia:number of windows = number of center of length increment
-        N=int(math.ceil(len(data)/inc_sr))
+        #Virginia:number of windows = number of sliding window at resol distance
+        N=int(math.ceil(len(data)/resol_sr))
 
         #Virginia: changed columns dimension -> must be equal to number of sliding window
         coefs = np.zeros((2 ** (nlevels + 1) - 2, N))
@@ -112,12 +119,12 @@ class WaveletSegment:
         # start is the sample start of a window
         # center is the sample "center" of a window
         #end is the sample end of a window
-        #The window is supposed to be "centered" so we must be careful with starting and ending windows
-        center=int(math.ceil(inc_sr/2)) #inizialization: the "segment" window are supposed to be of length increment
-        for t in range(N):
+        #We are working with sliding windows starting from the file start
+        start=0 #inizialization
+        #Virginia: the loop works on the resolution scale to adjust with annotations
+        for t in range(0,N,step, step):
             E = []
-            start=max(0,center-win_sr2)
-            end = min(len(data), center+win_sr2)
+            end = min(len(data), start+win_sr)
             # generate a WP
             if wpmode == "pywt":
                 wp = pywt.WaveletPacket(data=data[start:end], wavelet=self.WaveletFunctions.wavelet,
@@ -143,8 +150,8 @@ class WaveletSegment:
                     e = 100.0 * e / np.sum(e)
                 E = np.concatenate((E, e), axis=0)
             #Virginia:update start
-            center+=inc_sr # Virginia: corrected
-            coefs[:, t] = E
+            start+=inc_sr # Virginia: corrected
+            coefs[:, t:t+step] = E
         return coefs
 
 
@@ -378,7 +385,6 @@ class WaveletSegment:
             # If there is a call anywhere in the window, report it as a call
             #Virginia-> for each sliding window:
             # start is the sample start of a window
-            # center is the sample "center" of a window
             #end is the sample end of a window
             #Sliding windows: from the file start
             #center=int(math.ceil(inc_sr/2)) keeped if needed in the future
@@ -390,14 +396,18 @@ class WaveletSegment:
                 start+=inc_sr  #Virginia: corrected
             count += 1
         detected = np.max(detected, axis=1)
+
         j=0
         for i in range(nw):
             if detected[i]==1:
                 detect_ann[j:j+step_w]=1
             j+=step_inc
 
+        del C
+        gc.collect()
 
         return detect_ann
+
 
 
     def detectCalls_sep(self, new_wp, wp, sampleRate, nodes, spInfo={},window=1, inc=None):
@@ -466,7 +476,6 @@ class WaveletSegment:
         # If there is a call anywhere in the window, report it as a call
         # Virginia-> for each sliding window:
         # start is the sample start of a window
-        # center is the sample "center" of a window
         # end is the sample end of a window
         # The window is sliding, starting from sata start
         #center = int(math.ceil(inc_sr/2)) #keeped if needed in the future
@@ -476,11 +485,15 @@ class WaveletSegment:
             end = min(N, start + win_sr)
             detected[j] = np.any(E[start:end] > threshold)
             start += inc_sr #Virginia: corrected
+
+        #Virginia: generate annotation file in resolution scale.
         j=0
         for i in range(nw):
             if detected[i]==1:
                 detect_ann[j:j+step_w]=1
             j+=step_inc
+
+        del C
         gc.collect()
         return detect_ann
 
@@ -564,7 +577,6 @@ class WaveletSegment:
         # If there is a call anywhere in the window, report it as a call
         # Virginia-> for each sliding window:
         # start is the sample start of a window
-        # center is the sample "center" of a window
         # end is the sample end of a window
         # The window are sliding windows: starting from data start
         #center = int(math.ceil(inc_sr/2)) #keeped if neede in future
@@ -690,9 +702,6 @@ class WaveletSegment:
 
         nlevels = 5
         self.annotation = []
-        #Virginia: added but then changed. Keeped if needed in future
-        #if inc!=window:
-        #    self.annotation2=[]
         self.filelengths = []
         self.audioList = []
         self.waveletCoefs = np.array([]).reshape(2 ** (nlevels + 1) - 2, 0)
@@ -730,7 +739,7 @@ class WaveletSegment:
         WC = np.transpose(self.waveletCoefs)
         ann = np.reshape(self.annotation, (len(self.annotation), 1))
         MLdata = np.append(WC, ann, axis=1)
-        np.savetxt(os.path.join(dirName, "energies.tsv"), MLdata, delimiter="\t")
+        # np.savetxt(os.path.join(dirName, "energies.tsv"), MLdata, delimiter="\t")
         print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(self.annotation), len(self.annotation)))
 
     def generateWPs(self, wavelet, maxlevel, wpmode):
@@ -821,12 +830,6 @@ class WaveletSegment:
                 # loop over files:
                 for indexF in range(len(self.filelengths)):
                     # load the annots and WCs for this file
-
-                    #Virginia: added before: keeped if needed in future
-                    #if inc!=window:
-                    #    annotation = self.annotation2[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF + 1]))]
-                    #else:
-
                     annotation = self.annotation[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF + 1]))]
 
                     # Find 10 most positively correlated nodes
@@ -935,11 +938,6 @@ class WaveletSegment:
                 finalnodesT.append(nodesacc)
                 # Get the measures with the selected node set for this threshold and M over the set of files
 
-                # Virginia: Added because it could be useful. Keeped for the future
-                #if inc!=window:
-                #    fB, recall, tp, fp, tn, fn = self.fBetaScore(self.annotation2, detected_all)
-                #else:
-
                 fB, recall, tp, fp, tn, fn = self.fBetaScore(self.annotation, detected_all)
                 tpa[indexM, indext] = tp
                 fpa[indexM, indext] = fp
@@ -982,9 +980,6 @@ class WaveletSegment:
 
         # clear storage for multifile processing
         self.annotation = []
-        # Virginia: Added because it could be useful. Keeped for the future
-        #if inc!=window:
-         #   self.annotation2 =[]
         self.audioList = []
         self.filelengths = []
         self.filenames = []
@@ -1002,13 +997,6 @@ class WaveletSegment:
                     self.audioList.append(filteredDenoisedData)
 
         # remember to convert main structures to np arrays
-
-        # Virginia: Added because it could be useful. Keeped for the future
-        #if inc!=window:
-        #    self.annotation2 = np.array(self.annotation2)
-        #    print("Testing with %s positive and %s negative annotations" % (np.sum(self.annotation2 == 1), np.sum(self.annotation2 == 0)))
-        #else:
-
         self.annotation = np.array(self.annotation)
         print("Testing with %s positive and %s negative annotations" % (np.sum(self.annotation == 1), np.sum(self.annotation == 0)))
 
@@ -1030,7 +1018,7 @@ class WaveletSegment:
                     detected_c = self.identifySegments(np.squeeze(detected_c))
                 elif np.shape(detected_c)[1] == 1:
                     detected_c = np.array(detected_c).flatten().tolist()
-                    detected_c = self.identifySegments(detected_c) 
+                    detected_c = self.identifySegments(detected_c)
                 else:
                     detected_c = []
                 detected_c = self.mergeSeg(detected_c)
@@ -1048,10 +1036,6 @@ class WaveletSegment:
             wp = []
             del wp
             gc.collect()
-        # Virginia: Added because it could be useful. Keeped for the future
-        #if inc != window:
-        #    fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation2, detected)
-        #else:
         fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
         return detected, TP, FP, TN, FN
 
@@ -1112,29 +1096,9 @@ class WaveletSegment:
             # TWO VERSIONS FOR COMPATIBILITY WITH BOTH TRAINING LOOPS:
             if trainPerFile:
                 self.annotation = np.array(fileAnnotations)
-                # Virginia: Added because it could be useful. Keeped for the future
-                #if resol != window:
-                #    step = int(window / resol)
-                #    N1 = len(fileAnnotations)
-                #    N2 = int(math.ceil(N1 / step))
-                #    annotation2 = np.zeros(N2)
-                #    for indexA in range(N2):
-                #        if np.any(fileAnnotations[indexA * step:min(indexA * (step + 1), N1)]):
-                #            annotation2[indexA] = 1
-                #    self.annotation2=np.array(annotation2)
 
             else:
                 self.annotation.extend(fileAnnotations)
-                # Virginia: Added because it could be useful. Keeped for the future
-                #if resol != window:
-                #    step = int(window / resol)
-                 #   N1 = len(fileAnnotations)
-                 #   N2 = int(math.ceil(N1 / step))
-                 #   annotation2 = np.zeros(N2)
-                #    for indexA in range(N2):
-                #        if np.any(fileAnnotations[indexA * step:min(indexA * (step + 1), N1)]):
-                #            annotation2[indexA] = 1
-                #    self.annotation2.extend(annotation2)
                 self.filelengths.append(n)
             if savedetections:
                 self.filenames.append(filename)

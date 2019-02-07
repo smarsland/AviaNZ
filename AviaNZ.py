@@ -1036,7 +1036,7 @@ class AviaNZ(QMainWindow):
                 self.addNoiseData()
 
             # setting this to True forces initial save
-            self.segmentsToSave = True
+            # self.segmentsToSave = True
             self.saveSegments()
 
         self.previousFile = current
@@ -3487,7 +3487,7 @@ class AviaNZ(QMainWindow):
             x2 = math.floor(x2 * self.config['incr']) #/ self.sampleRate
             filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.SoundFileDir, '*.wav')
             if filename:
-                wavio.write(str(filename) + '.wav', self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
+                wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(os.path.basename(self.filename))
 
@@ -3652,7 +3652,7 @@ class AviaNZ(QMainWindow):
             speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
                            'FreqRange': [minFrq, maxFrq]}
             # returns 2d lists of nodes over M x thr, or stats over M x thr
-            thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
+            thrList = np.linspace(0.1, 1, num=self.waveletTDialog.setthr.value())
             MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
@@ -3765,6 +3765,27 @@ class AviaNZ(QMainWindow):
                                 msg.exec_()
                                 self.FilterFiles.append(self.species)
                                 self.waveletTDialog.test.setEnabled(True)
+                            else:
+                                # TODO: decide how to save the new filter when you don't want to overwrite
+                                # previous filter (or forgot to rename previous filter before coming to this
+                                # point and no need to loose all the heavy work done with grid search
+                                filename = filename[:-4] + '_new.txt'
+                                print("Saving new filter to ", filename[:-4] + '_new.txt', " (have to rename new filter)")
+                                f = open(filename, 'w')
+                                f.write(json.dumps(speciesData))
+                                f.close()
+                                # Add it to the Filter list
+                                msg = QMessageBox()
+                                msg.setIcon(QMessageBox.Information)
+                                msg.setText(
+                                    "Training completed! (but the filter saved with a new name)\nFollow Step 3 and test on a separate dataset before actual use.")
+                                msg.setIconPixmap(QPixmap("img/Owl_done.png"))
+                                msg.setWindowIcon(QIcon('img/Avianz.ico'))
+                                msg.setWindowTitle("Training completed!")
+                                msg.setStandardButtons(QMessageBox.Ok)
+                                msg.exec_()
+                                self.FilterFiles.append(self.species)
+                                self.waveletTDialog.test.setEnabled(True)
                         else:
                             print("Saving new filter to ", filename)
                             f = open(filename, 'w')
@@ -3870,8 +3891,11 @@ class AviaNZ(QMainWindow):
         This generates the ground truth for a given sound file
         Given the AviaNZ annotation, returns the ground truth as a txt file
         """
+        # TODO: Allow empty files (no target calls) when testing but not when training - a flag
+        #       Species combobox should compatible with labels in annotations, e.g. show Kiwi (Nth Is Brown) when
+        #       variations of it exists Kiwi (Nth Is Brown)(M)1, Kiwi (Nth Is Brown)(M)2 etc.
         datFile = wavFile + '.data'
-        eFile = datFile[:-9] + '-sec.txt'
+        eFile = datFile[:-9] + '-1sec.txt'
         if duration == 0:
             wavobj = wavio.read(wavFile)
             sampleRate = wavobj.rate
@@ -4569,7 +4593,7 @@ class AviaNZ(QMainWindow):
             imageFile, drop = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
         try:
             # works but requires devel (>=0.11) version of pyqtgraph:
-            exporter.export(imageFile + '.png')
+            exporter.export(imageFile)
             print("Exporting spectrogram to file %s.png" % imageFile)
         except:
             print("Failed to save image")
