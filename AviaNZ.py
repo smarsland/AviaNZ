@@ -3547,7 +3547,7 @@ class AviaNZ(QMainWindow):
                 ws = WaveletSegment.WaveletSegment()
                 # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
                 window = 1
-                inc = 0.5
+                inc = None
                 Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None, spInfo=speciesData, withzeros=True,window=window,inc=inc)
                 #Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None,spInfo=speciesData, withzeros=True)
                 print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
@@ -3657,7 +3657,7 @@ class AviaNZ(QMainWindow):
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window=1
-            inc= 0.5
+            inc= None
             nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recaa",window=window,inc=inc)
             #nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList,spInfo=speciesData, d=False, f=True, feature="recaafull")
             # Remove any negatively correlated nodes
@@ -3830,7 +3830,7 @@ class AviaNZ(QMainWindow):
         # Virginia: added window and increment to prepare annotation file
         # BE CAREFULL: they must be updated here
         window = 1
-        inc= 0.5
+        inc= None
         species = str(self.waveletTDialog.species.currentText())
         if species == 'Choose species...':
             msg = QMessageBox()
