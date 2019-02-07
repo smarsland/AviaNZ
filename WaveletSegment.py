@@ -324,6 +324,9 @@ class WaveletSegment:
         #Virginia: if no increment I set it equal to window
         if inc==None:
             inc=window
+            resol=window
+        else:
+            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
 
         if sampleRate == 0:
             sampleRate = self.sampleRate
@@ -333,15 +336,22 @@ class WaveletSegment:
         # Virginia window length in samples
         win_sr = math.ceil(window * sampleRate)
         # Half window length in samples
-        win_sr2=math.ceil(win_sr/2)
+        #win_sr2=math.ceil(win_sr/2)
         #Increment length in samples
         inc_sr=math.ceil(inc*sampleRate)
+        #Resolution Length in samples
+        resol_sr = math.ceil(resol * sampleRate)
         # Compute the number of samples in a window -- species specific
         # Virginia: changed sampleRate with win_sr
         M = int(spInfo['WaveletParams'][1] * win_sr / 2.0)
         # Virginia: number of segments = number of window centers of length inc
         nw= int(np.ceil(len(wp.data) / inc_sr))
         detected = np.zeros((nw, len(listnodes)))
+        #Virginia: added detected that can match with annotation
+        na= int(np.ceil(len(wp.data) / resol_sr)) #number of segments
+        detect_ann=np.zeros(na) #aqnnotation
+        step_w=int(math.ceil(window/resol)) #window length in resolution scale
+        step_inc=int(math.ceil(inc/resol)) #increment length in resolution scale
 
         count = 0
         for index in listnodes:
@@ -370,16 +380,24 @@ class WaveletSegment:
             # start is the sample start of a window
             # center is the sample "center" of a window
             #end is the sample end of a window
-            #The window is supposed to be "centered" so we must be careful with starting and ending windows
-            center=int(math.ceil(inc_sr/2)) #inizialization: the "segment" window are supposed to be of length increment
+            #Sliding windows: from the file start
+            #center=int(math.ceil(inc_sr/2)) keeped if needed in the future
+            start=0 # #inizialization:
             for j in range(nw):
-                start = max(0, center - win_sr2)
-                end = min(N, center + win_sr2)
+                #start = max(0, center - win_sr2)
+                end = min(N, start + win_sr)
                 detected[j, count] = np.any(E[start:end] > threshold)
-                center+=inc_sr  #Virginia: corrected
+                start+=inc_sr  #Virginia: corrected
             count += 1
         detected = np.max(detected, axis=1)
-        return detected
+        j=0
+        for i in range(nw):
+            if detected[i]==1:
+                detect_ann[j:j+step_w]=1
+            j+=step_inc
+
+
+        return detect_ann
 
 
     def detectCalls_sep(self, new_wp, wp, sampleRate, nodes, spInfo={},window=1, inc=None):
@@ -396,6 +414,9 @@ class WaveletSegment:
         # Virginia: if no increment I set it equal to window
         if inc == None:
             inc = window
+            resol = window
+        else:
+            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
 
         if sampleRate == 0:
             sampleRate = self.sampleRate
@@ -404,15 +425,22 @@ class WaveletSegment:
         #Virginia: added window sample rate
         win_sr = math.ceil(window * sampleRate)
         # Half window length in samples
-        win_sr2=math.ceil(win_sr/2)
+        #win_sr2=math.ceil(win_sr/2)
         #Increment length in samples
         inc_sr = math.ceil(inc * sampleRate)
+        # resolution length in samples
+        resol_sr = math.ceil(resol * sampleRate)
         # Compute the number of samples in a window -- species specific
         # Virginia: changed sampleRate with win_sr
         M = int(spInfo['WaveletParams'][1] * win_sr / 2.0)
         # Virginia: number of segments = number of centers of length inc
         nw=int(np.ceil(len(wp.data) / inc_sr))
         detected = np.zeros(nw)
+        #Virginia: added detected that can match with annotation
+        na= int(np.ceil(len(wp.data) / resol_sr)) #number of segments
+        detect_ann=np.zeros(na) #aqnnotation
+        step_w=int(math.ceil(window/resol)) #window length in resolution scale
+        step_inc=int(math.ceil(inc/resol)) #increment length in resolution scale
 
         for level in range(wp.maxlevel + 1):
             for n in new_wp.get_level(level, 'natural'):
@@ -440,15 +468,21 @@ class WaveletSegment:
         # start is the sample start of a window
         # center is the sample "center" of a window
         # end is the sample end of a window
-        # The window is supposed to be "centered" so we must be careful with starting and ending windows
-        center = int(math.ceil(inc_sr/2)) #inizialization: the "segment" window are supposed to be of length increment
+        # The window is sliding, starting from sata start
+        #center = int(math.ceil(inc_sr/2)) #keeped if needed in the future
+        start= 0 #inizialization
         for j in range(nw):
-            start = max(0, center - win_sr2)
-            end = min(N, center + win_sr2)
+            #start = max(0, center - win_sr2) keeped if needed
+            end = min(N, start + win_sr)
             detected[j] = np.any(E[start:end] > threshold)
-            center += inc_sr #Virginia: corrected
+            start += inc_sr #Virginia: corrected
+        j=0
+        for i in range(nw):
+            if detected[i]==1:
+                detect_ann[j:j+step_w]=1
+            j+=step_inc
         gc.collect()
-        return detected
+        return detect_ann
 
     # Virginia:
     def detectCalls_aa(self, wp, sampleRate, node, spInfo={}, annots=None, window=1,inc=None):
@@ -473,6 +507,9 @@ class WaveletSegment:
         # Virginia: if no increment I set it equal to window
         if inc == None:
             inc = window
+            resol = window
+        else:
+            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
 
         if sampleRate == 0:
             sampleRate = self.sampleRate
@@ -480,9 +517,11 @@ class WaveletSegment:
         # Virginia: added window sample rate
         win_sr = math.ceil(window * sampleRate)
         # Half window length in samples
-        win_sr2 = math.ceil(win_sr/2)
+        #win_sr2 = math.ceil(win_sr/2)
         # Increment length in samples
         inc_sr = math.ceil(inc * sampleRate)
+        # Resolution length in samples
+        resol_sr = math.ceil(resol * sampleRate)
 
         thr = spInfo['WaveletParams'][0]
         # Compute the number of samples in a window -- species specific
@@ -505,14 +544,20 @@ class WaveletSegment:
         # Virginia: number of segments = number of centers of length inc
         nw=int(np.ceil(N / inc_sr))
         detected = np.zeros(nw)
+        #Virginia: added detected that can match with annotation
+        na= int(np.ceil(N / resol_sr)) #number of segments
+        detect_ann=np.zeros(na) #aqnnotation
+        step_w=int(math.ceil(window/resol)) #window length in resolution scale
+        step_inc=int(math.ceil(inc/resol)) #increment length in resolution scale
 
         # Compute the energy curve (a la Jinnai et al. 2012)
         E = ce.EnergyCurve(C, M)
         # Compute threshold using mean & sd from non-call sections
         # Virginia: changed the base. I'm using inc_sr as a base.
+        # CHECK
         if annots is not None:
-            C = C[:len(annots) * inc_sr]
-            C = C[np.repeat(annots == 0, inc_sr)]
+            C = C[:len(annots) * resol_sr]
+            C = C[np.repeat(annots == 0, resol_sr)]
         C = np.log(C)
         threshold = np.exp(np.mean(C) + np.std(C) * thr)
 
@@ -521,16 +566,22 @@ class WaveletSegment:
         # start is the sample start of a window
         # center is the sample "center" of a window
         # end is the sample end of a window
-        # The window is supposed to be "centered" so we must be careful with starting and ending windows
-        center = int(math.ceil(inc_sr/2)) #inizialization: the "segment" window are supposed to be of length increment
+        # The window are sliding windows: starting from data start
+        #center = int(math.ceil(inc_sr/2)) #keeped if neede in future
+        start=0 #inizializzation
         for j in range(nw):
-            start = max(0, center - win_sr2)
-            end = min(N, center + win_sr2)
+            #start = max(0, center - win_sr2) keeped if needed in funture
+            end = min(N, start + win_sr)
             detected[j] = np.any(E[start:end] > threshold)
-            center += inc_sr #Virginia: corrected
+            start += inc_sr #Virginia: corrected
         del C
+        j=0
+        for i in range(nw):
+            if detected[i]==1:
+                detect_ann[j:j+step_w]=1
+            j+=step_inc
         gc.collect()
-        return detected
+        return detect_ann
 
     def identifySegments(self, seg):  # , maxgap=1, minlength=1):
         # TODO: *** Replace with segmenter.checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0)
@@ -635,7 +686,7 @@ class WaveletSegment:
         if inc==None:
             resol=window
         else:
-            resol=inc
+            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
 
         nlevels = 5
         self.annotation = []
@@ -649,7 +700,7 @@ class WaveletSegment:
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-'+str(resol)+'sec.txt' in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res'+str(resol)+'sec.txt' in files:
                     opstartingtime = time.time()
                     wavFile = root + '/' + file[:-4]
                     # adds to annotation and filelength arrays, sets self.data:
@@ -921,9 +972,9 @@ class WaveletSegment:
         if inc==None:
             resol=window
         else:
-            resol=inc
+            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
 
-        # Load the relevant list of nodes
+            # Load the relevant list of nodes
         if listnodes is None:
             nodes = spInfo['WaveletParams'][2]
         else:
@@ -942,7 +993,7 @@ class WaveletSegment:
         # populate storage
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-'+str(resol)+'sec.txt' in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res'+str(resol)+'sec.txt' in files:
                     wavFile = root + '/' + file[:-4]
                     # Load data and annotation
                     # (preprocess only requires SampleRate and FreqRange from spInfo)
@@ -1024,7 +1075,7 @@ class WaveletSegment:
         # Added resol input as basic unit for read annotation file
         filename = fName + '.wav'  # 'train/kiwi/train1.wav'
         # Virginia: added resol for identify annotation txt
-        filenameAnnotation = fName + '-'+str(resol)+'sec.txt'  # 'train/kiwi/train1-1sec.txt'
+        filenameAnnotation = fName + '-res'+str(resol)+'sec.txt'  # 'train/kiwi/train1-1sec.txt'
         try:
             wavobj = wavio.read(filename)
         except:

@@ -3547,7 +3547,7 @@ class AviaNZ(QMainWindow):
                 ws = WaveletSegment.WaveletSegment()
                 # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
                 window = 1
-                inc = None
+                inc = 0.5
                 Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None, spInfo=speciesData, withzeros=True,window=window,inc=inc)
                 #Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None,spInfo=speciesData, withzeros=True)
                 print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
@@ -3657,7 +3657,7 @@ class AviaNZ(QMainWindow):
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window=1
-            inc= None
+            inc= 0.5
             nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recaa",window=window,inc=inc)
             #nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList,spInfo=speciesData, d=False, f=True, feature="recaafull")
             # Remove any negatively correlated nodes
@@ -3806,6 +3806,10 @@ class AviaNZ(QMainWindow):
     def prepareTrainData(self):
         """ Listener for the wavelet training dialog.
         """
+        # Virginia: added window and increment to prepare annotation file
+        # BE CAREFULL: they must be updated here
+        window = 1
+        inc= 0.5
         species = str(self.waveletTDialog.species.currentText())
         if species == 'Choose species...':
             msg = QMessageBox()
@@ -3834,7 +3838,7 @@ class AviaNZ(QMainWindow):
             for file in files:
                 if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
                     wavFile = root + '/' + file
-                    metaData = self.annotation2GT(wavFile, species)
+                    metaData = self.annotation2GT_OvWin(wavFile, species, window=window, inc=inc)
                     len_min.append(metaData[0])
                     len_max.append(metaData[1])
                     f_low.append(metaData[2])
@@ -3936,6 +3940,105 @@ class AviaNZ(QMainWindow):
                 f.write('\n')
             f.write('\n')
         # print(lenMin, lenMax, fLow, fHigh, sampleRate)
+        return [lenMin, lenMax, fLow, fHigh, sampleRate]
+
+    def annotation2GT_OvWin(self, wavFile, species, duration=0, window=1, inc=None):
+        """
+        This generates the ground truth for a given sound file
+        Given the AviaNZ annotation, returns the ground truth as a txt file
+        """
+        # Virginia:now it generate a text file for overlapping window
+        if inc == None:
+            inc = window
+            resol = window
+        else:
+            # Virginia: resolution is the "gcd" between window and inc. In this way I'm hoping to solve the case with
+            # 75% overlap
+            # maybe it is not useful
+            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
+
+        datFile = wavFile + '.data'
+        eFile = datFile[:-9] + '-res' + str(resol) + 'sec.txt'
+
+        if duration == 0:
+            wavobj = wavio.read(wavFile)
+            sampleRate = wavobj.rate
+            # Virginia: resolution length in samples
+            res_sr = resol * sampleRate
+            data = wavobj.data
+            duration = int(np.ceil(len(data) / res_sr))
+            # number of expected segments = number of center at inc distance
+
+        GT = np.zeros((duration, 4))
+        GT = GT.tolist()
+        GT[:][1] = str(0)
+        GT[:][2] = ''
+        GT[:][3] = ''
+        # fHigh and fLow for text boxes
+        fLow = sampleRate / 2
+        fHigh = 0
+        lenMin = duration
+        lenMax = 0
+        if os.path.isfile(datFile):
+            # print(datFile)
+            with open(datFile) as f:
+                segments = json.load(f)
+            for seg in segments:
+                if seg[0] == -1:
+                    continue
+                if not species.title() in seg[4]:
+                    continue
+                else:
+                    # print("lenMin, seg[1]-seg[0]", lenMin, seg[1]-seg[0])
+                    # Virginia: added this variable so the machine don't have to calculate it every rime
+                    dur_segm = seg[1] - seg[0]
+                    if lenMin > dur_segm:
+                        lenMin = dur_segm
+                    if lenMax < dur_segm:
+                        lenMax = dur_segm
+                    if fLow > seg[2]:
+                        fLow = seg[2]
+                    if fHigh < seg[3]:
+                        fHigh = seg[3]
+                    type = species.title()
+                    quality = ''
+                    # Virginia: start and end must be read in resol base
+                    s = int(math.floor(seg[0] / resol))
+                    e = int(math.ceil(seg[1] / resol))
+                    # Virginia: start and end printed in seconds
+                    print("start and end: ", s*resol, e*resol)
+                    # Virginia: I'm adding the segments that have this interval in their window
+                    # NB: if resol=window step2s=step2e=0
+                    for i in range(s, e):
+                        GT[i][1] = str(1)
+                        GT[i][2] = type
+                        GT[i][3] = quality
+
+                        # Empty files cannot be used now, and lead to problems
+        if len(GT) == 0:
+            print("ERROR: no calls for this species in file", datFile)
+            return
+
+        for line in GT:
+            if line[1] == 0.0:
+                line[1] = '0'
+            if line[2] == 0.0:
+                line[2] = ''
+            if line[3] == 0.0:
+                line[3] = ''
+                # now save GT as a .txt file
+        for i in range(1, duration + 1):
+            GT[i - 1][0] = str(i * resol)  # add time as the first column to make GT readable
+        # strings = (str(item) for item in GT)
+        with open(eFile, "w") as f:
+            for l, el in enumerate(GT):
+                string = '\t'.join(map(str, el))
+                for item in string:
+                    f.write(item)
+                f.write('\n')
+            f.write('\n')
+        print(eFile)
+        #print(lenMin, lenMax, fLow, fHigh, sampleRate)
         return [lenMin, lenMax, fLow, fHigh, sampleRate]
 
     def browseTrainData(self):
