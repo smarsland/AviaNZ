@@ -342,13 +342,13 @@ def testTrainers(dName, species, f1, f2, fs, cleanNodelist=False, feature='recse
                    'FreqRange': [minFrq, maxFrq]}  # last params are thr, M
     # returns 2d lists of nodes over M x thr, or stats over M x thr
 
-    thrList = np.linspace(0, 1, 5)  # np.linspace(0, 1, 5)
+    thrList = np.linspace(0.2, 1, 5)  # np.linspace(0, 1, 5)
     MList = np.linspace(0.25, 1, 4)  # np.linspace(0.25, 1.5, 3)
     #Virginia: added window and increment
     window = 1
     inc= None
     ws = WaveletSegment.WaveletSegment()
-    nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature='recsep',window=window, inc=inc)
+    nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature=feature,window=window, inc=inc)
 
     print("Filtered nodes: ", nodes)
     print("Negative nodes: ", negative_nodes)
@@ -447,8 +447,8 @@ def testWavelet(dName, species, withzeros, savedetections):
     print(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
 
 
-testTrainers('D:\\Nirosha\CHAPTER5\DATASETS\\NIbrownkiwi\Train\Ponui-train', "Kiwi", f1=1000, f2=8000, fs=16000, cleanNodelist=True, feature="recaa")
-# testWavelet('D:\\Nirosha\CHAPTER5\AnotatedDataset_Thesis_NP\S 5.5 Audio and annotation. Brown kiwi\\test', "Kiwi (Nth Is Brown)", withzeros=True, savedetections=False)
+# testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Train\Ponui-train', "Kiwi", f1=1000, f2=8000, fs=16000, cleanNodelist=True, feature="recsep")
+# testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test\Ponui_test', "Kiwi", withzeros=True, savedetections=False)
 
 
 import math
