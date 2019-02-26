@@ -3548,8 +3548,10 @@ class AviaNZ(QMainWindow):
                 # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
                 window = 1
                 inc = None
-                Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None, spInfo=speciesData, withzeros=True,window=window,inc=inc)
-                #Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None,spInfo=speciesData, withzeros=True)
+                Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, sampleRate=None,
+                                                                   spInfo=speciesData, d=False, f=True, rf=True,
+                                                                   withzeros=True, feature='recaa', savedetections=True,
+                                                                   window=window, inc=inc)
                 print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
                 if TP+FN != 0:
                     recall = TP/(TP+FN)
@@ -3658,14 +3660,15 @@ class AviaNZ(QMainWindow):
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window=1
             inc= None
-            nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False, f=True, feature="recmulti",window=window,inc=inc)
+            nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False,
+                                                            f=True, rf=True, feature="recaa", window=window, inc=inc)
             #nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList,spInfo=speciesData, d=False, f=True, feature="recaafull")
             # Remove any negatively correlated nodes
-            for lst in nodes:
-                for sub_lst in lst:
-                    for item in sub_lst:
-                        if item in negative_nodes:
-                            sub_lst.remove(item)
+            # for lst in nodes:
+            #     for sub_lst in lst:
+            #         for item in sub_lst:
+            #             if item in negative_nodes:
+            #                 sub_lst.remove(item)
             print("Filtered nodes: ", nodes)
             print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
 
