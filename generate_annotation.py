@@ -126,6 +126,14 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None):
                         type = 'Weow'
                     elif '(Roro)' in str(seg[4][0]):
                         type = 'Roro'
+                elif species == 'Robin':
+                    type = 'Robin'
+                elif species == 'Kakapo(B)':
+                    type = 'B'
+                elif species == 'Kakapo(C)':
+                    type = 'C'
+                elif species == 'Bittern':
+                    type = 'Bittern'
                 # Record call quality for evaluation purpose
                 if re.search('1', seg[4][0]):
                     quality = '1'  # v close
@@ -142,9 +150,13 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None):
                 e=int(math.ceil(seg[1]/resol))
                 print("start and end: ", s, e)
                 for i in range(s, e):
-                    GT[i][1] = str(1)
-                    GT[i][2] = type
-                    GT[i][3] = quality
+                    # when there are overlapping calls priority for good quality one
+                    if GT[i][1] == '1' and GT[i][3] >= quality:
+                        continue
+                    else:
+                        GT[i][1] = str(1)
+                        GT[i][2] = type
+                        GT[i][3] = quality
 
     # Empty files cannot be used now, and lead to problems
     if len(GT)==0:
@@ -174,7 +186,6 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None):
     print(lenMin, lenMax, fLow, fHigh, sampleRate)
     #return [lenMin, lenMax, fLow, fHigh, sampleRate]
 
-#Virginia:change directory name 
-# genGT('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Train\Ponui-train',species='Kiwi',window=1, inc=0.5)
-
+#Virginia:change directory name
+# genGT('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test\Tier1-test\Set2_29hrs',species='Kiwi',window=1, inc=1)
 

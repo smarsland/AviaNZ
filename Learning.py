@@ -744,7 +744,7 @@ def TrainClassifier(dir, species, feature, clf=None):
         model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_GMM.joblib')
-    if clf:
+    if not clf:
         # Save the model
         dump(model, dir + '\\' + species + '_' + clf + '.joblib')
         learners.performTest(model)
@@ -954,8 +954,9 @@ def computeMFCC(data, sampleRate, n_mfcc, delta):
     return mfcc
 
 
-# generateDataset(dir_src="D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train", feature='WE+MFCCraw_all', species='Kiwi (Nth Is Brown)',filemode='long', wpmode='new', dir_out="D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train")
-# TrainClassifier('D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train', 'Kiwi (Nth Is Brown)', 'WEraw_all', clf='kNN')
+# generateDataset(dir_src="D:\AviaNZ\Sound Files\Brownkiwi_thesis\\test", feature='MFCCraw_all', species='Kiwi',filemode='long', wpmode='new', dir_out="D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train")
+# TrainClassifier('D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train', 'Kiwi', 'MFCCraw_all', clf='kNN')
+# testClassifiers(dir_clf='D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train', dir_test='D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train', species='Kiwi', feature='MFCCraw_all',clf='kNN')
 
 
 
@@ -967,8 +968,7 @@ def computeMFCC(data, sampleRate, n_mfcc, delta):
 
 
 
-
-# IGNORE THE CODE BELOW FOR NOW
+# IGNORE THE FOLLOWING CODE FOR NOW
 def testScoring():
     from sklearn import svm, datasets
     from sklearn.model_selection import cross_val_score

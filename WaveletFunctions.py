@@ -299,7 +299,7 @@ class WaveletFunctions:
             node = (node-1)//2
             lvl = lvl - 1
 
-        if len(data)>310*16000 and antialias:
+        if len(data) > 310*16000 and antialias:
             print("Size of signal to be reconstructed is", len(data))
             print("ERROR: processing of big data chunks is currently disabled. Recommend splitting files to below 5 min chunks. Enable this only if you are ready to wait.")
             return
