@@ -353,6 +353,7 @@ class AviaNZ(QMainWindow):
             self.showInvSpec.setChecked(False)
 
             specMenu.addSeparator()
+            specMenu.addAction("Show training diagnostics",self.showDiagnosticDialog)
             extraMenu = specMenu.addMenu("Diagnostic plots")
             extraGroup = QActionGroup(self)
             for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Filter band energy", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
@@ -3256,6 +3257,25 @@ class AviaNZ(QMainWindow):
             #     self.updateLabel(self.segments[self.box1id][4])
         self.statusLeft.setText("Ready")
 
+    def showDiagnosticDialog(self):
+        """ Create the dialog to set diagnostic plot parameters.
+        """
+        if not hasattr(self, 'diagnosticDialog'):
+            self.diagnosticDialog = Dialogs.Diagnostic(self.FilterFiles)
+        self.diagnosticDialog.show()
+        self.diagnosticDialog.activateWindow()
+        self.diagnosticDialog.activate.clicked.connect(self.setDiagnostic)
+
+    def setDiagnostic(self):
+        """ Takes parameters returned from DiagnosticDialog
+            and draws the training diagnostic plots.
+        """
+        # take values: -2/-3/-4 for AA types, -2/-3 for En/Spec plot
+        [filter, aaType, plotType] = self.diagnosticDialog.getValues()
+        print(filter, aaType, plotType)
+
+        # draw
+
     def showSpectrogramDialog(self):
         """ Create the spectrogram dialog when the button is pressed.
         """
@@ -3264,8 +3284,6 @@ class AviaNZ(QMainWindow):
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
-        # This next line was for dynamic update.
-        # self.connect(self.spectrogramDialog, SIGNAL("changed"), self.spectrogram)
 
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
