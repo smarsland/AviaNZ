@@ -91,7 +91,7 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None):
         for seg in segments:
             if seg[0] == -1:
                 continue
-            if not species.title() in seg[4]:
+            if not species.title() in seg[4][0]:
                 continue
             else:
                 # print("lenMin, seg[1]-seg[0]", lenMin, seg[1]-seg[0])
@@ -105,16 +105,58 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None):
                     fLow = seg[2]
                 if fHigh < seg[3]:
                     fHigh = seg[3]
-                type = species.title()
-                quality = ''
+                # Record call type for evaluation purpose
+                if species == 'Kiwi (Nth Is Brown)' or species == 'Kiwi':
+                    # check male, female, duet calls
+                    if '(M)' in str(seg[4][0]):
+                        type = 'M'
+                    elif '(F)' in str(seg[4][0]):
+                        type = 'F'
+                    elif '(D)' in str(seg[4][0]):
+                        type = 'D'
+                    else:
+                        type = 'K'
+                elif species == 'Morepork':
+                    # check mp, tril, weow, roro calls
+                    if '(Mp)' in str(seg[4][0]):
+                        type = 'Mp'
+                    elif '(Tril)' in str(seg[4][0]):
+                        type = 'Tril'
+                    elif '(Weow)' in str(seg[4][0]):
+                        type = 'Weow'
+                    elif '(Roro)' in str(seg[4][0]):
+                        type = 'Roro'
+                elif species == 'Robin':
+                    type = 'Robin'
+                elif species == 'Kakapo(B)':
+                    type = 'B'
+                elif species == 'Kakapo(C)':
+                    type = 'C'
+                elif species == 'Bittern':
+                    type = 'Bittern'
+                # Record call quality for evaluation purpose
+                if re.search('1', seg[4][0]):
+                    quality = '1'  # v close
+                elif re.search('2', seg[4][0]):
+                    quality = '2'  # close
+                elif re.search('3', seg[4][0]):
+                    quality = '3'  # fade
+                elif re.search('4', seg[4][0]):
+                    quality = '4'  # v fade
+                elif re.search('5', seg[4][0]):
+                    quality = '5'  # v v fade
                 #Virginia: start and end must be read in resol base
                 s=int(math.floor(seg[0]/resol))
                 e=int(math.ceil(seg[1]/resol))
                 print("start and end: ", s, e)
                 for i in range(s, e):
-                    GT[i][1] = str(1)
-                    GT[i][2] = type
-                    GT[i][3] = quality
+                    # when there are overlapping calls priority for good quality one
+                    if GT[i][1] == '1' and GT[i][3] >= quality:
+                        continue
+                    else:
+                        GT[i][1] = str(1)
+                        GT[i][2] = type
+                        GT[i][3] = quality
 
     # Empty files cannot be used now, and lead to problems
     if len(GT)==0:
@@ -144,7 +186,6 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None):
     print(lenMin, lenMax, fLow, fHigh, sampleRate)
     #return [lenMin, lenMax, fLow, fHigh, sampleRate]
 
-#Virginia:change directory name 
-genGT('/home/listanvirg/Data/',species='Kiwi (Nth Is Brown)',window=1)
-
+#Virginia:change directory name
+# genGT('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test\Tier1-test\Set2_29hrs',species='Kiwi',window=1, inc=1)
 
