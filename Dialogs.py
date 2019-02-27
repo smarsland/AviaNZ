@@ -370,6 +370,61 @@ class addNoiseData(QDialog):
         return [self.level.checkedButton().text(),types]
 
 #======
+class Diagnostic(QDialog):
+    # Class for the diagnostic dialog box
+    def __init__(self, filters, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Diagnostic Plot Options')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setMinimumWidth(300)
+
+        # species / filter
+        self.filterLabel = QLabel("Select filter to use")
+        self.filter = QComboBox()
+        # add filter file names to combobox
+        self.filter.addItems(filters)
+
+        # antialiasing
+        self.aaLabel = QLabel("Select antialiasing type:")
+        self.aaGroup = QButtonGroup()
+        aaButtons = [QRadioButton("No AA"), QRadioButton("Fast partial AA"), QRadioButton("Full AA")]
+        aaButtons[0].setChecked(True)
+        for a in aaButtons:
+            self.aaGroup.addButton(a)
+
+        # spec or energy plot
+        self.plotLabel = QLabel("Select plot type:")
+        self.plotGroup = QButtonGroup()
+        plotButtons = [QRadioButton("Filter band energy"), QRadioButton("Reconstructed spectrogram")]
+        plotButtons[0].setChecked(True)
+        for a in plotButtons:
+            self.plotGroup.addButton(a)
+
+        # buttons
+        self.activate = QPushButton("Make Plots")
+
+        # layout
+        Box = QVBoxLayout()
+        Box.addWidget(self.filterLabel)
+        Box.addWidget(self.filter)
+
+        Box.addWidget(self.aaLabel)
+        for a in aaButtons:
+            Box.addWidget(a)
+
+        Box.addWidget(self.plotLabel)
+        for a in plotButtons:
+            Box.addWidget(a)
+
+        Box.addWidget(self.activate)
+
+        # Now put everything into the frame
+        self.setLayout(Box)
+
+    def getValues(self):
+        return [self.filter.currentText(), self.aaGroup.checkedId(), self.plotGroup.checkedId()]
+
+#======
 class WaveletTrain(QDialog):
     # Class for the segmentation dialog box
     # TODO: add the wavelet params
