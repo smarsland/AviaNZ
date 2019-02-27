@@ -213,13 +213,11 @@ class WaveletSegment:
 
         return r
 
-
     def sortListByChild(self, order):
         """ Inputs is a list sorted into order of correlation.
         This functions resort so that any children of the current node that are in the list go first.
         Assumes that there are five levels in the tree (easy to extend, though)
         """
-
         newlist = []
         currentIndex = 0
         # Need to keep track of where each level of the tree starts
@@ -274,7 +272,6 @@ class WaveletSegment:
         This functions resort so that any children of the current node that are in the list go first.
         Assumes that there are five levels in the tree (easy to extend, though)
         """
-
         newlist = []
         currentIndex = 0
         # Need to keep track of where each level of the tree starts
@@ -320,9 +317,117 @@ class WaveletSegment:
 
         return newlist
 
+    def detectCalls(self, wp, sampleRate, nodelist, spInfo={}, rf=True, duration=300, annotation=None, window=1, inc=None):
+        """
+        For both TRAIN and NON_TRAIN modes
+        ANTIALIASED version ('recaa') of detectCalls_old.
+        Regenerates the signal from the node and threshold.
+        Args:
+        1. wp - homebrew wavelet packet (list of nodes)
+        2. sampleRate - integer
+        3. node - will reconstruct signal from this single node
+        4. spInfo - for passing thr, M, and frequency range
+        5. annotation - for calculating noise properties during training
+        """
 
-    # USE THIS FUNCTION FOR TESTING AND ACTUAL USE. FOR TRAINING USE detectCalls_sep
-    def detectCalls(self, wp, sampleRate, listnodes=[], spInfo={}, withzeros=True, window=1, inc=None):
+        # Virginia: this function now works with OVERLAPPING sliding windows
+        # Added window and increment input.
+        # Window is window length in seconds
+        # inc is increment length in seconds
+        # Changed detection to work with sliding overlapping window
+        # It compute energy in "centered" window.
+
+        # Virginia: if no increment I set it equal to window
+        if inc == None:
+            inc = window
+            resol = window
+        else:
+            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
+
+        if sampleRate == 0:
+            sampleRate = self.sampleRate
+
+        # Virginia: added window sample rate
+        win_sr = math.ceil(window * sampleRate)
+        # Half window length in samples
+        #win_sr2 = math.ceil(win_sr/2)
+        # Increment length in samples
+        inc_sr = math.ceil(inc * sampleRate)
+        # Resolution length in samples
+        resol_sr = math.ceil(resol * sampleRate)
+
+        thr = spInfo['WaveletParams'][0]
+        # Compute the number of samples in a window -- species specific
+        # Virginia: changed sampleRate with win_sr
+        M = int(spInfo['WaveletParams'][1] * win_sr)
+        nw = int(np.ceil(duration / inc_sr))
+        detected = np.zeros((nw, len(nodelist)))
+        #Virginia: added detected that can match with annotation
+        na = int(np.ceil(duration / resol_sr)) #number of segments
+        detect_ann=np.zeros(na) #aqnnotation
+        step_w = int(math.ceil(window/resol)) #window length in resolution scale
+        step_inc = int(math.ceil(inc/resol)) #increment length in resolution scale
+
+        count = 0
+        for node in nodelist:
+            # put WC from test node(s) on the new tree
+            C = self.WaveletFunctions.reconstructWP2(wp, self.WaveletFunctions.wavelet, node, True)
+            # Sanity check for all zero case
+            if not any(C):
+                continue    # return np.zeros(nw)
+
+            if len(C) > duration:
+                C = C[:duration]
+
+            # Filter
+            if rf:
+                C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0],
+                                                high=spInfo['FreqRange'][1], order=10)
+            C = np.abs(C)
+            N = len(C)
+            # Virginia: number of segments = number of centers of length inc
+            # nw=int(np.ceil(N / inc_sr))
+            # detected = np.zeros(nw)
+
+            # Compute the energy curve (a la Jinnai et al. 2012)
+            E = ce.EnergyCurve(C, M)
+            # Compute threshold using mean & sd from non-call sections
+            # Virginia: changed the base. I'm using inc_sr as a base.
+            if annotation is not None:
+                C = C[np.repeat(annotation == 0, resol_sr)]
+            C = np.log(C)
+            threshold = np.exp(np.mean(C) + np.std(C) * thr)
+
+            # If there is a call anywhere in the window, report it as a call
+            # Virginia-> for each sliding window:
+            # start is the sample start of a window
+            # end is the sample end of a window
+            # The window are sliding windows: starting from data start
+            #center = int(math.ceil(inc_sr/2)) #keeped if neede in future
+            start = 0 #inizializzation
+            for j in range(nw):
+                #start = max(0, center - win_sr2) keeped if needed in funture
+                end = min(N, start + win_sr)
+                detected[j, count] = np.any(E[start:end] > threshold)
+                start += inc_sr  # Virginia: corrected
+            count += 1
+
+        detected = np.max(detected, axis=1)
+
+        j=0
+        for i in range(nw):
+            if detected[i] == 1:
+                detect_ann[j:j+step_w] = 1
+            j += step_inc
+
+        del C
+        gc.collect()
+        return detect_ann
+
+
+    def detectCalls_old(self, wp, sampleRate, listnodes=[], spInfo={}, withzeros=True, window=1, inc=None):
+        # TODO: to be removed, kept as a backup
+        # Old version of WP
         # For a recording (not for training) and the set of nodes
         # Regenerate the signal from each node and threshold
         # Output detections (OR version)
@@ -343,7 +448,6 @@ class WaveletSegment:
             sampleRate = self.sampleRate
         thr = spInfo['WaveletParams'][0]
 
-
         # Virginia window length in samples
         win_sr = math.ceil(window * sampleRate)
         # Half window length in samples
@@ -354,7 +458,7 @@ class WaveletSegment:
         resol_sr = math.ceil(resol * sampleRate)
         # Compute the number of samples in a window -- species specific
         # Virginia: changed sampleRate with win_sr
-        M = int(spInfo['WaveletParams'][1] * win_sr / 2.0)
+        M = int(spInfo['WaveletParams'][1] * win_sr)
         # Virginia: number of segments = number of window centers of length inc
         nw= int(np.ceil(len(wp.data) / inc_sr))
         detected = np.zeros((nw, len(listnodes)))
@@ -363,9 +467,6 @@ class WaveletSegment:
         detect_ann=np.zeros(na) #aqnnotation
         step_w=int(math.ceil(window/resol)) #window length in resolution scale
         step_inc=int(math.ceil(inc/resol)) #increment length in resolution scale
-
-        #print('detectCalls')
-        #print((nw,na))
 
         count = 0
         for index in listnodes:
@@ -416,9 +517,9 @@ class WaveletSegment:
         return detect_ann
 
 
-
-    def detectCalls_sep(self, new_wp, wp, sampleRate, nodes, spInfo={},window=1, inc=None):
-        # For training
+    def detectCalls_train_old(self, new_wp, wp, sampleRate, nodes, spInfo={},window=1, inc=None, annots=None):
+        # TODO: to be removed, kept as a backup
+        # For training - old wp
         # Regenerate the signal from the node and threshold
         # Output detection
         # Accepts nodes argument as list or as single node
@@ -449,7 +550,7 @@ class WaveletSegment:
         resol_sr = math.ceil(resol * sampleRate)
         # Compute the number of samples in a window -- species specific
         # Virginia: changed sampleRate with win_sr
-        M = int(spInfo['WaveletParams'][1] * win_sr / 2.0)
+        M = int(spInfo['WaveletParams'][1] * win_sr)
         # Virginia: number of segments = number of centers of length inc
         nw=int(np.ceil(len(wp.data) / inc_sr))
         detected = np.zeros(nw)
@@ -480,6 +581,12 @@ class WaveletSegment:
         N = len(C)
         # Compute the energy curve (a la Jinnai et al. 2012)
         E = ce.EnergyCurve(C, M)
+        # Compute threshold using mean & sd from non-call sections
+        # Virginia: changed the base. I'm using inc_sr as a base.
+        # CHECK
+        if annots is not None:
+            C = C[:len(annots) * resol_sr]
+            C = C[np.repeat(annots == 0, resol_sr)]
         # Compute threshold
         threshold = np.exp(np.mean(np.log(C)) + np.std(np.log(C)) * thr)
 
@@ -504,107 +611,6 @@ class WaveletSegment:
             j+=step_inc
 
         del C
-        gc.collect()
-        return detect_ann
-
-    # Virginia:
-    def detectCalls_aa(self, wp, sampleRate, node, spInfo={}, annots=None, window=1,inc=None):
-        """
-        For training. ANTIALIASED version of detectCalls_sep.
-        Regenerates the signal from the node and threshold.
-        Args:
-        1. wp - homebrew wavelet packet (list of nodes)
-        2. sampleRate - integer
-        3. node - will reconstruct signal from this single node
-        4. spInfo - for passing thr, M, and frequency range
-        5. annotation - for calculating noise properties during training
-        """
-
-        # Virginia: this function now works with OVERLAPPING sliding windows
-        # Added window and increment input.
-        # Window is window length in seconds
-        #inc is increment length in seconds
-        # Changed detection to work with sliding overlapping window
-        # It compute energy in "centered" window.
-
-        # Virginia: if no increment I set it equal to window
-        if inc == None:
-            inc = window
-            resol = window
-        else:
-            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
-
-        if sampleRate == 0:
-            sampleRate = self.sampleRate
-
-        # Virginia: added window sample rate
-        win_sr = math.ceil(window * sampleRate)
-        # Half window length in samples
-        #win_sr2 = math.ceil(win_sr/2)
-        # Increment length in samples
-        inc_sr = math.ceil(inc * sampleRate)
-        # Resolution length in samples
-        resol_sr = math.ceil(resol * sampleRate)
-
-        thr = spInfo['WaveletParams'][0]
-        # Compute the number of samples in a window -- species specific
-        # Virginia: changed sampleRate with win_sr
-        M = int(spInfo['WaveletParams'][1] * win_sr / 2.0)
-
-        # put WC from test node(s) on the new tree
-        C = self.WaveletFunctions.reconstructWP2(wp, self.WaveletFunctions.wavelet, node, True)
-
-        # The following can be used for caching - just pass C as argument,
-        # and copy tempC to cachedC on good node addition.
-        # # store this reconstruction. If node is accepted, it will be cached.
-        # self.tempC = copy.deepcopy(C)
-
-        # Filter
-        C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1],
-                                        order=10)
-        C = np.abs(C)
-        N = len(C)
-        # Virginia: number of segments = number of centers of length inc
-        nw=int(np.ceil(N / inc_sr))
-        detected = np.zeros(nw)
-        #Virginia: added detected that can match with annotation
-        na= int(np.ceil(N / resol_sr)) #number of segments
-        detect_ann=np.zeros(na) #aqnnotation
-        step_w=int(math.ceil(window/resol)) #window length in resolution scale
-        step_inc=int(math.ceil(inc/resol)) #increment length in resolution scale
-
-        #print('detectCalls_aa')
-        #print((nw, na))
-
-        # Compute the energy curve (a la Jinnai et al. 2012)
-        E = ce.EnergyCurve(C, M)
-        # Compute threshold using mean & sd from non-call sections
-        # Virginia: changed the base. I'm using inc_sr as a base.
-        # CHECK
-        if annots is not None:
-            C = C[:len(annots) * resol_sr]
-            C = C[np.repeat(annots == 0, resol_sr)]
-        C = np.log(C)
-        threshold = np.exp(np.mean(C) + np.std(C) * thr)
-
-        # If there is a call anywhere in the window, report it as a call
-        # Virginia-> for each sliding window:
-        # start is the sample start of a window
-        # end is the sample end of a window
-        # The window are sliding windows: starting from data start
-        #center = int(math.ceil(inc_sr/2)) #keeped if neede in future
-        start=0 #inizializzation
-        for j in range(nw):
-            #start = max(0, center - win_sr2) keeped if needed in funture
-            end = min(N, start + win_sr)
-            detected[j] = np.any(E[start:end] > threshold)
-            start += inc_sr #Virginia: corrected
-        del C
-        j=0
-        for i in range(nw):
-            if detected[i]==1:
-                detect_ann[j:j+step_w]=1
-            j+=step_inc
         gc.collect()
         return detect_ann
 
@@ -643,7 +649,8 @@ class WaveletSegment:
             filteredDenoisedData = denoisedData
         return filteredDenoisedData
 
-    def waveletSegment_train(self, dirName, thrList, MList, spInfo={}, d=False, f=False, feature=None,window=1,inc=None):
+    def waveletSegment_train(self, dirName, thrList, MList, spInfo={}, d=False, f=False, rf=True, feature='recaa',
+                             window=1, inc=None):
         """ Main caller of wavelet training, called from AviaNZ.py and _batch.py.
             Used as an entry point for switching between various training methods,
             so just passes the arguments to the right training method and returns all the results."""
@@ -659,7 +666,7 @@ class WaveletSegment:
         keepaudio = (feature=="recsep" or feature=="recmulti" or feature=="recaa" or feature=="recaafull")
         # recommend using wpmode="new", because it is fast and almost alias-free.
         # Virginia: added window and inc input
-        self.loadDirectory(dirName, spInfo, d, f, keepaudio, "new",window, inc)
+        self.loadDirectory(dirName, spInfo, d, f, keepaudio, "new", False, window, inc)
 
         # Argument _feature_ will determine which detectCalls function is used:
         # feature=="ethr":
@@ -688,10 +695,10 @@ class WaveletSegment:
         # energies are stored in self.waveletCoefs,
         # or can be read-in from the export file.
         # Virginia: added window and inc input
-        res = self.waveletSegment_train_sep(thrList, MList, spInfo, feature,window, inc)
+        res = self.gridSearch(thrList, MList, spInfo, rf, feature, window, inc)
         return res
 
-    def loadDirectory(self, dirName, spInfo, denoise, filter, keepaudio, wpmode,window=1, inc=None):
+    def loadDirectory(self, dirName, spInfo, denoise, filter, keepaudio, wpmode,savedetections, window=1, inc=None):
         """ (moved out from individual training functions)
             Finds and reads wavs from directory dirName.
             Computes a WP and stores the node energies for each second.
@@ -722,12 +729,12 @@ class WaveletSegment:
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res'+str(resol)+'sec.txt' in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
                     opstartingtime = time.time()
                     wavFile = root + '/' + file[:-4]
                     # adds to annotation and filelength arrays, sets self.data:
                     # Virginia: added resol input
-                    self.loadData(wavFile,window, resol, trainPerFile=False)
+                    self.loadData(wavFile,window, resol, savedetections=savedetections,trainPerFile=False)
 
                     # denoise and store actual audio data:
                     # note: preprocessing is a side effect on self.data
@@ -749,9 +756,9 @@ class WaveletSegment:
 
         self.annotation = np.array(self.annotation)
         # Prepare WC data and annotation targets into a matrix for saving
-        WC = np.transpose(self.waveletCoefs)
-        ann = np.reshape(self.annotation, (len(self.annotation), 1))
-        MLdata = np.append(WC, ann, axis=1)
+        # WC = np.transpose(self.waveletCoefs)
+        # ann = np.reshape(self.annotation, (len(self.annotation), 1))
+        # MLdata = np.append(WC, ann, axis=1)
         # np.savetxt(os.path.join(dirName, "energies.tsv"), MLdata, delimiter="\t")
         print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(self.annotation), len(self.annotation)))
 
@@ -804,7 +811,7 @@ class WaveletSegment:
 
         return (files)
 
-    def waveletSegment_train_sep(self, thrList, MList, spInfo={}, feature=None, window=1, inc=None):
+    def gridSearch(self, thrList, MList, spInfo={}, rf=True, feature=None, window=1, inc=None):
         """ Take list of files and other parameters,
              load files, compute wavelet coefficients and reuse them in each (M, thr) combination,
              perform grid search over thr and M parameters,
@@ -820,15 +827,15 @@ class WaveletSegment:
         # inc= increment length in seconds
         # If there is inc I call other functions to work with overlapping windows
 
-
-
         shape = (len(MList), len(thrList))
         tpa = np.zeros(shape)
         fpa = np.zeros(shape)
         tna = np.zeros(shape)
         fna = np.zeros(shape)
         finalnodes = []
-        negative_nodes = []
+        # negative_nodes = []
+        # avoid low-level nodes
+        avoid_nodes = list(range(15))
 
         # Grid search over M x thr x Files
         for indexM in range(len(MList)):
@@ -842,19 +849,23 @@ class WaveletSegment:
                 detected_all = []
                 # loop over files:
                 for indexF in range(len(self.filelengths)):
-                    # load the annots and WCs for this file
+                    # load the annotation and WCs for this file
                     annotation = self.annotation[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF + 1]))]
 
                     # Find 10 most positively correlated nodes
                     nodeCorrs = self.nodeCorrs[:, indexF]
-                    nodes = np.flip(np.argsort(nodeCorrs)[-10:])
+                    nodes1 = np.flip(np.argsort(nodeCorrs)[:]).tolist()
+                    nodes = []
+                    for item in nodes1:
+                        if not item in avoid_nodes:
+                            nodes.append(item)
+                    nodes = nodes[0:10]
 
-                    # Keep track of negative correlated nodes
-                    negative_nodes.extend(np.argsort(nodeCorrs)[:10])
+                    # # Keep track of negative correlated nodes
+                    # negative_nodes.extend(np.argsort(nodeCorrs)[:10])
 
-                    # Now for Nirosha's sorting
-                    # Basically, for each node, put any of its children (and their children, iteratively) that are in the list in front of it
-                    nodes = self.sortListByChild(np.ndarray.tolist(nodes))
+                    # Sort the nodes, put any of its children (and their children, iteratively) that are in the list in front of it
+                    nodes = self.sortListByChild(nodes)
 
                     # These nodes refer to the un-rooted tree, so add 1 to get the real indices
                     nodes = [n + 1 for n in nodes]
@@ -874,10 +885,6 @@ class WaveletSegment:
                         # Allocate memory for new WP
                         new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric',
                                                     maxlevel=wp.maxlevel)
-                    # Generate a full 5 level wavelet packet decomposition, "our way"
-                    # if feature=="recaa":
-                    #    wp = self.WaveletFunctions.WaveletPacket(data=self.audioList[indexF], wavelet=self.WaveletFunctions.wavelet, mode='symmetric', maxlevel=5, antialias=False)
-
                     # Read a full 5 level packet decomposition from antialiased results
                     if feature == "recaafull" or feature == "recaa":
                         print("reading WP from file", self.tempfiles[indexF])
@@ -898,20 +905,21 @@ class WaveletSegment:
                         # or no reconstruction, just energy-based detection (ethr...)
                         # Virginia: added window and incr input. Now just one version of functions
                         if feature == "recsep":
-                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=[node],
-                                                              spInfo=spInfo, window=window,inc=inc)
+                            detected_c = self.detectCalls_train_old(new_wp, wp, spInfo['SampleRate'], nodes=[node],
+                                                              spInfo=spInfo, window=window, inc=inc, annots=annotation)
                         if feature == "recmulti":
-                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=testlist,
-                                                              spInfo=spInfo, window=window,inc=inc)
+                            detected_c = self.detectCalls_train_old(new_wp, wp, spInfo['SampleRate'], nodes=testlist,
+                                                              spInfo=spInfo, window=window, inc=inc)
                         if feature == "recaa" or feature == "recaafull":
-                            detected_c = self.detectCalls_aa(wp, spInfo['SampleRate'], node=node, spInfo=spInfo,
-                                                             annots=annotation, window=window,inc=inc)
+                            detected_c = self.detectCalls(wp, spInfo['SampleRate'], nodelist=[node], spInfo=spInfo,
+                                                          rf=rf, duration=len(self.audioList[indexF]),
+                                                          annotation=annotation, window=window, inc=inc)
                         if feature == "ethr" or feature == "elearn":
                             print("not implemented yet")
                                 # TODO
                                 # Non-reconstructing detectors:
                                 # detected_c = self.detectCalls_en(self.audioList[indexF], self.sampleRate, nodes=testlist)
-                            detected_c = self.detectCalls_sep(new_wp, wp, spInfo['SampleRate'], nodes=[node],spInfo=spInfo, window=window, inc=inc)
+                            detected_c = self.detectCalls_train_old(new_wp, wp, spInfo['SampleRate'], nodes=[node], spInfo=spInfo, window=window, inc=inc)
 
                         #Virginia: I'm supposing that detection are of the same length of annaotation on a window base
                         # adjust for rounding errors:
@@ -956,28 +964,26 @@ class WaveletSegment:
                 fpa[indexM, indext] = fp
                 tna[indexM, indext] = tn
                 fna[indexM, indext] = fn
-                print("Iteration t %d/%d complete\n----------------" % (indext + 1, len(thrList)))
+                print("Iteration t %d/%d complete\t thr=%f\n---------------- " % (indext + 1, len(thrList), thr))
             # One row done, store nodes
             finalnodes.append(finalnodesT)
-            print("Iteration M %d/%d complete\n----------------\n----------------" % (indexM + 1, len(MList)))
-        # Convert negative correlated nodes
-        negative_nodes = [n + 1 for n in negative_nodes]
-        # reduce to unique nodes:
-        negative_nodes = set(negative_nodes)
-        negative_nodes = list(negative_nodes)
-        print("Negative nodes:", negative_nodes)
-        return finalnodes, tpa, fpa, tna, fna, negative_nodes
+            print("Iteration M %d/%d complete\t M=%f\n----------------\n---------------- " % (indexM + 1, len(MList), M))
+        # # Convert negative correlated nodes
+        # negative_nodes = [n + 1 for n in negative_nodes]
+        # # reduce to unique nodes:
+        # negative_nodes = set(negative_nodes)
+        # negative_nodes = list(negative_nodes)
+        # print("Negative nodes:", negative_nodes)
+        return finalnodes, tpa, fpa, tna, fna
 
 
-    def waveletSegment_test(self, dirName, sampleRate=None, listnodes=None, spInfo={}, d=False, f=False, withzeros=True,
-                            savedetections=False, window=1, inc=None):
+    def waveletSegment_test(self, dirName, sampleRate=None, listnodes=None, spInfo={}, d=False, f=False, rf=True, withzeros=True,
+                            feature='recaa', savedetections=False, window=1, inc=None):
         # Virginia changes
         # Added window and inc input
         # window -> window length in seconds
         # Inc -> increment length in seconds
         # Resol is the base of the annotations
-
-        #attempt to merge detection functions
 
         # Virginia: if no increment I set resol equal of window otherwise it is equal to inc
         if inc==None:
@@ -998,16 +1004,13 @@ class WaveletSegment:
         self.filenames = []
         detected = np.array([])
 
-        # populate storage
-        for root, dirs, files in os.walk(str(dirName)):
-            for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res'+str(resol)+'sec.txt' in files:
-                    wavFile = root + '/' + file[:-4]
-                    # Load data and annotation
-                    # (preprocess only requires SampleRate and FreqRange from spInfo)
-                    self.loadData(wavFile, window=window, resol=resol,savedetections=savedetections) #Virginia: add window and resolution
-                    filteredDenoisedData = self.preprocess(spInfo, d=d, f=f)
-                    self.audioList.append(filteredDenoisedData)
+        self.loadDirectory(dirName, spInfo, d, f, keepaudio=True, wpmode="new", savedetections=savedetections, window=window, inc=inc)
+
+        # not sure if this is useful for other modes, but definitely needed for recaafull
+        if feature == "recaa":
+            self.tempfiles = self.generateWPs(self.WaveletFunctions.wavelet, 5, wpmode="new")
+        if feature == "recaafull":
+            self.tempfiles = self.generateWPs(self.WaveletFunctions.wavelet, 5, wpmode="aa")
 
         # remember to convert main structures to np arrays
         self.annotation = np.array(self.annotation)
@@ -1016,11 +1019,30 @@ class WaveletSegment:
         # wavelet decomposition and call detection
         for fileId in range(len(self.audioList)):
             print('Processing file # ', fileId + 1)
-            wp = pywt.WaveletPacket(data=self.audioList[fileId], wavelet=self.WaveletFunctions.wavelet,
-                                    mode='symmetric', maxlevel=5)
+
+            wp = []
+            # prepare for reconstructing detectors
+            if feature == "recsep" or feature == "recmulti":
+                # Generate a full 5 level wavelet packet decomposition
+                wp = pywt.WaveletPacket(data=self.audioList[fileId], wavelet=self.WaveletFunctions.wavelet,
+                                        mode='symmetric', maxlevel=5)
+                # # Allocate memory for new WP
+                # new_wp = pywt.WaveletPacket(data=None, wavelet=wp.wavelet, mode='symmetric', maxlevel=wp.maxlevel)
+
+            # Read a full 5 level packet decomposition from antialiased results
+            if feature == "recaafull" or feature == "recaa":
+                print("reading WP from file", self.tempfiles[fileId])
+                file = open(self.tempfiles[fileId], 'rb')
+                wp = pickle.load(file)
+                file.close()
+                # TODO: os.remove(file)
+
             #Virginia: added window and inc input
-            detected_c = self.detectCalls(wp, self.sampleRate, listnodes=nodes, spInfo=spInfo, withzeros=withzeros, window=window,inc=inc)
-            # detected_c = detected_c[0:math.ceil(len(self.audioList[fileId])/self.sampleRate)]
+            if feature == 'recsep':
+                detected_c = self.detectCalls_old(wp, self.sampleRate, listnodes=nodes, spInfo=spInfo, withzeros=withzeros, window=window, inc=inc)
+            elif feature == 'recaa':
+                detected_c = self.detectCalls(wp, self.sampleRate, nodelist=nodes, spInfo=spInfo, rf=rf,
+                                              duration=len(self.audioList[fileId]), annotation=None, window=1, inc=None)
             detected = np.concatenate((detected, detected_c))
             # Generate .data for this file
             # Merge neighbours in order to convert the detections into segments
@@ -1072,7 +1094,7 @@ class WaveletSegment:
         # Added resol input as basic unit for read annotation file
         filename = fName + '.wav'  # 'train/kiwi/train1.wav'
         # Virginia: added resol for identify annotation txt
-        filenameAnnotation = fName + '-res'+str(resol)+'sec.txt'  # 'train/kiwi/train1-res1sec.txt'
+        filenameAnnotation = fName + '-res'+str(float(resol))+'sec.txt'  # 'train/kiwi/train1-res1sec.txt'
         try:
             wavobj = wavio.read(filename)
         except:
