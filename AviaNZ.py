@@ -356,7 +356,7 @@ class AviaNZ(QMainWindow):
             specMenu.addAction("Show training diagnostics",self.showDiagnosticDialog)
             extraMenu = specMenu.addMenu("Diagnostic plots")
             extraGroup = QActionGroup(self)
-            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Filter band energy", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
+            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
                 em = extraMenu.addAction(ename)
                 em.setCheckable(True)
                 if ename == self.extra:
@@ -1604,6 +1604,7 @@ class AviaNZ(QMainWindow):
         self.widthWindow.setValue(self.convertSpectoAmpl(maxX-minX))
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), update=True, padding=0)
         self.p_spec.setXRange(minX, maxX, update=True, padding=0)
+        self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), update=True, padding=0)
 
         # I know the next two lines SHOULD be unnecessary. But they aren't!
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
@@ -1706,30 +1707,12 @@ class AviaNZ(QMainWindow):
         self.extra = plotname
 
         # clear plot before updating/proceeding
-        try:
-            # self.p_plot.removeItem(self.plotExtra)
-            self.p_plot.clear()
-        except Exception as e:
-            print(e)
+        self.clearDiagnostic()
 
         if self.extra != "none":
             self.d_plot.show()
         else:
             self.d_plot.hide()
-
-        # if self.extra == "wcorr" or self.extra == "wsc":
-            # self.plotPlot2 = pg.PlotDataItem()
-            # self.p_plot.addItem(self.plotPlot2)
-            # self.plotPlot4 = pg.PlotDataItem()
-            # self.p_plot.addItem(self.plotPlot4)
-            # self.plotPlot5 = pg.PlotDataItem()
-            # self.p_plot.addItem(self.plotPlot5)
-            # self.plotPlot6 = pg.PlotDataItem()
-            # self.p_plot.addItem(self.plotPlot6)
-            # self.plotPlot7 = pg.PlotDataItem()
-            # self.p_plot.addItem(self.plotPlot7)
-            # self.plotPlot8 = pg.PlotDataItem()
-            # self.p_plot.addItem(self.plotPlot8)
 
         # plot wavelet scalogram
         if self.extra == "Wavelet scalogram":
@@ -1861,53 +1844,6 @@ class AviaNZ(QMainWindow):
             #self.p_plot.setXRange(minX, maxX, padding=0)
             self.plotaxis.setLabel('Frequency bins')
              
-
-        # plot energy in bands of some particular trained filter:
-        if self.extra == "Filter band energy":
-            WF = WaveletFunctions.WaveletFunctions(data=None, wavelet='dmey2', maxLevel=5)
-            from ext import ce_denoise
-            M = 1.5
- 
-            # resample
-            if self.sampleRate != 16000:
-                audiodata = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
-            else:
-                audiodata = self.audiodata
-
-            # as in detectCalls:
-            try:
-                plotNodes = json.load(open(os.path.join(self.filtersDir, 'plotnodes.txt')))
-            except:
-                print("Couldn't load file, using default list")
-                plotNodes = [35, 36, 8, 41, 43, 45]
-
-            Esep = np.zeros((len(plotNodes), int(self.datalengthSec)))
-
-            # decompose signal
-            wp = WF.WaveletPacket(audiodata, WF.wavelet, 5, 'symmetric', False)
-
-            # reconstruct from bands, separately
-            r = 0 
-            for node in plotNodes:
-                C = WF.reconstructWP2(wp, WF.wavelet, node, False)
-                C = np.abs(C)
-                E = ce_denoise.EnergyCurve(C, int(M * self.sampleRate / 2)) 
-
-                # get max E for each second
-                for w in range(int(self.datalengthSec)):
-                    # normalize energy, so that we don't need to hardcode thr 
-                    Esep[r,w] = (np.max(E[w*16000 : (w+1)*16000]) - np.mean(C)) / np.std(C)
-
-                # plot
-                self.plotExtra = pg.PlotDataItem(np.arange(int(self.datalengthSec)), Esep[r,:])
-                self.plotExtra.setPen(fn.mkPen(color=(255*r//len(plotNodes),0,0), width=1))
-                self.p_plot.addItem(self.plotExtra)
-                self.plotExtra2 = pg.TextItem(color=(255*r//len(plotNodes), 0, 0), text=str(node))
-                self.p_plot.addItem(self.plotExtra2)
-                self.plotExtra2.setPos(1, Esep[r,1])
-                r = r + 1 
- 
-            self.plotaxis.setLabel('Power Z-score')
 
             # pproc = SupportClasses.postProcess(self.audiodata,self.sampleRate)
             #energy, e = pproc.detectClicks()
@@ -3262,22 +3198,120 @@ class AviaNZ(QMainWindow):
         """
         if not hasattr(self, 'diagnosticDialog'):
             self.diagnosticDialog = Dialogs.Diagnostic(self.FilterFiles)
+            self.diagnosticDialog.activate.clicked.connect(self.setDiagnostic)
         self.diagnosticDialog.show()
         self.diagnosticDialog.activateWindow()
-        self.diagnosticDialog.activate.clicked.connect(self.setDiagnostic)
+
+    def clearDiagnostic(self):
+        """ Cleans up diagnostic plot space. Should be called
+            when loading new file/page, or from Diagnostic Dialog.
+        """
+        try:
+            self.p_plot.clear()
+            if hasattr(self, "p_legend"):
+                self.p_legend.scene().removeItem(self.p_legend)
+            if hasattr(self, "diagnosticCalls"):
+                for c in self.diagnosticCalls:
+                    self.p_spec.removeItem(c)
+        except Exception as e:
+            print(e)
+        self.diagnosticCalls = []
+
 
     def setDiagnostic(self):
         """ Takes parameters returned from DiagnosticDialog
             and draws the training diagnostic plots.
         """
-        # take values: -2/-3/-4 for AA types, -2/-3 for En/Spec plot
-        [filter, aaType, plotType] = self.diagnosticDialog.getValues()
-        print(filter, aaType, plotType)
+        with pg.BusyCursor():
+            self.diagnosticDialog.activate.setEnabled(False)
+            self.statusLeft.setText("Making diagnostic plots...")
+            # Note: importing here so that main program could be run without ext/
+            from ext import ce_denoise
 
-        # draw
+            # take values: -2/-3/-4 for AA types, -2/-3 for En/Spec plot
+            [filter, aaType, plotType, markSpec] = self.diagnosticDialog.getValues()
+            spInfo = json.load(open(os.path.join(self.filtersDir, filter + '.txt')))
+
+            # clear plot box and add legend
+            self.clearDiagnostic()
+            self.p_legend = pg.LegendItem()
+            self.p_legend.setParentItem(self.p_plot)
+            # 1 sec in spectrogram units
+            specs = self.convertAmpltoSpec(1)
+
+            # plot things
+            # 1. decompose
+            WF = WaveletFunctions.WaveletFunctions(data=None, wavelet='dmey2', maxLevel=5)
+            # if needed, adjusting sampling rate to match filter
+            if self.sampleRate != spInfo['SampleRate']:
+                datatoplot = librosa.core.audio.resample(self.audiodata, self.sampleRate, spInfo['SampleRate'])
+            else:
+                datatoplot = self.audiodata
+
+            wp = WF.WaveletPacket(datatoplot, WF.wavelet, 5, 'symmetric', aaType==-4)
+            numNodes = len(spInfo['WaveletParams'][2])
+            Esep = np.zeros(( numNodes, int(self.datalengthSec) ))
+            
+            # 2. reconstruct from bands
+            r = 0
+            M = spInfo['WaveletParams'][1]
+            for node in spInfo['WaveletParams'][2]:
+                # reconstruction as in detectCalls:
+                print("working on node", node)
+                C = WF.reconstructWP2(wp, WF.wavelet, node, aaType != -2)
+                C = self.sp.ButterworthBandpass(C, spInfo['SampleRate'],
+                        low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1], order=10)
+
+                C = np.abs(C)
+                E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
+                C = np.log(C)
+
+                # some prep that doesn't need to be looped over t:
+                meanC = np.mean(C)
+                sdC = np.std(C)
+
+                # get true freqs of this band
+                freqmin, freqmax = WF.getWCFreq(node, spInfo['SampleRate'])
+                # convert freqs to spec Y units
+                freqmin = self.convertFreqtoY(freqmin)
+                freqmax = self.convertFreqtoY(freqmax)
+
+                if plotType==-3:
+                    print("plotType SPEC not implemented yet")
+                    return
+
+                # get max E for each second
+                # and normalize, so that we don't need to hardcode thr 
+                for w in range(int(self.datalengthSec)):
+                    maxE = np.max(E[w*spInfo['SampleRate'] : (w+1)*spInfo['SampleRate']])
+                    Esep[r,w] = (np.log(maxE) - meanC) / sdC
+
+                    # mark detected calls on spectrogram
+                    if markSpec and Esep[r,w] > spInfo['WaveletParams'][0]:
+                        diagCall = pg.ROI((specs*w, (freqmin+freqmax)/2),
+                                (specs, freqmax-freqmin),
+                                pen=(255*r//numNodes,0,0), movable=False)
+                        self.diagnosticCalls.append(diagCall)
+                        self.p_spec.addItem(diagCall)
+
+                # plot
+                self.plotDiag = pg.PlotDataItem(np.arange(int(self.datalengthSec))+0.5, Esep[r,:],
+                        pen=(255*r//numNodes,0,0))
+                self.p_plot.addItem(self.plotDiag)
+                self.p_legend.addItem(self.plotDiag, str(node))
+                r = r + 1 
+
+            # add line corresponding to thr
+            self.p_plot.addItem(pg.InfiniteLine(spInfo['WaveletParams'][0], angle=0, pen=fn.mkPen(color=(40,40,40), width=1)))
+            minX, maxX = self.overviewImageRegion.getRegion()
+            self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), update=True, padding=0)
+            self.plotaxis.setLabel('Power Z-score')
+            self.d_plot.show()
+        self.diagnosticDialog.activate.setEnabled(True)
+        self.statusLeft.setText("Ready")
 
     def showSpectrogramDialog(self):
-        """ Create the spectrogram dialog when the button is pressed.
+        """ Create spectrogram dialog when the button is pressed.
         """
         if not hasattr(self,'spectrogramDialog'):
             self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.minFreq,self.maxFreq, self.minFreqShow,self.maxFreqShow)

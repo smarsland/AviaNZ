@@ -400,6 +400,10 @@ class Diagnostic(QDialog):
         for a in plotButtons:
             self.plotGroup.addButton(a)
 
+        # mark calls on spectrogram?
+        self.mark = QCheckBox("Mark calls on spectrogram?")
+        self.mark.setChecked(True)
+
         # buttons
         self.activate = QPushButton("Make Plots")
 
@@ -416,13 +420,15 @@ class Diagnostic(QDialog):
         for a in plotButtons:
             Box.addWidget(a)
 
+        Box.addWidget(self.mark)
+
         Box.addWidget(self.activate)
 
         # Now put everything into the frame
         self.setLayout(Box)
 
     def getValues(self):
-        return [self.filter.currentText(), self.aaGroup.checkedId(), self.plotGroup.checkedId()]
+        return [self.filter.currentText(), self.aaGroup.checkedId(), self.plotGroup.checkedId(), self.mark.isChecked()]
 
 #======
 class WaveletTrain(QDialog):
