@@ -263,6 +263,23 @@ class WaveletFunctions:
 
         return(tree)
 
+    def getWCFreq(self, node, sampleRate):
+        """ Gets true frequencies of a wavelet node, based on sampling rate sampleRate."""
+
+        # find node's scale
+        lvl = math.floor(math.log2(node+1))
+        # position of node in its level (0-based)
+        nodepos = node - (2**lvl - 1)
+        # Gray-permute node positions (cause wp is not in natural order)
+        nodepos = self.graycode(nodepos)
+        # get number of nodes in this level
+        numnodes = 2**lvl
+
+        freqmin = nodepos*sampleRate/2/numnodes
+        freqmax = (nodepos+1)*sampleRate/2/numnodes
+        return((freqmin, freqmax))
+
+
     def reconstructWP2(self, wp, wv, node, antialias=False):
         """ Inverse of WaveletPacket: returns the signal from a single node.
             Expects our homebrew (non-downsampled) WP.
