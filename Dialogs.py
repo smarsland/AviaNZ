@@ -393,19 +393,20 @@ class Diagnostic(QDialog):
             self.aaGroup.addButton(a)
 
         # spec or energy plot
-        self.plotLabel = QLabel("Select plot type:")
-        self.plotGroup = QButtonGroup()
-        plotButtons = [QRadioButton("Filter band energy"), QRadioButton("Reconstructed spectrogram")]
-        plotButtons[0].setChecked(True)
-        for a in plotButtons:
-            self.plotGroup.addButton(a)
+        # self.plotLabel = QLabel("Select plot type:")
+        # self.plotGroup = QButtonGroup()
+        # plotButtons = [QRadioButton("Filter band energy"), QRadioButton("Reconstructed spectrogram")]
+        # plotButtons[0].setChecked(True)
+        # for a in plotButtons:
+        #     self.plotGroup.addButton(a)
 
         # mark calls on spectrogram?
-        self.mark = QCheckBox("Mark calls on spectrogram?")
+        self.mark = QCheckBox("Mark calls on spectrogram")
         self.mark.setChecked(True)
 
         # buttons
-        self.activate = QPushButton("Make Plots")
+        self.activate = QPushButton("Make plots")
+        self.clear = QPushButton("Clear plots")
 
         # layout
         Box = QVBoxLayout()
@@ -416,19 +417,20 @@ class Diagnostic(QDialog):
         for a in aaButtons:
             Box.addWidget(a)
 
-        Box.addWidget(self.plotLabel)
-        for a in plotButtons:
-            Box.addWidget(a)
+        # Box.addWidget(self.plotLabel)
+        # for a in plotButtons:
+        #     Box.addWidget(a)
 
         Box.addWidget(self.mark)
 
         Box.addWidget(self.activate)
+        Box.addWidget(self.clear)
 
         # Now put everything into the frame
         self.setLayout(Box)
 
     def getValues(self):
-        return [self.filter.currentText(), self.aaGroup.checkedId(), self.plotGroup.checkedId(), self.mark.isChecked()]
+        return [self.filter.currentText(), self.aaGroup.checkedId(), self.mark.isChecked()]
 
 #======
 class WaveletTrain(QDialog):

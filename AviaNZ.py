@@ -3199,6 +3199,7 @@ class AviaNZ(QMainWindow):
         if not hasattr(self, 'diagnosticDialog'):
             self.diagnosticDialog = Dialogs.Diagnostic(self.FilterFiles)
             self.diagnosticDialog.activate.clicked.connect(self.setDiagnostic)
+            self.diagnosticDialog.clear.clicked.connect(self.clearDiagnostic)
         self.diagnosticDialog.show()
         self.diagnosticDialog.activateWindow()
 
@@ -3229,7 +3230,7 @@ class AviaNZ(QMainWindow):
             from ext import ce_denoise
 
             # take values: -2/-3/-4 for AA types, -2/-3 for En/Spec plot
-            [filter, aaType, plotType, markSpec] = self.diagnosticDialog.getValues()
+            [filter, aaType, markSpec] = self.diagnosticDialog.getValues()
             spInfo = json.load(open(os.path.join(self.filtersDir, filter + '.txt')))
 
             # clear plot box and add legend
@@ -3276,10 +3277,6 @@ class AviaNZ(QMainWindow):
                 freqmin = self.convertFreqtoY(freqmin)
                 freqmax = self.convertFreqtoY(freqmax)
 
-                if plotType==-3:
-                    print("plotType SPEC not implemented yet")
-                    return
-
                 # get max E for each second
                 # and normalize, so that we don't need to hardcode thr 
                 for w in range(int(self.datalengthSec)):
@@ -3296,7 +3293,7 @@ class AviaNZ(QMainWindow):
 
                 # plot
                 self.plotDiag = pg.PlotDataItem(np.arange(int(self.datalengthSec))+0.5, Esep[r,:],
-                        pen=(255*r//numNodes,0,0))
+                        pen=fn.mkPen((255*r//numNodes,0,0), width=2))
                 self.p_plot.addItem(self.plotDiag)
                 self.p_legend.addItem(self.plotDiag, str(node))
                 r = r + 1 
