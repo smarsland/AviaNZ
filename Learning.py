@@ -11,6 +11,7 @@ from joblib import dump, load
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import ShuffleSplit
 from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 from sklearn.metrics import confusion_matrix
 from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -65,6 +66,7 @@ class Learning:
         print("Testing error: ", testError)
         CM = confusion_matrix(self.testTgt, testOut)
         print(CM)
+        print(CM[1][1], CM[0][1], CM[0][0], CM[1][0])
 
     def trainMLP(self, structure=(100,), learningrate=0.001, solver='adam', epochs=200, alpha=1, shuffle=True,
                  early_stopping=False):
@@ -78,7 +80,7 @@ class Learning:
 
         return model
 
-    def trainKNN(self, K=3):
+    def trainKNN(self, K):
         model = KNeighborsClassifier(K)
         model.fit(self.train, self.trainTgt)
 
@@ -575,7 +577,7 @@ def testLearning2():
     model = learners.trainGMM()
     learners.performTest(model)
 
-def TrainClassifier(dir, species, feature, clf=None):
+def TrainClassifier(dir, species, feature, clf=None, pca=False):
     '''
     Use wavelet energy/MFCC as features, train, and save the classifiers for later use
     Recommended to use fit_GridSearchCV and plot validation/learning curves to determine hyper-parameter values
@@ -636,9 +638,13 @@ def TrainClassifier(dir, species, feature, clf=None):
     negTargetInd = random.sample(negTargetInd, n)
     inds = posTargetInd + negTargetInd
     data = data[inds, :]
+    # use PCA if selected
+    if pca:
+        pca1 = PCA(n_components=0.99)   # will retain 90% of the variance
+        data = pca1.fit_transform(data)
     targets = targets[inds]
 
-    learners = Learning(data, targets, testFraction=0.4)  # use whole data set for training
+    learners = Learning(data, targets, testFraction=0.0)  # use whole data set for training
     # OR learn with optimum nodes, for kiwi it is [35, 43, 36, 45]
     # kiwiNodes = [35, 43, 36, 45]
     # kiwiNodes = [34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 55]
@@ -652,18 +658,21 @@ def TrainClassifier(dir, species, feature, clf=None):
 
     if clf == None: # then train all the classifiers (expensive option)
         print("MLP--------------------------------")
+        # model = learners.trainMLP(structure=(100,), learningrate=0.001, solver='adam', epochs=200, alpha=1,
+        #                           shuffle=True, early_stopping=False)
         model = learners.trainMLP(structure=(100,), learningrate=0.001, solver='adam', epochs=200, alpha=1,
                                   shuffle=True, early_stopping=False)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_MLP.joblib')
         learners.performTest(model)
         print("kNN--------------------------------")
-        model = learners.trainKNN()
+        model = learners.trainKNN(K=3)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_kNN.joblib')
         learners.performTest(model)
         print("SVM--------------------------------")
-        model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0077)
+        # model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0077)
+        model = learners.trainSVM(kernel="rbf", C=1, gamma=0.03)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_SVM.joblib')
         learners.performTest(model)
@@ -700,13 +709,13 @@ def TrainClassifier(dir, species, feature, clf=None):
         print("######################################################")
     elif clf == 'MLP':
         print("MLP--------------------------------")
-        model = learners.trainMLP(structure=(250, ), learningrate=0.001, solver='adam', epochs=200, alpha=1,
+        model = learners.trainMLP(structure=(25, ), learningrate=0.001, solver='adam', epochs=200, alpha=1,
                                   shuffle=True, early_stopping=True)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature + '_' + clf + '.joblib')
     elif clf == 'kNN':
         print("kNN--------------------------------")
-        model = learners.trainKNN()
+        model = learners.trainKNN(K=4)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_kNN.joblib')
     elif clf == 'SVM':
@@ -749,7 +758,7 @@ def TrainClassifier(dir, species, feature, clf=None):
         dump(model, dir + '\\' + species + '_' + clf + '.joblib')
         learners.performTest(model)
 
-def testClassifiers(dir_clf, dir_test, species, feature, clf=None):
+def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     '''
     Load previously trained classifiers and test on a completely new data set.
     :param dir_clf: path to the saved classifiers
@@ -763,8 +772,14 @@ def testClassifiers(dir_clf, dir_test, species, feature, clf=None):
     # read test dataset
     d = pd.read_csv(dir_test+'\\' + species + '_' + feature + '.tsv', sep="\t", header=None)
     data = d.values
+    targets = data[:, -1]
+    data = data[:, 0:-1]
+    # use PCA if selected
+    if pca:
+        pca1 = PCA(n_components=0.99)   # will retain 90% of the variance
+        data = pca1.fit_transform(data)
     # Test with all 62 nodes
-    learners = Learning(data[:, 0:-1], data[:, -1], testFraction=1)     # use all data for testing
+    learners = Learning(data, targets, testFraction=1)     # use all data for testing
     # # OR test with optimum nodes, for kiwi it is [35, 43, 36, 45]
     # # kiwiNodes = [35, 43, 36, 45]
     # kiwiNodes = [34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 55]
@@ -805,7 +820,7 @@ def testClassifiers(dir_clf, dir_test, species, feature, clf=None):
         learners.performTest(model)
         print("######################################################")
     else:
-        model = load(dir_clf + '\\' + species + '_' + clf + '.joblib')
+        model = load(dir_clf + '\\' + species + '_' + feature + '_' + clf + '.joblib')
         learners.performTest(model)
 
 def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
@@ -832,14 +847,17 @@ def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
         waveletCoefs = np.array([]).reshape(2**(nlevels+1)-2, 0)
     if 'MFCC' in feature:
         n_mfcc = 24
-        delta = False
-        MFCC = np.array([]).reshape(0, n_mfcc*32)
+        delta = True
+        if delta:
+            MFCC = np.array([]).reshape(0, n_mfcc * 2 * 32)
+        else:
+            MFCC = np.array([]).reshape(0, n_mfcc * 32)
     # Find the species filter
     speciesData = json.load(open(os.path.join(dir_src, species + '.txt')))
 
     for root, dirs, files in os.walk(str(dir_src)):
         for file in files:
-            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files or file.endswith('.wav') and filemode!='long' and os.stat(root + '/' + file).st_size > 150:
+            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res1.0sec.txt' in files or file.endswith('.wav') and filemode!='long' and os.stat(root + '/' + file).st_size > 150:
                 opstartingtime = time.time()
                 wavFile = root + '/' + file[:-4]
                 print(wavFile)
@@ -858,7 +876,7 @@ def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
                 # Compute energy in each WP node and store
                 if 'WE' in feature:
                     currWCs = ws.computeWaveletEnergy(data=data, sampleRate=ws.sampleRate, nlevels=nlevels,
-                                                      wpmode=wpmode, extractedCalls=False)
+                                                      wpmode=wpmode)
                     waveletCoefs = np.column_stack((waveletCoefs, currWCs))
                 if 'MFCC' in feature:
                     currMFCC = computeMFCC(data=data, sampleRate=ws.sampleRate, n_mfcc=24, delta=delta)
@@ -891,7 +909,7 @@ def loadData(fName, filemode):
     :return: audio data, GT, sampleRate
     '''
     filename = fName+'.wav'
-    filenameAnnotation = fName+'-sec.txt'
+    filenameAnnotation = fName+'-res1.0sec.txt'
     try:
         wavobj = wavio.read(filename)
     except:
@@ -936,7 +954,10 @@ def computeMFCC(data, sampleRate, n_mfcc, delta):
     :return: MFCC metrix
     '''
     n = math.ceil(len(data) / sampleRate)
-    mfcc=np.zeros((n, n_mfcc*32))
+    if delta:
+        mfcc = np.zeros((n, n_mfcc * 2 * 32))
+    else:
+        mfcc=np.zeros((n, n_mfcc*32))
     i = 0
     for t in range(n):
         end = min(len(data), (t + 1) * sampleRate)
@@ -954,9 +975,17 @@ def computeMFCC(data, sampleRate, n_mfcc, delta):
     return mfcc
 
 
-# generateDataset(dir_src="D:\AviaNZ\Sound Files\Brownkiwi_thesis\\test", feature='MFCCraw_all', species='Kiwi',filemode='long', wpmode='new', dir_out="D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train")
-# TrainClassifier('D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train', 'Kiwi', 'MFCCraw_all', clf='kNN')
-# testClassifiers(dir_clf='D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train', dir_test='D:\AviaNZ\Sound Files\Brownkiwi_thesis\\train', species='Kiwi', feature='MFCCraw_all',clf='kNN')
+# generateDataset(dir_src="D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Test-5min", feature='MFCCbp_all',
+#                 species='Morepork', filemode='long', wpmode='new',
+#                 dir_out="D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Test-5min\ML")
+# generateDataset(dir_src="D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min", feature='MFCCbp_all',
+#                 species='Morepork', filemode='long', wpmode='new',
+#                 dir_out="D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min\ML")
+# TrainClassifier('D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min\ML', 'Morepork', 'MFCCbp_all', clf='RF',
+#                 pca=True)
+# testClassifiers(dir_clf='D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min\ML',
+#                 dir_test='D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Test-5min\ML', species='Morepork',
+#                 feature='MFCCbp_all', clf='RF', pca=True)
 
 
 
@@ -1026,7 +1055,8 @@ def brownKiwi_segmentbased_train(clf=None, dirName="D:\\Nirosha\CHAPTER5\kiwi\\b
         dump(model, dirName+'\\'+'bk_kNN.joblib')
         # learners.performTest(model)
         print("SVM--------------------------------")
-        model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0077)
+        # model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0077)
+        model = learners.trainSVM(kernel="rbf", C=1, gamma='auto')
         # Save the model
         dump(model, dirName+'\\'+ 'bk_SVM.joblib')
         # learners.performTest(model)

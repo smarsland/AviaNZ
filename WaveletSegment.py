@@ -833,9 +833,10 @@ class WaveletSegment:
         tna = np.zeros(shape)
         fna = np.zeros(shape)
         finalnodes = []
-        # negative_nodes = []
+        negative_nodes = []
+        top_nodes = []
         # avoid low-level nodes
-        avoid_nodes = list(range(15))
+        low_level_nodes = list(range(15))
 
         # Grid search over M x thr x Files
         for indexM in range(len(MList)):
@@ -857,12 +858,15 @@ class WaveletSegment:
                     nodes1 = np.flip(np.argsort(nodeCorrs)[:]).tolist()
                     nodes = []
                     for item in nodes1:
-                        if not item in avoid_nodes:
+                        if not item in low_level_nodes:
                             nodes.append(item)
                     nodes = nodes[0:10]
 
-                    # # Keep track of negative correlated nodes
-                    # negative_nodes.extend(np.argsort(nodeCorrs)[:10])
+                    # Keep track of negative correlated nodes
+                    negative_nodes.extend(np.argsort(nodeCorrs)[:10])
+                    # # Avoid having any node in the first half of the positive nodes as a neg node
+                    # negative_nodes = [i for i in negative_nodes if i not in nodes[0:5]]
+                    top_nodes.extend(nodes[0:2])
 
                     # Sort the nodes, put any of its children (and their children, iteratively) that are in the list in front of it
                     nodes = self.sortListByChild(nodes)
@@ -968,13 +972,15 @@ class WaveletSegment:
             # One row done, store nodes
             finalnodes.append(finalnodesT)
             print("Iteration M %d/%d complete\t M=%f\n----------------\n---------------- " % (indexM + 1, len(MList), M))
-        # # Convert negative correlated nodes
-        # negative_nodes = [n + 1 for n in negative_nodes]
-        # # reduce to unique nodes:
-        # negative_nodes = set(negative_nodes)
-        # negative_nodes = list(negative_nodes)
+        # remove duplicates
+        negative_nodes = set(negative_nodes)
+        negative_nodes = list(negative_nodes)
+        # Remove any top nodes from negative list
+        negative_nodes = [i for i in negative_nodes if i not in top_nodes]
+        # Convert negative correlated nodes
+        negative_nodes = [n + 1 for n in negative_nodes]
         # print("Negative nodes:", negative_nodes)
-        return finalnodes, tpa, fpa, tna, fna
+        return finalnodes, tpa, fpa, tna, fna, negative_nodes
 
 
     def waveletSegment_test(self, dirName, sampleRate=None, listnodes=None, spInfo={}, d=False, f=False, rf=True, withzeros=True,
