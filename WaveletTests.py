@@ -280,17 +280,18 @@ def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='
     #Virginia: added window and increment
 
     ws = WaveletSegment.WaveletSegment()
-    nodes, TP, FP, TN, FN = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=d, f=f, rf=rf, feature=feature,window=window, inc=inc)
+    nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=d, f=f, rf=rf, feature=feature,window=window, inc=inc)
 
     print("Filtered nodes: ", nodes)
-    # print("Negative nodes: ", negative_nodes)
-    # # Remove any negatively correlated nodes
+    print("Negative nodes: ", negative_nodes)
+    # Remove any negatively correlated nodes
+    nodes = [[[item for item in sublst if item not in negative_nodes] for sublst in lst] for lst in nodes]
     # for lst in nodes:
     #     for sub_lst in lst:
     #         for item in sub_lst:
     #             if item in negative_nodes:
     #                 sub_lst.remove(item)
-    # print("Filtered nodes after cleaning: ", nodes)
+    print("Filtered nodes after cleaning: ", nodes)
     TPR = TP / (TP + FN)
     FPR = 1 - TN / (FP + TN)
     print("TP rate: ", TPR)
@@ -350,9 +351,11 @@ def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='
 
 # Test the trained filter on test data
 def testWavelet(dName, species, savedetections, feature, d, f, rf, window=1, inc=None):
-
-    #speciesData = json.load(open(os.path.join(dName, species + '.txt')))
+    print(dName)
+    print(os.path.join(dName, species + '.txt'))
+    # speciesData = json.load(open(os.path.join(dName, species + '.txt')))
     speciesData = json.load(open(os.path.join(dName, species + '.txt')))
+    # speciesData = json.load(open("D:\WaveletDetection\DATASETS\Morepork\Test-5min\Morepork.txt"))
     opstartingtime = time.time()
     ws = WaveletSegment.WaveletSegment()
     #Virginia: added window and incremnt
@@ -378,8 +381,8 @@ def testWavelet(dName, species, savedetections, feature, d, f, rf, window=1, inc
     print(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
 
 
-
-kiwi_M = [0.25, 0.75, 1.25, 1.75]
+kiwi_M = [0.125, 0.5, 2.0, 8.0]    # syllable length =1 sec; syl_length/8, syl_length/2, syl_length*2 etc.
+# kiwi_M = [0.25, 0.75, 1.25, 1.75]
 kiwi_thr = [0.25, 0.5, 0.75, 1, 1.25]
 kiwi_fs = 16000     # fs
 kiwi_f1 = 800   # f low
@@ -388,7 +391,8 @@ kiwi_d = False  # denoise
 kiwi_f = True   # filter
 kiwi_rf = True  # filter the reconstructed signal
 
-morepork_M = [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0]
+# morepork_M = [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0]
+morepork_M = [0.0625, 0.25, 1.0, 4]     # syllable length =0.5 sec; syl_length/8, syl_length/2, syl_length*2 etc.
 morepork_thr = [0.1, 0.2, 0.4, 0.8, 1.6]
 morepork_fs = 16000
 morepork_f1 = 600
@@ -406,7 +410,8 @@ robin_d = False
 robin_f = True
 robin_rf = True
 
-kakapoB_M = [0.125, 0.25, 1, 1.5, 2]  # syllable length ~ 0.5 sec
+# kakapoB_M = [0.125, 0.25, 1, 1.5, 2]
+kakapoB_M = [0.0625, 0.25, 1.0, 4]  # syllable length ~ 0.5 sec
 kakapoB_thr = [0.1, 0.2, 0.4, 0.8, 1.6]
 kakapoB_fs = 4000
 kakapoB_f1 = 50
@@ -433,19 +438,22 @@ bittern_d = False
 bittern_f = False
 bittern_rf = False
 
-# testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\Kakapo\KakapoC\\train-5min\\train', "KakapoC", f1=kakapoC_f1, f2=kakapoC_f2, fs=kakapoC_fs, thrList=kakapoC_thr, MList=kakapoC_M, d=kakapoC_d, f=kakapoC_f, rf=kakapoC_rf, feature="recaa")
-# testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\Kakapo\KakapoC\\test-5min', "KakapoC", savedetections=True, feature='recaa', d=kakapoC_d, f=kakapoC_f, rf=kakapoC_rf, window=1, inc=None)
-# testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\Kakapo\KakapoB\\test-5min\\New folder', "KakapoB", savedetections=True, feature='recaa', d=kakapoB_d, f=kakapoB_f, rf=kakapoB_rf, window=1, inc=None)
+# testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa")
+# testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=1, inc=None)
+
+testTrainers('D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min', "KakapoB", f1=kakapoB_f1, f2=kakapoB_f2, fs=kakapoB_fs, thrList=kakapoB_thr, MList=kakapoB_M, d=kakapoB_d, f=kakapoB_f, rf=kakapoB_rf, feature="recaa")
+# testWavelet('D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\test-5min\\New folder', "KakapoB", savedetections=True, feature='recaa', d=kakapoB_d, f=kakapoB_f, rf=kakapoB_rf, window=1, inc=None)
+
 # testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\RMBL-Robin\\robin\\train\\train-5min', "Robin", f1=robin_f1, f2=robin_f2, fs=robin_fs, thrList=robin_thr, MList=robin_M, d=robin_d, f=robin_f, rf=robin_rf, feature="recaa")
 # testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\RMBL-Robin\\robin\\test', "Robin", savedetections=True, feature='recaa', d=robin_d, f=robin_f, rf=robin_rf, window=1, inc=None)
 
 # testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\Bittern\\train', "Bittern", f1=bittern_f1, f2=bittern_f2, fs=bittern_fs, thrList=bittern_thr, MList=bittern_M, d=bittern_d, f=bittern_f, rf=bittern_rf, feature="recaa")
 # testWavelet('D:\\Nirosha\WaveletDetection\\bittern\\train_national\Kessel', "Bittern", savedetections=True, feature='recaa', d=bittern_d, f=bittern_f, rf=bittern_rf, window=1, inc=None)
 
-testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min_FilterA', "Morepork", f1=morepork_f1, f2=morepork_f2, fs=morepork_fs, thrList=morepork_thr, MList=morepork_M, d=morepork_d, f=morepork_f, rf=morepork_rf, feature="recaa")
-# testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Test-5min', "Morepork", savedetections=True, feature='recaa', d=morepork_d, f=morepork_f, rf=morepork_rf, window=1, inc=None)
+# testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min', "Morepork", f1=morepork_f1, f2=morepork_f2, fs=morepork_fs, thrList=morepork_thr, MList=morepork_M, d=morepork_d, f=morepork_f, rf=morepork_rf, feature="recaa")
+# testWavelet('D:\WaveletDetection\DATASETS\Morepork\Test-5min', "Morepork", savedetections=True, feature='recaa', d=morepork_d, f=morepork_f, rf=morepork_rf, window=1, inc=None)
 
-# testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Train\sub1', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa")
-# testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test\Ponui-test', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=1, inc=None)
+# testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa")
+# testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=1, inc=None)
 
 
