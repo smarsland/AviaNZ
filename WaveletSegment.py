@@ -754,6 +754,10 @@ class WaveletSegment:
 
                     print("file loaded in", time.time() - opstartingtime)
 
+        if len(self.annotation)==0:
+            print("ERROR: no files loaded!")
+            return
+
         self.annotation = np.array(self.annotation)
         # Prepare WC data and annotation targets into a matrix for saving
         # WC = np.transpose(self.waveletCoefs)
@@ -791,7 +795,7 @@ class WaveletSegment:
             # No need to store everything:
             # Find 10 most positively correlated nodes
             nodeCorrs = self.nodeCorrs[:, indexF]
-            goodnodes = np.flip(np.argsort(nodeCorrs)[-10:])
+            goodnodes = np.flip(np.argsort(nodeCorrs)[-10:], 0)
             goodnodes = [n + 1 for n in goodnodes]
 
             # set other nodes to 0
@@ -800,7 +804,7 @@ class WaveletSegment:
                     wp[ni] = [0]
 
             # save:
-            files.append(os.path.join(tempfile.gettempdir(), "avianz_wp" + str(indexF)))
+            files.append(os.path.join(tempfile.gettempdir(), "avianz_wp" + str(os.getpid()) + "_" + str(indexF)))
             file = open(files[indexF], 'w+b')
             pickle.dump(wp, file)
             file.flush()
@@ -855,7 +859,7 @@ class WaveletSegment:
 
                     # Find 10 most positively correlated nodes
                     nodeCorrs = self.nodeCorrs[:, indexF]
-                    nodes1 = np.flip(np.argsort(nodeCorrs)[:]).tolist()
+                    nodes1 = np.flip(np.argsort(nodeCorrs)[:], 0).tolist()
                     nodes = []
                     for item in nodes1:
                         if not item in low_level_nodes:
