@@ -25,7 +25,7 @@ import numpy as np
 import pywt
 import math
 import scipy.fftpack as fft
-import time
+import pyfftw
 from ext import ce_denoise as ce
 
 class WaveletFunctions:
@@ -243,18 +243,18 @@ class WaveletFunctions:
 
             # antialias A_j+1
             if antialias:
-                ft = fft.fft(nexta)
+                ft = pyfftw.interfaces.scipy_fftpack.fft(nexta)
                 ft[l//4 : 3*l//4] = 0
-                nexta = np.real(fft.ifft(ft))
+                nexta = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
             # store A before downsampling
             tree.append(nexta)
 
             # antialias D_j+1
             if antialias:
-                ft = fft.fft(nextd)
+                ft = pyfftw.interfaces.scipy_fftpack.fft(nextd)
                 ft[:l//4] = 0
                 ft[3*l//4:] = 0
-                nextd = np.real(fft.ifft(ft))
+                nextd = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
             # store D before downsampling
             tree.append(nextd)
 
@@ -323,7 +323,7 @@ class WaveletFunctions:
 
         if antialias:
             # wipe images
-            ft = fft.fft(data)
+            ft = pyfftw.interfaces.scipy_fftpack.fft(data)
             l = len(ft)
             # to keep: [nodepos/numnodes : (nodepos+1)/numnodes] x Fs
             # (same for negative freqs)
@@ -332,7 +332,7 @@ class WaveletFunctions:
             # indexing [-0:] wipes everything
             if nodepos!=0:
                 ft[-l*nodepos//numnodes : ] = 0
-            data = np.real(fft.ifft(ft))
+            data = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
 
         return(data)
 
