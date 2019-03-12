@@ -795,7 +795,7 @@ class WaveletSegment:
             # No need to store everything:
             # Find 10 most positively correlated nodes
             nodeCorrs = self.nodeCorrs[:, indexF]
-            goodnodes = np.flip(np.argsort(nodeCorrs)[-10:])
+            goodnodes = np.flip(np.argsort(nodeCorrs)[-10:], 0)
             goodnodes = [n + 1 for n in goodnodes]
 
             # set other nodes to 0
@@ -859,7 +859,7 @@ class WaveletSegment:
 
                     # Find 10 most positively correlated nodes
                     nodeCorrs = self.nodeCorrs[:, indexF]
-                    nodes1 = np.flip(np.argsort(nodeCorrs)[:]).tolist()
+                    nodes1 = np.flip(np.argsort(nodeCorrs)[:], 0).tolist()
                     nodes = []
                     for item in nodes1:
                         if not item in low_level_nodes:
