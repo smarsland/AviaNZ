@@ -21,7 +21,7 @@ from sklearn.gaussian_process.kernels import RBF
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import AdaBoostClassifier
-import xgboost as xgb
+#import xgboost as xgb
 from sklearn.mixture import GaussianMixture
 
 from sklearn.model_selection import learning_curve
@@ -624,7 +624,7 @@ def TrainClassifier(dir, species, feature, clf=None, pca=False):
     :return: save the trained classifier in dirName e.g. kiwi_SVM.joblib
     '''
     # Read previously stored data as required
-    d = pd.read_csv(dir + '\\' + species + '_' + feature + '.tsv', sep="\t", header=None)
+    d = pd.read_csv(os.path.join(dir,species + '_' + feature + '.tsv'), sep="\t", header=None)
     data = d.values
 
     # Balance the data set
@@ -665,100 +665,100 @@ def TrainClassifier(dir, species, feature, clf=None, pca=False):
         model = learners.trainMLP(structure=(25,), learningrate=0.001, solver='adam', epochs=200, alpha=1,
                                   shuffle=True, early_stopping=False)
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_MLP.joblib')
-        # learners.performTest(model)
+        dump(model, os.path.join(dir,species+'_'+feature+'_MLP.joblib'))
+        learners.performTest(model)
         print("kNN--------------------------------")
         model = learners.trainKNN(K=3)
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_kNN.joblib')
-        # learners.performTest(model)
+        dump(model, os.path.join(dir,species+'_'+feature+'_kNN.joblib'))
+        learners.performTest(model)
         print("SVM--------------------------------")
         # model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0077)
         model = learners.trainSVM(kernel="rbf", C=1, gamma=0.03)
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_SVM.joblib')
-        # learners.performTest(model)
+        dump(model, os.path.join(dir,species+'_'+feature+'_SVM.joblib'))
+        learners.performTest(model)
         print("GP--------------------------------")
         model = learners.trainGP()
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_GP.joblib')
-        # learners.performTest(model)
+        dump(model, os.path.join(dir,species+'_'+feature+'_GP.joblib'))
+        learners.performTest(model)
         print("DT--------------------------------")
         model = learners.trainDecisionTree()
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_DT.joblib')
-        # learners.performTest(model)
+        dump(model, os.path.join(dir,species+'_'+feature+'_DT.joblib'))
+        learners.performTest(model)
         print("RF--------------------------------")
         model = learners.trainRandomForest()
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_RF.joblib')
-        # learners.performTest(model)
+        dump(model, os.path.join(dir,species+'_'+feature+'_RF.joblib'))
+        learners.performTest(model)
         print("Boosting--------------------------------")
         model = learners.trainBoosting()
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_Boost.joblib')
-        # learners.performTest(model)
+        dump(model, os.path.join(dir,species+'_'+feature+'_Boost.joblib'))
+        learners.performTest(model)
         print("XGB--------------------------------")
         model = learners.trainXGBoost()
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_XGB.joblib')
-        # learners.performTest(model)
-        # print("GMM--------------------------------")
-        # model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
-        # # Save the model
-        # dump(model, dir+'\\'+species+'_'+feature+'_GMM.joblib')
-        # # learners.performTest(model)
+        dump(model, os.path.join(dir,species+'_'+feature+'_XGB.joblib'))
+        learners.performTest(model)
+        print("GMM--------------------------------")
+        model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
+        # Save the model
+        dump(model, os.path.join(dir,species+'_'+feature+'_GMM.joblib'))
+        learners.performTest(model)
         print("######################################################")
     elif clf == 'MLP':
         print("MLP--------------------------------")
         model = learners.trainMLP(structure=(250, ), learningrate=0.001, solver='adam', epochs=200, alpha=1,
                                   shuffle=True, early_stopping=True)
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature + '_' + clf + '.joblib')
+        dump(model, os.path.join(dir,species+'_'+feature+'_MLP.joblib'))
     elif clf == 'kNN':
         print("kNN--------------------------------")
         model = learners.trainKNN(K=3)
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_kNN.joblib')
+        dump(model, os.path.join(dir,species+'_'+feature+'_kNN.joblib'))
     elif clf == 'SVM':
         print("SVM--------------------------------")
         model = learners.trainSVM(kernel="rbf", C=1, gamma=0.00018)
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_SVM.joblib')
+        dump(model, os.path.join(dir,species+'_'+feature+'_SVM.joblib'))
     elif clf == 'GP':
         print("GP--------------------------------")
         model = learners.trainGP()
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_GP.joblib')
+        dump(model, os.path.join(dir,species+'_'+feature+'_GP.joblib'))
     elif clf == 'DT':
         print("DT--------------------------------")
         model = learners.trainDecisionTree()
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_DT.joblib')
+        dump(model, os.path.join(dir,species+'_'+feature+'_DT.joblib'))
     elif clf == 'RF':
         print("RF--------------------------------")
         model = learners.trainRandomForest()
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_RF.joblib')
+        dump(model, os.path.join(dir,species+'_'+feature+'_RF.joblib'))
     elif clf == 'Boost':
         print("Boosting--------------------------------")
         model = learners.trainBoosting()
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_Boost.joblib')
+        dump(model, os.path.join(dir,species+'_'+feature+'_Boost.joblib'))
     elif clf == 'XGB':
         print("XGB--------------------------------")
         model = learners.trainXGBoost()
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_XGB.joblib')
+        dump(model, os.path.join(dir,species+'_'+feature+'_XGB.joblib'))
     elif clf == 'GMM':
         print("GMM--------------------------------")
         model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
         # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_GMM.joblib')
+        dump(model, os.path.join(dir,species+'_'+feature+'_GMM.joblib'))
     if not clf:
         # Save the model
-        dump(model, dir + '\\' + species + '_' + str(clf) + '.joblib')
-        # learners.performTest(model)
+        dump(model, os.path.join(dir,species+'_'+feature+'_'+clf+'.joblib'))
+        learners.performTest(model)
 
 def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     '''
@@ -772,7 +772,7 @@ def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     :return: print out confusion matrix
     '''
     # read test dataset
-    d = pd.read_csv(dir_test+'\\' + species + '_' + feature + '.tsv', sep="\t", header=None)
+    d = pd.read_csv(os.path.join(dir_test,species + '_' + feature + '.tsv'), sep="\t", header=None)
     data = d.values
     targets = data[:, -1]
     data = data[:, 0:-1]
@@ -794,36 +794,35 @@ def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     if clf == None:
         print("MLP--------------------------------")
         # Load the model
-        model = load(os.path.join(dir_clf, species + '_' + feature + '_MLP.joblib'))
-        # model = load(dir_clf+'\\'+species+'_MLP.joblib')
+        model = load(os.path.join(dir_clf,species+'_MLP.joblib'))
         learners.performTest(model)
         print("kNN--------------------------------")
-        model = load(os.path.join(dir_clf, species + '_' + feature + '_kNN.joblib'))
+        model = load(os.path.join(dir_clf,species+'_kNN.joblib'))
         learners.performTest(model)
         print("SVM--------------------------------")
-        model = load(os.path.join(dir_clf, species + '_' + feature + '_SVM.joblib'))
+        model = load(os.path.join(dir_clf,species+'_SVM.joblib'))
         learners.performTest(model)
         print("GP--------------------------------")
-        model = load(os.path.join(dir_clf, species + '_' + feature + '_GP.joblib'))
+        model = load(os.path.join(dir_clf,species+'_GP.joblib'))
         learners.performTest(model)
         print("DT--------------------------------")
-        model = load(os.path.join(dir_clf, species + '_' + feature + '_DT.joblib'))
+        model = load(os.path.join(dir_clf,species+'_DT.joblib'))
         learners.performTest(model)
         print("RF--------------------------------")
-        model = load(os.path.join(dir_clf, species + '_' + feature + '_RF.joblib'))
+        model = load(os.path.join(dir_clf,species+'_RF.joblib'))
         learners.performTest(model)
         print("Boosting--------------------------------")
-        model = load(os.path.join(dir_clf, species + '_' + feature + '_Boost.joblib'))
+        model = load(os.path.join(dir_clf,species+'_Boost.joblib'))
         learners.performTest(model)
         print("XGB--------------------------------")
-        model = load(os.path.join(dir_clf, species + '_' + feature + '_XGB.joblib'))
+        model = load(os.path.join(dir_clf,species+'_XGB.joblib'))
         learners.performTest(model)
-        # print("GMM--------------------------------")
-        # model = load(dir_clf+'\\'+species+'_GMM.joblib')
-        # learners.performTest(model)
-        # print("######################################################")
+        print("GMM--------------------------------")
+        model = load(os.path.join(dir_clf,species+'_GMM.joblib'))
+        learners.performTest(model)
+        print("######################################################")
     else:
-        model = load(os.path.join(dir_clf, species + '_' + feature + '_' + clf + '.joblib'))
+        model = load(os.path.join(dir_clf,species+'_' + feature + '_' + clf + '.joblib'))
         learners.performTest(model)
 
 def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
@@ -1009,6 +1008,10 @@ testClassifiers(dir_clf='D:\WaveletDetection\DATASETS\Morepork\Train-5min\ML',
 #                 feature='WE+MFCCraw_all', clf='SVM', pca=False)
 
 # validationCurve(dataFile='D:\WaveletDetection\DATASETS\Morepork\Train-5min\ML\Morepork_MFCCbp_all.tsv', clf='kNN', nClasses=2, score=None)
+
+generateDataset(dir_src="/Users/marslast/Projects/AviaNZ/Sound Files/Train", feature='MFCCraw_all', species='Morepork',filemode='long', wpmode='new', dir_out="/Users/marslast/Projects/AviaNZ/Sound Files/Train")
+TrainClassifier('/Users/marslast/Projects/AviaNZ/Sound Files/Train', 'Morepork', 'MFCCraw_all', clf='kNN')
+testClassifiers(dir_clf='/Users/marslast/Projects/AviaNZ/Sound Files/Train', dir_test='/Users/marslast/Projects/AviaNZ/Sound Files/Train', species='Morepork', feature='MFCCraw_all',clf='kNN')
 
 
 
