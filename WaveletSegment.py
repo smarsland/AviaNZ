@@ -866,7 +866,8 @@ class WaveletSegment:
                     negative_nodes.extend(np.argsort(nodeCorrs)[:10])
                     # # Avoid having any node in the first half of the positive nodes as a neg node
                     # negative_nodes = [i for i in negative_nodes if i not in nodes[0:5]]
-                    top_nodes.extend(nodes[0:2])
+                    if np.sum(annotation) > 0:
+                        top_nodes.extend(nodes[0:2])
 
                     # Sort the nodes, put any of its children (and their children, iteratively) that are in the list in front of it
                     nodes = self.sortListByChild(nodes)
