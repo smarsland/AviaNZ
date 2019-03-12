@@ -754,6 +754,10 @@ class WaveletSegment:
 
                     print("file loaded in", time.time() - opstartingtime)
 
+        if len(self.annotation)==0:
+            print("ERROR: no files loaded!")
+            return
+
         self.annotation = np.array(self.annotation)
         # Prepare WC data and annotation targets into a matrix for saving
         # WC = np.transpose(self.waveletCoefs)
