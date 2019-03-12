@@ -4034,7 +4034,7 @@ class AviaNZ(QMainWindow):
             resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
 
         datFile = wavFile + '.data'
-        eFile = datFile[:-9] + '-res' + str(resol) + 'sec.txt'
+        eFile = datFile[:-9] + '-res' + str(float(resol)) + 'sec.txt'
 
         if duration == 0:
             wavobj = wavio.read(wavFile)
