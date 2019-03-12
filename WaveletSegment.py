@@ -804,7 +804,7 @@ class WaveletSegment:
                     wp[ni] = [0]
 
             # save:
-            files.append(os.path.join(tempfile.gettempdir(), "avianz_wp" + str(indexF)))
+            files.append(os.path.join(tempfile.gettempdir(), "avianz_wp" + str(os.getpid()) + "_" + str(indexF)))
             file = open(files[indexF], 'w+b')
             pickle.dump(wp, file)
             file.flush()
