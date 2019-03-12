@@ -413,7 +413,9 @@ def validationCurve(dataFile, clf, nClasses=2, score=None):
         # param_name = "max_iter"
         # param_range = [100, 200, 300, 400, 500]
     elif clf == 'kNN':
-        estimator = KNeighborsClassifier(3)
+        estimator = KNeighborsClassifier()
+        param_name = "n_neighbors"
+        param_range = [1, 2, 3, 4, 5, 6]
     elif clf == 'GP':
         estimator = GaussianProcessClassifier(1.0 * RBF(1.0))
     elif clf == 'DT':
@@ -640,7 +642,7 @@ def TrainClassifier(dir, species, feature, clf=None, pca=False):
     data = data[inds, :]
     # use PCA if selected
     if pca:
-        pca1 = PCA(n_components=0.99)   # will retain 90% of the variance
+        pca1 = PCA(n_components=0.8)   # will retain 90% of the variance
         data = pca1.fit_transform(data)
     targets = targets[inds]
 
@@ -660,67 +662,67 @@ def TrainClassifier(dir, species, feature, clf=None, pca=False):
         print("MLP--------------------------------")
         # model = learners.trainMLP(structure=(100,), learningrate=0.001, solver='adam', epochs=200, alpha=1,
         #                           shuffle=True, early_stopping=False)
-        model = learners.trainMLP(structure=(100,), learningrate=0.001, solver='adam', epochs=200, alpha=1,
+        model = learners.trainMLP(structure=(25,), learningrate=0.001, solver='adam', epochs=200, alpha=1,
                                   shuffle=True, early_stopping=False)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_MLP.joblib')
-        learners.performTest(model)
+        # learners.performTest(model)
         print("kNN--------------------------------")
         model = learners.trainKNN(K=3)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_kNN.joblib')
-        learners.performTest(model)
+        # learners.performTest(model)
         print("SVM--------------------------------")
         # model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0077)
         model = learners.trainSVM(kernel="rbf", C=1, gamma=0.03)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_SVM.joblib')
-        learners.performTest(model)
+        # learners.performTest(model)
         print("GP--------------------------------")
         model = learners.trainGP()
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_GP.joblib')
-        learners.performTest(model)
+        # learners.performTest(model)
         print("DT--------------------------------")
         model = learners.trainDecisionTree()
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_DT.joblib')
-        learners.performTest(model)
+        # learners.performTest(model)
         print("RF--------------------------------")
         model = learners.trainRandomForest()
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_RF.joblib')
-        learners.performTest(model)
+        # learners.performTest(model)
         print("Boosting--------------------------------")
         model = learners.trainBoosting()
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_Boost.joblib')
-        learners.performTest(model)
+        # learners.performTest(model)
         print("XGB--------------------------------")
         model = learners.trainXGBoost()
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_XGB.joblib')
-        learners.performTest(model)
-        print("GMM--------------------------------")
-        model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
-        # Save the model
-        dump(model, dir+'\\'+species+'_'+feature+'_GMM.joblib')
-        learners.performTest(model)
+        # learners.performTest(model)
+        # print("GMM--------------------------------")
+        # model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
+        # # Save the model
+        # dump(model, dir+'\\'+species+'_'+feature+'_GMM.joblib')
+        # # learners.performTest(model)
         print("######################################################")
     elif clf == 'MLP':
         print("MLP--------------------------------")
-        model = learners.trainMLP(structure=(25, ), learningrate=0.001, solver='adam', epochs=200, alpha=1,
+        model = learners.trainMLP(structure=(250, ), learningrate=0.001, solver='adam', epochs=200, alpha=1,
                                   shuffle=True, early_stopping=True)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature + '_' + clf + '.joblib')
     elif clf == 'kNN':
         print("kNN--------------------------------")
-        model = learners.trainKNN(K=4)
+        model = learners.trainKNN(K=3)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_kNN.joblib')
     elif clf == 'SVM':
         print("SVM--------------------------------")
-        model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0077)
+        model = learners.trainSVM(kernel="rbf", C=1, gamma=0.00018)
         # Save the model
         dump(model, dir+'\\'+species+'_'+feature+'_SVM.joblib')
     elif clf == 'GP':
@@ -755,8 +757,8 @@ def TrainClassifier(dir, species, feature, clf=None, pca=False):
         dump(model, dir+'\\'+species+'_'+feature+'_GMM.joblib')
     if not clf:
         # Save the model
-        dump(model, dir + '\\' + species + '_' + clf + '.joblib')
-        learners.performTest(model)
+        dump(model, dir + '\\' + species + '_' + str(clf) + '.joblib')
+        # learners.performTest(model)
 
 def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     '''
@@ -776,7 +778,7 @@ def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     data = data[:, 0:-1]
     # use PCA if selected
     if pca:
-        pca1 = PCA(n_components=0.99)   # will retain 90% of the variance
+        pca1 = PCA(n_components=0.8)   # will retain 90% of the variance
         data = pca1.fit_transform(data)
     # Test with all 62 nodes
     learners = Learning(data, targets, testFraction=1)     # use all data for testing
@@ -792,35 +794,36 @@ def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     if clf == None:
         print("MLP--------------------------------")
         # Load the model
-        model = load(dir_clf+'\\'+species+'_MLP.joblib')
+        model = load(os.path.join(dir_clf, species + '_' + feature + '_MLP.joblib'))
+        # model = load(dir_clf+'\\'+species+'_MLP.joblib')
         learners.performTest(model)
         print("kNN--------------------------------")
-        model = load(dir_clf+'\\'+species+'_kNN.joblib')
+        model = load(os.path.join(dir_clf, species + '_' + feature + '_kNN.joblib'))
         learners.performTest(model)
         print("SVM--------------------------------")
-        model = load(dir_clf+'\\'+species+'_SVM.joblib')
+        model = load(os.path.join(dir_clf, species + '_' + feature + '_SVM.joblib'))
         learners.performTest(model)
         print("GP--------------------------------")
-        model = load(dir_clf+'\\'+species+'_GP.joblib')
+        model = load(os.path.join(dir_clf, species + '_' + feature + '_GP.joblib'))
         learners.performTest(model)
         print("DT--------------------------------")
-        model = load(dir_clf+'\\'+species+'_DT.joblib')
+        model = load(os.path.join(dir_clf, species + '_' + feature + '_DT.joblib'))
         learners.performTest(model)
         print("RF--------------------------------")
-        model = load(dir_clf+'\\'+species+'_RF.joblib')
+        model = load(os.path.join(dir_clf, species + '_' + feature + '_RF.joblib'))
         learners.performTest(model)
         print("Boosting--------------------------------")
-        model = load(dir_clf+'\\'+species+'_Boost.joblib')
+        model = load(os.path.join(dir_clf, species + '_' + feature + '_Boost.joblib'))
         learners.performTest(model)
         print("XGB--------------------------------")
-        model = load(dir_clf+'\\'+species+'_XGB.joblib')
+        model = load(os.path.join(dir_clf, species + '_' + feature + '_XGB.joblib'))
         learners.performTest(model)
-        print("GMM--------------------------------")
-        model = load(dir_clf+'\\'+species+'_GMM.joblib')
-        learners.performTest(model)
-        print("######################################################")
+        # print("GMM--------------------------------")
+        # model = load(dir_clf+'\\'+species+'_GMM.joblib')
+        # learners.performTest(model)
+        # print("######################################################")
     else:
-        model = load(dir_clf + '\\' + species + '_' + feature + '_' + clf + '.joblib')
+        model = load(os.path.join(dir_clf, species + '_' + feature + '_' + clf + '.joblib'))
         learners.performTest(model)
 
 def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
@@ -846,12 +849,14 @@ def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
         nlevels = 5
         waveletCoefs = np.array([]).reshape(2**(nlevels+1)-2, 0)
     if 'MFCC' in feature:
-        n_mfcc = 24
+        n_mfcc = 48
+        # n_bins = 8
+        n_bins = 32
         delta = True
         if delta:
-            MFCC = np.array([]).reshape(0, n_mfcc * 2 * 32)
+            MFCC = np.array([]).reshape(0, n_mfcc * 2 * n_bins)
         else:
-            MFCC = np.array([]).reshape(0, n_mfcc * 32)
+            MFCC = np.array([]).reshape(0, n_mfcc * n_bins)
     # Find the species filter
     speciesData = json.load(open(os.path.join(dir_src, species + '.txt')))
 
@@ -879,7 +884,7 @@ def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
                                                       wpmode=wpmode)
                     waveletCoefs = np.column_stack((waveletCoefs, currWCs))
                 if 'MFCC' in feature:
-                    currMFCC = computeMFCC(data=data, sampleRate=ws.sampleRate, n_mfcc=24, delta=delta)
+                    currMFCC = computeMFCC(data=data, sampleRate=ws.sampleRate, n_mfcc=n_mfcc, n_bins=n_bins, delta=delta)
                     MFCC = np.concatenate((MFCC, currMFCC), axis=0)
                 annotation.extend(currentannotation)
                 print("file loaded in", time.time() - opstartingtime)
@@ -945,7 +950,7 @@ def loadData(fName, filemode):
         fileAnnotation = np.zeros((math.ceil(len(data) / sampleRate), 1))
     return data, np.array(fileAnnotation), sampleRate
 
-def computeMFCC(data, sampleRate, n_mfcc, delta):
+def computeMFCC(data, sampleRate, n_mfcc, n_bins, delta):
     '''
     Compute MFCC for each second of data and return as a matrix
     :param data: audio data
@@ -955,16 +960,19 @@ def computeMFCC(data, sampleRate, n_mfcc, delta):
     '''
     n = math.ceil(len(data) / sampleRate)
     if delta:
-        mfcc = np.zeros((n, n_mfcc * 2 * 32))
+        mfcc = np.zeros((n, n_mfcc * 2 * n_bins))
     else:
-        mfcc=np.zeros((n, n_mfcc*32))
+        mfcc=np.zeros((n, n_mfcc*n_bins))
     i = 0
     for t in range(n):
         end = min(len(data), (t + 1) * sampleRate)
         mfcc1 = librosa.feature.mfcc(y=data[t * sampleRate:end], sr=sampleRate, n_mfcc=n_mfcc, n_fft=2048,
                                         hop_length=512)  # n_fft=10240, hop_length=2560
         if delta:
-            mfcc1_delta = librosa.feature.delta(mfcc1)
+            if n_bins == 8:
+                mfcc1_delta = librosa.feature.delta(mfcc1, width=5)
+            else:
+                mfcc1_delta = librosa.feature.delta(mfcc1)
             mfcc1 = np.concatenate((mfcc1, mfcc1_delta), axis=0)
         # Normalize
         mfcc1 -= np.mean(mfcc1, axis=0)
@@ -972,20 +980,35 @@ def computeMFCC(data, sampleRate, n_mfcc, delta):
         mfcc1 = np.reshape(mfcc1, np.shape(mfcc1)[0] * np.shape(mfcc1)[1])
         mfcc1 = mfcc1.flatten()
         mfcc[i, :] = mfcc1
+        i += 1
     return mfcc
 
 
-# generateDataset(dir_src="D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Test-5min", feature='MFCCbp_all',
-#                 species='Morepork', filemode='long', wpmode='new',
-#                 dir_out="D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Test-5min\ML")
-# generateDataset(dir_src="D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min", feature='MFCCbp_all',
-#                 species='Morepork', filemode='long', wpmode='new',
-#                 dir_out="D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min\ML")
-# TrainClassifier('D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min\ML', 'Morepork', 'MFCCbp_all', clf='RF',
-#                 pca=True)
-# testClassifiers(dir_clf='D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min\ML',
-#                 dir_test='D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Test-5min\ML', species='Morepork',
-#                 feature='MFCCbp_all', clf='RF', pca=True)
+# generateDataset(dir_src="D:\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min", feature='WE+MFCCbp_all',
+#                 species='Kiwi', filemode='long', wpmode='new',
+#                 dir_out="D:\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min\ML")
+# generateDataset(dir_src="D:\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min", feature='WE+MFCCbp_all',
+#                 species='Kiwi', filemode='long', wpmode='new',
+#                 dir_out="D:\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min\ML")
+TrainClassifier('D:\WaveletDetection\DATASETS\Morepork\Train-5min\ML', 'Morepork', 'WEbp_all', clf='kNN',
+                pca=True)
+testClassifiers(dir_clf='D:\WaveletDetection\DATASETS\Morepork\Train-5min\ML',
+                dir_test='D:\WaveletDetection\DATASETS\Morepork\Test-5min\ML', species='Morepork',
+                feature='WEbp_all', clf='kNN', pca=True)
+
+# generateDataset(dir_src="D:\WaveletDetection\DATASETS\Kakapo\KakapoC\\test-5min", feature='WEbp_all',
+#                 species='KakapoC', filemode='long', wpmode='new',
+#                 dir_out="D:\WaveletDetection\DATASETS\Kakapo\KakapoC\\test-5min\ML")
+# generateDataset(dir_src="D:\WaveletDetection\DATASETS\Kakapo\KakapoC\\train-5min\\train", feature='WEbp_all',
+#                 species='KakapoC', filemode='long', wpmode='new',
+#                 dir_out="D:\WaveletDetection\DATASETS\Kakapo\KakapoC\\train-5min\\train\ML")
+# TrainClassifier('D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min\ML', 'KakapoB', 'WE+MFCCraw_all', clf='SVM',
+#                 pca=False)
+# testClassifiers(dir_clf='D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min\ML',
+#                 dir_test='D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\test-5min\ML', species='KakapoB',
+#                 feature='WE+MFCCraw_all', clf='SVM', pca=False)
+
+# validationCurve(dataFile='D:\WaveletDetection\DATASETS\Morepork\Train-5min\ML\Morepork_MFCCbp_all.tsv', clf='kNN', nClasses=2, score=None)
 
 
 
