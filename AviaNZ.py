@@ -3709,15 +3709,8 @@ class AviaNZ(QMainWindow):
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window=1
             inc= None
-            nodes, TP, FP, TN, FN, negnodes = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False,
+            nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False,
                                                             f=True, rf=True, feature="recaafull", window=window, inc=inc)
-            #nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(self.dName, thrList, MList,spInfo=speciesData, d=False, f=True, feature="recaafull")
-            # Remove any negatively correlated nodes
-            # for lst in nodes:
-            #     for sub_lst in lst:
-            #         for item in sub_lst:
-            #             if item in negative_nodes:
-            #                 sub_lst.remove(item)
             print("Filtered nodes: ", nodes)
             print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
 
@@ -3727,7 +3720,7 @@ class AviaNZ(QMainWindow):
             print("FP rate: ", FPR)
 
         # Plot AUC and let the user to choose threshold and M
-        self.thr = 0.5 # default, get updated when user double-clicks on ROC curve
+        self.thr = 0.5  # default, get updated when user double-clicks on ROC curve
         self.M = 0.25  # default, get updated when user double-clicks on ROC curve
         self.optimumNodesSel = []
 
