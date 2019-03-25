@@ -211,8 +211,8 @@ class WaveletFunctions:
             4. mode - symmetric by default, as in pywt.WaveletPacket
             5. antialias - on/off switch
         """
-        if len(data)>310*16000 and antialias:
-            print("ERROR: processing files larger than 5 min in slow antialiasing mode is disabled. Enable this only if you are ready to wait.")
+        if len(data) > 910*16000 and antialias:
+            print("ERROR: processing files larger than 15 min in slow antialiasing mode is disabled. Enable this only if you are ready to wait.")
             return
 
         # filter length for extension modes
@@ -316,9 +316,9 @@ class WaveletFunctions:
             node = (node-1)//2
             lvl = lvl - 1
 
-        if len(data) > 310*16000 and antialias:
+        if len(data) > 910*16000 and antialias:
             print("Size of signal to be reconstructed is", len(data))
-            print("ERROR: processing of big data chunks is currently disabled. Recommend splitting files to below 5 min chunks. Enable this only if you are ready to wait.")
+            print("ERROR: processing of big data chunks is currently disabled. Recommend splitting files to below 15 min chunks. Enable this only if you are ready to wait.")
             return
 
         if antialias:

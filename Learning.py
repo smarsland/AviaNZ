@@ -837,8 +837,8 @@ def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
         waveletCoefs = np.array([]).reshape(2**(nlevels+1)-2, 0)
     if 'MFCC' in feature:
         n_mfcc = 48
-        # n_bins = 8
-        n_bins = 32
+        n_bins = 8  # kakapo boom
+        # n_bins = 32   # others
         delta = True
         if delta:
             MFCC = np.array([]).reshape(0, n_mfcc * 2 * n_bins)
@@ -985,17 +985,18 @@ def computeMFCC(data, sampleRate, n_mfcc, n_bins, delta):
 #                 dir_test='D:\WaveletDetection\DATASETS\Morepork\Test-5min\ML', species='Morepork',
 #                 feature='WEbp_all', clf='kNN', pca=True)
 
-# generateDataset(dir_src="D:\WaveletDetection\DATASETS\RMBL\\test", feature='WE+MFCCbp_all',
-#                 species='Robin', filemode='long', wpmode='new',
-#                 dir_out="D:\WaveletDetection\DATASETS\RMBL\\test\ML")
-# generateDataset(dir_src="D:\WaveletDetection\DATASETS\RMBL\\train", feature='WE+MFCCbp_all',
-#                 species='Robin', filemode='long', wpmode='new',
-#                 dir_out="D:\WaveletDetection\DATASETS\RMBL\\train\ML")
-TrainClassifier('D:\WaveletDetection\DATASETS\RMBL\\train\ML', 'Robin', 'WE+MFCCbp_all', clf='MLP',
-                pca=False)
-testClassifiers(dir_clf='D:\WaveletDetection\DATASETS\RMBL\\train\ML',
-                dir_test='D:\WaveletDetection\DATASETS\RMBL\\test\ML', species='Robin',
-                feature='WE+MFCCbp_all', clf='MLP', pca=False)
+# generateDataset(dir_src="D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\test-5min", feature='WE+MFCCraw_all',
+#                 species='KakapoB', filemode='long', wpmode='new',
+#                 dir_out="D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\test-5min\ML")
+# generateDataset(dir_src="D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min", feature='WE+MFCCraw_all',
+#                 species='KakapoB', filemode='long', wpmode='new',
+#                 dir_out="D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min\ML")
+
+# TrainClassifier('D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min\ML', 'KakapoB', 'WEraw_all', clf='SVM',
+#                 pca=False)
+# testClassifiers(dir_clf='D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min\ML',
+#                 dir_test='D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\test-5min\ML', species='KakapoB',
+#                 feature='WEraw_all', clf='SVM', pca=False)
 
 # validationCurve(dataFile='D:\WaveletDetection\DATASETS\Morepork\Train-5min\ML\Morepork_MFCCbp_all.tsv', clf='kNN', nClasses=2, score=None)
 

@@ -696,6 +696,9 @@ class WaveletSegment:
         # or can be read-in from the export file.
         # Virginia: added window and inc input
         res = self.gridSearch(thrList, MList, spInfo, rf, feature, window, inc)
+        # Release disk space
+        for f in self.tempfiles:
+            os.remove(f)
         return res
 
     def loadDirectory(self, dirName, spInfo, denoise, filter, keepaudio, wpmode,savedetections, window=1, inc=None):
@@ -985,7 +988,9 @@ class WaveletSegment:
         # Convert negative correlated nodes
         negative_nodes = [n + 1 for n in negative_nodes]
         # print("Negative nodes:", negative_nodes)
-        return finalnodes, tpa, fpa, tna, fna, negative_nodes
+        # Remove any negatively correlated nodes
+        finalnodes = [[[item for item in sublst if item not in negative_nodes] for sublst in lst] for lst in finalnodes]
+        return finalnodes, tpa, fpa, tna, fna
 
 
     def waveletSegment_test(self, dirName, sampleRate=None, listnodes=None, spInfo={}, d=False, f=False, rf=True, withzeros=True,
@@ -1051,7 +1056,7 @@ class WaveletSegment:
             #Virginia: added window and inc input
             if feature == 'recsep':
                 detected_c = self.detectCalls_old(wp, self.sampleRate, listnodes=nodes, spInfo=spInfo, withzeros=withzeros, window=window, inc=inc)
-            elif feature == 'recaa':
+            elif feature == 'recaa'or feature == "recaafull":
                 detected_c = self.detectCalls(wp, self.sampleRate, nodelist=nodes, spInfo=spInfo, rf=rf,
                                               duration=len(self.audioList[fileId]), annotation=None, window=1, inc=None)
             detected = np.concatenate((detected, detected_c))
