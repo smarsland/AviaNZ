@@ -350,7 +350,7 @@ def testWavelet(dName, species, savedetections, feature, d, f, rf, window=1, inc
     opstartingtime = time.time()
     ws = WaveletSegment.WaveletSegment()
     #Virginia: added window and incremnt
-    window= 1
+    window = 1
     inc=None
     Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, sampleRate=None, spInfo=speciesData, d=d, f=f, rf=rf, withzeros=True, feature=feature, savedetections=savedetections, window=window, inc=None)
     print("TESTING COMPLETED IN ", time.time() - opstartingtime)
@@ -450,4 +450,4 @@ bittern_rf = False
 
 # testWavelet('D:\WaveletDetection\Figure4\mp', "Morepork", savedetections=True, feature='recaa', d=morepork_d, f=morepork_f, rf=morepork_rf, window=1, inc=None)
 
-testWavelet('D:\AviaNZ\Sound Files\Fiordland kiwi\Dataset\Positive', "Kiwi(Tokoeka Fiordland)", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=1, inc=None)
+# testWavelet('D:\AviaNZ\Sound Files\Fiordland kiwi\Dataset\\Negative\\New folder', "Kiwi(Tokoeka Fiordland)", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=1, inc=None)
