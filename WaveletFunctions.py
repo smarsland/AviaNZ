@@ -219,7 +219,7 @@ class WaveletFunctions:
         flen = max(len(wavelet.dec_lo), len(wavelet.dec_hi), len(wavelet.rec_lo), len(wavelet.rec_hi))
         # this tree will store non-downsampled coefs for reconstruction
         tree = [data]
-        if mode!='symmetric':
+        if mode != 'symmetric':
             print("ERROR: only symmetric WP mode implemented so far")
             return
 
@@ -228,7 +228,7 @@ class WaveletFunctions:
             # retrieve parent node from J level
             data = tree[node]
             # downsample all non-root nodes because that wasn't done
-            if node!=0:
+            if node != 0:
                 data = data[0::2]
 
             # symmetric mode
@@ -296,21 +296,21 @@ class WaveletFunctions:
         # same for negative freq, so in total 2^lvl * 2 bands.
         numnodes = 2**(lvl+1)
 
-        while lvl!=0:
+        while lvl != 0:
             # convolve with rec filter
-            if node%2 == 0:
+            if node % 2 == 0:
                 # node is detail
                 data = np.convolve(data, wv.rec_hi, 'same')
             else:
                 # node is approx
                 data = np.convolve(data, wv.rec_lo, 'same')
             # upsample
-            if lvl!=1:
+            if lvl != 1:
                 datau = np.zeros(2*len(data))
                 datau[0::2] = data
                 data = datau
                 # trim ends to correct reconstruction length
-                data = data[len(wv.rec_hi)//2-1 : -(len(wv.rec_lo)//2-1)]
+                data = data[len(wv.rec_hi)//2-1: -(len(wv.rec_lo)//2-1)]
             # trim ends again (so all levels get 2*flen trim, top one gets 1*flen)
             data = data[len(wv.rec_hi)//2-1 : -(len(wv.rec_lo)//2-1)]
             node = (node-1)//2

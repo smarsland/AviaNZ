@@ -666,7 +666,8 @@ class WaveletSegment:
         keepaudio = (feature=="recsep" or feature=="recmulti" or feature=="recaa" or feature=="recaafull")
         # recommend using wpmode="new", because it is fast and almost alias-free.
         # Virginia: added window and inc input
-        self.loadDirectory(dirName, spInfo, d, f, keepaudio, "new", False, window, inc)
+        self.loadDirectory(dirName=dirName, spInfo=spInfo, denoise=d, filter=f, keepaudio=keepaudio, wpmode="new",
+                           savedetections=False, train=True, window=window, inc=inc)
 
         # Argument _feature_ will determine which detectCalls function is used:
         # feature=="ethr":
@@ -688,9 +689,9 @@ class WaveletSegment:
         # # TODO: start training by generating and storing WPs for all files
         # not sure if this is useful for other modes, but definitely needed for recaafull
         if feature == "recaa":
-            self.tempfiles = self.generateWPs(self.WaveletFunctions.wavelet, 5, wpmode="new")
+            self.tempfiles = self.generateWPs(wavelet=self.WaveletFunctions.wavelet, maxlevel=5, wpmode="new", train=True)
         if feature == "recaafull":
-            self.tempfiles = self.generateWPs(self.WaveletFunctions.wavelet, 5, wpmode="aa")
+            self.tempfiles = self.generateWPs(wavelet=self.WaveletFunctions.wavelet, maxlevel=5, wpmode="aa", train=True)
 
         # energies are stored in self.waveletCoefs,
         # or can be read-in from the export file.
@@ -701,7 +702,7 @@ class WaveletSegment:
             os.remove(f)
         return res
 
-    def loadDirectory(self, dirName, spInfo, denoise, filter, keepaudio, wpmode,savedetections, window=1, inc=None):
+    def loadDirectory(self, dirName, spInfo, denoise, filter, keepaudio, wpmode,savedetections, train, window=1, inc=None):
         """ (moved out from individual training functions)
             Finds and reads wavs from directory dirName.
             Computes a WP and stores the node energies for each second.
@@ -712,14 +713,17 @@ class WaveletSegment:
             wpmode selects WP decomposition function ("pywt", "new"-our but not AA'd, "aa"-our AA'd)
             Results: self.annotation, filelengths, [audioList,] waveletCoefs, nodeCorrs arrays.
             waveletCoefs also exported to a file.
+
+            For filter training and testing, therefore (correlated) nodes have two versions: save correlated nodes in
+            train and use optimum nodes from the filter in test mode
             """
         # Virginia changes:
         # input changed: added window and inc for window's and increment's length in sec.
         # Default values setted as window=1 and inc=None
 
         #Virginia: if no inc I set resol equal to window, otherwise it is equal to inc
-        if inc==None:
-            resol=window
+        if inc == None:
+            resol = window
         else:
             resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
 
@@ -728,7 +732,8 @@ class WaveletSegment:
         self.filelengths = []
         self.audioList = []
         self.waveletCoefs = np.array([]).reshape(2 ** (nlevels + 1) - 2, 0)
-        self.nodeCorrs = np.array([]).reshape(2 ** (nlevels + 1) - 2, 0)
+        if train:
+            self.nodeCorrs = np.array([]).reshape(2 ** (nlevels + 1) - 2, 0)
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
@@ -737,7 +742,7 @@ class WaveletSegment:
                     wavFile = root + '/' + file[:-4]
                     # adds to annotation and filelength arrays, sets self.data:
                     # Virginia: added resol input
-                    self.loadData(wavFile,window, resol, savedetections=savedetections,trainPerFile=False)
+                    self.loadData(wavFile, window, resol, savedetections=savedetections, trainPerFile=False)
 
                     # denoise and store actual audio data:
                     # note: preprocessing is a side effect on self.data
@@ -748,16 +753,16 @@ class WaveletSegment:
 
                     # Compute energy in each WP node and store
                     # Virginia: added window and inc input
-                    currWCs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate, 5, wpmode, window=window, inc=inc)
-                    self.waveletCoefs = np.column_stack((self.waveletCoefs, currWCs))
-                    # Compute all WC-annot correlations and store
-                    currAnnot = np.array(self.annotation[-self.filelengths[-1]:])
-                    self.nodeCorrs = np.column_stack(
-                        (self.nodeCorrs, self.compute_r(currAnnot, currWCs)))
+                    if train:
+                        currWCs = self.computeWaveletEnergy(filteredDenoisedData, self.sampleRate, 5, wpmode, window=window, inc=inc)
+                        self.waveletCoefs = np.column_stack((self.waveletCoefs, currWCs))
+                        # Compute all WC-annot correlations and store
+                        currAnnot = np.array(self.annotation[-self.filelengths[-1]:])
+                        self.nodeCorrs = np.column_stack((self.nodeCorrs, self.compute_r(currAnnot, currWCs)))
 
                     print("file loaded in", time.time() - opstartingtime)
 
-        if len(self.annotation)==0:
+        if len(self.annotation) == 0:
             print("ERROR: no files loaded!")
             return
 
@@ -769,7 +774,7 @@ class WaveletSegment:
         # np.savetxt(os.path.join(dirName, "energies.tsv"), MLdata, delimiter="\t")
         print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(self.annotation), len(self.annotation)))
 
-    def generateWPs(self, wavelet, maxlevel, wpmode):
+    def generateWPs(self, wavelet, maxlevel, wpmode, train):
         """ Stores WPs of selected nodes for all loaded files.
             Useful for disk-caching when WP decomp is slow.
 
@@ -796,10 +801,13 @@ class WaveletSegment:
                                                          maxlevel=maxlevel, antialias=True)
 
             # No need to store everything:
-            # Find 10 most positively correlated nodes
-            nodeCorrs = self.nodeCorrs[:, indexF]
-            goodnodes = np.flip(np.argsort(nodeCorrs)[-10:], 0)
-            goodnodes = [n + 1 for n in goodnodes]
+            # Find 10 most positively correlated nodes in train mode and the optimum nodes from filter in test mode
+            if train:
+                nodeCorrs = self.nodeCorrs[:, indexF]
+                goodnodes = np.flip(np.argsort(nodeCorrs)[-10:], 0)
+                goodnodes = [n + 1 for n in goodnodes]
+            else:
+                goodnodes = self.nodes
 
             # set other nodes to 0
             for ni in range(len(wp)):
@@ -1002,16 +1010,16 @@ class WaveletSegment:
         # Resol is the base of the annotations
 
         # Virginia: if no increment I set resol equal of window otherwise it is equal to inc
-        if inc==None:
-            resol=window
+        if inc == None:
+            resol = window
         else:
             resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
 
             # Load the relevant list of nodes
         if listnodes is None:
-            nodes = spInfo['WaveletParams'][2]
+            self.nodes = spInfo['WaveletParams'][2]
         else:
-            nodes = listnodes
+            self.nodes = listnodes
 
         # clear storage for multifile processing
         self.annotation = []
@@ -1020,13 +1028,14 @@ class WaveletSegment:
         self.filenames = []
         detected = np.array([])
 
-        self.loadDirectory(dirName, spInfo, d, f, keepaudio=True, wpmode="new", savedetections=savedetections, window=window, inc=inc)
+        self.loadDirectory(dirName=dirName, spInfo=spInfo, denoise=d, filter=f, keepaudio=True, wpmode="new",
+                           savedetections=savedetections, train=False, window=window, inc=inc)
 
         # not sure if this is useful for other modes, but definitely needed for recaafull
         if feature == "recaa":
-            self.tempfiles = self.generateWPs(self.WaveletFunctions.wavelet, 5, wpmode="new")
+            self.tempfiles = self.generateWPs(wavelet=self.WaveletFunctions.wavelet, maxlevel=5, wpmode="new", train=False)
         if feature == "recaafull":
-            self.tempfiles = self.generateWPs(self.WaveletFunctions.wavelet, 5, wpmode="aa")
+            self.tempfiles = self.generateWPs(wavelet=self.WaveletFunctions.wavelet, maxlevel=5, wpmode="aa", train=False)
 
         # remember to convert main structures to np arrays
         self.annotation = np.array(self.annotation)
@@ -1055,9 +1064,9 @@ class WaveletSegment:
 
             #Virginia: added window and inc input
             if feature == 'recsep':
-                detected_c = self.detectCalls_old(wp, self.sampleRate, listnodes=nodes, spInfo=spInfo, withzeros=withzeros, window=window, inc=inc)
+                detected_c = self.detectCalls_old(wp, self.sampleRate, listnodes=self.nodes, spInfo=spInfo, withzeros=withzeros, window=window, inc=inc)
             elif feature == 'recaa'or feature == "recaafull":
-                detected_c = self.detectCalls(wp, self.sampleRate, nodelist=nodes, spInfo=spInfo, rf=rf,
+                detected_c = self.detectCalls(wp, self.sampleRate, nodelist=self.nodes, spInfo=spInfo, rf=rf,
                                               duration=len(self.audioList[fileId]), annotation=None, window=1, inc=None)
             detected = np.concatenate((detected, detected_c))
             # Generate .data for this file
@@ -1088,6 +1097,9 @@ class WaveletSegment:
             del wp
             gc.collect()
         fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
+        print("Releasing disk space")
+        for f in self.tempfiles:
+            os.remove(f)
         return detected, TP, FP, TN, FN
 
 
