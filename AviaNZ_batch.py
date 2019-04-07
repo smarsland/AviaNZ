@@ -43,15 +43,7 @@ import Dialogs
 
 import json, copy
 
-# sppInfo = {
-#             # spp: [min_len, max_len, flow, fhigh, fs, f0_low, f0_high, wavelet_thr, wavelet_M, wavelet_nodes]
-#             'Kiwi': [10, 30, 1100, 7000, 16000, 1200, 4200, 0.5, 0.6, [17, 20, 22, 35, 36, 38, 40, 42, 43, 44, 45, 46, 48, 50, 55, 56]],
-#             'Gsk': [6, 25, 900, 7000, 16000, 1200, 4200, 0.25, 0.6, [35, 38, 43, 44, 52, 54]],
-#             'Lsk': [10, 30, 1200, 7000, 16000, 1200, 4200,  0.25, 0.6, []], # todo: find len, f0, nodes
-#             'Ruru': [1, 30, 500, 7000, 16000, 600, 1300,  0.25, 0.5, [33, 37, 38]], # find M
-#             'SIPO': [1, 5, 1200, 3800, 8000, 1200, 3800,  0.25, 0.2, [61, 59, 54, 51, 60, 58, 49, 47]],  # find len, f0
-#             'Bittern': [1, 5, 100, 200, 1000, 100, 200, 0.75, 0.2, [10,21,22,43,44,45,46]],  # find len, f0, confirm nodes
-# }
+import pywt
 
 class AviaNZ_batchProcess(QMainWindow):
     # Main class for batch processing
@@ -242,7 +234,7 @@ class AviaNZ_batchProcess(QMainWindow):
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 if filename.endswith('.wav'):
-                    total=total+1
+                    total = total+1
 
         # LOG FILE is read here
         # note: important to log all analysis settings here
@@ -306,7 +298,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # print current header (or old if resuming),
         # print old file list if resuming.
         self.log.file = open(self.log.file, 'w')
-        if self.species!="All species":
+        if self.species != "All species":
             self.log.reprintOld()
             # else single-sp runs should be deleted anyway
         if confirmedResume == QMessageBox.No:
@@ -340,7 +332,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         print("File %s processed previously, skipping" % filename)
                         # TODO: check the following line, if skip no need to load .wav (except for getting file length for sheet3?)
                         # TODO: Instead can we keep length of the recording as part of the meta info in [-1 ... -1]
-                        self.loadFile(wipe = (self.species=="All species"))
+                        self.loadFile(wipe=(self.species == "All species"))
                         DOCRecording = re.search('(\d{6})_(\d{6})', filename)
                         if DOCRecording:
                             startTime = DOCRecording.group(2)
@@ -355,7 +347,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         continue
 
                     if filename.endswith('.wav'):
-                        cnt=cnt+1
+                        cnt = cnt+1
                         # check if file not empty                            
                         print("Opening file %s" % filename)
                         self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total))
@@ -393,13 +385,17 @@ class AviaNZ_batchProcess(QMainWindow):
                             continue
                         
                         # ALL SYSTEMS GO: process this file
-                        self.loadFile(wipe = (self.species=="All species"))
-                        if self.species!='All species':
+                        self.loadFile(wipe=(self.species == "All species"))
+                        if self.species != 'All species':
                             # wipe same species:
                             self.segments[:] = [s for s in self.segments if self.species not in s[4] and self.species+'?' not in s[4]]
                             ws = WaveletSegment.WaveletSegment()
-                            speciesData = json.load(open(os.path.join(self.filtersDir, self.species+'.txt')))
-                            newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, wpmode="new")
+                            self.speciesData = json.load(open(os.path.join(self.filtersDir, self.species+'.txt')))
+                            # 'recaa' mode
+                            newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
+                                                            spInfo=self.speciesData, d=False, f=True,
+                                                            wavelet=ws.WaveletFunctions.wavelet, wpmode="new")
+                            print('Segments after wavelet seg: ', newSegments)
                         else:
                             # wipe all segments:
                             self.segments = []
@@ -414,26 +410,27 @@ class AviaNZ_batchProcess(QMainWindow):
                             post.rainClick()
                         else:
                             post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                              segments=newSegments, spInfo=speciesData)
-                            post.short()  # TODO: keep 'deleteShort' in filter file?
-                            if speciesData['Wind']:
+                                                              segments=newSegments, spInfo=self.speciesData)
+                            #   post.short()  # TODO: keep 'deleteShort' in filter file?
+                            if self.speciesData['Wind']:
                                 pass
                                 # post.wind() - omitted in sppSpecific cases
                                 # print('After wind: ', post.segments)
-                            if speciesData['Rain']:
+                            if self.speciesData['Rain']:
                                 pass
                                 # post.rainClick() - omitted in sppSpecific cases
                                 # print('After rain: ', post.segments)
-                            if speciesData['F0']:
+                            if self.speciesData['F0']:
                                 post.fundamentalFrq()
                                 # print('After ff: ', post.segments)
                         newSegments = post.segments
+                        print('Segments after post pro: ', newSegments)
 
                         # Save the excel and the annotation
                         if self.species == 'All species':
-                            out = SupportClasses.exportSegments(segments=[], segmentstoCheck=newSegments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength/self.sampleRate, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                            out = SupportClasses.exportSegments(segments=[], segmentstoCheck=newSegments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength/self.sampleRate, sampleRate=self.sampleRate, method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         else:
-                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=newSegments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength/self.sampleRate, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", sampleRate_species=speciesData['SampleRate'], fRange=speciesData['FreqRange'], batch=True)
+                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=newSegments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength/self.sampleRate, sampleRate=self.sampleRate, method=self.method, resolution=self.w_res.value(), operator="Auto", sampleRate_species=self.speciesData['SampleRate'], fRange=self.speciesData['FreqRange'], batch=True)
                         out.excel()
                         out.saveAnnotation()
                         # Log success for this file
@@ -477,6 +474,34 @@ class AviaNZ_batchProcess(QMainWindow):
                 if file.fileName()+'.data' in listOfDataFiles:
                     item.setForeground(Qt.red)
 
+    def generateWP(self, wavelet, maxlevel, wpmode):
+        """ Generate WP of selected nodes for current file.
+            Args:
+            1. wavelet object
+            2. maxlevel
+            3. wpmode ("pywt", "new", "aa")
+            Returns wp
+        """
+        # Generate a full 5 level wavelet packet decomposition
+        if wpmode == "pywt":
+            wp = pywt.WaveletPacket(data=self.audiodata, wavelet=wavelet,
+                                    mode='symmetric', maxlevel=maxlevel)
+        if wpmode == "new":
+            wp = self.WaveletFunctions.WaveletPacket(data=self.audiodata, wavelet=wavelet, mode='symmetric',
+                                                     maxlevel=maxlevel, antialias=False)
+        if wpmode == "aa":
+            wp = self.WaveletFunctions.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric',
+                                                     maxlevel=maxlevel, antialias=True)
+
+        # No need to store everything:
+        goodnodes = self.speciesData['WaveletParams'][2]
+
+        # set other nodes to 0
+        for ni in range(len(wp)):
+            if ni not in goodnodes:
+                wp[ni] = [0]
+        return wp
+
     def listLoadFile(self,current):
         """ Listener for when the user clicks on an item in filelist
         """
@@ -518,20 +543,14 @@ class AviaNZ_batchProcess(QMainWindow):
         # None of the following should be necessary for librosa
         if self.audiodata.dtype is not 'float':
             self.audiodata = self.audiodata.astype('float') #/ 32768.0
-        if np.shape(np.shape(self.audiodata))[0]>1:
-            self.audiodata = self.audiodata[:,0]
+        if np.shape(np.shape(self.audiodata))[0] > 1:
+            self.audiodata = np.squeeze(self.audiodata[:, 0])
+            # self.audiodata = self.audiodata[:, 0]
         self.datalength = np.shape(self.audiodata)[0]
-        print("Read %d samples, %f s at %d Hz" %(len(self.audiodata),float(self.datalength)/self.sampleRate,self.sampleRate))
-
-        if (self.species=='Kiwi' or self.species=='Ruru') and self.sampleRate!=16000:
-            self.audiodata = librosa.core.audio.resample(self.audiodata,self.sampleRate,16000)
-            self.sampleRate=16000
-            # self.audioFormat.setSampleRate(self.sampleRate)
-            self.datalength = np.shape(self.audiodata)[0]
-            print("File was downsampled to %d" % self.sampleRate)
+        print("Read %d samples, %f s at %d Hz" % (len(self.audiodata), float(self.datalength)/self.sampleRate, self.sampleRate))
 
         # Create an instance of the Signal Processing class
-        if not hasattr(self,'sp'):
+        if not hasattr(self, 'sp'):
             self.sp = SignalProc.SignalProc()
 
         # Get the data for the spectrogram
@@ -573,12 +592,11 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # Update the data that is seen by the other classes
         # TODO: keep an eye on this to add other classes as required
-        if hasattr(self,'seg'):
+        if hasattr(self, 'seg'):
             self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate,256,128)
         else:
             self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
         self.sp.setNewData(self.audiodata,self.sampleRate)
-
 
 class AviaNZ_reviewAll(QMainWindow):
     # Main class for reviewing batch processing results

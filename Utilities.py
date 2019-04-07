@@ -221,7 +221,7 @@ def delEmpAnn(dir):
                 elif len(segments)==1 and segments[0][0]==-1:
                     os.remove(annotation)
 
-# delEmpAnn('E:\Tier1_batch3_RH')
+# delEmpAnn('D:\\Nirosha\Employ\Heath_Haast tokoeka\\105')
 
 #------------------------------------------------- code to extract segments
 def extractSegments(wavFile, destination, copyName, species):
@@ -257,7 +257,7 @@ def extractSegments(wavFile, destination, copyName, species):
                 elif species == seg[4][0]:   # extract only specific calls - extracted sounds are saved with with the original file name followed by an index starting 1
                     ind = wavFile.rindex('/')
                     ind2 = wavFile.rindex('\\')
-                    filename = destination + '\\' + str(wavFile[ind2+1:ind]) + '-' + str(wavFile[ind + 1:-4]) + '-' + str(seg[4]) + '-' + str(cnt) + '.wav'
+                    filename = destination + '\\' + str(wavFile[ind2+1:ind]) + '-' + str(wavFile[ind + 1:-4]) + '-' + str(seg[4][0]) + '-' + str(cnt) + '.wav'
                     cnt += 1
                     s = int((seg[0]-1) * sampleRate)
                     e = int((seg[1]+1) * sampleRate)
@@ -282,8 +282,8 @@ def extractSegments_batch(dirName, destination, copyName = True, species = None)
                 extractSegments(filename, destination, copyName=copyName, species = species)
 
 
-# extractSegments_batch('D:\\Nirosha\CHAPTER5\kiwi\\tier1\\negative',
-#                       'D:\\Nirosha\CHAPTER5\kiwi\\tier1\\negative\segmentsAfterFilter1_v1', copyName=False, species=None)
+# extractSegments_batch('D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Eglinton_EV',
+#                       'D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Eglinton_EV\\tril\\tril5', copyName=False, species="Morepork(Trill)5")
 
 #------------------------------------------------- code to rename the annotations e.g. Kiwi(M)1 into bkm1
 def renameAnnotation(dirName, frm, to):
@@ -423,20 +423,20 @@ def genReport(dirName,species='Kiwi'):
     ws.cell(row=1, column=1, value="File name")
     ws.cell(row=1, column=2, value="start")
     ws.cell(row=1, column=3, value="end")
-    ws.cell(row=1, column=4, value="M/F/D")
+    ws.cell(row=1, column=4, value="call")
     # ws.cell(row=1, column=5, value="quality")
     r = 2
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
             if filename.endswith('.data'):
-                print (filename)
+                print(filename)
                 fName=filename
                 filename = root + '/' + filename
                 with open(filename) as f:
                     segments = json.load(f)
-                if len(segments)==0:
+                if len(segments) == 0:
                     continue
-                if len(segments)==1 and segments[0][0]==-1:
+                if len(segments) == 1 and segments[0][0] == -1:
                     continue
                 # Check if the filename is in standard DOC format
                 # Which is xxxxxx_xxxxxx.wav or ccxx_cccc_xxxxxx_xxxxxx.wav (c=char, x=0-9), could have _ afterward
@@ -456,13 +456,16 @@ def genReport(dirName,species='Kiwi'):
                     print (datetime.timedelta(seconds=startTime))
 
                 c = 1
-                ws.cell(row=r, column=c, value=str(filename[26:-9]))
+                ws.cell(row=r, column=c, value=str(filename[22:-5]))
                 c = c + 1
                 for seg in segments:
                     if seg[0] == -1:
                         continue
-                    x = re.search('Kiwi', seg[4][0])
-                    if not re.search('Kiwi', seg[4][0]):
+                    # x = re.search('Kiwi', seg[4][0])
+                    listformat = isinstance(seg[4], list)
+                    if listformat and not species in seg[4][0]:
+                        continue
+                    if not listformat and not species in seg[4]:
                         continue
                     s = int(math.floor(seg[0]))
                     s = datetime.timedelta(seconds=startTime+s)
@@ -470,22 +473,25 @@ def genReport(dirName,species='Kiwi'):
                     e = datetime.timedelta(seconds=startTime+e)
 
                     ws.cell(row=r, column=c, value=str(s))
-                    c=c+1
+                    c = c+1
                     ws.cell(row=r, column=c, value=str(e))
                     c = c + 1
-                    if len(seg[4][0])==19:                          # 'Kiwi?' and 'Kiwi5'
-                        gend='K'
-                        # if str(seg[4][4])=='?':
-                            # quality = ''
-                        # elif int(seg[4][0][-1]) == 1 or int(seg[4][0][-1]) == 2 or int(seg[4][0][-1]) == 3 or int(seg[4][0][-1]) == 4 or int(seg[4][0][-1]) == 5 or int(seg[4][0][-1]) == 6:
-                        #     quality = '*' * int(seg[4][0][-1])
-                    else:
-                        gend=seg[4][0][-1]
+                    # if len(seg[4][0])==19:                          # 'Kiwi?' and 'Kiwi5'
+                    #     gend='K'
+                    #     # if str(seg[4][4])=='?':
+                    #         # quality = ''
+                    #     # elif int(seg[4][0][-1]) == 1 or int(seg[4][0][-1]) == 2 or int(seg[4][0][-1]) == 3 or int(seg[4][0][-1]) == 4 or int(seg[4][0][-1]) == 5 or int(seg[4][0][-1]) == 6:
+                    #     #     quality = '*' * int(seg[4][0][-1])
+                    # else:
+                    #     gend=seg[4][0][-1]
                         # quality = '*' * int(seg[4][0][-1])
                     # elif len(seg[4]) == 8:                      # 'Kiwi(M)1'
                     #     gend = seg[4][0][5]
                     #     quality = '*' * int(seg[4][7])
-                    ws.cell(row=r, column=c, value=gend)
+                    if listformat:
+                        ws.cell(row=r, column=c, value=seg[4][0])
+                    else:
+                        ws.cell(row=r, column=c, value=seg[4])
                     # c = c + 1
                     # ws.cell(row=r, column=c, value = quality)
                     c = 2
@@ -493,9 +499,11 @@ def genReport(dirName,species='Kiwi'):
                 c = 1
                 r = r + 1
     wb.save(str(eFile))
-    print ("Generated Report")
+    print("Generated Report")
 
-# genReport('D:\\Nirosha\Kiwi_TBA_Jason\TR_KM_03',species='Kiwi')
+# delEmpAnn('E:\HaastTokoeka-Heath\AR10')
+# genReport('E:\HaastTokoeka-Heath\\210',species='Kiwi (Tokoeka Haast)')
+#genReport('G:\Isabel-Summit Forest (Northland)-Karen Lucich 22-11-17\Kiwi Recorder card 5',species='Kiwi')
 #genReport('G:\Isabel-Summit Forest (Northland)-Karen Lucich 22-11-17\Kiwi Recorder card 5',species='Kiwi')
 
 def genReportBittern(dirName):
@@ -575,7 +583,7 @@ def genReportBittern(dirName):
                     r = r + 1
                 # r = r + 1
     wb.save(str(eFile))
-    print ("Generated Report")
+    print("Generated Report")
 
 # genReportBittern('E:\Employ\Kessel ecology\Bittern-Kessels Ecology-Wiea-2017-11-19\DownSampled\KA13 Oct 25-31 down')
 
@@ -712,7 +720,7 @@ def batch_proc(dirName, species='BKiwi'):
 
                         wp = pywt.WaveletPacket(data=filteredDenoisedData, wavelet=wSeg.WaveletFunctions.wavelet,
                                                 mode='symmetric', maxlevel=5)
-                        detected_c = wSeg.detectCalls(wp, wSeg.sampleRate, listnodes=nodes, spInfo=speciesData,
+                        detected_c = wSeg.detectCalls_train_old(wp, wSeg.sampleRate, listnodes=nodes, spInfo=speciesData,
                                                       withzeros=True)
                         detected_c = np.where(detected_c > 0)
                         if np.shape(detected_c)[1] > 1:
@@ -758,3 +766,70 @@ def sort_noiseSegs(dirName, dst):
                             copyfile(srcwav, dstwav)
 
 # sort_noiseSegs('E:\Tier1-2015-16\A_FP_examples\segments', 'E:\Tier1-2015-16\A_FP_examples\Segs')
+
+
+# -------------------------- Fiordland kiwi-----------------------------------------------------------
+#####################################################################################################
+# (1) run the wavelet filter
+# (2) post process to merge segments < 3 sec apart
+# (3) then delete segments < 3 sec long
+# (4) review in batch mode, choose single species
+
+def mergeneighbours(dir='', maxGap=3):
+    """
+    This will merge neighbour segments in the annotation
+    """
+    for root, dirs, files in os.walk(str(dir)):
+        for file in files:
+            if file.endswith('.data') and file[:-5] in files:   # skip GT annotations
+                file = root + '/' + file
+                meta = None
+                with open(file) as f:
+                    segments = json.load(f)
+                    if len(segments) > 0 and segments[0][0] == -1:
+                        meta = segments[0]
+                        del (segments[0])
+                    indx = []
+                    chg = False
+                    for i in range(len(segments) - 1):
+                        if segments[i + 1][0] - segments[i][1] < maxGap:
+                            indx.append(i)
+                            chg = True
+                    indx.reverse()
+                    for i in indx:
+                        segments[i][1] = segments[i + 1][1]
+                        del (segments[i + 1])
+                if chg:
+                    if meta:
+                        segments.insert(0, meta)
+                    file = open(file, 'w')
+                    json.dump(segments, file)
+
+def deleteShort(dir='', minLen=2):
+    """
+    This will delete short segments from the annotation
+    """
+    for root, dirs, files in os.walk(str(dir)):
+        for file in files:
+            if file.endswith('.data') and file[:-5] in files:   # skip GT annotations
+                file = root + '/' + file
+                with open(file) as f:
+                    segments = json.load(f)
+                    newSegments = []
+                    chg = False
+                    for seg in segments:
+                        if seg[0] == -1:
+                            newSegments.append(seg)
+                        elif seg[1]-seg[0] > minLen:
+                            newSegments.append(seg)
+                        else:
+                            chg = True
+                            continue
+                if chg:
+                    file = open(file, 'w')
+                    json.dump(newSegments, file)
+
+# mergeneighbours('G:\Lake Thompson_01052018_SOUTH1047849_01052018_part2')
+# deleteShort('G:\Lake Thompson_01052018_SOUTH1047849_01052018_part2')
+# Now ready to review, recomended to use 'Batch Review'
+# delEmpAnn('H:\Lake Thompson_01052018_SOUTH1047849_01052018_part3')    # This is only useful in main interface

@@ -4192,7 +4192,7 @@ class AviaNZ(QMainWindow):
             elif str(alg) == 'FIR':
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
-            elif str(alg)=='Wavelets':
+            elif str(alg) == 'Wavelets':
                 if species == 'Choose species...':
                     msg = QMessageBox()
                     msg.setIconPixmap(QPixmap('img/Owl_warning.png'))
@@ -4205,8 +4205,10 @@ class AviaNZ(QMainWindow):
                 else:
                     speciesData = json.load(open(os.path.join(self.filtersDir, species+'.txt')))
                     ws = WaveletSegment.WaveletSegment()
-                    newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, spInfo=speciesData, wpmode="new")
-            elif str(alg)=='Cross-Correlation':
+                    newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
+                                                    spInfo=self.speciesData, d=False, f=True,
+                                                    wavelet=ws.WaveletFunctions.wavelet, wpmode="new")
+            elif str(alg) == 'Cross-Correlation':
                 if species_cc != 'Choose species...':
                     # need to load template/s
                     newSegments = self.findMatches(float(str(CCThr1)), species_cc)

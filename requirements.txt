@@ -26,6 +26,7 @@ mpldatacursor==0.6.2
 ## sudo apt install libgstreamer1.0-dev - not sure??
 ## pip uninstall joblib; pip install -Iv joblib=0.11.0
 # pip install git+https://github.com/pyqtgraph/pyqtgraph
+# pip install pyFFTW
 
 ## INSTALLATION:
 # pip install -r requirements.txt --user
