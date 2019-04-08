@@ -45,7 +45,7 @@ def genGT(dirName,species='Kiwi',duration=0,window=1, inc=None):
                 annotation2GT_OvWin(filename,species,duration=duration,window=window,inc=inc)
     print ("Generated GT")
 
-def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None):
+def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notargetsp=False):
     """
     This generates the ground truth for a given sound file
     Given the AviaNZ annotation, returns the ground truth as a txt file
@@ -79,6 +79,7 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None):
     GT[:][1] = str(0)
     GT[:][2] = ''
     GT[:][3] = ''
+
     # fHigh and fLow for text boxes
     fLow = sampleRate/2
     fHigh = 0
@@ -106,7 +107,7 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None):
                 if fHigh < seg[3]:
                     fHigh = seg[3]
                 # Record call type for evaluation purpose
-                if species == 'Kiwi (Nth Is Brown)' or species == 'Kiwi':
+                if species == 'Kiwi (Nth Is Brown)' or species == 'Kiwi' or species == 'Kiwi(Tokoeka Fiordland)':
                     # check male, female, duet calls
                     if '(M)' in str(seg[4][0]):
                         type = 'M'
@@ -159,9 +160,9 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None):
                         GT[i][3] = quality
 
     # Empty files cannot be used now, and lead to problems
-    if len(GT)==0:
-        print("ERROR: no calls for this species in file", datFile)
-        return
+    # if len(GT)==0:
+    #     print("ERROR: no calls for this species in file", datFile)
+    #     return
 
     for line in GT:
         if line[1] == 0.0:
@@ -187,5 +188,5 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None):
     #return [lenMin, lenMax, fLow, fHigh, sampleRate]
 
 #Virginia:change directory name
-# genGT('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test\Tier1-test\Set2_29hrs',species='Kiwi',window=1, inc=1)
+# genGT('D:\AviaNZ\Sound Files\Fiordland kiwi\Dataset\\Negative',species='Kiwi(Tokoeka Fiordland)',window=1, inc=1)
 
