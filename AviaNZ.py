@@ -1831,7 +1831,13 @@ class AviaNZ(QMainWindow):
                     new_wp[index] = wp[index].data
                 C = new_wp.reconstruct()
 
+            # reconstructed signal was @ 16 kHz,
+            # so we upsample to get equal sized spectrograms
+            if self.sampleRate != 16000:
+                C = librosa.core.audio.resample(C, 16000, self.sampleRate)
             sgRaw = self.sp.spectrogram(C)
+            sgHeightReduction = np.shape(sgRaw)[1]*16000//self.sampleRate
+            sgRaw = sgRaw[:, :sgHeightReduction]
             maxsg = np.min(sgRaw)
             tempsp = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
@@ -1840,10 +1846,20 @@ class AviaNZ(QMainWindow):
             lut = cmap.getLookupTable(0.0, 1.0, 256)
             self.plotExtra.setLookupTable(lut)
             self.plotExtra.setImage(tempsp)
+            
+            # set axis. Always at 0:sampleRate//2
             #minX, maxX = self.overviewImageRegion.getRegion()
             #self.p_plot.setXRange(minX, maxX, padding=0)
-            self.plotaxis.setLabel('Frequency bins')
-             
+            MaxFreq = 8000
+            height = 16000 // 2 / np.shape(tempsp)[1]
+            SpecRange = MaxFreq/height
+            self.plotaxis.setTicks([[(0, 0.0),
+                                 (SpecRange/4,round(MaxFreq/4000, 2)),
+                                 (SpecRange/2,round(MaxFreq/2000, 2)),
+                                 (3*SpecRange/4,round(3*MaxFreq/4000, 2)),
+                                 (SpecRange,round(MaxFreq/1000, 2))]])
+            self.plotaxis.setLabel('kHz')
+
 
             # pproc = SupportClasses.postProcess(self.audiodata,self.sampleRate)
             #energy, e = pproc.detectClicks()

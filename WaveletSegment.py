@@ -696,6 +696,8 @@ class WaveletSegment:
         # or can be read-in from the export file.
         # Virginia: added window and inc input
         res = self.gridSearch(thrList, MList, spInfo, rf, feature, window, inc)
+        for f in self.tempfiles:
+            os.remove(f)
         return res
 
     def loadDirectory(self, dirName, spInfo, denoise, filter, keepaudio, wpmode,savedetections, window=1, inc=None):
