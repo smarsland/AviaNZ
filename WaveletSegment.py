@@ -372,7 +372,7 @@ class WaveletSegment:
         count = 0
         for node in nodelist:
             # put WC from test node(s) on the new tree
-            C = self.WaveletFunctions.reconstructWP2(wp, self.WaveletFunctions.wavelet, node, True)
+            C = self.WaveletFunctions.reconstructWP2(wp, self.WaveletFunctions.wavelet, node, True, False)
             # Sanity check for all zero case
             if not any(C):
                 continue    # return np.zeros(nw)

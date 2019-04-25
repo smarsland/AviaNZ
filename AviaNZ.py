@@ -1815,14 +1815,14 @@ class AviaNZ(QMainWindow):
             
             if self.extra == "Filtered spectrogram, new + AA":
                 wp = WF.WaveletPacket(audiodata, WF.wavelet, 5, 'symmetric', True)
-                C = WF.reconstructWP2(wp, WF.wavelet, plotNodes[0], True)[:len(self.audiodata)]
+                C = WF.reconstructWP2(wp, WF.wavelet, plotNodes[0], True, False)[:len(self.audiodata)]
                 for node in plotNodes[1:]:
-                    C = C + WF.reconstructWP2(wp, WF.wavelet, node, True)[:len(C)]
+                    C = C + WF.reconstructWP2(wp, WF.wavelet, node, True, False)[:len(C)]
             if self.extra == "Filtered spectrogram, new":
                 wp = WF.WaveletPacket(audiodata, WF.wavelet, 5, 'symmetric', False)
-                C = WF.reconstructWP2(wp, WF.wavelet, plotNodes[0], True)[:len(self.audiodata)]
+                C = WF.reconstructWP2(wp, WF.wavelet, plotNodes[0], True, False)[:len(self.audiodata)]
                 for node in plotNodes[1:]:
-                    C = C + WF.reconstructWP2(wp, WF.wavelet, node, True)[:len(C)]
+                    C = C + WF.reconstructWP2(wp, WF.wavelet, node, True, False)[:len(C)]
             if self.extra == "Filtered spectrogram, old":
                 wp = pywt.WaveletPacket(data=audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
                 new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
@@ -3275,7 +3275,7 @@ class AviaNZ(QMainWindow):
             for node in spInfo['WaveletParams'][2]:
                 # reconstruction as in detectCalls:
                 print("working on node", node)
-                C = WF.reconstructWP2(wp, WF.wavelet, node, aaType != -2)
+                C = WF.reconstructWP2(wp, WF.wavelet, node, aaType != -2, False)
                 C = self.sp.ButterworthBandpass(C, spInfo['SampleRate'],
                         low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1], order=10)
 
@@ -3394,7 +3394,6 @@ class AviaNZ(QMainWindow):
         """ Listener for the denoising dialog.
         Calls the denoiser and then plots the updated data.
         """
-        # TODO: should it be saved automatically, or a button added?
         if self.CLI:
             # in CLI mode, default values will be retrieved from dialogs.
             self.denoiseDialog = Dialogs.Denoise(DOC=self.DOC,minFreq=self.minFreq,maxFreq=self.maxFreq)
@@ -3407,30 +3406,39 @@ class AviaNZ(QMainWindow):
             print("Denoising requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
             self.statusLeft.setText("Denoising...")
             if not self.DOC:
-                [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width] = self.denoiseDialog.getValues()
+                [alg,depthchoice,depth,thrType,thr,wavelet,start,end,width,aaRec] = self.denoiseDialog.getValues()
             else:
                 [alg, start, end, width] = self.denoiseDialog.getValues()
             self.backup()
             if not hasattr(self, 'waveletDenoiser'):
                 self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata,wavelet=None,maxLevel=self.config['maxSearchDepth'])
 
-            if str(alg) == "Wavelets" and not self.DOC:
-                if thrType is True:
-                    thrType = 'Soft'
+            if str(alg) == "Wavelets":
+                if not self.DOC:
+                    if thrType is True:
+                        thrType = 'soft'
+                    else:
+                        thrType = 'hard'
+                    if depthchoice:
+                        depth = 0
+                    else:
+                        depth = int(str(depth))
+                    self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
                 else:
-                    thrType = 'Hard'
+                    self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata)
+                start = self.minFreqShow
+                end = self.maxFreqShow
+
+            elif str(alg) == "Wavelets2" and not self.DOC:
+                if thrType is True:
+                    thrType = 'soft'
+                else:
+                    thrType = 'hard'
                 if depthchoice:
                     depth = 0
                 else:
                     depth = int(str(depth))
-                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
-                start = self.minFreqShow
-                end = self.maxFreqShow
-
-            elif str(alg) == "Wavelets" and self.DOC:
-                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata)
-                start = self.minFreqShow
-                end = self.maxFreqShow
+                self.audiodata = self.waveletDenoiser.waveletDenoise2(self.audiodata,thrType,float(str(thr)), depth, wavelet=str(wavelet), aaRec=aaRec)
 
             elif str(alg) == "Bandpass --> Wavelets" and not self.DOC:
                 if thrType is True:
