@@ -25,8 +25,10 @@ import numpy as np
 import pywt
 import math
 import scipy.fftpack as fft
+from scipy import signal
 import pyfftw
 from ext import ce_denoise as ce
+import time
 
 class WaveletFunctions:
     """ This class contains the wavelet specific methods.
@@ -176,7 +178,8 @@ class WaveletFunctions:
 
     def graycode(self, n):
         """ Returns a MODIFIED Gray permutation of n -
-            which corresponds to the frequncy band of position n."""
+            which corresponds to the frequency band of position n.
+            Input and output are integer ranks indicating position within level."""
         # convert number to binary repr string:
         n = bin(n)[2:]
         out = ''
@@ -280,7 +283,7 @@ class WaveletFunctions:
         return((freqmin, freqmax))
 
 
-    def reconstructWP2(self, wp, wv, node, antialias=False):
+    def reconstructWP2(self, wp, wv, node, antialias=False, antialiasFilter=False):
         """ Inverse of WaveletPacket: returns the signal from a single node.
             Expects our homebrew (non-downsampled) WP.
             Antialias option controls freq squashing in final step.
@@ -322,17 +325,49 @@ class WaveletFunctions:
             return
 
         if antialias:
-            # wipe images
-            ft = pyfftw.interfaces.scipy_fftpack.fft(data)
-            l = len(ft)
-            # to keep: [nodepos/numnodes : (nodepos+1)/numnodes] x Fs
-            # (same for negative freqs)
-            ft[ : l*nodepos//numnodes] = 0
-            ft[l*(nodepos+1)//numnodes : -l*(nodepos+1)//numnodes] = 0
-            # indexing [-0:] wipes everything
-            if nodepos!=0:
-                ft[-l*nodepos//numnodes : ] = 0
-            data = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
+            if antialiasFilter:
+                # BETTER METHOD for antialiasing
+                # essentially same as SignalProc.ButterworthBandpass,
+                # just stripped to minimum for speed.
+                low = nodepos / numnodes*2
+                high = (nodepos+1) / numnodes*2
+                print("antialising by filtering between %.3f-%.3f FN" %(low, high))
+
+                # Small buffer bands of 0.001 extend critical bands by 16 Hz at 32 kHz sampling
+                # (i.e. critical bands will be 16 Hz wider than passbands in each direction)
+                # Otherwise could use signal.buttord to calculate the critical bands.
+                if low==0:
+                    b,a = signal.butter(7, high+0.002, btype='lowpass')
+                elif high==1:
+                    b,a = signal.butter(7, low-0.002, btype='highpass')
+                else:
+                    b,a = signal.butter(7, [low-0.002, high+0.002], btype='bandpass')
+                data = signal.lfilter(b, a, data)
+
+                # NOTE: can use SOS instead of (b,a) representation to improve stability at high order
+                # (needed for steep transitions).
+                # if low==0:
+                #     sos = signal.butter(30, high+0.002, btype='lowpass', output='sos')
+                # elif high==1:
+                #     sos = signal.butter(30, low-0.002, btype='highpass', output='sos')
+                # else:
+                #     sos = signal.butter(30, [low-0.002, high+0.002], btype='bandpass', output='sos')
+                # data = signal.sosfilt(sos, data)
+
+            else:
+                # OLD METHOD for antialiasing
+                # just setting image frequencies to 0
+                print("antialiasing via FFT")
+                ft = pyfftw.interfaces.scipy_fftpack.fft(data)
+                l = len(ft)
+                # to keep: [nodepos/numnodes : (nodepos+1)/numnodes] x Fs
+                # (same for negative freqs)
+                ft[ : l*nodepos//numnodes] = 0
+                ft[l*(nodepos+1)//numnodes : -l*(nodepos+1)//numnodes] = 0
+                # indexing [-0:] wipes everything
+                if nodepos!=0:
+                    ft[-l*nodepos//numnodes : ] = 0
+                data = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
 
         return(data)
 
@@ -396,7 +431,6 @@ class WaveletFunctions:
         """
 
         print("Wavelet Denoising requested, with the following parameters: type %s, threshold %f, maxLevel %d, bandpass %s, wavelet %s, costfn %s" % (thresholdType, threshold, maxLevel, bandpass, wavelet, costfn))
-        import time
         opstartingtime = time.time()
         if data is None:
             data = self.data
@@ -414,7 +448,7 @@ class WaveletFunctions:
 
         self.thresholdMultiplier = threshold
 
-        wp = pywt.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric', maxlevel=self.maxLevel)
+        wp = pywt.WaveletPacket(data=data, wavelet=wavelet, maxlevel=self.maxLevel, mode='symmetric')
         # print("Checkpoint 1, %.5f" % (time.time() - opstartingtime))
 
         # Get the threshold
@@ -425,6 +459,7 @@ class WaveletFunctions:
 
         # print("Checkpoint 1b, %.5f" % (time.time() - opstartingtime))
         bestleaves = ce.BestTree(wp,threshold,costfn)
+        print("leaves to keep:", bestleaves)
 
         # Make a new tree with these in
         # pywavelet makes the whole tree. So if you don't give it blanks from places where you don't want the values in
@@ -438,6 +473,74 @@ class WaveletFunctions:
         new_wp = self.reconstructWPT(new_wp,wp,wp.wavelet,bestleaves)
 
         return new_wp[''].data
+
+    def waveletDenoise2(self,data=None,thresholdType='soft',threshold=4.5,maxLevel=5,bandpass=False,wavelet='dmey2',costfn='threshold', aaRec=False):
+        """ Perform wavelet denoising.
+        Constructs the wavelet tree to max depth (either specified or found), constructs the best tree, and then
+        thresholds the coefficients (soft or hard thresholding), reconstructs the data and returns the data at the
+        root.
+        Args:
+          1. input audio data - tested with a mono array only
+          2-5. obvious parameters
+          6. wavelet name - either dmey2 or a valid pywt wavelet name
+          7. obvious
+          8. antialias while reconstructing (T/F)
+        """
+
+        print("Wavelet Denoising-Modified requested, with the following parameters: type %s, threshold %f, maxLevel %d, bandpass %s, wavelet %s, costfn %s" % (thresholdType, threshold, maxLevel, bandpass, wavelet, costfn))
+        opstartingtime = time.time()
+        if data is None:
+            data = self.data
+
+        if wavelet == 'dmey2':
+            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
+            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
+            wavelet.orthogonal=True
+        else:
+            wavelet = pywt.Wavelet(wavelet)
+
+        if maxLevel == 0:
+            self.maxLevel = self.BestLevel(wavelet)
+            print("Best level is %d" % self.maxLevel)
+        else:
+            self.maxLevel = maxLevel
+
+        self.thresholdMultiplier = threshold
+
+        # TODO: try out antialiasing
+        wp = self.WaveletPacket(data, wavelet, self.maxLevel, 'symmetric', False)
+        wp2 = pywt.WaveletPacket(data=data, wavelet=wavelet, maxlevel=self.maxLevel, mode='symmetric')
+        # print("Checkpoint 1, %.5f" % (time.time() - opstartingtime))
+
+        # Get the threshold
+        det1 = wp[2]
+        # Note magic conversion number
+        sigma = np.median(np.abs(det1)) / 0.6745
+        threshold = self.thresholdMultiplier * sigma
+
+        # print("Checkpoint 1b, %.5f" % (time.time() - opstartingtime))
+        # TODO: rewrite BestTree to use custom WPs
+        # NOTE: node order is not the same
+        bestleaves = ce.BestTree2(wp,threshold,costfn)
+        print("leaves to keep:", bestleaves)
+
+        # Make a new tree with these in
+        # pywavelet makes the whole tree. So if you don't give it blanks from places where you don't want the values in
+        # the original tree, it copies the details from wp even though it wasn't asked for them.
+        # Reconstruction with the zeros is different to not reconstructing.
+
+        # Copy thresholded versions of the leaves into the new wpt
+        # NOTE: this version overwrites the provided wp
+        bestleaves = [2, 3, 4]
+        ce.ThresholdNodes2(self, wp, bestleaves, threshold, thresholdType)
+
+        # Reconstruct the internal nodes and the data
+        new_wp = np.zeros(len(data))
+        for i in bestleaves:
+            new_wp = new_wp + self.reconstructWP2(wp, wavelet, i, aaRec, True)[0:len(data)]
+        #new_wp = self.reconstructWPT(new_wp, wp2, wavelet, bestleaves)
+
+        return new_wp
 
     def waveletLeafCoeffs(self,data=None,maxLevel=None,wavelet='dmey2'):
         """ Return the wavelet coefficients of the leaf nodes.

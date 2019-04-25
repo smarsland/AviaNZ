@@ -965,7 +965,7 @@ class Denoise(QDialog):
         self.algs = QComboBox()
         # self.algs.addItems(["Wavelets","Bandpass","Butterworth Bandpass" ,"Wavelets --> Bandpass","Bandpass --> Wavelets","Median Filter"])
         if not self.DOC:
-            self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass", "Median Filter"])
+            self.algs.addItems(["Wavelets", "Wavelets2", "Bandpass", "Butterworth Bandpass", "Median Filter"])
         else:
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
@@ -992,6 +992,9 @@ class Denoise(QDialog):
             self.thr.setRange(1,10)
             self.thr.setSingleStep(0.5)
             self.thr.setValue(4.5)
+
+            self.aalabel = QLabel("Antialias reconstruction?")
+            self.aabox = QCheckBox()
 
             self.waveletlabel = QLabel("Type of wavelet")
             self.wavelet = QComboBox()
@@ -1051,6 +1054,9 @@ class Denoise(QDialog):
 
             Box.addWidget(self.thrlabel)
             Box.addWidget(self.thr)
+            
+            Box.addWidget(self.aalabel)
+            Box.addWidget(self.aabox)
 
             Box.addWidget(self.waveletlabel)
             Box.addWidget(self.wavelet)
@@ -1101,7 +1107,7 @@ class Denoise(QDialog):
 
     def changeBoxes(self,alg):
         # This does the hiding and showing of the options as the algorithm changes
-        if self.prevAlg == "Wavelets" and not self.DOC:
+        if (self.prevAlg == "Wavelets" or self.prevAlg == "Wavelets2") and not self.DOC:
             # self.wavlabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
@@ -1111,32 +1117,11 @@ class Denoise(QDialog):
             self.thrtype[1].hide()
             self.thrlabel.hide()
             self.thr.hide()
+            self.aalabel.hide()
+            self.aabox.hide()
             self.waveletlabel.hide()
             self.wavelet.hide()
-        elif self.prevAlg == "Bandpass --> Wavelets" and not self.DOC:
-            self.wblabel.hide()
-            self.depthlabel.hide()
-            self.depth.hide()
-            self.depthchoice.hide()
-            self.thrtypelabel.hide()
-            self.thrtype[0].hide()
-            self.thrtype[1].hide()
-            self.thrlabel.hide()
-            self.thr.hide()
-            self.waveletlabel.hide()
-            self.wavelet.hide()
-            self.blabel.hide()
-            self.low.hide()
-            self.lowtext.hide()
-            self.high.hide()
-            self.hightext.hide()
-            #self.trimlabel.hide()
-            #self.trimaxis.hide()
-            #self.trimaxis.setChecked(False)
-            self.medlabel.hide()
-            self.widthlabel.hide()
-            self.width.hide()
-        elif self.prevAlg == "Wavelets --> Bandpass" and not self.DOC:
+        elif (self.prevAlg == "Bandpass --> Wavelets" or self.prevAlg == "Wavelets --> Bandpass") and not self.DOC:
             self.wblabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
@@ -1186,6 +1171,23 @@ class Denoise(QDialog):
             self.thrtype[1].show()
             self.thrlabel.show()
             self.thr.show()
+            self.aalabel.show()
+            self.aabox.show()
+            self.waveletlabel.show()
+            self.wavelet.show()
+        elif str(alg) == "Wavelets2" and not self.DOC:
+            # TEST OPTION: boxes are currently same as for Wavelets
+            # self.wavlabel.show()
+            self.depthlabel.show()
+            self.depthchoice.show()
+            self.depth.show()
+            self.thrtypelabel.show()
+            self.thrtype[0].show()
+            self.thrtype[1].show()
+            self.thrlabel.show()
+            self.thr.show()
+            self.aalabel.show()
+            self.aabox.show()
             self.waveletlabel.show()
             self.wavelet.show()
         elif str(alg) == "Wavelets --> Bandpass" and not self.DOC:
@@ -1245,7 +1247,7 @@ class Denoise(QDialog):
 
     def getValues(self):
         if not self.DOC:
-            return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
+            return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox.isChecked()]
         else:
             return [self.algs.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
 
