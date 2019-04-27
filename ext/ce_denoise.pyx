@@ -22,7 +22,7 @@ cdef extern from "ce_functions.h":
         void ce_sumsquares(double *arr, int W, double *out)
 
 # Simplified caller to the cost calculator. Useful for testing purposes
-def JustCost(array, threshold, costfn):
+def JustCost(np.ndarray array, threshold, costfn):
          if array.dtype != 'float64':
                  array = array.astype('float64')
          if costfn == 'threshold':
@@ -203,7 +203,22 @@ def BestTree2(wp,threshold,costfn='threshold'):
 
         return listleaves
 
-def ThresholdNodes(self, oldtree, bestleaves, threshold, type):
+# simplified version of ThresholdNodes for testing.
+def JustThreshold(self, np.ndarray indata, threshold, type):
+        # then keep & threshold (inplace)
+        indata = np.ascontiguousarray(indata)
+        length = indata.shape[0]
+
+        if(type=='hard'):
+                ce_thresnode2(<double*> np.PyArray_DATA(indata), length, threshold, 'h')
+        else:
+                ce_thresnode2(<double*> np.PyArray_DATA(indata), length, threshold, 's')
+
+        # note: no return value b/c indata is edited inplace.
+        return indata
+
+
+def ThresholdNodes(self, list oldtree, bestleaves, threshold, str type):
         newtree = oldtree
         bestleavesset = set(bestleaves)
         for l in range(0, 2**(oldtree.maxlevel +1) - 1 ):
@@ -221,7 +236,7 @@ def ThresholdNodes(self, oldtree, bestleaves, threshold, type):
 
         return newtree
 
-def ThresholdNodes2(self, oldtree, bestleaves, threshold, type):
+def ThresholdNodes2(self, list oldtree, bestleaves, threshold, str type):
         # Alternative version for custom (ndarray-type) WPs
         # Uses inplace thresholding, so use with care!
         # (i.e. arg oldtree will be overwritten)
@@ -230,6 +245,7 @@ def ThresholdNodes2(self, oldtree, bestleaves, threshold, type):
                 if(ind in bestleavesset):
                         # then keep & threshold (inplace)
                         length = oldtree[ind].shape[0]
+                        oldtree[ind] = np.ascontiguousarray(oldtree[ind])
 
                         if(type=='hard'):
                                 ce_thresnode2(<double*> np.PyArray_DATA(oldtree[ind]), length, threshold, 'h')
@@ -240,7 +256,8 @@ def ThresholdNodes2(self, oldtree, bestleaves, threshold, type):
 
         # note: no return value b/c oldtree is edited inplace.
 
-def EnergyCurve(C, M):
+def EnergyCurve(np.ndarray C, M):
+        assert C.dtype==np.float64
         # Args: 1. wav data 2. M (int), expansion in samples
         N = len(C)
         E = np.zeros(N)
@@ -248,7 +265,8 @@ def EnergyCurve(C, M):
         ce_energycurve(<double*> np.PyArray_DATA(E), <double*> np.PyArray_DATA(C), N, M)
         return E
 
-def FundFreqYin(data, W, i, ints):
+def FundFreqYin(np.ndarray data, W, i, ints):
+        assert data.dtype==np.float64
         sd = np.zeros(W)
         data = data[i:]
         # Compute sum of squared diff (autocorrelation)
