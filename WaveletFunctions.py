@@ -288,6 +288,7 @@ class WaveletFunctions:
             Expects our homebrew (non-downsampled) WP.
             Antialias option controls freq squashing in final step.
         """
+        opstt = time.time()
         data = wp[node]
 
         lvl = math.floor(math.log2(node+1))
@@ -318,6 +319,7 @@ class WaveletFunctions:
             data = data[len(wv.rec_hi)//2-1 : -(len(wv.rec_lo)//2-1)]
             node = (node-1)//2
             lvl = lvl - 1
+        print("rec ch 1", time.time() - opstt)
 
         if len(data) > 910*16000 and antialias:
             print("Size of signal to be reconstructed is", len(data))
@@ -342,17 +344,25 @@ class WaveletFunctions:
                     b,a = signal.butter(7, low-0.002, btype='highpass')
                 else:
                     b,a = signal.butter(7, [low-0.002, high+0.002], btype='bandpass')
-                data = signal.lfilter(b, a, data)
+
+                # Check filter stability
+                # (smarter methods exist, but this should be fine for short filters)
+                filterUnstable = np.any(np.abs(np.roots(a))>1)
 
                 # NOTE: can use SOS instead of (b,a) representation to improve stability at high order
                 # (needed for steep transitions).
-                # if low==0:
-                #     sos = signal.butter(30, high+0.002, btype='lowpass', output='sos')
-                # elif high==1:
-                #     sos = signal.butter(30, low-0.002, btype='highpass', output='sos')
-                # else:
-                #     sos = signal.butter(30, [low-0.002, high+0.002], btype='bandpass', output='sos')
-                # data = signal.sosfilt(sos, data)
+                if filterUnstable:
+                    print("single-stage filter unstable, switching to SOS filtering")
+                    if low==0:
+                        sos = signal.butter(30, high+0.002, btype='lowpass', output='sos')
+                    elif high==1:
+                        sos = signal.butter(30, low-0.002, btype='highpass', output='sos')
+                    else:
+                        sos = signal.butter(30, [low-0.002, high+0.002], btype='bandpass', output='sos')
+                    data = signal.sosfilt(sos, data)
+                else:
+                    # if filter appears stable, run it on full data
+                    data = signal.lfilter(b, a, data)
 
             else:
                 # OLD METHOD for antialiasing
@@ -368,6 +378,7 @@ class WaveletFunctions:
                 if nodepos!=0:
                     ft[-l*nodepos//numnodes : ] = 0
                 data = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
+        print("rec ch 2", time.time() - opstt)
 
         return(data)
 
@@ -394,7 +405,7 @@ class WaveletFunctions:
                 while new_wp[self.ConvertWaveletNodeName(piterator)].data is None and piterator<first:
                     piterator = piterator + 1
                 parentLength = len(new_wp[self.ConvertWaveletNodeName(piterator)].data)
-                print("setting parentLength to", parentLength)
+                #print("setting parentLength to", parentLength)
                 if parentLength is None:
                     print("setting parentLength to default")
                     parentLength = 2*len(new_wp[names[1]].data)
@@ -408,7 +419,7 @@ class WaveletFunctions:
                     new_wp[names[1]].data = old_wp[names[1]].data
 
                 new_wp[p].data = pywt.idwt(new_wp[names[1]].data, new_wp[names[0]].data, wavelet)[:parentLength]
-                print("rebuilt",p)
+                #print("rebuilt",p)
 
                 # Delete these two nodes from working
                 working = np.delete(working, 1)
@@ -507,10 +518,9 @@ class WaveletFunctions:
 
         self.thresholdMultiplier = threshold
 
-        # TODO: try out antialiasing
-        wp = self.WaveletPacket(data, wavelet, self.maxLevel, 'symmetric', False)
-        wp2 = pywt.WaveletPacket(data=data, wavelet=wavelet, maxlevel=self.maxLevel, mode='symmetric')
-        # print("Checkpoint 1, %.5f" % (time.time() - opstartingtime))
+        # Create wavelet decomposition. Note: using full AA here
+        wp = self.WaveletPacket(data, wavelet, self.maxLevel, 'symmetric', True)
+        print("Checkpoint 1, %.5f" % (time.time() - opstartingtime))
 
         # Get the threshold
         det1 = wp[2]
@@ -518,11 +528,9 @@ class WaveletFunctions:
         sigma = np.median(np.abs(det1)) / 0.6745
         threshold = self.thresholdMultiplier * sigma
 
-        # print("Checkpoint 1b, %.5f" % (time.time() - opstartingtime))
-        # TODO: rewrite BestTree to use custom WPs
+        print("Checkpoint 2, %.5f" % (time.time() - opstartingtime))
         # NOTE: node order is not the same
         bestleaves = ce.BestTree2(wp,threshold,costfn)
-        print("leaves to keep:", bestleaves)
 
         # Make a new tree with these in
         # pywavelet makes the whole tree. So if you don't give it blanks from places where you don't want the values in
@@ -531,14 +539,15 @@ class WaveletFunctions:
 
         # Copy thresholded versions of the leaves into the new wpt
         # NOTE: this version overwrites the provided wp
-        bestleaves = [2, 3, 4]
         ce.ThresholdNodes2(self, wp, bestleaves, threshold, thresholdType)
 
         # Reconstruct the internal nodes and the data
+        print("Checkpoint 3, %.5f" % (time.time() - opstartingtime))
         new_wp = np.zeros(len(data))
         for i in bestleaves:
-            new_wp = new_wp + self.reconstructWP2(wp, wavelet, i, aaRec, True)[0:len(data)]
-        #new_wp = self.reconstructWPT(new_wp, wp2, wavelet, bestleaves)
+            tmp = self.reconstructWP2(wp, wavelet, i, aaRec, True)[0:len(data)]
+            new_wp = new_wp + tmp
+        print("Checkpoint 4, %.5f" % (time.time() - opstartingtime))
 
         return new_wp
 
