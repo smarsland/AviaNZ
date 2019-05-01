@@ -23,10 +23,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #     from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtWidgets import QAbstractButton
+from PyQt5.QtWidgets import QAbstractButton, QMessageBox
 from PyQt5.QtCore import QTime, QFile, QIODevice, QBuffer, QByteArray
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
-from PyQt5.QtGui import QPainter
+from PyQt5.QtGui import QPainter, QIcon, QPixmap
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -44,6 +44,7 @@ import Segment
 
 from time import sleep
 import time
+import platform
 
 import librosa
 
@@ -1080,8 +1081,12 @@ class ControllableAudio(QAudioOutput):
         self.timeoffset = 0
         self.keepSlider = False
         self.format = format
-        # set buffer size to 100 ms
-        self.setBufferSize(int(self.format.sampleSize() * self.format.sampleRate()/10 * self.format.channelCount()))
+        if platform.system() == 'Linux':
+            # set large buffer and use elapsed time
+            self.setBufferSize(int(self.format.sampleSize() * self.format.sampleRate()*10 * self.format.channelCount()))
+        else:
+            # set small buffer (100 ms) and use processed time
+            self.setBufferSize(int(self.format.sampleSize() * self.format.sampleRate()/10 * self.format.channelCount()))
 
     def isPlaying(self):
         return(self.state() == QAudio.ActiveState)
@@ -1395,4 +1400,34 @@ class Log(object):
             self.appendHeader(a[0], a[1], a[2])
             for f in a[3]:
                 self.appendFile(f)
+
+class MessagePopup(QMessageBox):
+    """ Convenience wrapper around QMessageBox.
+        TYPES, based on main icon:
+        w - warning
+        d - done (successful completion)
+        t - thinking (questions)
+        o - other
+    """
+    def __init__(self, type, title, text):
+        super(QMessageBox, self).__init__()
+        
+        self.setText(text)
+        self.setWindowTitle("Select Sound File")
+        if (type=="w"):
+            self.setIconPixmap(QPixmap("img/Owl_warning.png"))
+        elif (type=="d"):
+            self.setIcon(QMessageBox.Information)
+            self.setIconPixmap(QPixmap("img/Owl_done.png"))
+        elif (type=="t"):
+            self.setIcon(QMessageBox.Information)
+            self.setIconPixmap(QPixmap("img/Owl_thinking.png"))
+        elif (type=="o"):
+            self.setIconPixmap(QPixmap("img/AviaNZ.png"))
+
+        self.setWindowIcon(QIcon("img/Avianz.ico"))
+
+        # by default, adding OK button. Can easily be overwritten after creating
+        self.setStandardButtons(QMessageBox.Ok)
+
 

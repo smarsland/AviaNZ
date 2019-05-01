@@ -241,8 +241,8 @@ class WaveletFunctions:
 
             l = len(data)
             # make A_j+1 and D_j+1 (of length l)
-            nexta = np.convolve(data, wavelet.dec_lo, 'same')[1:-1]
-            nextd = np.convolve(data, wavelet.dec_hi, 'same')[1:-1]
+            nexta = signal.fftconvolve(data, wavelet.dec_lo, 'same')[1:-1]
+            nextd = signal.fftconvolve(data, wavelet.dec_hi, 'same')[1:-1]
 
             # antialias A_j+1
             if antialias:
@@ -300,25 +300,7 @@ class WaveletFunctions:
         # same for negative freq, so in total 2^lvl * 2 bands.
         numnodes = 2**(lvl+1)
 
-        while lvl != 0:
-            # convolve with rec filter
-            if node % 2 == 0:
-                # node is detail
-                data = np.convolve(data, wv.rec_hi, 'same')
-            else:
-                # node is approx
-                data = np.convolve(data, wv.rec_lo, 'same')
-            # upsample
-            if lvl != 1:
-                datau = np.zeros(2*len(data))
-                datau[0::2] = data
-                data = datau
-                # trim ends to correct reconstruction length
-                data = data[len(wv.rec_hi)//2-1: -(len(wv.rec_lo)//2-1)]
-            # trim ends again (so all levels get 2*flen trim, top one gets 1*flen)
-            data = data[len(wv.rec_hi)//2-1 : -(len(wv.rec_lo)//2-1)]
-            node = (node-1)//2
-            lvl = lvl - 1
+        data = ce.reconstruct(data, node, np.array(wv.rec_hi), np.array(wv.rec_lo), lvl)
         print("rec ch 1", time.time() - opstt)
 
         if len(data) > 910*16000 and antialias:
@@ -338,6 +320,8 @@ class WaveletFunctions:
                 # Small buffer bands of 0.001 extend critical bands by 16 Hz at 32 kHz sampling
                 # (i.e. critical bands will be 16 Hz wider than passbands in each direction)
                 # Otherwise could use signal.buttord to calculate the critical bands.
+                if low==0 and high==1:
+                    return data
                 if low==0:
                     b,a = signal.butter(7, high+0.002, btype='lowpass')
                 elif high==1:
@@ -485,7 +469,7 @@ class WaveletFunctions:
 
         return new_wp[''].data
 
-    def waveletDenoise2(self,data=None,thresholdType='soft',threshold=4.5,maxLevel=5,bandpass=False,wavelet='dmey2',costfn='threshold', aaRec=False):
+    def waveletDenoise2(self,data=None,thresholdType='soft',threshold=4.5,maxLevel=5,bandpass=False,wavelet='dmey2',costfn='threshold', aaRec=False, aaWP=False):
         """ Perform wavelet denoising.
         Constructs the wavelet tree to max depth (either specified or found), constructs the best tree, and then
         thresholds the coefficients (soft or hard thresholding), reconstructs the data and returns the data at the
@@ -496,6 +480,7 @@ class WaveletFunctions:
           6. wavelet name - either dmey2 or a valid pywt wavelet name
           7. obvious
           8. antialias while reconstructing (T/F)
+          9. antialias while building the WP ('full'), (T/F)
         """
 
         print("Wavelet Denoising-Modified requested, with the following parameters: type %s, threshold %f, maxLevel %d, bandpass %s, wavelet %s, costfn %s" % (thresholdType, threshold, maxLevel, bandpass, wavelet, costfn))
@@ -519,7 +504,7 @@ class WaveletFunctions:
         self.thresholdMultiplier = threshold
 
         # Create wavelet decomposition. Note: using full AA here
-        wp = self.WaveletPacket(data, wavelet, self.maxLevel, 'symmetric', True)
+        wp = self.WaveletPacket(data, wavelet, self.maxLevel, 'symmetric', aaWP)
         print("Checkpoint 1, %.5f" % (time.time() - opstartingtime))
 
         # Get the threshold
@@ -531,6 +516,7 @@ class WaveletFunctions:
         print("Checkpoint 2, %.5f" % (time.time() - opstartingtime))
         # NOTE: node order is not the same
         bestleaves = ce.BestTree2(wp,threshold,costfn)
+        print("leaves to keep:", bestleaves)
 
         # Make a new tree with these in
         # pywavelet makes the whole tree. So if you don't give it blanks from places where you don't want the values in
