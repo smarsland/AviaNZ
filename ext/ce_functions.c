@@ -116,3 +116,41 @@ void ce_sumsquares(double *arr, int W, double *out){
                 }
         }
 }
+
+/*
+ *  performs IDWT for all modes
+ *  
+ *  The upsampling is performed by splitting filters to even and odd elements
+ *  and performing 2 convolutions.
+*/
+
+int upsampling_convolution_valid_sf(const double * const restrict input, const int N,
+                const double * const restrict filter, const int F,
+                double * const restrict output, const int O){
+
+        size_t o, i;
+
+        // output_len expected to be 2*input_len - wavelet.rec_len + 2
+        if(O != 2*N-F+2)
+                return -1;
+        if((F%2) || (N < F/2))
+                return -1;
+        
+        // Perform only stage 2 - all elements in the filter overlap an input element.
+        {
+                for(o = 0, i = F/2 - 1; i < N; ++i, o += 2){
+                        double sum_even = 0;
+                        double sum_odd = 0;
+                        size_t j;
+                        // trick: skipping f[odd]*0 and f[even]*0 terms, due to 0s that come from upsampling
+                        for(j = 0; j < F/2; ++j){
+                                sum_even += filter[j*2] * input[i-j];
+                                sum_odd += filter[j*2+1] * input[i-j];
+                        }
+                        output[o] += sum_even;
+                        output[o+1] += sum_odd;
+                }
+        }
+        return 0;
+}
+

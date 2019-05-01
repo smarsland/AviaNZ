@@ -993,8 +993,8 @@ class Denoise(QDialog):
             self.thr.setSingleStep(0.5)
             self.thr.setValue(4.5)
 
-            self.aalabel = QLabel("Antialias reconstruction?")
-            self.aabox = QCheckBox()
+            self.aabox1 = QCheckBox("Antialias reconstruction")
+            self.aabox2 = QCheckBox("Antialias WP build")
 
             self.waveletlabel = QLabel("Type of wavelet")
             self.wavelet = QComboBox()
@@ -1055,8 +1055,10 @@ class Denoise(QDialog):
             Box.addWidget(self.thrlabel)
             Box.addWidget(self.thr)
             
-            Box.addWidget(self.aalabel)
-            Box.addWidget(self.aabox)
+            Box.addWidget(self.aabox1)
+            Box.addWidget(self.aabox2)
+            self.aabox1.hide()
+            self.aabox2.hide()
 
             Box.addWidget(self.waveletlabel)
             Box.addWidget(self.wavelet)
@@ -1117,8 +1119,9 @@ class Denoise(QDialog):
             self.thrtype[1].hide()
             self.thrlabel.hide()
             self.thr.hide()
-            self.aalabel.hide()
-            self.aabox.hide()
+            if self.prevAlg == "Wavelets2":
+                self.aabox1.hide()
+                self.aabox2.hide()
             self.waveletlabel.hide()
             self.wavelet.hide()
         elif (self.prevAlg == "Bandpass --> Wavelets" or self.prevAlg == "Wavelets --> Bandpass") and not self.DOC:
@@ -1171,8 +1174,6 @@ class Denoise(QDialog):
             self.thrtype[1].show()
             self.thrlabel.show()
             self.thr.show()
-            self.aalabel.show()
-            self.aabox.show()
             self.waveletlabel.show()
             self.wavelet.show()
         elif str(alg) == "Wavelets2" and not self.DOC:
@@ -1186,8 +1187,8 @@ class Denoise(QDialog):
             self.thrtype[1].show()
             self.thrlabel.show()
             self.thr.show()
-            self.aalabel.show()
-            self.aabox.show()
+            self.aabox1.show()
+            self.aabox2.show()
             self.waveletlabel.show()
             self.wavelet.show()
         elif str(alg) == "Wavelets --> Bandpass" and not self.DOC:
@@ -1247,7 +1248,17 @@ class Denoise(QDialog):
 
     def getValues(self):
         if not self.DOC:
-            return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox.isChecked()]
+            # some preprocessing of dialog options before returning
+            if self.thrtype[0].isChecked() is True:
+                thrType = 'soft'
+            else:
+                thrType = 'hard'
+            
+            if self.depthchoice.isChecked():
+                depth = 0 # "please auto-find best"
+            else:
+                depth = int(str(self.depth.text()))
+            return [self.algs.currentText(), depth, thrType, self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox1.isChecked(), self.aabox2.isChecked()]
         else:
             return [self.algs.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
 
