@@ -23,10 +23,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #     from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtWidgets import QAbstractButton
+from PyQt5.QtWidgets import QAbstractButton, QMessageBox
 from PyQt5.QtCore import QTime, QFile, QIODevice, QBuffer, QByteArray
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
-from PyQt5.QtGui import QPainter
+from PyQt5.QtGui import QPainter, QIcon, QPixmap
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -44,6 +44,7 @@ import Segment
 
 from time import sleep
 import time
+import platform
 
 import librosa
 
@@ -179,6 +180,27 @@ class postProcess:
         # plt.ylabel('PSD [V**2/Hz]')
         # plt.show()
         self.segments = newSegments
+
+    def wind_plot(self, Tmean_wind = 1e-8):
+        """
+        delete wind corrupted segments (targeting moderate wind and above) if no sign of kiwi (check len)
+        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
+        """
+        wind_lower = 2.0 * 100 / self.sampleRate
+        wind_upper = 2.0 * 250 / self.sampleRate
+
+        data = self.audioData[int(0*self.sampleRate):int((10)*self.sampleRate)]
+
+        f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
+
+        # check wind
+        limite_inf = int(round(p.__len__() * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
+        limite_sup = int(round(p.__len__() * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
+        a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
+
+        mean_a_wind = np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
+        print("mean_a_wind: ", mean_a_wind)
+        return mean_a_wind
 
     def rainClick(self):
         """
@@ -1059,8 +1081,8 @@ class ControllableAudio(QAudioOutput):
         self.timeoffset = 0
         self.keepSlider = False
         self.format = format
-        # set buffer size to 100 ms
-        self.setBufferSize(int(self.format.sampleSize() * self.format.sampleRate()/10 * self.format.channelCount()))
+        # set small buffer (10 ms) and use processed time
+        self.setBufferSize(int(self.format.sampleSize() * self.format.sampleRate()/100 * self.format.channelCount()))
 
     def isPlaying(self):
         return(self.state() == QAudio.ActiveState)
@@ -1374,4 +1396,41 @@ class Log(object):
             self.appendHeader(a[0], a[1], a[2])
             for f in a[3]:
                 self.appendFile(f)
+
+
+class MessagePopup(QMessageBox):
+    """ Convenience wrapper around QMessageBox.
+        TYPES, based on main icon:
+        w - warning
+        d - done (successful completion)
+        t - thinking (questions)
+        o - other
+        a - about
+    """
+    def __init__(self, type, title, text):
+        super(QMessageBox, self).__init__()
+
+        self.setText(text)
+        self.setWindowTitle("Select Sound File")
+        if (type=="w"):
+            self.setIconPixmap(QPixmap("img/Owl_warning.png"))
+        elif (type=="d"):
+            self.setIcon(QMessageBox.Information)
+            self.setIconPixmap(QPixmap("img/Owl_done.png"))
+        elif (type=="t"):
+            self.setIcon(QMessageBox.Information)
+            self.setIconPixmap(QPixmap("img/Owl_thinking.png"))
+        elif (type=="a"):
+            # Easy way to set ABOUT text here:
+            self.setIconPixmap(QPixmap("img/AviaNZ.png"))
+            self.setText("The AviaNZ Program, v1.4 (May 2019)")
+            self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
+        elif (type=="o"):
+            self.setIconPixmap(QPixmap("img/AviaNZ.png"))
+
+        self.setWindowIcon(QIcon("img/Avianz.ico"))
+
+        # by default, adding OK button. Can easily be overwritten after creating
+        self.setStandardButtons(QMessageBox.Ok)
+
 

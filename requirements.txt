@@ -1,6 +1,6 @@
 numpy==1.15.0
 matplotlib==2.2.2
-librosa==0.4.2
+librosa==0.6.1
 scikit_image==0.14.0
 scipy==1.1.0
 xgboost==0.72.1
@@ -12,7 +12,7 @@ Cython==0.28.4
 click==6.7
 spectrum==0.7.3
 PyQt5==5.11.2
-PyWavelets==0.5.2
+PyWavelets==1.0.1
 scikits.talkbox==0.2.5
 #skimage==0.0
 scikit_learn==0.19.2
@@ -26,6 +26,7 @@ mpldatacursor==0.6.2
 ## sudo apt install libgstreamer1.0-dev - not sure??
 ## pip uninstall joblib; pip install -Iv joblib=0.11.0
 # pip install git+https://github.com/pyqtgraph/pyqtgraph
+# pip install pyFFTW
 
 ## INSTALLATION:
 # pip install -r requirements.txt --user

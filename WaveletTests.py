@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 from PyQt5.QtWidgets import QMessageBox
 import time
+import math
 
 def showEnergies():
     import pylab as pl
@@ -193,142 +194,78 @@ def reconWPT():
     sg = sp.spectrogram(data,sampleRate)
     pl.imshow(10.*np.log10(sg).T)
 
-# Test previous code with and without zeroing the tree, save the filters and compare
-def testTrainers2(dName, withzeros):
-    # Hard code meta data
-    species = "Kiwi (Little Spotted)"
-    fs = 16000
-    minLen = 6
-    maxLen = 32
-    minFrq = 1200
-    maxFrq = 8000
-    wind = True
-    rain = True
-    ff = False
-    f0_low = 0
-    f0_high = 0
 
-    # Define the depth of grid
-    M_range = np.linspace(0.25, 1.5, num=3)
-    thr_range = np.linspace(0, 1, num=5)
+def y(t):
+    sines = math.sin(30*math.pi*t) + math.sin(60*math.pi*t) + math.sin(90*math.pi*t) + math.sin(120*math.pi*t) + math.sin(180*math.pi*t)
+    rest = 2*math.exp(-30*t) * math.sin(260*math.pi*t)
+    if (t>0 and t<0.125) or (t>0.3725 and t<0.5) or (t>0.7475 and t<5.1175):
+        return sines
+    else:
+        return sines+rest
 
-    optimumNodes_M = []
-    TPR_M = []
-    FPR_M = []
-    iterNum = 1
-    ws = WaveletSegment2.WaveletSegment()   # refers old version
+def sampley(fs=400, nump=2048):
+    out = np.zeros(nump)
+    for p in range(nump):
+        out[p] = y(p/400)
+    return out
 
-    opstartingtime = time.time()
-    for M in M_range:
-        print('------ Now M:', M)
-        # Find wavelet nodes for different thresholds
-        optimumNodes = []
-        TPR = []
-        FPR = []
-        for thr in thr_range:
-            speciesData = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
-                           'FreqRange': [minFrq, maxFrq], 'WaveletParams': [thr, M]}
-            optimumNodes_thr = []
-            TP = FP = TN = FN = 0
-            for root, dirs, files in os.walk(str(dName)):
-                for file in files:
-                    if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files:
-                        wavFile = root + '/' + file[:-4]
-                        nodes, stats = ws.waveletSegment_train(wavFile, spInfo=speciesData, df=False, withzeros=withzeros)
-                        TP += stats[0]
-                        FP += stats[1]
-                        TN += stats[2]
-                        FN += stats[3]
-                        print('Current:', wavFile)
-                        print("Parameters: M, Thr ", M, thr)
-                        print("Filtered nodes for current file: ", nodes)
-                        print("Iteration %d/%d" % (iterNum, len(M_range) * len(thr_range)))
-                        for node in nodes:
-                            if node not in optimumNodes_thr:
-                                optimumNodes_thr.append(node)
-            TPR_thr = TP / (TP + FN)
-            FPR_thr = 1 - TN / (FP + TN)
-            TPR.append(TPR_thr)
-            FPR.append(FPR_thr)
-            optimumNodes.append(optimumNodes_thr)
-            iterNum += 1
-        TPR_M.append(TPR)
-        FPR_M.append(FPR)
-        optimumNodes_M.append(optimumNodes)
-    print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
-    print(TPR_M)
-    print(FPR_M)
-    print(optimumNodes_M)
+import matplotlib
+import matplotlib.pyplot as plt
+def ploty(y, name):
+    xs = np.arange(0, y.size)/400
 
-    # Plot AUC and let the user to choose threshold and M
-    plt.style.use('ggplot')
-    valid_markers = ([item[0] for item in mks.MarkerStyle.markers.items() if
-                      item[1] is not 'nothing' and not item[1].startswith('tick') and not item[1].startswith(
-                          'caret')])
-    markers = np.random.choice(valid_markers, len(M_range) * len(thr_range), replace=False)
-    fig, ax = plt.subplots()
-    for i in range(len(M_range)):
-        ax.plot(FPR_M[i], TPR_M[i], marker=markers[i], label='M=' + str(M_range[i]))
-    ax.set_title('Double click and set Tolerance')
-    ax.set_xlabel('False Positive Rate (FPR)')
-    ax.set_ylabel('True Positive Rate (TPR)')
-    fig.canvas.set_window_title('ROC Curve - %s' % (species))
-    ax.set_ybound(0, 1)
-    ax.set_xbound(0, 1)
-    ax.yaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
-    ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
-    ax.legend()
-    def onclick(event):
-        if event.dblclick:
-            fpr_cl = event.xdata
-            tpr_cl = event.ydata
-            print("fpr_cl, tpr_cl: ", fpr_cl, tpr_cl)
-            # TODO: Interpolate?, currently get the closest point
-            TPRmin_M = []
-            for i in range(len(M_range)):
-                TPRmin = [np.abs(x - tpr_cl) for x in TPR_M[i]]
-                TPRmin_M.append(TPRmin)
-            # Choose M
-            M_min = [np.min(x) for x in TPRmin_M]
-            ind = np.argmin(M_min)
-            M = M_range[ind]
-            # Choose threshold
-            ind_thr = np.argmin(TPRmin_M[ind])
-            thr = thr_range[ind_thr]
-            optimumNodesSel = optimumNodes_M[ind][ind_thr]
-            plt.close()
-            speciesData['Wind'] = wind
-            speciesData['Rain'] = rain
-            speciesData['F0'] = ff
-            if ff:
-                speciesData['F0Range'] = [f0_low, f0_high]
-            speciesData['WaveletParams'].clear()
-            speciesData['WaveletParams'].append(thr)
-            speciesData['WaveletParams'].append(M)
-            speciesData['WaveletParams'].append(optimumNodesSel)
-            # Save it
-            filename = dName + '\\' + species + '.txt'
-            print("Saving new filter to ", filename)
-            f = open(filename, 'w')
-            f.write(json.dumps(speciesData))
-            f.close()
-    cid = fig.canvas.mpl_connect('button_press_event', onclick)
+    ws = np.fft.fft(y)
+    fbins = np.fft.fftfreq(y.size, d=1/400)
+
+    fig, ax = plt.subplots(2, 1)
+    ax[0].plot(xs,y)
+    ws[np.where(ws<0)] = 0
+    ax[1].plot(fbins, ws)
+    ax[0].set(xlabel='time, s', ylabel='signal', title=name)
+    ax[0].set(xlabel='freq, Hz', ylabel='signal')
+
+import pywt
+def gety():
+    ys = sampley()
+    ploty(ys, "original")
+
+    wp = pywt.WaveletPacket(data=ys, wavelet='db4')
+
+    new_wp = pywt.WaveletPacket(data=None, wavelet='db4')
+    new_wp['a'] = wp['a'].data
+    recy = new_wp.reconstruct()
+    afilt = np.fft.fft(recy)
+    abins = np.fft.fftfreq(len(wp['a'].data), d=1/400)
+    todrop = np.where(abins < len(wp['a'].data)/4) or np.where(abins > 3*len(wp['a'].data)/4)
+    afilt[todrop] = 0
+    recy = np.fft.ifft(afilt)
+    ploty(recy, "a")
+
+    new_wp = pywt.WaveletPacket(data=None, wavelet='db4')
+    #new_wp['a'] = np.zeros(len(wp['a'].data))
+    new_wp['d'] = wp['d'].data
+    recy = new_wp.reconstruct()
+    afilt = np.fft.fft(recy)
+    abins = np.fft.fftfreq(len(wp['d'].data), d=1/400)
+    todrop = np.where(abins < len(wp['d'].data)/4) or np.where(abins > 3*len(wp['d'].data)/4)
+    afilt[todrop] = 0
+    recy = np.fft.ifft(afilt)
+    ploty(recy, "d")
+
     plt.show()
 
-# testTrainers2('E:\AviaNZ\Sound Files\LSK\\train', withzeros=True)
 
-# Test the new version of training
-def testTrainers(dName, species, f1, f2, fs, trainPerFile=True, withzeros=False, mergeTrees=False, cleanNodelist=False):
-    # Hard code meta data
-    # species = "Kiwi (Little Spotted)"
-    species = species
-    fs = fs
+############ Test wavelet filters
+def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='recsep', window=1, inc=None):
+    # Hard-code extra information (they are not used but to be compatible with main program)
     minLen = 6
     maxLen = 32
     minFrq = f1
     maxFrq = f2
-    wind = True
-    rain = True
+
+    wind = False
+    rain = False
+
     ff = False
     f0_low = 0
     f0_high = 0
@@ -337,20 +274,15 @@ def testTrainers(dName, species, f1, f2, fs, trainPerFile=True, withzeros=False,
     speciesData = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
                    'FreqRange': [minFrq, maxFrq]}  # last params are thr, M
     # returns 2d lists of nodes over M x thr, or stats over M x thr
-    thrList = np.linspace(0, 1, 5)  # np.linspace(0, 1, 5)
-    MList = np.linspace(0.25, 1, 4)  # np.linspace(0.25, 1.5, 3)
+
+    print("Thr: ", thrList)
+    print("M: ", MList)
+    #Virginia: added window and increment
+
     ws = WaveletSegment.WaveletSegment()
-    nodes, TP, FP, TN, FN, negative_nodes = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=False, f=True, trainPerFile=trainPerFile, withzeros=withzeros, mergeTrees=mergeTrees)
+    nodes, TP, FP, TN, FN = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=d, f=f, rf=rf, feature=feature,window=window, inc=inc)
+
     print("Filtered nodes: ", nodes)
-    print("Negative nodes: ", negative_nodes)
-    # Remove any negatively correlated nodes
-    if cleanNodelist:
-        for lst in nodes:
-            for sub_lst in lst:
-                for item in sub_lst:
-                    if item in negative_nodes:
-                        sub_lst.remove(item)
-        print("Filtered nodes after cleaning: ", nodes)
     TPR = TP / (TP + FN)
     FPR = 1 - TN / (FP + TN)
     print("TP rate: ", TPR)
@@ -408,12 +340,19 @@ def testTrainers(dName, species, f1, f2, fs, trainPerFile=True, withzeros=False,
     cid = fig.canvas.mpl_connect('button_press_event', onclick)
     plt.show()
 
-# Test the trained detector on test data
-def testWavelet(dName, species, withzeros, savedetections):
+# Test the trained filter on test data
+def testWavelet(dName, species, savedetections, feature, d, f, rf, window=1, inc=None):
+    print(dName)
+    print(os.path.join(dName, species + '.txt'))
+    # speciesData = json.load(open(os.path.join(dName, species + '.txt')))
     speciesData = json.load(open(os.path.join(dName, species + '.txt')))
+    # speciesData = json.load(open("D:\WaveletDetection\DATASETS\Morepork\Test-5min\Morepork.txt"))
     opstartingtime = time.time()
     ws = WaveletSegment.WaveletSegment()
-    Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, sampleRate=None, spInfo=speciesData, d=False, f=True, withzeros=withzeros, savedetections=savedetections)
+    #Virginia: added window and incremnt
+    window = 1
+    inc=None
+    Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, sampleRate=None, spInfo=speciesData, d=d, f=f, rf=rf, withzeros=True, feature=feature, savedetections=savedetections, window=window, inc=None)
     print("TESTING COMPLETED IN ", time.time() - opstartingtime)
     print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
     if TP+FN != 0:
@@ -432,5 +371,83 @@ def testWavelet(dName, species, withzeros, savedetections):
         accuracy = (TP+TN)/(TP+FP+TN+FN)
     print(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
 
-# testTrainers('E:\Chapter5\DATASETS\\field\\ruru\\train', "Morepork", f1=600, f2=7000, fs=16000, trainPerFile=True, withzeros=True, mergeTrees=False, cleanNodelist=True)
-# testWavelet('E:\Chapter5\DATASETS\\field\\ruru\\test', "Morepork", withzeros=True, savedetections=True)
+
+kiwi_M = [0.125, 0.5, 2.0, 8.0]    # syllable length =1 sec; syl_length/8, syl_length/2, syl_length*2 etc.
+# kiwi_M = [0.25, 0.75, 1.25, 1.75]
+kiwi_thr = [0.25, 0.3, 0.4, 0.5, 0.6, 0.75, 1, 1.25]   #[0.25, 0.5, 0.75, 1, 1.25]
+kiwi_fs = 16000     # fs
+kiwi_f1 = 800   # f low
+kiwi_f2 = 8000  # f high
+kiwi_d = False  # denoise
+kiwi_f = True   # filter
+kiwi_rf = True  # filter the reconstructed signal
+
+# morepork_M = [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0]
+morepork_M = [0.0625, 0.25, 1.0, 4]     # syllable length =0.5 sec; syl_length/8, syl_length/2, syl_length*2 etc.
+morepork_thr = [0.1, 0.2, 0.4, 0.8, 1.6]
+morepork_fs = 16000
+morepork_f1 = 600
+morepork_f2 = 7000
+morepork_d = False
+morepork_f = True
+morepork_rf = True
+
+robin_M = [0.0625, 0.125, 0.25, 0.5, 1.0, 2.0]
+robin_thr = [0.1, 0.2, 0.4, 0.8, 1.6]
+robin_fs = 16000
+robin_f1 = 1500
+robin_f2 = 8000
+robin_d = False
+robin_f = True
+robin_rf = True
+
+# kakapoB_M = [0.125, 0.25, 1, 1.5, 2]
+kakapoB_M = [0.0625, 0.25, 1.0, 4]  # syllable length ~ 0.5 sec
+kakapoB_thr = [0.1, 0.2, 0.4, 0.8, 1.6]
+kakapoB_fs = 4000
+kakapoB_f1 = 50
+kakapoB_f2 = 500
+kakapoB_d = False
+kakapoB_f = False
+kakapoB_rf = False
+
+kakapoC_M = [0.125, 0.25, 1, 1.5, 2]
+kakapoC_thr = [0.1, 0.2, 0.4, 0.8, 1.6]
+kakapoC_fs = 16000
+kakapoC_f1 = 1100
+kakapoC_f2 = 8000
+kakapoC_d = False
+kakapoC_f = True
+kakapoC_rf = True
+
+bittern_M = [0.125, 0.25, 1, 1.5, 2]
+bittern_thr = [0.1, 0.2, 0.4, 0.8, 1.6]
+bittern_fs = 4000
+bittern_f1 = 100
+bittern_f2 = 200
+bittern_d = False
+bittern_f = False
+bittern_rf = False
+
+# testTrainers('D:\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa")
+# testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=1, inc=None)
+
+# testTrainers('D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min', "KakapoB", f1=kakapoB_f1, f2=kakapoB_f2, fs=kakapoB_fs, thrList=kakapoB_thr, MList=kakapoB_M, d=kakapoB_d, f=kakapoB_f, rf=kakapoB_rf, feature="recaa")
+# testWavelet('D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\test-5min\\New folder', "KakapoB", savedetections=True, feature='recaa', d=kakapoB_d, f=kakapoB_f, rf=kakapoB_rf, window=1, inc=None)
+
+# testTrainers('D:\WaveletDetection\DATASETS\RMBL\\train', "Robin", f1=robin_f1, f2=robin_f2, fs=robin_fs, thrList=robin_thr, MList=robin_M, d=robin_d, f=robin_f, rf=robin_rf, feature="recaafull")
+# testWavelet('D:\WaveletDetection\DATASETS\RMBL-Robin all\\robin\\test', "Robin", savedetections=True, feature='recaafull', d=robin_d, f=robin_f, rf=robin_rf, window=1, inc=None)
+# testWavelet('D:\WaveletDetection\DATASETS\RMBL\\aa\\recaa', "Robin", savedetections=True, feature='recaa', d=robin_d, f=robin_f, rf=robin_rf, window=1, inc=None)
+
+# testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\Bittern\\train', "Bittern", f1=bittern_f1, f2=bittern_f2, fs=bittern_fs, thrList=bittern_thr, MList=bittern_M, d=bittern_d, f=bittern_f, rf=bittern_rf, feature="recaa")
+# testWavelet('D:\\Nirosha\WaveletDetection\\bittern\\train_national\Kessel', "Bittern", savedetections=True, feature='recaa', d=bittern_d, f=bittern_f, rf=bittern_rf, window=1, inc=None)
+
+# testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min', "Morepork", f1=morepork_f1, f2=morepork_f2, fs=morepork_fs, thrList=morepork_thr, MList=morepork_M, d=morepork_d, f=morepork_f, rf=morepork_rf, feature="recaa")
+# testWavelet('D:\WaveletDetection\DATASETS\Morepork\Test-5min', "Morepork", savedetections=True, feature='recaa', d=morepork_d, f=morepork_f, rf=morepork_rf, window=1, inc=None)
+
+# testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa")
+# testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=1, inc=None)
+
+# testWavelet('D:\WaveletDetection\Figure4\mp', "Morepork", savedetections=True, feature='recaa', d=morepork_d, f=morepork_f, rf=morepork_rf, window=1, inc=None)
+
+# testWavelet('D:\AviaNZ\Sound Files\Fiordland kiwi\Dataset\\Negative\\New folder', "Kiwi(Tokoeka Fiordland)", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=1, inc=None)

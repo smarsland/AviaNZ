@@ -370,6 +370,69 @@ class addNoiseData(QDialog):
         return [self.level.checkedButton().text(),types]
 
 #======
+class Diagnostic(QDialog):
+    # Class for the diagnostic dialog box
+    def __init__(self, filters, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Diagnostic Plot Options')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setMinimumWidth(300)
+
+        # species / filter
+        self.filterLabel = QLabel("Select filter to use")
+        self.filter = QComboBox()
+        # add filter file names to combobox
+        self.filter.addItems(filters)
+
+        # antialiasing
+        self.aaLabel = QLabel("Select antialiasing type:")
+        self.aaGroup = QButtonGroup()
+        aaButtons = [QRadioButton("No AA"), QRadioButton("Fast partial AA"), QRadioButton("Full AA")]
+        aaButtons[0].setChecked(True)
+        for a in aaButtons:
+            self.aaGroup.addButton(a)
+
+        # spec or energy plot
+        # self.plotLabel = QLabel("Select plot type:")
+        # self.plotGroup = QButtonGroup()
+        # plotButtons = [QRadioButton("Filter band energy"), QRadioButton("Reconstructed spectrogram")]
+        # plotButtons[0].setChecked(True)
+        # for a in plotButtons:
+        #     self.plotGroup.addButton(a)
+
+        # mark calls on spectrogram?
+        self.mark = QCheckBox("Mark calls on spectrogram")
+        self.mark.setChecked(True)
+
+        # buttons
+        self.activate = QPushButton("Make plots")
+        self.clear = QPushButton("Clear plots")
+
+        # layout
+        Box = QVBoxLayout()
+        Box.addWidget(self.filterLabel)
+        Box.addWidget(self.filter)
+
+        Box.addWidget(self.aaLabel)
+        for a in aaButtons:
+            Box.addWidget(a)
+
+        # Box.addWidget(self.plotLabel)
+        # for a in plotButtons:
+        #     Box.addWidget(a)
+
+        Box.addWidget(self.mark)
+
+        Box.addWidget(self.activate)
+        Box.addWidget(self.clear)
+
+        # Now put everything into the frame
+        self.setLayout(Box)
+
+    def getValues(self):
+        return [self.filter.currentText(), self.aaGroup.checkedId(), self.mark.isChecked()]
+
+#======
 class WaveletTrain(QDialog):
     # Class for the segmentation dialog box
     # TODO: add the wavelet params
@@ -902,7 +965,7 @@ class Denoise(QDialog):
         self.algs = QComboBox()
         # self.algs.addItems(["Wavelets","Bandpass","Butterworth Bandpass" ,"Wavelets --> Bandpass","Bandpass --> Wavelets","Median Filter"])
         if not self.DOC:
-            self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass", "Median Filter"])
+            self.algs.addItems(["Wavelets", "Wavelets2", "Bandpass", "Butterworth Bandpass", "Median Filter"])
         else:
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
@@ -929,6 +992,9 @@ class Denoise(QDialog):
             self.thr.setRange(1,10)
             self.thr.setSingleStep(0.5)
             self.thr.setValue(4.5)
+
+            self.aabox1 = QCheckBox("Antialias reconstruction")
+            self.aabox2 = QCheckBox("Antialias WP build")
 
             self.waveletlabel = QLabel("Type of wavelet")
             self.wavelet = QComboBox()
@@ -988,6 +1054,11 @@ class Denoise(QDialog):
 
             Box.addWidget(self.thrlabel)
             Box.addWidget(self.thr)
+            
+            Box.addWidget(self.aabox1)
+            Box.addWidget(self.aabox2)
+            self.aabox1.hide()
+            self.aabox2.hide()
 
             Box.addWidget(self.waveletlabel)
             Box.addWidget(self.wavelet)
@@ -1038,7 +1109,7 @@ class Denoise(QDialog):
 
     def changeBoxes(self,alg):
         # This does the hiding and showing of the options as the algorithm changes
-        if self.prevAlg == "Wavelets" and not self.DOC:
+        if (self.prevAlg == "Wavelets" or self.prevAlg == "Wavelets2") and not self.DOC:
             # self.wavlabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
@@ -1048,32 +1119,12 @@ class Denoise(QDialog):
             self.thrtype[1].hide()
             self.thrlabel.hide()
             self.thr.hide()
+            if self.prevAlg == "Wavelets2":
+                self.aabox1.hide()
+                self.aabox2.hide()
             self.waveletlabel.hide()
             self.wavelet.hide()
-        elif self.prevAlg == "Bandpass --> Wavelets" and not self.DOC:
-            self.wblabel.hide()
-            self.depthlabel.hide()
-            self.depth.hide()
-            self.depthchoice.hide()
-            self.thrtypelabel.hide()
-            self.thrtype[0].hide()
-            self.thrtype[1].hide()
-            self.thrlabel.hide()
-            self.thr.hide()
-            self.waveletlabel.hide()
-            self.wavelet.hide()
-            self.blabel.hide()
-            self.low.hide()
-            self.lowtext.hide()
-            self.high.hide()
-            self.hightext.hide()
-            #self.trimlabel.hide()
-            #self.trimaxis.hide()
-            #self.trimaxis.setChecked(False)
-            self.medlabel.hide()
-            self.widthlabel.hide()
-            self.width.hide()
-        elif self.prevAlg == "Wavelets --> Bandpass" and not self.DOC:
+        elif (self.prevAlg == "Bandpass --> Wavelets" or self.prevAlg == "Wavelets --> Bandpass") and not self.DOC:
             self.wblabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
@@ -1123,6 +1174,21 @@ class Denoise(QDialog):
             self.thrtype[1].show()
             self.thrlabel.show()
             self.thr.show()
+            self.waveletlabel.show()
+            self.wavelet.show()
+        elif str(alg) == "Wavelets2" and not self.DOC:
+            # TEST OPTION: boxes are currently same as for Wavelets
+            # self.wavlabel.show()
+            self.depthlabel.show()
+            self.depthchoice.show()
+            self.depth.show()
+            self.thrtypelabel.show()
+            self.thrtype[0].show()
+            self.thrtype[1].show()
+            self.thrlabel.show()
+            self.thr.show()
+            self.aabox1.show()
+            self.aabox2.show()
             self.waveletlabel.show()
             self.wavelet.show()
         elif str(alg) == "Wavelets --> Bandpass" and not self.DOC:
@@ -1182,7 +1248,17 @@ class Denoise(QDialog):
 
     def getValues(self):
         if not self.DOC:
-            return [self.algs.currentText(),self.depthchoice.isChecked(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
+            # some preprocessing of dialog options before returning
+            if self.thrtype[0].isChecked() is True:
+                thrType = 'soft'
+            else:
+                thrType = 'hard'
+            
+            if self.depthchoice.isChecked():
+                depth = 0 # "please auto-find best"
+            else:
+                depth = int(str(self.depth.text()))
+            return [self.algs.currentText(), depth, thrType, self.thr.text(),self.wavelet.currentText(),self.low.value(),self.high.value(),self.width.text(), self.aabox1.isChecked(), self.aabox2.isChecked()]
         else:
             return [self.algs.currentText(),self.low.value(),self.high.value(),self.width.text()]#,self.trimaxis.isChecked()]
 
@@ -1550,6 +1626,9 @@ class HumanClassify1(QDialog):
                     if '(' in l:
                         ind = l.index('(')
                         l = l[:ind-1] + ">" + l[ind+1:-1]
+                if l not in self.longBirdList:
+                    self.longBirdList.append(l)
+                    self.saveConfig = True
                 ind = self.longBirdList.index(l)
                 self.birds3.item(ind).setSelected(True)
 
