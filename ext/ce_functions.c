@@ -68,9 +68,9 @@ void ce_thresnode(double *in_array, double *out_array, int size, double threshol
 }
 
 // Threshold a node in a wp tree. Note: works inplace, unlike earlier
-void ce_thresnode2(double *in_array, int size, double threshold, char type)
+int ce_thresnode2(double *in_array, int size, double threshold, int type)
 {
-        if(type=='h'){
+        if(type==2){
                 // Hard thresholding
                 for(int i=0; i<size; i++){
                         if(fabs(in_array[i]) < threshold){
@@ -79,7 +79,8 @@ void ce_thresnode2(double *in_array, int size, double threshold, char type)
                                 in_array[i] = in_array[i];
                         }
                 }
-        } else if(type=='s'){
+                return 0;
+        } else if(type==1){
                 // Soft thresholding
                 for(int i=0; i<size; i++){
                         double tmp = fabs(in_array[i]) - threshold;
@@ -91,6 +92,9 @@ void ce_thresnode2(double *in_array, int size, double threshold, char type)
                                 in_array[i] = tmp;
                         }
                 }
+                return 0;
+        } else {
+                return -1;
         }
 }
 
@@ -123,7 +127,6 @@ void ce_sumsquares(double *arr, int W, double *out){
  *  The upsampling is performed by splitting filters to even and odd elements
  *  and performing 2 convolutions.
 */
-
 int upsampling_convolution_valid_sf(const double * const restrict input, const int N,
                 const double * const restrict filter, const int F,
                 double * const restrict output, const int O){
@@ -153,4 +156,3 @@ int upsampling_convolution_valid_sf(const double * const restrict input, const i
         }
         return 0;
 }
-

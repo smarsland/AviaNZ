@@ -1081,12 +1081,8 @@ class ControllableAudio(QAudioOutput):
         self.timeoffset = 0
         self.keepSlider = False
         self.format = format
-        if platform.system() == 'Linux':
-            # set large buffer and use elapsed time
-            self.setBufferSize(int(self.format.sampleSize() * self.format.sampleRate()*10 * self.format.channelCount()))
-        else:
-            # set small buffer (100 ms) and use processed time
-            self.setBufferSize(int(self.format.sampleSize() * self.format.sampleRate()/10 * self.format.channelCount()))
+        # set small buffer (10 ms) and use processed time
+        self.setBufferSize(int(self.format.sampleSize() * self.format.sampleRate()/100 * self.format.channelCount()))
 
     def isPlaying(self):
         return(self.state() == QAudio.ActiveState)
@@ -1401,6 +1397,7 @@ class Log(object):
             for f in a[3]:
                 self.appendFile(f)
 
+
 class MessagePopup(QMessageBox):
     """ Convenience wrapper around QMessageBox.
         TYPES, based on main icon:
@@ -1408,10 +1405,11 @@ class MessagePopup(QMessageBox):
         d - done (successful completion)
         t - thinking (questions)
         o - other
+        a - about
     """
     def __init__(self, type, title, text):
         super(QMessageBox, self).__init__()
-        
+
         self.setText(text)
         self.setWindowTitle("Select Sound File")
         if (type=="w"):
@@ -1422,6 +1420,11 @@ class MessagePopup(QMessageBox):
         elif (type=="t"):
             self.setIcon(QMessageBox.Information)
             self.setIconPixmap(QPixmap("img/Owl_thinking.png"))
+        elif (type=="a"):
+            # Easy way to set ABOUT text here:
+            self.setIconPixmap(QPixmap("img/AviaNZ.png"))
+            self.setText("The AviaNZ Program, v1.4 (May 2019)")
+            self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
 

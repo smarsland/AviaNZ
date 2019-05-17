@@ -13,7 +13,7 @@ cdef extern from "ce_functions.h":
         double ce_thresnode(double *in_array, double *out_array, int size, double threshold, char type)
 
 cdef extern from "ce_functions.h":
-        double ce_thresnode2(double *in_array, int size, double threshold, char type)
+        int ce_thresnode2(double *in_array, int size, double threshold, int type)
 
 cdef extern from "ce_functions.h":
         void ce_energycurve(double *arrE, double *arrC, int N, int M)
@@ -229,25 +229,79 @@ def ThresholdNodes(self, oldtree, bestleaves, threshold, str type):
 
         return newtree
 
-def ThresholdNodes2(self, list oldtree, bestleaves, threshold, str type):
-        # Alternative version for custom (ndarray-type) WPs
-        # Uses inplace thresholding, so use with care!
-        # (i.e. arg oldtree will be overwritten)
+def ThresholdNodes2(self, list oldtree, bestleaves, threshold, str thrtype, int blocklen=0):
+        """ Alternative version for custom (ndarray-type) WPs
+            Uses inplace thresholding, so use with care! (i.e. arg oldtree will be overwritten)
+            Args:
+            1. oldtree - custom WP, a list of 2^(J+1)-1 ndarrays
+            2. bestleaves - ndarray or list of N nodes to be thresholded
+            3. threshold - if int or ndarray, will apply this thr over all nodes & times.
+                Otherwise if Nx1 ndarray, thresholding will be node-specific, but constant over time.
+                Otherwise if NxT ndarray, thresholding will be node- and time-specific (for each of T blocks).
+                IMPORTANT: assumes that row i matches SORTED bestleaves[i]!
+            4. blocklen - int, in samples. Required if threshold is NxT. T*blocklen must be greater or equal to datalength.
+        """
         bestleavesset = set(bestleaves)
+        N = len(bestleavesset)
+        if list(bestleavesset) != list(bestleaves):
+                print("Warning: best leaves were not sorted, make sure threshold order is the same")
+                # could return an error
+
+        # Input checks
+        if blocklen!=0:
+                # will split data into T time blocks
+                T = len(oldtree[0]) // blocklen + 1
+        else:
+                # will keep data in a single block
+                T = 1
+
+        if np.ndim(threshold)==0:
+                thrconst = "c"
+                print("Applying constant threshold over nodes and time")
+        elif type(threshold) is np.ndarray:
+                # checking for both 1D and 2D arrays to allow simple scripts outside for prep
+                if np.shape(threshold)==(1,) or np.shape(threshold)==(1,1):
+                        thrconst = "c"
+                        print("Applying constant threshold over nodes and time")
+                elif np.shape(threshold)==(N,) or np.shape(threshold)==(N,1):
+                        thrconst = "n"
+                        print("Applying node-specific, time-constant threshold")
+                elif np.shape(threshold)==(N,T):
+                        if blocklen==0:
+                                print("ERROR: blocklen must be provided for NxT thresholding")
+                                return 1
+                        thrconst = "t"
+                        print("Applying node- and time-specific threshold over blocks of %d samples" % blocklen)
+                else:
+                        print("ERROR: threshold shape %d x %d unrecognized" % (N, T))
+                        return 1
+        else:
+                print("ERROR: wrong type of threshold provided")
+                return 1
+
+        thrtype_ce = -1
+        if thrtype=="soft":
+                thrtype_ce = 1
+        elif thrtype=="hard":
+                thrtype_ce = 2
+        else:
+                print("ERROR: type of threshold not recognized")
+                return 1
+
+        # Main loop
         for ind in range(len(oldtree)):
                 if(ind in bestleavesset):
                         # then keep & threshold (inplace)
                         length = oldtree[ind].shape[0]
                         oldtree[ind] = np.ascontiguousarray(oldtree[ind])
-
-                        if(type=='hard'):
-                                ce_thresnode2(<double*> np.PyArray_DATA(oldtree[ind]), length, threshold, 'h')
-                        else:
-                                ce_thresnode2(<double*> np.PyArray_DATA(oldtree[ind]), length, threshold, 's')
+                        ce_thresnode2(<double*> np.PyArray_DATA(oldtree[ind]), length, threshold, thrtype_ce)
                 else:
+                        # zero-out all the other nodes
+                        # NOT USED because current reconstruction already assumes all other nodes are 0.
                         oldtree[ind] = np.zeros(len(oldtree[ind]))
 
-        # note: no return value b/c oldtree is edited inplace.
+        # note: no useful return b/c oldtree is edited inplace.
+        return 0
 
 def EnergyCurve(np.ndarray C, M):
         assert C.dtype==np.float64
@@ -284,6 +338,13 @@ def reconstruct(np.ndarray data, int node, np.ndarray wv_rec_hi, np.ndarray wv_r
     assert data.dtype==np.float64
     cdef np.ndarray datau = np.zeros(2**(lvl-1) * len(data), dtype=np.float64)
     cdef int datau_len, wv_hi_len, wv_lo_len, data_len
+
+    if lvl==0:
+        print("Warning: reconstruction from level 0 requested")
+        return data
+    elif lvl<0:
+        print("ERROR: suggested level %d < 0" % lvl)
+        return
 
     wv_hi_len = len(wv_rec_hi)
     wv_lo_len = len(wv_rec_lo)

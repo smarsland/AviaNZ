@@ -90,12 +90,13 @@ class SignalProc:
         Options: multitaper version, but it's slow, mean normalised, even, one-sided.
         This version is faster than the default versions in pylab and scipy.signal
         Assumes that the values are not normalised.
-        TODO: Makes a copy of the data and uses that to ensure can be inverted. This is memory wasteful. Is that a problem?
         """
         if data is None:
-            print ("Error")
+            print("Error")
 
-        datacopy = data.astype('float')
+        sg = np.copy(data)
+        if sg.dtype != 'float':
+            sg = sg.astype('float')
 
         if window_width is None:
             window_width = self.window_width
@@ -138,19 +139,19 @@ class SignalProc:
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)))
 
         if equal_loudness:
-            datacopy = self.equalLoudness(datacopy)
+            sg = self.equalLoudness(sg)
 
         if mean_normalise:
-            datacopy -= datacopy.mean()
+            sg -= sg.mean()
 
-        starts = range(0, len(datacopy) - window_width, incr)
+        starts = range(0, len(sg) - window_width, incr)
         if multitaper:
             from spectrum import dpss, pmtm
             [tapers, eigen] = dpss(window_width, 2.5, 4)
             counter = 0
             sg = np.zeros((len(starts),window_width // 2))
             for start in starts:
-                Sk, weights, eigen = pmtm(datacopy[start:start + window_width], v=tapers, e=eigen, show=False)
+                Sk, weights, eigen = pmtm(sg[start:start + window_width], v=tapers, e=eigen, show=False)
                 Sk = abs(Sk)**2
                 Sk = np.mean(Sk.T * weights, axis=1)
                 sg[counter:counter + 1,:] = Sk[window_width // 2:].T
@@ -158,11 +159,11 @@ class SignalProc:
             sg = np.fliplr(sg)
         else:
             if need_even:
-                starts = np.hstack((starts, np.zeros((window_width - len(datacopy) % window_width),dtype=int)))
+                starts = np.hstack((starts, np.zeros((window_width - len(sg) % window_width),dtype=int)))
 
             ft = np.zeros((len(starts), window_width))
             for i in starts:
-                ft[i // incr, :] = window * datacopy[i:i + window_width]
+                ft[i // incr, :] = window * sg[i:i + window_width]
             ft = fft.fft(ft)
             #ft = np.fft.fft(ft)
             if onesided:
