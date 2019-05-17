@@ -53,7 +53,7 @@ import numpy as np
 import os, json
 import copy
 
-import pywt
+import Wavelet
 import wavio
 
 import io
@@ -70,12 +70,7 @@ class preProcess:
         self.spInfo = spInfo
         self.d = d  # denoise
         self.f = f  # band-pass
-        if wavelet == 'dmey2':
-            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
-            self.wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
-            self.wavelet.orthogonal=True
-        else:
-            self.wavelet = wavelet
+        self.wavelet = Wavelet.Wavelet(name=wavelet)
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
         self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet=self.wavelet, maxLevel=20)
 

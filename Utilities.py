@@ -872,3 +872,20 @@ def deleteShort(dir='', minLen=2):
 # deleteShort('G:\Lake Thompson_01052018_SOUTH1047849_01052018_part2')
 # Now ready to review, recomended to use 'Batch Review'
 # delEmpAnn('H:\Lake Thompson_01052018_SOUTH1047849_01052018_part3')    # This is only useful in main interface
+
+def generateWavelet(name):
+    """ This loads the PyWavelets package,
+        generates a Wavelet object of the desired name,
+        and exports it to Wavelets/name.txt as a 4 filter list.
+    """
+    import pywt
+    import os
+    wv = pywt.Wavelet(name)
+
+    fname = 'Wavelets/' + name + '.txt'
+    if(os.path.isfile(fname)):
+        print("ERROR: file %s already exists!" % fname)
+        return
+    else:
+        np.savetxt(fname, wv.filter_bank, delimiter='  ')
+        print("File %s saved successfully" %fname)

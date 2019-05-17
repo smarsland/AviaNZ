@@ -22,21 +22,21 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
-import pywt
 import math
 import scipy.fftpack as fft
 from scipy import signal
 import pyfftw
 from ext import ce_denoise as ce
 import time
-
+import Wavelet
 
 class WaveletFunctions:
     """ This class contains the wavelet specific methods.
     It is based on pywavelets (pywt), but has extra functions that are required
     to work with the wavelet packet tree.
     As far as possible it matches Matlab.
-    dmey2 is in a file, and is an exact match for the Matlab dmeyer wavelet. It's the one to use.
+    dmey2 is created from the Matlab dmeyer wavelet. It's the one to use.
+    Other wavelets are created from pywt.Wavelet filter banks.
 
     Implements:
         waveletDenoise
@@ -66,12 +66,7 @@ class WaveletFunctions:
         self.tree = None
         self.treefs = samplerate
 
-        if wavelet == 'dmey2':
-            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
-            self.wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
-            self.wavelet.orthogonal=True
-        else:
-            self.wavelet = wavelet
+        self.wavelet = Wavelet.Wavelet(name=wavelet)
 
     def ShannonEntropy(self,s):
         """ Compute the Shannon entropy of data
@@ -88,13 +83,14 @@ class WaveletFunctions:
             maxLevel = self.maxLevel
 
         previouslevelmaxE = self.ShannonEntropy(self.data)
-        self.wp = pywt.WaveletPacket(data=self.data, wavelet=self.wavelet, mode='symmetric', maxlevel=maxLevel)
+        self.WaveletPacket(maxLevel, 'symmetric', aaWP=False, antialiasFilter=True)
+
         level = 1
-        currentlevelmaxE = np.max([self.ShannonEntropy(n.data) for n in self.wp.get_level(level, "freq")])
+        currentlevelmaxE = np.max([self.ShannonEntropy(self.tree[n]) for n in range(1,3)])
         while currentlevelmaxE < previouslevelmaxE and level<maxLevel:
             previouslevelmaxE = currentlevelmaxE
             level += 1
-            currentlevelmaxE = np.max([self.ShannonEntropy(n.data) for n in self.wp.get_level(level, "freq")])
+            currentlevelmaxE = np.max([self.ShannonEntropy(self.tree[n]) for n in range(2**level-1, 2**(level+1)-1)])
         return level
 
     def ConvertWaveletNodeName(self,i):
@@ -211,7 +207,7 @@ class WaveletFunctions:
         return(int(out, 2))
 
     # from memory_profiler import profile
-    # fp = open('memory_prof
+    # fp = open('memory_profiler_wp.log', 'w+')
     # @profile(stream=fp)
     def WaveletPacket(self, maxlevel, mode='symmetric', antialias=False, antialiasFilter=True):
         """ Reimplementation of pywt.WaveletPacket, but allowing for antialias
@@ -411,109 +407,7 @@ class WaveletFunctions:
         return data
 
 
-    def reconstructWPT(self,new_wp,old_wp,wavelet,listleaves):
-        """ Create a new wavelet packet tree by copying in the data for the leaves and then performing
-        the idwt up the tree to the root.
-        Assumes that listleaves is top-to-bottom, so just reverses it.
-        Only takes pywt WP trees.
-        """
-        # Sort the list of leaves into order bottom-to-top, left-to-right
-        working = listleaves.copy()
-        working = working[-1::-1]
-
-        level = int(np.floor(np.log2(working[0] + 1)))
-        while level > 0:
-            first = 2 ** level - 1
-            while working[0] >= first:
-                # Note that it assumes that the whole list is backwards
-                parent = (working[0] - 1) // 2
-                p = self.ConvertWaveletNodeName(parent)
-                names = [self.ConvertWaveletNodeName(working[0]), self.ConvertWaveletNodeName(working[1])]
-                # search over all parents to determine length:
-                piterator = 2**(level-1) - 1
-                while new_wp[self.ConvertWaveletNodeName(piterator)].data is None and piterator<first:
-                    piterator = piterator + 1
-                parentLength = len(new_wp[self.ConvertWaveletNodeName(piterator)].data)
-                #print("setting parentLength to", parentLength)
-                if parentLength is None:
-                    print("setting parentLength to default")
-                    parentLength = 2*len(new_wp[names[1]].data)
-
-                # Testing:
-                if new_wp[names[0]].data is None:
-                    print("retrieving", names[0])
-                    new_wp[names[0]].data = old_wp[names[0]].data
-                if new_wp[names[1]].data is None:
-                    print("retrieving", names[1])
-                    new_wp[names[1]].data = old_wp[names[1]].data
-
-                new_wp[p].data = pywt.idwt(new_wp[names[1]].data, new_wp[names[0]].data, wavelet)[:parentLength]
-                #print("rebuilt",p)
-
-                # Delete these two nodes from working
-                working = np.delete(working, 1)
-                working = np.delete(working, 0)
-                # Insert parent into list of nodes at the next level
-                ins = np.where(working > parent)
-                if len(ins[0]) > 0:
-                    ins = ins[0][-1] + 1
-                else:
-                    ins = 0
-                working = np.insert(working, ins, parent)
-            level = int(np.floor(np.log2(working[0] + 1)))
-        return new_wp
-
-    def waveletDenoise(self,data=None,thresholdType='soft',threshold=4.5,maxLevel=5,bandpass=False,wavelet='dmey2',costfn='threshold'):
-        """ Perform wavelet denoising.
-        Constructs the wavelet tree to max depth (either specified or found), constructs the best tree, and then
-        thresholds the coefficients (soft or hard thresholding), reconstructs the data and returns the data at the
-        root.
-        """
-
-        print("Wavelet Denoising requested, with the following parameters: type %s, threshold %f, maxLevel %d, bandpass %s, wavelet %s, costfn %s" % (thresholdType, threshold, maxLevel, bandpass, wavelet, costfn))
-        if data is None:
-            data = self.data
-
-        if wavelet == 'dmey2':
-            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
-            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
-            wavelet.orthogonal=True
-
-        if maxLevel == 0:
-            self.maxLevel = self.BestLevel(wavelet)
-            print("Best level is %d" % self.maxLevel)
-        else:
-            self.maxLevel = maxLevel
-
-        self.thresholdMultiplier = threshold
-
-        wp = pywt.WaveletPacket(data=data, wavelet=wavelet, maxlevel=self.maxLevel, mode='symmetric')
-        # print("Checkpoint 1, %.5f" % (time.time() - opstartingtime))
-
-        # Get the threshold
-        det1 = wp['d'].data
-        # Note magic conversion number
-        sigma = np.median(np.abs(det1)) / 0.6745
-        threshold = self.thresholdMultiplier * sigma
-
-        # print("Checkpoint 1b, %.5f" % (time.time() - opstartingtime))
-        bestleaves = ce.BestTree(wp,threshold,costfn)
-        print("leaves to keep:", bestleaves)
-
-        # Make a new tree with these in
-        # pywavelet makes the whole tree. So if you don't give it blanks from places where you don't want the values in
-        # the original tree, it copies the details from wp even though it wasn't asked for them.
-        # Reconstruction with the zeros is different to not reconstructing.
-
-        # Copy thresholded versions of the leaves into the new wpt
-        new_wp = ce.ThresholdNodes(self, wp, bestleaves, threshold, thresholdType)
-
-        # Reconstruct the internal nodes and the data
-        new_wp = self.reconstructWPT(new_wp,wp,wp.wavelet,bestleaves)
-
-        return new_wp[''].data
-
-    def waveletDenoise2(self,thresholdType='soft',threshold=4.5,maxLevel=5,bandpass=False, costfn='threshold', aaRec=False, aaWP=False):
+    def waveletDenoise(self,thresholdType='soft',threshold=4.5,maxLevel=5,bandpass=False, costfn='threshold', aaRec=False, aaWP=False):
         """ Perform wavelet denoising.
         Constructs the wavelet tree to max depth (either specified or found), constructs the best tree, and then
         thresholds the coefficients (soft or hard thresholding), reconstructs the data and returns the data at the root.
@@ -587,31 +481,3 @@ class WaveletFunctions:
         print("Checkpoint 4, %.5f" % (time.time() - opstartingtime))
 
         return new_wp
-
-    def waveletLeafCoeffs(self,data=None,maxLevel=None,wavelet='dmey2'):
-        """ Return the wavelet coefficients of the leaf nodes.
-        """
-        if data is None:
-            data = self.data
-
-        if wavelet == 'dmey2':
-            [lowd, highd, lowr, highr] = np.loadtxt('dmey.txt')
-            wavelet = pywt.Wavelet(filter_bank=[lowd, highd, lowr, highr])
-            wavelet.orthogonal=True
-
-        if maxLevel is None:
-            maxLevel = self.BestLevel(wavelet)
-            print("Best level is ", self.maxLevel)
-        else:
-            maxLevel = maxLevel
-
-        wp = pywt.WaveletPacket(data=data, wavelet=wavelet, mode='symmetric', maxlevel=maxLevel)
-        leafNodes=wp.get_leaf_nodes(decompose=False)
-        # make the matrix 64*n
-        leaves=[node.path for node in wp.get_level(maxLevel, 'natural')]
-        mat=np.zeros((len(leaves),len(leafNodes[0][leaves[0]].data)))
-        j=0
-        for leaf in leaves:
-            mat[j]=leafNodes[0][leaf].data
-            j=j+1
-        return mat

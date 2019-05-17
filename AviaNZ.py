@@ -62,7 +62,6 @@ import WaveletFunctions
 import AviaNZ_batch
 import fnmatch
 import librosa
-import pywt
 
 from openpyxl import load_workbook, Workbook
 import matplotlib.markers as mks
@@ -1825,8 +1824,6 @@ class AviaNZ(QMainWindow):
                 audiodata = self.audiodata
 
             WF = WaveletFunctions.WaveletFunctions(data=audiodata, wavelet='dmey2', maxLevel=5, samplerate=16000)
-            import time
-            opt = time.time()
 
             # For now, not using antialiasFilter in the reconstructions as it's quick anyway
             if self.extra == "Filtered spectrogram, new + AA":
@@ -1835,18 +1832,15 @@ class AviaNZ(QMainWindow):
                 for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(node, True, False)[:len(C)]
             if self.extra == "Filtered spectrogram, new":
-                WF.WaveletPacket(5, 'symmetric', False, True)
+                WF.WaveletPacket(5, 'symmetric', False)
                 C = WF.reconstructWP2(plotNodes[0], True, False)[:len(self.audiodata)]
                 for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(node, True, False)[:len(C)]
             if self.extra == "Filtered spectrogram, old":
-                wp = pywt.WaveletPacket(data=audiodata, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
-                new_wp = pywt.WaveletPacket(data=None, wavelet=WF.wavelet, mode='symmetric', maxlevel=5)
-                for index in plotNodes:
-                    index = WF.ConvertWaveletNodeName(index)
-                    new_wp[index] = wp[index].data
-                C = new_wp.reconstruct()
-            print(time.time() - opt)
+                WF.WaveletPacket(5, 'symmetric', False)
+                C = WF.reconstructWP2(plotNodes[0], False)[:len(self.audiodata)]
+                for node in plotNodes[1:]:
+                    C = C + WF.reconstructWP2(node, False)[:len(C)]
 
             # reconstructed signal was @ 16 kHz,
             # so we upsample to get equal sized spectrograms
@@ -3413,9 +3407,6 @@ class AviaNZ(QMainWindow):
             self.audiodata_backup = np.empty((np.shape(self.audiodata)[0], 1))
             self.audiodata_backup[:, 0] = np.copy(self.audiodata)
 
-    from memory_profiler import profile
-    fp = open('memory_profiler.log', 'w+')
-    @profile(stream = fp)
     def decomposeWP(self, x=None):
         """ Listener for quickWP control button.
             Takes DATA and produces a WP decomposition.
@@ -3426,7 +3417,6 @@ class AviaNZ(QMainWindow):
         self.WFinst.WaveletPacket(maxlevel=5, mode='symmetric', antialias=False)
         print("Done")
         print(time.time() - ot)
-        
 
     def denoiseSeg(self):
         """ Listener for quickDenoise control button.
@@ -3446,7 +3436,7 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
 
         # Since there is no dialog menu, settings are preset constants here:
-        alg = "Wavelets2"
+        alg = "Wavelets"
         thrType = "soft"
         depth = 6   # can also use 0 to autoset
         wavelet = "dmey2"
@@ -3461,12 +3451,10 @@ class AviaNZ(QMainWindow):
 
             # extract the piece of audiodata under current segment
             denoised = self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)]
-            WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
+            WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
 
             if alg == "Wavelets":
-                denoised = WF.waveletDenoise(denoised, thrType, thr, depth,wavelet=wavelet)
-            elif alg == "Wavelets2":
-                denoised = WF.waveletDenoise2(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP)
+                denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP)
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
@@ -3520,15 +3508,12 @@ class AviaNZ(QMainWindow):
 
             if str(alg) == "Wavelets":
                 if not self.DOC:
-                    self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
+                    # pass dialog settings
+                    self.audiodata = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP)
                 else:
-                    self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata)
+                    # go with defaults
+                    self.audiodata = self.waveletDenoiser.waveletDenoise(aaRec=True, aaWP=False)
                 # here we override default 0-Fs/2 returns
-                start = self.minFreqShow
-                end = self.maxFreqShow
-
-            elif str(alg) == "Wavelets2" and not self.DOC:
-                self.audiodata = self.waveletDenoiser.waveletDenoise2(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP)
                 start = self.minFreqShow
                 end = self.maxFreqShow
 
@@ -3536,11 +3521,11 @@ class AviaNZ(QMainWindow):
                 if depth==0:
                     depth = None # why not let auto-fit?
                 self.audiodata = self.sp.bandpassFilter(self.audiodata,start=int(str(start)),end=int(str(end)))
-                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
+                self.audiodata = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)),depth, aaRec=aaRec, aaWP=aaWP)
             elif str(alg) == "Wavelets --> Bandpass" and not self.DOC:
                 if depth==0:
                     depth = None # why not let auto-fit?
-                self.audiodata = self.waveletDenoiser.waveletDenoise(self.audiodata,thrType,float(str(thr)),depth,wavelet=str(wavelet))
+                self.audiodata = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)),depth, aaRec=aaRec, aaWP=aaWP)
                 self.audiodata = self.sp.bandpassFilter(self.audiodata,self.sampleRate,start=int(str(start)),end=int(str(end)),minFreq=self.minFreq,maxFreq=self.maxFreq)
 
             elif str(alg) == "Bandpass":

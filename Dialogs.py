@@ -965,7 +965,7 @@ class Denoise(QDialog):
         self.algs = QComboBox()
         # self.algs.addItems(["Wavelets","Bandpass","Butterworth Bandpass" ,"Wavelets --> Bandpass","Bandpass --> Wavelets","Median Filter"])
         if not self.DOC:
-            self.algs.addItems(["Wavelets", "Wavelets2", "Bandpass", "Butterworth Bandpass", "Median Filter"])
+            self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass", "Median Filter"])
         else:
             self.algs.addItems(["Wavelets", "Bandpass", "Butterworth Bandpass"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
@@ -1054,11 +1054,9 @@ class Denoise(QDialog):
 
             Box.addWidget(self.thrlabel)
             Box.addWidget(self.thr)
-            
+
             Box.addWidget(self.aabox1)
             Box.addWidget(self.aabox2)
-            self.aabox1.hide()
-            self.aabox2.hide()
 
             Box.addWidget(self.waveletlabel)
             Box.addWidget(self.wavelet)
@@ -1109,7 +1107,7 @@ class Denoise(QDialog):
 
     def changeBoxes(self,alg):
         # This does the hiding and showing of the options as the algorithm changes
-        if (self.prevAlg == "Wavelets" or self.prevAlg == "Wavelets2") and not self.DOC:
+        if self.prevAlg == "Wavelets" and not self.DOC:
             # self.wavlabel.hide()
             self.depthlabel.hide()
             self.depth.hide()
@@ -1119,9 +1117,8 @@ class Denoise(QDialog):
             self.thrtype[1].hide()
             self.thrlabel.hide()
             self.thr.hide()
-            if self.prevAlg == "Wavelets2":
-                self.aabox1.hide()
-                self.aabox2.hide()
+            self.aabox1.hide()
+            self.aabox2.hide()
             self.waveletlabel.hide()
             self.wavelet.hide()
         elif (self.prevAlg == "Bandpass --> Wavelets" or self.prevAlg == "Wavelets --> Bandpass") and not self.DOC:
@@ -1165,18 +1162,6 @@ class Denoise(QDialog):
 
         self.prevAlg = str(alg)
         if str(alg) == "Wavelets" and not self.DOC:
-            # self.wavlabel.show()
-            self.depthlabel.show()
-            self.depthchoice.show()
-            self.depth.show()
-            self.thrtypelabel.show()
-            self.thrtype[0].show()
-            self.thrtype[1].show()
-            self.thrlabel.show()
-            self.thr.show()
-            self.waveletlabel.show()
-            self.wavelet.show()
-        elif str(alg) == "Wavelets2" and not self.DOC:
             # TEST OPTION: boxes are currently same as for Wavelets
             # self.wavlabel.show()
             self.depthlabel.show()

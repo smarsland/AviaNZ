@@ -7,7 +7,10 @@ import numpy as np
 
 
 class Wavelet:
-    def __init__(self, filter_bank):
+    def __init__(self, name):
+        filename = 'Wavelets/' + name + '.txt'
+        filter_bank = np.loadtxt(filename)
+
         if(len(filter_bank)) != 4:
             msg = "ERROR: wavelet expects four filter coefficients"
             raise ValueError(msg)
