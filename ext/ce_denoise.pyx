@@ -7,16 +7,41 @@ cdef extern from "math.h":
         double log(double arg)
 
 cdef extern from "ce_functions.h":
-        double ce_getcost(double *in_array, int size, double threshold, char costfn)
+        double ce_getcost(double *in_array, int size, double threshold, char costfn, int step)
 
 cdef extern from "ce_functions.h":
         double ce_thresnode(double *in_array, double *out_array, int size, double threshold, char type)
+
+cdef extern from "ce_functions.h":
+        int ce_thresnode2(double *in_array, int size, double threshold, int type)
 
 cdef extern from "ce_functions.h":
         void ce_energycurve(double *arrE, double *arrC, int N, int M)
 
 cdef extern from "ce_functions.h":
         void ce_sumsquares(double *arr, int W, double *out)
+
+cdef extern from "ce_functions.h":
+        int upsampling_convolution_valid_sf(const double * const input, const size_t N,
+                const double * const filter, const size_t F,
+                double * const output, const size_t O)
+
+
+# Simplified caller to the cost calculator. Useful for testing purposes
+def JustCost(np.ndarray array, threshold, costfn):
+         if array.dtype != 'float64':
+                 array = array.astype('float64')
+         if costfn == 'threshold':
+                 # Threshold
+                 cost = ce_getcost(<double*> np.PyArray_DATA(array), array.shape[0], threshold, 't', 1)
+         elif costfn == 'entropy':
+                 # Entropy
+                 cost = ce_getcost(<double*> np.PyArray_DATA(array), array.shape[0], threshold, 'e', 1)
+         else:
+                 cost = ce_getcost(<double*> np.PyArray_DATA(array), array.shape[0], threshold, '*', 1)
+
+         return(cost)
+
 
 def BestTree(wp,threshold,costfn='threshold'):
         """ Compute the best wavelet tree using one of three cost functions: threshold, entropy, or SURE.
@@ -30,20 +55,22 @@ def BestTree(wp,threshold,costfn='threshold'):
         count = 0
         opstartingtime = time.time()
 
-        print("Checkpoint 1ba, %.5f" % (time.time() - opstartingtime))
         for level in range(wp.maxlevel + 1):
                 for n in wp.get_level(level, 'natural'):
+                        # Might be needed, tho pywt always outputs float, hopefully:
+                        # if n.data.dtype != 'float64':
+                        #        n.data = n.data.astype('float64')
                         if costfn == 'threshold':
                                 # Threshold
-                                cost[count] = ce_getcost(<double*> np.PyArray_DATA(n.data), n.data.shape[0], threshold, 't')
+                                cost[count] = ce_getcost(<double*> np.PyArray_DATA(n.data), n.data.shape[0], threshold, 't', 1)
                         elif costfn == 'entropy':
                                 # Entropy
-                                cost[count] = ce_getcost(<double*> np.PyArray_DATA(n.data), n.data.shape[0], threshold, 'e')
+                                cost[count] = ce_getcost(<double*> np.PyArray_DATA(n.data), n.data.shape[0], threshold, 'e', 1)
                         else:
-                                cost[count] = ce_getcost(<double*> np.PyArray_DATA(n.data), n.data.shape[0], threshold, '*')
+                                cost[count] = ce_getcost(<double*> np.PyArray_DATA(n.data), n.data.shape[0], threshold, '*', 1)
 
                         count += 1
-        print("Checkpoint 1bb, %.5f" % (time.time() - opstartingtime))
+        print("Best basis selected in %.5f s" % (time.time() - opstartingtime))
 
         # Compute the best tree using those cost values
         flags = 2 * np.ones(nnodes)
@@ -92,7 +119,99 @@ def BestTree(wp,threshold,costfn='threshold'):
 
         return listleaves
 
-def ThresholdNodes(self, oldtree, bestleaves, threshold, type):
+def BestTree2(wp,threshold,costfn='threshold'):
+        """ Compute the best wavelet tree using one of three cost functions: threshold, entropy, or SURE.
+        Scores each node and uses those scores to identify new leaves of the tree by working up the tree.
+        Returns the list of new leaves of the tree.
+
+        This version works on our custom WPs (ndarrays), not pywt trees.
+        """
+        nnodes = len(wp)
+        cost = np.zeros(nnodes)
+        count = 0
+        step = 1
+        opstartingtime = time.time()
+
+        # Get costs. Thr cost is +1 for each WC that exceeds t, Entr cost is -p*logp
+        for n in range(nnodes):
+                node = wp[n]
+                if node.dtype != 'float64':
+                        node = node.astype('float64')
+                # downsample non-root nodes to keep compatible w/ pywt WCs:
+                if n!=0:
+                        step = 2
+                if costfn == 'threshold':
+                        # Threshold
+                        cost[count] = ce_getcost(<double*> np.PyArray_DATA(node), node.shape[0], threshold, 't', step)
+                elif costfn == 'entropy':
+                        # Entropy
+                        cost[count] = ce_getcost(<double*> np.PyArray_DATA(node), node.shape[0], threshold, 'e', step)
+                else:
+                        cost[count] = ce_getcost(<double*> np.PyArray_DATA(node), node.shape[0], threshold, '*', step)
+
+                count += 1
+        print("Best basis selected in %.5f s" % (time.time() - opstartingtime))
+
+        # Compute the best tree using those cost values
+
+        flags = np.zeros(nnodes)  # initiate w/ 2 for all nodes
+        flags[ nnodes//2 :] = 1  # leaves. nnodes//2 starts from 2^maxlevel-1
+
+        # Work up the tree from just above leaves
+        inds = np.arange(nnodes//2)    # for every ind except leaves
+        inds = inds[-1::-1]    # reverse
+        for i in inds:
+                # Get children of this ind
+                children = np.array([2*i+1, 2*i+2])
+                # Get total cost of both children
+                c = cost[children[0]] + cost[children[1]]
+                if c < cost[i]:
+                        # if children more negative (less entropy), will decompose
+                        # flags are set to decompose by default,
+                        # so just update parent's cost:
+                        cost[i] = c
+                else:
+                        # if children have more entropy, will keep parent:
+                        flags[i] = 1
+                        flags[children] = 0
+
+        # Now get the new leaves of the tree. Anything below these nodes is deleted.
+        # Go through the tree from the top, and stop at "no-decompose" nodes:
+        def decompose(n):
+            if flags[n]==1:
+                # threshold says to keep parent
+                return [n]
+            else:
+                # Get children of this ind
+                child1 = 2*n+1
+                child2 = 2*n+2
+                if(child2 >= nnodes):
+                    # nowhere to decompose, return parent
+                    return [n]
+                else:
+                    # collect best node IDs from children
+                    return np.concatenate((decompose(child1), decompose(child2)))
+        newleaves = decompose(0)
+
+        return newleaves
+
+
+# simplified version of ThresholdNodes for testing.
+def JustThreshold(self, np.ndarray indata, threshold, type):
+        # then keep & threshold (inplace)
+        indata = np.ascontiguousarray(indata)
+        length = indata.shape[0]
+
+        if(type=='hard'):
+                ce_thresnode2(<double*> np.PyArray_DATA(indata), length, threshold, 'h')
+        else:
+                ce_thresnode2(<double*> np.PyArray_DATA(indata), length, threshold, 's')
+
+        # note: no return value b/c indata is edited inplace.
+        return indata
+
+
+def ThresholdNodes(self, oldtree, bestleaves, threshold, str type):
         newtree = oldtree
         bestleavesset = set(bestleaves)
         for l in range(0, 2**(oldtree.maxlevel +1) - 1 ):
@@ -110,7 +229,82 @@ def ThresholdNodes(self, oldtree, bestleaves, threshold, type):
 
         return newtree
 
-def EnergyCurve(C, M):
+def ThresholdNodes2(self, list oldtree, bestleaves, threshold, str thrtype, int blocklen=0):
+        """ Alternative version for custom (ndarray-type) WPs
+            Uses inplace thresholding, so use with care! (i.e. arg oldtree will be overwritten)
+            Args:
+            1. oldtree - custom WP, a list of 2^(J+1)-1 ndarrays
+            2. bestleaves - ndarray or list of N nodes to be thresholded
+            3. threshold - if int or ndarray, will apply this thr over all nodes & times.
+                Otherwise if Nx1 ndarray, thresholding will be node-specific, but constant over time.
+                Otherwise if NxT ndarray, thresholding will be node- and time-specific (for each of T blocks).
+                IMPORTANT: assumes that row i matches SORTED bestleaves[i]!
+            4. blocklen - int, in samples. Required if threshold is NxT. T*blocklen must be greater or equal to datalength.
+        """
+        bestleavesset = set(bestleaves)
+        N = len(bestleavesset)
+        if list(bestleavesset) != list(bestleaves):
+                print("Warning: best leaves were not sorted, make sure threshold order is the same")
+                # could return an error
+
+        # Input checks
+        if blocklen!=0:
+                # will split data into T time blocks
+                T = len(oldtree[0]) // blocklen + 1
+        else:
+                # will keep data in a single block
+                T = 1
+
+        if np.ndim(threshold)==0:
+                thrconst = "c"
+                print("Applying constant threshold over nodes and time")
+        elif type(threshold) is np.ndarray:
+                # checking for both 1D and 2D arrays to allow simple scripts outside for prep
+                if np.shape(threshold)==(1,) or np.shape(threshold)==(1,1):
+                        thrconst = "c"
+                        print("Applying constant threshold over nodes and time")
+                elif np.shape(threshold)==(N,) or np.shape(threshold)==(N,1):
+                        thrconst = "n"
+                        print("Applying node-specific, time-constant threshold")
+                elif np.shape(threshold)==(N,T):
+                        if blocklen==0:
+                                print("ERROR: blocklen must be provided for NxT thresholding")
+                                return 1
+                        thrconst = "t"
+                        print("Applying node- and time-specific threshold over blocks of %d samples" % blocklen)
+                else:
+                        print("ERROR: threshold shape %d x %d unrecognized" % (N, T))
+                        return 1
+        else:
+                print("ERROR: wrong type of threshold provided")
+                return 1
+
+        thrtype_ce = -1
+        if thrtype=="soft":
+                thrtype_ce = 1
+        elif thrtype=="hard":
+                thrtype_ce = 2
+        else:
+                print("ERROR: type of threshold not recognized")
+                return 1
+
+        # Main loop
+        for ind in range(len(oldtree)):
+                if(ind in bestleavesset):
+                        # then keep & threshold (inplace)
+                        length = oldtree[ind].shape[0]
+                        oldtree[ind] = np.ascontiguousarray(oldtree[ind])
+                        ce_thresnode2(<double*> np.PyArray_DATA(oldtree[ind]), length, threshold, thrtype_ce)
+                else:
+                        # zero-out all the other nodes
+                        # NOT USED because current reconstruction already assumes all other nodes are 0.
+                        oldtree[ind] = np.zeros(len(oldtree[ind]))
+
+        # note: no useful return b/c oldtree is edited inplace.
+        return 0
+
+def EnergyCurve(np.ndarray C, M):
+        assert C.dtype==np.float64
         # Args: 1. wav data 2. M (int), expansion in samples
         N = len(C)
         E = np.zeros(N)
@@ -118,7 +312,8 @@ def EnergyCurve(C, M):
         ce_energycurve(<double*> np.PyArray_DATA(E), <double*> np.PyArray_DATA(C), N, M)
         return E
 
-def FundFreqYin(data, W, i, ints):
+def FundFreqYin(np.ndarray data, W, i, ints):
+        assert data.dtype==np.float64
         sd = np.zeros(W)
         data = data[i:]
         # Compute sum of squared diff (autocorrelation)
@@ -138,4 +333,64 @@ def FundFreqYin(data, W, i, ints):
         d[1:] = sd[1:] * ints / np.cumsum(sd[1:])
 
         return d
- 
+
+def reconstruct(np.ndarray data, int node, np.ndarray wv_rec_hi, np.ndarray wv_rec_lo, int lvl):
+    assert data.dtype==np.float64
+    cdef np.ndarray datau = np.zeros(2**(lvl-1) * len(data), dtype=np.float64)
+    cdef int datau_len, wv_hi_len, wv_lo_len, data_len
+
+    if lvl==0:
+        print("Warning: reconstruction from level 0 requested")
+        return data
+    elif lvl<0:
+        print("ERROR: suggested level %d < 0" % lvl)
+        return
+
+    wv_hi_len = len(wv_rec_hi)
+    wv_lo_len = len(wv_rec_lo)
+
+    # Jth level doesn't need upsampling b/c WCs were non-downsampled on the last level
+    if node % 2 == 0:
+        data = np.convolve(data, wv_rec_hi, 'same')
+    else:
+        data = np.convolve(data, wv_rec_lo, 'same')
+    # cut ends because the WP process produces too long WC vectors
+    data = data[wv_hi_len//2-1 : -(wv_lo_len//2-1)]
+
+    # and then proceed with standard upsampling o convolution, J-1 times
+    node = (node - 1)//2
+    lvl = lvl - 1
+
+    while lvl != 0:
+        # allocate mem for upsampled output
+        data_len = len(data)
+        if node % 2 == 0:
+            datau_len = 2*data_len - wv_hi_len + 2
+        else:
+            datau_len = 2*data_len - wv_lo_len + 2
+        datau = np.zeros(datau_len, dtype=np.float64)
+        
+        # pray to gods all arrays are C_CONTIGUOUS
+        # and upsample o convolve:
+        if node % 2 == 0:
+            c_exit_code = upsampling_convolution_valid_sf(<double*> np.PyArray_DATA(data), data_len,
+                <double*> np.PyArray_DATA(wv_rec_hi), wv_hi_len,
+                <double*> np.PyArray_DATA(datau), datau_len)
+        else:
+            c_exit_code = upsampling_convolution_valid_sf(<double*> np.PyArray_DATA(data), data_len,
+                <double*> np.PyArray_DATA(wv_rec_lo), wv_lo_len,
+                <double*> np.PyArray_DATA(datau), datau_len)
+
+        if c_exit_code!=0:
+            print("ERROR: Cythonized convolution failed")
+            return
+        
+        # move output back on top of input for next loop
+        data = datau
+
+        #data = data[wv_hi_len//2-1 : -(wv_lo_len//2-1)]
+
+        node = (node - 1)//2
+        lvl = lvl - 1
+
+    return data

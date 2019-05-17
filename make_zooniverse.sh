@@ -4,6 +4,7 @@ python make_zooniverse.py -s 'Kiwi (Nth Is Brown)' -i 'Sound Files/Batch2/' -o T
 python AviaNZ.py -c -z -f TestOut -o TestOut
 
 # On laptop, have to do conda remove ffmpeg first
+# .wav to .mp3
 for f in ls TestOut/*.wav; do fn="${f%%.*}"; ffmpeg -i $fn.wav $fn.mp3; done
 # [nirosha@civic test]$ for f in *.wav ; do fn="/run/media/nirosha/Nirosha_Acoustics/Tier1-2015-16_Zooniverse/test/"$f; echo $fn; ffmpeg -i $fn $fn.mp3; done
 # Alternative (still creates bad start and end)
