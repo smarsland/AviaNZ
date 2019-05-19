@@ -2635,39 +2635,63 @@ class AviaNZ(QMainWindow):
                 self.updateText(text="Don't Know")
 
         # Now update the text
-        if birdname != 'Other':
-            # Put the selected bird name at the top of the list
-            if len(birdname) > 0 and birdname[-1] == '?':
-                birdname = birdname[:-1]
-            if self.config['ReorderList']:
-                # Either move the label to the top of the list, or delete the last
-                if birdname in self.shortBirdList:
-                    self.shortBirdList.remove(birdname)
-                else:
-                    del self.shortBirdList[-1]
-                self.shortBirdList.insert(0,birdname)
-        else:
+        if birdname == 'Other':
             # This allows textual name entry
             # Ask the user for the new name, and save it
-            text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name as species, (subsp) :')
+            text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name as species, subsp')
             if ok:
                 text = str(text).title()
-                self.updateText(text)
+                # Remove spaces, replace comma with >
+                text = text.replace(" ","")
+                text = text.replace(",",">")
 
                 if text in self.longBirdList:
                     pass
                 else:
+                    # TODO: Test this
                     # Add the new bird name.
+                    ind = text.find('>')
+                    if ind == -1:
+                        ind = len(text)
+                    index = self.model.findItems(text[:ind], QtCore.Qt.MatchFixedString)
+                    if len(index) == 0:
+                        # Species isn't in list
+                        item = QStandardItem(text[:ind])
+                        item.setSelectable(True)
+                        self.model.appendRow(item)
+                    else:
+                        # Get the species item
+                        item = index[0]
+                    if ind < len(text):
+                        # If there is a subsp, add it
+                        newtext = text[:ind]+' ('+text[ind+1:]+')'
+                        subitem = QStandardItem(text[ind+1:])
+                        item.setSelectable(False)
+                        item.appendRow(subitem)
+                        subitem.setSelectable(True)
+                    else:
+                        newtext = text
                     if self.config['ReorderList']:
-                        self.shortBirdList.insert(0,text)
+                        self.shortBirdList.insert(0,newtext)
                         del self.shortBirdList[-1]
                     self.longBirdList.append(text)
-                    self.longBirdList = sorted(self.longBirdList, key=str.lower)
                     self.longBirdList.remove('Unidentifiable')
+                    self.longBirdList = sorted(self.longBirdList, key=str.lower)
                     self.longBirdList.append('Unidentifiable')
                     json.dump(self.longBirdList, open(os.path.join(self.configdir, self.config['BirdListLong']), 'w'),indent=1)
                     
-                    # self.saveConfig = True
+                self.updateText(newtext)
+
+        # Put the selected bird name at the top of the list
+        if len(birdname) > 0 and birdname[-1] == '?':
+            birdname = birdname[:-1]
+        if self.config['ReorderList']:
+            # Either move the label to the top of the list, or delete the last
+            if birdname in self.shortBirdList:
+                self.shortBirdList.remove(birdname)
+            else:
+                del self.shortBirdList[-1]
+            self.shortBirdList.insert(0,birdname)
 
         # refresh overview boxes after all updates:
         self.refreshOverviewWith(startpoint, endpoint, self.segments[self.box1id][4])
