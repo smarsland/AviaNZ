@@ -926,6 +926,11 @@ class LinearRegionItem2(pg.LinearRegionItem):
         else:
             self.sigRegionChanged.emit(self)
 
+    # this allows compatibility with LinearRegions:
+    def setHoverBrush(self, *br, **args):
+        pass
+
+
 class DragViewBox(pg.ViewBox):
     # A normal ViewBox, but with ability to drag the segments
     # and also processes keypress events
