@@ -24,7 +24,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #     from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QAbstractButton, QMessageBox
-from PyQt5.QtCore import QTime, QFile, QIODevice, QBuffer, QByteArray
+from PyQt5.QtCore import QTime, QIODevice, QBuffer, QByteArray
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QPainter, QIcon, QPixmap
 
@@ -34,7 +34,7 @@ import pyqtgraph.functions as fn
 
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import colors
-from openpyxl.styles import Font, Color
+from openpyxl.styles import Font
 
 from scipy import signal
 from scipy.signal import medfilt
@@ -44,13 +44,14 @@ import Segment
 
 from time import sleep
 import time
-import platform
 
 import librosa
 
 import math
 import numpy as np
 import os, json
+import sys
+import re
 import copy
 
 import Wavelet
@@ -530,7 +531,7 @@ class exportSegments:
         ws.cell(row=1, column=3, value="end (hh:mm:ss)")
         ws.cell(row=1, column=4, value="min freq., Hz")
         ws.cell(row=1, column=5, value="max freq., Hz")
-        if species=="All species":
+        if species=="All_species":
             ws.cell(row=1, column=6, value="species")
 
         # Second sheet
@@ -570,7 +571,7 @@ class exportSegments:
             ws = wb['Time Stamps']
             r = ws.max_row + 1
             # Print the filename
-            ws.cell(row=r, column=1, value=str(relfname))
+            ws.cell(row=r, column=1, value=relfname)
             # Loop over the segments
             for seg in segments:
                 # if int(seg[1]-seg[0]) < self.minLen: # skip very short segments
@@ -588,7 +589,7 @@ class exportSegments:
         def writeToExcelp2(segments):
             ws = wb['Presence Absence']
             r = ws.max_row + 1
-            ws.cell(row=r, column=1, value=str(relfname))
+            ws.cell(row=r, column=1, value=relfname)
             ws.cell(row=r, column=2, value='_')
             if len(segments)>0:
                 # if seg[1]-seg[0] > self.minLen: # skip very short segments
@@ -606,7 +607,7 @@ class exportSegments:
                 self.resolution = int(math.ceil(float(self.datalength) / self.sampleRate))
             ws = wb['Per Time Period']
             r = ws.max_row + 1
-            ws.cell(row=r, column=1, value= str(self.resolution) + ' secs resolution')
+            ws.cell(row=r, column=1, value=str(self.resolution) + ' secs resolution')
             ft = Font(color=colors.DARKYELLOW)
             ws.cell(row=r, column=1).font=ft
             c = 2
@@ -617,7 +618,7 @@ class exportSegments:
                 c += 1
             r += 1
             pagesize = int(starttime/self.datalength * self.sampleRate)
-            ws.cell(row=r, column=1, value=str(relfname)+ '_p' + str(pagesize))
+            ws.cell(row=r, column=1, value=relfname + '_p' + str(pagesize))
             c = 2
             for i in range(0, len(detected), self.resolution):
                 j=1 if np.sum(detected[i:i+self.resolution])>0 else 0
@@ -630,30 +631,35 @@ class exportSegments:
         # now, generate the actual files, SEPARATELY FOR EACH SPECIES:
         for species in speciesList:
             print("Exporting species %s" % species)
+            # clean version for filename
+            speciesClean = re.sub(r'\W', "_", species)
+
             # setup output files:
             # if an Excel exists, append (so multiple files go into one worksheet)
             # if not, create new
-
             if self.withConf:
                 if self.batch:
-                    self.eFile = self.dirName + '/DetectionSummary_withConf_' + species + '.xlsx'
+                    self.eFile = self.dirName + '/DetectionSummary_withConf_' + speciesClean + '.xlsx'
                 else:
-                    self.eFile = self.filename + '_withConf_' + species + '.xlsx'
+                    self.eFile = self.filename + '_withConf_' + speciesClean + '.xlsx'
             else:
                 if self.batch:
-                    self.eFile = self.dirName + '/DetectionSummary_' + species + '.xlsx'
+                    self.eFile = self.dirName + '/DetectionSummary_' + speciesClean + '.xlsx'
                 else:
-                    self.eFile = self.filename + '_' + species + '.xlsx'
+                    self.eFile = self.filename + '_' + speciesClean + '.xlsx'
+            self.eFile = str(self.eFile)
 
             if os.path.isfile(self.eFile):
                 try:
-                    wb = load_workbook(str(self.eFile))
-                except:
-                    print("Unable to open file")  # Does not exist OR no read permissions
+                    wb = load_workbook(self.eFile)
+                except Exception as e:
+                    print("ERROR: cannot open file %s to append" % self.eFile)  # Does not exist OR no read permissions
+                    print(e)
                     return
             else:
-                wb = self.makeNewWorkbook(species)
-            relfname = os.path.relpath(str(self.filename), str(self.dirName))
+                wb = self.makeNewWorkbook(speciesClean)
+
+            relfname = str(os.path.relpath(str(self.filename), str(self.dirName)))
             # extract SINGLE-SPECIES ONLY segments,
             # incl. potential assignments ('Kiwi?').
             # if species=="All", take ALL segments.
@@ -687,7 +693,7 @@ class exportSegments:
                 writeToExcelp3(detected, p*n)
 
             # Save the file
-            wb.save(str(self.eFile))
+            wb.save(self.eFile)
 
     def saveAnnotation(self):
         # Save annotations - batch processing
@@ -1434,3 +1440,132 @@ class MessagePopup(QMessageBox):
         self.setStandardButtons(QMessageBox.Ok)
 
 
+class ConfigLoader(object):
+    """ This deals with reading main config files.
+        Not much functionality, but lots of exception handling,
+        so moved it out separately.
+
+        Most of these functions return the contents of a corresponding JSON file.
+    """
+
+    def config(self, file):
+        # At this point, the main config file should already be ensured to exist.
+        # It will always be in user configdir, otherwise it would be impossible to find.
+        print("Loading software settings from file %s" % file)
+        try:
+            config = json.load(open(file))
+            return config
+        except ValueError as e:
+            # if JSON looks corrupt, quit:
+            print(e)
+            msg = MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
+            msg.exec_()
+            sys.exit()
+
+    def filters(self, dir):
+        # Returns a list of filter files.
+        print("Loading call filters from folder %s" % dir)
+        try:
+            filters = [f[:-4] for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
+            return filters
+        except Exception:
+            print("Folder %s not found, no filters loaded" % dir)
+            return None
+
+    def shortbl(self, file, configdir):
+        # A fallback shortlist will be confirmed to exist in configdir.
+        # This list is necessary, long list can be None
+        print("Loading short species list from file %s" % file)
+        try:
+            if os.path.isabs(file):
+                # user-picked files will have absolute paths
+                shortblfile = file
+            else:
+                # initial file will have relative path,
+                # to allow looking it up in various OSes.
+                shortblfile = os.path.join(configdir, file)
+            if not os.path.isfile(shortblfile):
+                print("Warning: file %s not found, falling back to default" % shortblfile)
+                shortblfile = os.path.join(configdir, "ListCommonBirds.txt")
+
+            try:
+                readlist = json.load(open(shortblfile))
+                return readlist
+            except ValueError as e:
+                # if JSON looks corrupt, quit and suggest deleting:
+                print(e)
+                msg = MessagePopup("w", "Bad species list", "ERROR: file " + shortblfile + " corrupt, delete it to restore default")
+                msg.exec_()
+                return None
+
+        except Exception as e:
+            # if file is not found at all, quit, user must recreate the file or change path
+            print(e)
+            msg = MessagePopup("w", "Bad species list", "ERROR: Failed to load short species list from " + file)
+            msg.exec_()
+            return None
+
+
+    def longbl(self, file, configdir):
+        if file == "None":
+            # long bird list can be set to "None" intentionally
+            return None
+
+        print("Loading long species list from file %s" % file)
+        try:
+            if os.path.isabs(file):
+                # user-picked files will have absolute paths
+                longblfile = file
+            else:
+                # initial file will have relative path,
+                # to allow looking it up in various OSes.
+                longblfile = os.path.join(configdir, file)
+            if not os.path.isfile(longblfile):
+                print("Warning: file %s not found, falling back to default" % longblfile)
+                longblfile = os.path.join(configdir, "ListDOCBirds.txt")
+
+            try:
+                readlist = json.load(open(longblfile))
+                return readlist
+            except ValueError as e:
+                print(e)
+                msg = MessagePopup("w", "Bad species list", "Warning: file " + longblfile + " corrupt, delete it to restore default")
+                msg.exec_()
+                return None
+
+        except Exception as e:
+            print(e)
+            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file)
+            msg.exec_()
+            return None
+
+    # Dumps the provided JSON array to the corresponding bird file.
+    def blwrite(self, content, file, configdir):
+        print("Updating species list in file %s" % file)
+        try:
+            if os.path.isabs(file):
+                # user-picked files will have absolute paths
+                file = file
+            else:
+                # initial file will have relative path,
+                # to allow looking it up in various OSes.
+                file = os.path.join(configdir, file)
+
+            # no fallback in case file not found - don't want to write to random places.
+            json.dump(content, open(file, 'w'), indent=1)
+
+        except Exception as e:
+            print(e)
+            msg = MessagePopup("w", "Unwriteable species list", "Warning: Failed to write species list to " + file)
+            msg.exec_()
+
+    # Dumps the provided JSON array to the corresponding config file.
+    def configwrite(self, content, file):
+        print("Saving config to file %s" % file)
+        try:
+            # will always be an absolute path to the user configdir.
+            json.dump(content, open(file, 'w'), indent=1)
+
+        except Exception as e:
+            print("ERROR while saving config file:")
+            print(e)
