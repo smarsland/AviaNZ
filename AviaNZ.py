@@ -94,47 +94,36 @@ class AviaNZ(QMainWindow):
         self.zooniverse = zooniverse
         self.trainPerFile = True
 
+        # configdir passes the standard user app dir based on OS.
         # At this point, the main config file should already be ensured to exist.
         self.configdir = configdir
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
-        print("Loading configs from file %s" % self.configfile)
-        self.config = json.load(open(self.configfile))
+        self.ConfigLoader = SupportClasses.ConfigLoader()
+        self.config = self.ConfigLoader.config(self.configfile)
         self.saveConfig = True
 
         # Load filters
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
-        print("Loading species info from folder %s" % self.filtersDir)
-        try:
-            self.FilterFiles = [f[:-4] for f in os.listdir(self.filtersDir) if os.path.isfile(os.path.join(self.filtersDir, f))]
-        except:
-            print("Folder %s not found, no filters loaded" % self.filtersDir)
-            self.FilterFiles = None
+        self.FilterFiles = self.ConfigLoader.filters(self.filtersDir)
 
         # Load the birdlists:
         # short list is necessary, long list can be None
-        try:
-            shortblfile = os.path.join(configdir, self.config['BirdListShort'])
-            self.shortBirdList = json.load(open(shortblfile))
-        except:
-            print("ERROR: Failed to load short bird list from %s" % shortblfile)
+        self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], configdir)
+        if self.shortBirdList is None:
             sys.exit()
-        
-        if self.config['BirdListLong'] == "None":
-            # If don't have a long bird list, check the length of the short bird list is OK, and otherwise split it
+        # Will be None if fails to load or filename was "None"
+        self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], configdir)
+
+        if self.longBirdList is None:
+            # If don't have a long bird list,
+            # check that the length of the short bird list is OK, and otherwise split it
             # 40 is a bit random, but 20 in a list is long enough!
             if len(self.shortBirdList) > 40:
                 self.longBirdList = self.shortBirdList.copy()
                 self.shortBirdList = self.shortBirdList[:40]
-            else:       
+            else:
                 self.longBirdList = None
-        else:
-            try:
-                longblfile = os.path.join(configdir, self.config['BirdListLong'])
-                self.longBirdList = json.load(open(longblfile))
-            except:
-                print("Warning: failed to load long bird list from %s" % longblfile)
-                self.longBirdList = None
-            
+
         # Noise level details
         self.noiseLevel = None
         self.noiseTypes = []
@@ -807,20 +796,21 @@ class AviaNZ(QMainWindow):
 
         self.model = QStandardItemModel()
         headlist = []
-        for bird in self.longBirdList:
-            ind = bird.find('>')
-            if ind == -1:
-                ind = len(bird)
-            if bird[:ind] not in headlist:
-                headlist.append(bird[:ind])
-                item = QStandardItem(bird[:ind])
-                item.setSelectable(True)
-                self.model.appendRow(item)
-            if ind < len(bird):
-                subitem = QStandardItem(bird[ind+1:])
-                item.setSelectable(False)
-                item.appendRow(subitem)
-                subitem.setSelectable(True)
+        if self.longBirdList is not None:
+            for bird in self.longBirdList:
+                ind = bird.find('>')
+                if ind == -1:
+                    ind = len(bird)
+                if bird[:ind] not in headlist:
+                    headlist.append(bird[:ind])
+                    item = QStandardItem(bird[:ind])
+                    item.setSelectable(True)
+                    self.model.appendRow(item)
+                if ind < len(bird):
+                    subitem = QStandardItem(bird[ind+1:])
+                    item.setSelectable(False)
+                    item.appendRow(subitem)
+                    subitem.setSelectable(True)
         item = QStandardItem("Other")
         item.setSelectable(True)
         self.model.appendRow(item)
@@ -2678,8 +2668,8 @@ class AviaNZ(QMainWindow):
                     self.longBirdList.remove('Unidentifiable')
                     self.longBirdList = sorted(self.longBirdList, key=str.lower)
                     self.longBirdList.append('Unidentifiable')
-                    json.dump(self.longBirdList, open(os.path.join(self.configdir, self.config['BirdListLong']), 'w'),indent=1)
-                    
+                    self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+
                 self.updateText(newtext)
 
         # Put the selected bird name at the top of the list
@@ -3081,7 +3071,7 @@ class AviaNZ(QMainWindow):
                 self.longBirdList = sorted(self.longBirdList, key=str.lower)
                 self.longBirdList.remove('Unidentifiable')
                 self.longBirdList.append('Unidentifiable')
-                json.dump(self.longBirdList, open(os.path.join(self.configdir, self.config['BirdListLong']), 'w'),indent=1)
+                self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
 
         # Todo: boxid[4] has been updated so this if doesn't effect? added update label to else but not the ideal sol
         if label != self.segments[self.box1id][4]:
@@ -3103,7 +3093,7 @@ class AviaNZ(QMainWindow):
                 self.longBirdList = sorted(self.longBirdList, key=str.lower)
                 self.longBirdList.remove('Unidentifiable')
                 self.longBirdList.append('Unidentifiable')
-                json.dump(self.longBirdList, open(os.path.join(self.configdir, self.config['BirdListLong']), 'w'),indent=1)
+                self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
         elif '?' in ''.join(label):
             # Remove the question mark, since the user has agreed
             for i in range(len(self.segments[self.box1id][4])):
@@ -4894,22 +4884,24 @@ class AviaNZ(QMainWindow):
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
             elif childName=='Bird List.Common Bird List.Choose File':
                 filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
-                if filename is not '':
-                    self.config['BirdListShort'] = filename
-                    self.shortBirdList = json.load(open(self.config['BirdListShort']))
-                if '/' in filename:
-                    ind = filename[-1::-1].index('/')
-                    filename = filename[-ind:]
-                self.p['Bird List','Common Bird List', 'Filename'] = filename
+                if filename == '':
+                    print("no list file selected")
+                    return
+                else:
+                    self.shortBirdList = self.ConfigLoader.shortbl(filename, self.configdir)
+                    if self.shortBirdList is not None:
+                        self.config['BirdListShort'] = filename
+                        self.p['Bird List','Common Bird List', 'Filename'] = filename
+                    else:
+                        self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], self.configdir)
             elif childName=='Bird List.Full Bird List.Choose File':
                 filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
-                if filename is not '':
+                if filename == '':
+                    print("no list file selected")
+                    return
+                else:
+                    self.longBirdList = self.ConfigLoader.longbl(filename, self.configdir)
                     self.config['BirdListLong'] = filename
-                    self.longBirdList = json.load(open(self.config['BirdListLong']))
-                if '/' in filename:
-                    ind = filename[-1::-1].index('/')
-                    filename = filename[-ind:]
-                if filename is not '':
                     self.p['Bird List','Full Bird List','Filename'] = filename
                     self.p['Bird List','Full Bird List','No long list'] = False
             elif childName=='Bird List.Full Bird List.No long list':
@@ -4920,20 +4912,16 @@ class AviaNZ(QMainWindow):
                 else:
                     if self.p['Bird List','Full Bird List','Filename'] is None or self.p['Bird List','Full Bird List','Filename'] == '' or self.p['Bird List','Full Bird List','Filename'] == 'None':
                         filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
-                        if filename is not '':
-                            if '/' in filename:
-                                ind = filename[-1::-1].index('/')
-                                filename = filename[-ind:]
+                        if filename == '':
+                            print("no list file selected")
+                            return
+                        else:
                             self.p['Bird List','Full Bird List','Filename'] = filename
                             self.config['BirdListLong'] = filename
-                            self.longBirdList = json.load(open(self.config['BirdListLong']))
+                            self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
 
         self.saveConfig = True
         # Find the '/' in the fileName
-        #i=len(self.filename)-1
-        #while self.filename[i] != '/' and i>0:
-            #i = i-1
-
         if '/' in self.filename:
             ind = self.filename[-1::-1].index('/')
         else:
@@ -5155,9 +5143,9 @@ class AviaNZ(QMainWindow):
                 print(e)
 
         # Save the shortBirdList
-        json.dump(self.shortBirdList, open(os.path.join(self.configdir, self.config['BirdListShort']), 'w'),indent=1)
+        self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
         QApplication.exit(1)
-        
+
     def closeEvent(self, event):
         """ Catch the user closing the window by clicking the Close button instead of quitting. """
         self.quit()
@@ -5174,16 +5162,11 @@ class AviaNZ(QMainWindow):
             self.addNoiseData()
 
         self.saveSegments()
-        if self.saveConfig == True:
-            try:
-                print("Saving config file")
-                json.dump(self.config, open(self.configfile, 'w'),indent=1)
-            except Exception as e:
-                print("ERROR while saving config file:")
-                print(e)
+        if self.saveConfig:
+            self.ConfigLoader.configwrite(self.config, self.configfile)
 
         # Save the shortBirdList
-        json.dump(self.shortBirdList, open(os.path.join(self.configdir, self.config['BirdListShort']), 'w'),indent=1)
+        self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
         QApplication.quit()
 
     def backupDatafiles(self):
@@ -5215,6 +5198,7 @@ class AviaNZ(QMainWindow):
 
 # =============
 
+
 @click.command()
 @click.option('-c', '--cli', is_flag=True, help='Run in command-line mode')
 @click.option('-s', '--cheatsheet', is_flag=True, help='Make the cheatsheet images')
@@ -5223,7 +5207,7 @@ class AviaNZ(QMainWindow):
 @click.option('-o', '--imagefile', type=click.Path(), help='If specified, a spectrogram will be saved to this file')
 @click.argument('command', nargs=-1)
 def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
-    # determine config location
+    # determine location of config file and bird lists
     if platform.system() == 'Windows':
         # Win
         configdir = os.path.expandvars(os.path.join("%APPDATA%", "AviaNZ"))
@@ -5234,7 +5218,8 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
         print("ERROR: what OS is this? %s" % platform.system())
         sys.exit()
 
-    # if config files not found, copy from distributed backups:
+    # if config and bird files not found, copy from distributed backups.
+    # so these files will always exist on load (although they could be corrupt)
     # (exceptions here not handled and should always result in crashes)
     necessaryFiles = ["AviaNZconfig.txt", "ListCommonBirds.txt", "ListDOCBirds.txt"]
     if not os.path.isdir(configdir):
@@ -5283,7 +5268,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
         first.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         first.show()
         app.exec_()
-        
+
         task = first.getValues()
 
         if task == 1:
