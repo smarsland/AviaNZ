@@ -28,13 +28,12 @@
 
 import sys, os, json, platform, re, shutil
 from shutil import copyfile
-from os.path import isfile
 from openpyxl import load_workbook, Workbook
 
-from PyQt5.QtGui import QIcon, QPixmap, QStandardItemModel, QStandardItem, QKeySequence
-from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QLineEdit, QWidgetAction, QComboBox, QTreeView, QShortcut
-from PyQt5.QtCore import Qt, QDir, QTime, QTimer, QPoint, QPointF, QLocale, QFile, QIODevice, QLine, QModelIndex
-from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
+from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence
+from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut
+from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex
+from PyQt5.QtMultimedia import QAudio, QAudioFormat
 
 import wavio
 import numpy as np
@@ -608,9 +607,16 @@ class AviaNZ(QMainWindow):
         self.quickDenButton = QtGui.QToolButton()
         self.quickDenButton.setIcon(QtGui.QIcon('img/denoisesegment.png'))
         self.quickDenButton.setIconSize(QtCore.QSize(20, 20))
-        self.quickDenButton.setToolTip("Denoise & play segment")
+        self.quickDenButton.setToolTip("Denoise segment")
         self.quickDenButton.clicked.connect(self.denoiseSeg)
         self.quickDenButton.setEnabled(False)
+
+        self.quickDenNButton = QtGui.QToolButton()
+        self.quickDenNButton.setIcon(QtGui.QIcon('img/denoisesegment.png'))
+        self.quickDenNButton.setIconSize(QtCore.QSize(20, 20))
+        self.quickDenNButton.setToolTip("Denoise segment, node-specific")
+        self.quickDenNButton.clicked.connect(self.denoiseSegN)
+        self.quickDenNButton.setEnabled(False)
 
         # self.quickWPButton = QtGui.QToolButton()
         # self.quickWPButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_ArrowDown))
@@ -667,6 +673,7 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.playSegButton,row=0,col=2)
         self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
         self.w_controls.addWidget(self.quickDenButton,row=1,col=0)
+        self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
         # self.w_controls.addWidget(self.quickWPButton,row=1,col=0)
         self.w_controls.addWidget(self.timePlayed,row=2,col=0, colspan=4)
         self.w_controls.addWidget(self.volIcon, row=3, col=0)
@@ -2211,6 +2218,7 @@ class AviaNZ(QMainWindow):
         """ Changes the segment colors and enables playback buttons."""
         self.playSegButton.setEnabled(True)
         self.quickDenButton.setEnabled(True)
+        self.quickDenNButton.setEnabled(True)
         self.box1id = boxid
 
         brush = fn.mkBrush(self.ColourSelected)
@@ -3467,7 +3475,70 @@ class AviaNZ(QMainWindow):
             WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
 
             if alg == "Wavelets":
-                denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP)
+                denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, thrfun="c")
+
+            print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
+
+            # update full audiodata
+            self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)] = denoised
+
+            # recalculate spectrogram
+            sgRaw = self.sp.spectrogram(self.audiodata,mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided,multitaper=self.sgMultitaper)
+            maxsg = np.min(sgRaw)
+            self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+
+            # Update the ampl image
+            self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
+
+            # Update the spec & overview images.
+            # Does not reset to start if the freqs aren't changed
+            self.redoFreqAxis(self.minFreqShow,self.maxFreqShow, store=False)
+
+            if hasattr(self,'spectrogramDialog'):
+                self.spectrogramDialog.setValues(self.minFreq,self.maxFreq,self.minFreqShow,self.maxFreqShow)
+
+            self.setColourLevels()
+
+        print("Denoising completed in %s seconds" % round(time.time() - opstartingtime, 4))
+        self.statusLeft.setText("Ready")
+
+    def denoiseSegN(self):
+        """ Listener for quickDenoise control button.
+            Extracts a segment from DATA between START and STOP (in ms),
+            denoises that segment, concats with rest of original DATA,
+            and updates the original DATA.
+        """
+
+        if self.box1id > -1:
+            start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
+            stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
+        else:
+            print("Can't play, no segment selected")
+            return
+
+        if self.media_obj.isPlaying():
+            self.stopPlayback()
+
+        # Since there is no dialog menu, settings are preset constants here:
+        alg = "Wavelets"
+        thrType = "soft"
+        depth = 6   # can also use 0 to autoset
+        wavelet = "dmey2"
+        aaRec = True
+        aaWP = True
+        thr = 2.0  # this one is difficult to set universally...
+
+        with pg.BusyCursor():
+            opstartingtime = time.time()
+            print("Denoising requested at " + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
+            self.statusLeft.setText("Denoising...")
+
+            # extract the piece of audiodata under current segment
+            denoised = self.audiodata[int(start * self.sampleRate//1000) : int(stop * self.sampleRate//1000)]
+            WF = WaveletFunctions.WaveletFunctions(data=denoised, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
+
+            if alg == "Wavelets":
+                denoised = WF.waveletDenoise(thrType, thr, depth, aaRec=aaRec, aaWP=aaWP, thrfun="n")
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 

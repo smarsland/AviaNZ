@@ -407,7 +407,7 @@ class WaveletFunctions:
         return data
 
 
-    def waveletDenoise(self,thresholdType='soft',threshold=4.5,maxLevel=5,bandpass=False, costfn='threshold', aaRec=False, aaWP=False):
+    def waveletDenoise(self,thresholdType='soft',threshold=4.5,maxLevel=5,bandpass=False, costfn='threshold', aaRec=False, aaWP=False, thrfun="c"):
         """ Perform wavelet denoising.
         Constructs the wavelet tree to max depth (either specified or found), constructs the best tree, and then
         thresholds the coefficients (soft or hard thresholding), reconstructs the data and returns the data at the root.
@@ -433,18 +433,18 @@ class WaveletFunctions:
 
         # Create wavelet decomposition. Note: using full AA here
         self.WaveletPacket(self.maxLevel, 'symmetric', aaWP, antialiasFilter=True)
-        wp = self.tree
         print("Checkpoint 1, %.5f" % (time.time() - opstartingtime))
 
         # Get the threshold
-        det1 = wp[2]
+        det1 = self.tree[2]
         # Note magic conversion number
         sigma = np.median(np.abs(det1)) / 0.6745
         threshold = self.thresholdMultiplier * sigma
 
         print("Checkpoint 2, %.5f" % (time.time() - opstartingtime))
         # NOTE: node order is not the same
-        bestleaves = ce.BestTree2(wp,threshold,costfn)
+        # NOTE: threshold isn't needed for Entropy cost fn
+        bestleaves = ce.BestTree2(self.tree,threshold,costfn)
         print("leaves to keep:", bestleaves)
 
         # Make a new tree with these in
@@ -454,16 +454,26 @@ class WaveletFunctions:
 
         # Copy thresholded versions of the leaves into the new wpt
         # NOTE: this version overwrites the provided wp
-        thrfun = "c"
         if thrfun == "c":
             # constant threshold across all levels, nodes and times
-            exit_code = ce.ThresholdNodes2(self, wp, bestleaves, threshold, thresholdType)
+            exit_code = ce.ThresholdNodes2(self, self.tree, bestleaves, threshold, thresholdType)
         elif thrfun == "l":
             # threshold level-specific, constant across nodes and times
-            exit_code = ce.ThresholdNodes2(self, wp, bestleaves, threshold, thresholdType)
+            exit_code = ce.ThresholdNodes2(self, self.tree, bestleaves, threshold, thresholdType)
+            # TODO
         elif thrfun == "n":
             # threshold node-specific, constant across times
-            exit_code = ce.ThresholdNodes2(self, wp, bestleaves, threshold, thresholdType)
+            # Get the threshold
+            threshold = np.zeros(len(bestleaves))
+            bestleaves_sort = list(set(bestleaves))
+            # NOTE: IMPORTANT: bestleaves must be in set-order!!
+            for leavenum in range(len(bestleaves_sort)):
+                node = bestleaves_sort[leavenum]
+                det1 = self.tree[node]
+                # Note magic conversion number
+                sigma = np.median(np.abs(det1)) / 0.6745
+                threshold[leavenum] = self.thresholdMultiplier * sigma
+            exit_code = ce.ThresholdNodes2(self, self.tree, bestleaves, threshold, thresholdType)
         else:
             print("ERROR: unknown threshold type ", thrfun)
             return
