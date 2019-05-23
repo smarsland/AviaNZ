@@ -113,7 +113,9 @@ class WaveletSegment:
         print("ws  ch2", time.time() - opst)
         return detected
 
-    def waveletSegment_train(self, dirName, thrList, MList, wavelet, d=False, f=False, rf=True, learnMode='recaa', window=1, inc=None):
+    #Virginia: I noticed you added the input wavelet but it is not used in the function and it is not consistent with the
+    #function call in AviaNZ.py. Thus i removed it!
+    def waveletSegment_train(self, dirName, thrList, MList, d=False, f=False, rf=True, learnMode='recaa', window=1, inc=None):
         """ Entry point to use during training, called from AviaNZ.py.
             Switches between various training methods, orders data loading etc.,
             then just passes the arguments to the right training method and returns the results.
@@ -268,7 +270,7 @@ class WaveletSegment:
         return detected, TP, FP, TN, FN
 
     # Virginia: this function to work with sliding windows
-    def computeWaveletEnergy(self, data=None, sampleRate=0, nlevels=5, wpmode="pywt", window=1, inc=None, resol=1):
+    def computeWaveletEnergy(self, data=None, sampleRate=0, nlevels=5, wpmode="new", window=1, inc=None, resol=1):
         """ Computes the energy of the nodes in the wavelet packet decomposition
         Args:
         1. data (waveform)
@@ -286,6 +288,11 @@ class WaveletSegment:
         # Inc is increment length in sec.
         # Energy is calculated on sliding windows
         # the window is a "centered" window
+
+        #sanity check if called from AviaNZ.py
+        if inc==None and window==1:
+            inc=window
+            resol=window
 
         if data is None:
             print("ERROR: data needs to be specified")
