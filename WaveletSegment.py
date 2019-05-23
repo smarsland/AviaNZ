@@ -268,7 +268,7 @@ class WaveletSegment:
         return detected, TP, FP, TN, FN
 
     # Virginia: this function to work with sliding windows
-    def computeWaveletEnergy(self, data, sampleRate, nlevels=5, wpmode="new", window=1, inc=None):
+    def computeWaveletEnergy(self, data=None, sampleRate=0, nlevels=5, wpmode="pywt", window=1, inc=None, resol=1):
         """ Computes the energy of the nodes in the wavelet packet decomposition
         Args:
         1. data (waveform)
@@ -287,13 +287,6 @@ class WaveletSegment:
         # Energy is calculated on sliding windows
         # the window is a "centered" window
 
-        #Virginia: to made everything work if no increment it became equal to window
-        if inc is None:
-            inc=window
-            resol=window
-        else:
-            resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
-
         if data is None:
             print("ERROR: data needs to be specified")
             return
@@ -307,7 +300,7 @@ class WaveletSegment:
         #Virginia: number of samples in resolution
         resol_sr = math.ceil(resol * sampleRate)
         #Virginia: needed to generate coef of the same size of annotations
-        step=int(inc/resol) #
+        step=int(inc/resol)
 
         #Virginia:number of windows = number of sliding window at resol distance
         N=int(math.ceil(len(data)/resol_sr))
@@ -317,7 +310,6 @@ class WaveletSegment:
 
         #Virginia-> for each sliding window:
         # start is the sample start of a window
-        # center is the sample "center" of a window
         #end is the sample end of a window
         #We are working with sliding windows starting from the file start
         start=0 #inizialization
@@ -353,6 +345,8 @@ class WaveletSegment:
         """ Computes the beta scores given two sets of predictions """
         #print('fBetaScore')
         #print((len(annotation),len(predicted)))
+        print('Annotation length ', len(annotation))
+        print('Predicted length ', len(predicted))
         TP = np.sum(np.where((annotation == 1) & (predicted == 1), 1, 0))
         T = np.sum(annotation)
         P = np.sum(predicted)
@@ -543,8 +537,6 @@ class WaveletSegment:
 
         # Virginia: added window sample rate
         win_sr = math.ceil(window * self.sampleRate)
-        # Half window length in samples
-        #win_sr2 = math.ceil(win_sr/2)
         # Increment length in samples
         inc_sr = math.ceil(inc * self.sampleRate)
         # Resolution length in samples
@@ -556,16 +548,11 @@ class WaveletSegment:
         M = int(spInfo['WaveletParams'][1] * win_sr)
         nw = int(np.ceil(duration / inc_sr))
         detected = np.zeros((nw, len(nodelist)))
-        #Virginia: added detected that can match with annotation
-        na = int(np.ceil(duration / resol_sr)) #number of segments
-        detect_ann = np.zeros(na) #aqnnotation
-        step_w = int(math.ceil(window/resol)) #window length in resolution scale
-        step_inc = int(math.ceil(inc/resol)) #increment length in resolution scale
 
         count = 0
         for node in nodelist:
             # put WC from test node(s) on the new tree
-            C = wf.reconstructWP2(node, antialias=aa, antialiasFilter=True)
+            C = wf.reconstructWP2(node,antialias=aa, antialiasFilter=True)
             # Sanity check for all zero case
             if not any(C):
                 continue    # return np.zeros(nw)
@@ -586,7 +573,8 @@ class WaveletSegment:
             # Compute the energy curve (a la Jinnai et al. 2012)
             E = ce.EnergyCurve(C, M)
             # Compute threshold using mean & sd from non-call sections
-            # Virginia: changed the base. I'm using inc_sr as a base.
+            # Virginia: changed the base. I'm using resol_sr as a base. Cause I'm looking for detections on windows.
+            #This step is not so clear for me
             if annotation is not None:
                 C = C[np.repeat(annotation == 0, resol_sr)]
             C = np.log(C)
@@ -600,7 +588,7 @@ class WaveletSegment:
             #center = int(math.ceil(inc_sr/2)) #keeped if neede in future
             start = 0 #inizializzation
             for j in range(nw):
-                #start = max(0, center - win_sr2) keeped if needed in funture
+                #start = max(0, center - win_sr2) keeped if needed in future
                 end = min(N, start + win_sr)
                 detected[j, count] = np.any(E[start:end] > threshold)
                 start += inc_sr  # Virginia: corrected
@@ -608,18 +596,29 @@ class WaveletSegment:
 
         detected = np.max(detected, axis=1)
 
-        j=0
-        for i in range(nw):
-            if detected[i] == 1:
-                detect_ann[j:j+step_w] = 1
-            j += step_inc
+        # Virginia: caution. Annotation are 1-sec segments and also detections
+        # Otherwise no comparison make sense
+        # So I have to put them on a one second scale
+
+        if window != 1 or inc != window:
+            N = int(math.ceil(duration/ self.sampleRate))  # numbers of seconds
+            detect_ann = np.zeros(N)
+            start=0
+            #I follow the windows checking in what second they start or end
+            for i in range(nw):
+                if detected[i]==1:
+                    end= min(math.ceil(start + 1), N)
+                    detect_ann[int(math.floor(start)):end] = 1
+                start+=inc
+            detected=detect_ann
 
         del C
         del E
         gc.collect()
-        return detect_ann
+        return detected
 
     def gridSearch(self, thrList, MList, rf=True, learnMode=None, window=1, inc=None):
+
         """ Take list of files and other parameters,
              load files, compute wavelet coefficients and reuse them in each (M, thr) combination,
              perform grid search over thr and M parameters,
@@ -659,8 +658,17 @@ class WaveletSegment:
                 nodesacc = []
                 detected_all = []
                 # loop over files:
-                for indexF in range(len(self.filelengths)):
+                # Virginia: needs to distinguish filelength in both cases
+                if inc!=None or window!=1:
+                    file_lengths=self.filelengths2
+                else:
+                    file_lengths=self.filelengths
+                print('File Lengths', file_lengths)
+
+                for indexF in range(len(file_lengths)):
                     # load the annotation and WCs for this file
+                    if inc!=None or window!=1:
+                        annotation2 = self.annotation2[int(np.sum(self.filelengths2[0:indexF])):int(np.sum(self.filelengths2[0:indexF + 1]))]
                     annotation = self.annotation[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF + 1]))]
 
                     # Find 10 most positively correlated nodes
@@ -689,9 +697,14 @@ class WaveletSegment:
                     listnodes = []
                     bestBetaScore = 0
                     bestRecall = 0
-                    detected = np.zeros(self.filelengths[indexF])
+
+                    #detected = np.zeros(self.filelengths[indexF])
+                    detected = np.zeros(file_lengths[indexF])
 
                     ### GET WPs for reconstructing detectors:
+                    #Changed to read convenient filelength
+                    #wp = []
+
                     # Read a full 5 level packet decomposition from antialiased results
                     if learnMode == "recaafull" or learnMode == "recaa":
                         print("reading WP from file", self.tempfiles[indexF])
@@ -716,6 +729,7 @@ class WaveletSegment:
                         # Detect calls, using signal reconstructed from current node
                         # with antialias (freq squashing + non-downsampled tree, recaa...),
                         # or no reconstruction, just energy-based detection (ethr...)
+
                         if learnMode == "recaa" or learnMode == "recaafull":
                             detected_c = self.detectCalls(self.WF, nodelist=[node], spInfo=spInfo,
                                                           rf=rf, annotation=annotation, window=window, inc=inc)
@@ -729,6 +743,25 @@ class WaveletSegment:
                             print("ERROR: learning mode not recognized")
                             return
 
+                        if window != 1 or inc != None:
+                            print('Changing annotations')
+                            if inc == None:
+                                inc2 = window
+                            else:
+                                inc2 = inc
+                            N = len(annotation2)  # numbers of seconds:  must be equal to annotation length
+                            detect_ann = np.zeros(N)
+                            start = 0
+                            # I follow the windows checking in what second they start or end
+                            # detected length is equal to the number of windows. I follow the sliding windows to reconstruct useful annotaions
+                            for i in range(len(detected_c)):
+                                if detected_c[i] == 1:
+                                    end = int(min(math.ceil(start + 1), N))
+                                    # Virginia: remember start and end must be integers
+                                    detect_ann[int(math.floor(start)):end] = 1
+                                start += inc2
+                            detected_c = detect_ann
+
                         #Virginia: I'm supposing that detection are of the same length of annaotation on a window base
                         # adjust for rounding errors:
                         if len(detected_c) < len(detected):
@@ -739,7 +772,11 @@ class WaveletSegment:
                         # Merge the detections from current node with those from previous nodes
                         detections = np.maximum.reduce([detected, detected_c])
 
-                        fB, recall, tp, fp, tn, fn = self.fBetaScore(annotation, detections)
+                        #NB: I need to use correct annotation
+                        if inc!=None or window!=1:
+                            fB, recall, tp, fp, tn, fn = self.fBetaScore(annotation2, detections)
+                        else:
+                            fB, recall, tp, fp, tn, fn = self.fBetaScore(annotation, detections)
                         if fB is not None and fB > bestBetaScore:  # Keep this node and update fB, recall, detected, and optimum nodes
                             bestBetaScore = fB
                             bestRecall = recall
@@ -760,8 +797,11 @@ class WaveletSegment:
                 nodesacc = list(set(nodesacc))
                 finalnodesT.append(nodesacc)
                 # Get the measures with the selected node set for this threshold and M over the set of files
-
-                fB, recall, tp, fp, tn, fn = self.fBetaScore(self.annotation, detected_all)
+                #Virginia: call the appropriate annotation variable
+                if window!=1 or inc!= None:
+                    fB, recall, tp, fp, tn, fn = self.fBetaScore(self.annotation2, detected_all)
+                else:    
+                    fB, recall, tp, fp, tn, fn = self.fBetaScore(self.annotation, detected_all)
                 tpa[indexM, indext] = tp
                 fpa[indexM, indext] = fp
                 tna[indexM, indext] = tn
@@ -784,6 +824,7 @@ class WaveletSegment:
 
 
     def generateWPs(self, maxlevel, wpmode, train):
+
         """ Stores WPs of selected nodes for all loaded files.
             Useful for disk-caching when WP decomp is slow.
 
@@ -882,6 +923,7 @@ class WaveletSegment:
 
         #Virginia: if no inc I set resol equal to window, otherwise it is equal to inc
         if inc is None:
+            inc=window
             resol = window
         else:
             resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
@@ -901,7 +943,7 @@ class WaveletSegment:
                     wavFile = root + '/' + file[:-4]
                     # adds to annotation and filelength arrays, sets self.data:
                     # Virginia: added resol input
-                    self.loadData(wavFile, window, resol, savedetections=savedetections, trainPerFile=False)
+                    self.loadData(wavFile, window, inc, resol, savedetections=savedetections, trainPerFile=False)
 
                     # denoise and store actual audio data:
                     # note: preprocessing is a side effect on self.data
@@ -933,16 +975,20 @@ class WaveletSegment:
         # np.savetxt(os.path.join(dirName, "energies.tsv"), MLdata, delimiter="\t")
         print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(self.annotation), len(self.annotation)))
 
-    def loadData(self, fName, window, resol, trainPerFile=False, wavOnly=False, savedetections=False):
+
+    def loadData(self, fName, window, inc, resol, trainPerFile=False, wavOnly=False, savedetections=False):
         """ Loads a single file.
             Output: fills self.annotation, filelengths, filenames, produces self.data
         """
         # Virginia chamges
         # Added resol input as basic unit for read annotation file
         filename = fName + '.wav'  # 'train/kiwi/train1.wav'
+        #filename = dName+'/'+fName + '.wav'
         # Virginia: added resol for identify annotation txt
         filenameAnnotation = fName + '-res'+str(float(resol))+'sec.txt'  # 'train/kiwi/train1-res1sec.txt'
+        #filenameAnnotation = filename[:-4] + '-res'+str(float(resol))+'sec.txt'  # 'train/kiwi/train1-res1sec.txt'
         try:
+
             wavobj = wavio.read(filename)
         except Exception as e:
             print("unsupported file: ", filename)
@@ -977,6 +1023,7 @@ class WaveletSegment:
                 fileAnnotations.append(int(row[1]))
                 sum += int(row[1])
 
+
             # TWO VERSIONS FOR COMPATIBILITY WITH BOTH TRAINING LOOPS:
             if trainPerFile:
                 self.annotation = np.array(fileAnnotations)
@@ -984,8 +1031,30 @@ class WaveletSegment:
             else:
                 self.annotation.extend(fileAnnotations)
                 self.filelengths.append(n)
+
+            #Virginia: if overlapping window or window!=1sec I save in annotation2 segments o length 1 sec to make useful comparison
+
+            if window!=1 or inc!=window:
+                print('Storing annotation2')
+                N=int(math.ceil(len(self.data)/self.sampleRate)) # of seconds
+                annotation_sec=np.zeros(N)
+                sec_step=int(math.ceil(1/resol)) # window length in resolution scale
+                #inc_step = int(math.ceil(inc / resol)) #increment length in resolution scale
+                start=0
+                for i in range (N):
+                    end=int(min(start+sec_step,n))
+                    if np.count_nonzero(fileAnnotations[start:end])!=0:
+                        annotation_sec[i]=1
+                    start+=sec_step
+                if trainPerFile:
+                    self.annotation2 = np.array(annotation_sec)
+
+                else:
+                    self.annotation2.extend(annotation_sec)
+                    self.filelengths2.append(N)
+
             if savedetections:
-                self.filenames.append(filename)
+                self.filenames.append(fName)
             print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
 
     def identifySegments(self, detection):  # , maxgap=1, minlength=1):
@@ -1012,28 +1081,22 @@ class WaveletSegment:
             del (segments[i + 1])
         return segments
 
-    # def identifySegments(self, seg, maxgap=1, minlength=1,notSpec=False):   # From Segment class
-    #     """ Turns presence/absence segments into a list of start/stop times
-    #     Note the two parameters
-    #     """
-    #     segments = []
-    #     start = seg[0]
-    #     for i in range(1, len(seg)):
-    #         if seg[i] <= seg[i - 1] + maxgap:
-    #             pass
-    #         else:
-    #             # See if segment is long enough to be worth bothering with
-    #             if (seg[i - 1] - start) > minlength:
-    #                 if notSpec:
-    #                     segments.append([start, seg[i - 1]])
-    #                 else:
-    #                     segments.append([float(start) * self.incr / self.fs, float(seg[i - 1]) * self.incr / self.fs])
-    #             start = seg[i]
-    #     if seg[-1] - start > minlength:
-    #         if notSpec:
-    #             segments.append([start, seg[i-1]])
-    #         else:
-    #             segments.append([float(start) * self.incr / self.fs, float(seg[-1]) * self.incr / self.fs])
-    #
-    #     return segments
+
+
+                #change before push
+                #new_dir='D:\Desktop\Documents\Work\Filter Experiment\RURU\Part1\Test10C'
+                #new_dir='/home/listanvirg/FilterTest/Ruru/Test10D'
+                #new_dir='/home/listanvirg/FilterTest/Kiwi/New/Test14D'
+                #new_dir = 'D:\Desktop\Documents\Work\Filter Experiment\KIWI\Ponui\Test2F'
+                #new_filename=new_dir+ '/' +fName
+                #self.filenames.append(new_filename)
+                #self.filenames.append(filename)
+            #Virginia:change this?
+            #if window!=1 or inc!=window:
+                #print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (N, sum, len(self.annotation2)))
+            #else:
+                #print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
+
+
+
 

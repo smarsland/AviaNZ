@@ -216,7 +216,6 @@ def ploty(y, name):
 
     ws = np.fft.fft(y)
     fbins = np.fft.fftfreq(y.size, d=1/400)
-
     fig, ax = plt.subplots(2, 1)
     ax[0].plot(xs,y)
     ws[np.where(ws<0)] = 0
@@ -256,7 +255,7 @@ def gety():
 
 
 ############ Test wavelet filters
-def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='recsep', window=1, inc=None):
+def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='recaa', window=1, inc=None):
     # Hard-code extra information (they are not used but to be compatible with main program)
     minLen = 6
     maxLen = 32
@@ -278,8 +277,8 @@ def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='
     print("Thr: ", thrList)
     print("M: ", MList)
     #Virginia: added window and increment
-
     ws = WaveletSegment.WaveletSegment()
+
     nodes, TP, FP, TN, FN = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=d, f=f, rf=rf, feature=feature,window=window, inc=inc)
 
     print("Filtered nodes: ", nodes)
@@ -332,7 +331,11 @@ def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='
             speciesData['WaveletParams'].append(M)
             speciesData['WaveletParams'].append(optimumNodesSel)
             # Save it
-            filename = dName + '\\' + species + '.txt'
+            #dName_train = '/home/listanvirg/FilterTest/Ruru/Test1'
+            #dName_train = 'D:\Desktop\Documents\Work\Filter Experiment\RURU\Part1\Test10C'
+            #dName_train = '/home/listanvirg/FilterTest/Ruru/Test10D'
+            dName_train = '/home/listanvirg/FilterTest/Kiwi/New/Test14D'
+            filename = dName_train + '/' + species + '.txt'
             print("Saving new filter to ", filename)
             f = open(filename, 'w')
             f.write(json.dumps(speciesData))
@@ -340,19 +343,28 @@ def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='
     cid = fig.canvas.mpl_connect('button_press_event', onclick)
     plt.show()
 
+
 # Test the trained filter on test data
 def testWavelet(dName, species, savedetections, feature, d, f, rf, window=1, inc=None):
     print(dName)
     print(os.path.join(dName, species + '.txt'))
+    #dName_train = '/home/listanvirg/FilterTest/Ruru/Test1'
+    #dName_train = 'D:\Desktop\Documents\Work\Filter Experiment\RURU\Part1\Test10C'
+    #dName_train = '/home/listanvirg/FilterTest/Ruru/Test1F'
+    dName_train='/home/listanvirg/FilterTest/Kiwi/New/Test14D'
+    speciesData = json.load(open(os.path.join(dName_train, species + '.txt')))
     # speciesData = json.load(open(os.path.join(dName, species + '.txt')))
-    speciesData = json.load(open(os.path.join(dName, species + '.txt')))
+    #speciesData = json.load(open(os.path.join(dName, species + '.txt')))
     # speciesData = json.load(open("D:\WaveletDetection\DATASETS\Morepork\Test-5min\Morepork.txt"))
     opstartingtime = time.time()
     ws = WaveletSegment.WaveletSegment()
     #Virginia: added window and incremnt
-    window = 1
-    inc=None
-    Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, sampleRate=None, spInfo=speciesData, d=d, f=f, rf=rf, withzeros=True, feature=feature, savedetections=savedetections, window=window, inc=None)
+
+    #window= 1
+    #inc=None
+    Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, sampleRate=None, spInfo=speciesData, d=d, f=f, rf=rf, withzeros=True, feature=feature, savedetections=savedetections, window=window, inc=inc)
+
+
     print("TESTING COMPLETED IN ", time.time() - opstartingtime)
     print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
     if TP+FN != 0:
@@ -372,6 +384,30 @@ def testWavelet(dName, species, savedetections, feature, d, f, rf, window=1, inc
     print(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
 
 
+#BAT (LONG TAILED) PARAMETERS
+bat_LT_M = [0.01, 0.02, 0.06, 0.12]    # syllable length 4ms=0.04 sec; syl_length/8, syl_length/2, syl_length*2 etc.
+# kiwi_M = [0.25, 0.75, 1.25, 1.75]
+bat_LT_thr = [0.25, 0.3, 0.4, 0.5, 0.6, 0.75, 1, 1.25]   #[0.25, 0.5, 0.75, 1, 1.25]
+bat_LT_fs = 176000    # fs
+bat_LT_f1 = 800   # f low
+bat_LT_f2 = 88000  # f high
+bat_LT_d = False  # denoise
+bat_LT_f = True   # filter
+bat_LT_rf = True  # filter the reconstructed signal
+
+#BAT (LONG TAILED) PARAMETERS
+bat_LT_M = [0.00375, 0.015, 0.06, 0.12]    # syllable length 2ms=0.02 sec; syl_length/8, syl_length/2, syl_length*2 etc.
+# kiwi_M = [0.25, 0.75, 1.25, 1.75]
+bat_LT_thr = [0.25, 0.3, 0.4, 0.5, 0.6, 0.75, 1, 1.25]   #[0.25, 0.5, 0.75, 1, 1.25]
+bat_LT_fs = 176000    # fs
+bat_LT_f1 = 800   # f low
+bat_LT_f2 = 88000  # f high
+bat_LT_d = False  # denoise
+bat_LT_f = True   # filter
+bat_LT_rf = True  # filter the reconstructed signal
+
+
+#KIWI PARAMETERS
 kiwi_M = [0.125, 0.5, 2.0, 8.0]    # syllable length =1 sec; syl_length/8, syl_length/2, syl_length*2 etc.
 # kiwi_M = [0.25, 0.75, 1.25, 1.75]
 kiwi_thr = [0.25, 0.3, 0.4, 0.5, 0.6, 0.75, 1, 1.25]   #[0.25, 0.5, 0.75, 1, 1.25]
@@ -432,6 +468,7 @@ bittern_rf = False
 # testTrainers('D:\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa")
 # testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=1, inc=None)
 
+
 # testTrainers('D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min', "KakapoB", f1=kakapoB_f1, f2=kakapoB_f2, fs=kakapoB_fs, thrList=kakapoB_thr, MList=kakapoB_M, d=kakapoB_d, f=kakapoB_f, rf=kakapoB_rf, feature="recaa")
 # testWavelet('D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\test-5min\\New folder', "KakapoB", savedetections=True, feature='recaa', d=kakapoB_d, f=kakapoB_f, rf=kakapoB_rf, window=1, inc=None)
 
@@ -445,8 +482,30 @@ bittern_rf = False
 # testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\Morepork\Train-5min', "Morepork", f1=morepork_f1, f2=morepork_f2, fs=morepork_fs, thrList=morepork_thr, MList=morepork_M, d=morepork_d, f=morepork_f, rf=morepork_rf, feature="recaa")
 # testWavelet('D:\WaveletDetection\DATASETS\Morepork\Test-5min', "Morepork", savedetections=True, feature='recaa', d=morepork_d, f=morepork_f, rf=morepork_rf, window=1, inc=None)
 
+#VIRGINIA VERSION
+window=4
+inc= 3
+# MOREPORK
+#testTrainers('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui/Ponui-train', "Kiwi", f1=morepork_f1, f2=morepork_f2, fs=morepork_fs, thrList=morepork_thr, MList=morepork_M, d=morepork_d, f=morepork_f, rf=morepork_rf, feature="recaa")
+#testTrainers('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru\Train-5min', "Morepork", f1=morepork_f1, f2=morepork_f2, fs=morepork_fs, thrList=morepork_thr, MList=morepork_M, d=morepork_d, f=morepork_f, rf=morepork_rf, feature="recaa",window=window, inc=inc)
+#testWavelet('/home/listanvirg/Data/Filter experiment/Ruru/Test-5min', "Morepork", savedetections=True, feature='recaa', d=morepork_d, f=morepork_f, rf=morepork_rf, window=1, inc=None)
+#testWavelet('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru\Test-5min', "Morepork", savedetections=True, feature='recaa', d=morepork_d, f=morepork_f, rf=morepork_rf, window=window, inc=inc)
+
+#KiWI
 # testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa")
-# testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=1, inc=None)
+# testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=window, inc=inc)
+#testTrainers('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui/Ponui-train', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa", window=window, inc=inc)
+testWavelet('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui/Ponui_test', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=window, inc=inc)
+
+
+#Virginia: keeped as a track
+#testTrainers('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru\Train-5min', "Morepork", f1=1000, f2=8000, fs=16000, cleanNodelist=True, feature="recaa")
+#testTrainers('/home/listanvirg/Data/Filter experiment/BKiwi/Train', "Kiwi (Nth Is Brown)", f1=1000, f2=8000, fs=16000, cleanNodelist=True, feature="recaa")
+#testWavelet('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru\Test-5min', "Morepork", withzeros=True, savedetections=False)
+#testWavelet('/home/listanvirg/Data/Filter experiment/BKiwi/Test', "Kiwi (Nth Is Brown)", withzeros=True, savedetections=True)
+
+
+
 
 # testWavelet('D:\WaveletDetection\Figure4\mp', "Morepork", savedetections=True, feature='recaa', d=morepork_d, f=morepork_f, rf=morepork_rf, window=1, inc=None)
 
