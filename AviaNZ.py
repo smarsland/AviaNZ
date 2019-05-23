@@ -3789,8 +3789,8 @@ class AviaNZ(QMainWindow):
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window=1
             inc= None
-            nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, spInfo=speciesData, d=False,
-                                                            f=True, rf=True, feature="recaafull", window=window, inc=inc)
+            nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, d=False,
+                                                            f=True, rf=True, learnMode="recaa", window=window, inc=inc)
             print("Filtered nodes: ", nodes)
             print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
 

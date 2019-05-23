@@ -4,7 +4,6 @@ import numpy as np
 import string
 import os, json
 #import SignalProc
-import WaveletSegment2  # the original version
 import WaveletSegment   # the current version
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -277,9 +276,9 @@ def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='
     print("Thr: ", thrList)
     print("M: ", MList)
     #Virginia: added window and increment
-    ws = WaveletSegment.WaveletSegment()
+    ws = WaveletSegment.WaveletSegment(speciesData)
 
-    nodes, TP, FP, TN, FN = ws.waveletSegment_train(dName, thrList, MList, spInfo=speciesData, d=d, f=f, rf=rf, feature=feature,window=window, inc=inc)
+    nodes, TP, FP, TN, FN = ws.waveletSegment_train(dName, thrList, MList, d=d, f=f, rf=rf, learnMode=feature,window=window, inc=inc)
 
     print("Filtered nodes: ", nodes)
     TPR = TP / (TP + FN)
@@ -357,7 +356,7 @@ def testWavelet(dName, species, savedetections, feature, d, f, rf, window=1, inc
     #speciesData = json.load(open(os.path.join(dName, species + '.txt')))
     # speciesData = json.load(open("D:\WaveletDetection\DATASETS\Morepork\Test-5min\Morepork.txt"))
     opstartingtime = time.time()
-    ws = WaveletSegment.WaveletSegment()
+    ws = WaveletSegment.WaveletSegment(speciesData)
     #Virginia: added window and incremnt
 
     #window= 1
@@ -483,8 +482,8 @@ bittern_rf = False
 # testWavelet('D:\WaveletDetection\DATASETS\Morepork\Test-5min', "Morepork", savedetections=True, feature='recaa', d=morepork_d, f=morepork_f, rf=morepork_rf, window=1, inc=None)
 
 #VIRGINIA VERSION
-window=4
-inc= 3
+window=1
+inc= None
 # MOREPORK
 #testTrainers('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui/Ponui-train', "Kiwi", f1=morepork_f1, f2=morepork_f2, fs=morepork_fs, thrList=morepork_thr, MList=morepork_M, d=morepork_d, f=morepork_f, rf=morepork_rf, feature="recaa")
 #testTrainers('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru\Train-5min', "Morepork", f1=morepork_f1, f2=morepork_f2, fs=morepork_fs, thrList=morepork_thr, MList=morepork_M, d=morepork_d, f=morepork_f, rf=morepork_rf, feature="recaa",window=window, inc=inc)
@@ -494,7 +493,7 @@ inc= 3
 #KiWI
 # testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa")
 # testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=window, inc=inc)
-#testTrainers('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui/Ponui-train', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa", window=window, inc=inc)
+testTrainers('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui/Ponui-train', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa", window=window, inc=inc)
 testWavelet('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui/Ponui_test', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=window, inc=inc)
 
 
