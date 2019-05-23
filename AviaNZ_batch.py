@@ -56,16 +56,12 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # read config and filters from user location
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
-        print("Loading configs from file %s" % self.configfile)
-        self.config = json.load(open(self.configfile))
+        self.ConfigLoader = SupportClasses.ConfigLoader()
+        self.config = self.ConfigLoader.config(self.configfile)
         self.saveConfig = True
 
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
-        try:
-            self.FilterFiles = [f[:-4] for f in os.listdir(self.filtersDir) if os.path.isfile(os.path.join(self.filtersDir, f))]
-        except:
-            print("Folder %s not found, no filters loaded" % self.filtersDir)
-            self.FilterFiles = None
+        self.FilterFiles = self.ConfigLoader.filters(self.filtersDir)
 
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
@@ -571,8 +567,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # At this point, the main config file should already be ensured to exist.
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
-        print("Loading configs from file %s" % self.configfile)
-        self.config = json.load(open(self.configfile))
+        self.ConfigLoader = SupportClasses.ConfigLoader()
+        self.config = self.ConfigLoader.config(self.configfile)
         self.saveConfig = True
 
         # audio things
@@ -932,31 +928,23 @@ class AviaNZ_reviewAll(QMainWindow):
         """
         # Load the birdlists:
         # short list is necessary, long list can be None
-        try:
-            shortblfile = os.path.join(self.configdir, self.config['BirdListShort'])
-            shortBirdList = json.load(open(shortblfile))
-        except:
-            print("ERROR: Failed to load short bird list from %s" % shortblfile)
+        self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], self.configdir)
+        if self.shortBirdList is None:
             sys.exit()
 
-        if self.config['BirdListLong'] == "None":
-            # If don't have a long bird list, check the length of the short bird list is OK, and otherwise split      it
+        # Will be None if fails to load or filename was "None"
+        self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
+        if self.config['BirdListLong'] is None:
+            # If don't have a long bird list,
+            # check the length of the short bird list is OK, and otherwise split it
             # 40 is a bit random, but 20 in a list is long enough!
             if len(self.shortBirdList) > 40:
-                longBirdList = self.shortBirdList.copy()
-                shortBirdList = self.shortBirdList[:40]
+                self.longBirdList = self.shortBirdList.copy()
+                self.shortBirdList = self.shortBirdList[:40]
             else:
-                longBirdList = None
-        else:
-            try:
-                longblfile = os.path.join(self.configdir, self.config['BirdListLong'])
-                longBirdList = json.load(open(longblfile))
-            except:
-                print("Warning: failed to load long bird list from %s" % longblfile)
-                longBirdList = None
+                self.longBirdList = None
 
-
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], shortBirdList, longBirdList, self.config['MultipleSpecies'], self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.config['MultipleSpecies'], self)
         self.box1id = 0
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
@@ -1081,7 +1069,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.longBirdList = sorted(self.longBirdList, key=str.lower)
                 self.longBirdList.remove('Unidentifiable')
                 self.longBirdList.append('Unidentifiable')
-                json.dump(self.longBirdList, open(os.path.join(self.configdir, self.config['BirdListLong']), 'w'),indent=1)
+                self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
 
         if label != self.segments[self.box1id][4]:
             if self.config['saveCorrections']:
@@ -1099,7 +1087,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.longBirdList = sorted(self.longBirdList, key=str.lower)
                 self.longBirdList.remove('Unidentifiable')
                 self.longBirdList.append('Unidentifiable')
-                json.dump(self.longBirdList, open(os.path.join(self.configdir, self.config['BirdListLong']), 'w'),indent=1)
+                self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
         elif '?' in ''.join(label):
             # Remove the question mark, since the user has agreed
             for i in range(len(self.segments[self.box1id][4])):

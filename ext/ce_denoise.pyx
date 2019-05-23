@@ -253,30 +253,37 @@ def ThresholdNodes2(self, list oldtree, bestleaves, threshold, str thrtype, int 
                 T = len(oldtree[0]) // blocklen + 1
         else:
                 # will keep data in a single block
-                T = 1
+                T = len(oldtree[0]) // 16000 + 1 # let's say number of seconds
 
         if np.ndim(threshold)==0:
-                thrconst = "c"
+                threshold = threshold * np.ones((N,T))
                 print("Applying constant threshold over nodes and time")
         elif type(threshold) is np.ndarray:
                 # checking for both 1D and 2D arrays to allow simple scripts outside for prep
                 if np.shape(threshold)==(1,) or np.shape(threshold)==(1,1):
-                        thrconst = "c"
+                        threshold = threshold * np.ones((N,T))
                         print("Applying constant threshold over nodes and time")
                 elif np.shape(threshold)==(N,) or np.shape(threshold)==(N,1):
-                        thrconst = "n"
+                        print(np.shape(threshold))
+                        threshold = np.transpose(threshold * np.ones((T,N)))
+                        print(np.shape(threshold))
                         print("Applying node-specific, time-constant threshold")
                 elif np.shape(threshold)==(N,T):
                         if blocklen==0:
                                 print("ERROR: blocklen must be provided for NxT thresholding")
                                 return 1
-                        thrconst = "t"
                         print("Applying node- and time-specific threshold over blocks of %d samples" % blocklen)
                 else:
                         print("ERROR: threshold shape %d x %d unrecognized" % (N, T))
                         return 1
         else:
                 print("ERROR: wrong type of threshold provided")
+                return 1
+
+        # a dumb check, but important
+        if np.shape(threshold)!=(N,T):
+                print("ERROR: something went wrong in denoising")
+                print(np.shape(threshold))
                 return 1
 
         thrtype_ce = -1
@@ -289,16 +296,17 @@ def ThresholdNodes2(self, list oldtree, bestleaves, threshold, str thrtype, int 
                 return 1
 
         # Main loop
-        for ind in range(len(oldtree)):
-                if(ind in bestleavesset):
+        for node in range(len(oldtree)):
+                if(node in bestleavesset):
                         # then keep & threshold (inplace)
-                        length = oldtree[ind].shape[0]
-                        oldtree[ind] = np.ascontiguousarray(oldtree[ind])
-                        ce_thresnode2(<double*> np.PyArray_DATA(oldtree[ind]), length, threshold, thrtype_ce)
+                        length = oldtree[node].shape[0]
+                        oldtree[node] = np.ascontiguousarray(oldtree[node])
+                        nodeix = list(bestleavesset).index(node)
+                        ce_thresnode2(<double*> np.PyArray_DATA(oldtree[node]), length, threshold[nodeix,0], thrtype_ce)
                 else:
                         # zero-out all the other nodes
                         # NOT USED because current reconstruction already assumes all other nodes are 0.
-                        oldtree[ind] = np.zeros(len(oldtree[ind]))
+                        oldtree[node] = np.zeros(len(oldtree[node]))
 
         # note: no useful return b/c oldtree is edited inplace.
         return 0
