@@ -38,14 +38,20 @@ def genGT(dirName,species='Kiwi',duration=0,window=1, inc=None):
     'window' gives the desired length of the window. It is the resolution of the list.
     'inc' gives the increment. If given it is the "real" resolution.
     """
+    #☺duration=900
     for root, dirs, files in os.walk(str(dirName)):
         for filename in files:
             if filename.endswith('.wav'):
+            #1if filename.endswith('.data'):
                 filename = root + '/' + filename
                 annotation2GT_OvWin(filename,species,duration=duration,window=window,inc=inc)
     print ("Generated GT")
 
 def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notargetsp=False):
+<<<<<<< Updated upstream
+=======
+#def annotation2GT_OvWin(datFile, species, duration=0,window=1, inc=None, notargetsp=False):
+>>>>>>> Stashed changes
     """
     This generates the ground truth for a given sound file
     Given the AviaNZ annotation, returns the ground truth as a txt file
@@ -63,7 +69,8 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
 
     datFile = wavFile + '.data'
     #Virginia:changed file name appearence
-    eFile = datFile[:-9] +'-res'+str(resol)+'sec.txt'
+    eFile = datFile[:-9] +'-res'+str(float(resol))+'sec.txt'
+    print(eFile)
 
     if duration == 0:
         wavobj = wavio.read(wavFile)
@@ -86,15 +93,20 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
     lenMin = duration
     lenMax =0
     if os.path.isfile(datFile):
-        # print(datFile)
+        print(datFile)
         with open(datFile) as f:
             segments = json.load(f)
         for seg in segments:
             if seg[0] == -1:
                 continue
-            if not species.title() in seg[4][0]:
-                continue
-            else:
+            #ORIGINAL Version
+            #virginia: changed because I had problem on this
+            #if not species.title() in seg[4]:
+                #continue
+            #elif seg[4]!=['Noise']:
+            #if "Morepork" in str(seg[4]):
+            if species in str(seg[4]):
+            #else:
                 # print("lenMin, seg[1]-seg[0]", lenMin, seg[1]-seg[0])
                 #Virginia: added this variable so the machine don't have to calculate it every rime
                 dur_segm=seg[1]-seg[0]
@@ -122,6 +134,8 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
                     if '(Mp)' in str(seg[4][0]):
                         type = 'Mp'
                     elif '(Tril)' in str(seg[4][0]):
+                        type = 'Tril'
+                    elif '(Trill)' in str(seg[4][0]):
                         type = 'Tril'
                     elif '(Weow)' in str(seg[4][0]):
                         type = 'Weow'
@@ -187,6 +201,67 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
     print(lenMin, lenMax, fLow, fHigh, sampleRate)
     #return [lenMin, lenMax, fLow, fHigh, sampleRate]
 
+<<<<<<< Updated upstream
 #Virginia:change directory name
 # genGT('D:\AviaNZ\Sound Files\Fiordland kiwi\Dataset\\Negative',species='Kiwi(Tokoeka Fiordland)',window=1, inc=1)
+=======
+def splitGT(dirName, window=1, inc=None):
+
+#From Nirosha
+
+    # Virginia: set increment and resolution
+    if inc==None:
+        inc=window
+        resol=window
+    else:
+    # Virginia: resolution is the "gcd" between window and inc. In this way I'm hoping to solve the case with
+    # 75% overlap
+        resol=(math.gcd(int(100*window),int(100*inc)))/100
+    slot1=int(math.ceil(300/resol))
+    slot2=int(math.ceil(600/resol))
+    slot3=int(math.ceil(900/resol))
+    new_dir='D:\Desktop\Documents\Work\Data\Filter experiment\Ruru\Test-5min'
+    for root, dirs, files in os.walk(str(dirName)):
+        for file in files:
+            if file.endswith('.txt'):
+                filename = root + '/' + file
+                filename2= new_dir + '/'+file
+                fileAnnotations = []
+                # Get the segmentation from the txt file
+                f = open(filename, "r")
+                if resol==0.25:
+                     f1 = filename2[:-15] + '_0' + filename2[-15:]
+                     f2 = filename2[:-15] + '_1' + filename2[-15:]
+                     f3 = filename2[:-15] + '_2' + filename2[-15:]
+                else:
+                    f1 = filename2[:-14] + '_0' + filename2[-14:]
+                    f2 = filename2[:-14] + '_1' + filename2[-14:]
+                    f3 = filename2[:-14] + '_2' + filename2[-14:]
+                f1out = open(f1, 'w')
+                f2out = open(f2, 'w')
+                f3out = open(f3, 'w')
+                i = 0
+                for line in f:
+                    #if i<300:
+                    if i<slot1:
+                        f1out.write(line)
+                    #elif i<600:
+                    elif i<slot2:
+                        f2out.write(line)
+                    #elif i<900:
+                    elif i<slot3:
+                        f3out.write(line)
+                    i = i+1
+                f1out.close()
+                f2out.close()
+                f3out.close()
+
+
+#Virginia:change directory name 
+#genGT('/home/listanvirg/Data/Filter experiment/Ruru',species='Morepork',window=1)
+genGT('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui',species='Kiwi',window=4, inc=3)
+#genGT('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru GT\Test',species='Morepork',window=0.5, inc=0.25)
+#splitGT('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru GT\Test',window=0.5, inc=0.25)
+
+>>>>>>> Stashed changes
 

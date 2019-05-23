@@ -146,7 +146,6 @@ class AviaNZ(QMainWindow):
         self.segmentsToSave = False
 
         self.lastSpecies = ["Don't Know"]
-
         self.DOC = self.config['DOC']
         self.Hartley = self.config['Hartley']
         self.extra = "none"
@@ -3690,10 +3689,7 @@ class AviaNZ(QMainWindow):
                 # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
                 window = 1
                 inc = None
-                Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, 
-                                                                   d=False, f=True, rf=True,
-                                                                   withzeros=True, learnMode='recaa', savedetections=True,
-                                                                   window=window, inc=inc)
+                Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, d=False, f=True, rf=True, withzeros=True, learnMode='recaa', savedetections=True, window=window, inc=inc)
                 print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
                 if TP+FN != 0:
                     recall = TP/(TP+FN)
@@ -3786,7 +3782,8 @@ class AviaNZ(QMainWindow):
             speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
                            'FreqRange': [minFrq, maxFrq]}
             # returns 2d lists of nodes over M x thr, or stats over M x thr
-            thrList = np.linspace(0.1, 1, num=self.waveletTDialog.setthr.value())
+            #thrList = np.linspace(0.1, 1, num=self.waveletTDialog.setthr.value()) Virginia test to finde inconsistency
+            thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
             MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
@@ -3931,6 +3928,7 @@ class AviaNZ(QMainWindow):
         window = 1
         inc= None
         species = str(self.waveletTDialog.species.currentText())
+        #species = "Morepork" #Virginia: changed to test
         if species == 'Choose species...':
             msg = SupportClasses.MessagePopup("w", "Species Error", "Please specify the species!")
             msg.exec_()
@@ -4095,7 +4093,7 @@ class AviaNZ(QMainWindow):
                     continue
                 if not species.title() in seg[4]:
                     continue
-                else:
+                if species in str(seg[4]):
                     # print("lenMin, seg[1]-seg[0]", lenMin, seg[1]-seg[0])
                     # Virginia: added this variable so the machine don't have to calculate it every rime
                     dur_segm = seg[1] - seg[0]
