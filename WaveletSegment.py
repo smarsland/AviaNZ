@@ -113,8 +113,6 @@ class WaveletSegment:
         print("ws  ch2", time.time() - opst)
         return detected
 
-    #Virginia: I noticed you added the input wavelet but it is not used in the function and it is not consistent with the
-    #function call in AviaNZ.py. Thus i removed it!
     def waveletSegment_train(self, dirName, thrList, MList, d=False, f=False, rf=True, learnMode='recaa', window=1, inc=None):
         """ Entry point to use during training, called from AviaNZ.py.
             Switches between various training methods, orders data loading etc.,
@@ -123,7 +121,6 @@ class WaveletSegment:
             Input: path to directory with wav & wav.data files.
             Return: tuple of arrays (nodes, tp, fp, tn, fn)
         """
-        spInfo = self.spInfo
 
         # Virginia changes
         # input change: added variables window and inc
@@ -168,7 +165,7 @@ class WaveletSegment:
         # energies are stored in self.waveletCoefs,
         # Or can be read-in from the export file.
         # Virginia: added window and inc input
-        res = self.gridSearch(thrList, MList, spInfo, rf, learnMode, window, inc)
+        res = self.gridSearch(thrList, MList, self.spInfo, rf, learnMode, window, inc)
 
         # Release disk space
         for f in self.tempfiles:
@@ -270,7 +267,7 @@ class WaveletSegment:
         return detected, TP, FP, TN, FN
 
     # Virginia: this function to work with sliding windows
-    def computeWaveletEnergy(self, data=None, sampleRate=0, nlevels=5, wpmode="new", window=1, inc=None, resol=1):
+    def computeWaveletEnergy(self, data, sampleRate, nlevels=5, wpmode="new", window=1, inc=1, resol=1):
         """ Computes the energy of the nodes in the wavelet packet decomposition
         Args:
         1. data (waveform)
@@ -289,13 +286,8 @@ class WaveletSegment:
         # Energy is calculated on sliding windows
         # the window is a "centered" window
 
-        #sanity check if called from AviaNZ.py
-        if inc==None and window==1:
-            inc=window
-            resol=window
-
-        if data is None:
-            print("ERROR: data needs to be specified")
+        if data is None or sampleRate is None:
+            print("ERROR: data and Fs need to be specified")
             return
 
         #Virginia: number of samples in window
@@ -330,13 +322,13 @@ class WaveletSegment:
                 print("ERROR: pywt mode deprecated, use new or aa")
                 return
             if wpmode == "new":
-                wp = WF.WaveletPacket(mode='symmetric', maxlevel=nlevels, antialias=False)
+                WF.WaveletPacket(mode='symmetric', maxlevel=nlevels, antialias=False)
             if wpmode == "aa":
-                wp = WF.WaveletPacket(mode='symmetric', maxlevel=nlevels, antialias=True, antialiasFilter=True)
+                WF.WaveletPacket(mode='symmetric', maxlevel=nlevels, antialias=True, antialiasFilter=True)
 
             # Calculate energies
             for level in range(1, nlevels + 1):
-                lvlnodes = wp[2 ** level - 1:2 ** (level + 1) - 1]
+                lvlnodes = WF.tree[2 ** level - 1:2 ** (level + 1) - 1]
                 e = np.array([np.sum(n ** 2) for n in lvlnodes])
                 if np.sum(e) > 0:
                     e = 100.0 * e / np.sum(e)
@@ -570,7 +562,7 @@ class WaveletSegment:
             # Filter
             if rf:
                 C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0],
-                                                high=spInfo['FreqRange'][1], order=10)
+                                                high=spInfo['FreqRange'][1])
             C = np.abs(C)
             N = len(C)
             # Virginia: number of segments = number of centers of length inc
