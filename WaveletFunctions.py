@@ -342,6 +342,9 @@ class WaveletFunctions:
         numnodes = 2**(lvl+1)
 
         # do the actual convolutions + upsampling
+        data=np.asarray(data, dtype="float64")
+        print(data)
+        print(np.shape(data))
         data = ce.reconstruct(data, node, np.array(wv.rec_hi), np.array(wv.rec_lo), lvl)
         print("rec ch 1", time.time() - opstt)
 
