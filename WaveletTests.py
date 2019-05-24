@@ -361,7 +361,7 @@ def testWavelet(dName, species, savedetections, feature, d, f, rf, window=1, inc
 
     #window= 1
     #inc=None
-    Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, sampleRate=None, spInfo=speciesData, d=d, f=f, rf=rf, withzeros=True, feature=feature, savedetections=savedetections, window=window, inc=inc)
+    Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, spInfo=speciesData, d=d, f=f, rf=rf, withzeros=True, learnMode=feature, savedetections=savedetections, window=window, inc=inc)
 
 
     print("TESTING COMPLETED IN ", time.time() - opstartingtime)

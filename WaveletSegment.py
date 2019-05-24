@@ -89,6 +89,8 @@ class WaveletSegment:
             self.WF.WaveletPacket(mode='symmetric', maxlevel=5, antialias=True, antialiasFilter=True)
         # No need to store everything:
         goodnodes = self.spInfo['WaveletParams'][2]
+        print('Waveletsegment')
+        print('goodnodes', goodnodes)
         print("ws  ch1", time.time() - opst)
 
         # set other nodes to 0
@@ -165,7 +167,8 @@ class WaveletSegment:
         # energies are stored in self.waveletCoefs,
         # Or can be read-in from the export file.
         # Virginia: added window and inc input
-        res = self.gridSearch(thrList, MList, self.spInfo, rf, learnMode, window, inc)
+        # there was and self.spInfo input not required
+        res = self.gridSearch(thrList, MList, rf, learnMode, window, inc)
 
         # Release disk space
         for f in self.tempfiles:
@@ -449,58 +452,7 @@ class WaveletSegment:
         return newlist
 
 
-    def sortListByChild2(self, order):
-        # Virginia's Version
-        #it still needs test
-        # It uses only the father to find the childre
-        """ Inputs is a list sorted into order of correlation.
-        This functions resort so that any children of the current node that are in the list go first.
-        Assumes that there are five levels in the tree (easy to extend, though)
-        """
-        newlist = []
-        currentIndex = 0
-        # Need to keep track of where each level of the tree starts
-        # Note that there is no root to the tree, hence the 0 then 2
-        #starts = [0, 2, 6, 14, 30, 62]
-        while len(order) > 0:
-            if order[0] < 30:
-                # It could have children lower down the list
-                # Build a list of the children of the first element of order
-                level = int(np.log2(order[0] + 2))
-                nc = 2
-                first = order[0]
-                for l in range(level, 5):
-                    children = []
-                    current = currentIndex
-                    for i in range(nc):
-                        children.append(2*(first)+ i) #Virginia: find children from father
-                    nc *= 2
-                    first = 2*first+1 #Update father
-                    # Have to do it this annoying way since Python seems to ignore the next element if you delete one while iterating over the list
-                    i = 0
-                    order_sub = []
-                    while i < len(children):
-                        if children[i] not in order:
-                            del (children[i])
-                        else:
-                            order_sub.append(order.index(children[i]))
-                            i += 1
 
-                    # Sort into order
-                    children = [x for (y, x) in sorted(zip(order_sub, children), key=lambda pair: pair[0])]
-
-                    for a in children:
-                        # If so, remove and insert at the current location in the new list
-                        newlist.insert(current, a)
-                        current += 1
-                        order.remove(a)
-
-            # Finally, add the first element
-            newlist.append(order[0])
-            currentIndex = newlist.index(order[0]) + 1
-            del (order[0])
-
-        return newlist
 
     def detectCalls(self, wf, nodelist, spInfo, rf=True, annotation=None, window=1, inc=None, aa=True):
         """
@@ -547,11 +499,16 @@ class WaveletSegment:
         M = int(spInfo['WaveletParams'][1] * win_sr)
         nw = int(np.ceil(duration / inc_sr))
         detected = np.zeros((nw, len(nodelist)))
+        print('detectcalls', nodelist)
 
         count = 0
         for node in nodelist:
             # put WC from test node(s) on the new tree
+            print("n0", wf.tree[0])
+            print("n1", wf.tree[1])
+            print(node)
             C = wf.reconstructWP2(node,antialias=aa, antialiasFilter=True)
+            print(duration)
             # Sanity check for all zero case
             if not any(C):
                 continue    # return np.zeros(nw)
@@ -691,6 +648,7 @@ class WaveletSegment:
 
                     # These nodes refer to the un-rooted tree, so add 1 to get the real indices
                     nodes = [n + 1 for n in nodes]
+                    print('grid search node list', nodes)
 
                     # Now check the F2 values and add node if it improves F2
                     listnodes = []
@@ -858,9 +816,10 @@ class WaveletSegment:
                 goodnodes = self.nodes
 
             # set other nodes to 0
-            for ni in range(len(self.WF.tree)):
-                if ni not in goodnodes:
-                    self.WF.tree[ni] = [0]
+            print('goodnodes', goodnodes)
+            #for ni in range(len(self.WF.tree)):
+            #    if ni not in goodnodes and ni!=0:
+             #       self.WF.tree[ni] = [0]
 
             # save:
             files.append(os.path.join(tempfile.gettempdir(), "avianz_wp" + str(os.getpid()) + "_" + str(indexF)))
@@ -1081,20 +1040,6 @@ class WaveletSegment:
         return segments
 
 
-
-                #change before push
-                #new_dir='D:\Desktop\Documents\Work\Filter Experiment\RURU\Part1\Test10C'
-                #new_dir='/home/listanvirg/FilterTest/Ruru/Test10D'
-                #new_dir='/home/listanvirg/FilterTest/Kiwi/New/Test14D'
-                #new_dir = 'D:\Desktop\Documents\Work\Filter Experiment\KIWI\Ponui\Test2F'
-                #new_filename=new_dir+ '/' +fName
-                #self.filenames.append(new_filename)
-                #self.filenames.append(filename)
-            #Virginia:change this?
-            #if window!=1 or inc!=window:
-                #print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (N, sum, len(self.annotation2)))
-            #else:
-                #print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
 
 
 
