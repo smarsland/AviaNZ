@@ -29,6 +29,7 @@ import pyfftw
 from ext import ce_denoise as ce
 import time
 import Wavelet
+import SignalProc
 
 class WaveletFunctions:
     """ This class contains the wavelet specific methods.
@@ -329,6 +330,7 @@ class WaveletFunctions:
         opstt = time.time()
         wv = self.wavelet
         data = self.tree[node]
+        sp = SignalProc.SignalProc()
 
         lvl = math.floor(math.log2(node+1))
         # position of node in its level (0-based)
@@ -355,39 +357,8 @@ class WaveletFunctions:
                 # just stripped to minimum for speed.
                 low = nodepos / numnodes*2
                 high = (nodepos+1) / numnodes*2
-                print("antialising by filtering between %.3f-%.3f FN" %(low, high))
-
-                # Small buffer bands of 0.001 extend critical bands by 16 Hz at 32 kHz sampling
-                # (i.e. critical bands will be 16 Hz wider than passbands in each direction)
-                # Otherwise could use signal.buttord to calculate the critical bands.
-                if low==0 and high==1:
-                    return data
-                if low==0:
-                    b,a = signal.butter(7, high+0.002, btype='lowpass')
-                elif high==1:
-                    b,a = signal.butter(7, low-0.002, btype='highpass')
-                else:
-                    b,a = signal.butter(7, [low-0.002, high+0.002], btype='bandpass')
-
-                # Check filter stability
-                # (smarter methods exist, but this should be fine for short filters)
-                filterUnstable = np.any(np.abs(np.roots(a))>1)
-
-                # NOTE: can use SOS instead of (b,a) representation to improve stability at high order
-                # (needed for steep transitions).
-                if filterUnstable:
-                    print("single-stage filter unstable, switching to SOS filtering")
-                    if low==0:
-                        sos = signal.butter(30, high+0.002, btype='lowpass', output='sos')
-                    elif high==1:
-                        sos = signal.butter(30, low-0.002, btype='highpass', output='sos')
-                    else:
-                        sos = signal.butter(30, [low-0.002, high+0.002], btype='bandpass', output='sos')
-                    data = signal.sosfilt(sos, data)
-                else:
-                    # if filter appears stable, run it on full data
-                    data = signal.lfilter(b, a, data)
-
+                print("antialiasing by filtering between %.3f-%.3f FN" %(low, high))
+                data = sp.FastButterworthBandpass(data, low, high)
             else:
                 # OLD METHOD for antialiasing
                 # just setting image frequencies to 0
@@ -402,6 +373,7 @@ class WaveletFunctions:
                 if nodepos!=0:
                     ft[-ll*nodepos//numnodes : ] = 0
                 data = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
+
         print("rec ch 2", time.time() - opstt)
 
         return data

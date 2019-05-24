@@ -3313,7 +3313,7 @@ class AviaNZ(QMainWindow):
                 print("working on node", node)
                 C = WF.reconstructWP2(node, aaType != -2, True)
                 C = self.sp.ButterworthBandpass(C, spInfo['SampleRate'],
-                        low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1], order=10)
+                        low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1])
 
                 C = np.abs(C)
                 E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
@@ -3604,18 +3604,18 @@ class AviaNZ(QMainWindow):
             elif str(alg) == "Bandpass --> Wavelets" and not self.DOC:
                 if depth==0:
                     depth = None # why not let auto-fit?
-                self.audiodata = self.sp.bandpassFilter(self.audiodata,start=int(str(start)),end=int(str(end)))
+                self.audiodata = self.sp.bandpassFilter(self.audiodata,start=start,end=end)
                 self.audiodata = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)),depth, aaRec=aaRec, aaWP=aaWP)
             elif str(alg) == "Wavelets --> Bandpass" and not self.DOC:
                 if depth==0:
                     depth = None # why not let auto-fit?
                 self.audiodata = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)),depth, aaRec=aaRec, aaWP=aaWP)
-                self.audiodata = self.sp.bandpassFilter(self.audiodata,self.sampleRate,start=int(str(start)),end=int(str(end)),minFreq=self.minFreq,maxFreq=self.maxFreq)
+                self.audiodata = self.sp.bandpassFilter(self.audiodata,self.sampleRate,start=start,end=end)
 
             elif str(alg) == "Bandpass":
-                self.audiodata = self.sp.bandpassFilter(self.audiodata,self.sampleRate, start=int(str(start)), end=int(str(end)),minFreq=self.minFreq,maxFreq=self.maxFreq)
+                self.audiodata = self.sp.bandpassFilter(self.audiodata,self.sampleRate, start=start, end=end)
             elif str(alg) == "Butterworth Bandpass":
-                self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=int(str(start)), high=int(str(end)),minFreq=self.minFreq,maxFreq=self.maxFreq)
+                self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, low=start, high=end)
             else:
                 #"Median Filter"
                 self.audiodata = self.sp.medianFilter(self.audiodata,int(str(width)))
@@ -4317,33 +4317,7 @@ class AviaNZ(QMainWindow):
                     newSegments = self.findMatches(float(str(CCThr1)))
 
             print('Segments: ', newSegments)
-            # print "to excel", newSegments
-                # # Here the idea is to use both ML and wavelets then label AND as definite and XOR as possible just for wavelets
-                # # but ML is extremely slow and crappy. So I decided to use just the wavelets
-                # newSegmentsML = WaveletSegment.findCalls_learn(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species=species,trainTest=False)
-                # print np.shape(newSegmentsML),type(newSegmentsML), newSegmentsML
-                #
-                # newSegments = WaveletSegment.findCalls_test(fName=None,data=self.audiodata, sampleRate=self.sampleRate, species='kiwi',trainTest=False)
-                # # print type(newSegments),newSegments
-                # import itertools
-                # newSegments=list(itertools.chain.from_iterable(newSegments))
-                # temp=np.zeros(len(newSegmentsML))
-                # for i in newSegments:
-                #     temp[i]=1
-                # newSegments=temp.astype(int)
-                # newSegments=newSegments.tolist()
-                # print np.shape(newSegments), type(newSegments), newSegments
-                #
-                # newSegmentsDef=np.minimum.reduce([newSegmentsML,newSegments])
-                # newSegmentsDef=newSegmentsDef.tolist()
-                # print "newSegmentsDef:", np.shape(newSegmentsDef), type(newSegmentsDef), newSegmentsDef
-                # C=[(a and not b) or (not a and b) for a,b in zip(newSegmentsML,newSegments)]
-                # newSegmentsPb=[int(c) for c in C]
-                # print "newSegmentsPosi:", np.shape(newSegmentsPb), type(newSegmentsPb), newSegmentsPb
-                #
-                # # convert these segments to [start,end] format
-                # newSegmentsDef=self.binary2seg(newSegmentsDef)
-                # newSegmentsPb=self.binary2seg(newSegmentsPb)
+
             # post process to remove short segments, wind, rain, and use F0 check.
             if species == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
@@ -4542,11 +4516,11 @@ class AviaNZ(QMainWindow):
                     seglength = np.abs(self.segments[i][1] - self.segments[i][0])
                     if seglength <= 1:
                         # Recognise as is
-                        label = WaveletSegment.computeWaveletEnergy(self.audiodata[self.segments[i][0]:self.segments[i][1]],wavelet='dmey2')
+                        label = WaveletSegment.computeWaveletEnergy(self.audiodata[self.segments[i][0]:self.segments[i][1]], self.sampleRate)
                         self.updateText(label,i)
                     else:
                         for sec in range(math.ceil(seglength)):
-                            label = WaveletSegment.computeWaveletEnergy(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]],wavelet='dmey2')
+                            label = WaveletSegment.computeWaveletEnergy(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]], self.sampleRate)
                             # TODO: Check if the labels match, decide what to do if not
                         self.updateText(label,i)
 

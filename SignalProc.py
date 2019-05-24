@@ -173,7 +173,7 @@ class SignalProc:
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T
         return sg
 
-    def bandpassFilter(self,data=None,sampleRate=None,start=0,end=None,minFreq=0,maxFreq=None):
+    def bandpassFilter(self,data=None,sampleRate=None,start=0,end=None):
         """ FIR bandpass filter
         128 taps, Hamming window, very basic.
         """
@@ -183,90 +183,159 @@ class SignalProc:
             sampleRate = self.sampleRate
         if end is None:
             end = self.sampleRate/2
-        if maxFreq is None:
-            maxFreq = self.sampleRate/2
-        start = max(start,0,minFreq)
-        end = min(end,maxFreq,self.sampleRate/2)
+        start = max(start,0)
+        end = min(end,self.sampleRate/2)
 
-        #print(start,end,minFreq,maxFreq)
-
-        if start == minFreq and end == maxFreq:
+        if start == 0 and end == self.sampleRate/2:
             print("No filter needed!")
             return data
 
         nyquist = self.sampleRate/2
         ntaps = 128
 
-        if start == minFreq:
+        if start == 0:
             # Low pass
-            #print("Low")
             taps = signal.firwin(ntaps, cutoff=[end / nyquist], window=('hamming'), pass_zero=True)
-        elif end == maxFreq:
+        elif end == self.sampleRate/2:
             # High pass
-            #print("High")
             taps = signal.firwin(ntaps, cutoff=[start / nyquist], window=('hamming'), pass_zero=False)
         else:
             # Bandpass
-            #print("Band")
             taps = signal.firwin(ntaps, cutoff=[start / nyquist, end / nyquist], window=('hamming'), pass_zero=False)
         #ntaps, beta = signal.kaiserord(ripple_db, width)
         #taps = signal.firwin(ntaps,cutoff = [500/nyquist,8000/nyquist], window=('kaiser', beta),pass_zero=False)
         return signal.lfilter(taps, 1.0, data)
 
-    def ButterworthBandpass(self,data,sampleRate,low=0,high=None,minFreq=0,maxFreq=None,order=10,band=50):
+    def ButterworthBandpass(self,data,sampleRate,low=0,high=None,band=0.005):
         """ Basic IIR bandpass filter.
-        Identifies order of filter, max 10.
+            Identifies order of filter, max 10. If single-stage polynomial is unstable,
+            switches to order 30, second-order filter.
+            Args:
+            1-2. data and sample rate.
+            3-4. Low and high pass frequencies in Hz
+            5. difference between stopband and passband, in fraction of Nyquist.
+            Filter will lose no more than 3 dB in freqs [low,high], and attenuate
+            at least 40 dB outside [low-band*Fn, high+band*Fn].
 
+            Does double-pass filtering - slower, but keeps original phase.
         """
+
         if data is None:
             data = self.data
         if sampleRate is None:
             sampleRate = self.sampleRate
-        if high is None:
-            high = sampleRate/2
-        if maxFreq is None:
-            maxFreq = sampleRate/2
-        low = max(low,0,minFreq)
-        high = min(high,maxFreq,sampleRate/2)
-
-        if low == minFreq and high == maxFreq:
-            print("No filter needed!")
-            return data
-
         nyquist = sampleRate/2
 
-        if low == minFreq:
+        if high is None:
+            high = nyquist
+        low = max(low,0)
+        high = min(high,nyquist)
+
+        # convert freqs to fractions of Nyquist:
+        lowPass = low/nyquist
+        highPass = high/nyquist
+        lowStop = lowPass-band
+        highStop = highPass+band
+
+        if lowPass == 0 and highPass == 1:
+            print("No filter needed!")
+            return data
+        elif lowPass == 0:
             # Low pass
-            cut1 = high/nyquist
-            cut2 = (high+band)/nyquist
             # calculate the best order
-            order,wN = signal.buttord(cut1, cut2, 3, band)
+            order,wN = signal.buttord(highPass, highStop, 3, 40)
             if order>10:
                 order=10
-            b, a = signal.butter(order,wN,btype='lowpass')
-        elif high == maxFreq:
+            b, a = signal.butter(order,wN, btype='lowpass')
+        elif highPass == 1:
             # High pass
-            cut1 = low/nyquist
-            cut2 = (low-band)/nyquist
             # calculate the best order
-            order,wN = signal.buttord(cut1, cut2, 3, band)
+            order,wN = signal.buttord(lowPass, lowStop, 3, 40)
             if order>10:
                 order=10
             b, a = signal.butter(order,wN, btype='highpass')
         else:
             # Band pass
-            lowPass = low/nyquist
-            highPass = high/nyquist
-            lowStop = (low-band)/nyquist
-            highStop = (high+band)/nyquist
             # calculate the best order
-            order,wN = signal.buttord([lowPass, highPass], [lowStop, highStop], 3, band)
+            order,wN = signal.buttord([lowPass, highPass], [lowStop, highStop], 3, 40)
             if order>10:
                 order=10
             b, a = signal.butter(order,wN, btype='bandpass')
-            #b, a = signal.butter(order,[lowPass, highPass], btype='bandpass')
 
-        return signal.filtfilt(b, a, data)
+        # check if filter is stable
+        filterUnstable = np.any(np.abs(np.roots(a))>1)
+        if filterUnstable:
+            # redesign to SOS and filter.
+            # uses order=30 because why not
+            print("single-stage filter unstable, switching to SOS filtering")
+            if lowPass == 0:
+                sos = signal.butter(30, wN, btype='lowpass', output='sos')
+            elif highPass == 1:
+                sos = signal.butter(30, wN, btype='highpass', output='sos')
+            else:
+                sos = signal.butter(30, wN, btype='bandpass', output='sos')
+
+            # do the actual filtering
+            data = signal.sosfiltfilt(sos, data)
+        else:
+            # do the actual filtering
+            data = signal.filtfilt(b, a, data)
+
+        return data
+
+    def FastButterworthBandpass(self,data,low=0,high=None):
+        """ Basic IIR bandpass filter.
+            Streamlined to be fast - for use in antialiasing etc.
+            Tries to construct a filter of order 7, with critical bands at +-0.002 Fn.
+            This corresponds to +- 16 Hz or so.
+            If single-stage polynomial is unstable,
+            switches to order 30, second-order filter.
+            Args:
+            1-2. data and sample rate.
+            3-4. Low and high pass frequencies in fraction of Nyquist
+
+            Does single-pass filtering, so does not retain phase.
+        """
+
+        if data is None:
+            data = self.data
+
+        # convert freqs to fractions of Nyquist:
+        lowPass = max(low-0.002, 0)
+        highPass = min(high+0.002, 1)
+
+        if lowPass == 0 and highPass == 1:
+            print("No filter needed!")
+            return data
+        elif lowPass == 0:
+            # Low pass
+            b, a = signal.butter(7, highPass, btype='lowpass')
+        elif highPass == 1:
+            # High pass
+            b, a = signal.butter(7, lowPass, btype='highpass')
+        else:
+            # Band pass
+            b, a = signal.butter(7, [lowPass, highPass], btype='bandpass')
+
+        # check if filter is stable
+        filterUnstable = np.any(np.abs(np.roots(a))>1)
+        if filterUnstable:
+            # redesign to SOS and filter.
+            # uses order=30 because why not
+            print("single-stage filter unstable, switching to SOS filtering")
+            if lowPass == 0:
+                sos = signal.butter(30, highPass, btype='lowpass', output='sos')
+            elif highPass == 1:
+                sos = signal.butter(30, lowPass, btype='highpass', output='sos')
+            else:
+                sos = signal.butter(30, [lowPass, highPass], btype='bandpass', output='sos')
+
+            # do the actual filtering
+            data = signal.sosfilt(sos, data)
+        else:
+            data = signal.lfilter(b, a, data)
+
+        return data
 
     # The next functions perform spectrogram inversion
 
