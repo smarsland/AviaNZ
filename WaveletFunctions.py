@@ -327,7 +327,6 @@ class WaveletFunctions:
 
             Return: the reconstructed signal, ndarray.
         """
-        opstt = time.time()
         wv = self.wavelet
         data = self.tree[node]
         sp = SignalProc.SignalProc()
@@ -342,11 +341,9 @@ class WaveletFunctions:
         numnodes = 2**(lvl+1)
 
         # do the actual convolutions + upsampling
-        data=np.asarray(data, dtype="float64")
-        print(data)
-        print(np.shape(data))
+        if not isinstance(data, np.ndarray):
+            data = np.asarray(data, dtype='float64')
         data = ce.reconstruct(data, node, np.array(wv.rec_hi), np.array(wv.rec_lo), lvl)
-        print("rec ch 1", time.time() - opstt)
 
         if antialias:
             if len(data) > 910*16000 and not antialiasFilter:
@@ -376,8 +373,6 @@ class WaveletFunctions:
                 if nodepos!=0:
                     ft[-ll*nodepos//numnodes : ] = 0
                 data = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
-
-        print("rec ch 2", time.time() - opstt)
 
         return data
 

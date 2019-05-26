@@ -167,7 +167,6 @@ class WaveletSegment:
         # energies are stored in self.waveletCoefs,
         # Or can be read-in from the export file.
         # Virginia: added window and inc input
-        # there was and self.spInfo input not required
         res = self.gridSearch(thrList, MList, rf, learnMode, window, inc)
 
         # Release disk space
@@ -175,7 +174,7 @@ class WaveletSegment:
             os.remove(f)
         return res
 
-    def waveletSegment_test(self, dirName, listnodes=None, spInfo={}, d=False, f=False, rf=True, withzeros=True, learnMode='recaa', savedetections=False, window=1, inc=None):
+    def waveletSegment_test(self, dirName, listnodes=None, d=False, f=False, rf=True, withzeros=True, learnMode='recaa', savedetections=False, window=1, inc=None):
         """ Wrapper for segmentation to be used when testing a new filter
             (called at the end of training from AviaNZ.py).
             Basically a simplified gridSearch.
@@ -188,7 +187,7 @@ class WaveletSegment:
 
         # Load the relevant list of nodes
         if listnodes is None:
-            self.nodes = spInfo['WaveletParams'][2]
+            self.nodes = self.spInfo['WaveletParams'][2]
         else:
             self.nodes = listnodes
 
@@ -199,15 +198,9 @@ class WaveletSegment:
         self.filenames = []
         detected = np.array([])
 
+        # Loads all audio data to memory
         self.loadDirectory(dirName=dirName, denoise=d, filter=f, keepaudio=True, wpmode="new",
                            savedetections=savedetections, train=False, window=window, inc=inc)
-
-        # stores WPs as a temp file. Not saving any work here, but cleaner this way
-        # (because there's no iterating over these files)
-        if learnMode == "recaa":
-            self.tempfiles = self.generateWPs(maxlevel=5, wpmode="new", train=False)
-        if learnMode == "recaafull":
-            self.tempfiles = self.generateWPs(maxlevel=5, wpmode="aa", train=False)
 
         # remember to convert main structures to np arrays
         self.annotation = np.array(self.annotation)
@@ -221,16 +214,15 @@ class WaveletSegment:
                 print("Warning: recsep and recmulti modes deprecated, defaulting to recaa")
                 learnMode = "recaa"
 
-            # Read a full 5 level packet decomposition from antialiased results
-            print("reading WP from file", self.tempfiles[fileId])
-            file = open(self.tempfiles[fileId], 'rb')
-            self.WF = pickle.load(file)
-            file.close()
-
-            # Using new-style WPs, detect calls:
-            if learnMode == 'recaa'or learnMode == "recaafull":
-                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, spInfo=spInfo, rf=rf,
-                                              annotation=None, window=1, inc=None)
+            data = self.audioList[fileId]
+            # Generate a full 5 level wavelet packet decomposition and detect calls
+            self.WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=self.sampleRate)
+            if learnMode == "recaa" or learnMode =="recold":
+                self.WF.WaveletPacket(mode='symmetric', maxlevel=5, antialias=False)
+                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, spInfo=self.spInfo, rf=rf, window=1, inc=None)
+            elif learnMode == "recaafull":
+                self.WF.WaveletPacket(mode='symmetric', maxlevel=5, antialias=True, antialiasFilter=True)
+                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, spInfo=self.spInfo, rf=rf, window=1, inc=None)
             else:
                 print("ERROR: the specified learning mode is not implemented in this function yet")
                 return
@@ -252,22 +244,21 @@ class WaveletSegment:
                 for item in detected_c:
                     item[0] = int(item[0])
                     item[1] = int(item[1])
-                    item = item.append(spInfo['FreqRange'][0])
+                    item = item.append(self.spInfo['FreqRange'][0])
                 for item in detected_c:
-                    item = item.append(spInfo['FreqRange'][1])
+                    item = item.append(self.spInfo['FreqRange'][1])
                 for item in detected_c:
-                    item = item.append(spInfo['Name'])
+                    item = item.append(self.spInfo['Name'])
                 file = open(str(self.filenames[fileId]) + '.data', 'w')
                 json.dump(detected_c, file)
 
             # memory cleanup:
+            del self.WF
             gc.collect()
 
         fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
-        print("Releasing disk space")
-        for f in self.tempfiles:
-            os.remove(f)
         return detected, TP, FP, TN, FN
+
 
     # Virginia: this function to work with sliding windows
     def computeWaveletEnergy(self, data, sampleRate, nlevels=5, wpmode="new", window=1, inc=1, resol=1):
@@ -346,7 +337,6 @@ class WaveletSegment:
     def fBetaScore(self, annotation, predicted, beta=2):
         """ Computes the beta scores given two sets of predictions """
         #print('fBetaScore')
-        #print((len(annotation),len(predicted)))
         print('Annotation length ', len(annotation))
         print('Predicted length ', len(predicted))
         TP = np.sum(np.where((annotation == 1) & (predicted == 1), 1, 0))
@@ -462,7 +452,7 @@ class WaveletSegment:
         1. wf - WaveletFunctions with a homebrew wavelet tree (list of ndarray nodes)
         2. nodelist - will reconstruct signal and run detections on each of these nodes separately
         3. spInfo - used to pass thr, M, and other parameters
-        4. rf - ??
+        4. rf - bandpass to species freq range?
         5. annotation - for calculating noise properties during training
         6-7. window, inc - ??
         8. antialias - True/False
@@ -532,7 +522,9 @@ class WaveletSegment:
             # Virginia: changed the base. I'm using resol_sr as a base. Cause I'm looking for detections on windows.
             #This step is not so clear for me
             if annotation is not None:
-                C = C[np.repeat(annotation == 0, resol_sr)]
+                noiseSamples = np.repeat(annotation == 0, resol_sr)
+                noiseSamples = noiseSamples[:len(C)]
+                C = C[noiseSamples]
             C = np.log(C)
             threshold = np.exp(np.mean(C) + np.std(C) * thr)
 
@@ -574,7 +566,6 @@ class WaveletSegment:
         return detected
 
     def gridSearch(self, thrList, MList, rf=True, learnMode=None, window=1, inc=None):
-
         """ Take list of files and other parameters,
              load files, compute wavelet coefficients and reuse them in each (M, thr) combination,
              perform grid search over thr and M parameters,
@@ -598,10 +589,8 @@ class WaveletSegment:
         finalnodes = []
         negative_nodes = []
         top_nodes = []
-        # avoid low-level nodes
-        low_level_nodes = list(range(15))
 
-        spInfo = self.spInfo
+        spInfo = copy.deepcopy(self.spInfo)
 
         # Grid search over M x thr x Files
         for indexM in range(len(MList)):
@@ -627,20 +616,9 @@ class WaveletSegment:
                         annotation2 = self.annotation2[int(np.sum(self.filelengths2[0:indexF])):int(np.sum(self.filelengths2[0:indexF + 1]))]
                     annotation = self.annotation[int(np.sum(self.filelengths[0:indexF])):int(np.sum(self.filelengths[0:indexF + 1]))]
 
-                    # Find 10 most positively correlated nodes
-                    nodeCorrs = self.nodeCorrs[:, indexF]
-                    nodes1 = np.flip(np.argsort(nodeCorrs)[:], 0).tolist()
-                    nodes = []
-                    for item in nodes1:
-                        if item not in low_level_nodes:
-                            nodes.append(item)
-                    nodes = nodes[0:10]
-
-                    # Keep track of negative correlated nodes
-                    negative_nodes.extend(np.argsort(nodeCorrs)[:10])
-                    # # Avoid having any node in the first half of the positive nodes as a neg node
-                    # negative_nodes = [i for i in negative_nodes if i not in nodes[0:5]]
+                    nodesToTest, worstnodes = self.listTopNodes(indexF)
                     if np.sum(annotation) > 0:
+<<<<<<< HEAD
                         top_nodes.extend(nodes[0:2])
 
                     # Sort the nodes, put any of its children (and their children, iteratively) that are in the list in front of it
@@ -649,19 +627,21 @@ class WaveletSegment:
                     # These nodes refer to the un-rooted tree, so add 1 to get the real indices
                     nodes = [n + 1 for n in nodes]
                     print('grid search node list', nodes)
+=======
+                        top_nodes.extend(nodesToTest[0:2])
+                    negative_nodes.extend(worstnodes)
+>>>>>>> 8bit WAV playback, + filter training now works again
 
-                    # Now check the F2 values and add node if it improves F2
+                    # Best nodes found within this file:
                     listnodes = []
                     bestBetaScore = 0
                     bestRecall = 0
 
+                    #Changed to read convenient filelength
                     #detected = np.zeros(self.filelengths[indexF])
                     detected = np.zeros(file_lengths[indexF])
 
                     ### GET WPs for reconstructing detectors:
-                    #Changed to read convenient filelength
-                    #wp = []
-
                     # Read a full 5 level packet decomposition from antialiased results
                     if learnMode == "recaafull" or learnMode == "recaa":
                         print("reading WP from file", self.tempfiles[indexF])
@@ -678,10 +658,10 @@ class WaveletSegment:
                         return
 
                     ### STEPWISE SEARCH for best node combination:
-                    for node in nodes:
-                        testlist = listnodes[:]
-                        testlist.append(node)
-                        print("Test list: ", testlist)
+                    # (reconstruct, check the F2 values and add node if it improves F2)
+                    print("Starting stepwise search. Possible nodes:", nodesToTest)
+                    for node in nodesToTest:
+                        print("Testing node ", node)
 
                         # Detect calls, using signal reconstructed from current node
                         # with antialias (freq squashing + non-downsampled tree, recaa...),
@@ -734,7 +714,9 @@ class WaveletSegment:
                             fB, recall, tp, fp, tn, fn = self.fBetaScore(annotation2, detections)
                         else:
                             fB, recall, tp, fp, tn, fn = self.fBetaScore(annotation, detections)
-                        if fB is not None and fB > bestBetaScore:  # Keep this node and update fB, recall, detected, and optimum nodes
+                        # If this node improved fB,
+                        # store it and update fB, recall, detected, and optimum nodes
+                        if fB is not None and fB > bestBetaScore:
                             bestBetaScore = fB
                             bestRecall = recall
                             detected = detections
@@ -781,7 +763,6 @@ class WaveletSegment:
 
 
     def generateWPs(self, maxlevel, wpmode, train):
-
         """ Stores WPs of selected nodes for all loaded files.
             Useful for disk-caching when WP decomp is slow.
 
@@ -807,19 +788,22 @@ class WaveletSegment:
 
             # No need to store everything:
             # Find 10 most positively correlated nodes in train mode and the optimum nodes from filter in test mode
-            # TODO cleanup this argument
             if train:
-                nodeCorrs = self.nodeCorrs[:, indexF]
-                goodnodes = np.flip(np.argsort(nodeCorrs)[-10:], 0)
-                goodnodes = [n + 1 for n in goodnodes]
+                goodnodes, _ = self.listTopNodes(indexF)
             else:
                 goodnodes = self.nodes
 
             # set other nodes to 0
+<<<<<<< HEAD
             print('goodnodes', goodnodes)
             #for ni in range(len(self.WF.tree)):
             #    if ni not in goodnodes and ni!=0:
              #       self.WF.tree[ni] = [0]
+=======
+            for ni in range(len(self.WF.tree)):
+                if ni not in goodnodes and ni!=0:
+                    self.WF.tree[ni] = [0]
+>>>>>>> 8bit WAV playback, + filter training now works again
 
             # save:
             files.append(os.path.join(tempfile.gettempdir(), "avianz_wp" + str(os.getpid()) + "_" + str(indexF)))
@@ -831,6 +815,40 @@ class WaveletSegment:
             print("saved WP to file", files[indexF])
 
         return (files)
+
+    def listTopNodes(self, filenum):
+        """ Selects top 10 or so nodes to be tested for this file,
+            using correlations stored in nodeCorrs, and provided file index.
+
+            Return: tuple of lists (bestnodes, worstnodes)
+        """
+
+        # Retrieve stored node correlations
+        nodeCorrs = self.nodeCorrs[:, filenum]
+        nodes1 = np.flip(np.argsort(nodeCorrs)[:], 0).tolist()
+        bestnodes = []
+
+        # avoid low-level nodes
+        low_level_nodes = list(range(15))
+        for item in nodes1:
+            if item not in low_level_nodes:
+                bestnodes.append(item)
+
+        # Find 10 most positively correlated nodes
+        bestnodes = bestnodes[0:10]
+
+        # Keep track of negative correlated nodes
+        worstnodes = np.argsort(nodeCorrs)[:10]
+        # # Avoid having any node in the first half of the positive nodes as a neg node
+        # negative_nodes = [i for i in negative_nodes if i not in nodes[0:5]]
+
+        # Sort the nodes, put any of its children (and their children, iteratively) that are in the list in front of it
+        bestnodes = self.sortListByChild(bestnodes)
+
+        # These nodes refer to the un-rooted tree, so add 1 to get the real indices
+        bestnodes = [n + 1 for n in bestnodes]
+
+        return (bestnodes, worstnodes)
 
     def preprocess(self, data, d=False, f=False):
         """ Downsamples, denoises, and filters the data.
@@ -1041,6 +1059,22 @@ class WaveletSegment:
 
 
 
+<<<<<<< HEAD
 
 
+=======
+                #change before push
+                #new_dir='D:\Desktop\Documents\Work\Filter Experiment\RURU\Part1\Test10C'
+                #new_dir='/home/listanvirg/FilterTest/Ruru/Test10D'
+                #new_dir='/home/listanvirg/FilterTest/Kiwi/New/Test14D'
+                #new_dir = 'D:\Desktop\Documents\Work\Filter Experiment\KIWI\Ponui\Test2F'
+                #new_filename=new_dir+ '/' +fName
+                #self.filenames.append(new_filename)
+                #self.filenames.append(filename)
+            #Virginia:change this?
+            #if window!=1 or inc!=window:
+                #print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (N, sum, len(self.annotation2)))
+            #else:
+                #print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
+>>>>>>> 8bit WAV playback, + filter training now works again
 

@@ -1157,12 +1157,14 @@ class ControllableAudio(QAudioOutput):
     def loadArray(self, audiodata):
         # loads an array from memory into an audio buffer
         if self.format.sampleSize() == 16:
-            audiodata = audiodata.astype('int16') # 16 corresponds to sampwidth=2
+            audiodata = audiodata.astype('int16')  # 16 corresponds to sampwidth=2
         elif self.format.sampleSize() == 32:
             audiodata = audiodata.astype('int32')
         elif self.format.sampleSize() == 24:
             audiodata = audiodata.astype('int32')
             print("Warning: 24-bit sample playback currently not supported")
+        elif self.format.sampleSize() == 8:
+            audiodata = audiodata.astype('uint8')
         else:
             print("ERROR: sampleSize %d not supported" % self.format.sampleSize())
             return
@@ -1172,8 +1174,13 @@ class ControllableAudio(QAudioOutput):
 
         # write filtered output to a BytesIO buffer
         self.tempout = io.BytesIO()
-        # NOTE: scale=None rescales using data minimum/max. Use scale="none" if this causes weird playback sound issues.
-        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale=None, sampwidth=self.format.sampleSize() // 8)
+        # NOTE: scale=None rescales using data minimum/max. This can cause clipping. Use scale="none" if this causes weird playback sound issues.
+        # in particular for 8bit samples, we need more scaling:
+        if self.format.sampleSize() == 8:
+            scale = (audiodata.min()/2, audiodata.max()*2)
+        else:
+            scale = None
+        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale=scale, sampwidth=self.format.sampleSize() // 8)
 
         # copy BytesIO@write to QBuffer@read for playing
         self.temparr = QByteArray(self.tempout.getvalue()[44:])

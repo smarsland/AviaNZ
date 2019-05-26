@@ -969,11 +969,6 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.setEnabled(False)
         self.quickDenButton.setEnabled(False)
 
-        # Delete the overview segments
-        for r in self.SegmentRects:
-            self.p_overview2.removeItem(r)
-        self.SegmentRects = []
-
         # Remove any fundamental frequencies drawn
         for r in self.segmentPlots:
             self.p_spec.removeItem(r)
@@ -1085,7 +1080,6 @@ class AviaNZ(QMainWindow):
         Then it sets up the audio player and fills in the appropriate time data in the window, and makes
         the scroll bar and overview the appropriate lengths.
         """
-
         self.resetStorageArrays()
 
         with pg.ProgressDialog("Loading..", 0, 7) as dlg:
@@ -1558,6 +1552,13 @@ class AviaNZ(QMainWindow):
         self.widthOverviewSegment = np.shape(self.sg)[0]//numSegments
 
         self.overviewSegments = np.zeros((numSegments,3))
+
+        # Delete the overview segments
+        for r in self.SegmentRects:
+            self.p_overview2.removeItem(r)
+        self.SegmentRects = []
+
+        # Add new overview segments
         for i in range(numSegments):
             r = SupportClasses.ClickableRectItem(i*self.widthOverviewSegment, 0, self.widthOverviewSegment, 0.5)
             r.setPen(pg.mkPen('k'))
@@ -3724,10 +3725,6 @@ class AviaNZ(QMainWindow):
         if changedY:
             # Remove everything and redraw it
             self.removeSegments(delete=False)
-            for r in self.SegmentRects:
-                self.p_overview2.removeItem(r)
-            self.SegmentRects = []
-            #self.p_overview.removeItem(self.overviewImageRegion)
             self.drawOverview()
             self.drawfigMain(remaking=True)
 
@@ -3747,42 +3744,44 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog.test.clicked.connect(self.testWavelet)
 
     def testWavelet(self):
-        if hasattr(self, 'dNameTest'):
-            if hasattr(self, 'species'):
-                ind = self.species.find('>')
-                if ind != -1:
-                    species = self.species.replace('>', '(')
-                    species = species + ')'
-                else:
-                    species = self.species
-                speciesData = json.load(open(os.path.join(self.filtersDir, species + '.txt')))
-                ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
-                # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
-                window = 1
-                inc = None
-                Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, d=False, f=True, rf=True, withzeros=True, learnMode='recaa', savedetections=True, window=window, inc=inc)
-                print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
-                if TP+FN != 0:
-                    recall = TP/(TP+FN)
-                else:
-                    recall = 0
-                if TP+FP != 0:
-                    precision = TP/(TP+FP)
-                else:
-                    precision = 0
-                if TN+FP != 0:
-                    specificity = TN/(TN+FP)
-                else:
-                    specificity = 0
-                if TP+FP+TN+FN != 0:
-                    accuracy = (TP+TN)/(TP+FP+TN+FN)
-                    self.waveletTDialog.note_step3.setText(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
-            else:
-                msg = SupportClasses.MessagePopup("w", "Train first", "Please train the detector first!")
-                msg.exec_()
-        else:
+        if not hasattr(self, 'dNameTest'):
             msg = SupportClasses.MessagePopup("w", "Testing data", "Please specify testing data")
             msg.exec_()
+            return
+        if not hasattr(self, 'species'):
+            msg = SupportClasses.MessagePopup("w", "Train first", "Please train the detector first!")
+            msg.exec_()
+            return
+
+        with pg.BusyCursor():
+            ind = self.species.find('>')
+            if ind != -1:
+                species = self.species.replace('>', '(')
+                species = species + ')'
+            else:
+                species = self.species
+            speciesData = json.load(open(os.path.join(self.filtersDir, species + '.txt')))
+            ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
+            # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
+            window = 1
+            inc = None
+            Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, d=False, f=True, rf=True, withzeros=True, learnMode='recaa', savedetections=True, window=window, inc=inc)
+            print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
+            if TP+FN != 0:
+                recall = TP/(TP+FN)
+            else:
+                recall = 0
+            if TP+FP != 0:
+                precision = TP/(TP+FP)
+            else:
+                precision = 0
+            if TN+FP != 0:
+                specificity = TN/(TN+FP)
+            else:
+                specificity = 0
+            if TP+FP+TN+FN != 0:
+                accuracy = (TP+TN)/(TP+FP+TN+FN)
+                self.waveletTDialog.note_step3.setText(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
 
     def trainWavelet(self):
         """ Listener for the wavelet training dialog.
@@ -3899,15 +3898,18 @@ class AviaNZ(QMainWindow):
                 fpr_cl = event.xdata
                 tpr_cl = event.ydata
                 print("fpr_cl, tpr_cl: ",fpr_cl, tpr_cl)
+
                 if tpr_cl is not None and fpr_cl is not None:
+                    # TODO: Interpolate?, currently get the closest point
+                    # get M and thr for closest point
+                    distarr = (tpr_cl - TPR)**2 + (fpr_cl - FPR)**2
+                    M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
+                    tpr_cl = TPR[M_min_ind, thr_min_ind]
+                    fpr_cl = FPR[M_min_ind, thr_min_ind]
                     msg = SupportClasses.MessagePopup("t", 'Set Tolerance - %s' % (self.species), 'Confirm %d%% Sensitivity with %d%% FPR?' % (tpr_cl*100, fpr_cl*100))
                     msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                     reply = msg.exec_()
                     if reply == QMessageBox.Yes:
-                        # TODO: Interpolate?, currently get the closest point
-                        # get M and thr for closest point
-                        distarr = (tpr_cl - TPR)**2 + (fpr_cl - FPR)**2
-                        M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
                         self.M = MList[M_min_ind]
                         self.thr = thrList[thr_min_ind]
                         # Get nodes for closest point
@@ -3919,7 +3921,7 @@ class AviaNZ(QMainWindow):
                         speciesData['F0'] = ff
                         if ff:
                             speciesData['F0Range'] = [f0_low, f0_high]
-                        speciesData['WaveletParams'].clear()
+                        speciesData['WaveletParams'] = []
                         speciesData['WaveletParams'].append(self.thr)
                         speciesData['WaveletParams'].append(self.M)
                         speciesData['WaveletParams'].append(self.optimumNodesSel)
@@ -3998,7 +4000,7 @@ class AviaNZ(QMainWindow):
         # BE CAREFULL: they must be updated here
         window = 1
         inc= None
-        species = str(self.waveletTDialog.species.currentText())
+        species = self.waveletTDialog.species.currentText()
         #species = "Morepork" #Virginia: changed to test
         if species == 'Choose species...':
             msg = SupportClasses.MessagePopup("w", "Species Error", "Please specify the species!")
@@ -4070,9 +4072,7 @@ class AviaNZ(QMainWindow):
             for seg in segments:
                 if seg[0] == -1:
                     continue
-                if not species.title() in seg[4]:
-                    continue
-                else:
+                if species in seg[4]:
                     # print("lenMin, seg[1]-seg[0]", lenMin, seg[1]-seg[0])
                     if lenMin > seg[1]-seg[0]:
                         lenMin = seg[1]-seg[0]
@@ -4082,7 +4082,7 @@ class AviaNZ(QMainWindow):
                         fLow = seg[2]
                     if fHigh < seg[3]:
                         fHigh = seg[3]
-                    type = species.title()
+                    type = species
                     quality = ''
                     s = int(math.floor(seg[0]))
                     e = min(duration, int(math.ceil(seg[1])))
@@ -4162,8 +4162,6 @@ class AviaNZ(QMainWindow):
             for seg in segments:
                 if seg[0] == -1:
                     continue
-                if not species.title() in seg[4]:
-                    continue
                 if species in str(seg[4]):
                     # print("lenMin, seg[1]-seg[0]", lenMin, seg[1]-seg[0])
                     # Virginia: added this variable so the machine don't have to calculate it every rime
@@ -4176,7 +4174,7 @@ class AviaNZ(QMainWindow):
                         fLow = seg[2]
                     if fHigh < seg[3]:
                         fHigh = seg[3]
-                    type = species.title()
+                    type = species
                     quality = ''
                     # Virginia: start and end must be read in resol base
                     s = int(math.floor(seg[0] / resol))
@@ -4191,9 +4189,6 @@ class AviaNZ(QMainWindow):
                         GT[i][3] = quality
 
                         # Empty files cannot be used now, and lead to problems
-        if len(GT) == 0:
-            print("ERROR: no calls for this species in file", datFile)
-            return
 
         for line in GT:
             if line[1] == 0.0:
