@@ -618,19 +618,8 @@ class WaveletSegment:
 
                     nodesToTest, worstnodes = self.listTopNodes(indexF)
                     if np.sum(annotation) > 0:
-<<<<<<< HEAD
-                        top_nodes.extend(nodes[0:2])
-
-                    # Sort the nodes, put any of its children (and their children, iteratively) that are in the list in front of it
-                    nodes = self.sortListByChild(nodes)
-
-                    # These nodes refer to the un-rooted tree, so add 1 to get the real indices
-                    nodes = [n + 1 for n in nodes]
-                    print('grid search node list', nodes)
-=======
                         top_nodes.extend(nodesToTest[0:2])
                     negative_nodes.extend(worstnodes)
->>>>>>> 8bit WAV playback, + filter training now works again
 
                     # Best nodes found within this file:
                     listnodes = []
@@ -794,16 +783,9 @@ class WaveletSegment:
                 goodnodes = self.nodes
 
             # set other nodes to 0
-<<<<<<< HEAD
-            print('goodnodes', goodnodes)
-            #for ni in range(len(self.WF.tree)):
-            #    if ni not in goodnodes and ni!=0:
-             #       self.WF.tree[ni] = [0]
-=======
             for ni in range(len(self.WF.tree)):
                 if ni not in goodnodes and ni!=0:
                     self.WF.tree[ni] = [0]
->>>>>>> 8bit WAV playback, + filter training now works again
 
             # save:
             files.append(os.path.join(tempfile.gettempdir(), "avianz_wp" + str(os.getpid()) + "_" + str(indexF)))
@@ -1056,25 +1038,4 @@ class WaveletSegment:
             segments[i][1] = segments[i + 1][1]
             del (segments[i + 1])
         return segments
-
-
-
-<<<<<<< HEAD
-
-
-=======
-                #change before push
-                #new_dir='D:\Desktop\Documents\Work\Filter Experiment\RURU\Part1\Test10C'
-                #new_dir='/home/listanvirg/FilterTest/Ruru/Test10D'
-                #new_dir='/home/listanvirg/FilterTest/Kiwi/New/Test14D'
-                #new_dir = 'D:\Desktop\Documents\Work\Filter Experiment\KIWI\Ponui\Test2F'
-                #new_filename=new_dir+ '/' +fName
-                #self.filenames.append(new_filename)
-                #self.filenames.append(filename)
-            #Virginia:change this?
-            #if window!=1 or inc!=window:
-                #print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (N, sum, len(self.annotation2)))
-            #else:
-                #print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
->>>>>>> 8bit WAV playback, + filter training now works again
 
