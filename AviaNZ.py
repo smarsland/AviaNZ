@@ -46,7 +46,7 @@ pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
 pg.setConfigOption('antialias',True)
 from pyqtgraph.Qt import QtCore, QtGui
-from pyqtgraph.dockarea import *
+from pyqtgraph.dockarea import DockArea, Dock
 import pyqtgraph.functions as fn
 import pyqtgraph.exporters as pge
 
@@ -441,7 +441,7 @@ class AviaNZ(QMainWindow):
         self.move(100,50)
 
         # Make the docks and lay them out
-        self.d_overview = Dock("Overview",size = (1200,150))
+        self.d_overview = Dock("Overview",size=(1200,150))
         self.d_ampl = Dock("Amplitude",size=(1200,150))
         self.d_spec = Dock("Spectrogram",size=(1200,300))
         self.d_controls = Dock("Controls",size=(40,100))
@@ -889,38 +889,37 @@ class AviaNZ(QMainWindow):
         """ Generates the list of files for the file listbox.
         fileName - currently opened file (marks it in the list).
         Most of the work is to deal with directories in that list.
-        It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
-        red in the list, and the second to know if the files are long."""
+        It only sees *.wav files. Picks up *.data to make the filenames
+        red in the list."""
+
+        if not os.path.isdir(self.SoundFileDir):
+            print("ERROR: directory %s doesn't exist" % self.soundFileDir)
+            return
+
         # clear file listbox
         self.listFiles.clearSelection()
         self.listFiles.clearFocus()
         self.listFiles.clear()
 
-        if not os.path.isdir(self.SoundFileDir):
-            print("Directory doesn't exist: making it")
-            os.makedirs(self.SoundFileDir)
-
         self.listOfFiles = QDir(self.SoundFileDir).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
         listOfDataFiles = QDir(self.SoundFileDir).entryList(['*.data'])
-        listOfLongFiles = QDir(self.SoundFileDir).entryList(['*_1.wav'])
         for file in self.listOfFiles:
-            if file.fileName()[:-4]+'_1.wav' in listOfLongFiles:
-                # Ignore this entry
-                pass
+            # If there is a .data version, colour the name red to show it has been labelled
+            item = QListWidgetItem(self.listFiles)
+            self.listitemtype = type(item)
+            if file.isDir():
+                item.setText(file.fileName() + "/")
             else:
-                # If there is a .data version, colour the name red to show it has been labelled
-                item = QListWidgetItem(self.listFiles)
-                self.listitemtype = type(item)
                 item.setText(file.fileName())
-                if file.fileName()+'.data' in listOfDataFiles:
-                    item.setForeground(Qt.red)
+            if file.fileName()+'.data' in listOfDataFiles:
+                item.setForeground(Qt.red)
+        # mark the current file
         if fileName:
-            index = self.listFiles.findItems(fileName,Qt.MatchExactly)
+            index = self.listFiles.findItems(fileName+"\/?",Qt.MatchRegExp)
             if len(index)>0:
                 self.listFiles.setCurrentItem(index[0])
             else:
-                index = self.listFiles.findItems(self.listOfFiles[0].fileName(),Qt.MatchExactly)
-                self.listFiles.setCurrentItem(index[0])
+                self.listFiles.setCurrentRow(0)
 
     def resetStorageArrays(self):
         """ Called when new files are loaded.
@@ -1008,6 +1007,7 @@ class AviaNZ(QMainWindow):
         # Need name of file
         if type(current) is self.listitemtype:
             current = current.text()
+            current = re.sub('\/.*', '', current)
 
         fullcurrent = os.path.join(self.SoundFileDir, current)
         if not os.path.isdir(fullcurrent):
@@ -1052,17 +1052,10 @@ class AviaNZ(QMainWindow):
             dir.cd(self.listOfFiles[i].fileName())
             # Now repopulate the listbox
             self.SoundFileDir=str(dir.absolutePath())
-            #self.listFiles.clearSelection()
-            #self.listFiles.clearFocus()
-            #self.listFiles.clear()
             self.previousFile = None
             if (i == len(self.listOfFiles)-1) and (self.listOfFiles[i].fileName() != current):
                 self.loadFile(current)
             self.fillFileList(current)
-            # Show the selected file
-            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
-            if len(index) > 0:
-                self.listFiles.setCurrentItem(index[0])
         else:
             self.loadFile(current)
         return(0)
@@ -4217,26 +4210,6 @@ class AviaNZ(QMainWindow):
         """
         self.dName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose Folder to Process')
         # get the species list from annotations
-        spList = ['Choose species...']
-        for root, dirs, files in os.walk(str(self.dName)):
-            for filename in files:
-                if filename.endswith('.data'):
-                    datFile = root + '/' + filename
-                    if os.path.isfile(datFile):
-                        with open(datFile) as f:
-                            segments = json.load(f)
-                            for seg in segments:
-                                if seg[0] == -1:
-                                    continue
-                                elif len(seg[4])>0:
-                                    for birdName in seg[4]:
-                                        if len(birdName)>0 and birdName[-1] == '?':
-                                            if birdName[:-1] not in spList:
-                                                spList.append(birdName[:-1])
-                                        elif birdName not in spList:
-                                            spList.append(birdName)
-        self.waveletTDialog.species.clear()
-        self.waveletTDialog.species.addItems(spList)
         self.waveletTDialog.fillFileList(self.dName)
         self.waveletTDialog.genGT.setEnabled(True)
         self.waveletTDialog.raise_()
@@ -4267,13 +4240,30 @@ class AviaNZ(QMainWindow):
 
         opstartingtime = time.time()
         print('Segmenting requested at ' + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))
+        # for undoing:
+        self.prevSegments = copy.deepcopy(self.segments)
 
         self.segmentsToSave = True
-        # TODO: Currently just gives them all the label "Don't Know"
         [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution,species_cc] = self.segmentDialog.getValues()
         with pg.BusyCursor():
             species = str(species)
             self.statusLeft.setText('Segmenting...')
+            # Delete old segments:
+            # only this species, if using species-specific methods:
+            if alg == 'Wavelets':
+                if species == 'Choose species...':
+                    msg = SupportClasses.MessagePopup("w", "Species Error", 'Please select your species!')
+                    msg.exec_()
+                    return
+
+                # deleting from the end, because deleteSegments shifts IDs:
+                for si in reversed(range(len(self.segments))):
+                    if species in self.segments[si][4] or species+'?' in self.segments[si][4]:
+                        self.deleteSegment(si)
+            else:
+                self.removeSegments()
+
+            # NON-SPECIFIC methods here (produce "Don't Know"):
             if str(alg) == 'Default':
                 newSegments = self.seg.bestSegments()
             elif str(alg) == 'Median Clipping':
@@ -4294,16 +4284,13 @@ class AviaNZ(QMainWindow):
             elif str(alg) == 'FIR':
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
+            # SPECIES-SPECIFIC methods from here:
             elif str(alg) == 'Wavelets':
-                if species == 'Choose species...':
-                    msg = SupportClasses.MessagePopup("w", "Species Error", 'Please select your species!')
-                    msg.exec_()
-                    return
-                else:
-                    speciesData = json.load(open(os.path.join(self.filtersDir, species+'.txt')))
-                    ws = WaveletSegment.WaveletSegment(speciesData)
-                    newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
-                                                    d=False, f=True, wpmode="new")
+                speciesData = json.load(open(os.path.join(self.filtersDir, species+'.txt')))
+                ws = WaveletSegment.WaveletSegment(speciesData)
+                newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
+                                                d=False, f=True, wpmode="new")
+            # TODO
             elif str(alg) == 'Cross-Correlation':
                 if species_cc != 'Choose species...':
                     # need to load template/s
@@ -4372,12 +4359,17 @@ class AviaNZ(QMainWindow):
 
     def segment_undo(self):
         """ Listener for undo button in segmentation dialog.
-        This is very cheap: the segments were appended, so delete the last len of them (from the end)
+            Deletes everything, and re-adds segments from a backup.
         """
-        end = len(self.segments)
-        for seg in range(end-1,end-self.lenNewSegments-1,-1):
-            self.deleteSegment(seg)
+        # just in case:
         self.segmentDialog.undo.setEnabled(False)
+        if not hasattr(self, 'prevSegments'):
+            print("Nothing to undo!")
+            return
+        
+        self.removeSegments()
+        for seg in self.prevSegments:
+            self.addSegment(seg)
 
     def exportSeg(self, annotation=None):
         # find all the species
@@ -4499,6 +4491,9 @@ class AviaNZ(QMainWindow):
     def classifySegments(self):
         # TODO: Finish this
         # Note that this still works on 1 second -- species-specific parameter eventually (here twice: as 1 and in sec loop)
+        print("Not implemented yet!")
+        return
+
         if self.segments is None or len(self.segments) == 0:
             msg = SupportClasses.MessagePopup("w", "No segments", "No segments to recognise")
             msg.exec_()
@@ -4691,13 +4686,17 @@ class AviaNZ(QMainWindow):
         exporter = pge.ImageExporter(self.w_spec.scene())
 
         if imageFile=='':
-            imageFile, drop = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)");
+            imageFile, drop = QFileDialog.getSaveFileName(self, "Save Image", "", "Images (*.png *.xpm *.jpg)")
+            if not (imageFile.endswith('.png') or imageFile.endswith('.xpm') or imageFile.endswith('.jpg')):
+                # exporter won't be able to deduce file type and will quit silently
+                imageFile = imageFile + '.png'
         try:
             # works but requires devel (>=0.11) version of pyqtgraph:
             exporter.export(imageFile)
-            print("Exporting spectrogram to file %s.png" % imageFile)
-        except:
-            print("Failed to save image")
+            print("Exporting spectrogram to file %s" % imageFile)
+        except Exception as e:
+            print("Warning: failed to save image")
+            print(e)
 
     def changeSettings(self):
         """ Create the parameter tree when the Interface settings menu is pressed.
@@ -4982,12 +4981,8 @@ class AviaNZ(QMainWindow):
             # includes resetting playback buttons
             self.stopPlayback()
 
-        if not hr and (id<0 or not id):
+        if not hr and id<0:
             id = self.box1id
-
-        #if id<0 or not id:
-            # delete selected
-            #id = self.box1id
 
         if id>-1:
             startpoint = self.segments[id][0]-self.startRead

@@ -529,8 +529,8 @@ class exportSegments:
         ws.cell(row=1, column=1, value="File Name")
         ws.cell(row=1, column=2, value="start (hh:mm:ss)")
         ws.cell(row=1, column=3, value="end (hh:mm:ss)")
-        ws.cell(row=1, column=4, value="min freq., Hz")
-        ws.cell(row=1, column=5, value="max freq., Hz")
+        ws.cell(row=1, column=4, value="min freq. (Hz)")
+        ws.cell(row=1, column=5, value="max freq. (Hz)")
         if species=="All_species":
             ws.cell(row=1, column=6, value="species")
 
