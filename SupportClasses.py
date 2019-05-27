@@ -910,31 +910,27 @@ class LinearRegionItem2(pg.LinearRegionItem):
         if not self.movable or ev.button()==self.parent.MouseDrawingButton:
             return
         ev.accept()
-        
+
         if ev.isStart():
             bdp = ev.buttonDownPos()
             self.cursorOffsets = [l.pos() - bdp for l in self.lines]
             self.startPositions = [l.pos() for l in self.lines]
             self.moving = True
-            
+
         if not self.moving:
             return
-            
+
         self.lines[0].blockSignals(True)  # only want to update once
         for i, l in enumerate(self.lines):
             l.setPos(self.cursorOffsets[i] + ev.pos())
         self.lines[0].blockSignals(False)
         self.prepareGeometryChange()
-        
+
         if ev.isFinish():
             self.moving = False
             self.sigRegionChangeFinished.emit(self)
         else:
             self.sigRegionChanged.emit(self)
-
-    # this allows compatibility with LinearRegions:
-    def setHoverBrush(self, *br, **args):
-        pass
 
 
 class DragViewBox(pg.ViewBox):
