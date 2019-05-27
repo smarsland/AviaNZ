@@ -27,7 +27,7 @@ import sys,os
 
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
+from PyQt5.QtCore import QDir, QPointF, QTime, Qt
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -619,31 +619,58 @@ class WaveletTrain(QDialog):
         It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
         red in the list, and the second to know if the files are long."""
 
-        # if not os.path.isdir(self.dirName):
-        #     print("Directory doesn't exist: making it")
-        #     os.makedirs(self.dirName)
+        if not os.path.isdir(dirName):
+            print("ERROR: Directory doesn't exist")
+            return
 
         if train:
             self.listFiles.clear()
+            spList = set()
+            # collect possible species from annotations:
+            for root, dirs, files in os.walk(dirName):
+                for filename in files:
+                    if filename.endswith('.wav') and filename+'.data' in files:
+                        # this wav has data, so see what species are in there
+                        with open(os.path.join(root, filename+'.data')) as f:
+                            segments = json.load(f)
+                            for seg in segments:
+                                # meta/empty segments
+                                if seg[0] == -1 or len(seg[4])==0:
+                                    continue
+
+                                for birdName in seg[4]:
+                                    if birdName == "Don't Know":
+                                        continue
+                                    elif len(birdName)>0 and birdName[-1] == '?':
+                                        spList.add(birdName[:-1])
+                                    else:
+                                        spList.add(birdName)
+            spList = list(spList)
+            spList.insert(0, 'Choose species...')
+            self.species.clear()
+            self.species.addItems(spList)
         else:
             self.listFilesTest.clear()
-        self.listOfFiles = QDir(dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
-        listOfDataFiles = QDir(dirName).entryList(['*.data'])
-        listOfLongFiles = QDir(dirName).entryList(['*_1.wav'])
-        for file in self.listOfFiles:
-            if file.fileName()[:-4]+'_1.wav' in listOfLongFiles:
-                # Ignore this entry
-                pass
+
+        listOfFiles = QDir(dirName).entryInfoList(['*.wav'],filters=QDir.AllDirs|QDir.NoDotAndDotDot|QDir.Files,sort=QDir.DirsFirst)
+        listOfDataFiles = QDir(dirName).entryList(['*.wav.data'])
+        for file in listOfFiles:
+            # Add the filename to the right list
+            if train:
+                item = QListWidgetItem(self.listFiles)
             else:
-                # If there is a .data version, colour the name red to show it has been labelled
-                if train:
-                    item = QListWidgetItem(self.listFiles)
-                else:
-                    item = QListWidgetItem(self.listFilesTest)
-                self.listitemtype = type(item)
+                item = QListWidgetItem(self.listFilesTest)
+            # count wavs in directories:
+            if file.isDir():
+                numwavs = 0
+                for root, dirs, files in os.walk(file.filePath()):
+                    numwavs += sum(f.endswith('.wav') for f in files)
+                item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
+            else:
                 item.setText(file.fileName())
-                if file.fileName()+'.data' in listOfDataFiles:
-                    item.setForeground(Qt.red)
+            # If there is a .data version, colour the name red to show it has been labelled
+            if file.fileName()+'.data' in listOfDataFiles:
+                item.setForeground(Qt.red)
 
 #======
 class Segmentation(QDialog):
