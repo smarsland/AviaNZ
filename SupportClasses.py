@@ -73,7 +73,7 @@ class preProcess:
         self.f = f  # band-pass
         self.wavelet = Wavelet.Wavelet(name=wavelet)
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
-        self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet=self.wavelet, maxLevel=20)
+        self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet=self.wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
 
     def denoise_filter(self, level=5):
         # set df=True to perform both denoise and filter
