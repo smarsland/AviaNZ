@@ -272,6 +272,11 @@ class AviaNZ(QMainWindow):
             self.listLoadFile(firstFile)
             #self.previousFile = firstFile
 
+        # Store the state of the docks in case the user wants to reset it
+        self.state = self.area.saveState()
+        containers, docks = self.area.findAll()
+        self.state_cont = [cont.sizes() for cont in containers]
+
         if self.DOC and not cheatsheet and not zooniverse:
             self.setOperatorReviewerDialog()
 
@@ -686,7 +691,6 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(QLabel('Visible window (seconds)'),row=9,col=0,colspan=4)
         self.w_controls.addWidget(self.widthWindow,row=10,col=0,colspan=4)
 
-
         # The slider to show playback position
         # This is hidden, but controls the moving bar
         self.playSlider = QSlider(Qt.Horizontal)
@@ -704,7 +708,6 @@ class AviaNZ(QMainWindow):
         # List to hold the list of files
         self.listFiles = QListWidget()
         self.listFiles.setMinimumWidth(150)
-        #self.listFiles.connect(self.listFiles, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.listLoadFile)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
         self.w_files.addWidget(QLabel('Double click to open'),row=0,col=0)
@@ -743,9 +746,6 @@ class AviaNZ(QMainWindow):
         # Listener for key presses
         self.p_ampl.keyPressed.connect(self.handleKey)
         self.p_spec.keyPressed.connect(self.handleKey)
-
-        # Store the state of the docks in case the user wants to reset it
-        self.state = self.area.saveState()
 
         # Function calls to check if should show various parts of the interface, whether dragging boxes or not
         self.useAmplitudeCheck()
@@ -1418,8 +1418,18 @@ class AviaNZ(QMainWindow):
                     rect.setMovable(True)
 
     def dockReplace(self):
-        """ Listener for if the docks should be replaced menu item. """
-        self.area.restoreState(self.state)
+        """ Listener for if the docks should be replaced menu item.
+            A rewrite of pyqtgraph.dockarea.restoreState.
+            """
+        containers, docks = self.area.findAll()
+        # main recursion of restoreState:
+        self.area.buildFromState(self.state['main'], docks, self.area, missing='error')
+        # restoreState doesn't restore non-floating window sizes smh
+        self.d_plot.hide()
+        containers, docks = self.area.findAll()
+        for cont in range(len(containers)):
+            containers[cont].setSizes(self.state_cont[cont])
+
 
     def showFundamentalFreq(self):
         """ Calls the SignalProc class to compute, and then draws the fundamental frequency.
