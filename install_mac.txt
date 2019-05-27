@@ -5,7 +5,7 @@
 (3) Open a terminal, paste in the following lines:
 
 conda install -c anaconda scikit-learn scikit-image openpyxl
-conda install -c conda-forge librosa spectrum peakutils intervaltree
+conda install -c conda-forge librosa spectrum peakutils intervaltree pyfftw
 conda install -c bjornfjohansson mpldatacursor
 pip install pyqt5 --user
 pip install git+https://github.com/pyqtgraph/pyqtgraph --user
