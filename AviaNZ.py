@@ -75,6 +75,13 @@ import click, webbrowser, colourMaps, copy, math
 
 print("Package import complete.")
 
+# import pdb
+# from PyQt5.QtCore import pyqtRemoveInputHook
+# from pdb import set_trace
+# 
+# def debug_trace():
+#     pyqtRemoveInputHook()
+#     set_trace()
 class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
@@ -273,11 +280,6 @@ class AviaNZ(QMainWindow):
             self.listLoadFile(firstFile)
             #self.previousFile = firstFile
 
-        # Store the state of the docks in case the user wants to reset it
-        self.state = self.area.saveState()
-        containers, docks = self.area.findAll()
-        self.state_cont = [cont.sizes() for cont in containers]
-
         if self.DOC and not cheatsheet and not zooniverse:
             self.setOperatorReviewerDialog()
 
@@ -453,6 +455,7 @@ class AviaNZ(QMainWindow):
         self.d_controls = Dock("Controls",size=(40,100))
         self.d_files = Dock("Files",size=(40,200))
         self.d_plot = Dock("Plots",size=(1200,150))
+        self.d_controls.setSizePolicy(1,1)
 
         self.area.addDock(self.d_files,'left')
         self.area.addDock(self.d_overview,'right',self.d_files)
@@ -460,6 +463,11 @@ class AviaNZ(QMainWindow):
         self.area.addDock(self.d_spec,'bottom',self.d_ampl)
         self.area.addDock(self.d_controls,'bottom',self.d_files)
         self.area.addDock(self.d_plot,'bottom',self.d_spec)
+
+        # Store the state of the docks in case the user wants to reset it
+        self.state = self.area.saveState()
+        containers, docks = self.area.findAll()
+        self.state_cont = [cont.sizes() for cont in containers]
 
         # Put content widgets in the docks
         self.w_overview = pg.LayoutWidget()
@@ -617,12 +625,12 @@ class AviaNZ(QMainWindow):
         self.quickDenButton.clicked.connect(self.denoiseSeg)
         self.quickDenButton.setEnabled(False)
 
-        self.quickDenNButton = QtGui.QToolButton()
-        self.quickDenNButton.setIcon(QtGui.QIcon('img/denoisesegment.png'))
-        self.quickDenNButton.setIconSize(QtCore.QSize(20, 20))
-        self.quickDenNButton.setToolTip("Denoise segment, node-specific")
-        self.quickDenNButton.clicked.connect(self.denoiseSegN)
-        self.quickDenNButton.setEnabled(False)
+        # self.quickDenNButton = QtGui.QToolButton()
+        # self.quickDenNButton.setIcon(QtGui.QIcon('img/denoisesegment.png'))
+        # self.quickDenNButton.setIconSize(QtCore.QSize(20, 20))
+        # self.quickDenNButton.setToolTip("Denoise segment, node-specific")
+        # self.quickDenNButton.clicked.connect(self.denoiseSegN)
+        # self.quickDenNButton.setEnabled(False)
 
         # self.quickWPButton = QtGui.QToolButton()
         # self.quickWPButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_ArrowDown))
@@ -662,9 +670,9 @@ class AviaNZ(QMainWindow):
         self.contrastSlider.setTickInterval(1)
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
-        # Delete segment button
+        # Delete segment button. We have to get rid of the extra event args
         deleteButton = QPushButton("&Delete Current Segment")
-        deleteButton.clicked.connect(self.deleteSegment)
+        deleteButton.clicked.connect(lambda _ : self.deleteSegment())
 
         # The spinbox for changing the width shown in the controls dock
         self.widthWindow = QDoubleSpinBox()
@@ -679,7 +687,7 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.playSegButton,row=0,col=2)
         self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
         self.w_controls.addWidget(self.quickDenButton,row=1,col=0)
-        self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
+        # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
         # self.w_controls.addWidget(self.quickWPButton,row=1,col=0)
         self.w_controls.addWidget(self.timePlayed,row=2,col=0, colspan=4)
         self.w_controls.addWidget(self.volIcon, row=3, col=0)
@@ -1430,8 +1438,11 @@ class AviaNZ(QMainWindow):
         # restoreState doesn't restore non-floating window sizes smh
         self.d_plot.hide()
         containers, docks = self.area.findAll()
-        for cont in range(len(containers)):
-            containers[cont].setSizes(self.state_cont[cont])
+        # basically say that left panel and controls should be as small as possible:
+        self.d_controls.setSizePolicy(1,1)
+        containers[1].setSizePolicy(1,1)
+        # for cont in range(len(containers)):
+        #     containers[cont].setSizes(self.state_cont[cont])
 
 
     def showFundamentalFreq(self):
@@ -1485,14 +1496,15 @@ class AviaNZ(QMainWindow):
 
     def showInvertedSpectrogram(self):
         """ Listener for the menu item that draws the spectrogram of the waveform of the inverted spectrogram."""
-        if self.showInvSpec.isChecked():
-            sgRaw = self.sp.show_invS()
-        else:
-            sgRaw = self.sp.spectrogram(self.audiodata, mean_normalise=self.sgMeanNormalise, equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided, multitaper=self.sgMultitaper)
-        maxsg = np.min(sgRaw)
-        self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
-        self.overviewImage.setImage(self.sg)
-        self.specPlot.setImage(self.sg)
+        with pg.BusyCursor():
+            if self.showInvSpec.isChecked():
+                sgRaw = self.sp.show_invS()
+            else:
+                sgRaw = self.sp.spectrogram(self.audiodata, mean_normalise=self.sgMeanNormalise, equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided, multitaper=self.sgMultitaper)
+            maxsg = np.min(sgRaw)
+            self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+            self.overviewImage.setImage(self.sg)
+            self.specPlot.setImage(self.sg)
 
     def medianFilterSpec(self):
         """ Median filter the spectrogram. To be used in conjunction with spectrogram inversion. """
@@ -2232,7 +2244,7 @@ class AviaNZ(QMainWindow):
         #print("selected %d" % boxid)
         self.playSegButton.setEnabled(True)
         self.quickDenButton.setEnabled(True)
-        self.quickDenNButton.setEnabled(True)
+        # self.quickDenNButton.setEnabled(True)
         self.box1id = boxid
 
         brush = fn.mkBrush(self.ColourSelected)
@@ -4998,7 +5010,6 @@ class AviaNZ(QMainWindow):
         Deletes the segment that is selected, otherwise does nothing.
         Updates the overview segments as well.
         """
-
         if self.media_obj.isPlaying():
             # includes resetting playback buttons
             self.stopPlayback()

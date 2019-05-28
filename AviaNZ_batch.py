@@ -733,25 +733,25 @@ class AviaNZ_reviewAll(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         #print("Dir:", self.dirName)
         self.w_dir.setPlainText(self.dirName)
-        self.spList = ['All species']
+        self.spList = set()
         # find species names from the annotations
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
-                if filename.endswith('.data'):
-                    datFile = root + '/' + filename
-                    if os.path.isfile(datFile):
-                        with open(datFile) as f:
-                            segments = json.load(f)
-                            for seg in segments:
-                                if seg[0] == -1:
-                                    continue
-                                elif len(seg[4])>0:
-                                    for birdName in seg[4]:
-                                        if len(birdName)>0 and birdName[-1] == '?':
-                                            if birdName[:-1] not in self.spList:
-                                                self.spList.append(birdName[:-1])
-                                        elif birdName not in self.spList:
-                                            self.spList.append(birdName)
+                if filename.endswith('.wav') and filename+'.data' in files:
+                    with open(os.path.join(root, filename+'.data')) as f:
+                        segments = json.load(f)
+                        for seg in segments:
+                            # meta segments
+                            if seg[0] == -1:
+                                continue
+
+                            for birdName in seg[4]:
+                                if len(birdName)>0 and birdName[-1] == '?':
+                                    self.spList.add(birdName[:-1])
+                                else:
+                                    self.spList.add(birdName)
+        self.spList = list(self.spList)
+        self.spList.insert(0, 'All species')
         self.w_spe1.clear()
         self.w_spe1.addItems(self.spList)
         self.fillFileList(self.dirName)
