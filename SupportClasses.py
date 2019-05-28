@@ -787,6 +787,7 @@ class ShadedROI(pg.ROI):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(self.currentPen)
         p.setBrush(self.currentBrush)
+
         p.translate(r.left(), r.top())
         p.scale(r.width(), r.height())
         p.drawRect(0, 0, 1, 1)
@@ -802,9 +803,31 @@ class ShadedROI(pg.ROI):
         self.brush = fn.mkBrush(*br, **kargs)
         self.currentBrush = self.brush
 
+    # this allows compatibility with LinearRegions:
+    def setHoverBrush(self, *br, **kargs):
+        self.hoverBrush = fn.mkBrush(*br, **kargs)
+
     def setPen(self, *br, **kargs):
         self.pen = fn.mkPen(*br, **kargs)
         self.currentPen = self.pen
+
+    def hoverEvent(self, ev):
+        if self.transparent:
+            return
+        if not ev.isExit():
+            self.setMouseHover(True)
+        else:
+            self.setMouseHover(False)
+
+    def setMouseHover(self, hover):
+        if self.mouseHovering == hover:
+            return
+        self.mouseHovering = hover
+        if hover:
+            self.currentBrush = self.hoverBrush
+        else:
+            self.currentBrush = self.brush
+        self.update()
 
 def mouseDragEventFlexible(self, ev):
     if ev.button() == self.rois[0].parent.MouseDrawingButton:
@@ -856,6 +879,10 @@ class ShadedRectROI(ShadedROI):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
         pg.ROI.__init__(self, pos, size, **args)
         self.parent = parent
+        self.mouseHovering = False
+        self.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 50)))
+        self.setHoverBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 100)))
+        self.transparent = True
         if centered:
             center = [0.5, 0.5]
         else:
@@ -866,10 +893,6 @@ class ShadedRectROI(ShadedROI):
         if sideScalers:
             self.addScaleHandle([1, 0.5], [center[0], 0.5])
             self.addScaleHandle([0.5, 1], [0.5, center[1]])
-
-    # this allows compatibility with LinearRegions:
-    def setHoverBrush(self, *br, **args):
-        pass
 
     def mouseDragEvent(self, ev):
         if ev.isStart():

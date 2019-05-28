@@ -89,9 +89,6 @@ class WaveletSegment:
             self.WF.WaveletPacket(mode='symmetric', maxlevel=5, antialias=True, antialiasFilter=True)
         # No need to store everything:
         goodnodes = self.spInfo['WaveletParams'][2]
-        print('Waveletsegment')
-        print('goodnodes', goodnodes)
-        print("ws  ch1", time.time() - opst)
 
         # set other nodes to 0
         for ni in range(len(self.WF.tree)):
@@ -112,7 +109,7 @@ class WaveletSegment:
         else:
             detected = []
         detected = self.mergeSeg(detected)
-        print("ws  ch2", time.time() - opst)
+        print("Wavelet segmenting completed in", time.time() - opst)
         return detected
 
     def waveletSegment_train(self, dirName, thrList, MList, d=False, f=False, rf=True, learnMode='recaa', window=1, inc=None):
@@ -268,8 +265,8 @@ class WaveletSegment:
         2. sample rate
         3. max levels for WP decomposition
         4. WP style ("new"-our non-downsampled, "aa"-our fully AA'd)
-        There are 62 coefficients up to level 5 of the wavelet tree (without root), and 300 seconds [N sliding window] in 5 mins
-        Hence coefs would then be a 62*300 matrix [62*N matrix]
+        There are 62 coefficients up to level 5 of the wavelet tree (without root!!), and 300 seconds [N sliding window] in 5 mins
+        Hence returned coefs would then be a 62*300 matrix [62*N matrix]
         The energy is the sum of the squares of the data in each node divided by the total in that level of the tree as a percentage.
         """
 
@@ -337,8 +334,6 @@ class WaveletSegment:
     def fBetaScore(self, annotation, predicted, beta=2):
         """ Computes the beta scores given two sets of predictions """
         #print('fBetaScore')
-        print('Annotation length ', len(annotation))
-        print('Predicted length ', len(predicted))
         TP = np.sum(np.where((annotation == 1) & (predicted == 1), 1, 0))
         T = np.sum(annotation)
         P = np.sum(predicted)
@@ -489,16 +484,11 @@ class WaveletSegment:
         M = int(spInfo['WaveletParams'][1] * win_sr)
         nw = int(np.ceil(duration / inc_sr))
         detected = np.zeros((nw, len(nodelist)))
-        print('detectcalls', nodelist)
 
         count = 0
         for node in nodelist:
             # put WC from test node(s) on the new tree
-            print("n0", wf.tree[0])
-            print("n1", wf.tree[1])
-            print(node)
             C = wf.reconstructWP2(node,antialias=aa, antialiasFilter=True)
-            print(duration)
             # Sanity check for all zero case
             if not any(C):
                 continue    # return np.zeros(nw)
@@ -608,7 +598,6 @@ class WaveletSegment:
                     file_lengths=self.filelengths2
                 else:
                     file_lengths=self.filelengths
-                print('File Lengths', file_lengths)
 
                 for indexF in range(len(file_lengths)):
                     # load the annotation and WCs for this file
@@ -827,7 +816,7 @@ class WaveletSegment:
         # Sort the nodes, put any of its children (and their children, iteratively) that are in the list in front of it
         bestnodes = self.sortListByChild(bestnodes)
 
-        # These nodes refer to the un-rooted tree, so add 1 to get the real indices
+        # These nodes refer to the un-rooted tree, so add 1 to get the real WP indices
         bestnodes = [n + 1 for n in bestnodes]
 
         return (bestnodes, worstnodes)
@@ -993,7 +982,6 @@ class WaveletSegment:
             #Virginia: if overlapping window or window!=1sec I save in annotation2 segments o length 1 sec to make useful comparison
 
             if window!=1 or inc!=window:
-                print('Storing annotation2')
                 N=int(math.ceil(len(self.data)/self.sampleRate)) # of seconds
                 annotation_sec=np.zeros(N)
                 sec_step=int(math.ceil(1/resol)) # window length in resolution scale

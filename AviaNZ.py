@@ -180,6 +180,7 @@ class AviaNZ(QMainWindow):
         # INPUT FILE LOADING
         # search order: infile -> firstFile -> dialog
         # Make life easier for now: preload a birdsong
+        print("Loaded")
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
             firstFile = self.SoundFileDir + '/' + 'tril1.wav' #'male1.wav' # 'kiwi.wav'
             #firstFile = "/home/julius/Documents/kiwis/rec/birds1.wav"
@@ -1331,6 +1332,7 @@ class AviaNZ(QMainWindow):
                 if type(box) == self.ROItype:
                     col = box.brush.color()
                     col.setAlpha(255)
+                    box.transparent = True
                     box.setBrush(pg.mkBrush(None))
                     box.setPen(pg.mkPen(col,width=1))
                     box.update()
@@ -1339,6 +1341,7 @@ class AviaNZ(QMainWindow):
                 if type(box) == self.ROItype:
                     col = box.pen.color()
                     col.setAlpha(self.ColourNamed.alpha())
+                    box.transparent = False
                     box.setBrush(pg.mkBrush(col))
                     box.setPen(pg.mkPen(None))
                     box.update()
@@ -2170,10 +2173,16 @@ class AviaNZ(QMainWindow):
                     col = self.prevBoxCol.rgb()
                     col = QtGui.QColor(col)
                     col.setAlpha(255)
+                    p_spec_r.transparent = True
                     p_spec_r.setBrush(None)
+                    p_spec_r.setHoverBrush(None)
                     p_spec_r.setPen(pg.mkPen(col,width=1))
                 else:
                     p_spec_r.setBrush(pg.mkBrush(self.prevBoxCol))
+                    c = self.prevBoxCol
+                    c.setAlpha(min(c.alpha()*2, 255))
+                    p_spec_r.transparent = False
+                    p_spec_r.setHoverBrush(pg.mkBrush(c))
                     p_spec_r.setPen(pg.mkPen(None))
             self.p_spec.addItem(p_spec_r, ignoreBounds=True)
             p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
@@ -2220,6 +2229,7 @@ class AviaNZ(QMainWindow):
 
     def selectSegment(self, boxid):
         """ Changes the segment colors and enables playback buttons."""
+        #print("selected %d" % boxid)
         self.playSegButton.setEnabled(True)
         self.quickDenButton.setEnabled(True)
         self.quickDenNButton.setEnabled(True)
@@ -2261,6 +2271,7 @@ class AviaNZ(QMainWindow):
             col = QtGui.QColor(col)
             col.setAlpha(255)
             self.listRectanglesa2[boxid].setBrush(pg.mkBrush(None))
+            self.listRectanglesa2[boxid].setHoverBrush(pg.mkBrush(None))
             self.listRectanglesa2[boxid].setPen(col,width=1)
 
         self.listRectanglesa1[boxid].update()
@@ -3589,10 +3600,11 @@ class AviaNZ(QMainWindow):
             if not self.DOC:
                 [alg, depth, thrType, thr,wavelet,start,end,width,aaRec,aaWP] = self.denoiseDialog.getValues()
             else:
+                wavelet = "dmey2"
                 [alg, start, end, width] = self.denoiseDialog.getValues()
             self.backup()
 
-            self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata, wavelet=str(wavelet), maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
+            self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
 
             if str(alg) == "Wavelets":
                 if not self.DOC:
@@ -3663,7 +3675,7 @@ class AviaNZ(QMainWindow):
                     if hasattr(self,'seg'):
                         self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
 
-                    self.redoFreqAxis(self.minFreqShow, self.maxFreqShow)
+                    self.redoFreqAxis(self.minFreq, self.maxFreq)
                     self.setColourLevels()
 
     def denoise_save(self):
