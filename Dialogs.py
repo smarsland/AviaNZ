@@ -686,14 +686,10 @@ class Segmentation(QDialog):
 
         self.algs = QComboBox()
         if DOC:
-            self.algs.addItems(["Median Clipping", "FIR", "Wavelets"])
+            self.algs.addItems(["Wavelets", "FIR"])
         else:
             self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
-        if DOC:
-            self.prevAlg = "Median Clipping"
-        else:
-            self.prevAlg = "Default"
         self.undo = QPushButton("Undo")
         self.resLabel = QLabel("Time Resolution in Excel Output (secs)")
         self.res = QSpinBox()
@@ -774,28 +770,26 @@ class Segmentation(QDialog):
         #self.amplabel = QLabel("Set threshold amplitude")
         #Box.addWidget(self.amplabel)
 
-        self.Harmalabel = QLabel("Set decibal threshold")
+        self.Harmalabel = QLabel("Set decibel threshold")
         Box.addWidget(self.Harmalabel)
-        self.Harmalabel.hide()
 
         #self.Onsetslabel = QLabel("Onsets: No parameters")
         #Box.addWidget(self.Onsetslabel)
-        #self.Onsetslabel.hide()
 
         self.medlabel = QLabel("Set median threshold")
         Box.addWidget(self.medlabel)
-        if DOC:
-            self.medlabel.show()
-        else:
-            self.medlabel.hide()
+        self.medlabel.show()
 
         self.eclabel = QLabel("Set energy curve threshold")
         Box.addWidget(self.eclabel)
-        self.eclabel.hide()
         self.ecthrtype = [QRadioButton("N standard deviations"), QRadioButton("Threshold")]
 
         self.specieslabel = QLabel("Species")
         self.species=QComboBox()
+
+        # extra hiding step - less widgets to draw on initial load
+        for w in range(Box.count()):
+            Box.itemAt(w).widget().hide()
 
         # TODO: Tidy this
         self.specieslabel_cc = QLabel("Species")
@@ -808,55 +802,32 @@ class Segmentation(QDialog):
         # self.species.currentIndexChanged[QString].connect(self.changeBoxes)
 
         Box.addWidget(self.specieslabel)
-        self.specieslabel.hide()
         Box.addWidget(self.species)
-        self.species.hide()
 
         Box.addWidget(self.specieslabel_cc)
-        self.specieslabel_cc.hide()
         Box.addWidget(self.species_cc)
-        self.species_cc.hide()
 
         Box.addWidget(self.HarmaThr1)
         Box.addWidget(self.HarmaThr2)
-        self.HarmaThr1.hide()
-        self.HarmaThr2.hide()
         Box.addWidget(self.PowerThr)
-        self.PowerThr.hide()
 
         Box.addWidget(self.medThr)
-        if DOC:
-            self.medThr.show()
-        else:
-            self.medThr.hide()
         for i in range(len(self.ecthrtype)):
             Box.addWidget(self.ecthrtype[i])
-            self.ecthrtype[i].hide()
         Box.addWidget(self.ecThr)
-        self.ecThr.hide()
 
         Box.addWidget(self.FIRThr1)
-        self.FIRThr1.hide()
 
         Box.addWidget(self.Fundminfreqlabel)
-        self.Fundminfreqlabel.hide()
         Box.addWidget(self.Fundminfreq)
-        self.Fundminfreq.hide()
         Box.addWidget(self.Fundminperiodslabel)
-        self.Fundminperiodslabel.hide()
         Box.addWidget(self.Fundminperiods)
-        self.Fundminperiods.hide()
         Box.addWidget(self.Fundthrlabel)
-        self.Fundthrlabel.hide()
         Box.addWidget(self.Fundthr)
-        self.Fundthr.hide()
         Box.addWidget(self.Fundwindowlabel)
-        self.Fundwindowlabel.hide()
         Box.addWidget(self.Fundwindow)
-        self.Fundwindow.hide()
 
         Box.addWidget(self.CCThr1)
-        self.CCThr1.hide()
 
         Box.addWidget(self.resLabel)
         Box.addWidget(self.res)
@@ -865,85 +836,50 @@ class Segmentation(QDialog):
         Box.addWidget(self.activate)
         #Box.addWidget(self.save)
 
-        # Now put everything into the frame
+        # Now put everything into the frame,
+        # hide and reopen the default
+        for w in range(Box.count()):
+            Box.itemAt(w).widget().hide()
         self.setLayout(Box)
+        self.algs.show()
+        self.undo.show()
+        self.res.show()
+        self.resLabel.show()
+        self.activate.show()
+        if DOC:
+            self.changeBoxes("Wavelets")
+        else:
+            self.changeBoxes("Default")
 
     def changeBoxes(self,alg):
         # This does the hiding and showing of the options as the algorithm changes
-        if self.prevAlg == "Default":
-            pass
-        elif self.prevAlg == "Energy Curve":
-            self.eclabel.hide()
-            self.ecThr.hide()
-            for i in range(len(self.ecthrtype)):
-                self.ecthrtype[i].hide()
-            #self.ecThr.hide()
-        elif self.prevAlg == "Harma":
-            self.Harmalabel.hide()
-            self.HarmaThr1.hide()
-            self.HarmaThr2.hide()
-        elif self.prevAlg == "Power":
-            self.PowerThr.hide()
-        elif self.prevAlg == "Median Clipping":
-            self.medlabel.hide()
-            self.medThr.hide()
-            #print("hiding")
-        elif self.prevAlg == "Fundamental Frequency":
-            self.Fundminfreq.hide()
-            self.Fundminperiods.hide()
-            self.Fundthr.hide()
-            self.Fundwindow.hide()
-            self.Fundminfreqlabel.hide()
-            self.Fundminperiodslabel.hide()
-            self.Fundthrlabel.hide()
-            self.Fundwindowlabel.hide()
-        elif self.prevAlg == "Cross-Correlation":
-            self.CCThr1.hide()
-            self.specieslabel_cc.hide()
-            self.species_cc.hide()
-        #elif self.prevAlg == "Onsets":
-        #    self.Onsetslabel.hide()
-        elif self.prevAlg == "FIR":
-            self.FIRThr1.hide()
-        else:
-            self.specieslabel.hide()
-            self.species.hide()
-            self.species.setCurrentIndex(0)
-            #self.depthlabel.hide()
-            #self.depth.hide()
-            ##self.depthchoice.hide()
-            #self.thrtypelabel.hide()
-            #self.thrtype[0].hide()
-            #self.thrtype[1].hide()
-            #self.thrlabel.hide()
-            #self.thr.hide()
-            #self.waveletlabel.hide()
-            #self.wavelet.hide()
-            #self.blabel.hide()
-            #self.start.hide()
-            #self.end.hide()
-            #self.blabel2.hide()
-            #self.bandchoice.hide()
-        self.prevAlg = str(alg)
+        # hide and reopen the default
+        for w in range(self.layout().count()):
+            self.layout().itemAt(w).widget().hide()
+        self.algs.show()
+        self.undo.show()
+        self.res.show()
+        self.resLabel.show()
+        self.activate.show()
 
-        if str(alg) == "Default":
+        if alg == "Default":
             pass
-        elif str(alg) == "Energy Curve":
+        elif alg == "Energy Curve":
             self.eclabel.show()
             self.ecThr.show()
             for i in range(len(self.ecthrtype)):
                 self.ecthrtype[i].show()
             self.ecThr.show()
-        elif str(alg) == "Harma":
+        elif alg == "Harma":
             self.Harmalabel.show()
             self.HarmaThr1.show()
             self.HarmaThr2.show()
-        elif str(alg) == "Power":
+        elif alg == "Power":
             self.PowerThr.show()
-        elif str(alg) == "Median Clipping":
+        elif alg == "Median Clipping":
             self.medlabel.show()
             self.medThr.show()
-        elif str(alg) == "Fundamental Frequency":
+        elif alg == "Fundamental Frequency":
             self.Fundminfreq.show()
             self.Fundminperiods.show()
             self.Fundthr.show()
@@ -952,13 +888,13 @@ class Segmentation(QDialog):
             self.Fundminperiodslabel.show()
             self.Fundthrlabel.show()
             self.Fundwindowlabel.show()
-        #elif str(alg) == "Onsets":
+        #elif alg == "Onsets":
         #    self.Onsetslabel.show()
-        elif str(alg) == "FIR":
+        elif alg == "FIR":
             self.FIRThr1.show()
-        #elif str(alg) == "Best":
+        #elif alg == "Best":
         #    pass
-        elif self.prevAlg == "Cross-Correlation":
+        elif alg == "Cross-Correlation":
             self.CCThr1.show()
             self.specieslabel_cc.show()
             self.species_cc.show()
