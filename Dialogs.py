@@ -1302,6 +1302,10 @@ class HumanClassify1(QDialog):
         self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
         self.delete.setIconSize(iconSize)
 
+        self.buttonNext = QtGui.QToolButton()
+        self.buttonNext.setIcon(self.style().standardIcon(QtGui.QStyle.SP_ArrowForward))
+        self.buttonNext.setIconSize(iconSize)
+
         # The list of less common birds
         self.birds3 = QListWidget(self)
         if self.longBirdList is not None and self.longBirdList != 'None':
@@ -1385,6 +1389,7 @@ class HumanClassify1(QDialog):
         hboxNextPrev.addWidget(self.buttonPrev)
         hboxNextPrev.addWidget(self.correct)
         hboxNextPrev.addWidget(self.delete)
+        hboxNextPrev.addWidget(self.buttonNext)
         hboxNextPrev.addWidget(self.numberLeft)
 
         self.playButton = QtGui.QToolButton()
@@ -1622,7 +1627,6 @@ class HumanClassify1(QDialog):
         else:
             # a button was unchecked:
             if checkedButton.text() in self.label:
-                print("removing")
                 self.label.remove(checkedButton.text())
             elif checkedButton.text()+'?' in self.label:
                 self.label.remove(checkedButton.text()+'?')

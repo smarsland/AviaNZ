@@ -106,7 +106,7 @@ class AviaNZ_batchProcess(QMainWindow):
         for sp in spp:
             ind = sp.find('>')
             if ind > -1:
-                sp = sp[:ind] + ' (' + sp[pos+1:] + ')'
+                sp = sp[:ind] + ' (' + sp[ind+1:] + ')'
         spp.insert(0, "All species")
         self.w_spe1.addItems(spp)
         self.d_detection.addWidget(self.w_spe1,row=1,col=1,colspan=2)
@@ -746,10 +746,10 @@ class AviaNZ_reviewAll(QMainWindow):
                                 continue
 
                             for birdName in seg[4]:
-                                if len(birdName)>0 and birdName[-1] == '?':
-                                    self.spList.add(birdName[:-1])
-                                else:
-                                    self.spList.add(birdName)
+                                # strip question mark and convert sp>spp format
+                                birdName = re.sub(r'\?$', '', birdName)
+                                birdName = re.sub(r'(.*)>(.*)', '\\1 (\\2)', birdName)
+                                self.spList.add(birdName)
         self.spList = list(self.spList)
         self.spList.insert(0, 'All species')
         self.w_spe1.clear()
@@ -948,7 +948,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.longBirdList = None
 
         self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.config['MultipleSpecies'], self)
-        self.box1id = 0
+        self.box1id = -1
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
             self.humanClassifyDialog1.move(self.dialogPos)
@@ -958,6 +958,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
         self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
+        self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyNextImage1)
         success = self.humanClassifyDialog1.exec_() # 1 on clean exit
 
         if success == 0:
@@ -1010,6 +1011,13 @@ class AviaNZ_reviewAll(QMainWindow):
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
         self.setColourMap()
 
+        # trim the spectrogram
+        # TODO: could actually skip filtering above
+        height = self.sampleRate//2 / np.shape(self.sg)[1]
+        pixelstart = int(minFreq/height)
+        pixelend = int(maxFreq/height)
+        self.sg = self.sg[:,pixelstart:pixelend]
+
         # Update the data that is seen by the other classes
         # TODO: keep an eye on this to add other classes as required
         # self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate,256,128)
@@ -1017,7 +1025,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def humanClassifyNextImage1(self):
         # Get the next image
-        if self.box1id < len(self.segments):
+        if self.box1id < len(self.segments)-1:
+            self.box1id += 1
             # update "done/to go" numbers:
             self.humanClassifyDialog1.setSegNumbers(self.box1id, len(self.segments))
             # Check if have moved to next segment, and if so load it
@@ -1035,9 +1044,13 @@ class AviaNZ_reviewAll(QMainWindow):
             x3 = max(x3, 0)
             x4 = int((x2nob + self.config['reviewSpecBuffer']) * self.sampleRate)
             x4 = min(x4, len(self.audiodata))
+            # these pass the axis limits set by slider
+            minFreq = max(self.fLow.value(), 0)
+            maxFreq = min(self.fHigh.value(), self.sampleRate//2)
             self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
                                            self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1,
-                                           self.segments[self.box1id][0], self.segments[self.box1id][1])
+                                           self.segments[self.box1id][0], self.segments[self.box1id][1],
+                                           minFreq, maxFreq)
 
         else:
             msg = SupportClasses.MessagePopup("d", "Finished", "All segments in this file checked")
@@ -1052,7 +1065,7 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Go back one image by changing boxid and calling NextImage.
         Note: won't undo deleted segments."""
         if self.box1id>0:
-            self.box1id -= 1
+            self.box1id -= 2
             self.humanClassifyNextImage1()
 
     def humanClassifyCorrect1(self):
@@ -1086,7 +1099,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.segments[self.box1id][4] = label
 
             if self.saveConfig:
-                self.longBirdList.append(text)
+                self.longBirdList.append(checkText)
                 self.longBirdList = sorted(self.longBirdList, key=str.lower)
                 self.longBirdList.remove('Unidentifiable')
                 self.longBirdList.append('Unidentifiable')
@@ -1095,12 +1108,10 @@ class AviaNZ_reviewAll(QMainWindow):
             # Remove the question mark, since the user has agreed
             for i in range(len(self.segments[self.box1id][4])):
                 if self.segments[self.box1id][4][i][-1] == '?':
-                    self.segments[self.box1id][4][i] = self.segments[self.box1id][4][i][:-1] 
+                    self.segments[self.box1id][4][i] = self.segments[self.box1id][4][i][:-1]
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
-        # counter updated here
-        self.box1id += 1
         self.humanClassifyNextImage1()
 
     def humanClassifyDelete1(self):
@@ -1108,6 +1119,8 @@ class AviaNZ_reviewAll(QMainWindow):
         # (no need to update counter then)
         id = self.box1id
         del self.segments[id]
+
+        self.box1id = id-1
         self.segmentsToSave = True
         self.humanClassifyNextImage1()
 
