@@ -984,6 +984,11 @@ class AviaNZ(QMainWindow):
             self.p_spec.removeItem(r)
         self.segmentPlots=[]
 
+        # Remove spectral derivatives
+        try:
+            self.p_spec.removeItem(self.derivPlot)
+        except Exception:
+            pass
         # Cheatsheet: remove the freq labels
         if self.zooniverse and hasattr(self,'label1'):
             self.p_spec.removeItem(self.label1)
@@ -1489,7 +1494,7 @@ class AviaNZ(QMainWindow):
                 self.derivPlot = pg.ScatterPlotItem() 
                 x,y = np.where(sd>0)
                 self.derivPlot.setData(x,y,pen=pg.mkPen('b',width=5))
-                
+
                 self.p_spec.addItem(self.derivPlot)
             else:
                 self.statusLeft.setText("Removing spectral derivative...")
@@ -2977,6 +2982,7 @@ class AviaNZ(QMainWindow):
             self.humanClassifyDialog1.activateWindow()
             #self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
             self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
+            self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyNextImage1)
             self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
             self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
             # self.statusLeft.setText("Ready")
@@ -3075,7 +3081,7 @@ class AviaNZ(QMainWindow):
         """ Update the label on a segment that is currently shown in the display. """
         # birdSelectedMenu flips the state of each label
         # so need to pass all labels for deletion, or clean before updating
-        
+
         # Need to keep track of self.multipleBirds
         multipleTemp = self.multipleBirds
         self.multipleBirds = True
@@ -3087,16 +3093,20 @@ class AviaNZ(QMainWindow):
         self.multipleBirds = multipleTemp
 
         if self.listRectanglesa2[self.box1id] is not None:
+            col = self.prevBoxCol.rgb()
+            col = QtGui.QColor(col)
+            col.setAlpha(100)
             self.listRectanglesa1[self.box1id].setBrush(self.prevBoxCol)
-            self.listRectanglesa1[self.box1id].update()
+            self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
+            col.setAlpha(200)
+            self.listRectanglesa1[self.box1id].setHoverBrush(fn.mkBrush(col))
+            self.listRectanglesa2[self.box1id].setHoverBrush(fn.mkBrush(col))
             if self.config['transparentBoxes'] and type(self.listRectanglesa2[self.box1id]) == self.ROItype:
-                col = self.prevBoxCol.rgb()
-                col = QtGui.QColor(col)
                 col.setAlpha(255)
                 self.listRectanglesa2[self.box1id].setPen(col, width=1)
-            else:
-                self.listRectanglesa2[self.box1id].setBrush(self.prevBoxCol)
-
+                self.listRectanglesa2[self.box1id].setBrush(pg.mkBrush(None))
+                self.listRectanglesa2[self.box1id].setHoverBrush(pg.mkBrush(None))
+            self.listRectanglesa1[self.box1id].update()
             self.listRectanglesa2[self.box1id].update()
             self.segmentsToSave = True
 
@@ -3145,7 +3155,7 @@ class AviaNZ(QMainWindow):
             # Remove the question mark, since the user has agreed
             for i in range(len(self.segments[self.box1id][4])):
                 if self.segments[self.box1id][4][i][-1] == '?':
-                    self.segments[self.box1id][4][i] = self.segments[self.box1id][4][i][:-1] 
+                    self.segments[self.box1id][4][i] = self.segments[self.box1id][4][i][:-1]
 
             # force wipe old overview to empty
             self.refreshOverviewWith(startpoint, endpoint, oldname, delete=True)
