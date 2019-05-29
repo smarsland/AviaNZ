@@ -226,7 +226,6 @@ class SignalProc:
             sampleRate = self.sampleRate
         nyquist = sampleRate/2
 
-        print(data)
         if high is None:
             high = nyquist
         low = max(low,0)
