@@ -1144,25 +1144,27 @@ class AviaNZ_reviewAll(QMainWindow):
         It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
         red in the list, and the second to know if the files are long."""
 
-        # if not os.path.isdir(self.dirName):
-        #     print("Directory doesn't exist: making it")
-        #     os.makedirs(self.dirName)
+        if not os.path.isdir(self.dirName):
+            print("ERROR: directory %s doesn't exist" % self.soundFileDir)
+            return
 
+        # clear file listbox
+        self.listFiles.clearSelection()
+        self.listFiles.clearFocus()
         self.listFiles.clear()
+
         self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
         listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
-        listOfLongFiles = QDir(self.dirName).entryList(['*_1.wav'])
         for file in self.listOfFiles:
-            if file.fileName()[:-4]+'_1.wav' in listOfLongFiles:
-                # Ignore this entry
-                pass
+            # If there is a .data version, colour the name red to show it has been labelled
+            item = QListWidgetItem(self.listFiles)
+            self.listitemtype = type(item)
+            if file.isDir():
+                item.setText(file.fileName() + "/")
             else:
-                # If there is a .data version, colour the name red to show it has been labelled
-                item = QListWidgetItem(self.listFiles)
-                self.listitemtype = type(item)
                 item.setText(file.fileName())
-                if file.fileName()+'.data' in listOfDataFiles:
-                    item.setForeground(Qt.red)
+            if file.fileName()+'.data' in listOfDataFiles:
+                item.setForeground(Qt.red)
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on an item in filelist
@@ -1171,6 +1173,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # Need name of file
         if type(current) is self.listitemtype:
             current = current.text()
+            current = re.sub('\/.*', '', current)
 
         self.previousFile = current
 

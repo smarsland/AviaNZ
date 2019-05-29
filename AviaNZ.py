@@ -435,7 +435,7 @@ class AviaNZ(QMainWindow):
     def showCheatSheet(self):
         """ Show the cheatsheet of sample spectrograms (a pdf file)"""
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/CheatSheet.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/CheatSheet_v1.3.pdf')
+        webbrowser.open_new(r'http://avianz.net/index.php/cheat-sheet')
 
     def createFrame(self):
         """ Creates the main window.
@@ -799,15 +799,16 @@ class AviaNZ(QMainWindow):
 
     def makeFullBirdList(self):
         """ Makes a combo box holding the complete list of birds.
-        Some work is needed to keep track of the indices since it's a two column 
+        Some work is needed to keep track of the indices since it's a two column
         list: species and subspecies in most cases.
         Also parses the DOC files, which use > to mark the subspecies. """
-        self.fullbirdlist = QComboBox()
-        self.fullbirdlist.setView(QTreeView())
-        self.fullbirdlist.setRootModelIndex(QModelIndex())
+        fullbirdlist = QComboBox()
+        fullbirdlist.setView(QTreeView())
+        fullbirdlist.setRootModelIndex(QModelIndex())
 
-        self.fullbirdlist.view().setHeaderHidden(True)
-        self.fullbirdlist.view().setItemsExpandable(True)
+        fullbirdlist.view().setHeaderHidden(True)
+        fullbirdlist.view().setItemsExpandable(True)
+        fullbirdlist.setMouseTracking(True)
 
         self.model = QStandardItemModel()
         headlist = []
@@ -829,8 +830,9 @@ class AviaNZ(QMainWindow):
         item = QStandardItem("Other")
         item.setSelectable(True)
         self.model.appendRow(item)
-        
-        self.fullbirdlist.setModel(self.model)
+
+        fullbirdlist.setModel(self.model)
+        return fullbirdlist
 
     def fillBirdList(self,unsure=False):
         """ Sets the contents of the context menu.
@@ -866,7 +868,7 @@ class AviaNZ(QMainWindow):
                 pos = item.find('>')
                 if pos > -1:
                     item = item[:pos] + ' (' + item[pos+1:] + ')'
-    
+
                 bird = self.menuBird2.addAction(item)
                 bird.setCheckable(True)
                 if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
@@ -881,17 +883,17 @@ class AviaNZ(QMainWindow):
                 pos = item.find('>')
                 if pos > -1:
                     item = item[:pos] + ' (' + item[pos+1:] + ')'
-    
+
                 bird = self.menuBird2.addAction(item)
                 bird.setCheckable(True)
                 if hasattr(self,'segments') and item in self.segments[self.box1id][4]:
                     bird.setChecked(True)
                 self.menuBird2.addAction(bird)
-    
-            self.makeFullBirdList()
+
+            self.fullbirdlist = self.makeFullBirdList()  # a QComboBox
             self.showFullbirdlist = QWidgetAction(self.menuBirdList)
             self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
-            bird = self.menuBird2.addAction(self.showFullbirdlist)
+            self.menuBird2.addAction(self.showFullbirdlist)
             self.fullbirdlist.activated.connect(self.birdSelectedList)
 
     def fillFileList(self,fileName):
@@ -2615,7 +2617,7 @@ class AviaNZ(QMainWindow):
 
     def birdSelectedList(self,index):
         """ If the user clicks in the full bird list, update the text, and copy the species into the short list """
-        birdname = self.fullbirdlist.view().currentIndex().parent().data(0) 
+        birdname = self.fullbirdlist.view().currentIndex().parent().data(0)
         if birdname is None:
             birdname = self.fullbirdlist.currentText()
         else:
@@ -2633,6 +2635,8 @@ class AviaNZ(QMainWindow):
             birdname = birditem.text()
         else:
             birdname = birditem
+        if birdname is None or birdname=='':
+            return
 
         startpoint = self.segments[self.box1id][0]-self.startRead
         endpoint = self.segments[self.box1id][1]-self.startRead
@@ -2662,49 +2666,54 @@ class AviaNZ(QMainWindow):
         if birdname == 'Other':
             # This allows textual name entry
             # Ask the user for the new name, and save it
-            text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name as species, subsp')
+            text, ok = QInputDialog.getText(self, 'Bird name', 'Enter the bird name as genus (species)')
             if ok:
                 text = str(text).title()
-                # Remove spaces, replace comma with >
-                text = text.replace(" ","")
-                text = text.replace(",",">")
+                # splits "A (B)", with B optional, into groups A and B
+                match = re.fullmatch(r'(.*?)(?: \((.*)\))?', text)
+                if match:
+                    twolevelname = '>'.join(match.groups(default=''))
+                    if text in self.longBirdList or twolevelname in self.longBirdList:
+                        # bird is already listed
+                        print("Warning: not adding species %s as it is already present" % text)
+                        return
 
-                if text in self.longBirdList:
-                    pass
-                else:
-                    # TODO: Test this
-                    # Add the new bird name.
-                    ind = text.find('>')
-                    if ind == -1:
-                        ind = len(text)
-                    index = self.model.findItems(text[:ind], QtCore.Qt.MatchFixedString)
+                    # maybe the genus is already listed?
+                    index = self.model.findItems(match.group(1), QtCore.Qt.MatchFixedString)
                     if len(index) == 0:
-                        # Species isn't in list
-                        item = QStandardItem(text[:ind])
+                        # Genus isn't in list
+                        item = QStandardItem(match.group(1))
                         item.setSelectable(True)
                         self.model.appendRow(item)
+                        # store as typed
+                        nametostore = text
                     else:
                         # Get the species item
                         item = index[0]
-                    if ind < len(text):
-                        # If there is a subsp, add it
-                        newtext = text[:ind]+' ('+text[ind+1:]+')'
-                        subitem = QStandardItem(text[ind+1:])
+                        if match.group(2) is None:
+                            print("ERROR: genus %s already exists, please provide species as well" % match.group(1))
+                            return
+                        # store in two-level format
+                        nametostore = twolevelname
+                        subitem = QStandardItem(match.group(2))
                         item.setSelectable(False)
                         item.appendRow(subitem)
                         subitem.setSelectable(True)
-                    else:
-                        newtext = text
+
+                    # either way, update the lists:
                     if self.config['ReorderList']:
-                        self.shortBirdList.insert(0,newtext)
+                        self.shortBirdList.insert(0,text)
                         del self.shortBirdList[-1]
-                    self.longBirdList.append(text)
+                    self.longBirdList.append(nametostore)
                     self.longBirdList.remove('Unidentifiable')
                     self.longBirdList = sorted(self.longBirdList, key=str.lower)
                     self.longBirdList.append('Unidentifiable')
                     self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+                else:
+                    print("ERROR: provided name %s does not match format requirements" % text)
+                    return
 
-                self.updateText(newtext)
+                self.updateText(text)
 
         # Put the selected bird name at the top of the list
         if len(birdname) > 0 and birdname[-1] == '?':
@@ -2770,6 +2779,8 @@ class AviaNZ(QMainWindow):
         """ Listener for the menu item that chooses a colour map.
         Loads them from the file as appropriate and sets the lookup table.
         """
+        if self.media_obj.isPlaying():
+            self.stopPlayback()
         self.config['cmap'] = cmap
 
         pos, colour, mode = colourMaps.colourMaps(cmap)
@@ -2791,6 +2802,8 @@ class AviaNZ(QMainWindow):
         Translates the brightness and contrast values into appropriate image levels.
         Calculation is simple.
         """
+        if self.media_obj.isPlaying():
+            self.stopPlayback()
         minsg = np.min(self.sg)
         maxsg = np.max(self.sg)
 
@@ -3150,7 +3163,7 @@ class AviaNZ(QMainWindow):
         """ If the user has deleted a segment in the review, delete it from the main display """
         id = self.box1id
         self.humanClassifyDialog1.stopPlayback()
-        self.deleteSegment(self.box1id)
+        self.deleteSegment(self.box1id, hr=True)
 
         self.box1id = id-1
         self.segmentsToSave = True
@@ -3278,6 +3291,7 @@ class AviaNZ(QMainWindow):
             if hasattr(self, "diagnosticCalls"):
                 for c in self.diagnosticCalls:
                     self.p_spec.removeItem(c)
+            self.d_plot.hide()
         except Exception as e:
             print(e)
         self.diagnosticCalls = []
@@ -5010,6 +5024,7 @@ class AviaNZ(QMainWindow):
         Deletes the segment that is selected, otherwise does nothing.
         Updates the overview segments as well.
         """
+        print("deleting id:", id)
         if self.media_obj.isPlaying():
             # includes resetting playback buttons
             self.stopPlayback()

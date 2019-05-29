@@ -1479,6 +1479,9 @@ class HumanClassify1(QDialog):
         for i in range(len(self.birdbtns)-1):
             self.birdbtns[i].setChecked(False)
             self.birdbtns[i].setText(self.shortBirdList[i])
+        # "other" button
+        self.birdbtns[-1].setChecked(False)
+        self.birds3.setEnabled(False)
 
     def setSegNumbers(self, done, total):
         text1 = "calls reviewed: " + str(done)
@@ -1583,24 +1586,52 @@ class HumanClassify1(QDialog):
     def tickBirdsClicked(self):
         # Listener for when the user selects a bird tick box
         # Update the text and store the data
+        # This makes it easy to switch out of DontKnow-only segments
+        checkedButton = None
+        dontknowButton = None
         for button in self.birds.buttons():
-            if button.isChecked():
-                if button.text() == "Other":
+            if button.text() == "Other":
+                # just toggle the long list box
+                if button.isChecked():
                     self.birds3.setEnabled(True)
                 else:
                     self.birds3.setEnabled(False)
-                    if button.text() not in self.label and button.text()+'?' not in self.label:
-                        self.label.append(str(button.text()))
-                    self.species.setText(','.join(self.label))
             else:
-                if button.text() == "Other":
-                    self.birds3.setEnabled(False)
-                if str(button.text()) in self.label:
-                    self.label.remove(str(button.text()))
-                    self.species.setText(','.join(self.label))
-                elif button.text()+'?' in self.label:
-                    self.label.remove(str(button.text())+'?')
-                    self.species.setText(','.join(self.label))
+                if button.text() == "Don't Know":
+                    dontknowButton = button
+                # figure out which one was changed now
+                if button.isChecked():
+                    if button.text() not in self.label and button.text()+'?' not in self.label:
+                        # this was just ticked ON
+                        checkedButton = button
+                else:
+                    if button.text() in self.label or button.text()+'?' in self.label:
+                        # this was just ticked OFF
+                        checkedButton = button
+        if checkedButton is None:
+            print("Warning: unrecognized check event")
+            return
+        if checkedButton.isChecked():
+            # if label was empty, just change from DontKnow:
+            if self.label == ["Don't Know"]:
+                self.label = [checkedButton.text()]
+                if dontknowButton is not None:
+                    dontknowButton.setChecked(False)
+            else:
+                self.label.append(checkedButton.text())
+        else:
+            # a button was unchecked:
+            if checkedButton.text() in self.label:
+                print("removing")
+                self.label.remove(checkedButton.text())
+            elif checkedButton.text()+'?' in self.label:
+                self.label.remove(checkedButton.text()+'?')
+            # if this erased everything, revert to don't know:
+            if self.label == []:
+                self.label = ["Don't Know"]
+                if dontknowButton is not None:
+                    dontknowButton.setChecked(True)
+        self.species.setText(','.join(self.label))
 
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
@@ -1660,23 +1691,25 @@ class HumanClassify1(QDialog):
         Translates the brightness and contrast values into appropriate image levels.
         Calculation is simple.
         """
+        try:
+            self.stopPlayback()
+        except Exception:
+            pass
         minsg = np.min(self.sg)
         maxsg = np.max(self.sg)
-        # self.config['brightness'] = self.brightnessSlider.value()
-        # self.config['contrast'] = self.contrastSlider.value()
-        brightness = self.brightnessSlider.value() # self.config['brightness']
-        contrast = self.contrastSlider.value() # self.config['contrast']
+        if self.cmapInverted:
+            brightness = self.brightnessSlider.value()
+        else:
+            brightness = 100-self.brightnessSlider.value()
+        contrast = self.contrastSlider.value()
+
         self.colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
         self.colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + self.colourStart
-        self.plot.setLevels([self.colourStart, self.colourEnd])
+        if self.cmapInverted:
+            self.plot.setLevels([self.colourEnd, self.colourStart])
+        else:
+            self.plot.setLevels([self.colourStart, self.colourEnd])
 
-        # TODO: add button for this?
-        # if self.config['invertColourMap']:
-        #     self.overviewImage.setLevels([self.colourEnd, self.colourStart])
-        #     self.specPlot.setLevels([self.colourEnd, self.colourStart])
-        # else:
-        #     self.overviewImage.setLevels([self.colourStart, self.colourEnd])
-        #     self.specPlot.setLevels([self.colourStart, self.colourEnd])
 
     def getValues(self):
         #print('out',self.label)
