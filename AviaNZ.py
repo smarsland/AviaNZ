@@ -3189,26 +3189,43 @@ class AviaNZ(QMainWindow):
             return
         self.statusLeft.setText("Checking...")
 
-        # Get all labels
-        names = [item[4] for item in self.segments]
-        # Need to have a single list, so this makes it
-        flatten = lambda list: [item for sublist in list for item in sublist]
-        names = flatten(names)
+        # Get all labels into a single list
+        names = [sp for seg in self.segments for sp in seg[4]]
+
+        # TODO: at the moment, we're showing all "yellow" and "green" segments together.
         names = [re.sub('\?','',item) for item in names]
-
-        # Get all labels
-        #names = [item[4] for item in self.segments]
-        #names = [n if n[-1] != '?' else n[:-1] for n in names]
-
         # Make them unique
-        keys = {}
-        for n in names:
-            keys[n] = 1
-        names = keys.keys()
+        names = list(set(names))
+        try:
+            # can't use single-species review on "Don't Know" segments
+            names.remove("Don't Know")
+        except Exception:
+            pass
+        if len(names) == 0:
+            msg = SupportClasses.MessagePopup("w", "No segments", "No segments to check")
+            msg.exec_()
+            return
+
+        # mini dialog to select species:
         self.humanClassifyDialog2a = Dialogs.HumanClassify2a(names)
 
         if self.humanClassifyDialog2a.exec_() == 1:
             label = self.humanClassifyDialog2a.getValues()
+
+            # reload audiodata and spectrogram???
+            #self.loadSegment(hr2=True)
+
+            # main dialog:
+            self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments,
+                                                               label, self.sampleRate, self.audioFormat,
+                                                               self.config['incr'], self.lut, self.colourStart,
+                                                               self.colourEnd, self.config['invertColourMap'],
+                                                               self.brightnessSlider.value(), self.contrastSlider.value())
+            self.humanClassifyDialog2.exec_()
+            return
+
+
+            ### OLD
             self.indices = []
 
             # Sort all segs into order, avoid showAllPages to make it simple
@@ -3217,26 +3234,9 @@ class AviaNZ(QMainWindow):
             self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
             self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
             self.listLabels = [self.listLabels[i] for i in sortOrder]
-            # filter segments to show
-            segments2show = []   # segments to show
-            ids = []
-            id = 0
-            # then find segments with label to review
-            for seg in self.segments:
-                if label in seg[4] or label+'?' in seg[4]:
-                    segments2show.append(seg)
-                    ids.append(id)  # their actual indices
-                id += 1
 
-            # and show them
-            self.loadSegment(hr2=True)
             #print("segments to go to dialog2: ", segments2show)
             segments = copy.deepcopy(segments2show)
-            self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, segments2show,
-                                                               label, self.sampleRate, self.audioFormat,
-                                                               self.config['incr'], self.lut, self.colourStart,
-                                                               self.colourEnd, self.config['invertColourMap'], self.brightnessSlider.value(), self.contrastSlider.value())
-            self.humanClassifyDialog2.exec_()
             errorInds = self.humanClassifyDialog2.getValues()
             print("Errors identified: ", errorInds, len(errorInds))
 

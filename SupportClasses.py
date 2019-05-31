@@ -1022,67 +1022,6 @@ class ChildInfoViewBox(pg.ViewBox):
     def resend(self,x):
         self.sigChildMessage.emit(x)
 
-class PicButton(QAbstractButton):
-    # Class for HumanClassify dialogs to put spectrograms on buttons
-    # Also includes playback capability.
-    def __init__(self, index, im1, im2, audiodata, format, duration, parent=None):
-        super(PicButton, self).__init__(parent)
-        self.index = index
-        self.im1 = im1
-        self.im2 = im2
-        self.buttonClicked = False
-        self.clicked.connect(self.changePic)
-
-        # playback things
-        self.media_obj = ControllableAudio(format)
-        self.media_obj.notify.connect(self.endListener)
-        self.audiodata = audiodata
-        self.duration = duration * 1000 # in ms
-
-        self.playButton = QtGui.QToolButton(self)
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.playButton.clicked.connect(self.playImage)
-        self.playButton.hide()
-
-    def paintEvent(self, event):
-        im = self.im2 if self.buttonClicked else self.im1
-
-        if type(event) is not bool:
-            painter = QPainter(self)
-            painter.drawImage(event.rect(), im)
-
-    def enterEvent(self, QEvent):
-        self.playButton.show()
-
-    def leaveEvent(self, QEvent):
-        if not self.media_obj.isPlaying():
-            self.playButton.hide()
-
-    def playImage(self):
-        if self.media_obj.isPlaying():
-            self.stopPlayback()
-        else:
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-            self.media_obj.loadArray(self.audiodata)
-
-    def endListener(self):
-        time = self.media_obj.elapsedUSecs() // 1000
-        if time > self.duration:
-            self.stopPlayback()
-
-    def stopPlayback(self):
-        self.media_obj.pressedStop()
-        self.playButton.hide()
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-
-    def sizeHint(self):
-        return self.im1.size()
-
-    def changePic(self,event):
-        self.buttonClicked = not(self.buttonClicked)
-        self.paintEvent(event)
-        self.update()
-
 class ClickableRectItem(QtGui.QGraphicsRectItem):
     # QGraphicsItem doesn't include signals, hence this mess
     def __init__(self, *args, **kwds):
