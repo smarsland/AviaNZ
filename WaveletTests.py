@@ -305,8 +305,10 @@ def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='
     ax.yaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
     ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
     ax.legend()
+    print('check1')
     def onclick(event):
         if event.dblclick:
+            print('check2')
             fpr_cl = event.xdata
             tpr_cl = event.ydata
             print("fpr_cl, tpr_cl: ", fpr_cl, tpr_cl)
@@ -325,6 +327,7 @@ def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='
             speciesData['F0'] = ff
             if ff:
                 speciesData['F0Range'] = [f0_low, f0_high]
+            speciesData['WaveletParams'] = []
             speciesData['WaveletParams'].clear()
             speciesData['WaveletParams'].append(thr)
             speciesData['WaveletParams'].append(M)
@@ -333,8 +336,9 @@ def testTrainers(dName, species, f1, f2, fs, thrList, MList, d, f, rf, feature='
             #dName_train = '/home/listanvirg/FilterTest/Ruru/Test1'
             #dName_train = 'D:\Desktop\Documents\Work\Filter Experiment\RURU\Part1\Test10C'
             #dName_train = '/home/listanvirg/FilterTest/Ruru/Test10D'
-            dName_train = '/home/listanvirg/FilterTest/Kiwi/New/Test14D'
+            dName_train = '/home/listanvirg/FilterTest/Kiwi/New/Code'
             filename = dName_train + '/' + species + '.txt'
+            print(filename)
             print("Saving new filter to ", filename)
             f = open(filename, 'w')
             f.write(json.dumps(speciesData))
@@ -350,7 +354,7 @@ def testWavelet(dName, species, savedetections, feature, d, f, rf, window=1, inc
     #dName_train = '/home/listanvirg/FilterTest/Ruru/Test1'
     #dName_train = 'D:\Desktop\Documents\Work\Filter Experiment\RURU\Part1\Test10C'
     #dName_train = '/home/listanvirg/FilterTest/Ruru/Test1F'
-    dName_train='/home/listanvirg/FilterTest/Kiwi/New/Test14D'
+    dName_train='/home/listanvirg/FilterTest/Kiwi/New/Code'
     speciesData = json.load(open(os.path.join(dName_train, species + '.txt')))
     # speciesData = json.load(open(os.path.join(dName, species + '.txt')))
     #speciesData = json.load(open(os.path.join(dName, species + '.txt')))
@@ -361,7 +365,7 @@ def testWavelet(dName, species, savedetections, feature, d, f, rf, window=1, inc
 
     #window= 1
     #inc=None
-    Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, spInfo=speciesData, d=d, f=f, rf=rf, withzeros=True, learnMode=feature, savedetections=savedetections, window=window, inc=inc)
+    Segments, TP, FP, TN, FN = ws.waveletSegment_test(dirName=dName, d=d, f=f, rf=rf, withzeros=True, learnMode=feature, savedetections=savedetections, window=window, inc=inc)
 
 
     print("TESTING COMPLETED IN ", time.time() - opstartingtime)
@@ -493,7 +497,7 @@ inc= None
 #KiWI
 # testTrainers('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa")
 # testWavelet('D:\\Nirosha\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=window, inc=inc)
-testTrainers('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui/Ponui-train', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa", window=window, inc=inc)
+testTrainers('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui/Ponui_train', "Kiwi", f1=kiwi_f1, f2=kiwi_f2, fs=kiwi_fs, thrList=kiwi_thr, MList=kiwi_M, d=kiwi_d, f=kiwi_f, rf=kiwi_rf, feature="recaa", window=window, inc=inc)
 testWavelet('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui/Ponui_test', "Kiwi", savedetections=True, feature='recaa', d=kiwi_d, f=kiwi_f, rf=kiwi_rf, window=window, inc=inc)
 
 

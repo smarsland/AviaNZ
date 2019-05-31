@@ -177,26 +177,28 @@ class SignalProc:
         """ FIR bandpass filter
         128 taps, Hamming window, very basic.
         """
+
+        #Virginia corrections: cutted references to self.sampleRate
         if data is None:
             data = self.data
         if sampleRate is None:
             sampleRate = self.sampleRate
         if end is None:
-            end = self.sampleRate/2
+            end = sampleRate/2
         start = max(start,0)
-        end = min(end,self.sampleRate/2)
+        end = min(end,sampleRate/2)
 
-        if start == 0 and end == self.sampleRate/2:
+        if start == 0 and end == sampleRate/2:
             print("No filter needed!")
             return data
 
-        nyquist = self.sampleRate/2
+        nyquist = sampleRate/2
         ntaps = 128
 
         if start == 0:
             # Low pass
             taps = signal.firwin(ntaps, cutoff=[end / nyquist], window=('hamming'), pass_zero=True)
-        elif end == self.sampleRate/2:
+        elif end == sampleRate/2:
             # High pass
             taps = signal.firwin(ntaps, cutoff=[start / nyquist], window=('hamming'), pass_zero=False)
         else:
@@ -368,7 +370,7 @@ class SignalProc:
         sgi = self.invert_spectrogram(sg_best, incr, calculate_offset=True,set_zero_phase=False)
         return np.real(sgi)
 
-    def invert_spectrogram(self,sg, incr, calculate_offset=True, set_zero_phase=True):
+    def invert_spectrogram(self,sg, incr, calculate_offset=True, set_zero_phase=True, window='Hann'):
         """
         Under MSR-LA License
         Based on MATLAB implementation from Spectrogram Inversion Toolbox
@@ -390,7 +392,18 @@ class SignalProc:
         # Getting overflow warnings with 32 bit...
         #wave = wave.astype('float64')
         total_windowing_sum = np.zeros((np.shape(sg)[0] * incr + size))
-        window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
+        #Virginia: adding different windows
+
+        if window == 'Hann':
+            # Hann window
+            window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
+        elif window == 'Blackman':
+            # Blackman
+            alpha = 0.16
+            a0 = 0.5 * (1 - alpha)
+            a1 = 0.5
+            a2 = 0.5 * alpha
+            window = a0 - a1 * np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2 * np.cos(4 * np.pi * np.arange(size) / (size - 1))
 
         est_start = int(size // 2) - 1
         est_end = est_start + size
@@ -413,7 +426,7 @@ class SignalProc:
             else:
                 offset = 0
             wave[wave_start:wave_end] += window * wave_est[est_start - offset:est_end - offset]
-            total_windowing_sum[wave_start:wave_end] += window
+            total_windowing_sum[wave_start:wave_end] += window**2 #Virginia: needed square
         wave = np.real(wave) / (total_windowing_sum + 1E-6)
         return wave
 
