@@ -182,21 +182,21 @@ class SignalProc:
         if sampleRate is None:
             sampleRate = self.sampleRate
         if end is None:
-            end = self.sampleRate/2
+            end = sampleRate/2
         start = max(start,0)
-        end = min(end,self.sampleRate/2)
+        end = min(end,sampleRate/2)
 
-        if start == 0 and end == self.sampleRate/2:
+        if start == 0 and end == sampleRate/2:
             print("No filter needed!")
             return data
 
-        nyquist = self.sampleRate/2
+        nyquist = sampleRate/2
         ntaps = 128
 
         if start == 0:
             # Low pass
             taps = signal.firwin(ntaps, cutoff=[end / nyquist], window=('hamming'), pass_zero=True)
-        elif end == self.sampleRate/2:
+        elif end == sampleRate/2:
             # High pass
             taps = signal.firwin(ntaps, cutoff=[start / nyquist], window=('hamming'), pass_zero=False)
         else:
