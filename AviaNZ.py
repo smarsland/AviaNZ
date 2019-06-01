@@ -3210,75 +3210,67 @@ class AviaNZ(QMainWindow):
         self.humanClassifyDialog2a = Dialogs.HumanClassify2a(names)
 
         if self.humanClassifyDialog2a.exec_() == 1:
-            label = self.humanClassifyDialog2a.getValues()
-
-            # reload audiodata and spectrogram???
-            #self.loadSegment(hr2=True)
+            self.revLabel = self.humanClassifyDialog2a.getValues()
 
             # main dialog:
             self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments,
-                                                               label, self.sampleRate, self.audioFormat,
+                                                               self.revLabel, self.sampleRate, self.audioFormat,
                                                                self.config['incr'], self.lut, self.colourStart,
                                                                self.colourEnd, self.config['invertColourMap'],
                                                                self.brightnessSlider.value(), self.contrastSlider.value())
+            self.humanClassifyDialog2.finish.clicked.connect(self.humanClassifyClose2)
             self.humanClassifyDialog2.exec_()
-            return
 
+    def humanClassifyClose2(self):
+        self.segmentsToSave = True
+        todelete = []
+        # initialize correction file. All "downgraded" segments will be stored
+        outputErrors = []
 
-            ### OLD
-            self.indices = []
+        for btn in self.humanClassifyDialog2.buttons:
+            btn.stopPlayback()
+            self.box1id = btn.index
+            currSeg = self.segments[btn.index]
+            # clear these species from overview colors
+            self.refreshOverviewWith(currSeg[0], currSeg[1], currSeg[4], delete=True)
+            # btn.index carries the index of segment shown on btn
+            if btn.mark=="red":
+                outputErrors.append(currSeg)
+                todelete.append(btn.index)
+            # fix name or name+? of the analyzed species
+            elif btn.mark=="yellow":
+                for lbindex in range(len(currSeg[4])):
+                    label = currSeg[4][lbindex]
+                    # find "greens", swap to "yellows"
+                    if label==self.revLabel:
+                        outputErrors.append(currSeg)
+                        currSeg[4][lbindex] = self.revLabel+'?'
+                # this will also update the overview colors
+                self.updateLabel(currSeg[4])
+            elif btn.mark=="green":
+                for lbindex in range(len(currSeg[4])):
+                    label = currSeg[4][lbindex]
+                    # find "yellows", swap to "greens"
+                    if label==self.revLabel+'?':
+                        currSeg[4][lbindex] = self.revLabel
+                # this will also update the overview colors
+                self.updateLabel(currSeg[4])
 
-            # Sort all segs into order, avoid showAllPages to make it simple
-            sortOrder = sorted(range(len(self.segments)), key=self.segments.__getitem__)
-            self.segments = [self.segments[i] for i in sortOrder]
-            self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
-            self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
-            self.listLabels = [self.listLabels[i] for i in sortOrder]
+        self.humanClassifyDialog2.done(1)
 
-            #print("segments to go to dialog2: ", segments2show)
-            segments = copy.deepcopy(segments2show)
-            errorInds = self.humanClassifyDialog2.getValues()
-            print("Errors identified: ", errorInds, len(errorInds))
+        # Save the errors in a file
+        if self.config['saveCorrections'] and len(outputErrors)>0:
+            speciesClean = re.sub(r'\W', "_", self.revLabel)
+            file = open(self.filename + '.corrections_' + speciesClean, 'a')
+            json.dump(outputErrors, file,indent=1)
+            file.close()
 
-            if len(errorInds) > 0:
-                outputErrors = []
-                for ind in errorInds:
-                    outputErrors.append(segments[ind])
-                    # Delete segment if it only has that label, otherwise remove that label
-                    if len(self.segments[ids[ind]][4]) == 1:
-                        # if single species, mark for deletion
-                        self.deleteSegment(id=ids[ind], hr=True)
-                        ids = [x-1 for x in ids]
-                    else:
-                        # if multiple species in label, only edit the label
-                        self.box1id = ids[ind]
-                        # this will "untick" that bird from the selected segment:
-                        self.birdSelectedMenu(label)
-
-                self.segmentsToSave = True
-                if self.config['saveCorrections']:
-                    # Save the errors in a file
-                    file = open(self.filename + '.corrections_' + str(label), 'a')
-                    json.dump(outputErrors, file,indent=1)
-                    file.close()
-
-            # avoid '?' and confirm the segments
-            id = 0
-            for seg in self.segments:
-                for sp in seg[4]:
-                    if sp[:-1] == label and sp[-1] == '?':
-                        self.box1id = id
-                        # this will untick the 'species?' and tick the 'species'
-                        self.birdSelectedMenu(sp)
-                        self.birdSelectedMenu(label)
-                        self.segmentsToSave = True
-                id += 1
-            # Todo: update excel? hopefully it's not necessary (1) there is 'export to excel' option
-            # (2) corresponding excel might be in a parent directory, so locating it correctly is tricky and creating anoher excel in the same level as sound file is extra cost.
-            self.saveSegments()
-            # for seg in self.segments:
-            #     self.updateLabel(self.segments[self.box1id][4])
+        # reverse loop to allow deleting segments
+        for dl in reversed(todelete):
+            self.deleteSegment(dl)
+        self.saveSegments()
         self.statusLeft.setText("Ready")
+        return
 
     def showDiagnosticDialog(self):
         """ Create the dialog to set diagnostic plot parameters.
@@ -5016,14 +5008,9 @@ class AviaNZ(QMainWindow):
                             self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
 
         self.saveConfig = True
-        # Find the '/' in the fileName
-        if '/' in self.filename:
-            ind = self.filename[-1::-1].index('/')
-        else:
-            ind = 0
 
         self.resetStorageArrays()
-        self.loadFile(self.filename[-ind:])
+        self.loadFile()
 
 # ============
 # Various actions: deleting segments, saving, quitting
