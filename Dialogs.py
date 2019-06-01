@@ -1809,6 +1809,7 @@ class HumanClassify2(QDialog):
         # filter segments for the requested species
         self.indices2show = []
         self.segments = segments
+        self.label = label
         for i in range(len(segments)):
             if label in segments[i][4] or label+'?' in segments[i][4]:
                 self.indices2show.append(i)
@@ -1874,10 +1875,9 @@ class HumanClassify2(QDialog):
         self.buttonNext.clicked.connect(self.nextPage)
         self.pageLabel = QLabel()
 
-        finish = QPushButton("Confirm and close")
-        finish.clicked.connect(self.finishRev)
-        finish.setSizePolicy(QSizePolicy(5,5))
-        finish.setMaximumSize(250, 30)
+        self.finish = QPushButton("Confirm and close")
+        self.finish.setSizePolicy(QSizePolicy(5,5))
+        self.finish.setMaximumSize(250, 30)
 
         # movement buttons and page numbers
         vboxBot = QHBoxLayout()
@@ -1886,7 +1886,7 @@ class HumanClassify2(QDialog):
         vboxBot.addSpacing(20)
         vboxBot.addWidget(self.pageLabel)
         vboxBot.addSpacing(20)
-        vboxBot.addWidget(finish)
+        vboxBot.addWidget(self.finish)
 
         # set up the middle section of images
         self.numPicsV = 0
@@ -1951,8 +1951,12 @@ class HumanClassify2(QDialog):
             x1 = int(self.convertAmpltoSpec(tstart))
             x2 = int(self.convertAmpltoSpec(tend))
 
+            # boundaries of raw segment, in spec units, relative to start of seg:
+            unbufStart = self.convertAmpltoSpec(seg[0]) - x1
+            unbufStop = self.convertAmpltoSpec(seg[1]) - x1
+
             # create the button:
-            newButton = PicButton(0, self.sg[x1:x2, :], self.audiodata[x1a:x2a], self.audioFormat, tend-tstart, self.convertAmpltoSpec(seg[0]), self.convertAmpltoSpec(seg[1]), self.lut, self.colourStart, self.colourEnd, self.cmapInverted)
+            newButton = PicButton(i, self.sg[x1:x2, :], self.audiodata[x1a:x2a], self.audioFormat, tend-tstart, unbufStart, unbufStop, self.lut, self.colourStart, self.colourEnd, self.cmapInverted)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:
@@ -1999,7 +2003,6 @@ class HumanClassify2(QDialog):
             for col in range(self.numPicsH):
                 # resizing shouldn't change which segments are displayed,
                 # so we use a fixed start point for counting shown buttons.
-                print("Drawing", self.butStart+butNum)
                 self.flowLayout.addWidget(self.buttons[self.butStart+butNum], row, col)
                 # just in case, update the bounds of grid on every redraw
                 self.flowLayout.layout.setColumnMinimumWidth(col, self.specH+10)
@@ -2024,7 +2027,6 @@ class HumanClassify2(QDialog):
             Updates next/prev arrow states.
         """
         buttonsPerPage = self.numPicsV * self.numPicsH
-        print(buttonsPerPage)
         if buttonsPerPage == 0:
             # dialog still initializing or too small to show segments
             self.buttonPrev.setEnabled(False)
@@ -2071,14 +2073,15 @@ class HumanClassify2(QDialog):
         self.redrawButtons()
 
     def clearButtons(self):
-        print("CLEARING")
-        print("total widgets now", self.flowLayout.layout.count())
         for btnum in reversed(range(self.flowLayout.layout.count())):
             item = self.flowLayout.layout.itemAt(btnum)
             if item is not None:
                 self.flowLayout.layout.removeItem(item)
+                r,c = self.flowLayout.items[item.widget()]
+                self.flowLayout.layout.setColumnMinimumWidth(c, 1)
+                self.flowLayout.layout.setRowMinimumHeight(r, 1)
+                del self.flowLayout.rows[r][c]
                 item.widget().hide()
-                print("Removed from layout", btnum)
         self.flowLayout.update()
 
     def setColourLevels(self):
@@ -2088,19 +2091,14 @@ class HumanClassify2(QDialog):
         """
         minsg = np.min(self.sg)
         maxsg = np.max(self.sg)
-        # self.config['brightness'] = self.brightnessSlider.value()
-        # self.config['contrast'] = self.contrastSlider.value()
-        brightness = self.brightnessSlider.value() # self.config['brightness']
-        contrast = self.contrastSlider.value() # self.config['contrast']
-        self.colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
-        self.colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + self.colourStart
-        whichOff = []
-        for btn in reversed(self.buttons):
-            whichOff.insert(0,btn.buttonClicked)
-            self.flowLayout.removeWidget(btn)
-            # remove it from the gui
-            btn.setParent(None)
-        self.makeButtons(whichOff=whichOff)
+        brightness = self.brightnessSlider.value()
+        contrast = self.contrastSlider.value()
+        colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
+        colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + colourStart
+        for btn in self.buttons:
+            btn.stopPlayback()
+            btn.setImage(self.lut, colourStart, colourEnd, self.cmapInverted)
+            btn.update()
 
     def OLDnextpage(self):
         # Find out which buttons have been clicked (so are not correct)
@@ -2111,27 +2109,6 @@ class HumanClassify2(QDialog):
             self.buttons[i].stopPlayback()
             if self.buttons[i].buttonClicked:
                 self.errors.append(i+self.firstSegment)
-        # print(self.errors)
-
-        # Now find out if there are more segments to check, and remake the buttons, otherwise close
-        if len(self.segments2show) > 0:
-            self.firstSegment += len(self.buttons)
-            if self.firstSegment != len(self.segments2show):
-                for btn in reversed(self.buttons):
-                    self.flowLayout.removeWidget(btn)
-                    # remove it from the gui
-                    btn.setParent(None)
-                self.makeButtons()
-            else:
-                self.done(1)
-        else:
-            self.done(1)
-
-    def finishRev(self):
-        self.done(1)
-
-    def getValues(self):
-        return self.errors
 
 
 class PicButton(QAbstractButton):
@@ -2140,7 +2117,13 @@ class PicButton(QAbstractButton):
     def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, parent=None):
         super(PicButton, self).__init__(parent)
         self.index = index
-        self.setImage(spec, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv)
+        self.mark = "green"
+        self.spec = spec
+        self.unbufStart = unbufStart
+        self.unbufStop = unbufStop
+        # setImage reads some properties from self, to allow easy update
+        # when color map changes
+        self.setImage(lut, colStart, colEnd, cmapInv)
 
         self.buttonClicked = False
         self.clicked.connect(self.changePic)
@@ -2159,40 +2142,52 @@ class PicButton(QAbstractButton):
         self.playButton.clicked.connect(self.playImage)
         self.playButton.hide()
 
-    def setImage(self, seg, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv):
+    def setImage(self, lut, colStart, colEnd, cmapInv):
         # takes in a piece of spectrogram and produces a pair of images
         if cmapInv:
-            im, alpha = fn.makeARGB(seg, lut=lut, levels=[colEnd, colStart])
+            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colEnd, colStart])
         else:
-            im, alpha = fn.makeARGB(seg, lut=lut, levels=[colStart, colEnd])
+            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colStart, colEnd])
         im1 = fn.makeQImage(im, alpha)
 
-        if cmapInv:
-            im, alpha = fn.makeARGB(seg, lut=lut, levels=[colStart, colEnd])
-        else:
-            im, alpha = fn.makeARGB(seg, lut=lut, levels=[colEnd, colStart])
-
-        im2 = fn.makeQImage(im, alpha)
         # hardcode all image widths
         self.specReductionFact = im1.size().width()/500
         self.im1 = im1.scaled(500, im1.size().height())
-        self.im2 = im2.scaled(500, im2.size().height())
 
         # draw lines
-        unbufStartAdj = unbufStart / self.specReductionFact
-        unbufStopAdj = unbufStop / self.specReductionFact
+        unbufStartAdj = self.unbufStart / self.specReductionFact
+        unbufStopAdj = self.unbufStop / self.specReductionFact
         self.line1 = QLineF(unbufStartAdj, 0, unbufStartAdj, im1.size().height())
         self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, im1.size().height())
 
     def paintEvent(self, event):
-        im = self.im2 if self.buttonClicked else self.im1
-
         if type(event) is not bool:
             painter = QPainter(self)
             painter.setPen(QPen(QColor(80,255,80), 2))
-            painter.drawImage(event.rect(), im)
+            if self.mark == "yellow":
+                painter.setOpacity(0.8)
+            elif self.mark == "red":
+                painter.setOpacity(0.5)
+            painter.drawImage(event.rect(), self.im1)
             painter.drawLine(self.line1)
             painter.drawLine(self.line2)
+
+            # draw decision mark
+            if self.mark == "green":
+                pass
+            elif self.mark == "yellow":
+                painter.setOpacity(0.9)
+                painter.setPen(QPen(QColor(220,220,0)))
+                painter.setFont(QFont("Helvetica", 70))
+                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "?")
+            elif self.mark == "red":
+                painter.setOpacity(0.8)
+                painter.setPen(QPen(QColor(220,0,0)))
+                painter.setFont(QFont("Helvetica", 70))
+                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "X")
+            else:
+                print("ERROR: unrecognized segment mark")
+                return
 
     def enterEvent(self, QEvent):
         self.playButton.show()
@@ -2225,7 +2220,13 @@ class PicButton(QAbstractButton):
         return self.im1.size()
 
     def changePic(self,event):
-        self.buttonClicked = not(self.buttonClicked)
+        # cycle through CONFIRM / DELETE / RECHECK marks
+        if self.mark == "green":
+            self.mark = "red"
+        elif self.mark == "red":
+            self.mark = "yellow"
+        elif self.mark == "yellow":
+            self.mark = "green"
         self.paintEvent(event)
         self.update()
 
