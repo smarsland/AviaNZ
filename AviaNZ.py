@@ -2202,9 +2202,9 @@ class AviaNZ(QMainWindow):
                 else:
                     p_spec_r.setBrush(pg.mkBrush(self.prevBoxCol))
                     col = self.prevBoxCol
-                    col.setAlpha(min(c.alpha()*2, 255))
+                    col.setAlpha(min(col.alpha()*2, 255))
                     p_spec_r.transparent = False
-                    p_spec_r.setHoverBrush(pg.mkBrush(c))
+                    p_spec_r.setHoverBrush(pg.mkBrush(col))
                     p_spec_r.setPen(pg.mkPen(None))
                     col.setAlpha(100)
             self.p_spec.addItem(p_spec_r, ignoreBounds=True)
