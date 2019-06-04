@@ -1351,6 +1351,7 @@ class AviaNZ(QMainWindow):
                     box.setBrush(pg.mkBrush(None))
                     box.setPen(pg.mkPen(col,width=1))
                     box.update()
+                    col.setAlpha(100)
         else:
             for box in self.listRectanglesa2:
                 if type(box) == self.ROItype:
@@ -1360,6 +1361,7 @@ class AviaNZ(QMainWindow):
                     box.setBrush(pg.mkBrush(col))
                     box.setPen(pg.mkPen(None))
                     box.update()
+                    col.setAlpha(100)
 
     def useAmplitudeCheck(self):
         """ Listener for the check menu item saying if the user wants to see the waveform.
@@ -2196,13 +2198,15 @@ class AviaNZ(QMainWindow):
                     p_spec_r.setBrush(None)
                     p_spec_r.setHoverBrush(None)
                     p_spec_r.setPen(pg.mkPen(col,width=1))
+                    col.setAlpha(100)
                 else:
                     p_spec_r.setBrush(pg.mkBrush(self.prevBoxCol))
-                    c = self.prevBoxCol
-                    c.setAlpha(min(c.alpha()*2, 255))
+                    col = self.prevBoxCol
+                    col.setAlpha(min(c.alpha()*2, 255))
                     p_spec_r.transparent = False
                     p_spec_r.setHoverBrush(pg.mkBrush(c))
                     p_spec_r.setPen(pg.mkPen(None))
+                    col.setAlpha(100)
             self.p_spec.addItem(p_spec_r, ignoreBounds=True)
             p_spec_r.sigRegionChangeFinished.connect(self.updateRegion_spec)
 
@@ -2292,6 +2296,7 @@ class AviaNZ(QMainWindow):
             self.listRectanglesa2[boxid].setBrush(pg.mkBrush(None))
             self.listRectanglesa2[boxid].setHoverBrush(pg.mkBrush(None))
             self.listRectanglesa2[boxid].setPen(col,width=1)
+            col.setAlpha(100)
 
         self.listRectanglesa1[boxid].update()
         self.listRectanglesa2[boxid].update()
@@ -3106,6 +3111,7 @@ class AviaNZ(QMainWindow):
                 self.listRectanglesa2[self.box1id].setPen(col, width=1)
                 self.listRectanglesa2[self.box1id].setBrush(pg.mkBrush(None))
                 self.listRectanglesa2[self.box1id].setHoverBrush(pg.mkBrush(None))
+                col.setAlpha(100)
             self.listRectanglesa1[self.box1id].update()
             self.listRectanglesa2[self.box1id].update()
             self.segmentsToSave = True

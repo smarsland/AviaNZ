@@ -751,6 +751,11 @@ class AviaNZ_reviewAll(QMainWindow):
                                 birdName = re.sub(r'(.*)>(.*)', '\\1 (\\2)', birdName)
                                 self.spList.add(birdName)
         self.spList = list(self.spList)
+        # Can't review only "Don't Knows". Ideally this should call AllSpecies dialog tho
+        try:
+            self.spList.remove("Don't Know")
+        except Exception:
+            pass
         self.spList.insert(0, 'All species')
         self.w_spe1.clear()
         self.w_spe1.addItems(self.spList)
@@ -828,8 +833,18 @@ class AviaNZ_reviewAll(QMainWindow):
                     elif self.species == 'All species':
                         filesuccess = self.review_all(sTime)
                     else:
-                        filesuccess = self.review_single(sTime)
-                        print("File success: ", filesuccess)
+                        # check if there are any segments for this single species
+                        spPresent = False
+                        for seg in self.segments:
+                            if self.species in seg[4] or self.species+'?' in seg[4]:
+                                spPresent = True
+                        if not spPresent:
+                            print("No segments found in file %s" % filename)
+                        else:
+                            # thus, we can be sure that >=1 relevant segment exists
+                            # if this dialog is called.
+                            filesuccess = self.review_single(sTime)
+                            print("File success: ", filesuccess)
 
                     # Store the output to an Excel file (no matter if review dialog exit was clean)
                     out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=[self.species], batch=True)
@@ -863,66 +878,68 @@ class AviaNZ_reviewAll(QMainWindow):
                 QApplication.exit(1)
 
     def review_single(self, sTime):
-        """ Initializes all species dialog.
+        """ Initializes single species dialog, based on self.species
+            (thus we don't need the small species choice dialog here).
             Updates self.segments as a side effect.
             Returns 1 for clean completion, 0 for Esc press or other dirty exit.
         """
-        # self.segments_other = []
-        self.segments_sp = []
-        for seg in self.segments:
-            for birdName in seg[4]:
-                if len(birdName)>0 and birdName[-1] == '?':
-                    if self.species == birdName[:-1]:
-                        self.segments_sp.append(seg)
-                        break
-                elif self.species == birdName:
-                    self.segments_sp.append(seg)
-                    break
-
-        segments = copy.deepcopy(self.segments)
-        errorInds = []
         # Initialize the dialog for this file
-        if len(self.segments_sp) > 0:
-            self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments_sp,
-                                           self.species, self.sampleRate, self.audioFormat,
-                                           self.config['incr'], self.lut, self.colourStart,
-                                           self.colourEnd, self.config['invertColourMap'],
-                                           self.config['brightness'], self.config['contrast'],
-                                           filename = self.filename)
+        self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments,
+                                                           self.species, self.sampleRate, self.audioFormat,
+                                                           self.config['incr'], self.lut, self.colourStart,
+                                                           self.colourEnd, self.config['invertColourMap'],
+                                                           self.config['brightness'], self.config['contrast'], self.filename)
+        self.humanClassifyDialog2.finish.clicked.connect(self.humanClassifyClose2)
+        success = self.humanClassifyDialog2.exec_()
 
-            success = self.humanClassifyDialog2.exec_()
-            # capture Esc press or other "dirty" exit:
-            if success == 0:
-                 return(0)
-            errorInds = self.humanClassifyDialog2.getValues()
-            print("Errors: ", errorInds, len(errorInds))
+        # capture Esc press or other "dirty" exit:
+        if success == 0:
+            return(0)
+        else:
+            return(1)
 
+    def humanClassifyClose2(self):
+        self.segmentsToSave = True
+        todelete = []
+        # initialize correction file. All "downgraded" segments will be stored
         outputErrors = []
-        if len(errorInds) > 0:
-            # print(self.segments)
-            for ind in errorInds:
-                outputErrors.append(self.segments[ind])
-                # self.deleteSegment(id=ids[ind], hr=True)
-                # ids = [x - 1 for x in ids]
-            self.segmentsToSave = True
-            if self.config['saveCorrections']:
-                # Save the errors in a file
-                file = open(self.filename + '.corrections_' + str(self.species), 'a')
-                json.dump(outputErrors, file)
-                file.close()
 
-        # Produce segments:
-        for seg in outputErrors:
-            if seg in self.segments:
-                segments.remove(seg)
-        # remove '?'
-        for seg in segments:
-            for sp in seg[4]:
-                if sp[:-1] == self.species and sp[-1] == '?':
-                    sp = sp[:-1]
+        for btn in self.humanClassifyDialog2.buttons:
+            btn.stopPlayback()
+            currSeg = self.segments[btn.index]
+            # btn.index carries the index of segment shown on btn
+            if btn.mark=="red":
+                outputErrors.append(currSeg)
+                todelete.append(btn.index)
+            # fix name or name+? of the analyzed species
+            elif btn.mark=="yellow":
+                for lbindex in range(len(currSeg[4])):
+                    label = currSeg[4][lbindex]
+                    # find "greens", swap to "yellows"
+                    if label==self.species:
+                        outputErrors.append(currSeg)
+                        currSeg[4][lbindex] = self.species+'?'
+            elif btn.mark=="green":
+                for lbindex in range(len(currSeg[4])):
+                    label = currSeg[4][lbindex]
+                    # find "yellows", swap to "greens"
+                    if label==self.species+'?':
+                        currSeg[4][lbindex] = self.species
 
-        self.segments = segments
-        return(1)
+        self.humanClassifyDialog2.done(1)
+
+        # Save the errors in a file
+        if self.config['saveCorrections'] and len(outputErrors)>0:
+            speciesClean = re.sub(r'\W', "_", self.species)
+            file = open(self.filename + '.corrections_' + speciesClean, 'a')
+            json.dump(outputErrors, file,indent=1)
+            file.close()
+
+        # reverse loop to allow deleting segments
+        for dl in reversed(todelete):
+            del self.segments[dl]
+        # done - the segments will be saved by the main loop
+        return
 
     def review_all(self, sTime, minLen=5):
         """ Initializes all species dialog.
