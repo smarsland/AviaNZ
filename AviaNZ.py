@@ -2632,11 +2632,11 @@ class AviaNZ(QMainWindow):
             birdname = self.fullbirdlist.currentText()
         else:
             birdname = birdname + ' (' + self.fullbirdlist.currentText() + ')'
-        self.birdSelectedMenu(birdname,fromList=True)
+        self.birdSelectedMenu(birdname)
         if not self.multipleBirds:
             self.menuBirdList.hide()
 
-    def birdSelectedMenu(self,birditem,fromList=False):
+    def birdSelectedMenu(self,birditem):
         """ Collects the label for a bird from the context menu and processes it.
         Has to update the overview segments in case their colour should change.
         Also handles getting the name through a message box if necessary.
@@ -2664,6 +2664,12 @@ class AviaNZ(QMainWindow):
         # if species wasn't in the list before, means it is now ticked, so add it:
         if birdname not in oldname and birdname != "Other":
             self.updateText(birdname)
+
+        # patch for unticking initial "Don't Know"
+        if "Don't Know" not in self.segments[self.box1id][4]:
+            for act in self.menuBirdList.actions() + self.menuBird2.actions():
+                if act.text()=="Don't Know":
+                    act.setChecked(False)
 
         # patch for updating if all names were deleted:
         if self.segments[self.box1id][4] == []:
@@ -2779,11 +2785,6 @@ class AviaNZ(QMainWindow):
                 self.prevBoxCol = self.ColourNamed
         else:
             self.prevBoxCol = self.ColourNone
-        
-
-    """def processMultipleBirdSelections(self):
-        # TODO??
-        pass"""
 
     def setColourMap(self,cmap):
         """ Listener for the menu item that chooses a colour map.
@@ -3476,6 +3477,7 @@ class AviaNZ(QMainWindow):
         else:
             self.audiodata_backup = np.empty((np.shape(self.audiodata)[0], 1))
             self.audiodata_backup[:, 0] = np.copy(self.audiodata)
+        self.showFreq_backup = [self.minFreqShow, self.maxFreqShow]
 
     def decomposeWP(self, x=None):
         """ Listener for quickWP control button.
@@ -3692,7 +3694,6 @@ class AviaNZ(QMainWindow):
     def denoise_undo(self):
         """ Listener for undo button in denoising dialog.
         """
-        # TODO: Can I actually delete something from an object?
         print("Undoing",np.shape(self.audiodata_backup))
         if hasattr(self,'audiodata_backup'):
             if self.audiodata_backup is not None:
@@ -3709,7 +3710,10 @@ class AviaNZ(QMainWindow):
                     if hasattr(self,'seg'):
                         self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
 
-                    self.redoFreqAxis(self.minFreq, self.maxFreq)
+                    if hasattr(self, 'showFreq_backup'):
+                        self.redoFreqAxis(self.showFreq_backup[0], self.showFreq_backup[1])
+                    else:
+                        self.redoFreqAxis(self.minFreq, self.maxFreq)
                     self.setColourLevels()
 
     def denoise_save(self):

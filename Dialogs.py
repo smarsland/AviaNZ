@@ -2115,7 +2115,6 @@ class PicButton(QAbstractButton):
         self.spec = spec
         self.unbufStart = unbufStart
         self.unbufStop = unbufStop
-        print("Had mouse tracking?", self.hasMouseTracking())
         self.setMouseTracking(True)
         # setImage reads some properties from self, to allow easy update
         # when color map changes
@@ -2157,7 +2156,6 @@ class PicButton(QAbstractButton):
         self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, im1.size().height())
 
     def paintEvent(self, event):
-        print("paint event received")
         if type(event) is not bool:
             painter = QPainter(self)
             painter.setPen(QPen(QColor(80,255,80), 2))
@@ -2225,13 +2223,9 @@ class PicButton(QAbstractButton):
             self.mark = "yellow"
         elif self.mark == "yellow":
             self.mark = "green"
-        print("sending paint event")
         self.paintEvent(event)
-        print("updating")
-        self.update()
-        print("repainting")
+        #self.update()
         self.repaint()
-        print("processing events")
         pg.QtGui.QApplication.processEvents()
 
 
