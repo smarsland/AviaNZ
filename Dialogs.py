@@ -1403,7 +1403,7 @@ class HumanClassify1(QDialog):
 
         # Volume control
         self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.sliderMoved.connect(self.volSliderMoved)
+        self.volSlider.valueChanged.connect(self.volSliderMoved)
         self.volSlider.setRange(0,100)
         self.volSlider.setValue(50)
         self.volIcon = QLabel()
@@ -1777,8 +1777,8 @@ class HumanClassify2(QDialog):
         14-15. ???
     """
 
-    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, filename=None, parent=None):
-        QDialog.__init__(self, parent)
+    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, filename=None):
+        QDialog.__init__(self)
 
         if len(segments)==0:
             print("No segments provided")
@@ -1818,7 +1818,7 @@ class HumanClassify2(QDialog):
 
         # Volume control
         self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.sliderMoved.connect(self.volSliderMoved)
+        self.volSlider.valueChanged.connect(self.volSliderMoved)
         self.volSlider.setRange(0,100)
         self.volSlider.setValue(50)
         self.volIcon = QLabel()
@@ -1967,9 +1967,9 @@ class HumanClassify2(QDialog):
             self.buttons.append(newButton)
             self.buttons[-1].buttonClicked=False
             self.marked.append(False)
-        # set volume values on these new buttons
+        # set volume and brightness on these new buttons
         self.volSliderMoved(self.volSlider.value())
-        print("Created %d buttons" % len(self.buttons))
+        self.setColourLevels()
 
     def resizeEvent(self, ev):
         """ On this event, choose which (and how many) buttons to display
@@ -2014,8 +2014,12 @@ class HumanClassify2(QDialog):
                     return
 
     def volSliderMoved(self, value):
-        for btn in self.buttons:
-            btn.media_obj.applyVolSlider(value)
+        # try/pass to avoid race situations when smth is not initialized
+        try:
+            for btn in self.buttons:
+                btn.media_obj.applyVolSlider(value)
+        except Exception:
+            pass
 
     def convertAmpltoSpec(self, x):
         return x * self.sampleRate / self.incr
@@ -2100,16 +2104,6 @@ class HumanClassify2(QDialog):
             btn.setImage(self.lut, colourStart, colourEnd, self.cmapInverted)
             btn.update()
 
-    def OLDnextpage(self):
-        # Find out which buttons have been clicked (so are not correct)
-        if not hasattr(self,'buttons'):
-            self.done(0)
-
-        for i in range(len(self.buttons)):
-            self.buttons[i].stopPlayback()
-            if self.buttons[i].buttonClicked:
-                self.errors.append(i+self.firstSegment)
-
 
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
@@ -2121,6 +2115,8 @@ class PicButton(QAbstractButton):
         self.spec = spec
         self.unbufStart = unbufStart
         self.unbufStop = unbufStop
+        print("Had mouse tracking?", self.hasMouseTracking())
+        self.setMouseTracking(True)
         # setImage reads some properties from self, to allow easy update
         # when color map changes
         self.setImage(lut, colStart, colEnd, cmapInv)
@@ -2161,6 +2157,7 @@ class PicButton(QAbstractButton):
         self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, im1.size().height())
 
     def paintEvent(self, event):
+        print("paint event received")
         if type(event) is not bool:
             painter = QPainter(self)
             painter.setPen(QPen(QColor(80,255,80), 2))
@@ -2173,17 +2170,18 @@ class PicButton(QAbstractButton):
             painter.drawLine(self.line2)
 
             # draw decision mark
+            fontsize = int(self.im1.size().height() * 0.65)
             if self.mark == "green":
                 pass
             elif self.mark == "yellow":
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220,220,0)))
-                painter.setFont(QFont("Helvetica", 70))
+                painter.setFont(QFont("Helvetica", fontsize))
                 painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "?")
             elif self.mark == "red":
                 painter.setOpacity(0.8)
                 painter.setPen(QPen(QColor(220,0,0)))
-                painter.setFont(QFont("Helvetica", 70))
+                painter.setFont(QFont("Helvetica", fontsize))
                 painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "X")
             else:
                 print("ERROR: unrecognized segment mark")
@@ -2227,8 +2225,14 @@ class PicButton(QAbstractButton):
             self.mark = "yellow"
         elif self.mark == "yellow":
             self.mark = "green"
+        print("sending paint event")
         self.paintEvent(event)
+        print("updating")
         self.update()
+        print("repainting")
+        self.repaint()
+        print("processing events")
+        pg.QtGui.QApplication.processEvents()
 
 
 class InterfaceSettings2(QDialog):
