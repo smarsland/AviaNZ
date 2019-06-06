@@ -71,9 +71,8 @@ class preProcess:
         self.spInfo = spInfo
         self.d = d  # denoise
         self.f = f  # band-pass
-        self.wavelet = Wavelet.Wavelet(name=wavelet)
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
-        self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet=self.wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
+        self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet=wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
 
     def denoise_filter(self, level=5):
         # set df=True to perform both denoise and filter
@@ -89,7 +88,8 @@ class preProcess:
 
         # Get the five level wavelet decomposition
         if self.d:
-            denoisedData = self.WaveletFunctions.waveletDenoise(self.audioData, thresholdType='soft', wavelet=self.wavelet,maxLevel=level)
+            print(level)
+            denoisedData = self.WaveletFunctions.waveletDenoise(thresholdType="soft", maxLevel=level)
         else:
             denoisedData=self.audioData  # this is to avoid washing out very fade calls during the denoising
 
@@ -253,7 +253,7 @@ class postProcess:
                     data = librosa.core.audio.resample(data, sampleRate, speciesData['SampleRate'])
                 # denoise before fundamental frq. extraction
                 sc = preProcess(audioData=data, spInfo=speciesData, d=True, f=False)  # avoid bandpass filter
-                data, sampleRate = sc.denoise_filter(level=10)
+                data, sampleRate = sc.denoise_filter(level=8)
                 sp = SignalProc.SignalProc([], 0, 256, 128)
                 sgRaw = sp.spectrogram(data, 256, 128, mean_normalise=True, onesided=True, multitaper=False)
                 segment = Segment.Segment(data, sgRaw, sp, sampleRate, 256, 128)
@@ -659,7 +659,12 @@ class exportSegments:
             else:
                 wb = self.makeNewWorkbook(speciesClean)
 
-            relfname = str(os.path.relpath(str(self.filename), str(self.dirName)))
+            try:
+                relfname = str(os.path.relpath(str(self.filename), str(self.dirName)))
+            except Exception as e:
+                print("Falling back to absolute paths. Encountered exception:")
+                print(e)
+                relfname = str(os.path.abspath(str(self.filename)))
             # extract SINGLE-SPECIES ONLY segments,
             # incl. potential assignments ('Kiwi?').
             # if species=="All", take ALL segments.

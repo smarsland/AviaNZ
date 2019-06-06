@@ -745,6 +745,10 @@ class AviaNZ_reviewAll(QMainWindow):
                             if seg[0] == -1:
                                 continue
 
+                            # convert single-species IDs to [species]
+                            if type(seg[4]) is not list:
+                                seg[4] = [seg[4]]
+
                             for birdName in seg[4]:
                                 # strip question mark and convert sp>spp format
                                 birdName = re.sub(r'\?$', '', birdName)
@@ -836,6 +840,10 @@ class AviaNZ_reviewAll(QMainWindow):
                         # check if there are any segments for this single species
                         spPresent = False
                         for seg in self.segments:
+                            # convert single-species IDs to [species]
+                            if type(seg[4]) is not list:
+                                seg[4] = [seg[4]]
+
                             if self.species in seg[4] or self.species+'?' in seg[4]:
                                 spPresent = True
                         if not spPresent:
