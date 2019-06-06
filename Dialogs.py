@@ -638,6 +638,10 @@ class WaveletTrain(QDialog):
                                 if seg[0] == -1 or len(seg[4])==0:
                                     continue
 
+                                # compatibility with old-style segments
+                                if type(seg[4]) is not list:
+                                    seg[4] = [seg[4]]
+
                                 for birdName in seg[4]:
                                     if birdName == "Don't Know":
                                         continue

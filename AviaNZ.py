@@ -3876,7 +3876,11 @@ class AviaNZ(QMainWindow):
                             for seg in segments:
                                 if seg[0] == -1:
                                     continue
-                                elif seg[4][0].title() == self.species:
+
+                                if type(seg[4]) is not list:
+                                    seg[4] = [seg[4]]
+
+                                if seg[4][0].title() == self.species:
                                     secs = seg[1] - seg[0]
                                     wavobj = wavio.read(wavFile+'.wav', nseconds=secs, offset=seg[0])
                                     data = wavobj.data
@@ -4031,7 +4035,7 @@ class AviaNZ(QMainWindow):
     def ff(self, data, speciesData):
         # TODO: fs in speciesData could not be the actual fs of the audio, does it matter?
         sc = SupportClasses.preProcess(audioData=data, spInfo=speciesData, d=True, f=False)  # avoid bandpass filter
-        data, sampleRate = sc.denoise_filter(level=10)
+        data, sampleRate = sc.denoise_filter(level=8)
         sp = SignalProc.SignalProc([], 0, 256, 128) #SignalProc.SignalProc([], 0, 512, 256)
         sgRaw = sp.spectrogram(data, 256, 128, mean_normalise=True, onesided=True, multitaper=False)
         segment = Segment.Segment(data, sgRaw, sp, sampleRate, 256, 128)
@@ -4125,6 +4129,10 @@ class AviaNZ(QMainWindow):
             for seg in segments:
                 if seg[0] == -1:
                     continue
+
+                if type(seg[4]) is not list:
+                    seg[4] = [seg[4]]
+
                 if species in seg[4]:
                     # print("lenMin, seg[1]-seg[0]", lenMin, seg[1]-seg[0])
                     if lenMin > seg[1]-seg[0]:
@@ -4215,7 +4223,11 @@ class AviaNZ(QMainWindow):
             for seg in segments:
                 if seg[0] == -1:
                     continue
-                if species in str(seg[4]):
+
+                if type(seg[4]) is not list:
+                    seg[4] = [seg[4]]
+
+                if species in seg[4]:
                     # print("lenMin, seg[1]-seg[0]", lenMin, seg[1]-seg[0])
                     # Virginia: added this variable so the machine don't have to calculate it every rime
                     dur_segm = seg[1] - seg[0]
@@ -4426,10 +4438,14 @@ class AviaNZ(QMainWindow):
         if not hasattr(self, 'prevSegments'):
             print("Nothing to undo!")
             return
-        
+
         self.removeSegments()
         for seg in self.prevSegments:
-            self.addSegment(seg)
+            if seg[2] == 0 and seg[3] == 0:
+                self.addSegment(seg[0], seg[1],0,0,seg[4], index=-1)
+            else:
+                self.addSegment(seg[0], seg[1],self.convertFreqtoY(seg[2]),self.convertFreqtoY(seg[3]),seg[4], index=-1)
+            self.segmentsToSave = True
 
     def exportSeg(self, annotation=None):
         # find all the species
@@ -5111,9 +5127,12 @@ class AviaNZ(QMainWindow):
                     self.p_spec.removeItem(r)
                 except:
                     pass
-        for r in self.SegmentRects:
-            r.setBrush(pg.mkBrush('w'))
-            r.update()
+
+        # clear overview boxes and their count trackers
+        for ovid in range(len(self.SegmentRects)):
+            self.overviewSegments[ovid, :] = 0
+            self.SegmentRects[ovid].setBrush(pg.mkBrush('w'))
+            self.SegmentRects[ovid].update()
 
         if delete:
             self.segments=[]
