@@ -404,8 +404,7 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Export segments to Excel",self.exportSeg)
             actionMenu.addSeparator()
 
-        if not self.DOC and not self.Hartley:
-            actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
+        actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
         actionMenu.addSeparator()
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
@@ -757,6 +756,7 @@ class AviaNZ(QMainWindow):
         self.p_spec.keyPressed.connect(self.handleKey)
 
         # Function calls to check if should show various parts of the interface, whether dragging boxes or not
+        self.makeReadOnly()
         self.useAmplitudeCheck()
         self.useFilesCheck()
         self.showOverviewSegsCheck()
@@ -1396,46 +1396,26 @@ class AviaNZ(QMainWindow):
         Turns off the listeners for the amplitude and spectrogram plots.
         Also has to go through all of the segments, turn off the listeners, and make them unmovable.
         """
-        self.config['readOnly']=self.readonly.isChecked()
+        self.config['readOnly'] = self.readonly.isChecked()
         if self.readonly.isChecked():
-            try:
-                self.p_ampl.scene().sigMouseClicked.disconnect()
-                self.p_spec.scene().sigMouseClicked.disconnect()
-                self.p_spec.sigMouseDragged.disconnect()
-            except Exception as e:
-                print(e)
-                pass
-            try:
-                self.p_spec.scene().sigMouseMoved.disconnect()
-            except Exception:
-                pass
-            for rect in self.listRectanglesa1:
-                if rect is not None:
-                    try:
-                        rect.sigRegionChangeFinished.disconnect()
-                    except Exception:
-                        pass
-                    rect.setMovable(False)
-            for rect in self.listRectanglesa2:
-                if rect is not None:
-                    try:
-                        rect.sigRegionChangeFinished.disconnect()
-                    except Exception:
-                        pass
-                    rect.setMovable(False)
+            # this is for accepting drag boxes or not
+            self.p_spec.enableDrag = False
+
+            # when clicking is used to draw segments/boxes,
+            # read-only changes are implemented in the button signals.
+            # Because connecting-disconnecting slots is very dirty.
+
+            # this will re-make segment boxes with correct moving abilities:
+            if hasattr(self, 'audiodata'):
+                self.removeSegments(delete=False)
+                self.drawfigMain(remaking=True)
+                self.statusLeft.setText("Ready. Read-only mode!")
         else:
-            self.p_ampl.scene().sigMouseClicked.connect(self.mouseClicked_ampl)
-            self.p_spec.scene().sigMouseClicked.connect(self.mouseClicked_spec)
-            if self.showPointerDetails.isChecked():
-                self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
-            for rect in self.listRectanglesa1:
-                if rect is not None:
-                    rect.sigRegionChangeFinished.connect(self.updateRegion_ampl)
-                    rect.setMovable(True)
-            for rect in self.listRectanglesa2:
-                if rect is not None:
-                    rect.sigRegionChangeFinished.connect(self.updateRegion_spec)
-                    rect.setMovable(True)
+            self.p_spec.enableDrag = self.config['specMouseAction']==3
+            if hasattr(self, 'audiodata'):
+                self.removeSegments(delete=False)
+                self.drawfigMain(remaking=True)
+                self.statusLeft.setText("Ready")
 
     def dockReplace(self):
         """ Listener for if the docks should be replaced menu item.
@@ -2161,6 +2141,8 @@ class AviaNZ(QMainWindow):
             self.refreshOverviewWith(startpoint, endpoint, species)
             self.prevBoxCol = brush
 
+            segsMovable = not (self.Hartley or self.config['readOnly'])
+
             # Make sure startpoint and endpoint are in the right order
             if startpoint > endpoint:
                 temp = startpoint
@@ -2168,20 +2150,16 @@ class AviaNZ(QMainWindow):
                 endpoint = temp
 
             # Add the segment in both plots and connect up the listeners
-            if self.Hartley:
-                p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=brush,movable=False)
-            else:
-                p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=brush)
+            p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=brush, movable=segsMovable)
             self.p_ampl.addItem(p_ampl_r, ignoreBounds=True)
             p_ampl_r.setRegion([startpoint, endpoint])
             p_ampl_r.sigRegionChangeFinished.connect(self.updateRegion_ampl)
 
+            # full-height segments:
             if y1==0 and y2==0:
-                if self.Hartley:
-                    p_spec_r = SupportClasses.LinearRegionItem2(self, brush = brush,movable=False)
-                else:
-                    p_spec_r = SupportClasses.LinearRegionItem2(self, brush = brush)
+                p_spec_r = SupportClasses.LinearRegionItem2(self, brush=brush, movable=segsMovable)
                 p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
+            # rectangle boxes:
             else:
                 if y1 > y2:
                     temp = y1
@@ -2189,7 +2167,7 @@ class AviaNZ(QMainWindow):
                     y2 = temp
                 startpointS = QPointF(self.convertAmpltoSpec(startpoint),max(y1,miny))
                 endpointS = QPointF(self.convertAmpltoSpec(endpoint),min(y2,maxy))
-                p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, parent=self)
+                p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, movable=segsMovable, parent=self)
                 if self.config['transparentBoxes']:
                     col = self.prevBoxCol.rgb()
                     col = QtGui.QColor(col)
@@ -2389,7 +2367,7 @@ class AviaNZ(QMainWindow):
                 # if this is right click (drawing mode):
                 # (or whatever you want)
                 if evt.button() == self.MouseDrawingButton:
-                    if self.Hartley:
+                    if self.Hartley or self.config['readOnly']:
                         return
                     # this would prevent starting boxes in ampl plot
                     # if self.config['specMouseAction']>1:
@@ -2525,7 +2503,7 @@ class AviaNZ(QMainWindow):
             else:
                 # if this is right click (drawing mode):
                 if evt.button() == self.MouseDrawingButton:
-                    if self.Hartley:
+                    if self.Hartley or self.config['readOnly']:
                         return
                     nonebrush = self.ColourNone
                     self.start_ampl_loc = self.convertSpectoAmpl(mousePoint.x())
@@ -3911,7 +3889,7 @@ class AviaNZ(QMainWindow):
             # returns 2d lists of nodes over M x thr, or stats over M x thr
             #thrList = np.linspace(0.1, 1, num=self.waveletTDialog.setthr.value()) Virginia test to finde inconsistency
             thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
-            MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
+            MList = np.linspace(0.125, 0.125, num=self.waveletTDialog.setM.value())# 0.25, 1.5
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window=1
@@ -4239,7 +4217,7 @@ class AviaNZ(QMainWindow):
                         fLow = seg[2]
                     if fHigh < seg[3]:
                         fHigh = seg[3]
-                    type = species
+                    typeOfAnnot = species
                     quality = ''
                     # Virginia: start and end must be read in resol base
                     s = int(math.floor(seg[0] / resol))
@@ -4250,7 +4228,7 @@ class AviaNZ(QMainWindow):
                     # NB: if resol=window step2s=step2e=0
                     for i in range(s, e):
                         GT[i][1] = str(1)
-                        GT[i][2] = type
+                        GT[i][2] = typeOfAnnot
                         GT[i][3] = quality
 
                         # Empty files cannot be used now, and lead to problems
@@ -4464,12 +4442,18 @@ class AviaNZ(QMainWindow):
                 if fnmatch.fnmatch(file, self.filename[:-4] + "_*.xlsx"):
                     print("Removing file %s" % file)
                     os.remove(file)
-        out = SupportClasses.exportSegments(startTime=self.startTime, segments=self.segments, filename=self.filename[:-4], resolution=10, datalength=self.datalength, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
-        out.excel()
+        # excel should be split by page size, but for short files just give the file size
+        datalen = self.config['maxFileShow'] if self.nFileSections>1 else self.datalengthSec
+        out = SupportClasses.exportSegments(self.SoundFileDir, self.filename, datalen, self.segments, startTime=self.startTime, resolution=10, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
+        success = out.excel()
         # add user notification
-        msg = SupportClasses.MessagePopup("d", "Segments Exported", "Check this directory for the excel output: " + '\n' + self.SoundFileDir)
-        msg.exec_()
-        return
+        if success==0:
+            print("Warning: xlsx output was not saved")
+            return
+        else:
+            msg = SupportClasses.MessagePopup("d", "Segments Exported", "Check this directory for the excel output: " + '\n' + self.SoundFileDir)
+            msg.exec_()
+            return
 
     def findMatches(self,thr=0.4, species='Choose species...'):
         """ Calls the cross-correlation function to find matches like the currently highlighted box.
@@ -4917,7 +4901,7 @@ class AviaNZ(QMainWindow):
                     self.MouseDrawingButton = QtCore.Qt.LeftButton
             elif childName == 'Mouse settings.Spectrogram mouse action':
                 self.config['specMouseAction'] = data
-                self.p_spec.enableDrag = data==3
+                self.p_spec.enableDrag = data==3 and not self.readonly.isChecked()
             elif childName == 'Paging.Page size':
                 self.config['maxFileShow'] = data
             elif childName=='Paging.Page overlap':
@@ -5063,8 +5047,11 @@ class AviaNZ(QMainWindow):
             self.refreshOverviewWith(startpoint, endpoint, species, delete=True)
 
             if self.listRectanglesa1[id] is not None:
-                self.listRectanglesa1[id].sigRegionChangeFinished.disconnect()
-                self.listRectanglesa2[id].sigRegionChangeFinished.disconnect()
+                try:
+                    self.listRectanglesa1[id].sigRegionChangeFinished.disconnect()
+                    self.listRectanglesa2[id].sigRegionChangeFinished.disconnect()
+                except:
+                    pass
                 self.p_ampl.removeItem(self.listRectanglesa1[id])
                 self.p_spec.removeItem(self.listRectanglesa2[id])
                 self.p_spec.removeItem(self.listLabels[id])

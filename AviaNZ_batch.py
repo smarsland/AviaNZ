@@ -317,10 +317,11 @@ class AviaNZ_batchProcess(QMainWindow):
                             sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
                         else:
                             sTime = 0
+                        pagelen = np.ceil(self.datalength/self.sampleRate)
                         if self.species == 'All species':
-                            out = SupportClasses.exportSegments(segments=self.segments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                            out = SupportClasses.exportSegments(self.dirName, self.filename, pagelen, segments=self.segments, species=[], startTime=sTime, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         else:
-                            out = SupportClasses.exportSegments(segments=self.segments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                            out = SupportClasses.exportSegments(self.dirName, self.filename, pagelen, segments=self.segments, species=[self.species], startTime=sTime, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         out.excel()
                         continue
 
@@ -401,17 +402,19 @@ class AviaNZ_batchProcess(QMainWindow):
                                 # post.rainClick() - omitted in sppSpecific cases
                                 # print('After rain: ', post.segments)
                             if self.speciesData['F0']:
-                                post.fundamentalFrq()
+                                post.fundamentalFrq(self.filename, self.speciesData)
                                 # print('After ff: ', post.segments)
                         newSegments = post.segments
                         print('Segments after post pro: ', newSegments)
 
                         # Save the excel and the annotation
+                        pagelen = np.ceil(self.datalength/self.sampleRate)
                         if self.species == 'All species':
-                            out = SupportClasses.exportSegments(segments=[], segmentstoCheck=newSegments, species=[], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength/self.sampleRate, sampleRate=self.sampleRate, method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
+                            out = SupportClasses.exportSegments(self.dirName, self.filename, pagelen, segments=[], segmentstoCheck=newSegments, species=[], startTime=sTime, sampleRate=self.sampleRate, method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
                         else:
-                            out = SupportClasses.exportSegments(segments=self.segments, segmentstoCheck=newSegments, species=[self.species], startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength/self.sampleRate, sampleRate=self.sampleRate, method=self.method, resolution=self.w_res.value(), operator="Auto", sampleRate_species=self.speciesData['SampleRate'], fRange=self.speciesData['FreqRange'], batch=True)
-                        out.excel()
+                            out = SupportClasses.exportSegments(self.dirName, self.filename, pagelen, segments=self.segments, segmentstoCheck=newSegments, species=[self.species], startTime=sTime, sampleRate=self.sampleRate, method=self.method, resolution=self.w_res.value(), operator="Auto", sampleRate_species=self.speciesData['SampleRate'], fRange=self.speciesData['FreqRange'], batch=True)
+                        # note: excel output success isn't used at this point
+                        filesuccess = out.excel()
                         out.saveAnnotation()
                         # Log success for this file
                         self.log.appendFile(self.filename)
@@ -855,8 +858,10 @@ class AviaNZ_reviewAll(QMainWindow):
                             print("File success: ", filesuccess)
 
                     # Store the output to an Excel file (no matter if review dialog exit was clean)
-                    out = SupportClasses.exportSegments(segments=self.segments, startTime=sTime, dirName=self.dirName, filename=self.filename, datalength=self.datalength, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=[self.species], batch=True)
-                    out.excel()
+                    pagelen = np.ceil(self.datalength/self.sampleRate)
+                    out = SupportClasses.exportSegments(self.dirName, self.filename, pagelen, segments=self.segments, startTime=sTime, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=[self.species], batch=True)
+                    # also catch the return value from this
+                    filesuccess = filesuccess & out.excel()
                     # Save the corrected segment JSON
                     out.saveAnnotation()
 

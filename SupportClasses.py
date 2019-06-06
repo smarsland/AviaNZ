@@ -446,27 +446,26 @@ class exportSegments:
         in an excel workbook. It makes the workbook if necessary.
 
         Inputs
+            dirName:    xlsx will be stored here
+            filename:   file name to be recorded inside the xlsx
             segments:   detected segments in form of [[s1,e1], [s2,e2],...]
                         OR in format [[s1, e1, fs1, fe1, sp1], [s2, e2, fs2, fe2, sp2], ...]
                 segmentstoCheck     : segments without confidence in form of [[s1,e1], [s2,e2],...]
                 confirmedSegments   : segments with confidence
             species:    default species. e.g. 'Kiwi'. Default is 'all'
             startTime:  start time of the recording (in DoC format). Default is 0
-            dirName:    directory name
-            filename:   file name e.g.
-            datalength: number of data points in the recording
+            pagelen:    page length, seconds. If =datalength, entire data is treated as a single page.
             sampleRate: sample rate
             method:     e.g. 'Wavelets'. Default is 'Default'
             resolution: output resolution on excel (sheet 3) in seconds. Default is 1
-            trainTest:  is it for training/testing (=True) or real use (=False)
-            withConf:   is it with some level of confidence? e.g. after post-processing (e ratio). Default is 'False'
+            batch:      if the output is coming from batch mode, will default to appending
             seg_pos:    possible segments are needed apart from the segments when withConf is True. This is just to
                         generate the annotation including the segments with conf (kiwi) and without confidence (kiwi?).
             minLen: minimum length of a segment in secs
 
     """
 
-    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species=["Don't Know"], startTime=0, dirName='', filename='', datalength=0, sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1, fRange=[0, 0], noiseLevel=None, noiseTypes=[], sampleRate_species=0, batch=False):
+    def __init__(self, dirName, filename, pagelen, segments, confirmedSegments=[], segmentstoCheck=[], species=["Don't Know"], startTime=0, sampleRate=0, method="Default", resolution=1, batch=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1, fRange=[0, 0], noiseLevel=None, noiseTypes=[], sampleRate_species=0):
 
         self.species=species
         # convert 2-col lists to 5-col lists, if needed
@@ -481,12 +480,10 @@ class exportSegments:
         self.startTime=startTime
         self.dirName=dirName
         self.filename=filename
-        self.datalength=datalength
+        self.pagelen = math.ceil(pagelen)
         self.sampleRate=sampleRate
         self.method=method
         self.resolution = resolution
-        self.trainTest = trainTest
-        self.withConf=withConf  # todo: remove
         self.seg_pos=seg_pos #segmentstoCheck
         self.operator = operator
         self.reviewer = reviewer
@@ -541,8 +538,9 @@ class exportSegments:
 
         # Third sheet
         ws = self.wb['Per Time Period']
-        ws.cell(row=1, column=1, value="File Name_Page")
-        ws.cell(row=1, column=2, value="Presence=1, Absence=0")
+        ws.cell(row=1, column=1, value="File Name")
+        ws.cell(row=1, column=2, value="Page")
+        ws.cell(row=1, column=3, value="Presence=1, Absence=0")
 
         # Hack to delete original sheet
         del self.wb['Sheet']
@@ -574,9 +572,6 @@ class exportSegments:
             ws.cell(row=r, column=1, value=relfname)
             # Loop over the segments
             for seg in segments:
-                # if int(seg[1]-seg[0]) < self.minLen: # skip very short segments
-                #     continue
-                # deleting short segments already done during post processing
                 ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
                 ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
                 if seg[3]!=0:
@@ -598,35 +593,30 @@ class exportSegments:
             else:
                 ws.cell(row=r, column=2, value='No')
 
-        def writeToExcelp3(detected, starttime=0):
-            # todo: use minLen
-            need_reset = False
-            if self.resolution > math.ceil(float(self.datalength) / self.sampleRate):
-                resolution_before = self.resolution
-                need_reset = True
-                self.resolution = int(math.ceil(float(self.datalength) / self.sampleRate))
+        def writeToExcelp3(detected, pagenum):
+            # writes binary output DETECTED (per s) from page PAGENUM of length SELF.PAGELEN
+            starttime = pagenum * self.pagelen
             ws = wb['Per Time Period']
+            # print resolution "header"
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value=str(self.resolution) + ' secs resolution')
             ft = Font(color=colors.DARKYELLOW)
             ws.cell(row=r, column=1).font=ft
-            c = 2
-            for i in range(starttime,starttime+len(detected), self.resolution):
-                endtime = min(i+self.resolution, int(math.ceil(self.datalength * self.numpages / self.sampleRate)))
-                ws.cell(row=r, column=c, value=str(i) + '-' + str(endtime))
+            # print file name and page number
+            ws.cell(row=r+1, column=1, value=relfname)
+            ws.cell(row=r+1, column=2, value=str(pagenum+1))
+            # fill the header and detection columns
+            c = 3
+            for t in range(0, len(detected), self.resolution):
+                # absolue (within-file) times:
+                win_start = starttime + t
+                win_end = min(win_start+self.resolution, int(self.pagelen * self.numpages))
+                ws.cell(row=r, column=c, value=str(win_start) + '-' + str(win_end))
                 ws.cell(row=r, column=c).font = ft
+                # within-page times:
+                det = 1 if np.sum(detected[t:win_end-starttime])>0 else 0
+                ws.cell(row=r+1, column=c, value=det)
                 c += 1
-            r += 1
-            pagesize = int(starttime/self.datalength * self.sampleRate)
-            ws.cell(row=r, column=1, value=relfname + '_p' + str(pagesize))
-            c = 2
-            for i in range(0, len(detected), self.resolution):
-                j=1 if np.sum(detected[i:i+self.resolution])>0 else 0
-                ws.cell(row=r, column=c, value=j)
-                c += 1
-            # reset resolution
-            if need_reset:
-                self.resolution = resolution_before
 
         # now, generate the actual files, SEPARATELY FOR EACH SPECIES:
         for species in speciesList:
@@ -637,27 +627,51 @@ class exportSegments:
             # setup output files:
             # if an Excel exists, append (so multiple files go into one worksheet)
             # if not, create new
-            if self.withConf:
-                if self.batch:
-                    self.eFile = self.dirName + '/DetectionSummary_withConf_' + speciesClean + '.xlsx'
-                else:
-                    self.eFile = self.filename + '_withConf_' + speciesClean + '.xlsx'
-            else:
-                if self.batch:
-                    self.eFile = self.dirName + '/DetectionSummary_' + speciesClean + '.xlsx'
-                else:
-                    self.eFile = self.filename + '_' + speciesClean + '.xlsx'
-            self.eFile = str(self.eFile)
+            self.eFile = self.dirName + '/DetectionSummary_' + speciesClean + '.xlsx'
 
             if os.path.isfile(self.eFile):
+                if self.batch:
+                    # must not throw a dialog for every file in batch mode!
+                    action = "append"
+                else:
+                    # check with user
+                    msg = MessagePopup("w", "Excel file exists", "Output file " + self.eFile + " exists. Overwrite it, append to it, or cancel the operation?")
+                    msg.setStandardButtons(QMessageBox.Cancel)
+                    msg.addButton("Overwrite", QMessageBox.YesRole)
+                    msg.addButton("Append", QMessageBox.YesRole)
+                    # cancelBtn = msg.addButton(QMessageBox.Cancel)
+                    reply = msg.exec_()
+                    print(reply)
+                    if reply == 4194304:  # weird const for Cancel
+                        return 0
+                    elif reply == 1:
+                        action = "append"
+                    elif reply == 0:
+                        action = "overwrite"
+                    else:
+                        print("ERROR: Unrecognized reply", reply)
+                        return 0
+            else:
+                # well make new book actually
+                action = "overwrite"
+
+            if action == "append":
                 try:
                     wb = load_workbook(self.eFile)
                 except Exception as e:
-                    print("ERROR: cannot open file %s to append" % self.eFile)  # Does not exist OR no read permissions
+                    print("ERROR: cannot open file %s to append" % self.eFile)  # no read permissions or smth
                     print(e)
-                    return
+                    return 0
+            elif action == "overwrite":
+                try:
+                    wb = self.makeNewWorkbook(speciesClean)
+                except Exception as e:
+                    print("ERROR: could not create new file %s" % self.eFile)  # no read permissions or smth
+                    print(e)
+                    return 0
             else:
-                wb = self.makeNewWorkbook(speciesClean)
+                print("ERROR: unrecognized action", action)
+                return 0
 
             try:
                 relfname = str(os.path.relpath(str(self.filename), str(self.dirName)))
@@ -686,25 +700,28 @@ class exportSegments:
             writeToExcelp2(segmentsWPossible)
 
             # Generate per second binary output
-            n = math.ceil(float(self.datalength) / self.sampleRate)
+            # (assuming all pages are of same length as current data)
             for p in range(0, self.numpages):
-                detected = np.zeros(n)
+                detected = np.zeros(self.pagelen)
                 print("exporting page %d" % p)
                 for seg in segmentsWPossible:
-                    for t in range(n):
-                        truet = t + p*n
+                    for t in range(self.pagelen):
+                        # convert within-page time to segment (within-file) time
+                        truet = t + p*self.pagelen
                         if math.floor(seg[0]) <= truet and truet < math.ceil(seg[1]):
                             detected[t] = 1
-                writeToExcelp3(detected, p*n)
+                # write page p to xlsx
+                writeToExcelp3(detected, p)
 
             # Save the file
             wb.save(self.eFile)
+        return 1
 
     def saveAnnotation(self):
         # Save annotations - batch processing
         annotation = []
         # annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), self.operator, self.reviewer, -1])
-        annotation.append([-1, self.datalength, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]])
+        annotation.append([-1, self.pagelen*self.sampleRate, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]])
         y1 = self.fRange[0]/2
         y2 = self.sampleRate_species/2
         if y2 > self.sampleRate/2:
@@ -798,9 +815,6 @@ class ShadedROI(pg.ROI):
         p.drawRect(0, 0, 1, 1)
         p.restore()
 
-    def setMovable(self,value):
-        self.translatable = value
-
     def setBrush(self, *br, **kargs):
         """Set the brush that fills the region. Can have any arguments that are valid
         for :func:`mkBrush <pyqtgraph.mkBrush>`.
@@ -825,6 +839,10 @@ class ShadedROI(pg.ROI):
             self.setMouseHover(False)
 
     def setMouseHover(self, hover):
+        # for ignoring when ReadOnly enabled:
+        if not self.translatable:
+            return
+        # don't waste time if state isn't changing:
         if self.mouseHovering == hover:
             return
         self.mouseHovering = hover
@@ -880,9 +898,9 @@ def mouseDragEventFlexibleLine(self, ev):
 
 class ShadedRectROI(ShadedROI):
     # A rectangular ROI that it shaded, for marking segments
-    def __init__(self, pos, size, centered=False, sideScalers=False, parent=None, **args):
+    def __init__(self, pos, size, centered=False, movable=True, sideScalers=False, parent=None, **args):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
-        pg.ROI.__init__(self, pos, size, **args)
+        pg.ROI.__init__(self, pos, size, movable=movable, **args)
         self.parent = parent
         self.mouseHovering = False
         self.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 50)))
@@ -894,10 +912,15 @@ class ShadedRectROI(ShadedROI):
             center = [0, 0]
 
         #self.addTranslateHandle(center)
-        self.addScaleHandle([1, 1], center)
-        if sideScalers:
-            self.addScaleHandle([1, 0.5], [center[0], 0.5])
-            self.addScaleHandle([0.5, 1], [0.5, center[1]])
+        if self.translatable:
+            self.addScaleHandle([1, 1], center)
+            if sideScalers:
+                self.addScaleHandle([1, 0.5], [center[0], 0.5])
+                self.addScaleHandle([0.5, 1], [0.5, center[1]])
+
+    def setMovable(self,value):
+        self.resizable = value
+        self.translatable = value
 
     def mouseDragEvent(self, ev):
         if ev.isStart():
@@ -962,8 +985,10 @@ class LinearRegionItem2(pg.LinearRegionItem):
 
 
 class DragViewBox(pg.ViewBox):
-    # A normal ViewBox, but with ability to drag the segments
-    # and also processes keypress events
+    # A normal ViewBox, but with the ability to capture drag.
+    # Effectively, if "dragging" is enabled, it captures press & release signals.
+    # Otherwise it ignores the event, which then goes to the scene(),
+    # which only captures click events.
     sigMouseDragged = QtCore.Signal(object,object,object)
     keyPressed = QtCore.Signal(int)
 
@@ -1387,7 +1412,7 @@ class MessagePopup(QMessageBox):
         super(QMessageBox, self).__init__()
 
         self.setText(text)
-        self.setWindowTitle("Select Sound File")
+        self.setWindowTitle(title)
         if (type=="w"):
             self.setIconPixmap(QPixmap("img/Owl_warning.png"))
         elif (type=="d"):
