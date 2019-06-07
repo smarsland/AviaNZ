@@ -1,10 +1,1 @@
-{ 
-  "Name": "Kiwi, Nth Is Brown", 
-  "SampleRate": 16000,
-  "TimeRange": [10, 30],
-  "FreqRange": [1000, 7000],
-  "F0": true,
-  "F0Range": [850, 4200],
-  "WaveletParams": [0.5, 0.6, [34 , 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 55]],
-  "Wind": true, "Rain": true
-}
+{"Name": "Kiwi, Nth Is Brown", "SampleRate": 16000, "TimeRange": [6, 32], "FreqRange": [800, 8000], "WaveletParams": [0.5, 0.5, [35, 36, 39, 40, 43, 44, 45]], "Wind": false, "Rain": false, "F0": false}

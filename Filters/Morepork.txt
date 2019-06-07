@@ -2,9 +2,9 @@
   "Name": "Morepork", 
   "SampleRate": 16000,
   "TimeRange": [1, 30],
-  "FreqRange": [500, 7000],
-  "F0": true,
-  "F0Range": [600, 1300], 
-  "WaveletParams": [0.25, 0.5, [33,37,38]],
-  "Wind": true, "Rain": true
+  "FreqRange": [500, 7000], 
+  "WaveletParams": [0.25, 0.5, [33,37,38]], 
+  "Wind": false,
+  "Rain": false,
+  "F0": false
 }

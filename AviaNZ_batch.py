@@ -923,7 +923,15 @@ class AviaNZ_reviewAll(QMainWindow):
             # btn.index carries the index of segment shown on btn
             if btn.mark=="red":
                 outputErrors.append(currSeg)
-                todelete.append(btn.index)
+                if len(currSeg[4])==1:
+                    # delete if this was the only species label:
+                    todelete.append(btn.index)
+                else:
+                    # otherwise just delete this species from the label
+                    if self.species in currSeg[4]:
+                        currSeg[4].remove(self.species)
+                    if self.species+'?' in currSeg[4]:
+                        currSeg[4].remove(self.species+'?')
             # fix name or name+? of the analyzed species
             elif btn.mark=="yellow":
                 for lbindex in range(len(currSeg[4])):
