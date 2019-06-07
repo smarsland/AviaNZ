@@ -2,8 +2,8 @@
   "SampleRate": 1000,
   "TimeRange": [1, 5],
   "FreqRange": [100, 200], 
-  "F0": false,
   "WaveletParams": [0.25, 0.2, [8,10,21,22,43,44,45,46]],
-  "Wind": false, "Rain": true
+  "Wind": false, 
+  "Rain": false, 
+  "F0": false
 }
-
