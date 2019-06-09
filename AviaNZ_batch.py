@@ -170,7 +170,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # TODO: manual is not distributed as pdf now
         import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.1.pdf')
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.4.pdf')
 
     def quitPro(self):
         """ quit program
