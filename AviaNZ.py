@@ -429,7 +429,7 @@ class AviaNZ(QMainWindow):
     def showHelp(self):
         """ Show the user manual (a pdf file)"""
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.3.pdf')
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.4.pdf')
 
     def showCheatSheet(self):
         """ Show the cheatsheet of sample spectrograms (a pdf file)"""
@@ -3899,7 +3899,7 @@ class AviaNZ(QMainWindow):
             # returns 2d lists of nodes over M x thr, or stats over M x thr
             #thrList = np.linspace(0.1, 1, num=self.waveletTDialog.setthr.value()) Virginia test to finde inconsistency
             thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
-            MList = np.linspace(0.125, 0.125, num=self.waveletTDialog.setM.value())# 0.25, 1.5
+            MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window=1

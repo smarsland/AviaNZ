@@ -561,7 +561,7 @@ class WaveletTrain(QDialog):
         self.layout_step2.addWidget(self.blank)
         self.layout_step2.addWidget(self.note_step2)
         self.layout_step2.addWidget(self.blank)
-        self.layout_step2.addLayout(self.hBox2_step2)
+        #self.layout_step2.addLayout(self.hBox2_step2)
         self.layout_step2.addLayout(self.hBox3_step2)
         self.layout_step2.addStretch(1)
         self.layout_step2.addLayout(self.hBox_step2)
