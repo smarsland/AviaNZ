@@ -3,9 +3,9 @@
 \usepackage{graphicx}
 \usepackage{url}
 
-\title{The AviaNZ Birdsong Analysis Software (v 1.3)}
+\title{The AviaNZ Birdsong Analysis Software (v 1.4)}
 \author{The AviaNZ Team \\(\url{stephen.marsland@vuw.ac.nz})}
-\date{October 2018}
+\date{June 2019}
 
 %\usepackage[usenames, dvipsnames]{color}
 
@@ -24,7 +24,7 @@
 % 5 areas bit
 % not a problem
 
-This is a brief guide to version 1.3 of the AviaNZ program. 
+This is a brief guide to version 1.4 of the AviaNZ program. 
 We really want feedback on it, particularly what works and what doesn't, how you would like to see it improved, and what other functionality it needs. We are more than happy to talk about our plans as well. 
 
 %If you haven't done any birdsong processing before, make sure that you read Section~\ref{labelling}, which works through an example. 
@@ -124,9 +124,7 @@ You can also play a segment of sound, assuming that a segment is selected. We wi
 
 \subsection{Performing Segmentation}
 
-\item Segmentation has changed slightly in this version of the software. 
-
-\item You select and edit a segment by clicking on it with one of the mouse buttons (left or right), and create one by using the other mouse button. You can select which performs which action using the `Mouse settings' of the `Interface settings' in the Appearance menu.
+\item You select and edit a segment by clicking on it with one of the mouse buttons (left or right), and create one by using the other mouse button. You can select which performs which action using the `Mouse settings' of the `Interface settings' in the Appearance menu. 
 
 \item There are three options for how to create a segment. You select one of them in the `Mouse settings' of the `Interface settings' in the Appearance menu:
 	\begin{itemize}
@@ -151,6 +149,8 @@ You can also play a segment of sound, assuming that a segment is selected. We wi
 
 \item By default, the software only allows one bird type to be specified for each segment. However, there may be times when you wish to label multiple species in one box (for example, for the dawn chorus). In that case, choose `Default to multiple species' in the `Interface settings'. Now, when you choose a bird from the list it will be ticked, and the menu will not close automatically, allowing you to make multiple selections. To unselect something, click on it again. When you make a new segment, `Don't Know' if selected by default. Choosing any other option deselects `Don't Know'. You can reselect it if you do want that it in the list. 
 
+\item You can denoise a single segment by selecting it, and then pressing the buttons with a paintbrush on in the `Controls' section (13). 
+
 \item The segments that are drawn on the screen have different colours. They are changeable in the `Interface settings', but by default are:
 	\begin{description} 
 	\item[Blue] This segment is currently selected. You can play it by pressing the buttons in 14, or give it a new label. 
@@ -168,7 +168,7 @@ You can also play a segment of sound, assuming that a segment is selected. We wi
 	\item[Green] if all the segments in that section are labelled with definite species. 
 	\end{description}
 	
-\item You can click on those rectangles in (3), and they will update the amplitude and spectrogram plots to show that section of the file. This is a good way to move through the file quickly.
+\item You can click on the rectangles in (3), and they will update the amplitude and spectrogram plots to show that section of the file. This is a good way to move through the file quickly.
 
 \item Segments can be moved by dragging them, or resized by dragging the left and right ends, just like the Overview highlight. For bounded-frequency boxes, drag the handle on the top right corner of the box to resize. (All these interactions use the non-drawing mouse button.)
 
@@ -206,13 +206,14 @@ These options will mostly provide dialog boxes that ask you to make choices.
 \item [Denoise] Runs some programs that try to get rid of the noise in the sound file so that the birdcalls are easier to see. 
 \item [Add metadata about noise] Allows the user to specify if the sound file is particularly corrupted by noise, and also to identify the type(s) if known. This can be an optional datafield, or made compulsory for each file by choosing the appropriate option in the `Interface settings'.
 \item [Show fundamental frequency] Plots an estimate of the fundamental frequency for each call as a red line on the spectrogram.
+\item [Show spectral derivatives] Plots the points that have significant spectral derivative in the plot.
 \item [Segment] You can ask the computer to segment the calls automatically. 
 We currently provide 3 options, and you can try them to see how well they work.
 %\item [Find Matches] If you select a segment (so that its box is green) and then press this button the program will look for others that are similar. It does not currently deal well with nosie. 
 %\item [Filter Spectrogram] This tries to clean the spectrogram for easier viewing.
 \item [Human Review] These two options provide two different ways to view the segments and their labels for easier checking. The option to Show all pages (in `Interface settings') decides on whether to view segments in an entire file, or just the current 5 minutes of it. 
 	\begin{description}
-	\item [Human Review [All segments]] This option shows the segments one-by-one in time order (Figure~\ref{check1}).
+	\item [Human Review [All segments]] This option shows the segments one-by-one in time order (Figure~\ref{check1}). Make the window larger if the spectrogram is too large for the window. 
 	\begin{figure}
 	\centering
 	\includegraphics[width=.6\textwidth]{Figs/review1}
@@ -220,16 +221,42 @@ We currently provide 3 options, and you can try them to see how well they work.
 	\label{check1}
 	\end{figure}
 	To play the segment, click on the play button. Green bars mark the limits of current segment, and a couple of seconds of context are provided around it. You can also change the spectrogram brightness to make it easier to review. If the label is correct, click on the green tick, which will make the next image load. If not, select the correct label before clicking the tick button. If you have allowed multiple species selection you can pick several options. To delete a segment, click on the red dustbin button. To move back to the previous one, click the back arrow; note that this will not save your current changes. 
-	\item [Human Review [Choose species]] This option asks you to choose a bird from those found in the current file. For each segment that is wrongly labelled, click on its picture (the colour map will change). These segments will be deleted (Figure~\ref{check2}). By default, the program will automatically save the corrections in a temporary folder so that they can be used to help us improve these classifications in the future. You can stop this behaviour in the `Interface settings' interface. You can change the brightness and contrast here as well, and also play the sounds by hovering on the image, and then clicking on the play button when it appears. 
+	\item [Human Review [Choose species]] This option asks you to choose a bird from those found in the current file. It will then show a set of spectrograms from the file. Make the window larger to see more of them. For each segment that is wrongly labelled, click on its picture (it will be marked with a cross). These segments will be deleted (Figure~\ref{check2}). If you click again, it will be marked with a question mark, and if you click again then it will cycle back to being accepted. By default, the program will automatically save the corrections in a temporary folder so that they can be used to help us improve these classifications in the future. You can stop this behaviour in the `Interface settings' interface. You can change the brightness and contrast here as well, and also play the sounds by hovering on the image, and then clicking on the play button when it appears. 
 	\begin{figure}
 	\centering
-	\includegraphics[width=.4\textwidth]{Figs/Check2}
+	\includegraphics[width=.4\textwidth]{Figs/singlespecies}
 	\caption{Example of the window for Human Review [Choose species].}
 	\label{check2}
 	\end{figure}
 	\end{description}
 
 \item [Export segments to Excel] This enables the user to save a summary of the annotation of the currently opened file into an Excel workbook (in the same location as the current sound file), as is described in Section~\ref{sec:outputs}. 
+
+\item [Train a species detector] A significant new feature of this version of AviaNZ is that you can now train your own filters. The process is relatively simple. 
+    \begin{enumerate}
+    \item Make a folder that contains a set of sound files that contain calls of your bird of interest. They can be of any quality, and there can be other birds present in them. 
+    \item Use the manual interface to label the calls. The more examples of calls from the particular species you mark, the better. You will probably need at least 20 examples of each type of call for good results.
+    \item Select the `Train a species detector' option in the `Actions' menu. The dialog shown in Figure~\ref{fig:train} will appear. 
+    \item Work left to right through this dialog, first selecting the folder where your sound files are, then the bird species you wish to train for (the list will pre-populate from your annotations in those files). Click on `Prepare for Training', and AviaNZ will then attempt to fill in values for Step 2, based on your data. You can change these options if you wish to. When you click on `Train', AviaNZ will run through your files and train a filter for your bird species. It will then produce a plot (shown in Figure~\ref{fig:selectfilter}) that you can use to select how you wish to balance false positives and false negatives. The better the true positive rate you want (so that the filter detects all examples of the sounds you are interested in, no matter how far away they are), the more false positives (incorrect detections, either or other calls, or just noisy sections of the recording) the filter will produce when in use. 
+    To choose a value for that trade-off, double click on the graph at a point on one of the lines to select those parameter values. We recommend trying to keep the false positive rate below 10\%. After confirming this for the program, the filter will be created.
+    \item Before starting to use it, in Step 3 you should choose a folder containing indepedent test data to ensure that the filter works. 
+    \item This filter is saved, and will be available in the Segmentation options and also in the Batch Processing window for you to use. If you want to copy it to another computer, you can find it in \url{C:/Users/username/AppData/Roaming/AviaNZ/Filters} for Windows and \url{~/.avianz/Filters} for Mac and Linux.
+    \end{enumerate}
+
+    \begin{figure}
+    \centering
+    \includegraphics[width=.6\textwidth]{Figs/train}
+    \caption{The dialog for training a species filter.}
+    \label{fig:train}
+    \end{figure}
+
+    \begin{figure}
+    \centering
+    \includegraphics[width=.4\textwidth]{Figs/ROC_Curve_zoom}
+    \caption{As part of the training process, AviaNZ will show a number of curves showing how different parameter values trade-off between false positives, and false negatives on the training data. A perfect classifier would be on the top-left of the plot, spotting every call and not labelling any other calls as your species. In practice, if you want to see every example of your species calling, the classifier will also make more mistakes where it labels other calls (or noises) as your species: false positives. This means that you will need to spend more time reviewing the outputs after using the filter. }
+    \label{fig:selectfilter}
+    \end{figure}
+
 \item [Save as image] Saves the spectrogram currently visible on the screen as an image.
 \item [Save selected sound] Saves a selected segment as a short sound file.
 \end{description}
@@ -238,7 +265,7 @@ We currently provide 3 options, and you can try them to see how well they work.
 
 \begin{description}
 \item [Help] Gives access to this file.
-\item [Cheat sheet] Provides a set of examples of common bird calls. 
+\item [Cheat sheet] Links to our webpage to see examples of New Zealand bird spectrograms and calls, mostly taken from New Zealand Birds Online.
 \end{description}
 
 

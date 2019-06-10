@@ -3774,6 +3774,7 @@ class AviaNZ(QMainWindow):
     def trainWaveletDialog(self):
         """ Create the wavelet training dialog for the relevant menu item
         """
+        self.saveSegments()
         self.waveletTDialog = Dialogs.WaveletTrain(np.max(self.audiodata))
         self.waveletTDialog.show()
         self.waveletTDialog.activateWindow()
