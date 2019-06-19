@@ -22,7 +22,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os, re, platform, fnmatch, sys
 
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtGui import QIcon, QPixmap, QApplication
 from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem
 from PyQt5.QtMultimedia import QAudioFormat
 from PyQt5.QtCore import Qt, QDir
@@ -41,7 +41,7 @@ import WaveletSegment
 import SupportClasses
 import Dialogs
 
-import json, copy
+import json, copy, time
 
 
 class AviaNZ_batchProcess(QMainWindow):
@@ -215,25 +215,32 @@ class AviaNZ_batchProcess(QMainWindow):
         if self.species == "All species":
             self.method = "Default"
         else:
+            self.speciesData = json.load(open(os.path.join(self.filtersDir, self.species+'.txt')))
             self.method = "Wavelets"
 
-        # directory found, so find any .wav files
-        total=0
+        # Parse the user-set time window to process
+        timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
+        timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
+
+        # LIST ALL WAV files that will be processed
+        allwavs = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 if filename.endswith('.wav'):
-                    total = total+1
+                    allwavs.append(os.path.join(root, filename))
+        total = len(allwavs)
 
         # LOG FILE is read here
         # note: important to log all analysis settings here
         self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'),
-                                self.species, [self.method, self.w_res.value()])
+                                self.species, [self.method, self.w_res.value(), timeWindow_s, timeWindow_e])
 
         # Ask for RESUME CONFIRMATION here
         confirmedResume = QMessageBox.Cancel
         if self.log.possibleAppend:
-            if len(self.log.filesDone) < total:
-                text = "Previous analysis found in this folder (analyzed " + str(len(self.log.filesDone)) + " out of " + str(total) + " files in this folder).\nWould you like to resume that analysis?"
+            filesExistAndDone = set(self.log.filesDone).intersection(set(allwavs))
+            if len(filesExistAndDone) < total:
+                text = "Previous analysis found in this folder (analyzed " + str(len(filesExistAndDone)) + " out of " + str(total) + " files in this folder).\nWould you like to resume that analysis?"
                 msg = SupportClasses.MessagePopup("t", "Resume previous batch analysis?", text)
                 msg.setStandardButtons(QMessageBox.No | QMessageBox.Yes)
                 confirmedResume = msg.exec_()
@@ -252,7 +259,7 @@ class AviaNZ_batchProcess(QMainWindow):
             self.filesDone = []
         elif confirmedResume == QMessageBox.Yes:
             # ignore files in log
-            self.filesDone = self.log.filesDone
+            self.filesDone = filesExistAndDone
 
         # Ask for FINAL USER CONFIRMATION here
         cnt = len(self.filesDone)
@@ -286,145 +293,213 @@ class AviaNZ_batchProcess(QMainWindow):
             for f in self.log.filesDone:
                 self.log.appendFile(f)
 
-        # delete old results (xlsx)
-        # ! WARNING: any Detection...xlsx files will be DELETED,
-        # ! ANYWHERE INSIDE the specified dir, recursively
-        for root, dirs, files in os.walk(str(self.dirName)):
-            for filename in files:
-                if fnmatch.fnmatch(filename, '*DetectionSummary_*.xlsx'):
-                    print("Removing excel file %s" % filename)
-                    os.remove(os.path.join(root, filename))
-
         # MAIN PROCESSING starts here
-        # Read the time window to process
-        timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
-        timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
+        processingTime = 0
+        cleanexit = 0
+        cnt = 0
         with pg.BusyCursor():
+            for filename in allwavs:
+                processingTimeStart = time.time()
+                self.filename = filename
+                self.segments = []
+                newSegments = []
+                # get remaining run time in min
+                hh,mm = divmod(processingTime * (total-cnt) / 60, 60)
+                cnt = cnt+1
+                print("*** Processing file %d / %d : %s ***" % (cnt, total, filename))
+                self.statusBar().showMessage("Processing file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm))
+                QtGui.QApplication.processEvents()
+
+                # if it was processed previously (stored in log)
+                if filename in self.filesDone:
+                    # skip the processing:
+                    print("File %s processed previously, skipping" % filename)
+                    continue
+
+                # check if file not empty
+                if os.stat(filename).st_size < 100:
+                    print("File %s empty, skipping" % filename)
+                    self.log.appendFile(filename)
+                    continue
+
+                # test the selected time window if it is a doc recording
+                inWindow = False
+
+                DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
+                if DOCRecording:
+                    startTime = DOCRecording.group(2)
+                    sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                    if timeWindow_s == timeWindow_e:
+                        inWindow = True
+                    elif timeWindow_s < timeWindow_e:
+                        if sTime >= timeWindow_s and sTime <= timeWindow_e:
+                            inWindow = True
+                        else:
+                            inWindow = False
+                    else:
+                        if sTime >= timeWindow_s or sTime <= timeWindow_e:
+                            inWindow = True
+                        else:
+                            inWindow = False
+                else:
+                    sTime=0
+                    inWindow = True
+
+                if DOCRecording and not inWindow:
+                    print("Skipping out-of-time-window recording")
+                    self.log.appendFile(filename)
+                    continue
+
+                # ALL SYSTEMS GO: process this file
+                print("Loading file...")
+                self.loadFile(wipe=(self.species == "All species"))
+                print("Segmenting...")
+                if self.species != 'All species':
+                    # wipe same species:
+                    self.segments[:] = [s for s in self.segments if self.species not in s[4] and self.species+'?' not in s[4]]
+                    ws = WaveletSegment.WaveletSegment(self.speciesData, 'dmey2')
+                    # 'recaa' mode
+                    newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
+                                                    d=False, f=True, wpmode="new")
+                else:
+                    # wipe all segments:
+                    self.segments = []
+                    self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
+                    newSegments=self.seg.bestSegments()
+                print("Segmentation complete. %d new segments marked" % len(newSegments))
+
+                # post process to remove short segments, wind, rain, and use F0 check.
+                print("Post processing...")
+                if self.species == 'All species':
+                    post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                                                      segments=newSegments, spInfo={})
+                    post.wind()
+                    post.rainClick()
+                else:
+                    post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                                                      segments=newSegments, spInfo=self.speciesData)
+                    #   post.short()  # TODO: keep 'deleteShort' in filter file?
+                    if self.speciesData['Wind']:
+                        pass
+                        # post.wind() - omitted in sppSpecific cases
+                        # print('After wind: ', post.segments)
+                    if self.speciesData['Rain']:
+                        pass
+                        # post.rainClick() - omitted in sppSpecific cases
+                        # print('After rain: ', post.segments)
+                    if self.speciesData['F0']:
+                        post.fundamentalFrq(self.filename, self.speciesData)
+                        # print('After ff: ', post.segments)
+                newSegments = post.segments
+                print('Segments after post pro: ', newSegments)
+
+                # export segments
+                cleanexit = self.saveAnnotation(self.segments, newSegments)
+                if cleanexit != 1:
+                    print("Warning: could not save segments!")
+                # Log success for this file
+                self.log.appendFile(self.filename)
+
+                # track how long it took to process one file:
+                processingTime = time.time() - processingTimeStart
+                print("File processed in", processingTime)
+            # END of audio batch processing
+
+            # delete old results (xlsx)
+            # ! WARNING: any Detection...xlsx files will be DELETED,
+            # ! ANYWHERE INSIDE the specified dir, recursively
             for root, dirs, files in os.walk(str(self.dirName)):
                 for filename in files:
-                    self.filename = os.path.join(root, filename)
-                    self.segments = []
-                    newSegments = []
-                    if self.filename in self.filesDone:
-                        # skip the processing, but still need to update excel:
-                        print("File %s processed previously, skipping" % filename)
-                        # TODO: check the following line, if skip no need to load .wav (except for getting file length for sheet3?)
-                        # TODO: Instead can we keep length of the recording as part of the meta info in [-1 ... -1]
-                        self.loadFile(wipe=(self.species == "All species"))
-                        DOCRecording = re.search('(\d{6})_(\d{6})', filename)
-                        if DOCRecording:
-                            startTime = DOCRecording.group(2)
-                            sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
-                        else:
-                            sTime = 0
-                        pagelen = np.ceil(self.datalength/self.sampleRate)
-                        if self.species == 'All species':
-                            out = SupportClasses.exportSegments(self.dirName, self.filename, pagelen, segments=self.segments, species=[], startTime=sTime, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
-                        else:
-                            out = SupportClasses.exportSegments(self.dirName, self.filename, pagelen, segments=self.segments, species=[self.species], startTime=sTime, sampleRate=self.sampleRate,method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
-                        out.excel()
+                    filenamef = os.path.join(root, filename)
+                    if fnmatch.fnmatch(filenamef, '*DetectionSummary_*.xlsx'):
+                        print("Removing excel file %s" % filenamef)
+                        os.remove(filenamef)
+
+            # Determine all species detected in at least one file
+            # (two loops ensure that all files will have pres/abs xlsx for all species.
+            # Ugly, but more readable this way)
+            spList = set([self.species])
+            for filename in allwavs:
+                if not os.path.isfile(filename + '.data'):
+                    continue
+
+                file = open(filename + '.data', 'r')
+                segments = json.load(file)
+                file.close()
+
+                for seg in segments:
+                    if seg[0] == -1:
                         continue
-
-                    if filename.endswith('.wav'):
-                        cnt = cnt+1
-                        # check if file not empty
-                        print("Processing file " + str(cnt) + "/" + str(total))
-                        print("Opening file %s" % filename)
-                        self.statusBar().showMessage("Processing file " + str(cnt) + "/" + str(total))
-                        if os.stat(self.filename).st_size < 100:
-                            print("Skipping empty file")
-                            self.log.appendFile(self.filename)
-                            continue
-
-                        # test the selected time window if it is a doc recording
-                        inWindow = False
-
-                        DOCRecording = re.search('(\d{6})_(\d{6})', filename)
-                        if DOCRecording:
-                            startTime = DOCRecording.group(2)
-                            sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
-                            if timeWindow_s == timeWindow_e:
-                                inWindow = True
-                            elif timeWindow_s < timeWindow_e:
-                                if sTime >= timeWindow_s and sTime <= timeWindow_e:
-                                    inWindow = True
-                                else:
-                                    inWindow = False
-                            else:
-                                if sTime >= timeWindow_s or sTime <= timeWindow_e:
-                                    inWindow = True
-                                else:
-                                    inWindow = False
+                    for birdName in seg[4]:
+                        if birdName.endswith('?'):
+                            spList.add(birdName[:-1])
                         else:
-                            sTime=0
-                            inWindow = True
+                            spList.add(birdName)
 
-                        if DOCRecording and not inWindow:
-                            print("Skipping out-of-time-window recording")
-                            self.log.appendFile(self.filename)
-                            continue
+            # Save the new excels
+            for filename in allwavs:
+                if not os.path.isfile(filename + '.data'):
+                    continue
 
-                        # ALL SYSTEMS GO: process this file
-                        print("Loading file...")
-                        self.loadFile(wipe=(self.species == "All species"))
-                        print("Creating wavelet packet...")
-                        if self.species != 'All species':
-                            # wipe same species:
-                            self.segments[:] = [s for s in self.segments if self.species not in s[4] and self.species+'?' not in s[4]]
-                            self.speciesData = json.load(open(os.path.join(self.filtersDir, self.species+'.txt')))
-                            ws = WaveletSegment.WaveletSegment(self.speciesData, 'dmey2')
-                            # 'recaa' mode
-                            newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
-                                                            d=False, f=True, wpmode="new")
-                            print('Segments after wavelet seg: ', newSegments)
-                        else:
-                            # wipe all segments:
-                            self.segments = []
-                            self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
-                            newSegments=self.seg.bestSegments()
+                file = open(filename + '.data', 'r')
+                segments = json.load(file)
+                file.close()
 
-                        # post process to remove short segments, wind, rain, and use F0 check.
-                        if self.species == 'All species':
-                            post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                              segments=newSegments, spInfo={})
-                            post.wind()
-                            post.rainClick()
-                        else:
-                            post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                              segments=newSegments, spInfo=self.speciesData)
-                            #   post.short()  # TODO: keep 'deleteShort' in filter file?
-                            if self.speciesData['Wind']:
-                                pass
-                                # post.wind() - omitted in sppSpecific cases
-                                # print('After wind: ', post.segments)
-                            if self.speciesData['Rain']:
-                                pass
-                                # post.rainClick() - omitted in sppSpecific cases
-                                # print('After rain: ', post.segments)
-                            if self.speciesData['F0']:
-                                post.fundamentalFrq(self.filename, self.speciesData)
-                                # print('After ff: ', post.segments)
-                        newSegments = post.segments
-                        print('Segments after post pro: ', newSegments)
+                # This could be incompatible with old .data files that didn't store file size
+                pagelen = np.ceil(segments[0][1])
+                if pagelen<=0:
+                    pagelen = max([s[1] for s in segments])
 
-                        # Save the excel and the annotation
-                        pagelen = np.ceil(self.datalength/self.sampleRate)
-                        if self.species == 'All species':
-                            out = SupportClasses.exportSegments(self.dirName, self.filename, pagelen, segments=[], segmentstoCheck=newSegments, species=[], startTime=sTime, sampleRate=self.sampleRate, method=self.method, resolution=self.w_res.value(), operator="Auto", batch=True)
-                        else:
-                            out = SupportClasses.exportSegments(self.dirName, self.filename, pagelen, segments=self.segments, segmentstoCheck=newSegments, species=[self.species], startTime=sTime, sampleRate=self.sampleRate, method=self.method, resolution=self.w_res.value(), operator="Auto", sampleRate_species=self.speciesData['SampleRate'], fRange=self.speciesData['FreqRange'], batch=True)
-                        # note: excel output success isn't used at this point
-                        filesuccess = out.excel()
-                        out.saveAnnotation()
-                        # Log success for this file
-                        self.log.appendFile(self.filename)
-            self.log.file.close()
-            self.statusBar().showMessage("Processed all %d files" % total)
-            msg = SupportClasses.MessagePopup("d", "Finished", "Finished processing. Would you like to return to the start screen?")
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            reply = msg.exec_()
-            if reply == QMessageBox.Yes:
-                QApplication.exit(1)
+                out = SupportClasses.exportSegments(self.dirName, filename, pagelen, segments=segments, resolution=self.w_res.value(), species=list(spList), batch=True)
+                out.excel()
+
+        # END of processing and exporting. Final cleanup
+        self.log.file.close()
+        self.statusBar().showMessage("Processed all %d files" % total)
+        msg = SupportClasses.MessagePopup("d", "Finished", "Finished processing. Would you like to return to the start screen?")
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        reply = msg.exec_()
+        if reply == QMessageBox.Yes:
+            QApplication.exit(1)
+
+    def saveAnnotation(self, segmentsOld, segmentsNew):
+        """ Saves current segments to file.
+            segmentsOld - saved untouched
+            segmentsNew - assign species to them. """
+
+        annotation = []
+        # annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), self.operator, self.reviewer, -1])
+        operator = "Auto"
+        reviewer = ""
+        noiseLevel = None
+        noiseTypes = []
+        annotation.append([-1, float(self.datalength)/self.sampleRate, operator, reviewer, [noiseLevel, noiseTypes]])
+
+        # These parameters will be set for the new segments:
+        if self.species != 'All species':
+            y1 = self.speciesData['FreqRange'][0]/2
+            y2 = min(self.sampleRate//2, self.speciesData['SampleRate']/2)
+            species = [self.species + "?"]
+        else:
+            y1 = 0
+            y2 = self.sampleRate//2
+            species = ["Don't Know"]
+
+        for seg in segmentsOld:
+            annotation.append(seg)
+        for seg in segmentsNew:
+            annotation.append([float(seg[0]), float(seg[1]), y1, y2, species])
+
+        if isinstance(self.filename, str):
+            file = open(self.filename + '.data', 'w')
+        else:
+            file = open(str(self.filename) + '.data', 'w')
+
+        json.dump(annotation, file)
+        file.write("\n")
+        file.close()
+        return 1
+
 
     def fillFileList(self,fileName):
         """ Generates the list of files for the file listbox.
@@ -782,100 +857,133 @@ class AviaNZ_reviewAll(QMainWindow):
             msg.exec_()
             return
 
-        # directory found, reviewer provided, so start review
-        # 1. find any .wav+.data files
-        # 2. delete old results (xlsx)
-        # ! WARNING: any Detection...xlsx files will be DELETED,
-        # ! ANYWHERE INSIDE the specified dir, recursively
-        total = 0
+        # LIST ALL WAV + DATA pairs that can be processed
+        allwavs = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
-                filename = os.path.join(root, filename)
-
-                if fnmatch.fnmatch(filename, '*DetectionSummary_*.xlsx'):
-                    print("Removing excel file %s" % filename)
-                    os.remove(filename)
-
-                if filename.endswith('.wav') and os.path.isfile(filename + '.data'):
-                    total = total + 1
-
+                filenamef = os.path.join(root, filename)
+                if filename.endswith('.wav') and os.path.isfile(filenamef + '.data'):
+                    allwavs.append(filenamef)
+        total = len(allwavs)
+        print(total, "files found")
 
         # main file review loop
         cnt = 0
         filesuccess = 1
-        for root, dirs, files in os.walk(str(self.dirName)):
-            for filename in files:
-                DOCRecording = re.search('(\d{6})_(\d{6})', filename)
-                filename = os.path.join(root, filename)
-                self.filename = filename
+        for filename in allwavs:
+            self.filename = filename
+
+            cnt=cnt+1
+            print("*** Reviewing file %d / %d : %s ***" % (cnt, total, filename))
+            self.statusBar().showMessage("Reviewing file " + str(cnt) + "/" + str(total) + "...")
+            QtGui.QApplication.processEvents()
+
+            if not os.path.isfile(filename + '.data'):
+                print("Warning: .data file lost for file", filename)
+                continue
+
+            if os.stat(filename).st_size < 100:
+                print("File %s empty, skipping" % filename)
+                continue
+
+            DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
+            if DOCRecording:
+                startTime = DOCRecording.group(2)
+                sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+            else:
+                sTime = 0
+
+            # load segments
+            self.segments = json.load(open(filename + '.data'))
+
+            if len(self.segments) == 0:
+                # skip review dialog, but save the name into excel
+                print("No segments found in file %s" % filename)
                 filesuccess = 1
-                if filename.endswith('.wav') and os.path.isfile(filename + '.data'):
-                    print("Opening file %s" % filename)
-                    cnt=cnt+1
-                    if os.stat(filename).st_size < 100:
-                        print("Skipping empty file")
-                        continue
+            # file has segments, so call the right review dialog:
+            # (they will update self.segments and store corrections)
+            elif self.species == 'All species':
+                self.loadFile(filename)
+                filesuccess = self.review_all(sTime)
+            else:
+                # check if there are any segments for this single species
+                spPresent = False
+                for seg in self.segments:
+                    # convert single-species IDs to [species]
+                    if type(seg[4]) is not list:
+                        seg[4] = [seg[4]]
 
-                    if DOCRecording:
-                        startTime = DOCRecording.group(2)
-                        sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
-                    else:
-                        sTime = 0
-
-                    self.statusBar().showMessage("Reviewing file " + str(cnt) + "/" + str(total) + "...")
-                    # load segments
-                    self.segments = json.load(open(filename + '.data'))
-                    # read in operator from first "segment"
-                    if len(self.segments)>0 and self.segments[0][0] == -1:
-                        self.operator = self.segments[0][2]
-                        del self.segments[0]
-                    else:
-                        self.operator = "None"
-
-                    self.loadFile()
-                    if len(self.segments) == 0:
-                        # and skip review dialog, but save the name into excel
-                        print("No segments found in file %s" % filename)
-                    # file has segments, so call the right review dialog:
-                    elif self.species == 'All species':
-                        filesuccess = self.review_all(sTime)
-                    else:
-                        # check if there are any segments for this single species
-                        spPresent = False
-                        for seg in self.segments:
-                            # convert single-species IDs to [species]
-                            if type(seg[4]) is not list:
-                                seg[4] = [seg[4]]
-
-                            if self.species in seg[4] or self.species+'?' in seg[4]:
-                                spPresent = True
-                        if not spPresent:
-                            print("No segments found in file %s" % filename)
-                        else:
-                            # thus, we can be sure that >=1 relevant segment exists
-                            # if this dialog is called.
-                            filesuccess = self.review_single(sTime)
-                            print("File success: ", filesuccess)
-
-                    # Store the output to an Excel file (no matter if review dialog exit was clean)
-                    pagelen = np.ceil(self.datalength/self.sampleRate)
-                    out = SupportClasses.exportSegments(self.dirName, self.filename, pagelen, segments=self.segments, startTime=sTime, sampleRate=self.sampleRate, resolution=self.w_res.value(), operator=self.operator, reviewer=self.reviewer, species=[self.species], batch=True)
-                    # also catch the return value from this
-                    filesuccess = filesuccess & out.excel()
-                    # Save the corrected segment JSON
-                    out.saveAnnotation()
-
-                    # break out of both loops if Esc detected
-                    # (return value will be 1 for correct close, 0 for Esc)
-                    if filesuccess == 0:
-                        break
-
-            # after the loop, check if file wasn't Esc-broken
+                    if self.species in seg[4] or self.species+'?' in seg[4]:
+                        spPresent = True
+                if not spPresent:
+                    print("No segments found in file %s" % filename)
+                else:
+                    # thus, we can be sure that >=1 relevant segment exists
+                    # if this dialog is called.
+                    self.loadFile(filename)
+                    filesuccess = self.review_single(sTime)
+            # break out of review loop if Esc detected
+            # (return value will be 1 for correct close, 0 for Esc)
             if filesuccess == 0:
+                print("Review stopped")
                 break
+            # otherwise save the corrected segment JSON
+            cleanexit = self.saveAnnotation(self.segments)
+            if cleanexit != 1:
+                print("Warning: could not save segments!")
+        # END of main review loop
 
-        # loop complete, all files checked
-        # save the excel at the end
+        with pg.BusyCursor():
+            # delete old results (xlsx)
+            # ! WARNING: any Detection...xlsx files will be DELETED,
+            # ! ANYWHERE INSIDE the specified dir, recursively
+            for root, dirs, files in os.walk(str(self.dirName)):
+                for filename in files:
+                    filenamef = os.path.join(root, filename)
+                    if fnmatch.fnmatch(filenamef, '*DetectionSummary_*.xlsx'):
+                        print("Removing excel file %s" % filenamef)
+                        os.remove(filenamef)
+
+            # Determine all species detected in at least one file
+            # (two loops ensure that all files will have pres/abs xlsx for all species.
+            # Ugly, but more readable this way)
+            spList = set([self.species])
+            for filename in allwavs:
+                if not os.path.isfile(filename + '.data'):
+                    continue
+
+                file = open(filename + '.data', 'r')
+                segments = json.load(file)
+                file.close()
+
+                for seg in segments:
+                    if seg[0] == -1:
+                        continue
+                    for birdName in seg[4]:
+                        if birdName.endswith('?'):
+                            spList.add(birdName[:-1])
+                        else:
+                            spList.add(birdName)
+
+            # Collect all .data contents to an Excel file (no matter if review dialog exit was clean)
+            for filename in allwavs:
+                if not os.path.isfile(filename + '.data'):
+                    continue
+
+                file = open(filename + '.data', 'r')
+                segments = json.load(file)
+                file.close()
+
+                # This could be incompatible with old .data files that didn't store file size
+                pagelen = np.ceil(segments[0][1])
+                if pagelen<=0:
+                    pagelen = max([s[1] for s in segments])
+
+                # Still exporting the current species even if no calls were detected
+                out = SupportClasses.exportSegments(self.dirName, filename, pagelen, segments=segments, resolution=self.w_res.value(), species=list(spList), batch=True)
+                out.excel()
+
+        # END of review and exporting. Final cleanup
         self.statusBar().showMessage("Reviewed files " + str(cnt) + "/" + str(total))
         if filesuccess == 1:
             msg = SupportClasses.MessagePopup("d", "Finished", "All files checked. Would you like to return to the start screen?")
@@ -1005,8 +1113,26 @@ class AviaNZ_reviewAll(QMainWindow):
 
         return(1)
 
-    def loadFile(self):
-        wavobj = wavio.read(self.filename)
+    def saveAnnotation(self, segments):
+        """ Saves current segments to file.
+            All provided segments are saved as-is. """
+
+        for seg in segments:
+            if seg[0] == -1:
+                # update reviewer
+                seg[3] = self.reviewer
+        if isinstance(self.filename, str):
+            file = open(self.filename + '.data', 'w')
+        else:
+            file = open(str(self.filename) + '.data', 'w')
+
+        json.dump(segments, file)
+        file.write("\n")
+        file.close()
+        return 1
+
+    def loadFile(self, filename):
+        wavobj = wavio.read(filename)
         self.sampleRate = wavobj.rate
         self.audiodata = wavobj.data
         self.audioFormat.setChannelCount(np.shape(self.audiodata)[1])

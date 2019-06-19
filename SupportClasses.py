@@ -441,63 +441,49 @@ class postProcess:
         return energy, e2
 
 class exportSegments:
-    """ This class saves the batch detection results(Find Species) and also current annotations (AviaNZ interface)
-        in three different formats: time stamps, presence/absence, and per second presence/absence
-        in an excel workbook. It makes the workbook if necessary.
+    """ This class exports .data to xlsx in batch processing, review, or manual mode.
+        Three different sheets are produced in the workbook:
+        time stamps, presence/absence, and per second presence/absence.
+        It makes the workbook if necessary.
 
         Inputs
             dirName:    xlsx will be stored here
             filename:   file name to be recorded inside the xlsx
+            pagelen:    page length, seconds. If =datalength, entire data is treated as a single page.
             segments:   detected segments in form of [[s1,e1], [s2,e2],...]
                         OR in format [[s1, e1, fs1, fe1, sp1], [s2, e2, fs2, fe2, sp2], ...]
-                segmentstoCheck     : segments without confidence in form of [[s1,e1], [s2,e2],...]
-                confirmedSegments   : segments with confidence
-            species:    default species. e.g. 'Kiwi'. Default is 'all'
-            startTime:  start time of the recording (in DoC format). Default is 0
-            pagelen:    page length, seconds. If =datalength, entire data is treated as a single page.
-            sampleRate: sample rate
-            method:     e.g. 'Wavelets'. Default is 'Default'
+            species:    Species that is currently processed.
+                        Species in this list will get an xlsx even if none were detected,
+                        and any [s1,e1] segments will be assigned to this.
             resolution: output resolution on excel (sheet 3) in seconds. Default is 1
             batch:      if the output is coming from batch mode, will default to appending
-            seg_pos:    possible segments are needed apart from the segments when withConf is True. This is just to
-                        generate the annotation including the segments with conf (kiwi) and without confidence (kiwi?).
-            minLen: minimum length of a segment in secs
-
+            minLen:     minimum length of a segment in secs
+            numpages:   number of pages in this file (of size pagelen)
     """
 
-    def __init__(self, dirName, filename, pagelen, segments, confirmedSegments=[], segmentstoCheck=[], species=["Don't Know"], startTime=0, sampleRate=0, method="Default", resolution=1, batch=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1, fRange=[0, 0], noiseLevel=None, noiseTypes=[], sampleRate_species=0):
+    def __init__(self, dirName, filename, pagelen, segments, species=["Don't Know"], resolution=1, batch=False, minLen=0, numpages=1):
 
         self.species=species
         # convert 2-col lists to 5-col lists, if needed
         self.segments = self.correctSegFormat(segments, [])
-        self.confirmedSegments = self.correctSegFormat(confirmedSegments, species)
-        if species==[]:
-            self.segmentstoCheck = self.correctSegFormat(segmentstoCheck, ["Don't Know"])
-        else:
-            self.segmentstoCheck = self.correctSegFormat(segmentstoCheck, [species[0] + "?"])
 
-        self.numpages=numpages
-        self.startTime=startTime
         self.dirName=dirName
         self.filename=filename
+        # extract start time of the recording (in DoC format). Default is 0
+        DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
+        if DOCRecording:
+            startTime = DOCRecording.group(2)
+            self.startTime = int(startTime[:2])*3600 + int(startTime[2:4])*60 + int(startTime[4:6])
+        else:
+            self.startTime = 0
+        self.numpages=numpages
         self.pagelen = math.ceil(pagelen)
-        self.sampleRate=sampleRate
-        self.method=method
         self.resolution = resolution
-        self.seg_pos=seg_pos #segmentstoCheck
-        self.operator = operator
-        self.reviewer = reviewer
         self.minLen = minLen
-        self.fRange = fRange
-        self.noiseLevel = noiseLevel
-        self.noiseTypes = noiseTypes
-        self.sampleRate_species = sampleRate_species
         self.batch = batch
 
     def correctSegFormat(self, seglist, species):
         # Checks and if needed corrects 2-col segments to 5-col segments.
-        # segments can be provided as confirmed/toCheck lists,
-        # while everything from segments list is exported as-is.
         if len(seglist)>0:
             if len(seglist[0])==2:
                 print("Using old format segment list")
@@ -508,7 +494,7 @@ class exportSegments:
                     seg.append(species)
                 return(seglist)
             elif len(seglist[0])==5:
-                #print("using new format segment list")
+                # using new format segment list
                 return(seglist)
             else:
                 print("ERROR: incorrect segment format")
@@ -556,6 +542,8 @@ class exportSegments:
         for sp in self.species:
             speciesList.add(sp)
         for seg in self.segments:
+            if seg[0]==-1:
+                continue
             for birdName in seg[4]:
                 segmentSpecies = birdName
                 if birdName.endswith('?'):
@@ -683,7 +671,9 @@ class exportSegments:
             # incl. potential assignments ('Kiwi?').
             # if species=="All", take ALL segments.
             segmentsWPossible = []
-            for seg in self.segments + self.confirmedSegments + self.segmentstoCheck:
+            for seg in self.segments:
+                if seg[0] == -1:
+                    continue
                 if len(seg) == 2:
                     seg.append(0)
                     seg.append(0)
@@ -703,7 +693,6 @@ class exportSegments:
             # (assuming all pages are of same length as current data)
             for p in range(0, self.numpages):
                 detected = np.zeros(self.pagelen)
-                print("exporting page %d" % p)
                 for seg in segmentsWPossible:
                     for t in range(self.pagelen):
                         # convert within-page time to segment (within-file) time
@@ -716,30 +705,6 @@ class exportSegments:
             # Save the file
             wb.save(self.eFile)
         return 1
-
-    def saveAnnotation(self):
-        # Save annotations - batch processing
-        annotation = []
-        # annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), self.operator, self.reviewer, -1])
-        annotation.append([-1, self.pagelen*self.sampleRate, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]])
-        y1 = self.fRange[0]/2
-        y2 = self.sampleRate_species/2
-        if y2 > self.sampleRate/2:
-            y2 = self.sampleRate/2-self.sampleRate*0.01
-        for seg in self.confirmedSegments:
-            annotation.append([float(seg[0]), float(seg[1]), y1, y2, seg[4]])
-        for seg in self.segmentstoCheck:
-            annotation.append([float(seg[0]), float(seg[1]), y1, y2, seg[4]])
-        for seg in self.segments:
-            annotation.append([float(seg[0]), float(seg[1]), y1, y2, seg[4]])
-
-        if isinstance(self.filename, str):
-            file = open(self.filename + '.data', 'w')
-        else:
-            file = open(str(self.filename) + '.data', 'w')
-
-        json.dump(annotation, file)
-        file.write("\n")
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)

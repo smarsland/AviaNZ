@@ -3775,6 +3775,7 @@ class AviaNZ(QMainWindow):
     def trainWaveletDialog(self):
         """ Create the wavelet training dialog for the relevant menu item
         """
+        self.saveSegments()
         self.waveletTDialog = Dialogs.WaveletTrain(np.max(self.audiodata))
         self.waveletTDialog.show()
         self.waveletTDialog.activateWindow()
@@ -4455,7 +4456,7 @@ class AviaNZ(QMainWindow):
                     os.remove(file)
         # excel should be split by page size, but for short files just give the file size
         datalen = self.config['maxFileShow'] if self.nFileSections>1 else self.datalengthSec
-        out = SupportClasses.exportSegments(self.SoundFileDir, self.filename, datalen, self.segments, startTime=self.startTime, resolution=10, numpages=self.nFileSections, sampleRate=self.sampleRate, species=species)
+        out = SupportClasses.exportSegments(self.SoundFileDir, self.filename, datalen, self.segments, resolution=10, numpages=self.nFileSections, species=species)
         success = out.excel()
         # add user notification
         if success==0:
