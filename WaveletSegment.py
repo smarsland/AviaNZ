@@ -736,6 +736,8 @@ class WaveletSegment:
         negative_nodes = [n + 1 for n in negative_nodes]
         # print("Negative nodes:", negative_nodes)
         # Remove any negatively correlated nodes
+        print("Final nodes before neg. node removal:", finalnodes)
+        print("Negative nodes:", negative_nodes)
         finalnodes = [[[item for item in sublst if item not in negative_nodes] for sublst in lst] for lst in finalnodes]
         return finalnodes, tpa, fpa, tna, fna
 
