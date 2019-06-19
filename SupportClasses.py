@@ -107,7 +107,7 @@ class postProcess:
     species:    species to consider
     """
 
-    def __init__(self,audioData=None, sampleRate=0, segments=[], spInfo={}):
+    def __init__(self, audioData=None, sampleRate=0, segments=[], spInfo={}):
         self.audioData = audioData
         self.sampleRate = sampleRate
         self.segments = segments
@@ -134,14 +134,14 @@ class postProcess:
                 continue
         self.segments = newSegments
 
-    def wind(self, Tmean_wind = 1e-8):
+    def wind(self, Tmean_wind = 2):
         """
         delete wind corrupted segments (targeting moderate wind and above) if no sign of kiwi (check len)
         Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
         """
         newSegments = copy.deepcopy(self.segments)
-        wind_lower = 2.0 * 100 / self.sampleRate
-        wind_upper = 2.0 * 250 / self.sampleRate
+        wind_lower = 2.0 * 50 / self.sampleRate
+        wind_upper = 2.0 * 500 / self.sampleRate
 
         for seg in self.segments:
             if seg[0] == -1:
@@ -156,7 +156,7 @@ class postProcess:
                 data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
 
                 f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
-
+                p = np.log10(p)
                 # check wind
                 limite_inf = int(round(p.__len__() * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
                 limite_sup = int(round(p.__len__() * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
