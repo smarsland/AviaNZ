@@ -371,8 +371,8 @@ class AviaNZ(QMainWindow):
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
         if not self.Hartley:
             actionMenu.addSeparator()
-            actionMenu.addAction("Denoise",self.showDenoiseDialog,"Ctrl+N")
-            actionMenu.addAction("Add metadata about noise", self.addNoiseData)
+            actionMenu.addAction("Denoise",self.showDenoiseDialog)
+            actionMenu.addAction("Add metadata about noise", self.addNoiseData, "Ctrl+N")
             #actionMenu.addAction("Find matches",self.findMatches)
             actionMenu.addSeparator()
             self.showFundamental = actionMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
@@ -1793,8 +1793,9 @@ class AviaNZ(QMainWindow):
             for w in range(int(self.datalengthSec)):
                 data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
                 f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
-                limsup = int(p.__len__() * 2 * 250 / self.sampleRate)
-                liminf = int(p.__len__() * 2 * 100 / self.sampleRate)
+                p = np.log10(p)
+                limsup = int(p.__len__() * 2 * 500 / self.sampleRate)
+                liminf = int(p.__len__() * 2 * 50 / self.sampleRate)
                 a_wind = p[liminf:limsup]
                 we_mean[w] = np.mean(a_wind)
                 we_std[w] = np.std(a_wind)
@@ -3902,8 +3903,8 @@ class AviaNZ(QMainWindow):
             MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
-            window=1
-            inc= None
+            window = 1
+            inc = None
             nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, d=False,
                                                             f=True, rf=True, learnMode="recaa", window=window, inc=inc)
             print("Filtered nodes: ", nodes)
@@ -3960,7 +3961,7 @@ class AviaNZ(QMainWindow):
                         # Get nodes for closest point
                         self.optimumNodesSel = nodes[M_min_ind][thr_min_ind]
 
-                        plt.close()
+                        # plt.close()   # If the user changed mind, let them choose another point without repeating heavy work
                         speciesData['Wind'] = wind
                         speciesData['Rain'] = rain
                         speciesData['F0'] = ff
@@ -4034,7 +4035,7 @@ class AviaNZ(QMainWindow):
             return 0, 0
         if ind.size < 2:
             f0 = pitch
-            return f0,f0
+            return f0, f0
         else:
             return round(np.min(pitch)), round(np.max(pitch))
 
