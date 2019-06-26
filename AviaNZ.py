@@ -349,7 +349,7 @@ class AviaNZ(QMainWindow):
             specMenu.addAction("Show training diagnostics",self.showDiagnosticDialog)
             extraMenu = specMenu.addMenu("Diagnostic plots")
             extraGroup = QActionGroup(self)
-            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
+            for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Rain", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
                 em = extraMenu.addAction(ename)
                 em.setCheckable(True)
                 if ename == self.extra:
@@ -1447,10 +1447,10 @@ class AviaNZ(QMainWindow):
                 ind = ind*W/(self.config['window_width'])
                 x = (pitch*2/self.sampleRate*np.shape(self.sg)[1]).astype('int')
 
-                x = medfilt(x,15)
+                x = medfilt(x, 15)
 
                 # Get the individual pieces
-                segs = self.seg.identifySegments(ind,maxgap=10,minlength=5)
+                segs = self.seg.identifySegments(ind, maxgap=10, minlength=5)
                 count = 0
                 self.segmentPlots = []
                 for s in segs:
@@ -1471,11 +1471,11 @@ class AviaNZ(QMainWindow):
         with pg.BusyCursor():
             if self.showSpectral.isChecked():
                 self.statusLeft.setText("Drawing spectral derivative...")
-                sd = self.sp.spectral_derivative(self.audiodata,self.sampleRate,self.config['window_width'],self.config['incr'],2,10.0)
+                sd = self.sp.spectral_derivative(self.audiodata, self.sampleRate, self.config['window_width'], self.config['incr'], 2, 5.0)
 
                 self.derivPlot = pg.ScatterPlotItem() 
-                x,y = np.where(sd>0)
-                self.derivPlot.setData(x,y,pen=pg.mkPen('b',width=5))
+                x, y = np.where(sd > 0)
+                self.derivPlot.setData(x, y, pen=pg.mkPen('b', width=5))
 
                 self.p_spec.addItem(self.derivPlot)
             else:
@@ -1738,7 +1738,7 @@ class AviaNZ(QMainWindow):
             # e is 2^nlevels x nseconds
 
             pos, colour, mode = colourMaps.colourMaps("Inferno")
-            cmap = pg.ColorMap(pos, colour,mode)
+            cmap = pg.ColorMap(pos, colour, mode)
             lut = cmap.getLookupTable(0.0, 1.0, 256)
             self.plotExtra.setLookupTable(lut)
             self.plotExtra.setImage(e.T)
@@ -1759,24 +1759,24 @@ class AviaNZ(QMainWindow):
             annotation = np.zeros(np.shape(e)[1])
             for s in self.segments:
                 annotation[math.floor(s[0]):math.ceil(s[1])] = 1
-            w0 = np.where(annotation==0)[0]
-            w1 = np.where(annotation==1)[0]
+            w0 = np.where(annotation == 0)[0]
+            w1 = np.where(annotation == 1)[0]
 
             r = np.zeros((64, np.shape(e)[1]))
             # dummy parameters b/c we're only using this for WF.graycode
             WF = WaveletFunctions.WaveletFunctions(data=[0], wavelet='dmey2', maxLevel=5, samplerate=1)
             for count in range(62):
                 # just compute_r from WaveletSegment
-                corr = (np.mean(e[count,w1]) - np.mean(e[count,w0]))/np.std(e[count,:]) * np.sqrt(len(w0)*len(w1))/len(annotation)
+                corr = (np.mean(e[count, w1]) - np.mean(e[count,w0]))/np.std(e[count, :]) * np.sqrt(len(w0)*len(w1))/len(annotation)
                 # map a long vector of rs to different image areas
                 level = int(math.log(count+2, 2))
                 node = count+2 - 2**level
                 node = WF.graycode(node)
                 r[node * 2**(6-level) : (node+1) * 2**(6-level), level] = corr
-            r[:,0] = np.linspace(np.min(r), np.max(r), num = 64)
+            r[:, 0] = np.linspace(np.min(r), np.max(r), num=64)
             # propagate along x
             for tmult in range(10, len(annotation)):
-                r[:,tmult] = r[:,tmult-10]
+                r[:, tmult] = r[:, tmult-10]
 
             pos, colour, mode = colourMaps.colourMaps("Viridis")
             cmap = pg.ColorMap(pos, colour,mode)
@@ -1803,10 +1803,38 @@ class AviaNZ(QMainWindow):
             self.plotExtra = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean)
             self.plotExtra.setPen(fn.mkPen(color='k', width=2))
             self.plotExtra2 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean+we_std)
-            self.plotExtra2.setPen(fn.mkPen('r'))
+            self.plotExtra2.setPen(fn.mkPen('c'))
             self.plotExtra3 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean-we_std)
-            self.plotExtra3.setPen(fn.mkPen('r'))
+            self.plotExtra3.setPen(fn.mkPen('c'))
+            self.plotExtra4 = pg.PlotDataItem(np.arange(self.datalengthSec), np.ones((int(self.datalengthSec)))*2)
+            self.plotExtra4.setPen(fn.mkPen('r'))
             self.plotaxis.setLabel('Mean (SD) power, V^2/Hz')
+            self.p_plot.addItem(self.plotExtra)
+            self.p_plot.addItem(self.plotExtra2)
+            self.p_plot.addItem(self.plotExtra3)
+            self.p_plot.addItem(self.plotExtra4)
+
+        # plot energy in "rain"
+        if self.extra == "Rain":
+            # compute following PostProcess.rain()
+            we_mean = np.zeros(int(self.datalengthSec))
+            we_std = np.zeros(int(self.datalengthSec))
+            for w in range(int(self.datalength/self.sampleRate)):
+                data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
+                mfcc = librosa.feature.mfcc(data, self.sampleRate)
+                # mfcc_delta = librosa.feature.delta(mfcc, width=3)
+                # Normalise
+                mfcc -= np.mean(mfcc, axis=0)
+                mfcc /= np.max(np.abs(mfcc), axis=0)
+                we_mean[w] = np.mean(mfcc[1, :])
+                we_std[w] = np.std(mfcc[1, :])
+            self.plotExtra = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean)
+            self.plotExtra.setPen(fn.mkPen(color='k', width=2))
+            self.plotExtra2 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean + we_std)
+            self.plotExtra2.setPen(fn.mkPen('r'))
+            self.plotExtra3 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean - we_std)
+            self.plotExtra3.setPen(fn.mkPen('r'))
+            self.plotaxis.setLabel('Mean (MFCC)')
             self.p_plot.addItem(self.plotExtra)
             self.p_plot.addItem(self.plotExtra2)
             self.p_plot.addItem(self.plotExtra3)

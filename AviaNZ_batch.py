@@ -478,7 +478,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # These parameters will be set for the new segments:
         if self.species != 'All species':
             y1 = self.speciesData['FreqRange'][0]/2
-            y2 = min(self.sampleRate//2, self.speciesData['SampleRate']/2)
+            y2 = min(self.sampleRate//2, self.speciesData['FreqRange'][1]/2)
             species = [self.species + "?"]
         else:
             y1 = 0

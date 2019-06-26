@@ -282,18 +282,18 @@ class WaveletSegment:
             return
 
         #Virginia: number of samples in window
-        win_sr=int(math.ceil(window*sampleRate))
+        win_sr = int(math.ceil(window*sampleRate))
         # half-window length in samples
         #win_sr2=int(math.ceil(win_sr/2))
         #Virginia: number of sample in increment
-        inc_sr=math.ceil(inc*sampleRate)
+        inc_sr = math.ceil(inc*sampleRate)
         #Virginia: number of samples in resolution
         resol_sr = math.ceil(resol * sampleRate)
         #Virginia: needed to generate coef of the same size of annotations
-        step=int(inc/resol)
+        step = int(inc/resol)
 
         #Virginia:number of windows = number of sliding window at resol distance
-        N=int(math.ceil(len(data)/resol_sr))
+        N = int(math.ceil(len(data)/resol_sr))
 
         #Virginia: changed columns dimension -> must be equal to number of sliding window
         coefs = np.zeros((2 ** (nlevels + 1) - 2, N))
@@ -302,9 +302,9 @@ class WaveletSegment:
         # start is the sample start of a window
         #end is the sample end of a window
         #We are working with sliding windows starting from the file start
-        start=0 #inizialization
+        start = 0 #inizialization
         #Virginia: the loop works on the resolution scale to adjust with annotations
-        for t in range(0,N,step):
+        for t in range(0, N, step):
             E = []
             end = min(len(data), start+win_sr)
             # generate a WP
@@ -325,8 +325,8 @@ class WaveletSegment:
                     e = 100.0 * e / np.sum(e)
                 E = np.concatenate((E, e), axis=0)
             #Virginia:update start
-            start+=inc_sr # Virginia: corrected
-            for T in range(t,t+step):
+            start += inc_sr     # Virginia: corrected
+            for T in range(t, t+step):
                 coefs[:, T] = E
         return coefs
 
@@ -528,7 +528,14 @@ class WaveletSegment:
             for j in range(nw):
                 #start = max(0, center - win_sr2) keeped if needed in future
                 end = min(N, start + win_sr)
-                detected[j, count] = np.any(E[start:end] > threshold)
+                # max/ mean/median
+                # detected[j, count] = np.any(E[start:end] > threshold)
+                # mean
+                if np.mean(E[start:end]) > threshold:
+                    detected[j, count] = 1
+                # # median
+                # if np.median(E[start:end]) > threshold:
+                #     detected[j, count] = 1
                 start += inc_sr  # Virginia: corrected
             count += 1
 
@@ -541,14 +548,14 @@ class WaveletSegment:
         if window != 1 or inc != window:
             N = int(math.ceil(duration/ self.sampleRate))  # numbers of seconds
             detect_ann = np.zeros(N)
-            start=0
+            start = 0
             #I follow the windows checking in what second they start or end
             for i in range(nw):
                 if detected[i]==1:
                     end= min(math.ceil(start + 1), N)
                     detect_ann[int(math.floor(start)):end] = 1
-                start+=inc
-            detected=detect_ann
+                start += inc
+            detected = detect_ann
 
         del C
         del E
@@ -699,7 +706,7 @@ class WaveletSegment:
                             bestRecall = recall
                             detected = detections
                             listnodes.append(node)
-                        if bestBetaScore == 1 or bestRecall == 1:
+                        if bestBetaScore > 0.95 or bestRecall > 0.95:   # Stop exhaustive search - will lead to less FPs
                             break
 
                     # Memory cleanup:
@@ -852,7 +859,7 @@ class WaveletSegment:
         return filteredDenoisedData
 
     def loadDirectory(self, dirName, denoise, filter, keepaudio, wpmode,savedetections, train, window=1, inc=None):
-        """ (moved out from individual training functions)
+        """
             Finds and reads wavs from directory dirName.
             Computes a WP and stores the node energies for each second.
             Computes and stores the WC-annotation correlations.
@@ -864,7 +871,8 @@ class WaveletSegment:
             Results: self.annotation, filelengths, [audioList,] waveletCoefs, nodeCorrs arrays.
             waveletCoefs also exported to a file.
 
-            For filter training and testing, therefore (correlated) nodes have two versions: save correlated nodes in train and use optimum nodes from the filter in test mode
+            For filter training and testing, therefore (correlated) nodes have two versions: save correlated nodes
+            in train and use optimum nodes from the filter in test mode
             """
         # Virginia changes:
         # input changed: added window and inc for window's and increment's length in sec.
@@ -872,7 +880,7 @@ class WaveletSegment:
 
         #Virginia: if no inc I set resol equal to window, otherwise it is equal to inc
         if inc is None:
-            inc=window
+            inc = window
             resol = window
         else:
             resol = (math.gcd(int(100 * window), int(100 * inc))) / 100
@@ -1003,7 +1011,7 @@ class WaveletSegment:
 
             if savedetections:
                 self.filenames.append(fName)
-            print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
+            print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, sum, len(self.annotation)))
 
     def identifySegments(self, detection):  # , maxgap=1, minlength=1):
         """ Turn binary detection to segments """
