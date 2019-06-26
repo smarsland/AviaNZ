@@ -1,33 +1,54 @@
-# Version 0.1 30/5/16
-# Author: Stephen Marsland
+# WaveletSegment.py
+#
+# Wavelet Segmentation
+
+# Version 1.4 26/06/19
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+
+#    AviaNZ birdsong analysis program
+#    Copyright (C) 2017--2018
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import numpy as np
-import sklearn as sk
-import WaveletSegment
 import matplotlib.pyplot as plt
 import pandas as pd
 import random
 from joblib import dump, load
+
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import ShuffleSplit
 from sklearn.preprocessing import StandardScaler
+
 from sklearn.decomposition import PCA
+
 from sklearn.metrics import confusion_matrix
 from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import SVC
 from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.gaussian_process.kernels import RBF
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import AdaBoostClassifier
-import xgboost as xgb
 from sklearn.mixture import GaussianMixture
+from sklearn.svm import SVC
+import xgboost as xgb
 
 from sklearn.model_selection import learning_curve
 from sklearn.model_selection import validation_curve
 from sklearn.model_selection import GridSearchCV
-from sklearn.model_selection import cross_val_score
+
 import json, time, os, math, csv, gc, wavio
 import WaveletSegment
 import librosa
@@ -160,11 +181,12 @@ class Learning:
 
         return model
     
+
+
 #For each sound class an ensemble of randomized decision trees (sklearn.ensemble.ExtraTreesRegressor) is applied. The number of estimators is chosen to be twice the number of selected features per class but not greater than 500. The winning solution considers 4 features when looking for the best split and requires a minimum of 3 samples to split an internal node.
 
-# Diagnostic plots
 class Validate:
-    # This class implements cross-validation and learning curves for the AviaNZ interface
+    # This class implements cross-validation and learning curves
     # based on scikit-learn
 
     def __init__(self, estimator, title, features, labels, param_name=None, param_range=None,scoring=None):
@@ -293,6 +315,7 @@ class Validate:
         plt.legend(loc="best")
         return plt
 
+
 def learninigCurve(dataFile, clf, score=None):
     ''' Choose a classifier and plot the learning curve
     dataFile: dataset including features and targets
@@ -350,6 +373,7 @@ def learninigCurve(dataFile, clf, score=None):
     v = Validate(estimator, title, data, targets, scoring=score)
     plt = v.plot_learning_curve()
     plt.show()
+
 
 def validationCurve(dataFile, clf, nClasses=2, score=None):
     ''' Choose a classifier and plot the validation curve
@@ -433,6 +457,7 @@ def validationCurve(dataFile, clf, nClasses=2, score=None):
     v = Validate(estimator, title, data, targets, param_name=param_name, param_range=param_range, scoring=score)
     plt = v.plot_validation_curve()
     plt.show()
+
 
 def fit_GridSearchCV(dataFile, clf, nClasses=2):
     '''
@@ -532,7 +557,7 @@ def testLearning1():
     import Learning
     from sklearn.datasets import make_classification
     features, labels = make_classification(n_features=2, n_redundant=0, n_informative=2, random_state=1, n_clusters_per_class=1)
-    learners = Learning.Learning(features,labels)
+    learners = Learning.Learning(features, labels)
     
     model = learners.trainMLP()
     learners.performTest(model)
@@ -552,13 +577,14 @@ def testLearning1():
     learners.performTest(model)
     model = learners.trainGMM()
     learners.performTest(model)
-    
+
+
 def testLearning2():
     # Iris data
     import Learning
     from sklearn.datasets import load_iris
     data = load_iris()
-    learners = Learning.Learning(data.data,data.target)
+    learners = Learning.Learning(data.data, data.target)
     
     model = learners.trainMLP()
     learners.performTest(model)
@@ -578,6 +604,7 @@ def testLearning2():
     learners.performTest(model)
     model = learners.trainGMM()
     learners.performTest(model)
+
 
 def TrainClassifier(dir, species, feature, clf=None, pca=False):
     '''
@@ -624,7 +651,8 @@ def TrainClassifier(dir, species, feature, clf=None, pca=False):
     :return: save the trained classifier in dirName e.g. kiwi_SVM.joblib
     '''
     # Read previously stored data as required
-    d = pd.read_csv(os.path.join(dir,species + '_' + feature + '.tsv'), sep="\t", header=None)
+    # d = pd.read_csv(os.path.join(dir, 'Kiwi (Tokoeka Fiordland)_WE_spnodes_seg_train.tsv'), sep=",", header=None)
+    d = pd.read_csv(os.path.join(dir, species + '_' + feature + '.tsv'), sep="\t", header=None)
     data = d.values
 
     # Balance the data set
@@ -646,7 +674,7 @@ def TrainClassifier(dir, species, feature, clf=None, pca=False):
         data = pca1.fit_transform(data)
     targets = targets[inds]
 
-    learners = Learning(data, targets, testFraction=0.0)  # use whole data set for training
+    learners = Learning(data, targets, testFraction=0.5)  # use whole data set for training
     # OR learn with optimum nodes, for kiwi it is [35, 43, 36, 45]
     # kiwiNodes = [35, 43, 36, 45]
     # kiwiNodes = [34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 55]
@@ -665,37 +693,45 @@ def TrainClassifier(dir, species, feature, clf=None, pca=False):
         model = learners.trainMLP(structure=(25,), learningrate=0.001, solver='adam', epochs=200, alpha=1,
                                   shuffle=True, early_stopping=False)
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_MLP.joblib'))
-        # learners.performTest(model)
+        dump(model, os.path.join(dir, species+'_'+feature+'_MLP.joblib'))
+        learners.performTest(model)
         print("kNN--------------------------------")
         model = learners.trainKNN(K=3)
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_kNN.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_kNN.joblib'))
+        learners.performTest(model)
         print("SVM--------------------------------")
         # model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0077)
         model = learners.trainSVM(kernel="rbf", C=1, gamma=0.03)
+        learners.performTest(model)
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_SVM.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_SVM.joblib'))
+        learners.performTest(model)
         print("GP--------------------------------")
         model = learners.trainGP()
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_GP.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_GP.joblib'))
+        learners.performTest(model)
         print("DT--------------------------------")
         model = learners.trainDecisionTree()
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_DT.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_DT.joblib'))
+        learners.performTest(model)
         print("RF--------------------------------")
         model = learners.trainRandomForest()
         # Save the model
         dump(model, os.path.join(dir,species+'_'+feature+'_RF.joblib'))
+        learners.performTest(model)
         print("Boosting--------------------------------")
         model = learners.trainBoosting()
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_Boost.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_Boost.joblib'))
+        learners.performTest(model)
         print("XGB--------------------------------")
         model = learners.trainXGBoost()
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_XGB.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_XGB.joblib'))
+        learners.performTest(model)
         # print("GMM--------------------------------")
         # model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
         # # Save the model
@@ -706,12 +742,12 @@ def TrainClassifier(dir, species, feature, clf=None, pca=False):
         model = learners.trainMLP(structure=(250, ), learningrate=0.001, solver='adam', epochs=200, alpha=1,
                                   shuffle=True, early_stopping=True)
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_MLP.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_MLP.joblib'))
     elif clf == 'kNN':
         print("kNN--------------------------------")
         model = learners.trainKNN(K=3)
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_kNN.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_kNN.joblib'))
     elif clf == 'SVM':
         print("SVM--------------------------------")
         model = learners.trainSVM(kernel="rbf", C=1, gamma=0.00018)
@@ -721,12 +757,12 @@ def TrainClassifier(dir, species, feature, clf=None, pca=False):
         print("GP--------------------------------")
         model = learners.trainGP()
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_GP.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_GP.joblib'))
     elif clf == 'DT':
         print("DT--------------------------------")
         model = learners.trainDecisionTree()
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_DT.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_DT.joblib'))
     elif clf == 'RF':
         print("RF--------------------------------")
         model = learners.trainRandomForest()
@@ -736,17 +772,18 @@ def TrainClassifier(dir, species, feature, clf=None, pca=False):
         print("Boosting--------------------------------")
         model = learners.trainBoosting()
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_Boost.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_Boost.joblib'))
     elif clf == 'XGB':
         print("XGB--------------------------------")
         model = learners.trainXGBoost()
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_XGB.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_XGB.joblib'))
     elif clf == 'GMM':
         print("GMM--------------------------------")
         model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
         # Save the model
-        dump(model, os.path.join(dir,species+'_'+feature+'_GMM.joblib'))
+        dump(model, os.path.join(dir, species+'_'+feature+'_GMM.joblib'))
+
 
 def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     '''
@@ -760,7 +797,8 @@ def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     :return: print out confusion matrix
     '''
     # read test dataset
-    d = pd.read_csv(os.path.join(dir_test,species + '_' + feature + '.tsv'), sep="\t", header=None)
+    d = pd.read_csv(os.path.join(dir_test, species + '_' + feature + '.tsv'), sep="\t", header=None)
+    # d = pd.read_csv(os.path.join(dir_test, 'Kiwi (Tokoeka Fiordland)_WE_spnodes_seg_test.tsv'), sep=",", header=None)
     data = d.values
     targets = data[:, -1]
     data = data[:, 0:-1]
@@ -812,6 +850,7 @@ def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     else:
         model = load(os.path.join(dir_clf, species+'_' + feature + '_' + clf + '.joblib'))
         learners.performTest(model)
+
 
 def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
     '''
@@ -893,6 +932,7 @@ def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
     np.savetxt(os.path.join(dir_out, species + '_' + feature + '.tsv'), MLdata, delimiter="\t")
     print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(annotation), len(annotation)))
 
+
 def loadData(fName, filemode):
     '''
     Load wav and GT for ML data set generation
@@ -937,6 +977,7 @@ def loadData(fName, filemode):
         fileAnnotation = np.zeros((math.ceil(len(data) / sampleRate), 1))
     return data, np.array(fileAnnotation), sampleRate
 
+
 def computeMFCC(data, sampleRate, n_mfcc, n_bins, delta):
     '''
     Compute MFCC for each second of data and return as a matrix
@@ -971,240 +1012,3 @@ def computeMFCC(data, sampleRate, n_mfcc, n_bins, delta):
         mfcc[i, :] = mfcc1
         i += 1
     return mfcc
-
-
-# generateDataset(dir_src="D:\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min", feature='WE+MFCCbp_all',
-#                 species='Kiwi', filemode='long', wpmode='new',
-#                 dir_out="D:\WaveletDetection\DATASETS\\NIbrownkiwi\Test_5min\ML")
-# generateDataset(dir_src="D:\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min", feature='WE+MFCCbp_all',
-#                 species='Kiwi', filemode='long', wpmode='new',
-#                 dir_out="D:\WaveletDetection\DATASETS\\NIbrownkiwi\Train_5min\ML")
-# TrainClassifier('D:\WaveletDetection\DATASETS\Morepork\Train-5min\ML', 'Morepork', 'WEbp_all', clf='kNN',
-#                 pca=True)
-# testClassifiers(dir_clf='D:\WaveletDetection\DATASETS\Morepork\Train-5min\ML',
-#                 dir_test='D:\WaveletDetection\DATASETS\Morepork\Test-5min\ML', species='Morepork',
-#                 feature='WEbp_all', clf='kNN', pca=True)
-
-# generateDataset(dir_src="D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\test-5min", feature='WE+MFCCraw_all',
-#                 species='KakapoB', filemode='long', wpmode='new',
-#                 dir_out="D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\test-5min\ML")
-# generateDataset(dir_src="D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min", feature='WE+MFCCraw_all',
-#                 species='KakapoB', filemode='long', wpmode='new',
-#                 dir_out="D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min\ML")
-
-# TrainClassifier('D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min\ML', 'KakapoB', 'WEraw_all', clf='SVM',
-#                 pca=False)
-# testClassifiers(dir_clf='D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\train-5min\ML',
-#                 dir_test='D:\WaveletDetection\DATASETS\Kakapo\KakapoB\\test-5min\ML', species='KakapoB',
-#                 feature='WEraw_all', clf='SVM', pca=False)
-
-# validationCurve(dataFile='D:\WaveletDetection\DATASETS\Morepork\Train-5min\ML\Morepork_MFCCbp_all.tsv', clf='kNN', nClasses=2, score=None)
-
-# generateDataset(dir_src="/Users/marslast/Projects/AviaNZ/Sound Files/Train", feature='MFCCraw_all', species='Morepork',filemode='long', wpmode='new', dir_out="/Users/marslast/Projects/AviaNZ/Sound Files/Train")
-# TrainClassifier('/Users/marslast/Projects/AviaNZ/Sound Files/Train', 'Morepork', 'MFCCraw_all', clf='kNN')
-# testClassifiers(dir_clf='/Users/marslast/Projects/AviaNZ/Sound Files/Train', dir_test='/Users/marslast/Projects/AviaNZ/Sound Files/Train', species='Morepork', feature='MFCCraw_all',clf='kNN')
-
-
-
-
-
-
-
-
-
-
-
-# IGNORE THE FOLLOWING CODE FOR NOW
-def testScoring():
-    from sklearn import svm, datasets
-    from sklearn.model_selection import cross_val_score
-    iris = datasets.load_iris()
-    X, y = iris.data, iris.target
-    clf = svm.SVC(gamma='scale', random_state=0)
-    # cross_val_score(clf, X, y, scoring='recall_macro', cv=5)
-    model = svm.SVC()
-    print(cross_val_score(model, X, y, cv=5, scoring='recall_macro'))
-# testScoring()
-
-
-def brownKiwi_segmentbased_train(clf=None, dirName="D:\\Nirosha\CHAPTER5\kiwi\\brown_segmentbased"):
-    d_male = pd.read_csv('D:\\Nirosha\CHAPTER5\kiwi\\brown_segmentbased\male\energies.tsv', sep="\t", header=None)
-    data_male = d_male.values
-    d_female = pd.read_csv('D:\\Nirosha\CHAPTER5\kiwi\\brown_segmentbased\\female\energies.tsv', sep="\t", header=None)
-    data_female = d_female.values
-    d_noise = pd.read_csv('D:\\Nirosha\CHAPTER5\kiwi\\brown_segmentbased\\noise\energies.tsv', sep="\t", header=None)
-    data_noise = d_noise.values
-    # Set the last column noise=0, male=1, female=2
-    data_male[:,-1] = 1
-    data_female[:,-1] = 2
-    # merge into one dataset
-    data = np.concatenate((data_noise,data_male),axis=0)
-    data = np.concatenate((data, data_female), axis=0)
-    targets = data[:, -1]
-    data = data[:, 0:-1]
-    # Balance the data set
-    noiseTargetInd = np.where(targets == 0)
-    maleTargetInd = np.where(targets == 1)
-    femaleTargetInd = np.where(targets == 2)
-    # randomly select n negative rows
-    n = min(np.shape(noiseTargetInd)[1], np.shape(maleTargetInd)[1], np.shape(femaleTargetInd)[1])
-    noiseTargetInd = noiseTargetInd[0].tolist()
-    noiseTargetInd = random.sample(noiseTargetInd, n)
-    maleTargetInd = maleTargetInd[0].tolist()
-    maleTargetInd = random.sample(maleTargetInd, n)
-    femaleTargetInd = femaleTargetInd[0].tolist()
-    femaleTargetInd = random.sample(femaleTargetInd, n)
-    inds = noiseTargetInd + maleTargetInd + femaleTargetInd
-    data = data[inds, :]
-    targets = targets[inds]
-    # Learn with all 62 nodes
-    learners = Learning(data, targets, testFraction=0)  # use whole data set for training
-    if clf == None:
-        print("MLP--------------------------------")
-        model = learners.trainMLP(structure=(100,), learningrate=0.001, solver='adam', epochs=200, alpha=1,
-                                  shuffle=True, early_stopping=False)
-        # Save the model
-        dump(model, dirName+'\\'+'bk_MLP.joblib')
-        # learners.performTest(model)
-        print("kNN--------------------------------")
-        model = learners.trainKNN(K=5)
-        # Save the model
-        dump(model, dirName+'\\'+'bk_kNN.joblib')
-        # learners.performTest(model)
-        print("SVM--------------------------------")
-        # model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0077)
-        model = learners.trainSVM(kernel="rbf", C=1, gamma='auto')
-        # Save the model
-        dump(model, dirName+'\\'+ 'bk_SVM.joblib')
-        # learners.performTest(model)
-        print("GP--------------------------------")
-        model = learners.trainGP()
-        # Save the model
-        dump(model, dirName+'\\'+'bk_GP.joblib')
-        # learners.performTest(model)
-        print("DT--------------------------------")
-        model = learners.trainDecisionTree()
-        # Save the model
-        dump(model, dirName+'\\'+'bk_DT.joblib')
-        # learners.performTest(model)
-        print("RF--------------------------------")
-        model = learners.trainRandomForest()
-        # Save the model
-        dump(model, dirName+'\\'+'bk_RF.joblib')
-        # learners.performTest(model)
-        print("Boosting--------------------------------")
-        model = learners.trainBoosting()
-        # Save the model
-        dump(model, dirName+'\\'+'bk_Boost.joblib')
-        # learners.performTest(model)
-        print("XGB--------------------------------")
-        model = learners.trainXGBoost()
-        # Save the model
-        dump(model, dirName+'\\'+'bk_XGB.joblib')
-        # learners.performTest(model)
-        print("GMM--------------------------------")
-        model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
-        # Save the model
-        dump(model, dirName+'\\'+'bk_GMM.joblib')
-        # learners.performTest(model)
-        print("######################################################")
-    elif clf == 'MLP':
-        print("MLP--------------------------------")
-        model = learners.trainMLP(structure=(250, ), learningrate=0.001, solver='adam', epochs=100, alpha=1,
-                                  shuffle=True, early_stopping=True)
-    elif clf == 'kNN':
-        print("kNN--------------------------------")
-        model = learners.trainKNN()
-    elif clf == 'SVM':
-        print("SVM--------------------------------")
-        model = learners.trainSVM(kernel="rbf", C=1, gamma=0.0032)
-    elif clf == 'GP':
-        print("GP--------------------------------")
-        model = learners.trainGP()
-    elif clf == 'DT':
-        print("DT--------------------------------")
-        model = learners.trainDecisionTree()
-    elif clf == 'RF':
-        print("RF--------------------------------")
-        model = learners.trainRandomForest()
-    elif clf == 'Boost':
-        print("Boosting--------------------------------")
-        model = learners.trainBoosting(n_estimators=200)
-    elif clf == 'XGB':
-        print("XGB--------------------------------")
-        model = learners.trainXGBoost()
-    elif clf == 'GMM':
-        print("GMM--------------------------------")
-        model = learners.trainGMM(covType='full', maxIts=200, nClasses=4)
-    if clf:
-        # Save the model
-        dump(model, dirName + '\\' + 'bk_' + clf + '.joblib')
-        # learners.performTest(model)
-
-def brownKiwi_segmentbased_test(clf=None, dir_clf="D:\\Nirosha\CHAPTER5\kiwi\\brown_segmentbased", species='bk'):
-    d_male = pd.read_csv('D:\\Nirosha\CHAPTER5\kiwi\\brown_segmentbased\\TestData_Tier1\energies_Tier1_male.tsv', sep="\t", header=None)
-    data_male = d_male.values
-    d_female = pd.read_csv('D:\\Nirosha\CHAPTER5\kiwi\\brown_segmentbased\\TestData_Tier1\energies_Tier1_female.tsv', sep="\t", header=None)
-    data_female = d_female.values
-    d_noise = pd.read_csv('D:\\Nirosha\CHAPTER5\kiwi\\brown_segmentbased\\\\TestData_Tier1\energies_Tier1_noise.tsv', sep="\t", header=None)
-    data_noise = d_noise.values
-    # Set the last column noise=0, male=1, female=2
-    data_male[:,-1] = 1
-    data_female[:,-1] = 2
-    # merge into one dataset
-    data = np.concatenate((data_noise,data_male),axis=0)
-    data = np.concatenate((data, data_female), axis=0)
-    # ##
-    # # test on train data and see
-    # d = pd.read_csv('D:\\Nirosha\CHAPTER5\kiwi\\brown_segmentbased\energies_train.tsv', sep="\t", header=None)
-    # data = d.values
-    # # ##
-    targets = data[:, -1]
-    data = data[:, 0:-1]
-    # Learn with all 62 nodes
-    learners = Learning(data, targets, testFraction=1.0)  # use whole data set for testing
-    if clf == None:
-        print("MLP--------------------------------")
-        # Load the model
-        model = load(dir_clf+'\\'+species+'_MLP.joblib')
-        learners.performTest(model)
-        print("kNN--------------------------------")
-        model = load(dir_clf+'\\'+species+'_kNN.joblib')
-        learners.performTest(model)
-        print("SVM--------------------------------")
-        model = load(dir_clf+'\\'+species+'_SVM.joblib')
-        learners.performTest(model)
-        print("GP--------------------------------")
-        model = load(dir_clf+'\\'+species+'_GP.joblib')
-        learners.performTest(model)
-        print("DT--------------------------------")
-        model = load(dir_clf+'\\'+species+'_DT.joblib')
-        learners.performTest(model)
-        print("RF--------------------------------")
-        model = load(dir_clf+'\\'+species+'_RF.joblib')
-        learners.performTest(model)
-        print("Boosting--------------------------------")
-        model = load(dir_clf+'\\'+species+'_Boost.joblib')
-        learners.performTest(model)
-        print("XGB--------------------------------")
-        model = load(dir_clf+'\\'+species+'_XGB.joblib')
-        learners.performTest(model)
-        print("GMM--------------------------------")
-        model = load(dir_clf+'\\'+species+'_GMM.joblib')
-        learners.performTest(model)
-        print("######################################################")
-    else:
-        model = load(dir_clf + '\\' + species + '_' + clf + '.joblib')
-        learners.performTest(model)
-
-# brownKiwi_segmentbased_train('XGB')
-# brownKiwi_segmentbased_test(clf='XGB')
-
-# validationCurve(dataFile='D:\\Nirosha\CHAPTER5\kiwi\\brown_segmentbased\energies_train.tsv', clf='MLP', nClasses=3, score='accuracy')
-# learninigCurve('D:\\nirosha\CHAPTER5\kiwi\\brown\\train-national\energies.tsv', 'XGB')
-# fit_GridSearchCV('D:\\nirosha\CHAPTER5\kiwi\\brown_segmentbased\energies_train.tsv', clf='Boost', nClasses=3)
-
-# testLearning3(dirName='D:\\nirosha\CHAPTER5\kiwi\\brown\\train-national', species='kiwi', clf='kNN')
-# testClassifiers(dir_clf='D:\\nirosha\CHAPTER5\kiwi\\brown\\train-national', dir_test='D:\\nirosha\CHAPTER5\kiwi\\tier1',
-#                 species='kiwi', clf='kNN')
-
