@@ -85,7 +85,7 @@ class SignalProc:
 
     def spectrogram(self,data,window_width=None,incr=None,window='Hann',equal_loudness=False,mean_normalise=True,onesided=True,multitaper=False,need_even=False):
         """ Compute the spectrogram from amplitude data
-        Returns the power spectrum, not the density -- compute 10.*log10(sg) before plotting.
+        Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
         Options: multitaper version, but it's slow, mean normalised, even, one-sided.
         This version is faster than the default versions in pylab and scipy.signal
@@ -467,62 +467,62 @@ class SignalProc:
     def goodness_of_pitch(self,spectral_deriv,sg):
         return np.max(np.abs(fft.fft(spectral_deriv/sg, axis=0)),axis=0)
 
-    def spectral_derivative(self,data,sampleRate,window_width,incr,K=2,threshold=0.5,returnAll=False):
+    def spectral_derivative(self, data, sampleRate, window_width, incr, K=2, threshold=0.5, returnAll=False):
         """ Compute the spectral derivative """
         from spectrum import dpss
 
         # Compute the set of multi-tapered spectrograms
         starts = range(0, len(data) - window_width, incr)
         [tapers, eigen] = dpss(window_width, 2.5, K)
-        sg = np.zeros((len(starts), window_width,K),dtype=complex)
+        sg = np.zeros((len(starts), window_width, K), dtype=complex)
         for k in range(K):
             for i in starts:
-                sg[i // incr, :,k] = tapers[:,k] * data[i:i + window_width]
-            sg[:,:,k] = fft.fft(sg[:,:,k])
-        sg = sg[:,window_width//2:,:]
+                sg[i // incr, :, k] = tapers[:, k] * data[i:i + window_width]
+            sg[:, :, k] = fft.fft(sg[:, :, k])
+        sg = sg[:, window_width//2:, :]
         
         # Spectral derivative is the real part of exp(i \phi) \sum_ k s_k conj(s_{k+1}) where s_k is the k-th tapered spectrogram
         # and \phi is the direction of maximum change (tan inverse of the ratio of pure time and pure frequency components)
-        S = np.sum(sg[:,:,:-1]*np.conj(sg[:,:,1:]),axis=2)
+        S = np.sum(sg[:, :, :-1]*np.conj(sg[:, :, 1:]), axis=2)
         timederiv = np.real(S)
         freqderiv = np.imag(S)
         
         # Frequency modulation is the angle $\pi/2 - direction of max change$
-        fm = np.arctan(np.max(timederiv**2,axis=0) / np.max(freqderiv**2,axis=0))
+        fm = np.arctan(np.max(timederiv**2, axis=0) / np.max(freqderiv**2, axis=0))
         spectral_deriv = -timederiv*np.sin(fm) + freqderiv*np.cos(fm)
 
-        sg = np.sum(np.real(sg*np.conj(sg)),axis=2)
+        sg = np.sum(np.real(sg*np.conj(sg)), axis=2)
         sg /= np.max(sg)
         
         # Suppress the noise (spectral continuity)
     
         # Compute the zero crossings of the spectral derivative in all directions
         # Pixel is a contour pixel if it is at a zero crossing and both neighbouring pixels in that direction are > threshold
-        sdt = spectral_deriv * np.roll(spectral_deriv,1,0) 
-        sdf = spectral_deriv * np.roll(spectral_deriv,1,1) 
-        sdtf = spectral_deriv * np.roll(spectral_deriv,1,(0,1)) 
-        sdft = spectral_deriv * np.roll(spectral_deriv,(1,-1),(0,1)) 
-        indt,indf = np.where(((sdt < 0) | (sdf < 0) | (sdtf < 0) | (sdft < 0)) & (spectral_deriv < 0))
+        sdt = spectral_deriv * np.roll(spectral_deriv, 1, 0)
+        sdf = spectral_deriv * np.roll(spectral_deriv, 1, 1)
+        sdtf = spectral_deriv * np.roll(spectral_deriv, 1, (0, 1))
+        sdft = spectral_deriv * np.roll(spectral_deriv, (1, -1), (0, 1))
+        indt, indf = np.where(((sdt < 0) | (sdf < 0) | (sdtf < 0) | (sdft < 0)) & (spectral_deriv < 0))
     
         # Noise reduction using a threshold
         we = np.abs(self.wiener_entropy(sg))
-        freqs,mf = self.mean_frequency(sampleRate,timederiv,freqderiv)
+        freqs, mf = self.mean_frequency(sampleRate, timederiv, freqderiv)
 
         # Given a time and frequency bin
         contours = np.zeros(np.shape(spectral_deriv))
         for i in range(len(indf)):
             f = indf[i]
             t = indt[i]
-            if (t>0) & (t<(np.shape(sg)[0]-1)) & (f>0) & (f<(np.shape(sg)[1]-1)): 
+            if (t > 0) & (t < (np.shape(sg)[0]-1)) & (f > 0) & (f < (np.shape(sg)[1]-1)):
                 thr = threshold*we[t]/np.abs(freqs[f] - mf[t])
-                if (sdt[t,f]<0) & (sg[t-1,f]>thr) & (sg[t+1,f]>thr):
-                    contours[t,f] = 1
-                if (sdf[t,f] < 0) & (sg[t,f-1]>thr) & (sg[t,f+1]>thr):
-                    contours[t,f] = 1
-                if (sdtf[t,f] < 0) & (sg[t-1,f-1]>thr) & (sg[t+1,f+1]>thr):
-                    contours[t,f] = 1
-                if (sdft[t,f] < 0) & (sg[t-1,f+1]>thr) & (sg[t-1,f+1]>thr):
-                    contours[t,f] = 1
+                if (sdt[t, f] < 0) & (sg[t-1, f] > thr) & (sg[t+1, f] > thr):
+                    contours[t, f] = 1
+                if (sdf[t, f] < 0) & (sg[t, f-1] > thr) & (sg[t, f+1] > thr):
+                    contours[t, f] = 1
+                if (sdtf[t, f] < 0) & (sg[t-1, f-1] > thr) & (sg[t+1, f+1] > thr):
+                    contours[t, f] = 1
+                if (sdft[t, f] < 0) & (sg[t-1, f+1] > thr) & (sg[t-1, f+1] > thr):
+                    contours[t, f] = 1
 
         if returnAll:
             return spectral_deriv, sg, fm, we, mf, np.fliplr(contours)

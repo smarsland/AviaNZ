@@ -1806,7 +1806,7 @@ class AviaNZ(QMainWindow):
             self.plotExtra2.setPen(fn.mkPen('c'))
             self.plotExtra3 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean-we_std)
             self.plotExtra3.setPen(fn.mkPen('c'))
-            self.plotExtra4 = pg.PlotDataItem(np.arange(self.datalengthSec), np.ones((int(self.datalengthSec)))*2)
+            self.plotExtra4 = pg.PlotDataItem(np.arange(self.datalengthSec), np.ones((int(self.datalengthSec)))*2.5)
             self.plotExtra4.setPen(fn.mkPen('r'))
             self.plotaxis.setLabel('Mean (SD) power, V^2/Hz')
             self.p_plot.addItem(self.plotExtra)

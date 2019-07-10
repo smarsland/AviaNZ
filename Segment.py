@@ -25,7 +25,7 @@ import numpy as np
 import scipy.ndimage as spi
 import skimage
 import time
-import ce_denoise as ce
+from ext import ce_denoise as ce
 
 class Segment:
     """ This class implements six forms of segmentation for the AviaNZ interface:
@@ -53,7 +53,7 @@ class Segment:
     See also the species-specific segmentation in WaveletSegment
     """
 
-    def __init__(self,data,sg,sp,fs,window_width=256,incr=128,mingap=0.3,minlength=0.2):
+    def __init__(self, data, sg, sp, fs, window_width=256, incr=128, mingap=0.3, minlength=0.2):
         self.data = data
         self.fs = fs
         # Spectrogram
@@ -158,7 +158,7 @@ class Segment:
                 del segs[i]
         return segs
 
-    def identifySegments(self, seg, maxgap=1, minlength=1,notSpec=False):
+    def identifySegments(self, seg, maxgap=1, minlength=1, notSpec=False):
         """ Turns presence/absence segments into a list of start/stop times
         Note the two parameters
         """
@@ -217,10 +217,10 @@ class Segment:
         samples = f(np.arange(1, upperlimit, float(upperlimit) / int(fftrate / 10.)))
         padded = np.concatenate((np.zeros(int(fftrate / 10.)), np.mean(self.sg, axis=1), np.zeros(int(fftrate / 10.))))
         envelope = spi.filters.convolve(padded, samples, mode='constant')[:-int(fftrate / 10.)]
-        seg = np.squeeze(np.where(envelope > np.median(envelope) + threshold * np.std(envelope)))
-        return self.identifySegments(seg, minlength=10)
+        ind = np.squeeze(np.where(envelope > np.median(envelope) + threshold * np.std(envelope)))
+        return self.identifySegments(ind, minlength=10)
 
-    def segmentByAmplitude(self,threshold,usePercent=True):
+    def segmentByAmplitude(self, threshold, usePercent=True):
         """ Bog standard amplitude segmentation.
         A straw man, do not use.
         """
@@ -232,7 +232,7 @@ class Segment:
         else:
             return []
 
-    def segmentByEnergy(self,thr,width,min_width=450):
+    def segmentByEnergy(self, thr, width, min_width=450):
         """ Based on description in Jinnai et al. 2012 paper in Acoustics
         Computes the 'energy curve' as windowed sum of absolute values of amplitude
         I median filter it, 'cos it's very noisy
@@ -325,16 +325,16 @@ class Segment:
 
         return segs
 
-    def segmentByPower(self,thr=1.):
+    def segmentByPower(self, thr=1.):
         """ Segmentation simply on the power
         """
-        maxFreqs = 10. * np.log10(np.max(self.sg, axis = 1))
+        maxFreqs = 10. * np.log10(np.max(self.sg, axis=1))
         from scipy.signal import medfilt
-        maxFreqs = medfilt(maxFreqs,21)
-        seg = np.squeeze(np.where(maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))))
-        return self.identifySegments(seg, minlength=10)
+        maxFreqs = medfilt(maxFreqs, 21)
+        ind = np.squeeze(np.where(maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))))
+        return self.identifySegments(ind, minlength=10)
 
-    def medianClip(self,thr=3.0,medfiltersize=5,minaxislength=5,minSegment=50):
+    def medianClip(self, thr=3.0, medfiltersize=5, minaxislength=5, minSegment=50):
         """ Median clipping for segmentation
         Based on Lasseck's method
         This version only clips in time, ignoring frequency
@@ -527,7 +527,7 @@ class Segment:
 
         if returnSegs:
             ind = np.squeeze(np.where(pitch > minfreq))
-            segs = self.identifySegments(ind,notSpec=True)
+            segs = self.identifySegments(ind, notSpec=True)
             #print(segs, len(ind), len(pitch))
             for s in segs:
                s[0] = float(s[0])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr#W / self.window_width
@@ -836,14 +836,14 @@ def showSpecDerivs():
     data = wavobj.data[:20*fs]
 
     if data.dtype is not 'float':
-        data = data.astype('float') # / 32768.0
+        data = data.astype('float')     # / 32768.0
 
     if np.shape(np.shape(data))[0] > 1:
         data = data[:, 0]
 
     import SignalProc
-    sp = SignalProc.SignalProc(data,fs,256,128)
-    sg = sp.spectrogram(data,multitaper=False)
+    sp = SignalProc.SignalProc(data, fs, 256, 128)
+    sg = sp.spectrogram(data, multitaper=False)
 
     h,v,b = sp.spectralDerivatives()
     h = np.abs(np.where(h == 0, 0.0, 10.0 * np.log10(h)))
@@ -851,17 +851,17 @@ def showSpecDerivs():
     b = np.abs(np.where(b == 0, 0.0, 10.0 * np.log10(b)))
     s = Segment(data, sg, sp, fs, 50)
 
-    hm = np.max(h[:,10:],axis=1)
-    segs = np.squeeze(np.where(hm>(np.mean(h[:,10:]+2.5*np.std(h[:,10:])))))
-    segmentsh = s.identifySegments(segs,minlength=10)
+    hm = np.max(h[:, 10:], axis=1)
+    inds = np.squeeze(np.where(hm > (np.mean(h[:,10:]+2.5*np.std(h[:, 10:])))))
+    segmentsh = s.identifySegments(inds, minlength=10)
 
-    vm = np.max(v[:,10:],axis=1)
-    segs = np.squeeze(np.where(vm>(np.mean(v[:,10:]+2.5*np.std(v[:,10:])))))
-    segmentsv = s.identifySegments(segs,minlength=10)
+    vm = np.max(v[:, 10:], axis=1)
+    inds = np.squeeze(np.where(vm > (np.mean(v[:, 10:]+2.5*np.std(v[:, 10:])))))
+    segmentsv = s.identifySegments(inds, minlength=10)
 
-    bm = np.max(b[:,10:],axis=1)
-    segs = np.squeeze(np.where(bm>(np.mean(b[:,10:]+2.5*np.std(b[:,10:])))))
-    segmentsb = s.identifySegments(segs,minlength=10)
+    bm = np.max(b[:, 10:], axis=1)
+    segs = np.squeeze(np.where(bm > (np.mean(b[:, 10:]+2.5*np.std(b[:, 10:])))))
+    segmentsb = s.identifySegments(segs, minlength=10)
     #print np.mean(h), np.max(h)
     #print np.where(h>np.mean(h)+np.std(h))
 
@@ -884,7 +884,7 @@ def showSpecDerivs():
     im2.setImage(h)
     for seg in segmentsh:
         a = pg.LinearRegionItem()
-        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        a.setRegion([convertAmpltoSpec(seg[0], fs, 128), convertAmpltoSpec(seg[1], fs, 128)])
         vb2.addItem(a, ignoreBounds=True)
 
     vb3 = win.addViewBox(enableMouse=False, enableMenu=False, row=2, col=0)
@@ -893,7 +893,7 @@ def showSpecDerivs():
     im3.setImage(v)
     for seg in segmentsv:
         a = pg.LinearRegionItem()
-        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        a.setRegion([convertAmpltoSpec(seg[0], fs, 128), convertAmpltoSpec(seg[1], fs, 128)])
         vb3.addItem(a, ignoreBounds=True)
 
     vb4 = win.addViewBox(enableMouse=False, enableMenu=False, row=3, col=0)
@@ -902,22 +902,32 @@ def showSpecDerivs():
     im4.setImage(b)
     for seg in segmentsb:
         a = pg.LinearRegionItem()
-        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        a.setRegion([convertAmpltoSpec(seg[0], fs, 128), convertAmpltoSpec(seg[1], fs, 128)])
         vb4.addItem(a, ignoreBounds=True)
     QtGui.QApplication.instance().exec_()
 
 def detectClicks():
     import SignalProc
-    reload(SignalProc)
+    # reload(SignalProc)
     import pyqtgraph as pg
     from pyqtgraph.Qt import QtCore, QtGui
     import wavio
     from scipy.signal import medfilt
 
-    #wavobj = wavio.read('Sound Files/tril1.wav')
-    #wavobj = wavio.read('Sound Files/010816_202935_p1.wav')
+    # wavobj = wavio.read('D:\AviaNZ\Sound_Files\Clicks\\1ex\Lake_Thompson__01052018_SOUTH1047849_01052018_High_20180509_'
+    #                     '20180509_183506.wav')  # close kiwi and rain
+    wavobj = wavio.read('D:\AviaNZ\Sound_Files\Clicks\Lake_Thompson__01052018_SOUTH1047849_01052018_High_20180508_'
+                        '20180508_200506.wav')  # very close kiwi with steady wind
+    # wavobj = wavio.read('D:\AviaNZ\Sound_Files\Clicks\\1ex\Murchison_Kelper_Heli_25042018_SOUTH7881_25042018_High_'
+    #                     '20180405_20180405_211007.wav')
+    # wavobj = wavio.read('D:\AviaNZ\Sound_Files\\Noise examples\\Noise_10s\Rain_010.wav')
+    # wavobj = wavio.read('D:\AviaNZ\Sound_Files\Clicks\Ponui_SR2_Jono_20130911_021920.wav')   #
+    # wavobj = wavio.read('D:\AviaNZ\Sound_Files\Clicks\CL78_BIRM_141120_212934.wav')   #
+    # wavobj = wavio.read('D:\AviaNZ\Sound_Files\Clicks\CL78_BIRD_141120_212934.wav')   # Loud click
+    # wavobj = wavio.read('D:\AviaNZ\Sound_Files\Tier1\Tier1 dataset\positive\DE66_BIRD_141011_005829.wav')   # close kiwi
+    # wavobj = wavio.read('Sound Files/010816_202935_p1.wav')
     #wavobj = wavio.read('Sound Files/20170515_223004 piping.wav')
-    wavobj = wavio.read('Sound Files/test/DE66_BIRD_141011_005829.wav')
+    # wavobj = wavio.read('Sound Files/test/DE66_BIRD_141011_005829.wav')
     #wavobj = wavio.read('/Users/srmarsla/DE66_BIRD_141011_005829_wb.wav')
     #wavobj = wavio.read('/Users/srmarsla/ex1.wav')
     #wavobj = wavio.read('/Users/srmarsla/ex2.wav')
@@ -925,39 +935,82 @@ def detectClicks():
     data = wavobj.data #[:20*fs]
 
     if data.dtype is not 'float':
-        data = data.astype('float') # / 32768.0
+        data = data.astype('float')     # / 32768.0
 
     if np.shape(np.shape(data))[0] > 1:
         data = data[:, 0]
 
     import SignalProc
-    sp = SignalProc.SignalProc(data,fs,256,128)
-    sg = sp.spectrogram(data,multitaper=False)
-    s = Segment(data, sg, sp, fs, 50)
+    sp = SignalProc.SignalProc(data, fs, 128, 128)
+    sg = sp.spectrogram(data, multitaper=False)
+    s = Segment(data, sg, sp, fs, 128)
 
-    energy = np.sum(sg,axis=1)
-    energy = medfilt(energy,15)
-    e2 = np.percentile(energy,95)*2
-    # Step 1: clicks have high energy
-    clicks = np.squeeze(np.where(energy>e2))
-    clicks = s.identifySegments(clicks, minlength=1)
+    # for each frq band get sections where energy exceeds some (90%) percentile
+    # and generate a binary spectrogram
+    sgb = np.zeros((np.shape(sg)))
+    for y in range(np.shape(sg)[1]):
+        ey = sg[:, y]
+        # em = medfilt(ey, 15)
+        ep = np.percentile(ey, 90)
+        sgb[np.where(ey > ep), y] = 1
+
+    # If lots of frq bands got 1 then predict a click
+    clicks = []
+    for x in range(np.shape(sg)[0]):
+        if np.sum(sgb[x, :]) > np.shape(sgb)[1]*0.75:
+            clicks.append(x)
 
     app = QtGui.QApplication([])
 
     mw = QtGui.QMainWindow()
     mw.show()
-    mw.resize(800, 600)
+    mw.resize(1200, 500)
 
     win = pg.GraphicsLayoutWidget()
     mw.setCentralWidget(win)
     vb1 = win.addViewBox(enableMouse=False, enableMenu=False, row=0, col=0)
     im1 = pg.ImageItem(enableMouse=False)
     vb1.addItem(im1)
-    im1.setImage(10.*np.log10(sg))
+    im1.setImage(sgb)
+
+    if len(clicks) > 0:
+        clicks = s.identifySegments(clicks, minlength=1)
 
     for seg in clicks:
         a = pg.LinearRegionItem()
-        a.setRegion([convertAmpltoSpec(seg[0],fs,128), convertAmpltoSpec(seg[1],fs,128)])
+        a.setRegion([convertAmpltoSpec(seg[0], fs, 128), convertAmpltoSpec(seg[1], fs, 128)])
         vb1.addItem(a, ignoreBounds=True)
 
     QtGui.QApplication.instance().exec_()
+
+
+    # energy = np.sum(sg, axis=1)
+    # energy = medfilt(energy, 15)
+    # e2 = np.percentile(energy, 50)*2
+    # # Step 1: clicks have high energy
+    # clicks = np.squeeze(np.where(energy > e2))
+    # print(clicks)
+    # if len(clicks) > 0:
+    #     clicks = s.identifySegments(clicks, minlength=1)
+    #
+    # app = QtGui.QApplication([])
+    #
+    # mw = QtGui.QMainWindow()
+    # mw.show()
+    # mw.resize(800, 600)
+    #
+    # win = pg.GraphicsLayoutWidget()
+    # mw.setCentralWidget(win)
+    # vb1 = win.addViewBox(enableMouse=False, enableMenu=False, row=0, col=0)
+    # im1 = pg.ImageItem(enableMouse=False)
+    # vb1.addItem(im1)
+    # im1.setImage(10.*np.log10(sg))
+    #
+    # for seg in clicks:
+    #     a = pg.LinearRegionItem()
+    #     a.setRegion([convertAmpltoSpec(seg[0], fs, 128), convertAmpltoSpec(seg[1],fs,128)])
+    #     vb1.addItem(a, ignoreBounds=True)
+    #
+    # QtGui.QApplication.instance().exec_()
+
+# detectClicks()
