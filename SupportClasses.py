@@ -134,6 +134,22 @@ class postProcess:
                 continue
         self.segments = newSegments
 
+    def wind_cal(self, data, sampleRate):
+        ''' Calculate wind '''
+        wind_lower = 2.0 * 50 / sampleRate
+        wind_upper = 2.0 * 500 / sampleRate
+        f, p = signal.welch(data, fs=sampleRate, window='hamming', nperseg=512, detrend=False)
+        p = np.log10(p)
+        # check wind
+        limite_inf = int(round(
+            p.__len__() * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
+        limite_sup = int(round(
+            p.__len__() * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
+        a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
+
+        return np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
+
+
     def wind(self, Tmean_wind = 2):
         """
         delete wind corrupted segments (targeting moderate wind and above) if no sign of kiwi (check len)
@@ -177,26 +193,35 @@ class postProcess:
         # plt.show()
         self.segments = newSegments
 
-    def wind_plot(self, Tmean_wind = 1e-8):
+    def impulse_cal(self, window, engp, fp):
         """
-        delete wind corrupted segments (targeting moderate wind and above) if no sign of kiwi (check len)
-        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
+        Find sections where impulse sounds occur e.g. clicks
+        window  -   window length (no overlap)
+        engp    -   energy percentile (thr), the percentile of energy to inform that a section got high energy across
+                    frequency bands
+        fp      -   frequency percentage (thr), the percentage of frequency bands to have high energy to mark a section
+                    as having impulse noise
+        :return: a binary list of length len(audioData)/window indicating presence of impulsive noise (1)
+        otherwise 0
         """
-        wind_lower = 2.0 * 100 / self.sampleRate
-        wind_upper = 2.0 * 250 / self.sampleRate
+        sp = SignalProc.SignalProc(self.audioData, self.sampleRate, window, window)
+        sg = sp.spectrogram(self.audioData, multitaper=False)
 
-        data = self.audioData[int(0*self.sampleRate):int((10)*self.sampleRate)]
+        # for each frq band get sections where energy exceeds some (90%) percentile
+        # and generate a binary spectrogram
+        sgb = np.zeros((np.shape(sg)))
+        ep = np.percentile(sg, engp, axis=0)    # note thr - 90% for energy percentile
+        for y in range(np.shape(sg)[1]):
+            ey = sg[:, y]
+            sgb[np.where(ey > ep[y]), y] = 1
 
-        f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
+        # If lots of frq bands got 1 then predict a click
+        impulse = np.where(np.count_nonzero(sgb, axis=1) > np.shape(sgb)[1] * fp, 1, 0)
+        gap = math.ceil(len(self.audioData) / window) - len(impulse)
+        if gap > 0:     # Sanity check
+            impulse = np.pad(impulse, (0, gap), 'constant')
 
-        # check wind
-        limite_inf = int(round(p.__len__() * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
-        limite_sup = int(round(p.__len__() * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
-        a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
-
-        mean_a_wind = np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
-        print("mean_a_wind: ", mean_a_wind)
-        return mean_a_wind
+        return impulse
 
     def rainClick(self):
         """

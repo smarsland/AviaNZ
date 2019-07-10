@@ -30,6 +30,9 @@ from PyQt5.QtCore import Qt, QDir
 import wavio
 import librosa
 import numpy as np
+import math
+import statistics
+from itertools import chain, repeat
 
 from pyqtgraph.Qt import QtGui
 from pyqtgraph.dockarea import *
@@ -360,7 +363,7 @@ class AviaNZ_batchProcess(QMainWindow):
                     ws = WaveletSegment.WaveletSegment(self.speciesData, 'dmey2')
                     # 'recaa' mode
                     newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
-                                                    d=False, f=True, wpmode="new")
+                                                    d=False, f=True, wpmode="new", noise=self.noise)
                 else:
                     # wipe all segments:
                     self.segments = []
@@ -619,6 +622,9 @@ class AviaNZ_batchProcess(QMainWindow):
 
             print("%d segments loaded from .data file" % len(self.segments))
 
+        # Wind and impulse masking
+        self.windImpMask()
+
         # Update the data that is seen by the other classes
         # TODO: keep an eye on this to add other classes as required
         if hasattr(self, 'seg'):
@@ -626,6 +632,70 @@ class AviaNZ_batchProcess(QMainWindow):
         else:
             self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
         self.sp.setNewData(self.audiodata,self.sampleRate)
+
+    def windImpMask(self, window=1, windT=2.5, engp=90, fp=0.75):
+        '''
+        Wind and rain masking
+        '''
+        n = math.ceil(len(self.audiodata) / self.sampleRate)
+        self.noise = np.ones((n))
+        wind = np.zeros((n))
+        postp = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=[], spInfo={})
+        start = 0
+        print(n,window)
+        for t in range(0, n, window):
+            end = min(len(self.audiodata), start + window * self.sampleRate)
+            w = postp.wind_cal(data=self.audiodata[start:end], sampleRate=self.sampleRate)
+            wind[t] = w
+            if w > windT:  # Note threshold
+                self.noise[t] = 0
+            start += window * self.sampleRate
+
+        # Wind gust has high variability compared to steady noise (in low frequency) which does not mask bird calls
+        # most of the time.
+        start = 0
+        if any(self.noise):
+            for t in range(0, n, 60):  # For each minute
+                end = min(len(wind), start + 60)
+                if statistics.variance(wind[start:end]) < 0.1 and np.max(wind[start:end]) < windT + 0.5:  # Note threshold
+                    self.noise[start:end] = 1  # If variation is low do not mask wind
+                start += 60
+
+        # Impulse masking
+        w1 = np.floor(self.sampleRate / 250)  # Window length of 1/250 sec selected experimentally
+        arr = [2 ** i for i in range(5, 11)]
+        pos = (np.abs(arr - w1)).argmin()
+        w = arr[pos]  # No overlap
+        imp = postp.impulse_cal(window=w, engp=engp, fp=fp)  # 1 - presence of impulse noise, 0 - otherwise
+        # When an impulsive noise detected look back and forth to make sure its not a bird call very close to
+        # the microphone.
+        imp_inds = np.where(imp > 0)[0].tolist()
+        imp = self.countConsecutive(imp_inds, len(imp))
+        imps = []
+        for item in imp:
+            if item > 10 or item == 0:  # Note threshold - 10 consecutive blocks ~1/25 sec
+                imps.append(0)
+            else:
+                imps.append(1)
+
+        imps = list(chain.from_iterable(repeat(e, w) for e in imps))  # Make it same length as self.data
+
+        # Mask only the affected samples
+        imps = np.subtract(list(np.ones((len(imps)))), imps)
+        self.audiodata = np.multiply(self.audiodata, imps)
+
+    def countConsecutive(self, nums, length):
+        gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s + 1 < e]
+        edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
+        edges = list(zip(edges, edges))
+        edges_reps = [item[1] - item[0] + 1 for item in edges]
+        res = np.zeros((length)).tolist()
+        t = 0
+        for item in edges:
+            for i in range(item[0], item[1]+1):
+                res[i] = edges_reps[t]
+            t += 1
+        return res
 
     def convertYtoFreq(self,y,sgy=None):
         """ Unit conversion """
