@@ -53,6 +53,17 @@ import json, time, os, math, csv, gc, wavio
 import WaveletSegment
 import librosa
 
+from sklearn.cluster import KMeans
+from sklearn.cluster import MiniBatchKMeans
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import Birch
+from sklearn.cluster import SpectralClustering
+from sklearn.cluster import MeanShift
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import AffinityPropagation
+# from sklearn.cluster import OPTICS
+# from sklearn import cluster_optics_dbscan
+from sklearn import metrics
 
 # TODO:
 # Put some stuff in here!
@@ -78,7 +89,8 @@ class Learning:
             self.train = features
             self.trainTgt = labels
         else:
-            self.train, self.test, self.trainTgt, self.testTgt = train_test_split(features, labels, test_size=testFraction, shuffle=True)
+            self.train, self.test, self.trainTgt, self.testTgt = train_test_split(features, labels,
+                                                                                  test_size=testFraction, shuffle=True)
 
     def performTest(self, model):
         testOut = model.predict(self.test)
@@ -181,6 +193,173 @@ class Learning:
 
         return model
     
+class Clustering:
+    # This class implements various clustering algorithms and performance measures for the AviaNZ interface
+    # Based on scikit-learn
+
+    def __init__(self, features, labels):
+        features = StandardScaler().fit_transform(features)
+        self.features = features
+        self.targets = labels
+
+    def clusteringScore1(self, labels_true, labels):
+        """ Evaluate clusterinf performance using different scores when ground truth labels are present.
+        """
+        self.adjustedRandScore(labels_true, labels)
+        self.completenessScore(labels_true, labels)
+        self.homogeneityScore(labels_true, labels)
+        self.adjustedMutualInfo(labels_true, labels)
+        self.vMeasureScore(labels_true, labels)
+
+    def clusteringScore2(self, features, labels):
+        """ Evaluate clusterinf performance using different scores when ground truth labels are NOT present.
+        """
+        self.silhouetteCoef(features, labels)
+
+    def homogeneityScore(self, labels_true, labels):
+        """ Homogeneity: each cluster contains only members of a single class.
+            score - between 0.0 and 1.0.
+            1.0 perfectly homogeneous
+        """
+        hs = metrics.homogeneity_score(labels_true, labels)
+        print("Homogeneity: %0.3f" % hs)
+
+    def completenessScore(self, labels_true, labels):
+        """ Completeness: all members of a given class are assigned to the same cluster.
+            score - between 0.0 and 1.0.
+            1.0 perfectly complete
+        """
+        cs = metrics.completeness_score(labels_true, labels)
+        print("Completeness: %0.3f" % cs)
+
+    def vMeasureScore(self, labels_true, labels):
+        """ V-measure is the harmonic mean between homogeneity and completeness.
+            score - between 0.0 and 1.0.
+            1.0 perfectly complete labeling
+        """
+        vs = metrics.v_measure_score(labels_true, labels)
+        print("V-measure: %0.3f" % vs)
+
+    def adjustedRandScore(self, labels_true, labels):
+        """ Measures the similarity of the two assignments, ignoring permutations and with chance normalization.
+            score - between -1.0 and 1.0.
+            Random labelings will have score close to 0.0.
+            1.0 perfect match.
+        """
+        ari = metrics.adjusted_rand_score(labels_true, labels)
+        print("Adjusted Rand Index: %0.3f" % ari)
+
+    def adjustedMutualInfo(self, labels_true, labels):
+        """ Adjusted Mutual Information between two clusterings.
+            score - =< 1.0.
+            1.0 perfect match.
+        """
+        ami = metrics.adjusted_mutual_info_score(labels_true, labels)
+        print("Adjusted Mutual Information: %0.3f" % ami)
+
+    def silhouetteCoef(self, features, labels):
+        """ When the ground truth labels are not present.
+            Mean Silhouette Coefficient of all samples.
+            Calculated using the mean intra-cluster distance and the mean nearest-cluster distance for each
+            sample.
+            score - between -1.0 and 1.0 (perfect).
+            score close to zero: overlapping clusters.
+            negative score: a sample has been assigned to the wrong cluster, as a different cluster is more similar.
+        """
+        sc = metrics.silhouette_score(features, labels)
+        print("Silhouette Coefficient: %0.3f" % sc)
+
+    def kMeans(self, init='k-means++', n_clusters=8, n_init=10):
+        """ K-Means clustering.
+            Useful when: general-purpose, even cluster size, flat geometry, not too many clusters.
+        """
+        model = KMeans(init=init, n_clusters=n_clusters, n_init=n_init)
+        model.fit(self.features)
+
+        return model
+
+    def miniBatchKmeans(self, n_clusters=8, init='k-means++', max_iter=100, batch_size=25):
+        """ Variant of the K-Means algorithm, uses mini-batches to reduce the computation time.
+        """
+        model = MiniBatchKMeans(n_clusters=n_clusters, init=init, max_iter=max_iter, batch_size=batch_size)
+        model.fit(self.features)
+
+        return model
+
+    def meanShift(self):
+        """ A sliding-window-based algorithm that attempts to find dense areas of data points.
+            Usecase: many clusters, uneven cluster size, non-flat geometry.
+        """
+        model = MeanShift()
+        model.fit(self.features)
+
+        return model
+
+    def DBscan(self, eps=0.5, min_samples=5, metric='euclidean'):
+        """ Density-Based Spatial Clustering of Applications with Noise. An extension to mean shift clustering.
+            Finds core samples of high density and expands clusters from them.
+            Usecase: non-flat geometry, uneven cluster sizes
+        """
+        model = DBSCAN(eps=eps, min_samples=min_samples, metric=metric)
+        model.fit(self.features)
+
+        return model
+
+    def birch(self, threshold=0.5, branching_factor=50, n_clusters=3, compute_labels=True, copy=True):
+        """ Builds a tree called the Characteristic Feature Tree (CFT) for the given data. The data is essentially lossy
+            compressed to a set of Characteristic Feature nodes (CF Nodes).
+            Usecase: large dataset, outlier removal, data reduction
+        """
+        model = Birch(threshold=threshold, branching_factor=branching_factor, n_clusters=n_clusters,
+                      compute_labels=compute_labels, copy=copy)
+        model.fit(self.features)
+
+        return model
+
+    def spectralClustering(self, n_clusters=8, eigen_solver=None, random_state=None, n_init=10, gamma=1.0,
+                           affinity='rbf', n_neighbors=10, eigen_tol=0.0, assign_labels='kmeans', degree=3,
+                           coef0=1, kernel_params=None, n_jobs=None):
+        """ Requires the number of clusters to be specified. Good for small number of classes.
+            Usecase: few clusters, even cluster size, non-flat geometry.
+        """
+        model = SpectralClustering(n_clusters=n_clusters, eigen_solver=eigen_solver, random_state=random_state,
+                                   n_init=n_init, gamma=gamma, affinity=affinity, n_neighbors=n_neighbors,
+                                   eigen_tol=eigen_tol, assign_labels=assign_labels, degree=degree, coef0=coef0,
+                                   kernel_params=kernel_params, n_jobs=n_jobs)
+        model.fit(self.features)
+
+        return model
+
+    def agglomerativeClustering(self, n_clusters=2, affinity='euclidean'):
+        """ A Hierarchical clustering using a bottom up approach: each observation starts in its own cluster, and
+            clusters are successively merged together.
+            Usecase: many clusters, possibly connectivity constraints, non Euclidean distances.
+        """
+        model = AgglomerativeClustering(n_clusters=n_clusters, affinity=affinity)
+        model.fit(self.features)
+
+        return model
+
+    def GMM(self, n_components=3, covariance_type='full', tol=0.001, reg_covar=1e-06, max_iter=100, n_init=1,
+            init_params='kmeans'):
+        """ Gaussian mixture model. Not scalable.
+            Usecase: flat geometry, good for density estimation.
+        """
+        model = GaussianMixture(n_components=n_components, covariance_type=covariance_type, tol=tol,
+                                reg_covar=reg_covar, max_iter=max_iter, n_init=n_init, init_params=init_params)
+        model.fit(self.features)
+        model.labels_ = model.predict(self.features)
+
+        return model
+
+    def affinityPropagation(self, damping=0.5, max_iter=200, convergence_iter=15):
+        """ Affinity Propagation.
+            Usecase: many clusters, uneven cluster size, non-flat geometry.
+        """
+        model = AffinityPropagation(damping=damping, max_iter=max_iter, convergence_iter=convergence_iter)
+        model.fit(self.features)
+
+        return model
 
 
 #For each sound class an ensemble of randomized decision trees (sklearn.ensemble.ExtraTreesRegressor) is applied. The number of estimators is chosen to be twice the number of selected features per class but not greater than 500. The winning solution considers 4 features when looking for the best split and requires a minimum of 3 samples to split an internal node.
@@ -315,6 +494,126 @@ class Validate:
         plt.legend(loc="best")
         return plt
 
+
+def testClustering():
+    # Very simple test using Iris data
+    import matplotlib.pyplot as plt
+    from sklearn.datasets import load_iris
+    data = load_iris()
+    learners = Clustering(data.data, data.target)
+
+    print('\nK-means-------------------------------------')
+    model = learners.kMeans(n_clusters=3)
+    learners.clusteringScore1(learners.targets, model.labels_)
+
+    print('\nMini batch K-means--------------------------')
+    model = learners.miniBatchKmeans(n_clusters=3)
+    learners.clusteringScore1(learners.targets, model.labels_)
+
+    print('\nDBSCAN--------------------------------------')
+    model = learners.DBscan(eps=0.5, min_samples=5)
+    learners.clusteringScore1(learners.targets, model.labels_)
+    # plot
+    core_samples_mask = np.zeros_like(model.labels_, dtype=bool)
+    core_samples_mask[model.core_sample_indices_] = True
+    unique_labels = set(model.labels_)
+    colors = [plt.cm.Spectral(each)
+              for each in np.linspace(0, 1, len(unique_labels))]
+    for k, col in zip(unique_labels, colors):
+        if k == -1:
+            # Black used for noise.
+            col = [0, 0, 0, 1]
+
+        class_member_mask = (model.labels_ == k)
+
+        xy = learners.features[class_member_mask & core_samples_mask]
+        plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(col), markeredgecolor='k', markersize=14)
+
+        xy = learners.features[class_member_mask & ~core_samples_mask]
+        plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(col),
+                 markeredgecolor='k', markersize=6)
+    plt.title('DBSCAN')
+    plt.show()
+
+    print('\nBirch----------------------------------------')
+    model = learners.birch(threshold=0.5)
+    learners.clusteringScore1(learners.targets, model.labels_)
+
+    print('\nSpectral Clustering--------------------------')
+    model = learners.spectralClustering()
+    learners.clusteringScore1(learners.targets, model.labels_)
+
+    print('\nMeanShift Clustering-------------------------')
+    model = learners.meanShift()
+    learners.clusteringScore1(learners.targets, model.labels_)
+
+    print('\nAgglomerative Clustering----------------------')
+    model = learners.agglomerativeClustering()
+    learners.clusteringScore1(learners.targets, model.labels_)
+
+    print('\nGMM------------------------------------------')
+    model = learners.GMM(n_components=3)
+    learners.clusteringScore1(learners.targets, model.labels_)
+
+    print('\nAffinity Propagation--------------------------')
+    model = learners.affinityPropagation()
+    learners.clusteringScore1(learners.targets, model.labels_)
+
+testClustering()
+
+def testLearning1():
+    # Very simple test
+    import Learning
+    from sklearn.datasets import make_classification
+    features, labels = make_classification(n_features=2, n_redundant=0, n_informative=2, random_state=1,
+                                           n_clusters_per_class=1)
+    learners = Learning.Learning(features, labels)
+
+    model = learners.trainMLP()
+    learners.performTest(model)
+    model = learners.trainKNN()
+    learners.performTest(model)
+    model = learners.trainSVM()
+    learners.performTest(model)
+    model = learners.trainGP()
+    learners.performTest(model)
+    model = learners.trainDecisionTree()
+    learners.performTest(model)
+    model = learners.trainRandomForest()
+    learners.performTest(model)
+    model = learners.trainBoosting()
+    learners.performTest(model)
+    model = learners.trainXGBoost()
+    learners.performTest(model)
+    model = learners.trainGMM()
+    learners.performTest(model)
+
+
+def testLearning2():
+    # Iris data
+    import Learning
+    from sklearn.datasets import load_iris
+    data = load_iris()
+    learners = Learning.Learning(data.data, data.target)
+
+    model = learners.trainMLP()
+    learners.performTest(model)
+    model = learners.trainKNN()
+    learners.performTest(model)
+    model = learners.trainSVM()
+    learners.performTest(model)
+    model = learners.trainGP()
+    learners.performTest(model)
+    model = learners.trainDecisionTree()
+    learners.performTest(model)
+    model = learners.trainRandomForest()
+    learners.performTest(model)
+    model = learners.trainBoosting()
+    learners.performTest(model)
+    model = learners.trainXGBoost()
+    learners.performTest(model)
+    model = learners.trainGMM()
+    learners.performTest(model)
 
 def learninigCurve(dataFile, clf, score=None):
     ''' Choose a classifier and plot the learning curve
@@ -550,60 +849,6 @@ def fit_GridSearchCV(dataFile, clf, nClasses=2):
         estimator = GridSearchCV(GaussianMixture(), param_grid=param_grid)
     estimator.fit(data, targets)
     print(estimator.best_estimator_)
-
-
-def testLearning1():
-    # Very simple test
-    import Learning
-    from sklearn.datasets import make_classification
-    features, labels = make_classification(n_features=2, n_redundant=0, n_informative=2, random_state=1, n_clusters_per_class=1)
-    learners = Learning.Learning(features, labels)
-    
-    model = learners.trainMLP()
-    learners.performTest(model)
-    model = learners.trainKNN()
-    learners.performTest(model)
-    model = learners.trainSVM()
-    learners.performTest(model)
-    model = learners.trainGP()
-    learners.performTest(model)
-    model = learners.trainDecisionTree()
-    learners.performTest(model)
-    model = learners.trainRandomForest()
-    learners.performTest(model)
-    model = learners.trainBoosting()
-    learners.performTest(model)
-    model = learners.trainXGBoost()
-    learners.performTest(model)
-    model = learners.trainGMM()
-    learners.performTest(model)
-
-
-def testLearning2():
-    # Iris data
-    import Learning
-    from sklearn.datasets import load_iris
-    data = load_iris()
-    learners = Learning.Learning(data.data, data.target)
-    
-    model = learners.trainMLP()
-    learners.performTest(model)
-    model = learners.trainKNN()
-    learners.performTest(model)
-    model = learners.trainSVM()
-    learners.performTest(model)
-    model = learners.trainGP()
-    learners.performTest(model)
-    model = learners.trainDecisionTree()
-    learners.performTest(model)
-    model = learners.trainRandomForest()
-    learners.performTest(model)
-    model = learners.trainBoosting()
-    learners.performTest(model)
-    model = learners.trainXGBoost()
-    learners.performTest(model)
-    model = learners.trainGMM()
-    learners.performTest(model)
 
 
 def TrainClassifier(dir, species, feature, clf=None, pca=False):
@@ -850,165 +1095,3 @@ def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     else:
         model = load(os.path.join(dir_clf, species+'_' + feature + '_' + clf + '.joblib'))
         learners.performTest(model)
-
-
-def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
-    '''
-    Generates different data sets for ML - variations of WE and MFCC
-    Can be continuous wav files or extracted segments
-    Continuous files + GT annotations OR
-    Extracted segments + tell if they are TPs or not
-    :param dir_src: path to the directory with recordings + GT annotations
-    :param feature: 'WEraw_all', 'WEbp_all', 'WEd_all', 'WEbpd_all', 'MFCCraw_all', 'MFCCbp_all', 'MFCCd_all',
-                    'MFCCbpd_all',
-                    'WE+MFCCraw_all', 'WE+MFCCbp_all', 'WE+MFCCd_all', 'WE+MFCCbpd_all'
-    :param species: species name (should be able to find species filter in dir_src)
-    :param filemode: 'long', 'segpos', 'segneg'
-    :param wpmode: 'pywt' or 'new' or 'aa'
-    :param dir_out: path to the output dir
-
-    :return: saves the data file to out-dir
-    '''
-
-    annotation = []
-    if 'WE' in feature:
-        nlevels = 5
-        waveletCoefs = np.array([]).reshape(2**(nlevels+1)-2, 0)
-    if 'MFCC' in feature:
-        n_mfcc = 48
-        n_bins = 8  # kakapo boom
-        # n_bins = 32   # others
-        delta = True
-        if delta:
-            MFCC = np.array([]).reshape(0, n_mfcc * 2 * n_bins)
-        else:
-            MFCC = np.array([]).reshape(0, n_mfcc * n_bins)
-    # Find the species filter
-    speciesData = json.load(open(os.path.join(dir_src, species + '.txt')))
-
-    for root, dirs, files in os.walk(str(dir_src)):
-        for file in files:
-            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res1.0sec.txt' in files or file.endswith('.wav') and filemode!='long' and os.stat(root + '/' + file).st_size > 150:
-                opstartingtime = time.time()
-                wavFile = root + '/' + file[:-4]
-                print(wavFile)
-                data, currentannotation, sampleRate = loadData(wavFile, filemode)
-
-                ws = WaveletSegment.WaveletSegment(data=data, sampleRate=sampleRate)
-                if feature == 'WEraw_all' or feature == 'MFCCraw_all' or feature == 'WE+MFCCraw_all':
-                    data = ws.preprocess(speciesData, d=False, f=False)
-                elif feature == 'WEbp_all' or feature == 'MFCCbp_all' or feature == 'WE+MFCCbp_all':
-                    data = ws.preprocess(speciesData, d=False, f=True)
-                elif feature == 'WEd_all' or feature == 'MFCCd_all' or feature == 'WE+MFCCd_all':
-                    data = ws.preprocess(speciesData, d=True, f=False)
-                elif feature == 'WEbpd_all' or feature == 'MFCCbpd_all' or feature == 'WE+MFCCbpd_all':
-                    data = ws.preprocess(speciesData, d=True, f=True)
-
-                # Compute energy in each WP node and store
-                if 'WE' in feature:
-                    currWCs = ws.computeWaveletEnergy(data=data, sampleRate=ws.sampleRate, nlevels=nlevels,
-                                                      wpmode=wpmode)
-                    waveletCoefs = np.column_stack((waveletCoefs, currWCs))
-                if 'MFCC' in feature:
-                    currMFCC = computeMFCC(data=data, sampleRate=ws.sampleRate, n_mfcc=n_mfcc, n_bins=n_bins, delta=delta)
-                    MFCC = np.concatenate((MFCC, currMFCC), axis=0)
-                annotation.extend(currentannotation)
-                print("file loaded in", time.time() - opstartingtime)
-
-    annotation = np.array(annotation)
-    ann = np.reshape(annotation, (len(annotation), 1))
-    if 'WE' in feature and 'MFCC' not in feature:
-        # Prepare WC data and annotation targets into a matrix for saving
-        WC = np.transpose(waveletCoefs)
-        # ann = np.reshape(annotation,(len(annotation),1))
-        MLdata = np.append(WC, ann, axis=1)
-    elif 'MFCC' in feature and 'WE' not in feature:
-        # ann = np.reshape(annotation, (len(annotation), 1))
-        MLdata = np.append(MFCC, ann, axis=1)
-    elif 'WE' in feature and 'MFCC' in feature:
-        WC = np.transpose(waveletCoefs)
-        WE_MFCC = np.append(WC, MFCC, axis=1)
-        MLdata = np.append(WE_MFCC, ann, axis=1)
-    np.savetxt(os.path.join(dir_out, species + '_' + feature + '.tsv'), MLdata, delimiter="\t")
-    print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(annotation), len(annotation)))
-
-
-def loadData(fName, filemode):
-    '''
-    Load wav and GT for ML data set generation
-    :param fName:
-    :param filemode: 'long' or 'segpos' or 'segneg'
-    :return: audio data, GT, sampleRate
-    '''
-    filename = fName+'.wav'
-    filenameAnnotation = fName+'-res1.0sec.txt'
-    try:
-        wavobj = wavio.read(filename)
-    except:
-        print("unsupported file: ", filename)
-        pass
-    sampleRate = wavobj.rate
-    data = wavobj.data
-    if data.dtype is not 'float':
-        data = data.astype('float') #/ 32768.0
-    if np.shape(np.shape(data))[0]>1:
-        data = np.squeeze(data[:,0])
-    n = math.ceil(len(data)/sampleRate)
-
-    if filemode=='long':
-        # GT from the txt file
-        fileAnnotation = []
-        with open(filenameAnnotation) as f:
-            reader = csv.reader(f, delimiter="\t")
-            d = list(reader)
-        if d[-1]==[]:
-            d = d[:-1]
-        if len(d) != n:
-            print("ERROR: annotation length %d does not match file duration %d!" %(len(d), n))
-            return
-        # for each second, store 0/1 presence:
-        sum = 0
-        for row in d:
-            fileAnnotation.append(int(row[1]))
-            sum += int(row[1])
-    elif filemode=='segpos':
-        fileAnnotation = np.ones((math.ceil(len(data) / sampleRate), 1))
-    elif filemode=='segneg':
-        fileAnnotation = np.zeros((math.ceil(len(data) / sampleRate), 1))
-    return data, np.array(fileAnnotation), sampleRate
-
-
-def computeMFCC(data, sampleRate, n_mfcc, n_bins, delta):
-    '''
-    Compute MFCC for each second of data and return as a matrix
-    :param data: audio data
-    :param sampleRate: sample rate
-    :param delta: True/False
-    :return: MFCC metrix
-    '''
-    n = math.ceil(len(data) / sampleRate)
-    if delta:
-        mfcc = np.zeros((n, n_mfcc * 2 * n_bins))
-    else:
-        mfcc=np.zeros((n, n_mfcc*n_bins))
-    i = 0
-    for t in range(n):
-        end = min(len(data), (t + 1) * sampleRate)
-        if end == len(data) and len(data) % sampleRate != 0:
-            continue
-        mfcc1 = librosa.feature.mfcc(y=data[t * sampleRate:end], sr=sampleRate, n_mfcc=n_mfcc, n_fft=2048,
-                                        hop_length=512)  # n_fft=10240, hop_length=2560
-        if delta:
-            if n_bins == 8:
-                mfcc1_delta = librosa.feature.delta(mfcc1, width=5)
-            else:
-                mfcc1_delta = librosa.feature.delta(mfcc1)
-            mfcc1 = np.concatenate((mfcc1, mfcc1_delta), axis=0)
-        # Normalize
-        mfcc1 -= np.mean(mfcc1, axis=0)
-        mfcc1 /= np.max(np.abs(mfcc1), axis=0)
-        mfcc1 = np.reshape(mfcc1, np.shape(mfcc1)[0] * np.shape(mfcc1)[1])
-        mfcc1 = mfcc1.flatten()
-        mfcc[i, :] = mfcc1
-        i += 1
-    return mfcc
