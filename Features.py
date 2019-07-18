@@ -25,8 +25,12 @@ import numpy as np
 import librosa
 import SignalProc
 import SupportClasses
+import WaveletSegment
 import wavio
-
+from scipy import signal
+import math
+import os
+import re
 
 # TODO:
 # First thing is to get my head around everything that is going on, which is:
@@ -127,20 +131,35 @@ class Features:
         self.sampleRate = sampleRate
         self.sg = sp.spectrogram(data, multitaper=False,window_width=self.window_width,incr=self.incr,window='Ones')
 
-    def get_mfcc(self):
-        # Use librosa to get the MFCC coefficients. These seem to have a window of 512, not changeable (NP: can change it, n_fft=2048, hop_length=512)
-        mfcc = librosa.feature.mfcc(self.data, self.sampleRate)
+    def get_mfcc(self, n_mfcc=48, n_bins=32, delta=True):
+        # Use librosa to get the MFCC coefficients.
+        # n_bins = 8  # kakapo boom
+        mfcc = librosa.feature.mfcc(y=self.data, sr=self.sampleRate, n_mfcc=n_mfcc, n_fft=2048,
+                                        hop_length=512)  # n_fft=10240, hop_length=2560
+        if delta:
+            if n_bins == 8:
+                mfcc_delta = librosa.feature.delta(mfcc, width=5)
+            else:
+                mfcc_delta = librosa.feature.delta(mfcc)
+            mfcc = np.concatenate((mfcc, mfcc_delta), axis=0)
 
         # Normalise
         mfcc -= np.mean(mfcc,axis=0)
         mfcc /= np.max(np.abs(mfcc),axis=0)
 
-        # Or:
-        melBasis = librosa.filters.mel(self.sampleRate)
-        melSpec = np.dot(melBasis,data)
-
+        # # Or:
+        # melBasis = librosa.filters.mel(self.sampleRate)
+        # melSpec = np.dot(melBasis,self.data)
 
         return mfcc
+
+    def get_WE(self, nlevels=5):
+        """ Wavelet energies
+        """
+        ws = WaveletSegment.WaveletSegment(spInfo=[])
+        WE = ws.computeWaveletEnergy(data=self.data, sampleRate=self.sampleRate, nlevels=nlevels, wpmode='new')
+
+        return WE
 
     def get_chroma(self):
         # Use librosa to get the chroma coefficients
@@ -150,7 +169,7 @@ class Features:
         cstft = librosa.feature.chroma_stft(self.data,self.sampleRate)
         ccqt = librosa.feature.chroma_cqt(self.data,self.sampleRate)
         cens = librosa.feature.chroma_cens(self.data,self.sampleRate)
-        return[cstft,ccqt,cens]
+        return[cstft, ccqt, cens]
 
     def get_tonnetz(self):
         # Use librosa to get the 6 tonnetz coefficients
@@ -293,22 +312,102 @@ class Features:
         # Also? max bearing, peak correlation, peak lag
         return (mina, mint, maxa, maxt, peaka, peakt,rmsa)
 
-    def computeCorrelation(self):
-        scipy.signal.fftconvolve(a, b, mode='same')
+    def computeCorrelation(self, a, b):
+        """ Convolve a and b using FFT
+        """
 
-    def get_SAP_features(self,data,fs,window_width,incr,K=2)
+        c = signal.fftconvolve(a, b, mode='same')
+
+        return c
+
+    def get_SAP_features(self,data,fs,window_width=256,incr=128,K=2):
         """ Compute the Sound Analysis Pro features, i.e., Wiener entropy, spectral derivative, and their variants.
         Most of the code is in SignalProc.py"""
         sp = SignalProc.SignalProc(sampleRate=fs, window_width=256, incr=128)
     
-        spectral_deriv, sg, freq_mod, wiener_entropy, mean_freq, np.fliplr(contours) = sp.spectral_derivative(data,fs,window_width=256,incr=128,K=2,threshold=0.5,returnAll=True)
+        spectral_deriv, sg, freq_mod, wiener_entropy, mean_freq, contours = sp.spectral_derivative(data, fs,
+                                            window_width=window_width, incr=incr, K=2, threshold=0.5, returnAll=True)
     
-        goodness_of_pitch = sp.goodness_of_pitch(spectral_deriv,sg)
+        goodness_of_pitch = sp.goodness_of_pitch(spectral_deriv, sg)
     
         # Now compute the continuity over time, freq as mean duration of contours in window, mean frequency range
         # TODO
     
         return spectral_deriv, goodness_of_pitch, freq_mod, contours, wiener_entropy, mean_freq
+
+
+def loadFile(filename):
+    wavobj = wavio.read(filename)
+    sampleRate = wavobj.rate
+    audiodata = wavobj.data
+
+    # None of the following should be necessary for librosa
+    if audiodata.dtype is not 'float':
+        audiodata = audiodata.astype('float')   #/ 32768.0
+    if np.shape(np.shape(audiodata))[0]>1:
+        audiodata = audiodata[:,0]
+
+    # if sampleRate != 16000:
+    #     audiodata = librosa.core.audio.resample(audiodata, sampleRate, 16000)
+    #     sampleRate=16000
+
+    # # pre-process
+    # sc = SupportClasses.preProcess(audioData=audiodata, sampleRate=sampleRate, species='Kiwi', df=False)
+    # audiodata,sampleRate = sc.denoise_filter()
+    return audiodata, sampleRate
+
+def genCluterData(dir, duration=1, sampRate=16000):
+    # male, female kiwi syllables from denoising chapter. They are in different lengths ~.87 sec min, therefore get the
+    # middle 0.8 sec only to make the features with fixed len.
+    f1 = open(dir + '/' + "mfcc.tsv", "a+")
+    for root, dirs, files in os.walk(str(dir)):
+        for filename in files:
+            if filename.endswith('.wav'):
+                filename = root + '/' + filename
+                # determin call type from the folder name
+                type = root.split("\\")[-1]
+                if type == 'male':
+                    tgt = 0
+                elif type == 'female':
+                    tgt = 1
+                # elif type == 'trill':
+                #     tgt = 2
+                data, fs = loadFile(filename)
+                # resample where necessary
+                if fs != sampRate:
+                    data = librosa.core.audio.resample(data, fs, sampRate)
+                    fs = sampRate
+                # get the middle 'duration' secs
+                middle_duration = int(duration * fs)
+                middleIndex = int((len(data) - 1) / 2)
+                if middle_duration < len(data):
+                    data = data[int(middleIndex - middle_duration/2): int(middleIndex + middle_duration/2)]
+
+                # # Wavelet energy
+                # ws = WaveletSegment.WaveletSegment(spInfo=[])
+                # wc = ws.computeWaveletEnergy(data=data, sampleRate=fs, nlevels=5, wpmode='new')
+                # wc = wc.tolist()
+                # wc = [i for sublist in wc for i in sublist]
+                # print(filename, np.shape(wc))
+                # f1.write("%s\t" % (filename))
+                # for i in wc:
+                #     f1.write("%f\t" % (i))
+                # f1.write("%d\n" % (tgt))
+
+                # MFCC
+                f = Features(data, fs, 256, 128)
+                mfcc = f.get_mfcc().tolist()    # 96x22 matrix
+                m = [i for sublist in mfcc for i in sublist]
+                print(filename, np.shape(mfcc))
+                # print(filename, np.shape(m))
+                f1.write("%s\t" % (filename))
+                for i in m:
+                    f1.write("%f\t" % (i))
+                f1.write("%d\n" % (tgt))
+    f1.close()
+
+# genCluterData('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi', duration=0.8)
+
 
 def mfcc(y1,y2,y3,sr1,sr2,sr3,yTest,srTest):
     # import dtw
@@ -424,27 +523,6 @@ def lcsDistanceMatrix(s0, s1):
                 distMatrix[i+1][j+1] = max(distMatrix[i][j+1], distMatrix[i+1][j])
     return distMatrix
 
-#--- testig
-def loadFile(filename):
-    wavobj = wavio.read(filename)
-    sampleRate = wavobj.rate
-    audiodata = wavobj.data
-
-    # None of the following should be necessary for librosa
-    if audiodata.dtype is not 'float':
-        audiodata = audiodata.astype('float') #/ 32768.0
-    if np.shape(np.shape(audiodata))[0]>1:
-        audiodata = audiodata[:,0]
-
-    # if sampleRate != 16000:
-    #     audiodata = librosa.core.audio.resample(audiodata, sampleRate, 16000)
-    #     sampleRate=16000
-
-    # pre-process
-    sc = SupportClasses.preProcess(audioData=audiodata, sampleRate=sampleRate, species='Kiwi', df=False)
-    audiodata,sampleRate = sc.denoise_filter()
-    return audiodata,sampleRate
-
 #####
 # yTest,srTest=loadFile('Sound Files/dtw_mfcc/kiwi/kiwifemale/bf10.wav')
 
@@ -473,13 +551,12 @@ def isKiwi_dtw_mfcc(dirName, yTest, srTest):
 #print dList
 
 def testFeatures():
-    import wavio
-    wavobj = wavio.read('Sound Files/tril1.wav')
+    wavobj = wavio.read('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\male\male1.wav')
     fs = wavobj.rate
     data = wavobj.data
 
     if data.dtype is not 'float':
-        data = data.astype('float') # / 32768.0
+        data = data.astype('float')         # / 32768.0
 
     if np.shape(np.shape(data))[0] > 1:
         data = data[:, 0]
@@ -490,10 +567,16 @@ def testFeatures():
     #sg = sg ** 2
     sg = sp.spectrogram(data, multitaper=False, window_width=256, incr=128, window='Hann')
 
-    f = Features(data,fs,256,128)
+    f = Features(data, fs, 256, 128)
 
     features = []
     # Loop over the segments (and time slices within?)
+    mfcc = f.get_mfcc().tolist()
+    # features.append(mfcc.tolist())
+    we = f.get_WE()
+    we = we.transpose().tolist()
+    # how to combine features with different resolution?
+
     features.append([f.get_Raven_spectrogram_measurements(sg=sg,fs=fs,window_width=256,f1=0,f2=np.shape(sg)[1],t1=0,t2=np.shape(sg)[0]),f.get_Raven_robust_measurements(sg,fs,0,np.shape(sg)[1],0,np.shape(sg)[0]),f.get_Raven_waveform_measurements(data,fs,0,len(data)),f.wiener_entropy(sg)])
 
     # Will need to think about feature vector length for the librosa features, since they are on fixed windows
@@ -503,4 +586,168 @@ def testFeatures():
     f.get_spectral_features()
     f.get_lpc(data,order=44)
     # DCT
+
+# testFeatures()
+
+# ---
+def generateDataset(dir_src, feature, species, filemode, wpmode, dir_out):
+    '''
+    Generates different data sets for ML - variations of WE and MFCC
+    Can be continuous wav files or extracted segments
+    Continuous files + GT annotations OR
+    Extracted segments + tell if they are TPs or not
+    :param dir_src: path to the directory with recordings + GT annotations
+    :param feature: 'WEraw_all', 'WEbp_all', 'WEd_all', 'WEbpd_all', 'MFCCraw_all', 'MFCCbp_all', 'MFCCd_all',
+                    'MFCCbpd_all',
+                    'WE+MFCCraw_all', 'WE+MFCCbp_all', 'WE+MFCCd_all', 'WE+MFCCbpd_all'
+    :param species: species name (should be able to find species filter in dir_src)
+    :param filemode: 'long', 'segpos', 'segneg'
+    :param wpmode: 'pywt' or 'new' or 'aa'
+    :param dir_out: path to the output dir
+
+    :return: saves the data file to out-dir
+    '''
+
+    annotation = []
+    if 'WE' in feature:
+        nlevels = 5
+        waveletCoefs = np.array([]).reshape(2**(nlevels+1)-2, 0)
+    if 'MFCC' in feature:
+        n_mfcc = 48
+        n_bins = 8  # kakapo boom
+        # n_bins = 32   # others
+        delta = True
+        if delta:
+            MFCC = np.array([]).reshape(0, n_mfcc * 2 * n_bins)
+        else:
+            MFCC = np.array([]).reshape(0, n_mfcc * n_bins)
+    # Find the species filter
+    speciesData = json.load(open(os.path.join(dir_src, species + '.txt')))
+
+    for root, dirs, files in os.walk(str(dir_src)):
+        for file in files:
+            if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res1.0sec.txt' in files or file.endswith('.wav') and filemode!='long' and os.stat(root + '/' + file).st_size > 150:
+                opstartingtime = time.time()
+                wavFile = root + '/' + file[:-4]
+                print(wavFile)
+                data, currentannotation, sampleRate = loadData(wavFile, filemode)
+
+                ws = WaveletSegment.WaveletSegment(data=data, sampleRate=sampleRate)
+                if feature == 'WEraw_all' or feature == 'MFCCraw_all' or feature == 'WE+MFCCraw_all':
+                    data = ws.preprocess(speciesData, d=False, f=False)
+                elif feature == 'WEbp_all' or feature == 'MFCCbp_all' or feature == 'WE+MFCCbp_all':
+                    data = ws.preprocess(speciesData, d=False, f=True)
+                elif feature == 'WEd_all' or feature == 'MFCCd_all' or feature == 'WE+MFCCd_all':
+                    data = ws.preprocess(speciesData, d=True, f=False)
+                elif feature == 'WEbpd_all' or feature == 'MFCCbpd_all' or feature == 'WE+MFCCbpd_all':
+                    data = ws.preprocess(speciesData, d=True, f=True)
+
+                # Compute energy in each WP node and store
+                if 'WE' in feature:
+                    currWCs = ws.computeWaveletEnergy(data=data, sampleRate=ws.sampleRate, nlevels=nlevels,
+                                                      wpmode=wpmode)
+                    waveletCoefs = np.column_stack((waveletCoefs, currWCs))
+                if 'MFCC' in feature:
+                    currMFCC = computeMFCC(data=data, sampleRate=ws.sampleRate, n_mfcc=n_mfcc, n_bins=n_bins, delta=delta)
+                    MFCC = np.concatenate((MFCC, currMFCC), axis=0)
+                annotation.extend(currentannotation)
+                print("file loaded in", time.time() - opstartingtime)
+
+    annotation = np.array(annotation)
+    ann = np.reshape(annotation, (len(annotation), 1))
+    if 'WE' in feature and 'MFCC' not in feature:
+        # Prepare WC data and annotation targets into a matrix for saving
+        WC = np.transpose(waveletCoefs)
+        # ann = np.reshape(annotation,(len(annotation),1))
+        MLdata = np.append(WC, ann, axis=1)
+    elif 'MFCC' in feature and 'WE' not in feature:
+        # ann = np.reshape(annotation, (len(annotation), 1))
+        MLdata = np.append(MFCC, ann, axis=1)
+    elif 'WE' in feature and 'MFCC' in feature:
+        WC = np.transpose(waveletCoefs)
+        WE_MFCC = np.append(WC, MFCC, axis=1)
+        MLdata = np.append(WE_MFCC, ann, axis=1)
+    np.savetxt(os.path.join(dir_out, species + '_' + feature + '.tsv'), MLdata, delimiter="\t")
+    print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(annotation), len(annotation)))
+
+
+# def loadData(fName, filemode):
+#     '''
+#     Load wav and GT for ML data set generation
+#     :param fName:
+#     :param filemode: 'long' or 'segpos' or 'segneg'
+#     :return: audio data, GT, sampleRate
+#     '''
+#     filename = fName+'.wav'
+#     filenameAnnotation = fName+'-res1.0sec.txt'
+#     try:
+#         wavobj = wavio.read(filename)
+#     except:
+#         print("unsupported file: ", filename)
+#         pass
+#     sampleRate = wavobj.rate
+#     data = wavobj.data
+#     if data.dtype is not 'float':
+#         data = data.astype('float') #/ 32768.0
+#     if np.shape(np.shape(data))[0]>1:
+#         data = np.squeeze(data[:,0])
+#     n = math.ceil(len(data)/sampleRate)
+#
+#     if filemode=='long':
+#         # GT from the txt file
+#         fileAnnotation = []
+#         with open(filenameAnnotation) as f:
+#             reader = csv.reader(f, delimiter="\t")
+#             d = list(reader)
+#         if d[-1]==[]:
+#             d = d[:-1]
+#         if len(d) != n:
+#             print("ERROR: annotation length %d does not match file duration %d!" %(len(d), n))
+#             return
+#         # for each second, store 0/1 presence:
+#         sum = 0
+#         for row in d:
+#             fileAnnotation.append(int(row[1]))
+#             sum += int(row[1])
+#     elif filemode=='segpos':
+#         fileAnnotation = np.ones((math.ceil(len(data) / sampleRate), 1))
+#     elif filemode=='segneg':
+#         fileAnnotation = np.zeros((math.ceil(len(data) / sampleRate), 1))
+#     return data, np.array(fileAnnotation), sampleRate
+
+
+def computeMFCC(data, sampleRate, n_mfcc, n_bins, delta):
+    '''
+    Compute MFCC for each second of data and return as a matrix
+    :param data: audio data
+    :param sampleRate: sample rate
+    :param delta: True/False
+    :return: MFCC metrix
+    '''
+    n = math.ceil(len(data) / sampleRate)
+    if delta:
+        mfcc = np.zeros((n, n_mfcc * 2 * n_bins))
+    else:
+        mfcc=np.zeros((n, n_mfcc*n_bins))
+    i = 0
+    for t in range(n):
+        end = min(len(data), (t + 1) * sampleRate)
+        if end == len(data) and len(data) % sampleRate != 0:
+            continue
+        mfcc1 = librosa.feature.mfcc(y=data[t * sampleRate:end], sr=sampleRate, n_mfcc=n_mfcc, n_fft=2048,
+                                        hop_length=512)  # n_fft=10240, hop_length=2560
+        if delta:
+            if n_bins == 8:
+                mfcc1_delta = librosa.feature.delta(mfcc1, width=5)
+            else:
+                mfcc1_delta = librosa.feature.delta(mfcc1)
+            mfcc1 = np.concatenate((mfcc1, mfcc1_delta), axis=0)
+        # Normalize
+        mfcc1 -= np.mean(mfcc1, axis=0)
+        mfcc1 /= np.max(np.abs(mfcc1), axis=0)
+        mfcc1 = np.reshape(mfcc1, np.shape(mfcc1)[0] * np.shape(mfcc1)[1])
+        mfcc1 = mfcc1.flatten()
+        mfcc[i, :] = mfcc1
+        i += 1
+    return mfcc
 
