@@ -64,6 +64,8 @@ from sklearn.cluster import AffinityPropagation
 # from sklearn.cluster import OPTICS
 # from sklearn import cluster_optics_dbscan
 from sklearn import metrics
+import sompy
+from sklearn.manifold import TSNE
 
 # TODO:
 # Put some stuff in here!
@@ -113,7 +115,7 @@ class Learning:
 
         return model
 
-    def trainKNN(self, K):
+    def trainKNN(self, K=5):
         model = KNeighborsClassifier(K)
         model.fit(self.train, self.trainTgt)
 
@@ -123,7 +125,7 @@ class Learning:
 
         return model
 
-    def trainSVM(self, kernel, C, gamma):
+    def trainSVM(self, kernel='rbf', C=1, gamma='auto'):
         model = SVC(kernel=kernel, C=C, gamma=gamma)
         model.fit(self.train, self.trainTgt)
 
@@ -203,18 +205,22 @@ class Clustering:
         self.targets = labels
 
     def clusteringScore1(self, labels_true, labels):
-        """ Evaluate clusterinf performance using different scores when ground truth labels are present.
+        """ Evaluate clustering performance using different scores when ground truth labels are present.
         """
-        self.adjustedRandScore(labels_true, labels)
-        self.completenessScore(labels_true, labels)
-        self.homogeneityScore(labels_true, labels)
-        self.adjustedMutualInfo(labels_true, labels)
-        self.vMeasureScore(labels_true, labels)
+        arc = self.adjustedRandScore(labels_true, labels)
+        ami = self.adjustedMutualInfo(labels_true, labels)
+        h = self.homogeneityScore(labels_true, labels)
+        c = self.completenessScore(labels_true, labels)
+        v = self.vMeasureScore(labels_true, labels)
+
+        return arc, ami, h, c, v
 
     def clusteringScore2(self, features, labels):
-        """ Evaluate clusterinf performance using different scores when ground truth labels are NOT present.
+        """ Evaluate clustering performance using different scores when ground truth labels are NOT present.
         """
-        self.silhouetteCoef(features, labels)
+        sc = self.silhouetteCoef(features, labels)
+
+        return sc
 
     def homogeneityScore(self, labels_true, labels):
         """ Homogeneity: each cluster contains only members of a single class.
@@ -224,6 +230,8 @@ class Clustering:
         hs = metrics.homogeneity_score(labels_true, labels)
         print("Homogeneity: %0.3f" % hs)
 
+        return hs
+
     def completenessScore(self, labels_true, labels):
         """ Completeness: all members of a given class are assigned to the same cluster.
             score - between 0.0 and 1.0.
@@ -232,6 +240,8 @@ class Clustering:
         cs = metrics.completeness_score(labels_true, labels)
         print("Completeness: %0.3f" % cs)
 
+        return cs
+
     def vMeasureScore(self, labels_true, labels):
         """ V-measure is the harmonic mean between homogeneity and completeness.
             score - between 0.0 and 1.0.
@@ -239,6 +249,8 @@ class Clustering:
         """
         vs = metrics.v_measure_score(labels_true, labels)
         print("V-measure: %0.3f" % vs)
+
+        return vs
 
     def adjustedRandScore(self, labels_true, labels):
         """ Measures the similarity of the two assignments, ignoring permutations and with chance normalization.
@@ -249,13 +261,18 @@ class Clustering:
         ari = metrics.adjusted_rand_score(labels_true, labels)
         print("Adjusted Rand Index: %0.3f" % ari)
 
+        return ari
+
     def adjustedMutualInfo(self, labels_true, labels):
-        """ Adjusted Mutual Information between two clusterings.
+        """ Adjusted Mutual Information between two clusterings. Measures the agreement of the two assignments,
+            ignoring permutations.
             score - =< 1.0.
             1.0 perfect match.
         """
         ami = metrics.adjusted_mutual_info_score(labels_true, labels)
         print("Adjusted Mutual Information: %0.3f" % ami)
+
+        return ami
 
     def silhouetteCoef(self, features, labels):
         """ When the ground truth labels are not present.
@@ -268,6 +285,8 @@ class Clustering:
         """
         sc = metrics.silhouette_score(features, labels)
         print("Silhouette Coefficient: %0.3f" % sc)
+
+        return sc
 
     def kMeans(self, init='k-means++', n_clusters=8, n_init=10):
         """ K-Means clustering.
@@ -330,12 +349,14 @@ class Clustering:
 
         return model
 
-    def agglomerativeClustering(self, n_clusters=2, affinity='euclidean'):
+    def agglomerativeClustering(self, n_clusters=3, distance_threshold=None, linkage='ward', affinity='euclidean',
+                                compute_full_tree=False):
         """ A Hierarchical clustering using a bottom up approach: each observation starts in its own cluster, and
             clusters are successively merged together.
             Usecase: many clusters, possibly connectivity constraints, non Euclidean distances.
         """
-        model = AgglomerativeClustering(n_clusters=n_clusters, affinity=affinity)
+        model = AgglomerativeClustering(n_clusters=n_clusters, distance_threshold=distance_threshold, linkage=linkage,
+                                        affinity=affinity, compute_full_tree=compute_full_tree)
         model.fit(self.features)
 
         return model
@@ -360,6 +381,15 @@ class Clustering:
         model.fit(self.features)
 
         return model
+
+    def som(self, mapsize):
+        """ Self Organising Map
+        """
+        som = sompy.SOMFactory.build(self.features, [], mask=None, mapshape='planar', lattice='rect', normalization='var',
+                                     initialization='pca', neighborhood='gaussian', training='batch', name='sompy')
+        som.train()
+
+        return som
 
 
 #For each sound class an ensemble of randomized decision trees (sklearn.ensemble.ExtraTreesRegressor) is applied. The number of estimators is chosen to be twice the number of selected features per class but not greater than 500. The winning solution considers 4 features when looking for the best split and requires a minimum of 3 samples to split an internal node.
@@ -496,11 +526,13 @@ class Validate:
 
 
 def testClustering():
-    # Very simple test using Iris data
+    # Simple test using Iris data
     import matplotlib.pyplot as plt
     from sklearn.datasets import load_iris
     data = load_iris()
     learners = Clustering(data.data, data.target)
+
+    print('**************Iris dataset ******************')
 
     print('\nK-means-------------------------------------')
     model = learners.kMeans(n_clusters=3)
@@ -514,30 +546,31 @@ def testClustering():
     model = learners.DBscan(eps=0.5, min_samples=5)
     learners.clusteringScore1(learners.targets, model.labels_)
     # plot
-    core_samples_mask = np.zeros_like(model.labels_, dtype=bool)
-    core_samples_mask[model.core_sample_indices_] = True
-    unique_labels = set(model.labels_)
-    colors = [plt.cm.Spectral(each)
-              for each in np.linspace(0, 1, len(unique_labels))]
-    for k, col in zip(unique_labels, colors):
-        if k == -1:
-            # Black used for noise.
-            col = [0, 0, 0, 1]
-
-        class_member_mask = (model.labels_ == k)
-
-        xy = learners.features[class_member_mask & core_samples_mask]
-        plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(col), markeredgecolor='k', markersize=14)
-
-        xy = learners.features[class_member_mask & ~core_samples_mask]
-        plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(col),
-                 markeredgecolor='k', markersize=6)
-    plt.title('DBSCAN')
-    plt.show()
+    # core_samples_mask = np.zeros_like(model.labels_, dtype=bool)
+    # core_samples_mask[model.core_sample_indices_] = True
+    # unique_labels = set(model.labels_)
+    # colors = [plt.cm.Spectral(each)
+    #           for each in np.linspace(0, 1, len(unique_labels))]
+    # for k, col in zip(unique_labels, colors):
+    #     if k == -1:
+    #         # Black used for noise.
+    #         col = [0, 0, 0, 1]
+    #
+    #     class_member_mask = (model.labels_ == k)
+    #
+    #     xy = learners.features[class_member_mask & core_samples_mask]
+    #     plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(col), markeredgecolor='k', markersize=14)
+    #
+    #     xy = learners.features[class_member_mask & ~core_samples_mask]
+    #     plt.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(col),
+    #              markeredgecolor='k', markersize=6)
+    # plt.title('DBSCAN')
+    # plt.show()
 
     print('\nBirch----------------------------------------')
-    model = learners.birch(threshold=0.5)
+    model = learners.birch(threshold=0.95, n_clusters=None)
     learners.clusteringScore1(learners.targets, model.labels_)
+    print('# clusters', len(set(model.labels_)))
 
     print('\nSpectral Clustering--------------------------')
     model = learners.spectralClustering()
@@ -548,8 +581,14 @@ def testClustering():
     learners.clusteringScore1(learners.targets, model.labels_)
 
     print('\nAgglomerative Clustering----------------------')
-    model = learners.agglomerativeClustering()
+    model = learners.agglomerativeClustering(n_clusters=None, distance_threshold=1, compute_full_tree=True,
+                                             linkage='complete')
     learners.clusteringScore1(learners.targets, model.labels_)
+    spanner = learners.get_cluster_spanner(model)
+    newick_tree = learners.build_Newick_tree(model.children_, model.n_leaves_, learners.features, model.labels_, spanner)
+
+    tree = ete3.Tree(newick_tree)
+    tree.show()
 
     print('\nGMM------------------------------------------')
     model = learners.GMM(n_components=3)
@@ -559,7 +598,268 @@ def testClustering():
     model = learners.affinityPropagation()
     learners.clusteringScore1(learners.targets, model.labels_)
 
-testClustering()
+# testClustering()
+
+def cluster_kiwi(sampRate):
+    import pyqtgraph as pg
+    from pyqtgraph.Qt import QtCore, QtGui
+    import SignalProc
+    import wavio
+
+    d = pd.read_csv('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\we.tsv', sep="\t", header=None)
+    data = d.values
+
+    target = data[:, -1]
+    fnames = data[:, 0]
+    data = data[:, 1:-1]
+    # dim reduction before clustering
+    pca = PCA(n_components=0.9)
+    data = pca.fit_transform(data)
+    # data = TSNE().fit_transform(data)
+    learners = Clustering(data, target)
+
+    print('\n**************Kiwi dataset ******************')
+    # Only choose algorithms that does not require n_clusters
+    m = []
+    print('\nDBSCAN--------------------------------------')
+    model_dbscan = learners.DBscan(eps=0.5, min_samples=5)
+    # print(model_dbscan.labels_)
+    print('# clusters', len(set(model_dbscan.labels_)))
+    m.append(learners.clusteringScore1(learners.targets, model_dbscan.labels_))
+
+    print('\nBirch----------------------------------------')
+    model_birch = learners.birch(threshold=0.95, n_clusters=None)
+    # print(model_birch.labels_)
+    print('# clusters', len(set(model_birch.labels_)))
+    m.append(learners.clusteringScore1(learners.targets, model_birch.labels_))
+
+    print('\nAgglomerative Clustering----------------------')
+    model_agg = learners.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=5.0,
+                                             linkage='complete')    # Either set n_clusters=None and compute_full_tree=T
+                                                                    # or distance_threshold=None
+    model_agg.fit_predict(learners.features)
+    # print(model_agg.labels_)
+    print('# clusters', len(set(model_agg.labels_)))
+    m.append(learners.clusteringScore1(learners.targets, model_agg.labels_))
+
+    print('\nAffinity Propagation--------------------------')
+    model_aff = learners.affinityPropagation(damping=0.8, max_iter=400, convergence_iter=50)
+    # print(model_aff.labels_)
+    print('# clusters', len(set(model_aff.labels_)))
+    m.append(learners.clusteringScore1(learners.targets, model_aff.labels_))
+
+    best_m = np.argmax(m, axis=0).tolist()      # Get algorithm with the best performance on each index
+    best_alg = max(set(best_m), key=best_m.count)   # Get the overall best alg
+
+    # Analysis
+    if best_alg == 0:
+        model_best = model_dbscan
+        print('\n***best clustering by: DBSCAN')
+        print('predicted:\n', model_dbscan.labels_)
+        print('actual:\n', learners.targets)
+    elif best_alg == 1:
+        model_best = model_birch
+        print('\n***best clustering by: Birch')
+        print('predicted:\n', model_birch.labels_)
+        print('actual:\n', learners.targets)
+    elif best_alg == 2:
+        model_best = model_agg
+        print('\n***best clustering by: Agglomerative')
+        print('predicted:\n', model_agg.labels_)
+        print('actual:\n', learners.targets)
+    elif best_alg == 3:
+        model_best = model_aff
+        print('\n***best clustering by: Affinity')
+        print('predicted:\n', model_aff.labels_)
+        print('actual:\n', learners.targets)
+
+    # plot the examples using the best clustering model
+    n_clusters = len(set(model_best.labels_))
+    # get indices and plot them
+    labels = list(set(model_best.labels_))
+
+    app = QtGui.QApplication([])
+
+    for label in labels:
+
+        inds = np.where(model_best.labels_ == label)[0].tolist()
+
+        mw = QtGui.QMainWindow()
+        mw.show()
+        mw.resize(1200, 800)
+
+        win = pg.GraphicsLayoutWidget()
+        mw.setCentralWidget(win)
+
+        row = 0
+        col = 0
+
+        for i in inds:
+            wavobj = wavio.read(fnames[i])
+            fs = wavobj.rate
+            audiodata = wavobj.data
+            if audiodata.dtype is not 'float':
+                audiodata = audiodata.astype('float')
+            if np.shape(np.shape(audiodata))[0] > 1:
+                audiodata = audiodata[:, 0]
+
+            if fs != sampRate:
+                audiodata = librosa.core.audio.resample(audiodata, fs, sampRate)
+                fs = sampRate
+
+            sp = SignalProc.SignalProc(audiodata, fs, 128, 128)
+            sg = sp.spectrogram(audiodata, multitaper=False)
+
+            vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
+            vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row+1, col=col)
+            im = pg.ImageItem(enableMouse=False)
+            txt = fnames[i].split("/")[-1][:-4]
+            lbl = pg.LabelItem(txt, rotateAxis=(1,0), angle=179)
+            vb.addItem(lbl)
+            vb2.addItem(im)
+            im.setImage(sg)
+            im.setBorder('w')
+            mw.setWindowTitle("Class " + str(label) + ' - ' + str(np.shape(inds)[0]) + ' calls')
+
+            if row == 8:
+                row = 0
+                col += 1
+            else:
+                row += 2
+
+        QtGui.QApplication.instance().exec_()
+
+
+def cluster_ruru(sampRate):
+    import pyqtgraph as pg
+    from pyqtgraph.Qt import QtCore, QtGui
+    import SignalProc
+    import wavio
+
+    d = pd.read_csv('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\\ruru\we2.tsv', sep="\t", header=None)
+    data = d.values
+
+    target = data[:, -1]
+    fnames = data[:, 0]
+    data = data[:, 1:-1]
+    # dim reduction before clustering
+    # pca = PCA(n_components=0.9)
+    # data = pca.fit_transform(data)
+    data = TSNE().fit_transform(data)
+    learners = Clustering(data, target)
+
+    print('\n**************Ruru dataset******************')
+    # Only choose algorithms that does not require n_clusters
+    m = []
+    print('\nDBSCAN--------------------------------------')
+    model_dbscan = learners.DBscan(eps=0.5, min_samples=5)
+    # print(model_dbscan.labels_)
+    print('# clusters', len(set(model_dbscan.labels_)))
+    m.append(learners.clusteringScore1(learners.targets, model_dbscan.labels_))
+
+    print('\nBirch----------------------------------------')
+    model_birch = learners.birch(threshold=0.88, n_clusters=None)
+    # print(model_birch.labels_)
+    print('# clusters', len(set(model_birch.labels_)))
+    m.append(learners.clusteringScore1(learners.targets, model_birch.labels_))
+
+    print('\nAgglomerative Clustering----------------------')
+    model_agg = learners.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=4.4,
+                                             linkage='complete')    # Either set n_clusters=None and compute_full_tree=T
+                                                                    # or distance_threshold=None
+    model_agg.fit_predict(learners.features)
+    # print(model_agg.labels_)
+    print('# clusters', len(set(model_agg.labels_)))
+    m.append(learners.clusteringScore1(learners.targets, model_agg.labels_))
+
+    print('\nAffinity Propagation--------------------------')
+    model_aff = learners.affinityPropagation(damping=0.8, max_iter=400, convergence_iter=50)
+    # print(model_aff.labels_)
+    print('# clusters', len(set(model_aff.labels_)))
+    m.append(learners.clusteringScore1(learners.targets, model_aff.labels_))
+
+    best_m = np.argmax(m, axis=0).tolist()      # Get algorithm with the best performance on each index
+    best_alg = max(set(best_m), key=best_m.count)   # Get the overall best alg
+
+    # Analysis
+    if best_alg == 0:
+        model_best = model_dbscan
+        print('\n***best clustering by: DBSCAN')
+        print('predicted:\n', model_dbscan.labels_)
+        print('actual:\n', learners.targets)
+    elif best_alg == 1:
+        model_best = model_birch
+        print('\n***best clustering by: Birch')
+        print('predicted:\n', model_birch.labels_)
+        print('actual:\n', learners.targets)
+    elif best_alg == 2:
+        model_best = model_agg
+        print('\n***best clustering by: Agglomerative')
+        print('predicted:\n', model_agg.labels_)
+        print('actual:\n', learners.targets)
+    elif best_alg == 3:
+        model_best = model_aff
+        print('\n***best clustering by: Affinity')
+        print('predicted:\n', model_aff.labels_)
+        print('actual:\n', learners.targets)
+
+    # plot the examples using the best clustering model
+    # n_clusters = len(set(model_best.labels_))
+    # get indices and plot them
+    labels = list(set(model_best.labels_))
+
+    app = QtGui.QApplication([])
+
+    for label in labels:
+
+        inds = np.where(model_best.labels_ == label)[0].tolist()
+
+        mw = QtGui.QMainWindow()
+        mw.show()
+        mw.resize(1200, 800)
+
+        win = pg.GraphicsLayoutWidget()
+        mw.setCentralWidget(win)
+
+        row = 0
+        col = 0
+
+        for i in inds:
+            wavobj = wavio.read(fnames[i])
+            fs = wavobj.rate
+            audiodata = wavobj.data
+            if audiodata.dtype is not 'float':
+                audiodata = audiodata.astype('float')
+            if np.shape(np.shape(audiodata))[0] > 1:
+                audiodata = audiodata[:, 0]
+
+            if fs != sampRate:
+                audiodata = librosa.core.audio.resample(audiodata, fs, sampRate)
+                fs = sampRate
+
+            sp = SignalProc.SignalProc(audiodata, fs, 128, 128)
+            sg = sp.spectrogram(audiodata, multitaper=False)
+
+            vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
+            vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row+1, col=col)
+            im = pg.ImageItem(enableMouse=False)
+            txt = fnames[i].split("/")[-1][:-4]
+            lbl = pg.LabelItem(txt, rotateAxis=(1,0), angle=179)
+            vb.addItem(lbl)
+            vb2.addItem(im)
+            im.setImage(sg)
+            im.setBorder('w')
+            mw.setWindowTitle("Class " + str(label) + ' - ' + str(np.shape(inds)[0]) + ' calls')
+
+            if row == 8:
+                row = 0
+                col += 1
+            else:
+                row += 2
+
+        QtGui.QApplication.instance().exec_()
+
+cluster_ruru(sampRate=16000)
 
 def testLearning1():
     # Very simple test
@@ -592,9 +892,15 @@ def testLearning1():
 def testLearning2():
     # Iris data
     import Learning
-    from sklearn.datasets import load_iris
-    data = load_iris()
-    learners = Learning.Learning(data.data, data.target)
+    # from sklearn.datasets import load_iris
+    # data = load_iris()
+
+    d = pd.read_csv('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\mfcc.tsv', sep="\t", header=None)
+    data = d.values
+
+    target = data[:, -1]
+    data = data[:, 0:-1]
+    learners = Learning.Learning(data, target)
 
     model = learners.trainMLP()
     learners.performTest(model)
@@ -614,6 +920,8 @@ def testLearning2():
     learners.performTest(model)
     model = learners.trainGMM()
     learners.performTest(model)
+
+# testLearning2()
 
 def learninigCurve(dataFile, clf, score=None):
     ''' Choose a classifier and plot the learning curve
