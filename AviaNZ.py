@@ -225,6 +225,9 @@ class AviaNZ(QMainWindow):
             self.MouseDrawingButton = QtCore.Qt.RightButton
         else:
             self.MouseDrawingButton = QtCore.Qt.LeftButton
+        # SRM: min size of box to add
+        # TODO: Currently only hard-coded here!
+        self.minboxsize = 0.1
         self.createMenu()
         self.createFrame()
 
@@ -939,6 +942,11 @@ class AviaNZ(QMainWindow):
 
         # Remove the segments
         self.removeSegments()
+
+        # Check if media is playing and stop it if so
+        if hasattr(self,'media_obj'):
+            if self.media_obj.isPlaying():
+                self.stopPlayback()
 
         # This is a flag to say if the next thing that the user clicks on should be a start or a stop for segmentation
         if self.started:
@@ -2506,25 +2514,30 @@ class AviaNZ(QMainWindow):
                 else:
                     y1 = 0
                     y2 = 0
-                # If the user has pressed shift, copy the last species and don't use the context menu
-                # If they pressed Control, add ? to the names
-                # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
-                modifiers = QtGui.QApplication.keyboardModifiers()
-                if modifiers == QtCore.Qt.ShiftModifier:
-                    self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
-                elif modifiers == QtCore.Qt.ControlModifier:
-                    self.addSegment(x1, x2, y1, y2)
-                    # Context menu
-                    self.fillBirdList(unsure=True)
-                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                else:
-                    self.addSegment(x1, x2, y1, y2)
-                    # Context menu
-                    self.fillBirdList()
-                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
 
-                # select the new segment/box
-                self.selectSegment(self.box1id)
+                # SRM: When dragging, can sometimes make boxes by mistake, which is annoying.
+                # To avoid, check that the box isn't too small
+                #print(x1,x2,y1,y2,(x2-x1)*(y2-y1))
+                if (np.abs((x2-x1)*(y2-y1)) > self.minboxsize):
+                    # If the user has pressed shift, copy the last species and don't use the context menu
+                    # If they pressed Control, add ? to the names
+                    # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
+                    modifiers = QtGui.QApplication.keyboardModifiers()
+                    if modifiers == QtCore.Qt.ShiftModifier:
+                        self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
+                    elif modifiers == QtCore.Qt.ControlModifier:
+                        self.addSegment(x1, x2, y1, y2)
+                        # Context menu
+                        self.fillBirdList(unsure=True)
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                    else:
+                        self.addSegment(x1, x2, y1, y2)
+                        # Context menu
+                        self.fillBirdList()
+                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+
+                    # select the new segment/box
+                    self.selectSegment(self.box1id)
                 self.started = not(self.started)
                 self.startedInAmpl = False
 
