@@ -428,16 +428,18 @@ class AviaNZ_batchProcess(QMainWindow):
 
                 file = open(filename + '.data', 'r')
                 segments = json.load(file)
+                print(filename,len(segments))
                 file.close()
 
-                for seg in segments:
-                    if seg[0] == -1:
-                        continue
-                    for birdName in seg[4]:
-                        if birdName.endswith('?'):
-                            spList.add(birdName[:-1])
-                        else:
-                            spList.add(birdName)
+                if len(segments)>1:
+                    for seg in segments:
+                        if seg[0] == -1:
+                            continue
+                        for birdName in seg[4]:
+                            if birdName.endswith('?'):
+                                spList.add(birdName[:-1])
+                            else:
+                                spList.add(birdName)
 
             # Save the new excels
             for filename in allwavs:
@@ -966,7 +968,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # load segments
             self.segments = json.load(open(filename + '.data'))
 
-            if len(self.segments) == 0:
+            if len(self.segments) < 2: # First is metadata
                 # skip review dialog, but save the name into excel
                 print("No segments found in file %s" % filename)
                 filesuccess = 1
@@ -1164,7 +1166,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.longBirdList = None
 
         self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.config['MultipleSpecies'], self)
-        self.box1id = -1
+        self.box1id = 0
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
             self.humanClassifyDialog1.move(self.dialogPos)
