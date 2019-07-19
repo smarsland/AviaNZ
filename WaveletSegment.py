@@ -673,8 +673,7 @@ class WaveletSegment:
 
                         if learnMode == "recaa" or learnMode == "recaafull":
                             detected_c = self.detectCalls(self.WF, nodelist=[node], spInfo=spInfo,
-                                                          rf=rf, annotation=annotation, window=window, inc=inc,
-                                                          indstouse=self.impInds[indexF])
+                                                          rf=rf, annotation=annotation, window=window, inc=inc)
                         elif learnMode == "ethr" or learnMode == "elearn":
                             print("ERROR: learning mode ethr not implemented yet")
                             return
