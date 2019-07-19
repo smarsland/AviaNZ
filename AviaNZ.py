@@ -3853,7 +3853,9 @@ class AviaNZ(QMainWindow):
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window = 1
             inc = None
-            Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, d=False, f=True, rf=True, withzeros=True, learnMode='recaa', savedetections=True, window=window, inc=inc)
+            Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, d=False, f=True, rf=True,
+                                                               learnMode='recaa', savedetections=True, window=window,
+                                                               inc=inc)
             print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
             if TP+FN != 0:
                 recall = TP/(TP+FN)
@@ -3945,7 +3947,7 @@ class AviaNZ(QMainWindow):
                            'FreqRange': [minFrq, maxFrq]}
             # returns 2d lists of nodes over M x thr, or stats over M x thr
             #thrList = np.linspace(0.1, 1, num=self.waveletTDialog.setthr.value()) Virginia test to finde inconsistency
-            thrList = np.linspace(0, 1, num=self.waveletTDialog.setthr.value())
+            thrList = np.linspace(0.2, 1, num=self.waveletTDialog.setthr.value())
             MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
@@ -4038,6 +4040,7 @@ class AviaNZ(QMainWindow):
                                 msg = SupportClasses.MessagePopup("d", "Training completed!", 'Training completed!\nFollow Step 3 and test on a separate dataset before actual use.')
                                 msg.exec_()
                                 self.FilterFiles.append(self.species)
+                                self.waveletTDialog.browseTest.setEnabled(True)
                                 self.waveletTDialog.test.setEnabled(True)
                             else:
                                 # TODO: decide how to save the new filter when you don't want to overwrite
@@ -4126,7 +4129,18 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog.fs.setValue(int(np.min(fs)))
         self.waveletTDialog.fs.setRange(0, int(np.min(fs)))
         self.waveletTDialog.note_step2.setText('Above fields propagated using training data.\nAdjust if required.')
-        self.waveletTDialog.train.setEnabled(True)        
+
+        self.waveletTDialog.minlen.setEnabled(True)
+        self.waveletTDialog.maxlen.setEnabled(True)
+        self.waveletTDialog.fLow.setEnabled(True)
+        self.waveletTDialog.fHigh.setEnabled(True)
+        self.waveletTDialog.fs.setEnabled(True)
+        self.waveletTDialog.setM.setEnabled(True)
+        self.waveletTDialog.setthr.setEnabled(True)
+        self.waveletTDialog.wind.setEnabled(True)
+        self.waveletTDialog.rain.setEnabled(True)
+        self.waveletTDialog.ff.setEnabled(True)
+        self.waveletTDialog.train.setEnabled(True)
 
         msg = SupportClasses.MessagePopup("d", "Preparation done!", "Follow Step 2 to complete training.")
         msg.exec_()
@@ -4319,6 +4333,17 @@ class AviaNZ(QMainWindow):
         # get the species list from annotations
         self.waveletTDialog.fillFileList(self.dName)
         self.waveletTDialog.genGT.setEnabled(True)
+        self.waveletTDialog.minlen.setEnabled(False)
+        self.waveletTDialog.maxlen.setEnabled(False)
+        self.waveletTDialog.fLow.setEnabled(False)
+        self.waveletTDialog.fHigh.setEnabled(False)
+        self.waveletTDialog.fs.setEnabled(False)
+        self.waveletTDialog.setM.setEnabled(False)
+        self.waveletTDialog.setthr.setEnabled(False)
+        self.waveletTDialog.wind.setEnabled(False)
+        self.waveletTDialog.rain.setEnabled(False)
+        self.waveletTDialog.ff.setEnabled(False)
+        self.waveletTDialog.train.setEnabled(False)
         self.waveletTDialog.raise_()
 
     def browseTestData(self):
