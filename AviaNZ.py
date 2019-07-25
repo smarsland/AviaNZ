@@ -20,6 +20,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# TODO: Move fundamental freq and spec derivs if y axis changes
 # TODO: Automate some of the training options, also the extra filters
 # TODO: And the false positive graph
 # TODO: Think about the filter dictionary a bit more for option checking, and adding new options
@@ -1714,6 +1715,9 @@ class AviaNZ(QMainWindow):
                     self.addSegment(self.segments[count][0], self.segments[count][1],self.convertFreqtoY(self.segments[count][2]),self.convertFreqtoY(self.segments[count][3]),self.segments[count][4],False,count,remaking)
 
             #self.drawProtocolMarks()
+            # TODO: Also need to check for spectral derivatives and fundamental frequency and update locations
+            if remaking:
+                pass
 
             # This is the moving bar for the playback
             if not hasattr(self,'bar'):
