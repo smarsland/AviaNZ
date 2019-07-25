@@ -3849,9 +3849,17 @@ class AviaNZ(QMainWindow):
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window = 1
             inc = None
+            # Generate GT files from annotations in test folder
+            print('Generating GT...')
+            for root, dirs, files in os.walk(str(self.dNameTest)):
+                for file in files:
+                    if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
+                        wavFile = root + '/' + file
+                        _ = self.annotation2GT_OvWin(wavFile, species, window=window, inc=inc)
+
             Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, d=False, f=True, rf=True,
-                                                               learnMode='recaa', savedetections=True, window=window,
-                                                               inc=inc)
+                                                               learnMode='recaa', savedetections=False, window=window,
+                                                               inc=inc, wind=speciesData['Wind'])
             print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
             if TP+FN != 0:
                 recall = TP/(TP+FN)
@@ -3878,6 +3886,13 @@ class AviaNZ(QMainWindow):
         minFrq = int(self.waveletTDialog.fLow.value())
         maxFrq = int(self.waveletTDialog.fHigh.value())
         fs = int(self.waveletTDialog.fs.value())
+
+        if minFrq == fs/2:  # Sanity check
+            minFrq = 0
+
+        if maxFrq == 0:
+            maxFrq = fs/2
+
         if self.waveletTDialog.wind.checkState() == 0:
             wind = False
         else:
@@ -3891,8 +3906,8 @@ class AviaNZ(QMainWindow):
         else:
             ff = True
         # print("wind, rain, ff:", wind, rain, ff)
-        speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq]}
-        ws = WaveletSegment.WaveletSegment(speciesData)
+        speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen], 'FreqRange': [minFrq, maxFrq]}
+        # ws = WaveletSegment.WaveletSegment(speciesData)
         # calculate f0_low and f0_high from GT
         if ff:
             f0_low = []     # int(self.waveletTDialog.f0Low.text())
@@ -3941,16 +3956,18 @@ class AviaNZ(QMainWindow):
             opstartingtime = time.time()
             speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
                            'FreqRange': [minFrq, maxFrq]}
+            ws = WaveletSegment.WaveletSegment(speciesData)
             # returns 2d lists of nodes over M x thr, or stats over M x thr
             #thrList = np.linspace(0.1, 1, num=self.waveletTDialog.setthr.value()) Virginia test to finde inconsistency
             thrList = np.linspace(0.2, 1, num=self.waveletTDialog.setthr.value())
-            MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())
+            MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())    # TODO: generate from syllable length
             # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window = 1
             inc = None
             nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, d=False,
-                                                            f=True, rf=True, learnMode="recaa", window=window, inc=inc)
+                                                            f=True, rf=True, learnMode="recaa", window=window, inc=inc,
+                                                            wind=wind)
             print("Filtered nodes: ", nodes)
             print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
 
@@ -4052,6 +4069,7 @@ class AviaNZ(QMainWindow):
                                 msg.exec_()
                                 self.FilterFiles.append(self.species)
                                 self.waveletTDialog.test.setEnabled(True)
+                                self.waveletTDialog.browseTest.setEnabled(True)
                         else:
                             print("Saving new filter to ", filename)
                             f = open(filename, 'w')
@@ -4062,6 +4080,7 @@ class AviaNZ(QMainWindow):
                             msg.exec_()
                             self.FilterFiles.append(self.species)
                             self.waveletTDialog.test.setEnabled(True)
+                            self.waveletTDialog.browseTest.setEnabled(True)
         cid = fig.canvas.mpl_connect('button_press_event', onclick)
         plt.show()
         # plt.raise_()
@@ -4090,9 +4109,8 @@ class AviaNZ(QMainWindow):
         # Virginia: added window and increment to prepare annotation file
         # BE CAREFULL: they must be updated here
         window = 1
-        inc= None
+        inc = None
         species = self.waveletTDialog.species.currentText()
-        #species = "Morepork" #Virginia: changed to test
         if species == 'Choose species...':
             msg = SupportClasses.MessagePopup("w", "Species Error", "Please specify the species!")
             msg.exec_()
