@@ -514,7 +514,7 @@ class WaveletTrain(QDialog):
         self.fs.setTickPosition(QSlider.TicksBelow)
         self.fs.setTickInterval(2000)
         self.fs.setRange(0, 32000)
-        self.fs.setSingleStep(1000)
+        self.fs.setSingleStep(2000)
         self.fs.valueChanged.connect(self.fsChange)
         self.fs.setEnabled(False)
         self.fstext = QLabel('')
@@ -528,7 +528,7 @@ class WaveletTrain(QDialog):
         self.rain_label = QLabel('Rain')
         self.rain.setChecked(False)
         self.ff = QCheckBox()
-        self.ff_label = QLabel('Fundamental frq.')
+        self.ff_label = QLabel('Fundamental frequency     ')
         self.ff.setChecked(False)
         self.wind.setEnabled(False)
         self.rain.setEnabled(False)
@@ -546,10 +546,11 @@ class WaveletTrain(QDialog):
         self.setthr_label = QLabel("thr iterations")
         self.setM = QSpinBox()
         self.setM_label = QLabel("M iterations")
-        self.setthr.setMinimum(2)
+        self.setthr.setMinimum(3)
         self.setM.setMinimum(1)
+        self.setM.setValue(3)
         self.setthr.setMaximum(20)
-        self.setM.setMaximum(20)
+        self.setM.setMaximum(10)
         self.setM.setEnabled(False)
         self.setthr.setEnabled(False)
         self.hBox3_step2.addWidget(self.setthr_label)
@@ -614,16 +615,29 @@ class WaveletTrain(QDialog):
         self.layout.addLayout(self.layout_step3)
         self.setLayout(self.layout)
 
-    def fLowChange(self,value):
+        self.rain_label.setHidden(True)
+        self.rain.setHidden(True)
+
+    def fLowChange(self, value):
+        value = value - (value % 10)
+        if value < 50:
+            value = 50
         self.fLowtext.setText(str(value))
 
-    def fHighChange(self,value):
+    def fHighChange(self, value):
+        value = value - (value % 10)
+        if value < 100:
+            value = 100
         self.fHightext.setText(str(value))
 
-    def fsChange(self,value):
+    def fsChange(self, value):
+        value = value - (value % 1000)
+        if value < 1000:
+            value = 1000
         self.fstext.setText(str(value))
 
-    def fillFileList(self,dirName, train=True):
+
+    def fillFileList(self, dirName, train=True):
         """ Generates the list of files for the file listbox.
         fileName - currently opened file (marks it in the list).
         Most of the work is to deal with directories in that list.

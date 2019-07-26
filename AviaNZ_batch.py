@@ -363,7 +363,7 @@ class AviaNZ_batchProcess(QMainWindow):
                     ws = WaveletSegment.WaveletSegment(self.speciesData, 'dmey2')
                     # 'recaa' mode
                     newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
-                                                    d=False, f=True, wpmode="new", noise=self.noise)
+                                                    d=False, f=True, wpmode="new", wnoise=self.noise)
                 else:
                     # wipe all segments:
                     self.segments = []
@@ -391,7 +391,8 @@ class AviaNZ_batchProcess(QMainWindow):
                         # post.rainClick() - omitted in sppSpecific cases
                         # print('After rain: ', post.segments)
                     if self.speciesData['F0']:
-                        post.fundamentalFrq(self.filename, self.speciesData)
+                        pass
+                        # post.fundamentalFrq(self.filename, self.speciesData)
                         # print('After ff: ', post.segments)
                 newSegments = post.segments
                 print('Segments after post pro: ', newSegments)
@@ -625,7 +626,7 @@ class AviaNZ_batchProcess(QMainWindow):
             print("%d segments loaded from .data file" % len(self.segments))
 
         # Wind and impulse masking
-        self.windImpMask()
+        self.windImpMask(wind=True)
 
         # Update the data that is seen by the other classes
         # TODO: keep an eye on this to add other classes as required
@@ -635,34 +636,37 @@ class AviaNZ_batchProcess(QMainWindow):
             self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
         self.sp.setNewData(self.audiodata,self.sampleRate)
 
-    def windImpMask(self, window=1, windT=2.5, engp=90, fp=0.75):
+    def windImpMask(self, window=1, wind=False, windT=2.5, engp=90, fp=0.75):
         '''
         Wind and rain masking
         '''
-        n = math.ceil(len(self.audiodata) / self.sampleRate)
-        self.noise = np.ones((n))
-        wind = np.zeros((n))
-        postp = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=[], spInfo={})
-        start = 0
-        print(n,window)
-        for t in range(0, n, window):
-            end = min(len(self.audiodata), start + window * self.sampleRate)
-            w = postp.wind_cal(data=self.audiodata[start:end], sampleRate=self.sampleRate)
-            wind[t] = w
-            if w > windT:  # Note threshold
-                self.noise[t] = 0
-            start += window * self.sampleRate
+        if wind:
+            print('Wind masking...')
+            n = math.ceil(len(self.audiodata) / self.sampleRate)
+            self.noise = np.ones((n))
+            wind = np.zeros((n))
+            postp = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=[], spInfo={})
+            start = 0
+            # print(n, window)
+            for t in range(0, n, window):
+                end = min(len(self.audiodata), start + window * self.sampleRate)
+                w = postp.wind_cal(data=self.audiodata[start:end], sampleRate=self.sampleRate)
+                wind[t] = w
+                if w > windT:  # Note threshold
+                    self.noise[t] = 0
+                start += window * self.sampleRate
 
-        # Wind gust has high variability compared to steady noise (in low frequency) which does not mask bird calls
-        # most of the time.
-        start = 0
-        if any(self.noise):
-            for t in range(0, n, 60):  # For each minute
-                end = min(len(wind), start + 60)
-                if statistics.variance(wind[start:end]) < 0.1 and np.max(wind[start:end]) < windT + 0.5:  # Note threshold
-                    self.noise[start:end] = 1  # If variation is low do not mask wind
-                start += 60
-
+            # Wind gust has high variability compared to steady noise (in low frequency) which does not mask bird calls
+            # most of the time.
+            start = 0
+            if any(self.noise):
+                for t in range(0, n, 60):  # For each minute
+                    end = min(len(wind), start + 60)
+                    if statistics.variance(wind[start:end]) < 0.1 and np.max(wind[start:end]) < windT + 0.5:  # Note threshold
+                        self.noise[start:end] = 1  # If variation is low do not mask wind
+                    start += 60
+        else:
+            self.noise = []
         # Impulse masking
         w1 = np.floor(self.sampleRate / 250)  # Window length of 1/250 sec selected experimentally
         arr = [2 ** i for i in range(5, 11)]

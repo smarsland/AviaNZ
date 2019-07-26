@@ -62,7 +62,7 @@ class WaveletSegment:
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
         self.segmenter = Segment.Segment(None, None, self.sp, 0, window_width=256, incr=128, mingap=mingap, minlength=minlength)
 
-    def waveletSegment(self, data, sampleRate, d, f, wpmode="new", noise=[]):
+    def waveletSegment(self, data, sampleRate, d, f, wpmode="new", wnoise=[]):
         """ Main analysis wrapper (segmentation in batch mode).
             Args:
             1. data to be segmented, ndarray
@@ -72,7 +72,7 @@ class WaveletSegment:
 
             Returns: list of segments found
         """
-        if data is None or data==[] or len(data)==0:
+        if data is None or data == [] or len(data) == 0:
             print("ERROR: data must be provided for WS")
             return
 
@@ -100,8 +100,9 @@ class WaveletSegment:
 
         # Segment detection and neighbour merging
         detected = self.detectCalls(self.WF, nodelist=goodnodes, spInfo=self.spInfo, rf=True, aa=wpmode!="old")
-        # Exclude noisy sections
-        detected = np.minimum.reduce([detected, noise])
+        # Exclude windy sections
+        if self.spInfo['Wind']:
+            detected = np.minimum.reduce([detected, wnoise])
 
         # merge neighbours in order to convert the detections into segments
         # note: detected np[0 1 1 1] becomes [[1,3]]
@@ -118,7 +119,7 @@ class WaveletSegment:
         return detected
 
     def waveletSegment_train(self, dirName, thrList, MList, d=False, f=False, rf=True, learnMode='recaa', window=1,
-                             inc=None, windT=2.5, engp=90, fp=0.75):
+                             inc=None, wind=False, windT=2.5, engp=90, fp=0.75):
         """ Entry point to use during training, called from AviaNZ.py.
             Switches between various training methods, orders data loading etc.,
             then just passes the arguments to the right training method and returns the results.
@@ -139,7 +140,8 @@ class WaveletSegment:
         # recommend using wpmode="new", because it is fast and almost alias-free.
         # Virginia: added window and inc input
         self.loadDirectory(dirName=dirName, denoise=d, filter=f, keepaudio=keepaudio, wpmode="new",
-                           savedetections=False, train=True, window=window, inc=inc, windT=windT, engp=engp, fp=fp)
+                           savedetections=False, train=True, window=window, inc=inc, wind=wind, windT=windT,
+                           engp=engp, fp=fp)
 
         # Argument _learnMode_ will determine which detectCalls function is used:
         # learnMode=="ethr":
@@ -171,7 +173,8 @@ class WaveletSegment:
         # energies are stored in self.waveletCoefs,
         # Or can be read-in from the export file.
         # Virginia: added window and inc input
-        res = self.gridSearch(thrList, MList, rf, learnMode, window, inc)
+        res = self.gridSearch(thrList=thrList, MList=MList, rf=rf, learnMode=learnMode, window=window, inc=inc,
+                              wind=wind)
 
         # Release disk space
         for f in self.tempfiles:
@@ -179,7 +182,7 @@ class WaveletSegment:
         return res
 
     def waveletSegment_test(self, dirName, listnodes=None, d=False, f=False, rf=True, learnMode='recaa',
-                            savedetections=False, window=1, inc=None, windT=2.5, engp=90, fp=0.75):
+                            savedetections=False, window=1, inc=None, wind=False, windT=2.5, engp=90, fp=0.75):
         """ Wrapper for segmentation to be used when testing a new filter
             (called at the end of training from AviaNZ.py).
             Basically a simplified gridSearch.
@@ -235,7 +238,8 @@ class WaveletSegment:
                 return
 
             # Wind (and impulse) masking
-            detected_c = np.minimum.reduce([detected_c, self.noiseList[fileId]])
+            if wind:
+                detected_c = np.minimum.reduce([detected_c, self.noiseList[fileId]])
 
             detected = np.concatenate((detected, detected_c))
             # Generate .data for this file
@@ -452,8 +456,6 @@ class WaveletSegment:
         return newlist
 
 
-
-
     def detectCalls(self, wf, nodelist, spInfo, rf=True, annotation=None, window=1, inc=None, aa=True):
         """
         For both TRAIN and NON_TRAIN modes
@@ -581,7 +583,7 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    def gridSearch(self, thrList, MList, rf=True, learnMode=None, window=1, inc=None):
+    def gridSearch(self, thrList, MList, rf=True, learnMode=None, window=1, inc=None, wind=False):
         """ Take list of files and other parameters,
              load files, compute wavelet coefficients and reuse them in each (M, thr) combination,
              perform grid search over thr and M parameters,
@@ -711,7 +713,8 @@ class WaveletSegment:
                             detected_c = detected_c[:len(detected)]
 
                         # exclude noisy sections
-                        detected_c = np.minimum.reduce([detected_c, self.noiseList[indexF]])
+                        if wind:
+                            detected_c = np.minimum.reduce([detected_c, self.noiseList[indexF]])
 
                         # Merge the detections from current node with those from previous nodes
                         detections = np.maximum.reduce([detected, detected_c])
@@ -764,7 +767,6 @@ class WaveletSegment:
         negative_nodes = [i for i in negative_nodes if i not in top_nodes]
         # Convert negative correlated nodes
         negative_nodes = [n + 1 for n in negative_nodes]
-        # print("Negative nodes:", negative_nodes)
         # Remove any negatively correlated nodes
         print("Final nodes before neg. node removal:", finalnodes)
         print("Negative nodes:", negative_nodes)
@@ -851,6 +853,18 @@ class WaveletSegment:
         # These nodes refer to the un-rooted tree, so add 1 to get the real WP indices
         bestnodes = [n + 1 for n in bestnodes]
 
+        # Lastly remove any node beyond the target frq range, last two levels, a sanity check
+        r1 = np.linspace(0, self.spInfo['SampleRate'] / 2, 16)
+        node_low = (np.abs(r1 - self.spInfo['FreqRange'][0])).argmin() + 15
+        node_high = (np.abs(r1 - self.spInfo['FreqRange'][1])).argmin() + 15
+        nr1 = np.arange(node_low, node_high).tolist()
+        r2 = np.linspace(0, self.spInfo['SampleRate']/2, 32)
+        node_low = (np.abs(r2 - self.spInfo['FreqRange'][0])).argmin() + 31
+        node_high = (np.abs(r2 - self.spInfo['FreqRange'][1])).argmin() + 31
+        nr2 = np.arange(node_low, node_high).tolist()
+        node_range = nr1 + nr2
+        bestnodes = [x for x in bestnodes if x in node_range]
+
         return (bestnodes, worstnodes)
 
     def preprocess(self, data, d=False, f=False):
@@ -882,7 +896,7 @@ class WaveletSegment:
         return filteredDenoisedData
 
     def loadDirectory(self, dirName, denoise, filter, keepaudio, wpmode,savedetections, train, window=1, inc=None,
-                      windT=2.5, engp=90, fp=0.75):
+                      wind=False, windT=2.5, engp=90, fp=0.75):
         """
             Finds and reads wavs from directory dirName.
             Computes a WP and stores the node energies for each second.
@@ -913,7 +927,8 @@ class WaveletSegment:
         self.annotation = []
         self.filelengths = []
         self.audioList = []
-        self.noiseList = []
+        if wind:
+            self.noiseList = []
         # self.impInds = []
         self.waveletCoefs = np.array([]).reshape(2 ** (nlevels + 1) - 2, 0)
         if train:
@@ -927,9 +942,10 @@ class WaveletSegment:
                     # adds to annotation and filelength arrays, sets self.data:
                     # Virginia: added resol input
                     self.loadData(wavFile, window, inc, resol, savedetections=savedetections, trainPerFile=False,
-                                  windT=windT, engp=engp, fp=fp)
+                                  wind=wind, windT=windT, engp=engp, fp=fp)
 
-                    self.noiseList.append(self.noise)     # store binary noise profile
+                    if wind:
+                        self.noiseList.append(self.noise)     # store binary wind noise profile
                     # self.impInds.append(self.impInd)
 
                     # denoise and store actual audio data:
@@ -963,8 +979,8 @@ class WaveletSegment:
         print("Directory loaded. %d/%d presence blocks found.\n" % (np.sum(self.annotation), len(self.annotation)))
 
 
-    def loadData(self, fName, window, inc, resol, trainPerFile=False, wavOnly=False, savedetections=False, windT=2.5,
-                 engp=90, fp=0.75):
+    def loadData(self, fName, window, inc, resol, trainPerFile=False, wavOnly=False, savedetections=False,
+                 wind=False, windT=2.5, engp=90, fp=0.75):
         """ Loads a single file.
             Output: fills self.annotation, filelengths, filenames, produces self.data
         """
@@ -975,7 +991,6 @@ class WaveletSegment:
         # Virginia: added resol for identify annotation txt
         filenameAnnotation = fName + '-res'+str(float(resol))+'sec.txt'
         try:
-
             wavobj = wavio.read(filename)
         except Exception as e:
             print("unsupported file: ", filename)
@@ -992,34 +1007,37 @@ class WaveletSegment:
         #Virginia-> number of entries in annotation file: built on resol scale
         n = math.ceil((len(self.data) / self.sampleRate)/resol)
 
-        # Wind masking
-        # Check for wind in each second
-        self.noise = np.ones((n))
-        self.wind = np.zeros((n))
-        postp = SupportClasses.postProcess(audioData=self.data, sampleRate=self.sampleRate, segments=[], spInfo={})
-        start = 0
-        for t in range(0, n, window):
-            end = min(len(self.data), start + window*self.sampleRate)
-            w = postp.wind_cal(data=self.data[start:end], sampleRate=self.sampleRate)
-            self.wind[t] = w
-            if w > windT:   # Note threshold
-                self.noise[t] = 0
-            start += window*self.sampleRate
+        # Wind masking: check for wind in each second when required
+        if wind:
+            self.noise = np.ones((n))
+            self.wind = np.zeros((n))
+            # Get an instance of SupportClasses
+            postp = SupportClasses.postProcess(audioData=self.data, sampleRate=self.sampleRate, segments=[], spInfo={})
+            start = 0
+            for t in range(0, n, window):
+                end = min(len(self.data), start + window*self.sampleRate)
+                w = postp.wind_cal(data=self.data[start:end], sampleRate=self.sampleRate)
+                self.wind[t] = w
+                if w > windT:   # Note threshold
+                    self.noise[t] = 0
+                start += window*self.sampleRate
 
-        # Wind gust has high variability compared to steady noise (in low frequency) which does not mask bird calls
-        # most of the time.
-        start = 0
-        if any(self.noise):
-            for t in range(0, n, 60):                                   # For each minute
-                end = min(len(self.wind), start + 60)
-                if statistics.variance(self.wind[start:end]) < 0.1 and np.max(self.wind[start:end]) < windT + 0.5:    # Note threshold
-                    self.noise[start:end] = 1                           # If variation is low do not mask wind
-                    print('steady noise: ', start, end, 'seconds ', statistics.pvariance(self.wind[start:end]))
-                else:
-                    print('variable noise: ', start, end, 'seconds ', statistics.pvariance(self.wind[start:end]))
-                start += 60
+            # Wind gust has high variability compared to steady noise (in low frequency) which does not mask bird calls
+            # most of the time.
+            start = 0
+            if any(self.noise):
+                for t in range(0, n, 60):                                   # For each minute
+                    end = min(len(self.wind), start + 60)
+                    if statistics.variance(self.wind[start:end]) < 0.1 and np.max(self.wind[start:end]) < windT + 0.5:    # Note thresholds
+                        self.noise[start:end] = 1                           # If variation is low do not mask wind
+                        print('steady noise: ', start, end, 'seconds ', statistics.pvariance(self.wind[start:end]))
+                    else:
+                        print('variable noise: ', start, end, 'seconds ', statistics.pvariance(self.wind[start:end]))
+                    start += 60
 
         # Impulse masking
+        if not wind:
+            postp = SupportClasses.postProcess(audioData=self.data, sampleRate=self.sampleRate, segments=[], spInfo={})
         w1 = np.floor(self.sampleRate/250)      # Window length of 1/250 sec selected experimentally
         arr = [2 ** i for i in range(5, 11)]
         pos = (np.abs(arr - w1)).argmin()
@@ -1073,11 +1091,9 @@ class WaveletSegment:
                 fileAnnotations.append(int(row[1]))
                 sum += int(row[1])
 
-
             # TWO VERSIONS FOR COMPATIBILITY WITH BOTH TRAINING LOOPS:
             if trainPerFile:
                 self.annotation = np.array(fileAnnotations)
-
             else:
                 self.annotation.extend(fileAnnotations)
                 self.filelengths.append(n)
