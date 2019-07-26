@@ -341,19 +341,20 @@ class SignalProc:
 
     # The next functions perform spectrogram inversion
 
-    def show_invS(self):
+    def show_invS(self,sg=None):
         print("Inverting spectrogam with window ", self.window_width, " and increment ", int(self.window_width/4.))
-        oldIncr = self.incr
-        self.incr = int(self.window_width/4.)
-        sg = self.spectrogram(self.data)
-        print(np.shape(sg))
+        if sg is None:
+            oldIncr = self.incr
+            self.incr = int(self.window_width/4.)
+            sg = self.spectrogram(self.data)
+            #print(np.shape(sg))
         sgi = self.invertSpectrogram(sg,self.window_width,self.incr)
         self.incr = oldIncr
         sg = self.spectrogram(sgi)
         # sgi = sgi.astype('int16')
         # wavfile.write('test.wav',self.sampleRate, sgi)
         # wavio.write('test.wav',sgi,self.sampleRate)
-        return sg
+        return sg,sgi
 
     def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10):
         # Assumes that this is the plain (not power) spectrogram
@@ -528,3 +529,47 @@ class SignalProc:
             return spectral_deriv, sg, fm, we, mf, np.fliplr(contours)
         else:
             return np.fliplr(contours)
+
+    def max_energy(self, sg,thr=1.2):
+        sg = sg/np.max(sg)
+
+        colmedians = np.median(sg, axis=0)
+        colmax = np.max(sg,axis=0)
+        colmaxinds = np.argmax(sg,axis=0)
+
+        #points = -np.ones(np.shape(sg)[1])
+        points = np.zeros(np.shape(sg))
+        print(np.shape(points))
+
+        inds = np.where(colmax>thr*colmedians)
+        print(len(inds))
+        points[colmaxinds[inds],inds] = 1
+        
+        return points
+
+    def denoiseImage(self,sg,thr=1.2):
+        from skimage.restoration import (denoise_tv_chambolle, denoise_bilateral, denoise_wavelet, estimate_sigma)
+        sigma_est = estimate_sigma(sg, multichannel=False, average_sigmas=True)
+        sgnew = denoise_tv_chambolle(sg, weight=0.2, multichannel=False)
+        #sgnew = denoise_bilateral(sg, sigma_color=0.05, sigma_spatial=15, multichannel=False)
+        #sgnew = denoise_wavelet(sg, multichannel=False)
+
+        return sgnew
+
+    def denoiseImage2(self,sg,filterSize=5):
+        # Filter size is odd
+        [x,y] = np.shape(sg)
+        width = filterSize//2
+        
+        sgnew = np.zeros(np.shape(sg))
+        sgnew[0:width+1,:] = sg[0:width+1,:]
+        sgnew[-width:,:] = sg[-width:,:]
+        sgnew[:,0:width+1] = sg[:,0:width+1]
+        sgnew[:,-width:] = sg[:,-width:]
+
+        for i in range(width,x-width):
+            for j in range(width,y-width):
+               sgnew[i,j] = np.median(sg[i-width:i+width+1,j-width:j+width+1]) 
+
+        print(sgnew)
+        return sgnew

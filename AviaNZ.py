@@ -383,8 +383,11 @@ class AviaNZ(QMainWindow):
             self.showFundamental.setCheckable(True)
             self.showFundamental.setChecked(False)
             self.showSpectral = actionMenu.addAction("Show spectral derivative", self.showSpectralDeriv)
+            self.showEnergies = actionMenu.addAction("Show maximum energies", self.showMaxEnergy)
             self.showSpectral.setCheckable(True)
             self.showSpectral.setChecked(False)
+            self.showEnergies.setCheckable(True)
+            self.showEnergies.setChecked(False)
 
         if not self.DOC and not self.Hartley:
             actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
@@ -996,6 +999,7 @@ class AviaNZ(QMainWindow):
         # Remove spectral derivatives
         try:
             self.p_spec.removeItem(self.derivPlot)
+            self.p_spec.removeItem(self.energyPlot)
         except Exception:
             pass
         # Cheatsheet: remove the freq labels
@@ -1280,6 +1284,7 @@ class AviaNZ(QMainWindow):
                 if not self.Hartley:
                     self.showFundamental.setChecked(False)
                     self.showSpectral.setChecked(False)
+                    self.showEnergies.setChecked(False)
                 if not self.DOC and not self.Hartley:
                     self.showInvSpec.setChecked(False)
 
@@ -1476,6 +1481,22 @@ class AviaNZ(QMainWindow):
                     self.p_spec.removeItem(r)
             self.statusLeft.setText("Ready")
 
+    def showMaxEnergy(self):
+        with pg.BusyCursor():
+            if self.showEnergies.isChecked():
+                self.statusLeft.setText("Drawing max energies...")
+                sd = self.sp.max_energy(self.sg)
+
+                self.energyPlot = pg.ScatterPlotItem() 
+                x, y = np.where(sd > 0)
+                self.energyPlot.setData(x, y, pen=pg.mkPen('g', width=5))
+
+                self.p_spec.addItem(self.energyPlot)
+            else:
+                self.statusLeft.setText("Removing max energies...")
+                self.p_spec.removeItem(self.energyPlot)
+            self.statusLeft.setText("Ready")
+
     def showSpectralDeriv(self):
         with pg.BusyCursor():
             if self.showSpectral.isChecked():
@@ -1496,13 +1517,19 @@ class AviaNZ(QMainWindow):
         """ Listener for the menu item that draws the spectrogram of the waveform of the inverted spectrogram."""
         with pg.BusyCursor():
             if self.showInvSpec.isChecked():
-                sgRaw = self.sp.show_invS()
+                # TODO !!!!!
+                # Make a new spectrogram at 4 times the resolution
+                #sg = self.sp.spectrogram(self.audiodata,incr=self.config['incr']//4)
+                #sgRaw = self.sp.denoiseImage2(sg)
+                sgRaw,wave = self.sp.show_invS()
             else:
                 sgRaw = self.sp.spectrogram(self.audiodata, mean_normalise=self.sgMeanNormalise, equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided, multitaper=self.sgMultitaper)
             maxsg = np.min(sgRaw)
             self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
             self.overviewImage.setImage(self.sg)
             self.specPlot.setImage(self.sg)
+            # TODO: check!
+            self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=len(wave),endpoint=True),wave)
 
     def medianFilterSpec(self):
         """ Median filter the spectrogram. To be used in conjunction with spectrogram inversion. """
