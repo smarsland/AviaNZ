@@ -1459,7 +1459,8 @@ class AviaNZ(QMainWindow):
                 ind = np.squeeze(np.where(pitch>minfreq))
                 pitch = pitch[ind]
                 ind = ind*W/(self.config['window_width'])
-                x = (pitch*2/self.sampleRate*np.shape(self.sg)[1]).astype('int')
+                # TODO
+                x = ((pitch-self.minFreqShow)*2/self.sampleRate*np.shape(self.sg)[1]).astype('int')
 
                 x = medfilt(x, 15)
 
@@ -3841,6 +3842,29 @@ class AviaNZ(QMainWindow):
             self.removeSegments(delete=False)
             self.drawOverview()
             self.drawfigMain(remaking=True)
+
+            try:
+                for r in self.segmentPlots:
+                    self.p_spec.removeItem(r)
+                self.segmentPlots=[]
+            except Exception:
+                pass
+            else:
+                self.showFundamentalFreq()
+
+            try:
+                self.p_spec.removeItem(self.derivPlot)
+            except Exception:
+                pass
+            else:
+                self.showSpectralDeriv()
+
+            try:
+                self.p_spec.removeItem(self.energyPlot)
+            except Exception:
+                pass
+            else:
+                self.showMaxEnergy()
 
         QApplication.processEvents()
 
