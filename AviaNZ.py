@@ -244,8 +244,27 @@ class AviaNZ(QMainWindow):
                         if f[-4:] == '.wav':
                             print(os.path.join(root, f))
                             self.loadFile(os.path.join(root, f))
+                            # resample to 16000 for the cheatsheet
+                            print(self.sampleRate)
+                            if self.sampleRate != 16000:
+                                print(self.sampleRate)
+                                self.audiodata = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
+                                self.sampleRate = 16000
+                                self.datalengthSec = len(self.audiodata) / self.sampleRate
+                                self.datalength = len(self.audiodata)
+                                sgRaw = self.sp.spectrogram(self.audiodata, self.config['window_width'],
+                                                            self.config['incr'], mean_normalise=self.sgMeanNormalise,
+                                                            equal_loudness=self.sgEqualLoudness,
+                                                            onesided=self.sgOneSided, multitaper=self.sgMultitaper)
+                                maxsg = np.min(sgRaw)
+                                self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+                                # Redraw spec
+                                self.specPlot.setImage(self.sg)
+                                self.redoFreqAxis(0, self.sampleRate)
                             self.widthWindow.setValue(60)  # self.datalengthSec)
-                            self.saveImage(os.path.join(root, f[:-4]))
+                            print('file path: ', os.path.join(root, f[:-4]))
+                            self.brightnessSlider.setValue(20)
+                            self.saveImage(os.path.join(root, f[:-4]+'.png'))
             else:
                 self.loadFile(firstFile)
                 while command!=():
@@ -4915,6 +4934,7 @@ class AviaNZ(QMainWindow):
     def saveImage(self, imageFile=''):
         if self.cheatsheet:
             self.showMaximized() # for nice spec images
+
         exporter = pge.ImageExporter(self.w_spec.scene())
 
         if imageFile=='':
