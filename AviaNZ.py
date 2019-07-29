@@ -1456,10 +1456,10 @@ class AviaNZ(QMainWindow):
                 self.statusLeft.setText("Drawing fundamental frequency...")
                 pitch, y, minfreq, W = self.seg.yin()
                 #print("pitch: ", np.min(pitch), np.max(pitch))
-                ind = np.squeeze(np.where(pitch>minfreq))
+                ind = np.squeeze(np.where(pitch > self.minFreqShow))
                 pitch = pitch[ind]
                 ind = ind*W/(self.config['window_width'])
-                # TODO
+                # Adjust to the frequency range to show
                 x = ((pitch-self.minFreqShow)*2/self.sampleRate*np.shape(self.sg)[1]).astype('int')
 
                 x = medfilt(x, 15)
@@ -1490,6 +1490,17 @@ class AviaNZ(QMainWindow):
 
                 self.energyPlot = pg.ScatterPlotItem() 
                 x, y = np.where(sd > 0)
+
+                # remove points beyond frq range to show
+                y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
+                y1 = np.asarray(y1)
+
+                inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
+
+                x = x[inds]
+                y = y[inds]
+                y = [i - self.minFreqShow//np.shape(self.sg)[1] for i in y]
+
                 self.energyPlot.setData(x, y, pen=pg.mkPen('g', width=5))
 
                 self.p_spec.addItem(self.energyPlot)
@@ -1504,8 +1515,18 @@ class AviaNZ(QMainWindow):
                 self.statusLeft.setText("Drawing spectral derivative...")
                 sd = self.sp.spectral_derivative(self.audiodata, self.sampleRate, self.config['window_width'], self.config['incr'], 2, 5.0)
 
-                self.derivPlot = pg.ScatterPlotItem() 
+                self.derivPlot = pg.ScatterPlotItem()
                 x, y = np.where(sd > 0)
+                # remove points beyond frq range to show
+                y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
+                y1 = np.asarray(y1)
+
+                inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
+
+                x = x[inds]
+                y = y[inds]
+                y = [i - self.minFreqShow//np.shape(self.sg)[1] for i in y]
+
                 self.derivPlot.setData(x, y, pen=pg.mkPen('b', width=5))
 
                 self.p_spec.addItem(self.derivPlot)
