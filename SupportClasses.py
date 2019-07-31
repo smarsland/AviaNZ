@@ -59,7 +59,8 @@ import wavio
 
 import io
 
-# import WaveletSegment
+from itertools import chain, repeat
+import statistics
 
 class preProcess:
     """ This class implements few pre processing methods to avoid noise
@@ -120,70 +121,78 @@ class postProcess:
         # self.confirmedSegments = []  # post processed detections with confidence TP
         # self.segmentstoCheck = []  # need more testing to confirm
 
-    def short(self):
+    def short(self, minLen=0):
         """
-        This will delete segments < minLen/2 secs
+        Delete segments < minLen secs
         """
+        if minLen == 0:
+            minLen = self.minLen
         newSegments = []
         for seg in self.segments:
             if seg[0] == -1:
                 newSegments.append(seg)
-            elif seg[1] - seg[0] >= self.minLen/2:
+            elif seg[1] - seg[0] > minLen:
                 newSegments.append(seg)
             else:
                 continue
         self.segments = newSegments
 
     def wind_cal(self, data, sampleRate):
-        ''' Calculate wind '''
+        """ Calculate wind """
         wind_lower = 2.0 * 50 / sampleRate
         wind_upper = 2.0 * 500 / sampleRate
         f, p = signal.welch(data, fs=sampleRate, window='hamming', nperseg=512, detrend=False)
         p = np.log10(p)
-        # check wind
+
         limite_inf = int(round(
-            p.__len__() * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
+            p.__len__() * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625
+                                        # (in normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
         limite_sup = int(round(
-            p.__len__() * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
+            p.__len__() * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in normalized
+                                        # frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
         a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
 
-        return np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
+        return np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in
+                                # Algorithm 2.1
 
 
-    def wind(self, Tmean_wind = 2):
+    def wind(self, windT=2.5, windV=0.1):
         """
-        delete wind corrupted segments (targeting moderate wind and above) if no sign of kiwi (check len)
-        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
+        Delete wind corrupted segments, mainly wind gust
+        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and
+        Jose D.Lopez
+        :param windT: wind threshold
+        :param windV: the variance
+        :return: None but self.segments get updated
         """
-        newSegments = copy.deepcopy(self.segments)
-        wind_lower = 2.0 * 50 / self.sampleRate
-        wind_upper = 2.0 * 500 / self.sampleRate
-
-        for seg in self.segments:
-            if seg[0] == -1:
-                continue
-            # read the sound segment and check for wind
-            else:
-                secs = seg[1] - seg[0]
-                # keep if really long segment
-                if secs > self.minLen:
+        if len(self.segments) == 0 or len(self.segments) == 1 and self.segments[0][0] == -1:
+            pass
+        else:
+            newSegments = copy.deepcopy(self.segments)
+            for seg in self.segments:
+                if seg[0] == -1:
                     continue
-
-                data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
-
-                f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
-                p = np.log10(p)
-                # check wind
-                limite_inf = int(round(p.__len__() * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
-                limite_sup = int(round(p.__len__() * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
-                a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
-
-                mean_a_wind = np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
-                # std_a_wind = np.std(a_wind)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
-                print(mean_a_wind)
-                if mean_a_wind > Tmean_wind:
-                    newSegments.remove(seg)
-
+                else:
+                    data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
+                    n = math.ceil((len(data) / self.sampleRate))
+                    window = 1
+                    start = 0
+                    wind = np.zeros(n)
+                    for t in range(0, n, window):
+                        end = min(len(data), start + window * self.sampleRate)
+                        w = np.mean(self.wind_cal(data=data[start:end], sampleRate=self.sampleRate))
+                        wind[t] = w
+                        start += window * self.sampleRate
+                    if n > 30:      # if it is at least 30 seconds check variance (of mean values over each sec)
+                        print(seg, np.max(wind), statistics.variance(wind), 'n=', n)
+                        if np.max(wind) > windT and statistics.variance(wind) > windV:
+                            print('long and windy')
+                            newSegments.remove(seg)
+                    elif np.max(wind) > windT:
+                        print(seg, np.max(wind), 'n=', n)
+                        print('short and windy')
+                        newSegments.remove(seg)
+            self.segments = newSegments
         # if you want to check out the power spectrum:
         # import matplotlib.pyplot as plt
         # plt.semilogy(f, p)
@@ -191,9 +200,8 @@ class postProcess:
         # plt.xlabel('frequency [Hz]')
         # plt.ylabel('PSD [V**2/Hz]')
         # plt.show()
-        self.segments = newSegments
 
-    def impulse_cal(self, window, engp, fp):
+    def impulse_cal(self, fs, engp=90, fp=0.75, blocksize=10):
         """
         Find sections where impulse sounds occur e.g. clicks
         window  -   window length (no overlap)
@@ -201,13 +209,21 @@ class postProcess:
                     frequency bands
         fp      -   frequency percentage (thr), the percentage of frequency bands to have high energy to mark a section
                     as having impulse noise
-        :return: a binary list of length len(audioData)/window indicating presence of impulsive noise (1)
-        otherwise 0
+        blocksize - max number of consecutive blocks, 10 consecutive blocks (~1/25 sec) is a good value, to not to mask
+                    very close-range calls
+        :return: a binary list of length len(audioData) indicating presence of impulsive noise (0) otherwise (1)
         """
-        sp = SignalProc.SignalProc(self.audioData, self.sampleRate, window, window)
+
+        # Calculate window length
+        w1 = np.floor(fs/250)      # Window length of 1/250 sec selected experimentally
+        arr = [2 ** i for i in range(5, 11)]
+        pos = np.abs(arr - w1).argmin()
+        window = arr[pos]
+
+        sp = SignalProc.SignalProc(self.audioData, self.sampleRate, window, window)     # No overlap
         sg = sp.spectrogram(self.audioData, multitaper=False)
 
-        # for each frq band get sections where energy exceeds some (90%) percentile
+        # For each frq band get sections where energy exceeds some (90%) percentile, engp
         # and generate a binary spectrogram
         sgb = np.zeros((np.shape(sg)))
         ep = np.percentile(sg, engp, axis=0)    # note thr - 90% for energy percentile
@@ -216,12 +232,65 @@ class postProcess:
             sgb[np.where(ey > ep[y]), y] = 1
 
         # If lots of frq bands got 1 then predict a click
-        impulse = np.where(np.count_nonzero(sgb, axis=1) > np.shape(sgb)[1] * fp, 1, 0)
+        # 1 - presence of impulse noise, 0 - otherwise
+        impulse = np.where(np.count_nonzero(sgb, axis=1) > np.shape(sgb)[1] * fp, 1, 0)     # Note thr fp
         gap = math.ceil(len(self.audioData) / window) - len(impulse)
         if gap > 0:     # Sanity check
             impulse = np.pad(impulse, (0, gap), 'constant')
 
+        # However, when an impulsive noise detected better to check neighbours to make sure its not a bird call
+        # very close to the microphone.
+        imp_inds = np.where(impulse > 0)[0].tolist()
+        imp = self.countConsecutive(imp_inds, len(impulse))
+        impulse = []
+        for item in imp:
+            if item > blocksize or item == 0:        # Note threshold - blocksize, 10 consecutive blocks ~1/25 sec
+                impulse.append(1)
+            else:
+                impulse.append(0)
+
+        impulse = list(chain.from_iterable(repeat(e, window) for e in impulse))  # Make it same length as self.audioData
         return impulse
+
+    def countConsecutive(self, nums, length):
+        gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s + 1 < e]
+        edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
+        edges = list(zip(edges, edges))
+        edges_reps = [item[1] - item[0] + 1 for item in edges]
+        res = np.zeros((length)).tolist()
+        t = 0
+        for item in edges:
+            for i in range(item[0], item[1]+1):
+                res[i] = edges_reps[t]
+            t += 1
+        return res
+
+    def mergeneighbours(self, maxGap=3):
+        if len(self.segments) <= 1 or len(self.segments) == 2 and self.segments[0][0] == -1:
+            pass
+        else:
+            newSegments = copy.deepcopy(self.segments)
+
+            meta = None
+            indx = []
+            chg = False
+            if newSegments[0][0] == -1:
+                meta = newSegments[0]
+                del (newSegments[0])
+
+            for i in range(len(newSegments) - 1):
+                if newSegments[i + 1][0] - newSegments[i][1] < maxGap:
+                    indx.append(i)
+                    chg = True
+            indx.reverse()
+            for i in indx:
+                newSegments[i][1] = newSegments[i + 1][1]
+                del (newSegments[i + 1])
+
+            if chg:
+                if meta:
+                    newSegments.insert(0, meta)
+                self.segments = newSegments
 
     def rainClick(self):
         """
