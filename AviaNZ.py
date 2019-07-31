@@ -243,24 +243,7 @@ class AviaNZ(QMainWindow):
                     for f in files:
                         if f[-4:] == '.wav':
                             print(os.path.join(root, f))
-                            self.loadFile(os.path.join(root, f))
-                            # resample to 16000 for the cheatsheet
-                            print(self.sampleRate)
-                            if self.sampleRate != 16000:
-                                print(self.sampleRate)
-                                self.audiodata = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
-                                self.sampleRate = 16000
-                                self.datalengthSec = len(self.audiodata) / self.sampleRate
-                                self.datalength = len(self.audiodata)
-                                sgRaw = self.sp.spectrogram(self.audiodata, self.config['window_width'],
-                                                            self.config['incr'], mean_normalise=self.sgMeanNormalise,
-                                                            equal_loudness=self.sgEqualLoudness,
-                                                            onesided=self.sgOneSided, multitaper=self.sgMultitaper)
-                                maxsg = np.min(sgRaw)
-                                self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
-                                # Redraw spec
-                                self.specPlot.setImage(self.sg)
-                                self.redoFreqAxis(0, self.sampleRate)
+                            self.loadFile(os.path.join(root, f), cs=True)
                             self.widthWindow.setValue(60)  # self.datalengthSec)
                             print('file path: ', os.path.join(root, f[:-4]))
                             self.brightnessSlider.setValue(20)
@@ -1108,7 +1091,7 @@ class AviaNZ(QMainWindow):
             self.loadFile(current)
         return(0)
 
-    def loadFile(self,name=None):
+    def loadFile(self, name=None, cs=False):
         """ This does the work of loading a file.
         We are using wavio to do the reading. We turn the data into a float, but do not normalise it (/2^(15)).
         For 2 channels, just take the first one.
@@ -1165,7 +1148,7 @@ class AviaNZ(QMainWindow):
                 else:
                     self.startTime = 0
                     if self.cheatsheet:
-                        self.timeaxis = SupportClasses.TimeAxisSec(orientation='bottom',linkView=self.p_ampl)
+                        self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
                     else:
                         self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
 
@@ -1188,14 +1171,21 @@ class AviaNZ(QMainWindow):
 
             if os.stat(self.filename).st_size != 0: # avoid files with no data (Tier 1 has 0Kb .wavs)
                 wavobj = wavio.read(self.filename,self.lenRead,self.startRead)
-
                 # Parse wav format details based on file header:
                 self.sampleRate = wavobj.rate
                 self.audiodata = wavobj.data
+                self.audioFormat.setChannelCount(np.shape(self.audiodata)[1])
+                if cs and wavobj.rate != 16000:
+                    if np.shape(np.shape(self.audiodata))[0] > 1:
+                        self.audiodata = self.audiodata[:, 0]
+                    if self.audiodata.dtype is not 'float':
+                        self.audiodata = self.audiodata.astype('float')  # / 32768.0
+                    self.audiodata = librosa.core.audio.resample(self.audiodata, self.sampleRate, 16000)
+                    self.sampleRate = 16000
+                    print(np.shape(self.audiodata))
                 self.minFreq = 0
                 self.maxFreq = self.sampleRate / 2.
                 self.fileLength = wavobj.nframes
-                self.audioFormat.setChannelCount(np.shape(self.audiodata)[1])
                 self.audioFormat.setSampleRate(self.sampleRate)
                 self.audioFormat.setSampleSize(wavobj.sampwidth*8)
                 print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
@@ -3954,7 +3944,7 @@ class AviaNZ(QMainWindow):
 
             Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, d=False, f=True, rf=True,
                                                                learnMode='recaa', savedetections=False, window=window,
-                                                               inc=inc, wind=speciesData['Wind'])
+                                                               inc=inc)
             print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
             if TP+FN != 0:
                 recall = TP/(TP+FN)
@@ -4061,8 +4051,7 @@ class AviaNZ(QMainWindow):
             window = 1
             inc = None
             nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, d=False,
-                                                            f=True, rf=True, learnMode="recaa", window=window, inc=inc,
-                                                            wind=wind)
+                                                            f=True, rf=True, learnMode="recaa", window=window, inc=inc)
             print("Filtered nodes: ", nodes)
             print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
 
@@ -4137,7 +4126,9 @@ class AviaNZ(QMainWindow):
                         filename = os.path.join(self.filtersDir, species + '.txt')
                         if os.path.isfile(filename):
                             # Add it to the Filter list
-                            msg = SupportClasses.MessagePopup("t", "Save Filter", 'Are you sure you want to Overwrite the existing filter\nfor %s?' %(species))
+                            msg = SupportClasses.MessagePopup("t", "Save Filter",
+                                                              'Are you sure you want to Overwrite the existing filter'
+                                                              '\nfor %s?' %(species))
                             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                             reply = msg.exec_()
                             if reply == QMessageBox.Yes:
@@ -4145,7 +4136,9 @@ class AviaNZ(QMainWindow):
                                 f = open(filename, 'w')
                                 f.write(json.dumps(speciesData))
                                 f.close()
-                                msg = SupportClasses.MessagePopup("d", "Training completed!", 'Training completed!\nFollow Step 3 and test on a separate dataset before actual use.')
+                                msg = SupportClasses.MessagePopup("d", "Training completed!",
+                                                                  'Training completed!\nFollow Step 3 and test on a '
+                                                                  'separate dataset before actual use.')
                                 msg.exec_()
                                 self.FilterFiles.append(self.species)
                                 self.waveletTDialog.browseTest.setEnabled(True)
@@ -4155,12 +4148,16 @@ class AviaNZ(QMainWindow):
                                 # previous filter (or forgot to rename previous filter before coming to this
                                 # point and no need to loose all the heavy work done with grid search
                                 filename = filename[:-4] + '_new.txt'
-                                print("Saving new filter to ", filename[:-4] + '_new.txt', " (have to rename new filter)")
+                                print("Saving new filter to ", filename[:-4] + '_new.txt',
+                                      " (have to rename new filter)")
                                 f = open(filename, 'w')
                                 f.write(json.dumps(speciesData))
                                 f.close()
                                 # Add it to the Filter list
-                                msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed! (but the filter saved with a new name)\nFollow Step 3 and test on a separate dataset before actual use.")
+                                msg = SupportClasses.MessagePopup("d", "Training completed!",
+                                                                  "Training completed! (but the filter saved with a "
+                                                                  "new name)\nFollow Step 3 and test on a separate "
+                                                                  "dataset before actual use.")
                                 msg.exec_()
                                 self.FilterFiles.append(self.species)
                                 self.waveletTDialog.test.setEnabled(True)
@@ -4171,7 +4168,9 @@ class AviaNZ(QMainWindow):
                             f.write(json.dumps(speciesData))
                             f.close()
                             # Add it to the Filter list
-                            msg = SupportClasses.MessagePopup("d", "Training completed!", 'Training completed!\nFollow Step 3 and test on a separate dataset before actual use.')
+                            msg = SupportClasses.MessagePopup("d", "Training completed!", 'Training completed!\nFollow '
+                                                                                          'Step 3 and test on a separate'
+                                                                                          'dataset before actual use.')
                             msg.exec_()
                             self.FilterFiles.append(self.species)
                             self.waveletTDialog.test.setEnabled(True)
@@ -5557,6 +5556,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
 
         task = first.getValues()
 
+        avianz = None
         if task == 1:
             avianz = AviaNZ(configdir=configdir)
             avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
@@ -5566,7 +5566,10 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
         elif task==4:
             avianz = AviaNZ_batch.AviaNZ_reviewAll(configdir=configdir)
 
-        avianz.show()
+        if avianz:
+            avianz.show()
+        else:
+            return
         out = app.exec_()
         QApplication.closeAllWindows()
         if out == 1:
