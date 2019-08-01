@@ -1504,11 +1504,12 @@ class AviaNZ(QMainWindow):
                 y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
                 y1 = np.asarray(y1)
 
-                inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
+                valminfrq = self.minFreqShow / (self.sampleRate // 2 / np.shape(self.sg)[1])
 
+                inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
                 x = x[inds]
                 y = y[inds]
-                y = [i - self.minFreqShow//np.shape(self.sg)[1] for i in y]
+                y = [i - valminfrq for i in y]
 
                 self.energyPlot.setData(x, y, pen=pg.mkPen('g', width=5))
 
@@ -1529,12 +1530,13 @@ class AviaNZ(QMainWindow):
                 # remove points beyond frq range to show
                 y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
                 y1 = np.asarray(y1)
+                valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
 
                 inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
 
                 x = x[inds]
                 y = y[inds]
-                y = [i - self.minFreqShow//np.shape(self.sg)[1] for i in y]
+                y = [i - valminfrq for i in y]
 
                 self.derivPlot.setData(x, y, pen=pg.mkPen('b', width=5))
 
@@ -3525,11 +3527,12 @@ class AviaNZ(QMainWindow):
         if (minFreq >= maxFreq):
             msg = SupportClasses.MessagePopup("w", "Error", "Incorrect frequency range")
             msg.exec_()
+            return
         with pg.BusyCursor():
             self.statusLeft.setText("Updating the spectrogram...")
             self.sp.setWidth(int(str(window_width)), int(str(incr)))
             oldSpecy = np.shape(self.sg)[1]
-            sgRaw = self.sp.spectrogram(self.audiodata,window=str(windowType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided,multitaper=self.sgMultitaper)
+            sgRaw = self.sp.spectrogram(self.audiodata, window_width=int(window_width), incr=int(incr), window=str(windowType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided,multitaper=self.sgMultitaper)
             maxsg = np.min(sgRaw)
             self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
 
@@ -3539,6 +3542,8 @@ class AviaNZ(QMainWindow):
                 self.config['window_width'] = int(str(window_width))
                 if hasattr(self, 'seg'):
                     self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'], self.config['incr'])
+
+                # self.specPlot.setImage(self.sg)   # TODO: interface changes to adapt if window_len and incr changed! overview, main spec ect.
 
             self.redoFreqAxis(minFreq,maxFreq)
 
