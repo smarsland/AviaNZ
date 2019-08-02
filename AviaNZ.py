@@ -3979,7 +3979,7 @@ class AviaNZ(QMainWindow):
         maxLen = float(self.waveletTDialog.maxlen.text())
         minFrq = int(self.waveletTDialog.fLow.value())
         maxFrq = int(self.waveletTDialog.fHigh.value())
-        fs = int(self.waveletTDialog.fs.value())
+        fs = int(self.waveletTDialog.fs.value()//1000*1000) # rounded to thousands
 
         if minFrq == fs/2:  # Sanity check
             minFrq = 0
