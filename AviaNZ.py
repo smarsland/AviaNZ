@@ -1208,12 +1208,14 @@ class AviaNZ(QMainWindow):
                     if self.datalength != self.fileLength:
                         #print("not all of file loaded")
                         self.nFileSections = int(np.ceil(self.fileLength/self.datalength))
+                        print('self.nFileSections: ', self.nFileSections)
                         self.prev5mins.setEnabled(False)
                         self.next5mins.setEnabled(True)
                         self.movePrev5minsKey.setEnabled(False)
                         self.moveNext5minsKey.setEnabled(True)
                     else:
                         self.nFileSections = 1
+                        print('self.nFileSections: ', self.nFileSections)
                         self.prev5mins.setEnabled(False)
                         self.next5mins.setEnabled(False)
                         self.movePrev5minsKey.setEnabled(False)
@@ -3543,6 +3545,8 @@ class AviaNZ(QMainWindow):
                 if hasattr(self, 'seg'):
                     self.seg.setNewData(self.audiodata, sgRaw, self.sampleRate, self.config['window_width'], self.config['incr'])
 
+                name = self.filename.split(self.SoundFileDir)[-1]
+                self.loadFile(name)
                 # self.specPlot.setImage(self.sg)   # TODO: interface changes to adapt if window_len and incr changed! overview, main spec ect.
 
             self.redoFreqAxis(minFreq,maxFreq)
@@ -5004,7 +5008,7 @@ class AviaNZ(QMainWindow):
                     {'name': "Don't know", 'type': 'color', 'value': self.config['ColourNone'],
                      'tip': "Segments that are not labelled"},
                     {'name': 'Currently selected', 'type': 'color', 'value': self.config['ColourSelected'],
-                     'tip': "Currently delected segment"},
+                     'tip': "Currently selected segment"},
                 ]},
                 {'name': 'Check-ignore protocol', 'type': 'group', 'children': [
                     {'name': 'Show check-ignore marks', 'type': 'bool', 'value': self.config['protocolOn']},
@@ -5086,6 +5090,7 @@ class AviaNZ(QMainWindow):
                 self.config['secsSave']=data
             elif childName=='Annotation.Annotation overview cell length':
                 self.config['widthOverviewSegment']=data
+
             elif childName=='Annotation.Make boxes transparent':
                 self.config['transparentBoxes']=data
                 self.dragRectsTransparent()
@@ -5216,7 +5221,8 @@ class AviaNZ(QMainWindow):
         self.saveConfig = True
 
         self.resetStorageArrays()
-        self.loadFile()
+        name = self.filename.split(self.SoundFileDir)[-1]       # pass the file name to reset interface properly
+        self.loadFile(name)
 
 # ============
 # Various actions: deleting segments, saving, quitting

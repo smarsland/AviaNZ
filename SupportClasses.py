@@ -232,16 +232,14 @@ class postProcess:
             sgb[np.where(ey > ep[y]), y] = 1
 
         # If lots of frq bands got 1 then predict a click
-        # 1 - presence of impulse noise, 0 - otherwise
+        # 1 - presence of impulse noise, 0 - otherwise here
         impulse = np.where(np.count_nonzero(sgb, axis=1) > np.shape(sgb)[1] * fp, 1, 0)     # Note thr fp
-        gap = math.ceil(len(self.audioData) / window) - len(impulse)
-        if gap > 0:     # Sanity check
-            impulse = np.pad(impulse, (0, gap), 'constant')
 
-        # However, when an impulsive noise detected better to check neighbours to make sure its not a bird call
+        # When an impulsive noise detected, it's better to check neighbours to make sure its not a bird call
         # very close to the microphone.
         imp_inds = np.where(impulse > 0)[0].tolist()
         imp = self.countConsecutive(imp_inds, len(impulse))
+
         impulse = []
         for item in imp:
             if item > blocksize or item == 0:        # Note threshold - blocksize, 10 consecutive blocks ~1/25 sec
@@ -250,6 +248,13 @@ class postProcess:
                 impulse.append(0)
 
         impulse = list(chain.from_iterable(repeat(e, window) for e in impulse))  # Make it same length as self.audioData
+
+        if len(impulse) > len(self.audioData):      # Sanity check
+            impulse = impulse[0:len(self.audioData)]
+        elif len(impulse) < len(self.audioData):
+            gap = len(self.audioData) - len(impulse)
+            impulse = np.pad(impulse, (0, gap), 'constant')
+
         return impulse
 
     def countConsecutive(self, nums, length):
