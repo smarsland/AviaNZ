@@ -4149,6 +4149,7 @@ class AviaNZ(QMainWindow):
                                                                   'Training completed!\nFollow Step 3 and test on a '
                                                                   'separate dataset before actual use.')
                                 msg.exec_()
+                                plt.close()
                                 self.FilterFiles.append(self.species)
                                 self.waveletTDialog.browseTest.setEnabled(True)
                                 self.waveletTDialog.test.setEnabled(True)
@@ -4168,6 +4169,7 @@ class AviaNZ(QMainWindow):
                                                                   "new name)\nFollow Step 3 and test on a separate "
                                                                   "dataset before actual use.")
                                 msg.exec_()
+                                plt.close()
                                 self.FilterFiles.append(self.species)
                                 self.waveletTDialog.test.setEnabled(True)
                                 self.waveletTDialog.browseTest.setEnabled(True)
@@ -4181,6 +4183,7 @@ class AviaNZ(QMainWindow):
                                                                                           'Step 3 and test on a separate'
                                                                                           'dataset before actual use.')
                             msg.exec_()
+                            plt.close()
                             self.FilterFiles.append(self.species)
                             self.waveletTDialog.test.setEnabled(True)
                             self.waveletTDialog.browseTest.setEnabled(True)
