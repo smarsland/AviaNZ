@@ -2,11 +2,11 @@
 # AviaNZ_batch.py
 #
 # This is the proceesing class for the batch AviaNZ interface
-# Version 1.3 23/10/18
+# Version 1.5 05/08/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
 #    AviaNZ birdsong analysis program
-#    Copyright (C) 2017--2018
+#    Copyright (C) 2017--2019
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -173,7 +173,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # TODO: manual is not distributed as pdf now
         import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.4.pdf')
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
     def quitPro(self):
         """ quit program
@@ -819,7 +819,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # TODO: manual is not distributed as pdf now
         import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.1.pdf')
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
     def quitPro(self):
         """ quit program

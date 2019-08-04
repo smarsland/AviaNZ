@@ -1803,10 +1803,11 @@ class HumanClassify2(QDialog):
         5-6. sampleRate, audioFormat for playback
         7. increment which was used for the spectrogram
         8-13. spec color parameters
-        14-15. ???
+        14. page start, in seconds - to convert segment-time to spec-time
+        15. ???
     """
 
-    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, filename=None):
+    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, startRead=0, filename=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -1831,6 +1832,7 @@ class HumanClassify2(QDialog):
         self.colourStart = colourStart
         self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
+        self.startRead = startRead
 
         # Seems that image is backwards?
         self.sg = np.fliplr(sg)
@@ -1840,6 +1842,9 @@ class HumanClassify2(QDialog):
         self.segments = segments
         self.label = label
         for i in range(len(segments)):
+            # if segment entirely outside of in this page:
+            if segments[i][1] < startRead or segments[i][0] > startRead + len(audiodata)//sampleRate:
+                continue
             if label in segments[i][4] or label+'?' in segments[i][4]:
                 self.indices2show.append(i)
 
@@ -1969,7 +1974,7 @@ class HumanClassify2(QDialog):
             seg = self.segments[i]
 
             # select 10 s region around segment center
-            mid = (seg[0] + seg[1])/2
+            mid = (seg[0] + seg[1])/2 - self.startRead
             tstart = max(0, mid-5)
             tend = min(len(self.audiodata)/self.sampleRate, mid+5)
 
@@ -1981,8 +1986,8 @@ class HumanClassify2(QDialog):
             x2 = int(self.convertAmpltoSpec(tend))
 
             # boundaries of raw segment, in spec units, relative to start of seg:
-            unbufStart = self.convertAmpltoSpec(seg[0]) - x1
-            unbufStop = self.convertAmpltoSpec(seg[1]) - x1
+            unbufStart = self.convertAmpltoSpec(seg[0]-self.startRead) - x1
+            unbufStop = self.convertAmpltoSpec(seg[1]-self.startRead) - x1
 
             # create the button:
             newButton = PicButton(i, self.sg[x1:x2, :], self.audiodata[x1a:x2a], self.audioFormat, tend-tstart, unbufStart, unbufStop, self.lut, self.colourStart, self.colourEnd, self.cmapInverted)
@@ -2173,6 +2178,9 @@ class PicButton(QAbstractButton):
         else:
             im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colStart, colEnd])
         im1 = fn.makeQImage(im, alpha)
+        if im1.size().width() == 0:
+            print("ERROR: button not shown, likely bad spectrogram coordinates")
+            return
 
         # hardcode all image widths
         self.specReductionFact = im1.size().width()/500

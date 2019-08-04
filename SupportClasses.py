@@ -4,11 +4,11 @@
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
 
-# Version 1.3 23/10/18
+# Version 1.5 05/08/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
 #    AviaNZ birdsong analysis program
-#    Copyright (C) 2017--2018
+#    Copyright (C) 2017--2019
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -1488,7 +1488,7 @@ class MessagePopup(QMessageBox):
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v1.4 (June 2019)")
+            self.setText("The AviaNZ Program, v1.5 (August 2019)")
             self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
