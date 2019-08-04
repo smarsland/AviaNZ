@@ -1807,7 +1807,7 @@ class HumanClassify2(QDialog):
         15. ???
     """
 
-    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, startRead=0, filename=None):
+    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, filename=None, startRead=0):
         QDialog.__init__(self)
 
         if len(segments)==0:
