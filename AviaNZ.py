@@ -1,11 +1,11 @@
 # AviaNZ.py
 #
 # This is the main class for the AviaNZ interface
-# Version 1.3 23/10/18
+# Version 1.5 05/08/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
 #    AviaNZ birdsong analysis program
-#    Copyright (C) 2017--2018
+#    Copyright (C) 2017--2019
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -226,8 +226,9 @@ class AviaNZ(QMainWindow):
             self.MouseDrawingButton = QtCore.Qt.RightButton
         else:
             self.MouseDrawingButton = QtCore.Qt.LeftButton
-        # SRM: min size of box to add
-        # TODO: Currently only hard-coded here!
+
+        # Boxes with area smaller than this will be ignored -
+        # to avoid accidentally creating little boxes
         self.minboxsize = 0.1
         self.createMenu()
         self.createFrame()
@@ -384,10 +385,11 @@ class AviaNZ(QMainWindow):
             self.showFundamental = actionMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
             self.showFundamental.setCheckable(True)
             self.showFundamental.setChecked(False)
-            self.showSpectral = actionMenu.addAction("Show spectral derivative", self.showSpectralDeriv)
+            if not self.DOC:
+                self.showSpectral = actionMenu.addAction("Show spectral derivative", self.showSpectralDeriv)
+                self.showSpectral.setCheckable(True)
+                self.showSpectral.setChecked(False)
             self.showEnergies = actionMenu.addAction("Show maximum energies", self.showMaxEnergy)
-            self.showSpectral.setCheckable(True)
-            self.showSpectral.setChecked(False)
             self.showEnergies.setCheckable(True)
             self.showEnergies.setChecked(False)
 
@@ -438,7 +440,7 @@ class AviaNZ(QMainWindow):
     def showHelp(self):
         """ Show the user manual (a pdf file)"""
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual_v1.4.pdf')
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
     def showCheatSheet(self):
         """ Show the cheatsheet of sample spectrograms (a pdf file)"""
@@ -1163,6 +1165,7 @@ class AviaNZ(QMainWindow):
                 dlg += 2
 
             # Read in the file and make the spectrogram
+            # Determine where to start and how much to read for this page (in seconds):
             self.startRead = max(0,self.currentFileSection*self.config['maxFileShow']-self.config['fileOverlap'])
             if self.startRead == 0:
                 self.lenRead = self.config['maxFileShow']+self.config['fileOverlap']
@@ -1294,9 +1297,9 @@ class AviaNZ(QMainWindow):
                     self.audiodata_backup = None
                 if not self.Hartley:
                     self.showFundamental.setChecked(False)
-                    self.showSpectral.setChecked(False)
                     self.showEnergies.setChecked(False)
                 if not self.DOC and not self.Hartley:
+                    self.showSpectral.setChecked(False)
                     self.showInvSpec.setChecked(False)
 
                 self.timeaxis.setOffset(self.startRead+self.startTime)
@@ -1323,7 +1326,7 @@ class AviaNZ(QMainWindow):
                 self.stopPlayback()
                 self.volSliderMoved(0)
                 self.segmentStop = 50
-                self.media_obj.filterSeg(0, 50, self.audiodata)
+                #self.media_obj.filterSeg(0, 50, self.audiodata)
                 self.volSliderMoved(self.volSlider.value())
 
                 # Set the length of the scrollbar.
@@ -2163,6 +2166,10 @@ class AviaNZ(QMainWindow):
         To be used when segments are added, deleted or moved."""
         # Work out which overview segment this segment is in (could be more than one)
         # min is to remove possible rounding error
+
+        # important because we use these as array indices
+        if startpoint > endpoint:
+            startpoint, endpoint = endpoint, startpoint
         inds = int(self.convertAmpltoSpec(startpoint) / self.widthOverviewSegment)
         inde = min(int(self.convertAmpltoSpec(endpoint) / self.widthOverviewSegment),len(self.overviewSegments)-1)
 
@@ -2172,6 +2179,7 @@ class AviaNZ(QMainWindow):
                 self.overviewSegments[inds:inde+1,0] -= 1
             else:
                 self.overviewSegments[inds:inde+1,0] += 1
+            print("Should add a Don't Know to", inds, inde)
         elif '?' in ''.join(species):
             brush = self.ColourPossible
             if delete:
@@ -2564,6 +2572,9 @@ class AviaNZ(QMainWindow):
                 self.p_spec.scene().sigMouseMoved.disconnect()
                 if self.showPointerDetails.isChecked():
                     self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
+                # reset the trackers
+                self.started = not(self.started)
+                self.startedInAmpl = False
 
                 # Pass either default y coords or box limits:
                 x1 = self.start_ampl_loc
@@ -2577,35 +2588,35 @@ class AviaNZ(QMainWindow):
                     maxy = self.convertFreqtoY(self.maxFreqShow)
                     y1 = min(max(miny, y1), maxy)
                     y2 = min(max(miny, y2), maxy)
+
+                    # When dragging, can sometimes make boxes by mistake, which is annoying.
+                    # To avoid, check that the box isn't too small
+                    if np.abs((x2-x1)*(y2-y1)) < self.minboxsize:
+                        print("Small box detected, ignoring")
+                        return
                 else:
                     y1 = 0
                     y2 = 0
 
-                # SRM: When dragging, can sometimes make boxes by mistake, which is annoying.
-                # To avoid, check that the box isn't too small
-                #print(x1,x2,y1,y2,(x2-x1)*(y2-y1))
-                if (np.abs((x2-x1)*(y2-y1)) > self.minboxsize):
-                    # If the user has pressed shift, copy the last species and don't use the context menu
-                    # If they pressed Control, add ? to the names
-                    # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
-                    modifiers = QtGui.QApplication.keyboardModifiers()
-                    if modifiers == QtCore.Qt.ShiftModifier:
-                        self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
-                    elif modifiers == QtCore.Qt.ControlModifier:
-                        self.addSegment(x1, x2, y1, y2)
-                        # Context menu
-                        self.fillBirdList(unsure=True)
-                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                    else:
-                        self.addSegment(x1, x2, y1, y2)
-                        # Context menu
-                        self.fillBirdList()
-                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                # If the user has pressed shift, copy the last species and don't use the context menu
+                # If they pressed Control, add ? to the names
+                # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
+                modifiers = QtGui.QApplication.keyboardModifiers()
+                if modifiers == QtCore.Qt.ShiftModifier:
+                    self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
+                elif modifiers == QtCore.Qt.ControlModifier:
+                    self.addSegment(x1, x2, y1, y2)
+                    # Context menu
+                    self.fillBirdList(unsure=True)
+                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                else:
+                    self.addSegment(x1, x2, y1, y2)
+                    # Context menu
+                    self.fillBirdList()
+                    self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
 
-                    # select the new segment/box
-                    self.selectSegment(self.box1id)
-                self.started = not(self.started)
-                self.startedInAmpl = False
+                # select the new segment/box
+                self.selectSegment(self.box1id)
 
             # if this is the first click:
             else:
@@ -3276,14 +3287,23 @@ class AviaNZ(QMainWindow):
     def humanRevDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
         """
-        if len(self.segments)==0 or self.box1id == len(self.segments) or len(self.listRectanglesa2)==0:
+        # First, determine which segments will be shown (i.e. visible in current page):
+        segsInPage = []
+        for s in self.segments:
+            # skip segments entirely outside of the current page
+            if s[1] < self.startRead or s[0] > self.startRead+self.lenRead:
+                pass
+            else:
+                segsInPage.append(s)
+
+        if len(segsInPage)==0:
             msg = SupportClasses.MessagePopup("w", "No segments", "No segments to check")
             msg.exec_()
             return
         self.statusLeft.setText("Checking...")
 
         # Get all labels into a single list
-        names = [sp for seg in self.segments for sp in seg[4]]
+        names = [sp for seg in segsInPage for sp in seg[4]]
 
         # TODO: at the moment, we're showing all "yellow" and "green" segments together.
         names = [re.sub('\?','',item) for item in names]
@@ -3306,11 +3326,13 @@ class AviaNZ(QMainWindow):
             self.revLabel = self.humanClassifyDialog2a.getValues()
 
             # main dialog:
+            # TODO: showAllPages is ignored here, always showing only the current one
+            # For now we're passing in all the segments, and it'll adjust for page start
             self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments,
                                                                self.revLabel, self.sampleRate, self.audioFormat,
                                                                self.config['incr'], self.lut, self.colourStart,
                                                                self.colourEnd, self.config['invertColourMap'],
-                                                               self.brightnessSlider.value(), self.contrastSlider.value())
+                                                               self.brightnessSlider.value(), self.contrastSlider.value(), self.startRead)
             self.humanClassifyDialog2.finish.clicked.connect(self.humanClassifyClose2)
             self.humanClassifyDialog2.exec_()
 
@@ -3324,8 +3346,12 @@ class AviaNZ(QMainWindow):
             btn.stopPlayback()
             self.box1id = btn.index
             currSeg = self.segments[btn.index]
+            # adjust for page start (because overview boxes are relative to this page)
+            startpoint = currSeg[0] - self.startRead
+            endpoint = currSeg[1] - self.startRead
             # clear these species from overview colors
-            self.refreshOverviewWith(currSeg[0], currSeg[1], currSeg[4], delete=True)
+            self.refreshOverviewWith(startpoint, endpoint, currSeg[4], delete=True)
+            self.refreshOverviewWith(startpoint, endpoint, "Don't Know")
             # btn.index carries the index of segment shown on btn
             if btn.mark=="red":
                 outputErrors.append(currSeg)
