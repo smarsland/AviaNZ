@@ -269,6 +269,7 @@ class WaveletSegment:
             del self.WF
             gc.collect()
 
+        self.annotation = np.concatenate(self.annotation, axis=0)
         fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
         return detected, TP, FP, TN, FN
 
@@ -603,7 +604,7 @@ class WaveletSegment:
 
             # Filter
             if rf:
-                C = self.sp.ButterworthBandpass(C, self.sampleRate, low=spInfo['FreqRange'][0],
+                C = self.sp.ButterworthBandpass(C, win_sr, low=spInfo['FreqRange'][0],
                                                 high=spInfo['FreqRange'][1])
             C = np.abs(C)
             N = len(C)
@@ -986,6 +987,7 @@ class WaveletSegment:
         totalcalls = sum([sum(a) for a in self.annotation])
         totalblocks = sum([len(a) for a in self.annotation])
         print("Directory loaded. %d/%d presence blocks found.\n" % (totalcalls, totalblocks))
+        print(np.shape(self.annotation))
 
 
     def loadData(self, fName, window, inc, resol):
@@ -1052,19 +1054,19 @@ class WaveletSegment:
 
         self.annotation.append(np.array(fileAnnotations))
 
-        #Virginia: if overlapping window or window!=1sec I save in annotation2 segments o length 1 sec to make useful comparison
-        if window != 1 or inc != window:
-            N = int(math.ceil(len(data)/sampleRate)) # of seconds
-            annotation_sec = np.zeros(N)
-            sec_step = int(math.ceil(1/resol)) # window length in resolution scale
-            #inc_step = int(math.ceil(inc / resol)) #increment length in resolution scale
-            start = 0
-            for i in range(N):
-                end=int(min(start+sec_step,n))
-                if np.count_nonzero(fileAnnotations[start:end])!=0:
-                    annotation_sec[i]=1
-                start += sec_step
-            self.annotation2.append(np.array(annotation_sec))
+        # #Virginia: if overlapping window or window!=1sec I save in annotation2 segments o length 1 sec to make useful comparison
+        # if window != 1 or inc != window:
+        #     N = int(math.ceil(len(data)/sampleRate)) # of seconds
+        #     annotation_sec = np.zeros(N)
+        #     sec_step = int(math.ceil(1/resol)) # window length in resolution scale
+        #     #inc_step = int(math.ceil(inc / resol)) #increment length in resolution scale
+        #     start = 0
+        #     for i in range(N):
+        #         end=int(min(start+sec_step,n))
+        #         if np.count_nonzero(fileAnnotations[start:end])!=0:
+        #             annotation_sec[i]=1
+        #         start += sec_step
+        #     self.annotation2.append(np.array(annotation_sec))
 
         totalblocks = sum([len(a) for a in self.annotation])
         print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, presblocks, totalblocks))
