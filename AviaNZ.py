@@ -4581,24 +4581,25 @@ class AviaNZ(QMainWindow):
             # post process to remove short segments, wind, rain, and use F0 check.
             if species == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
-                print(post.segments)
-                post.wind(Tmean_wind = 20)
+                post.wind()
                 print('After wind: ', post.segments)
-                post.rainClick()
-                print('After rain: ', post.segments)
+                # post.rainClick()
+                # print('After rain: ', post.segments)
             else:
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                   segments=newSegments, spInfo=speciesData)
                 post.short()  #TODO: keep 'deleteShort' in filter file?
                 if speciesData['Wind']:
-                    # post.wind() - omitted in sppSpecific=T cases
+                    post.wind()
                     print('After wind: ', post.segments)
                 if speciesData['Rain']:
+                    pass
                     # post.rainClick() - omitted in sppSpecific=T cases
-                    print('After rain: ', post.segments)
+                    # print('After rain: ', post.segments)
                 if speciesData['F0']:
-                    post.fundamentalFrq(self.filename, speciesData)
-                    print('After ff: ', post.segments)
+                    pass
+                    # post.fundamentalFrq(self.filename, speciesData)
+                    # print('After ff: ', post.segments)
 
             newSegments = post.segments
             print("After post processing: ", newSegments)
