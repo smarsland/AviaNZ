@@ -91,4 +91,4 @@ coll = COLLECT(exe,
                a.datas,
                strip=False,
                upx=True,
-               name='AviaNZv1.4')
+               name='AviaNZv1.5.1')
