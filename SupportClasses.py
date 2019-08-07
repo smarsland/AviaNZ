@@ -1149,11 +1149,16 @@ class ControllableAudio(QAudioOutput):
         # this should only be called if there's some misalignment between GUI and Audio
         if self.state() == QAudio.IdleState:
             # give some time for GUI to catch up and stop
-            while(self.state() != QAudio.StoppedState):
+            sleepCycles = 0
+            while(self.state() != QAudio.StoppedState and sleepCycles < 30):
                 sleep(0.03)
+                sleepCycles += 1
+                # This loop stops when timeoffset+processedtime > designated stop position.
+                # By adding this offset, we ensure the loop stops even if
+                # processed audio timer breaks somehow.
+                self.timeoffset += 30
                 self.notify.emit()
-            self.keepSlider=False
-            self.stop()
+            self.pressedStop()
 
     def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
         if not resetPause and self.state() == QAudio.SuspendedState:
