@@ -389,9 +389,9 @@ class AviaNZ(QMainWindow):
                 self.showSpectral = actionMenu.addAction("Show spectral derivative", self.showSpectralDeriv)
                 self.showSpectral.setCheckable(True)
                 self.showSpectral.setChecked(False)
-            self.showEnergies = actionMenu.addAction("Show maximum energies", self.showMaxEnergy)
-            self.showEnergies.setCheckable(True)
-            self.showEnergies.setChecked(False)
+                self.showEnergies = actionMenu.addAction("Show maximum energies", self.showMaxEnergy)
+                self.showEnergies.setCheckable(True)
+                self.showEnergies.setChecked(False)
 
         if not self.DOC and not self.Hartley:
             actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
@@ -1297,10 +1297,11 @@ class AviaNZ(QMainWindow):
                     self.audiodata_backup = None
                 if not self.Hartley:
                     self.showFundamental.setChecked(False)
-                    self.showEnergies.setChecked(False)
                 if not self.DOC and not self.Hartley:
+                    self.showEnergies.setChecked(False)
                     self.showSpectral.setChecked(False)
                     self.showInvSpec.setChecked(False)
+                    self.showEnergies.setChecked(False)
 
                 self.timeaxis.setOffset(self.startRead+self.startTime)
 
@@ -1308,12 +1309,12 @@ class AviaNZ(QMainWindow):
                 self.windowSize = self.config['windowWidth']
                 self.timeaxis.setRange(0, self.windowSize)
                 self.widthWindow.setRange(0.5, self.datalengthSec)
-    
+
                 # Reset it if the file is shorter than the window
                 if self.datalengthSec < self.windowSize:
                     self.windowSize = self.datalengthSec
                 self.widthWindow.setValue(self.windowSize)
-    
+
                 self.totalTime = self.convertMillisecs(1000*self.datalengthSec)
                 self.timePlayed.setText(self.convertMillisecs(0) + "/" + self.totalTime)
 
@@ -1332,7 +1333,7 @@ class AviaNZ(QMainWindow):
                 # Set the length of the scrollbar.
                 self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
                 self.scrollSlider.setValue(0)
-    
+
                 # Get the height of the amplitude for plotting the box
                 self.minampl = np.min(self.audiodata)+0.1*(np.max(self.audiodata)+np.abs(np.min(self.audiodata)))
                 self.drawOverview()
@@ -1561,7 +1562,7 @@ class AviaNZ(QMainWindow):
                 #sgRaw = self.sp.denoiseImage2(sg)
                 sgRaw,wave = self.sp.show_invS()
             else:
-                sgRaw = self.sp.spectrogram(self.audiodata, mean_normalise=self.sgMeanNormalise, equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided, multitaper=self.sgMultitaper)
+                sgRaw = self.sp.spectrogram(self.audiodata, mean_normalise=self.sgMeanNormalise, equal_loudness=self.sgEqualLoudness, window_width=self.config['window_width'], incr=self.config['incr'], onesided=self.sgOneSided, multitaper=self.sgMultitaper)
             maxsg = np.min(sgRaw)
             self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
             self.overviewImage.setImage(self.sg)
@@ -2179,7 +2180,6 @@ class AviaNZ(QMainWindow):
                 self.overviewSegments[inds:inde+1,0] -= 1
             else:
                 self.overviewSegments[inds:inde+1,0] += 1
-            print("Should add a Don't Know to", inds, inde)
         elif '?' in ''.join(species):
             brush = self.ColourPossible
             if delete:
@@ -3332,7 +3332,9 @@ class AviaNZ(QMainWindow):
                                                                self.revLabel, self.sampleRate, self.audioFormat,
                                                                self.config['incr'], self.lut, self.colourStart,
                                                                self.colourEnd, self.config['invertColourMap'],
-                                                               self.brightnessSlider.value(), self.contrastSlider.value(), self.startRead)
+                                                               self.brightnessSlider.value(), self.contrastSlider.value(), startRead=self.startRead)
+            if hasattr(self, 'humanClassifyDialogSize'):
+                self.humanClassifyDialog2.resize(self.humanClassifyDialogSize)
             self.humanClassifyDialog2.finish.clicked.connect(self.humanClassifyClose2)
             self.humanClassifyDialog2.exec_()
 
@@ -3385,6 +3387,7 @@ class AviaNZ(QMainWindow):
                 # this will also update the overview colors
                 self.updateLabel(currSeg[4])
 
+        self.humanClassifyDialogSize = self.humanClassifyDialog2.size()
         self.humanClassifyDialog2.done(1)
 
         # Save the errors in a file
@@ -4581,24 +4584,25 @@ class AviaNZ(QMainWindow):
             # post process to remove short segments, wind, rain, and use F0 check.
             if species == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
-                print(post.segments)
-                post.wind(Tmean_wind = 20)
+                post.wind()
                 print('After wind: ', post.segments)
-                post.rainClick()
-                print('After rain: ', post.segments)
+                # post.rainClick()
+                # print('After rain: ', post.segments)
             else:
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                   segments=newSegments, spInfo=speciesData)
                 post.short()  #TODO: keep 'deleteShort' in filter file?
                 if speciesData['Wind']:
-                    # post.wind() - omitted in sppSpecific=T cases
+                    post.wind()
                     print('After wind: ', post.segments)
                 if speciesData['Rain']:
+                    pass
                     # post.rainClick() - omitted in sppSpecific=T cases
-                    print('After rain: ', post.segments)
+                    # print('After rain: ', post.segments)
                 if speciesData['F0']:
-                    post.fundamentalFrq(self.filename, speciesData)
-                    print('After ff: ', post.segments)
+                    pass
+                    # post.fundamentalFrq(self.filename, speciesData)
+                    # print('After ff: ', post.segments)
 
             newSegments = post.segments
             print("After post processing: ", newSegments)
@@ -4822,6 +4826,7 @@ class AviaNZ(QMainWindow):
                 range = self.p_ampl.viewRange()[0]
                 self.setPlaySliderLimits(range[0]*1000, range[1]*1000)
                 # (else keep play slider range from before)
+            self.bar.setMovable(False)
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
             self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
@@ -4842,6 +4847,7 @@ class AviaNZ(QMainWindow):
                 stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
 
                 self.setPlaySliderLimits(start, stop)
+                self.bar.setMovable(False)
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
@@ -4868,6 +4874,7 @@ class AviaNZ(QMainWindow):
                 start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
                 stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
                 self.setPlaySliderLimits(start, stop)
+                self.bar.setMovable(False)
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
@@ -4880,6 +4887,7 @@ class AviaNZ(QMainWindow):
     def pausePlayback(self):
         """ Restores the PLAY buttons, calls media_obj to pause playing."""
         self.media_obj.pressedPause()
+        self.bar.setMovable(True)
 
         # Reset all button icons:
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
@@ -4888,6 +4896,7 @@ class AviaNZ(QMainWindow):
 
     def stopPlayback(self):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
+        self.bar.setMovable(True)
         self.media_obj.pressedStop()
         if not hasattr(self, 'segmentStart') or self.segmentStart is None:
             self.segmentStart = 0
