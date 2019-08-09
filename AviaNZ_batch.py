@@ -207,7 +207,7 @@ class AviaNZ_batchProcess(QMainWindow):
     # from memory_profiler import profile
     # fp = open('memory_profiler_wp.log', 'w+')
     # @profile(stream=fp)
-    def detect(self, minLen=5):
+    def detect(self):
         # check if folder was selected:
         if not self.dirName:
             msg = SupportClasses.MessagePopup("w", "Select Folder", "Please select a folder to process!")
@@ -345,7 +345,6 @@ class AviaNZ_batchProcess(QMainWindow):
                         else:
                             inWindow = False
                 else:
-                    sTime=0
                     inWindow = True
 
                 if DOCRecording and not inWindow:
@@ -589,7 +588,7 @@ class AviaNZ_batchProcess(QMainWindow):
             self.sp = SignalProc.SignalProc()
 
         # Get the data for the spectrogram
-        self.sgRaw = self.sp.spectrogram(self.audiodata, window_width=256, incr=128, window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
+        self.sgRaw = self.sp.spectrogram(self.audiodata, window_width=self.config['window_width'], incr=self.config['incr'], window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
         maxsg = np.min(self.sgRaw)
         self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
 
@@ -764,8 +763,9 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fHigh.setTickInterval(1000)
         self.fHigh.setRange(4000, 32000)
         self.fHigh.setSingleStep(250)
+        self.fHigh.setValue(8000)
         self.fHightext = QLabel('  Show freq. below (Hz)')
-        self.fHighvalue = QLabel('4000')
+        self.fHighvalue = QLabel('8000')
         receiverH = lambda value: self.fHighvalue.setText(str(value))
         self.fHigh.valueChanged.connect(receiverH)
         # add sliders to dock
@@ -1045,7 +1045,10 @@ class AviaNZ_reviewAll(QMainWindow):
                                                            self.species, self.sampleRate, self.audioFormat,
                                                            self.config['incr'], self.lut, self.colourStart,
                                                            self.colourEnd, self.config['invertColourMap'],
-                                                           self.config['brightness'], self.config['contrast'], self.filename)
+                                                           self.config['brightness'], self.config['contrast'], filename=self.filename)
+        if hasattr(self, 'dialogPos'):
+            self.humanClassifyDialog2.resize(self.dialogSize)
+            self.humanClassifyDialog2.move(self.dialogPos)
         self.humanClassifyDialog2.finish.clicked.connect(self.humanClassifyClose2)
         success = self.humanClassifyDialog2.exec_()
 
@@ -1091,6 +1094,9 @@ class AviaNZ_reviewAll(QMainWindow):
                     if label==self.species+'?':
                         currSeg[4][lbindex] = self.species
 
+        # store position to popup the next one in there
+        self.dialogSize = self.humanClassifyDialog2.size()
+        self.dialogPos = self.humanClassifyDialog2.pos()
         self.humanClassifyDialog2.done(1)
 
         # Save the errors in a file
@@ -1206,9 +1212,9 @@ class AviaNZ_reviewAll(QMainWindow):
         self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, minFreq, maxFreq)
 
         # Get the data for the spectrogram
-        self.sgRaw = self.sp.spectrogram(self.audiodata, window_width=256, incr=128, window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
+        self.sgRaw = self.sp.spectrogram(self.audiodata, window_width=self.config['window_width'], incr=self.config['incr'], window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
         maxsg = np.min(self.sgRaw)
-        self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
+        self.sg = np.abs(np.where(self.sgRaw==0, 0.0, 10.0 * np.log10(self.sgRaw/maxsg)))
         self.setColourMap()
 
         # trim the spectrogram

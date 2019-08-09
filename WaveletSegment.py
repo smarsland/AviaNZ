@@ -55,7 +55,6 @@ class WaveletSegment:
         self.annotation = annotation
         self.wavelet = wavelet
         self.spInfo = spInfo
-        self.sampleRate = 0
 
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
         self.segmenter = Segment.Segment(None, None, self.sp, 0, window_width=256, incr=128, mingap=mingap, minlength=minlength)
@@ -75,7 +74,6 @@ class WaveletSegment:
             return
 
         opst = time.time()
-        self.sampleRate = sampleRate
         filteredDenoisedData = self.preprocess(data, sampleRate, d=d, f=f)
 
         # Generate a full 5 level wavelet packet decomposition (stored in WF.tree)
@@ -209,6 +207,7 @@ class WaveletSegment:
         detected = np.array([])
 
         # Loads all audio data to memory
+        # and downsamples to self.spInfo['SampleRate']
         self.loadDirectory(dirName=dirName, denoise=d, filter=f, window=window, inc=inc)
 
         # remember to convert main structures to np arrays
@@ -227,7 +226,7 @@ class WaveletSegment:
             data = self.audioList[fileId]
             # Generate a full 5 level wavelet packet decomposition and detect calls
             self.WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20,
-                                                        samplerate=self.sampleRate)
+                                                        samplerate=self.spInfo['SampleRate'])
             if learnMode == "recaa" or learnMode =="recold":
                 self.WF.WaveletPacket(mode='symmetric', maxlevel=5, antialias=False)
                 detected_c = self.detectCalls(self.WF, nodelist=self.nodes, spInfo=self.spInfo, rf=rf, window=1,
@@ -816,53 +815,6 @@ class WaveletSegment:
         return finalnodes, tpa, fpa, tna, fna
 
 
-    def generateWPs(self, maxlevel, wpmode, train):
-        """ Stores WPs of selected nodes for all loaded files.
-            Useful for disk-caching when WP decomp is slow.
-
-            Args:
-            1. wavelet object
-            2. maxlevel
-            3. wpmode ("old", "new", "aa")
-            Returns a list of file paths
-        """
-        # For each file:
-        files = list()
-        for indexF in range(len(self.filelengths)):
-            data = self.audioList[indexF]
-            self.WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=self.sampleRate)
-            # Generate a full 5 level wavelet packet decomposition
-            if wpmode == "pywt":
-                print("ERROR: pywt objects deprecated, cannot store")
-                return
-            if wpmode == "new" or wpmode =="old":
-                self.WF.WaveletPacket(mode='symmetric', maxlevel=maxlevel, antialias=False)
-            if wpmode == "aa":
-                self.WF.WaveletPacket(mode='symmetric', maxlevel=maxlevel, antialias=True, antialiasFilter=True)
-
-            # No need to store everything:
-            # Find 10 most positively correlated nodes in train mode and the optimum nodes from filter in test mode
-            if train:
-                goodnodes, _ = self.listTopNodes(indexF)
-            else:
-                goodnodes = self.nodes
-
-            # set other nodes to 0
-            for ni in range(len(self.WF.tree)):
-                if ni not in goodnodes and ni!=0:
-                    self.WF.tree[ni] = [0]
-
-            # save:
-            files.append(os.path.join(tempfile.gettempdir(), "avianz_wp" + str(os.getpid()) + "_" + str(indexF)))
-            file = open(files[indexF], 'w+b')
-            pickle.dump(self.WF, file)
-            file.flush()
-            file.close()
-            self.WF = []
-            print("saved WP to file", files[indexF])
-
-        return (files)
-
     def listTopNodes(self, filenum):
         """ Selects top 10 or so nodes to be tested for this file,
             using correlations stored in nodeCorrs, and provided file index.
@@ -912,6 +864,7 @@ class WaveletSegment:
 
     def preprocess(self, data, sampleRate, d=False, f=False):
         """ Downsamples, denoises, and filters the data.
+            sampleRate - actual sample rate of the input. Will be resampled based on spInfo.
             d/f - Bools to perform denoise/filtering.
         """
         # set target sample rate:

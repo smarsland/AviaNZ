@@ -26,7 +26,7 @@
 import sys,os
 
 from PyQt5.QtGui import *
-from PyQt5.QtWidgets import QDialog, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit, QSlider, QCheckBox, QRadioButton
+from PyQt5.QtWidgets import QDialog, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit, QSlider, QCheckBox, QRadioButton, QButtonGroup
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QDir, QPointF, QTime, Qt, QLineF
 
@@ -1274,7 +1274,8 @@ class HumanClassify1(QDialog):
         self.pPlot = self.wPlot.addViewBox(enableMouse=False, row=0, col=1)
         self.plot = pg.ImageItem()
         self.pPlot.addItem(self.plot)
-        self.pPlot.setAspectLocked(ratio=0.2)
+        self.plotAspect = 0.2
+        self.pPlot.setAspectLocked(ratio=self.plotAspect)
         self.pPlot.disableAutoRange()
         self.pPlot.setLimits(xMin=0, yMin=-5)
         self.sg_axis = pg.AxisItem(orientation='left')
@@ -1454,10 +1455,16 @@ class HumanClassify1(QDialog):
         self.contrastSlider.setTickInterval(1)
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
+        # zoom buttons
+        self.zoomInBtn = QPushButton("+")
+        self.zoomOutBtn = QPushButton("-")
+        self.zoomInBtn.clicked.connect(self.zoomIn)
+        self.zoomOutBtn.clicked.connect(self.zoomOut)
+
         vboxSpecContr = pg.LayoutWidget()
         vboxSpecContr.addWidget(self.speciesTop, row=0, col=0, colspan=2)
         vboxSpecContr.addWidget(self.species, row=0, col=2, colspan=8)
-        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=10)
+        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=12)
         vboxSpecContr.addWidget(self.playButton, row=2, col=0)
         vboxSpecContr.addWidget(self.volIcon, row=2, col=1)
         vboxSpecContr.addWidget(self.volSlider, row=2, col=2, colspan=2)
@@ -1469,6 +1476,9 @@ class HumanClassify1(QDialog):
         labelCo.setAlignment(QtCore.Qt.AlignRight)
         vboxSpecContr.addWidget(labelCo, row=2, col=7)
         vboxSpecContr.addWidget(self.contrastSlider, row=2, col=8, colspan=2)
+        vboxSpecContr.addWidget(self.zoomInBtn, row=2, col=10)
+        vboxSpecContr.addWidget(self.zoomOutBtn, row=2, col=11)
+
 
         vboxFull = QVBoxLayout()
         vboxFull.addWidget(vboxSpecContr)
@@ -1506,6 +1516,23 @@ class HumanClassify1(QDialog):
             self.bar.setValue(barx)
             self.bar.update()
             # QApplication.processEvents()
+
+    def zoomIn(self):
+        self.plotAspect = self.plotAspect * 1.5
+        self.pPlot.setAspectLocked(ratio=self.plotAspect)
+        xyratio = np.shape(self.sg)
+        xyratio = xyratio[0] / xyratio[1]
+        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+
+    def zoomOut(self):
+        self.plotAspect = self.plotAspect / 1.5
+        #self.plot.setImage(self.sg)
+        self.pPlot.setAspectLocked(ratio=self.plotAspect)
+        xyratio = np.shape(self.sg)
+        xyratio = xyratio[0] / xyratio[1]
+        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
 
     def updateButtonList(self):
         # refreshes bird button names
@@ -1561,11 +1588,11 @@ class HumanClassify1(QDialog):
         self.pPlot.setRange(xRange=(0, np.shape(sg2)[0]), yRange=(0, SgSize))
         xyratio = np.shape(sg2)
         xyratio = xyratio[0] / xyratio[1]
-        # 0.2 for x/y pixel aspect ratio
+        # self.plotAspect = 0.2 for x/y pixel aspect ratio
         # 0.9 for padding
         # TODO: ***Issues here
-        self.wPlot.setMaximumSize(max(500, xyratio*250*0.2*0.9), 250)
-        self.wPlot.setMinimumSize(max(500, xyratio*250*0.2*0.9), 250)
+        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
 
         # add marks to separate actual segment from buffer zone
         # Note: need to use view coordinates to add items to pPlot
@@ -1842,8 +1869,9 @@ class HumanClassify2(QDialog):
         self.segments = segments
         self.label = label
         for i in range(len(segments)):
-            # if segment entirely outside of in this page:
-            if segments[i][1] < startRead or segments[i][0] > startRead + len(audiodata)//sampleRate:
+            # show segments which have midpoint in this page (ensures all are shown only once)
+            mid = (segments[i][0] + segments[i][1]) / 2
+            if mid < startRead or mid > startRead + len(audiodata)//sampleRate:
                 continue
             if label in segments[i][4] or label+'?' in segments[i][4]:
                 self.indices2show.append(i)
@@ -1975,7 +2003,7 @@ class HumanClassify2(QDialog):
 
             # select 10 s region around segment center
             mid = (seg[0] + seg[1])/2 - self.startRead
-            tstart = max(0, mid-5)
+            tstart = min(len(self.audiodata)/self.sampleRate-1, max(0, mid-5))
             tend = min(len(self.audiodata)/self.sampleRate, mid+5)
 
             # find the right boundaries from the audiodata
@@ -2223,6 +2251,9 @@ class PicButton(QAbstractButton):
                 return
 
     def enterEvent(self, QEvent):
+        # to reset the icon if it didn't stop cleanly
+        if not self.media_obj.isPlaying():
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.show()
 
     def leaveEvent(self, QEvent):
