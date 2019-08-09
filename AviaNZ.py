@@ -1298,6 +1298,7 @@ class AviaNZ(QMainWindow):
                 if not self.Hartley:
                     self.showFundamental.setChecked(False)
                 if not self.DOC and not self.Hartley:
+                    self.showEnergies.setChecked(False)
                     self.showSpectral.setChecked(False)
                     self.showInvSpec.setChecked(False)
                     self.showEnergies.setChecked(False)
