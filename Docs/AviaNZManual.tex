@@ -3,9 +3,9 @@
 \usepackage{graphicx}
 \usepackage{url}
 
-\title{The AviaNZ Birdsong Analysis Software (v 1.4)}
+\title{The AviaNZ Birdsong Analysis Software (v 1.5)}
 \author{The AviaNZ Team \\(\url{stephen.marsland@vuw.ac.nz})}
-\date{June 2019}
+\date{August 2019}
 
 %\usepackage[usenames, dvipsnames]{color}
 
@@ -24,14 +24,14 @@
 % 5 areas bit
 % not a problem
 
-This is a brief guide to version 1.4 of the AviaNZ program. 
+This is a brief guide to version 1.5 of the AviaNZ program. 
 We really want feedback on it, particularly what works and what doesn't, how you would like to see it improved, and what other functionality it needs. We are more than happy to talk about our plans as well. 
 
 %If you haven't done any birdsong processing before, make sure that you read Section~\ref{labelling}, which works through an example. 
 
 \section{Getting Started}
 
-{\em In contrast to previous versions, this version of AviaNZ does not require you to run it as administrator in Windows. It places some files in the home directory of your computer; in \url{C:/Users/username/AppData/Roaming/AviaNZ} for Windows and \url{~/.avianz} for Mac and Linux.}
+%{\em In contrast to previous versions, this version of AviaNZ does not require you to run it as administrator in Windows. It places some files in the home directory of your computer; in \url{C:/Users/username/AppData/Roaming/AviaNZ} for Windows and \url{~/.avianz} for Mac and Linux.}
 
 When the program loads, you are presented with three options in the following start-up screen:
 
@@ -135,7 +135,7 @@ You can also play a segment of sound, assuming that a segment is selected. We wi
 
 \item While the segment is being made, it is red. At the end it will turn blue, and a drop-down menu will then appear asking you to label the segment. 
 
-\item To choose the type of bird, click on the name. If the type isn't in the list, move to `Other'. If it isn't in the second list, at the bottom of that list is a selectable box (it probably says `Albatross'). Clicking on it provides the complete list of birds. If there is something missing from there, choose 'Other' from it, which is at the very end. It will ask you to enter a name. From then on this name will appear in the list. If you click anywhere on the screen except on a bird name in the menu then the menu will disappear and the bird type will be labelled as `Don't Know'. 
+\item To choose the type of bird, click on the name. If the type isn't in the list, move to `Other'. If it isn't in the second list, at the bottom of that list is a selectable box (it probably says `Albatross'). Clicking on it provides the complete list of birds. If there is something missing from there, choose Other' from it, which is at the very end. It will ask you to enter a name. From then on this name will appear in the list. If you click anywhere on the screen except on a bird name in the menu then the menu will disappear and the bird type will be labelled as `Don't Know'. 
 
 \item By default these lists update dynamically, so that bird types you have chosen appear at the top of the list. If you don't like that, then you can disable it in the `Interface settings'. 
 
@@ -190,7 +190,8 @@ You can also play a segment of sound, assuming that a segment is selected. We wi
 %\item[Invert Spectrogram] This is currently a play feature that shows that it is possibly to invert a spectrogram to get a new wave file. The spectrogram picture will update to be a bit blurred. 
 \item [Choose colour map] This enables the user to select a colour map they prefer to the standard grey one. There is also an option to swap black and white (inverting the colour map). 
 %\item [Make frequency axis tight] After bandpass filtering, this updates the spectrogram plot to stop showing the empty bands.
-\item [Change spectrogram parameters] A set of options to modify the spectrogram. Enables changes of the windowing function, width and increment of the FFT, and the option to not subtract off the mean. The `Multitapering' option can make very noisy spectrograms look better, but it takes a lot of computer time. The two sliders at the bottom of the dialog enable the user to non-destructively show a limited frequency band in the spectrogram. The axis in the plot shows what is visible. 
+\item [Change spectrogram parameters] A set of options to modify the spectrogram. Enables changes of the windowing function, width and increment of the FFT, and the option to not subtract off the mean. %The `Multitapering' option can make very noisy spectrograms look better, but it takes a lot of computer time. 
+The two sliders at the bottom of the dialog enable the user to non-destructively show a limited frequency band in the spectrogram. The axis in the plot shows what is visible. 
 \item [Make read only] When reviewing a segmentation it is possible to click on the plots by mistake, adding further segments. This option avoids this problem. It can be turned off by selecting it again. 
 \item [Interface settings] This option enables the user to customise several things about AviaNZ, such as the annotation colour scheme, length of the annotation overview sections, and auto save frequency. The user can also choose how much of a file is loaded automatically. There is a tick box under `Human classify` labelled `Save corrections'. This option is used when reviewing the automated segmentation results  (see Section \ref{sec:action} and Sections \ref{sec:auto}--\ref{sec:outputs}). It is also possible to change the lists of birds you are using. 
 There is an option to set the operator and reviewer, this facility can also be found in the File menu.
@@ -240,7 +241,7 @@ We currently provide 3 options, and you can try them to see how well they work.
     \item Work left to right through this dialog, first selecting the folder where your sound files are, then the bird species you wish to train for (the list will pre-populate from your annotations in those files). Click on `Prepare for Training', and AviaNZ will then attempt to fill in values for Step 2, based on your data. You can change these options if you wish to. When you click on `Train', AviaNZ will run through your files and train a filter for your bird species. It will then produce a plot (shown in Figure~\ref{fig:selectfilter}) that you can use to select how you wish to balance false positives and false negatives. The better the true positive rate you want (so that the filter detects all examples of the sounds you are interested in, no matter how far away they are), the more false positives (incorrect detections, either or other calls, or just noisy sections of the recording) the filter will produce when in use. 
     To choose a value for that trade-off, double click on the graph at a point on one of the lines to select those parameter values. We recommend trying to keep the false positive rate below 10\%. After confirming this for the program, the filter will be created.
     \item Before starting to use it, in Step 3 you should choose a folder containing indepedent test data to ensure that the filter works. 
-    \item This filter is saved, and will be available in the Segmentation options and also in the Batch Processing window for you to use. If you want to copy it to another computer, you can find it in \url{C:/Users/username/AppData/Roaming/AviaNZ/Filters} for Windows and \url{~/.avianz/Filters} for Mac and Linux.
+    \item This filter is saved, and will be available in the Segmentation options and also in the Batch Processing window for you to use. %If you want to copy it to another computer, you can find it in \url{C:/Users/username/AppData/Roaming/AviaNZ/Filters} for Windows and \url{~/.avianz/Filters} for Mac and Linux.
     \end{enumerate}
 
     \begin{figure}
