@@ -412,6 +412,25 @@ class Segment:
 
         return newsegs
 
+    def mergeshort(self, segs, minlen):
+        newsegs = []
+        # loop over and check for short segs, merge
+        i = 0
+        while i < len(segs):
+            if segs[i][1]-segs[i][0] < minlen and i+1 < len(segs):
+                newsegs.append([segs[i][0], segs[i+1][1]])
+                i += 2
+            else:
+                newsegs.append(segs[i])
+                i += 1
+
+        l = len(newsegs)
+        if newsegs[l-1][1]-newsegs[l-1][0] < minlen and l > 1:
+            temp = [newsegs[l-2][0], newsegs[l-1][1]]
+            del newsegs[-1]
+            newsegs.append(temp)
+
+        return newsegs
 
 
     def checkSegmentOverlapCentroids(self, blobs, minSegment=50):

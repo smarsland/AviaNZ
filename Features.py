@@ -359,7 +359,7 @@ def loadFile(filename):
 def genCluterData(dir, duration=1, sampRate=16000):
     # male, female kiwi syllables from denoising chapter. They are in different lengths ~.87 sec min, therefore get the
     # middle 0.8 sec only to make the features with fixed len.
-    f1 = open(dir + '/' + "mfcc.tsv", "a+")
+    f1 = open(dir + '/' + "mfcc.tsv", "w")
     for root, dirs, files in os.walk(str(dir)):
         for filename in files:
             if filename.endswith('.wav'):
@@ -396,7 +396,8 @@ def genCluterData(dir, duration=1, sampRate=16000):
 
                 # MFCC
                 f = Features(data, fs, 256, 128)
-                mfcc = f.get_mfcc().tolist()    # 96x22 matrix
+                mfcc = f.get_mfcc(n_mfcc=24).tolist()    # 96x22 matrix
+
                 m = [i for sublist in mfcc for i in sublist]
                 print(filename, np.shape(mfcc))
                 # print(filename, np.shape(m))
@@ -406,7 +407,7 @@ def genCluterData(dir, duration=1, sampRate=16000):
                 f1.write("%d\n" % (tgt))
     f1.close()
 
-# genCluterData('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi', duration=0.8)
+# genCluterData('D:\AviaNZ\Sound_Files\Denoising_paper_data\demo', duration=0.8)
 
 
 def mfcc(y1,y2,y3,sr1,sr2,sr3,yTest,srTest):

@@ -668,7 +668,7 @@ def cluster_kiwi(sampRate):
         print('\n***best clustering by: Agglomerative')
         print('predicted:\n', model_agg.labels_)
         print('actual:\n', learners.targets)
-        dump(model_best, 'D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\kiwi_agg.joblib')
+        # dump(model_best, 'D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\kiwi_agg.joblib')
     elif best_alg == 3:
         model_best = model_aff
         print('\n***best clustering by: Affinity')
@@ -866,7 +866,7 @@ def cluster_ruru(sampRate):
 
 def loadFile(filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0):
     """
-
+    Read audio file and preprocess as required
     :param filename:
     :param fs:
     :param f1:
@@ -888,7 +888,7 @@ def loadFile(filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0):
         audiodata = audiodata[:, 0]
 
     if fs != 0 and sampleRate != fs:
-        audiodata = librosa.core.audio.resample(audiodata, sampleRate, 16000)
+        audiodata = librosa.core.audio.resample(audiodata, sampleRate, fs)
         sampleRate = fs
 
     # # pre-process
@@ -944,23 +944,30 @@ def within_cluster_dist(dir):
 
 # within_cluster_dist('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\\ruru')
 
-def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2=0, denoise=False,
-                    displayallinone=True):
+def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2=0, denoise=False, single=False,
+                    displayallinone=True, distance='dtw'):
     """
     Given wav + annotation files,
         1) identify syllables using median clipping
-        2) generate MFCC features
+        2) generate features
         3) calculate DTW distances and decide class/ generate new class
     :param n_mels: number of mel coeff
     :param fs: prefered sampling frequency
     :param minlen: min syllable length in secs
-    :return: claculate the possible clusters
+    :param f_1:
+    :param f_2:
+    :param denoise:
+    :param single:
+    :param displayallinone:
+    :param distance:
+    :return: possible clusters
     """
     import warnings
     warnings.filterwarnings("ignore", category=FutureWarning)
     warnings.filterwarnings("ignore", category=UserWarning)
     import Segment
     import SignalProc
+    from scipy import signal
 
     # Get flow and fhigh for bandpass from annotations
     lowlist = []
@@ -1005,6 +1012,17 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
     print('Frequency band:', f_1, '-', f_2)
     print('fs: ', fs)
 
+    # Find the lower and upper bounds (relevant to the frq range), when the range is given
+    if feature == 'mfcc' and f_1 != 0 and f_2 != 0:
+        mels = librosa.core.mel_frequencies(n_mels=n_mels, fmin=0.0, fmax=fs / 2, htk=False)
+        ind_flow = (np.abs(mels - f_1)).argmin()
+        ind_fhigh = (np.abs(mels - f_2)).argmin()
+
+    elif feature == 'we' and f_1 != 0 and f_2 != 0:
+        linear = np.linspace(0, fs / 2, 62)
+        ind_flow = (np.abs(linear - f_1)).argmin()
+        ind_fhigh = (np.abs(linear - f_2)).argmin()
+
     # Ready for clustering
     max_clusters = 10
     n_clusters = 0
@@ -1024,41 +1042,35 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                 inds = np.argsort(segments_len)[::-1]
                 sortedsegments = [segments[i] for i in inds]
 
-                # Find the lower and upper bounds (relevant to the frq range), when the range is given
-                if feature == 'mfcc' and f_1 != 0 and f_2 != 0:
-                    mels = librosa.core.mel_frequencies(n_mels=n_mels, fmin=0.0, fmax=fs/2, htk=False)
-                    ind_flow = (np.abs(mels - f_1)).argmin()
-                    ind_fhigh = (np.abs(mels - f_2)).argmin()
-
-                elif feature == 'we' and f_1 != 0 and f_2 != 0:
-                    linear = np.linspace(0, fs/2, 62)
-                    ind_flow = (np.abs(linear - f_1)).argmin()
-                    ind_fhigh = (np.abs(linear - f_2)).argmin()
-
                 # Now find syllables within each segment, median clipping
                 for seg in sortedsegments:
                     if seg[0] == -1:
                         continue
-                    audiodata, sr = loadFile(os.path.join(root, file), seg[1]-seg[0], seg[0], fs, denoise, f_1, f_2)
-                    minlen = minlen * sr
-                    start = int(seg[0] * sr)
+                    audiodata, sr = loadFile(filename=os.path.join(root, file), duration=seg[1]-seg[0], offset=seg[0],
+                                             fs=fs, denoise=denoise, f1=f_1, f2=f_2)
+                    assert sr == fs
+                    minlen = minlen * fs
+                    start = int(seg[0] * fs)
                     sp = SignalProc.SignalProc(audiodata, fs, 256, 128)
                     sgRaw = sp.spectrogram(audiodata, 256, 128)
-                    segment = Segment.Segment(audiodata, sgRaw, sp, fs, 256, 128)
+                    segment = Segment.Segment(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
                     syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
+                    if len(syls) == 0:      # Sanity check
+                        segment = Segment.Segment(audiodata, sgRaw, sp, fs, 256, 128)
+                        syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
                     syls = segment.checkSegmentOverlap(syls)    # merge overlapped segments
-                    syls = [[int(s[0] * fs), int(s[1] * fs)] for s in syls]
+                    syls = [[int(s[0] * sr), int(s[1] * fs)] for s in syls]
 
-                    if syls == []:                                  # Sanity check, when annotating syllables tight,
-                        syls = [[0, int((seg[1]-seg[0])*fs)]]       # median clipping doesn't detect it.
+                    if len(syls) == 0:                                  # Sanity check, when annotating syllables tight,
+                        syls = [[0, int((seg[1]-seg[0])*fs)]]           # median clipping doesn't detect it.
                     if len(syls) > 1:
                         syls = segment.mergeshort(syls, minlen)             # Merge short segments
-                    if len(syls) == 1 and syls[0][1]-syls[0][0] < minlen:
+                    if len(syls) == 1 and syls[0][1]-syls[0][0] < minlen:   # Sanity check
                         syls = [[0, int((seg[1]-seg[0])*fs)]]
                     temp = [[np.round((x[0] + start) / fs, 2), np.round((x[1] + start) / fs, 2)] for x in syls]
                     print('\nCurrent:', seg, '--> Median clipping ', temp)
 
-                    # Calculate MFCC features of the syllables in the current segment.
+                    # Calculate features of the syllables in the current segment.
                     f = []
                     for s in syls:
                         data = audiodata[s[0]:s[1]]
@@ -1086,11 +1098,12 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                             chroma = scale(chroma, axis=1)
                             f.append(chroma)
 
-                    matched =False
+                    matched = False
                     if n_clusters == 0:
                         print('**Case 1: First class')
                         newclass= class_create(label=seg[4][0], syl=syls, features=f, f_low=seg[2], f_high=seg[3],
-                                                   segs=[(os.path.join(root, file), seg)])
+                                                segs=[(os.path.join(root, file), seg)], single=single,
+                                                dist_method=distance)
                         clusters.append(newclass)
                         n_clusters += 1
                         print('Created new class: Class ', "'", newclass["label"], "'", ',\tIn-class_d: ',
@@ -1099,17 +1112,21 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                     if not matched:
                         # See if the syllables in the current seg match with any existing class
                         min_ds = []     # Keep track of the minimum distances to each class
-                        clusters = random.sample(clusters, len(clusters))   # Shuffle the clusters to avoid any bias
+                        clusters = random.sample(clusters, len(clusters))   # Shuffle the clusters to avoid bias
                         for c in range(len(clusters)):
                             f_c = clusters[c]["features"]   # features of the current class c
                             dist_c = np.zeros((len(f_c), len(f)))   # distances to the current class c
                             for i in range(len(f_c)):
                                 for j in range(len(f)):
-                                    d, _ = librosa.sequence.dtw(f_c[i], f[j], metric='euclidean')
-                                    dist_c[i, j] = d[d.shape[0] - 1][d.shape[1] - 1]
+                                    if distance == 'dtw':
+                                        d, _ = librosa.sequence.dtw(f_c[i], f[j], metric='euclidean')
+                                        dist_c[i, j] = d[d.shape[0] - 1][d.shape[1] - 1]
+                                    elif distance == 'xcor':
+                                        corr = signal.correlate(f_c[i], f[j], mode='full')
+                                        dist_c[i, j] = np.sum(corr) / max(len(f_c[i]), len(f[j]))
 
                             # Min distance to the current class
-                            print('DTW distance to Class ', clusters[c]["label"], ': ', np.amin(dist_c[dist_c != 0]),
+                            print('Distance to Class ', clusters[c]["label"], ': ', np.amin(dist_c[dist_c != 0]),
                                   '( In-class distance: ', clusters[c]["d"], ')')
                             min_ds.append(np.amin(dist_c[dist_c != 0]))
 
@@ -1126,7 +1143,8 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                                 # Update this class
                                 clusters[c] = class_update(cluster=clusters[c], newfeatures=f, newf_low=seg[2],
                                                            newf_high=seg[3], newsyl=syls,
-                                                           newsegs=(os.path.join(root, file), seg))
+                                                           newsegs=(os.path.join(root, file), seg), single=single,
+                                                           dist_method=distance)
                                 matched = True
                                 break       # found match, exit from the search, go to the next segment
 
@@ -1137,10 +1155,14 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                     # syllable.
                     # Note the arbitrary thr, 50 for the case with clusters with only one data point.
                     if not matched:
+                        if distance == 'dtw':
+                            thr = 25
+                        elif distance == 'xcor':
+                            thr = 1000
                         for c in range(len(clusters)):
-                            if clusters[c]["d"] == 0 and min_ds[c] < 50:
+                            if clusters[c]["d"] == 0 and min_ds[c] < thr:
                                 print('**Case 3: In-class dist of ', clusters[c]["label"],  '=', clusters[c]["d"],
-                                      'and this example < 50 dist')
+                                      'and this example < ',  thr, ' dist')
                                 # or \
                                 # ((clusters[c]["f_low"] - 200 < seg[2] < clusters[c]["f_low"] + 200) and
                                 #  (clusters[c]["f_high"] - 200 < seg[3] < clusters[c]["f_high"] + 200)):
@@ -1148,7 +1170,8 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                                 # Update this class
                                 clusters[c] = class_update(cluster=clusters[c], newfeatures=f, newf_low=seg[2],
                                                            newf_high=seg[3], newsyl=syls,
-                                                           newsegs=(os.path.join(root, file), seg))
+                                                           newsegs=(os.path.join(root, file), seg), single=single,
+                                                           dist_method=distance)
                                 matched = True
                                 break    # Break the search and go to the next segment
 
@@ -1164,7 +1187,8 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                             # Update this class
                             clusters[0] = class_update(cluster=clusters[0], newfeatures=f, newf_low=seg[2],
                                                        newf_high=seg[3], newsyl=syls,
-                                                       newsegs=(os.path.join(root, file), seg))
+                                                       newsegs=(os.path.join(root, file), seg), single=single,
+                                                       dist_method=distance)
                             matched = True
                             continue    # Continue to next segment
 
@@ -1172,7 +1196,8 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                     if not matched:
                         print('**Case 5: None of Case 1-4')
                         newclass = class_create(label=seg[4][0], syl=syls, features=f, f_low=seg[2], f_high=seg[3],
-                                                    segs=[(os.path.join(root, file), seg)])
+                                                segs=[(os.path.join(root, file), seg)], single=single,
+                                                dist_method=distance)
                         print('Created a new class: Class ', n_clusters + 1)
                         clusters.append(newclass)
                         n_clusters += 1
@@ -1296,341 +1321,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                     row += 2
             QtGui.QApplication.instance().exec_()
 
-def cluster_by_dist2(dir, feature='mfcc', n_mels=24, fs=16000, minlen=0.3, f_1=0, f_2=0, denoise=False, displayallinone=True):
-    """ A version of cluster_by_dist, only one syllable from each segment saved in the cluster
-    Given wav + annotation files,
-        1) identify syllables using median clipping
-        2) generate MFCC features
-        3) calculate DTW distances and decide class/ generate new class
-    :param n_mels: number of mel coeff
-    :param fs: prefered sampling frequency
-    :param minlen: min syllable length in secs
-    :return: claculate the possible clusters
-    """
-    import warnings
-    warnings.filterwarnings("ignore", category=FutureWarning)
-    warnings.filterwarnings("ignore", category=UserWarning)
-    import Segment
-    import SignalProc
-
-    # Get flow and fhigh for bandpass from annotations
-    lowlist = []
-    highlist= []
-    for root, dirs, files in os.walk(str(dir)):
-        for file in files:
-            if file.endswith('.wav') and file+'.data' in files:
-                # Read the annotation
-                with open(os.path.join(root, file + '.data')) as f1:
-                    segments = json.load(f1)
-                    for seg in segments:
-                        if seg[0] == -1:
-                            continue
-                        else:
-                            lowlist.append(seg[2])
-                            highlist.append(seg[3])
-    print(lowlist)
-    print(highlist)
-    if f_1 == 0:
-        f_1 = np.min(lowlist)
-    if f_2 == 0:
-        f_2 = np.min(highlist)
-
-    if fs < f_2*2 + 100:
-        fs = f_2 * 2 + 100
-    print('Frequency band:', f_1, '-', f_2)
-
-    # Ready for clustering
-    max_clusters = 10
-    n_clusters = 0
-    clusters = []
-    for root, dirs, files in os.walk(str(dir)):
-        for file in files:
-            if file.endswith('.wav') and file+'.data' in files:
-                # Read the annotation
-                with open(os.path.join(root, file + '.data')) as f1:
-                    segments = json.load(f1)
-
-                # Sort the segments longest to shortest, would be a good idea to avoid making first class with only
-                # one member :)
-                if len(segments) > 0 and segments[0][0] == -1:
-                    del segments[0]
-                segments_len = [seg[1]-seg[0] for seg in segments]
-                inds = np.argsort(segments_len)[::-1]
-                sortedsegments = [segments[i] for i in inds]
-
-                # Find the lower and upper bounds (relevant to the frq range), when the range is given
-                if feature == 'mfcc' and f_1 != 0 and f_2 != 0:
-                    mels = librosa.core.mel_frequencies(n_mels=n_mels, fmin=0.0, fmax=fs/2, htk=False)
-                    ind_flow = (np.abs(mels - f_1)).argmin()
-                    ind_fhigh = (np.abs(mels - f_2)).argmin()
-
-                elif feature == 'we' and f_1 != 0 and f_2 != 0:
-                    linear = np.linspace(0, fs/2, 62)
-                    ind_flow = (np.abs(linear - f_1)).argmin()
-                    ind_fhigh = (np.abs(linear - f_2)).argmin()
-
-                # Now find syllables within each segment, median clipping
-                for seg in sortedsegments:
-                    if seg[0] == -1:
-                        continue
-                    audiodata, fs = loadFile(os.path.join(root, file), seg[1]-seg[0], seg[0], fs, denoise, f_1, f_2)
-                    minlen = minlen * fs
-                    start = int(seg[0] * fs)
-                    sp = SignalProc.SignalProc(audiodata, fs, 256, 128)
-                    sgRaw = sp.spectrogram(audiodata, 256, 128)
-                    segment = Segment.Segment(audiodata, sgRaw, sp, fs, 256, 128)
-                    syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
-                    syls = segment.checkSegmentOverlap(syls)    # merge overlapped segments
-                    syls = [[int(s[0] * fs), int(s[1] * fs)] for s in syls]
-
-                    if syls == []:                                  # Sanity check, when annotating syllables tight,
-                        syls = [[0, int((seg[1]-seg[0])*fs)]]       # its posible that median clipping miss it.
-                    if len(syls) > 1:
-                        syls = segment.mergeshort(syls, minlen)             # Merge short segments
-                    if len(syls) == 1 and syls[0][1]-syls[0][0] < minlen:
-                        syls = [[0, int((seg[1]-seg[0])*fs)]]
-                    temp = [[np.round((x[0] + start) / fs, 2), np.round((x[1] + start) / fs, 2)] for x in syls]
-                    print('\nCurrent:', seg, '--> Median clipping ', temp)
-
-                    # Calculate MFCC features of the syllables in the current segment.
-                    f = []
-                    for s in syls:
-                        data = audiodata[s[0]:s[1]]
-                        if feature == 'mfcc':    # MFCC
-                            mfcc = librosa.feature.mfcc(y=data, sr=fs, n_mfcc=n_mels)
-                            if f_1 != 0 and f_2 != 0:
-                                mfcc = mfcc[ind_flow:ind_fhigh, :]  # Limit the frequency to the fixed range [f_1, f_2]
-                            mfcc_delta = librosa.feature.delta(mfcc, mode='nearest')
-                            mfcc = np.concatenate((mfcc, mfcc_delta), axis=0)
-                            mfcc = scale(mfcc, axis=1)
-                            # librosa.display.specshow(mfcc, sr=fs, x_axis='time')
-                            # m = [i for sublist in mfcc for i in sublist]
-                            f.append(mfcc)
-
-                        elif feature == 'we':    # Wavelet Energy
-                            ws = WaveletSegment.WaveletSegment(spInfo=[])
-                            we = ws.computeWaveletEnergy(data=data, sampleRate=fs, nlevels=5, wpmode='new')
-                            we = we.mean(axis=1)
-                            if f_1 != 0 and f_2 != 0:
-                                we = we[ind_flow:ind_fhigh]  # Limit the frequency to a fixed range f_1, f_2
-                            f.append(we)
-                        elif feature == 'chroma':
-                            chroma = librosa.feature.chroma_cqt(y=data, sr=fs)
-                            # chroma = librosa.feature.chroma_stft(y=data, sr=fs)
-                            chroma = scale(chroma, axis=1)
-                            f.append(chroma)
-
-                    matched =False
-                    if n_clusters == 0:
-                        print('**Case 1: First class')
-                        newclass= class_create(label=seg[4][0], syl=[syls[len(syls)//2]], features=f, f_low=seg[2], f_high=seg[3],
-                                                   segs=[(os.path.join(root, file), seg)], single=True)
-                        clusters.append(newclass)
-                        n_clusters += 1
-                        print('Created new class: Class ', "'", newclass["label"], "'", ',\tIn-class_d: ',
-                              newclass["d"], '\tf_low: ', newclass["f_low"], '\tf_high: ', newclass["f_high"])
-                        matched = True
-                    if not matched:
-                        # See if the syllables in the current seg match with any existing class
-                        min_ds = []     # Keep track of the minimum distances to each class
-                        clusters = random.sample(clusters, len(clusters))   # Shuffle the clusters to avoid any bias
-                        for c in range(len(clusters)):
-                            f_c = clusters[c]["features"]   # features of the current class c
-                            dist_c = np.zeros((len(f_c), len(f)))   # distances to the current class c
-                            for i in range(len(f_c)):
-                                for j in range(len(f)):
-                                    d, _ = librosa.sequence.dtw(f_c[i], f[j], metric='euclidean')
-                                    dist_c[i, j] = d[d.shape[0] - 1][d.shape[1] - 1]
-
-                            # Min distance to the current class
-                            print('DTW distance to Class ', clusters[c]["label"], ': ', np.amin(dist_c[dist_c != 0]),
-                                  '( In-class distance: ', clusters[c]["d"], ')')
-                            min_ds.append(np.amin(dist_c[dist_c != 0]))
-
-                        # Now get the clusters sorted according to the min dist
-                        ind = np.argsort(min_ds)
-                        min_ds = np.sort(min_ds)
-                        # make the cluster order
-                        clusters = [clusters[i] for i in ind]
-                        for c in range(len(clusters)):
-                            if (clusters[c]["d"] != 0) and \
-                                    min_ds[c] < (clusters[c]["d"] + clusters[c]["d"] * 0.1):
-                                print('**Case 2: Found a match with a class > one syllable')
-                                print('Class ', clusters[c]["label"], ', dist ', min_ds[c])
-                                # Update this class
-                                clusters[c] = class_update(cluster=clusters[c], newfeatures=[f[len(f)//2]],
-                                                           newf_low=seg[2], newf_high=seg[3], newsyl=[syls[len(syls)//2]],
-                                                           newsegs=(os.path.join(root, file), seg))
-                                matched = True
-                                break       # found match, exit from the search, go to the next segment
-
-                            elif c < len(clusters)-1:
-                                continue    # continue to the next class
-
-                    # Checked most of the classes by now, if still no match found, check the classes with only one
-                    # syllable.
-                    # Note the arbitrary thr, 50 for the case with clusters with only one data point.
-                    if not matched:
-                        for c in range(len(clusters)):
-                            if clusters[c]["d"] == 0 and min_ds[c] < 50:
-                                print('**Case 3: In-class dist of ', clusters[c]["label"],  '=', clusters[c]["d"],
-                                      'and this example < 50 dist')
-                                # or \
-                                # ((clusters[c]["f_low"] - 200 < seg[2] < clusters[c]["f_low"] + 200) and
-                                #  (clusters[c]["f_high"] - 200 < seg[3] < clusters[c]["f_high"] + 200)):
-                                print('Class ', clusters[c]["label"], ', dist ', min_ds[c])
-                                # Update this class
-                                clusters[c] = class_update(cluster=clusters[c], newfeatures=[f[len(f)//2]],
-                                                           newf_low=seg[2], newf_high=seg[3], newsyl=[syls[len(syls)//2]],
-                                                           newsegs=(os.path.join(root, file), seg))
-                                matched = True
-                                break    # Break the search and go to the next segment
-
-                    # No match found yet, check the max clusters
-                    if not matched:
-                        if n_clusters == max_clusters:
-                            print('**Case 4: Reached max classes, therefore adding current seg to the closest '
-                                  'class... ')
-                            # min_ind = np.argmin(min_ds)
-                            # classes are sorted in accesnding order of distance already
-                            print('Class ', clusters[0]["label"], ', dist ', min_ds[0],
-                                  '(in-class distance:', clusters[c]["d"], ')')
-                            # Update this class
-                            clusters[0] = class_update(cluster=clusters[0], newfeatures=[f[len(f)//2]], newf_low=seg[2],
-                                                       newf_high=seg[3], newsyl=[syls[len(syls)//2]],
-                                                       newsegs=(os.path.join(root, file), seg))
-                            matched = True
-                            continue    # Continue to next segment
-
-                    #  If still no luck, create a new class
-                    if not matched:
-                        print('**Case 5: None of Case 1-4')
-                        newclass = class_create(label=seg[4][0], syl=[syls[len(syls)//2]], features=f, f_low=seg[2],
-                                                f_high=seg[3], segs=[(os.path.join(root, file), seg)], single=True)
-                        print('Created a new class: Class ', n_clusters + 1)
-                        clusters.append(newclass)
-                        n_clusters += 1
-                        print('Created new class: Class ', "'", newclass["label"], "'", ',\tin-class_d: ',
-                              newclass["d"], '\tf_low: ', newclass["f_low"], '\tf_high: ', newclass["f_high"])
-
-    print('\n\n--------------Clusters created-------------------')
-    for c in range(len(clusters)):
-        print('Class ', clusters[c]['label'])
-        for s in range(len(clusters[c]['segs'])):
-            print('\t', clusters[c]['segs'][s])
-
-    # Display the segs
-    import pyqtgraph as pg
-    from pyqtgraph.Qt import QtCore, QtGui
-    if displayallinone:
-        app = QtGui.QApplication([])
-
-        mw = QtGui.QMainWindow()
-        mw.show()
-        mw.resize(1200, 800)
-        mw.setWindowTitle("Clustered segments (each row is a Class) - Feature: " + feature + " ; Denoise: " + str(denoise) +
-                          " ; Bandpass: " + str(f_1) + "-" + str(f_2))
-
-        win = pg.GraphicsLayoutWidget()
-        mw.setCentralWidget(win)
-        row = 0
-
-        for c in range(len(clusters)):
-            col = 0
-            for s in clusters[c]["segs"]:
-                wavobj = wavio.read(s[0], s[1][1]-s[1][0], s[1][0])
-                samplerate = wavobj.rate
-                audiodata = wavobj.data
-                if audiodata.dtype is not 'float':
-                    audiodata = audiodata.astype('float')
-                if np.shape(np.shape(audiodata))[0] > 1:
-                    audiodata = audiodata[:, 0]
-
-                if samplerate != fs:
-                    audiodata = librosa.core.audio.resample(audiodata, samplerate, fs)
-
-                sp = SignalProc.SignalProc(audiodata, fs, 512, 256)
-                sg = sp.spectrogram(audiodata, multitaper=False)
-                maxsg = np.min(sg)
-                sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
-                # Make it readable
-                minsg = np.min(sg)
-                maxsg = np.max(sg)
-                colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
-                colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
-
-                vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
-                vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row+1, col=col)
-                im = pg.ImageItem(enableMouse=False)
-                vb2.addItem(im)
-                im.setImage(sg)
-                im.setBorder('w')
-                im.setLevels([colourStart, colourEnd])
-
-                txt = s[1][4][0]
-                # txt = s[0].split('\\')[-1]+'-'+s[1][4][0]
-                lbl = pg.LabelItem(txt, rotateAxis=(1,0), angle=179)
-                vb.addItem(lbl)
-                col += 1
-            row += 2
-
-        QtGui.QApplication.instance().exec_()
-
-    else:
-        app = QtGui.QApplication([])
-        for c in range(len(clusters)):
-            print(clusters[c]["label"])
-            # app = QtGui.QApplication([])
-
-            mw = QtGui.QMainWindow()
-            mw.show()
-            mw.resize(1200, 800)
-
-            win = pg.GraphicsLayoutWidget()
-            mw.setCentralWidget(win)
-            row = 0
-            col = 0
-            for s in clusters[c]["segs"]:
-                wavobj = wavio.read(s[0], s[1][1] - s[1][0], s[1][0])
-                samplerate = wavobj.rate
-                audiodata = wavobj.data
-                if audiodata.dtype is not 'float':
-                    audiodata = audiodata.astype('float')
-                if np.shape(np.shape(audiodata))[0] > 1:
-                    audiodata = audiodata[:, 0]
-
-                if samplerate != fs:
-                    audiodata = librosa.core.audio.resample(audiodata, samplerate, fs)
-
-                sp = SignalProc.SignalProc(audiodata, fs, 512, 256)
-                sg = sp.spectrogram(audiodata, multitaper=False)
-                maxsg = np.min(sg)
-                sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
-                # Make it readable
-                minsg = np.min(sg)
-                maxsg = np.max(sg)
-                colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
-                colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
-
-                vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
-                vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row + 1, col=col)
-                im = pg.ImageItem(enableMouse=False)
-                vb2.addItem(im)
-                im.setImage(sg)
-                im.setBorder('w')
-                im.setLevels([colourStart, colourEnd])
-
-                txt = s[1][4][0]
-                lbl = pg.LabelItem(txt, rotateAxis=(1, 0), angle=179)
-                vb.addItem(lbl)
-                if row == 6:
-                    row = 0
-                    col += 1
-                else:
-                    row += 2
-            QtGui.QApplication.instance().exec_()
-
-def class_create(label, syl, features, f_low, f_high, segs, single=False):
+def class_create(label, syl, features, f_low, f_high, segs, single=False, dist_method='dtw'):
     """ Create a new class
     :param label: label of the new class
     :param syl: syllables
@@ -1641,13 +1332,19 @@ def class_create(label, syl, features, f_low, f_high, segs, single=False):
     :param single: True if only one syllable from the segment goes to the class templates
     :return:
     """
+    from scipy import signal
     dist = np.zeros((len(features), len(features)))
     shift = 0
     for i in range(len(features)):
         shift += 1
         for j in range(shift, len(features)):
-            d, _ = librosa.sequence.dtw(features[i], features[j], metric='euclidean')
-            dist[i, j] = d[d.shape[0] - 1][d.shape[1] - 1]
+            if dist_method == 'dtw':
+                d, _ = librosa.sequence.dtw(features[i], features[j], metric='euclidean')
+                dist[i, j] = d[d.shape[0] - 1][d.shape[1] - 1]
+            elif dist_method == 'xcor':
+                corr = signal.correlate(features[i], features[j], mode='full')
+                dist[i,j] = np.sum(corr)/max(len(features[i]), len(features[j]))
+
     if np.count_nonzero(dist) > 0:
         nonzero = dist > 0
         inclass_d = np.percentile(dist[nonzero], 10)  # TODO: max? mean? a percentile?
@@ -1669,7 +1366,7 @@ def class_create(label, syl, features, f_low, f_high, segs, single=False):
     return newclass
 
 
-def class_update(cluster, newfeatures, newf_low, newf_high, newsyl, newsegs):
+def class_update(cluster, newfeatures, newf_low, newf_high, newsyl, newsegs, single, dist_method='dtw'):
     """ Update an existing class
     :param cluster: the class to update
     :param newfeatures:
@@ -1679,8 +1376,15 @@ def class_update(cluster, newfeatures, newf_low, newf_high, newsyl, newsegs):
     :param newsegs:
     :return: the updated cluster
     """
+    from scipy import signal
+
     # Get in-class distance
     f_c = cluster["features"]  # features of the current class c
+
+    if single:
+        newfeatures = [newfeatures[len(newfeatures)//2]]
+        newsyl = [newsyl[len(newsyl)//2]]
+
     for i in range(len(newfeatures)):
         f_c.append(newfeatures[i])
 
@@ -1689,8 +1393,12 @@ def class_update(cluster, newfeatures, newf_low, newf_high, newsyl, newsegs):
     for i in range(len(f_c)):
         shift += 1
         for j in range(shift, len(f_c)):
-            d, _ = librosa.sequence.dtw(f_c[i], f_c[j], metric='euclidean')
-            dist_c[i, j] = d[d.shape[0] - 1][d.shape[1] - 1]
+            if dist_method == 'dtw':
+                d, _ = librosa.sequence.dtw(f_c[i], f_c[j], metric='euclidean')
+                dist_c[i, j] = d[d.shape[0] - 1][d.shape[1] - 1]
+            elif dist_method == 'xcor':
+                corr = signal.correlate(f_c[i], f_c[j], mode='full')
+                dist_c[i, j] = np.sum(corr) / max(len(f_c[i]), len(f_c[j]))
 
     if np.count_nonzero(dist_c) > 0:
         nonzero = dist_c > 0
@@ -1711,14 +1419,157 @@ def class_update(cluster, newfeatures, newf_low, newf_high, newsyl, newsegs):
           cluster["f_high"])
     return cluster
 
+# cluster_by_dist('D:\AviaNZ\Sound_Files\demo\morepork', feature='we', denoise=False, single=False, distance='dtw')
 
-cluster_by_dist('D:\AviaNZ\Sound_Files\demo\morepork', feature='we', denoise=False) #, f_1=500, f_2=3900)
-# cluster_by_dist2('D:\AviaNZ\Sound_Files\demo\morepork_train_all', feature='we', denoise=False, displayallinone=True)
-# cluster_by_dist('D:\AviaNZ\Sound_Files\demo\morepork', feature='mfcc', denoise=False, fs=16000, f_1=500, f_2=6000)
-# cluster_by_dist('D:\AviaNZ\Sound_Files\demo\morepork', feature='chroma', denoise=False, fs=16000, f_1=500, f_2=6000)
-# cluster_by_dist2('D:\AviaNZ\Sound_Files\demo\\brownkiwi\\train', feature='we', denoise=False) #, f_1=800, f_2=6000)
-# cluster_by_dist('D:\\Nirosha\Acoustic Workshops\VIC (6th Aug 2019)\Filter usage\Ponui', feature='we', denoise=False, fs=16000, f_1=500, f_2=7000, displayallinone=False)
-#
+def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2=0, denoise=False,
+                    displayallinone=True):
+    """
+    Given wav + annotation files,
+        1) identify syllables using median clipping
+        2) generate features
+        3) calculate DTW distances and decide class/ generate new class
+    :param n_mels: number of mel coeff
+    :param fs: prefered sampling frequency
+    :param minlen: min syllable length in secs
+    :param f_1:
+    :param f_2:
+    :param denoise:
+    :param displayallinone:
+    :return: possible clusters
+    """
+    import warnings
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    warnings.filterwarnings("ignore", category=UserWarning)
+    import Segment
+    import SignalProc
+    from scipy import signal
+
+    # Get flow and fhigh for bandpass from annotations
+    lowlist = []
+    highlist = []
+    srlist = []
+    for root, dirs, files in os.walk(str(dir)):
+        for file in files:
+            if file.endswith('.wav') and file+'.data' in files:
+                wavobj = wavio.read(os.path.join(root, file))
+                srlist.append(wavobj.rate)
+                # Read the annotation
+                with open(os.path.join(root, file + '.data')) as f1:
+                    segments = json.load(f1)
+                    for seg in segments:
+                        if seg[0] == -1:
+                            continue
+                        else:
+                            lowlist.append(seg[2])
+                            highlist.append(seg[3])
+    print(lowlist)
+    print(highlist)
+    print(srlist)
+    if f_1 == 0:
+        f_1 = np.min(lowlist)
+    if f_2 == 0:
+        f_2 = np.min(highlist)
+
+    if fs == 0:
+        arr = [4000, 8000, 16000]
+        pos = np.abs(arr - np.median(highlist)*2).argmin()
+        fs = arr[pos]
+
+    print('fs: ', fs)
+
+    if fs > np.min(srlist):
+        print(fs)
+        fs = np.min(srlist)
+
+    if fs < f_2 * 2 + 50:
+        f_2 = fs//2 + 50
+
+    print('Frequency band:', f_1, '-', f_2)
+    print('fs: ', fs)
+
+    # Find the lower and upper bounds (relevant to the frq range), when the range is given
+    if feature == 'mfcc' and f_1 != 0 and f_2 != 0:
+        mels = librosa.core.mel_frequencies(n_mels=n_mels, fmin=0.0, fmax=fs / 2, htk=False)
+        ind_flow = (np.abs(mels - f_1)).argmin()
+        ind_fhigh = (np.abs(mels - f_2)).argmin()
+
+    elif feature == 'we' and f_1 != 0 and f_2 != 0:
+        linear = np.linspace(0, fs / 2, 62)
+        ind_flow = (np.abs(linear - f_1)).argmin()
+        ind_fhigh = (np.abs(linear - f_2)).argmin()
+
+    # Ready for clustering
+    dataset = []
+    for root, dirs, files in os.walk(str(dir)):
+        for file in files:
+            if file.endswith('.wav') and file+'.data' in files:
+                # Read the annotation
+                with open(os.path.join(root, file + '.data')) as f1:
+                    segments = json.load(f1)
+
+                # Now find syllables within each segment, median clipping
+                for seg in segments:
+                    if seg[0] == -1:
+                        continue
+                    audiodata, sr = loadFile(filename=os.path.join(root, file), duration=seg[1]-seg[0], offset=seg[0],
+                                             fs=fs, denoise=denoise, f1=f_1, f2=f_2)
+                    assert sr == fs
+                    minlen = minlen * fs
+                    start = int(seg[0] * fs)
+                    sp = SignalProc.SignalProc(audiodata, fs, 256, 128)
+                    sgRaw = sp.spectrogram(audiodata, 256, 128)
+                    segment = Segment.Segment(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
+                    syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
+                    if len(syls) == 0:      # Sanity check
+                        segment = Segment.Segment(audiodata, sgRaw, sp, fs, 256, 128)
+                        syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
+                    syls = segment.checkSegmentOverlap(syls)    # merge overlapped segments
+                    syls = [[int(s[0] * sr) + start, int(s[1] * fs + start)] for s in syls]
+
+                    if len(syls) == 0:                                  # Sanity check, when annotating syllables tight,
+                        syls = [[start, int(seg[1]*fs)]]           # median clipping doesn't detect it.
+                    if len(syls) > 1:
+                        syls = segment.mergeshort(syls, minlen)             # Merge short segments
+                    if len(syls) == 1 and syls[0][1]-syls[0][0] < minlen:   # Sanity check
+                        syls = [[start, int(seg[1]*fs)]]
+                    syls = [[x[0] / fs, x[1] / fs] for x in syls]
+                    print('\nCurrent:', seg, '--> Median clipping ', syls)
+                    for syl in syls:
+                        dataset.append((os.path.join(root, file), seg, syl))
+
+    print(dataset)
+    # Now calculate the features, make them same length?
+    # TODO...
+
+                    # # Calculate features of the syllables in the current segment.
+                    # f = []
+                    # for s in syls:
+                    #     data = audiodata[s[0]:s[1]]
+                    #     if feature == 'mfcc':    # MFCC
+                    #         mfcc = librosa.feature.mfcc(y=data, sr=fs, n_mfcc=n_mels)
+                    #         if f_1 != 0 and f_2 != 0:
+                    #             mfcc = mfcc[ind_flow:ind_fhigh, :]  # Limit the frequency to the fixed range [f_1, f_2]
+                    #         mfcc_delta = librosa.feature.delta(mfcc, mode='nearest')
+                    #         mfcc = np.concatenate((mfcc, mfcc_delta), axis=0)
+                    #         mfcc = scale(mfcc, axis=1)
+                    #         # librosa.display.specshow(mfcc, sr=fs, x_axis='time')
+                    #         # m = [i for sublist in mfcc for i in sublist]
+                    #         f.append(mfcc)
+                    #
+                    #     elif feature == 'we':    # Wavelet Energy
+                    #         ws = WaveletSegment.WaveletSegment(spInfo=[])
+                    #         we = ws.computeWaveletEnergy(data=data, sampleRate=fs, nlevels=5, wpmode='new')
+                    #         we = we.mean(axis=1)
+                    #         if f_1 != 0 and f_2 != 0:
+                    #             we = we[ind_flow:ind_fhigh]  # Limit the frequency to a fixed range f_1, f_2
+                    #         f.append(we)
+                    #     elif feature == 'chroma':
+                    #         chroma = librosa.feature.chroma_cqt(y=data, sr=fs)
+                    #         # chroma = librosa.feature.chroma_stft(y=data, sr=fs)
+                    #         chroma = scale(chroma, axis=1)
+                    #         f.append(chroma)
+
+# cluster_by_agg(dir='D:\AviaNZ\Sound_Files\demo\morepork', feature='we', denoise=False)
 
 def testLearning1():
     # Very simple test
