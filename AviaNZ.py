@@ -1865,19 +1865,16 @@ class AviaNZ(QMainWindow):
 
         # plot energy in "wind" band
         if self.extra == "Wind energy":
-            # compute following PostProcess.wind()
             we_mean = np.zeros(int(self.datalengthSec))
             we_std = np.zeros(int(self.datalengthSec))
             for w in range(int(self.datalengthSec)):
                 data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
-                f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
-                p = np.log10(p)
-                limsup = int(p.__len__() * 2 * 500 / self.sampleRate)
-                liminf = int(p.__len__() * 2 * 50 / self.sampleRate)
-                a_wind = p[liminf:limsup]
-                we_mean[w] = np.mean(a_wind)
-                we_std[w] = np.std(a_wind)
+                post = SupportClasses.postProcess(audioData=data, sampleRate=self.sampleRate, segments=[], spInfo={})
+                m, std = post.wind_cal(data, self.sampleRate)
+                we_mean[w] = m
+                we_std[w] = std
 
+            print('mean wind: ', we_mean)
             self.plotExtra = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean)
             self.plotExtra.setPen(fn.mkPen(color='k', width=2))
             self.plotExtra2 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean+we_std)
@@ -1894,25 +1891,22 @@ class AviaNZ(QMainWindow):
 
         # plot energy in "rain"
         if self.extra == "Rain":
-            # compute following PostProcess.rain()
             we_mean = np.zeros(int(self.datalengthSec))
             we_std = np.zeros(int(self.datalengthSec))
             for w in range(int(self.datalength/self.sampleRate)):
                 data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
-                mfcc = librosa.feature.mfcc(data, self.sampleRate)
-                # mfcc_delta = librosa.feature.delta(mfcc, width=3)
+                sgRaw = self.sp.spectrogram(data)
                 # Normalise
-                mfcc -= np.mean(mfcc, axis=0)
-                mfcc /= np.max(np.abs(mfcc), axis=0)
-                we_mean[w] = np.mean(mfcc[1, :])
-                we_std[w] = np.std(mfcc[1, :])
+                sgRaw -= np.mean(sgRaw, axis=0)
+                sgRaw /= np.max(np.abs(sgRaw), axis=0)
+                we_mean[w] = np.mean(np.mean(sgRaw, axis=0))
+                we_std[w] = np.std(np.std(sgRaw, axis=0))
             self.plotExtra = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean)
             self.plotExtra.setPen(fn.mkPen(color='k', width=2))
             self.plotExtra2 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean + we_std)
             self.plotExtra2.setPen(fn.mkPen('r'))
             self.plotExtra3 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean - we_std)
             self.plotExtra3.setPen(fn.mkPen('r'))
-            self.plotaxis.setLabel('Mean (MFCC)')
             self.p_plot.addItem(self.plotExtra)
             self.p_plot.addItem(self.plotExtra2)
             self.p_plot.addItem(self.plotExtra3)

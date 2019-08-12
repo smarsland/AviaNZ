@@ -376,6 +376,7 @@ class AviaNZ_batchProcess(QMainWindow):
                     post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                       segments=newSegments, spInfo={})
                     post.wind()
+                    print('After wind: ', post.segments)
                 else:
                     post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                       segments=newSegments, spInfo=self.speciesData)

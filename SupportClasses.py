@@ -152,8 +152,8 @@ class postProcess:
                                         # frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
         a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
 
-        return np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in
-                                # Algorithm 2.1
+        return np.mean(a_wind), np.std(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the
+                                                # step 3 in Algorithm 2.1
 
 
     def wind(self, windT=2.5, windV=0.1):
@@ -174,22 +174,25 @@ class postProcess:
                     continue
                 else:
                     data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
+                    ind = np.flatnonzero(data).tolist()     # eliminate impulse masked sections
+                    data = np.asarray(data)[ind].tolist()
+                    if len(data) == 0:
+                        continue
                     n = math.ceil((len(data) / self.sampleRate))
                     window = 1
                     start = 0
                     wind = np.zeros(n)
                     for t in range(0, n, window):
                         end = min(len(data), start + window * self.sampleRate)
-                        w = np.mean(self.wind_cal(data=data[start:end], sampleRate=self.sampleRate))
-                        wind[t] = w
+                        m, _ = self.wind_cal(data=data[start:end], sampleRate=self.sampleRate)
+                        wind[t] = m
                         start += window * self.sampleRate
+                    print(seg, np.max(wind), statistics.variance(wind), 'n=', n)
                     if n > 30:      # if it is at least 30 seconds check variance (of mean values over each sec)
-                        print(seg, np.max(wind), statistics.variance(wind), 'n=', n)
                         if np.max(wind) > windT and statistics.variance(wind) > windV:
                             print('long and windy')
                             newSegments.remove(seg)
                     elif np.max(wind) > windT:
-                        print(seg, np.max(wind), 'n=', n)
                         print('short and windy')
                         newSegments.remove(seg)
             self.segments = newSegments
@@ -299,33 +302,31 @@ class postProcess:
 
     def rainClick(self):
         """
-        delete random clicks e.g. rain. Check for sign of kiwi (len)
+        delete random clicks e.g. rain.
         """
         newSegments = copy.deepcopy(self.segments)
         if newSegments.__len__() > 1:
-            mfcc = librosa.feature.mfcc(self.audioData, self.sampleRate)
+            # Get avg energy
+            sp = SignalProc.SignalProc(data=self.audioData, sampleRate=self.sampleRate)
+            rawsg = sp.spectrogram(self.audioData)
             # Normalise
-            mfcc -= np.mean(mfcc, axis=0)
-            mfcc /= np.max(np.abs(mfcc), axis=0)
-            mean = np.mean(mfcc[1, :])
-            std = np.std(mfcc[1, :])
-            thr = mean - 2 * std  # mfcc1 thr for the recording
+            rawsg -= np.mean(rawsg, axis=0)
+            rawsg /= np.max(np.abs(rawsg), axis=0)
+            mean = np.mean(rawsg)
+            std = np.std(rawsg)
+            thr = mean - 2 * std  # thr for the recording
 
             for seg in self.segments:
                 if seg[0] == -1:
                     continue
                 else:
-                    secs = seg[1] - seg[0]
-                    if secs > self.minLen:  # just check duration>10 sec
-                        continue
                     data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
-                mfcc = librosa.feature.mfcc(data, self.sampleRate)
-                # Normalise
-                mfcc -= np.mean(mfcc, axis=0)
-                mfcc /= np.max(np.abs(mfcc), axis=0)
-                mfcc1 = mfcc[1, :]  # mfcc1 of the segment
-                if np.min(mfcc1) < thr:
-                    newSegments.remove(seg)
+                    rawsg = sp.spectrogram(data)
+                    # Normalise
+                    rawsg -= np.mean(rawsg, axis=0)
+                    rawsg /= np.max(np.abs(rawsg), axis=0)
+                    if np.min(rawsg) < thr:
+                        newSegments.remove(seg)
         self.segments = newSegments
 
     def fundamentalFrq(self, fileName, speciesData):
