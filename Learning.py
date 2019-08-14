@@ -944,7 +944,7 @@ def within_cluster_dist(dir):
 
 # within_cluster_dist('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\\ruru')
 
-def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2=0, denoise=False, single=False,
+def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0, denoise=False, single=False,
                     displayallinone=True, distance='dtw'):
     """
     Given wav + annotation files,
@@ -993,7 +993,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
     if f_1 == 0:
         f_1 = np.min(lowlist)
     if f_2 == 0:
-        f_2 = np.min(highlist)
+        f_2 = np.median(highlist)
 
     if fs == 0:
         arr = [4000, 8000, 16000]
@@ -1007,7 +1007,9 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
         fs = np.min(srlist)
 
     if fs < f_2 * 2 + 50:
-        f_2 = fs//2 + 50
+        f_2 = fs//2 - 50
+
+    minlen_samples = minlen * fs
 
     print('Frequency band:', f_1, '-', f_2)
     print('fs: ', fs)
@@ -1048,27 +1050,24 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                         continue
                     audiodata, sr = loadFile(filename=os.path.join(root, file), duration=seg[1]-seg[0], offset=seg[0],
                                              fs=fs, denoise=denoise, f1=f_1, f2=f_2)
-                    assert sr == fs
-                    minlen = minlen * fs
                     start = int(seg[0] * fs)
                     sp = SignalProc.SignalProc(audiodata, fs, 256, 128)
                     sgRaw = sp.spectrogram(audiodata, 256, 128)
                     segment = Segment.Segment(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
                     syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
-                    if len(syls) == 0:      # Sanity check
-                        segment = Segment.Segment(audiodata, sgRaw, sp, fs, 256, 128)
-                        syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
+                    if len(syls) == 0:      # Try again with FIR
+                        syls = segment.segmentByFIR(threshold=0.05)
                     syls = segment.checkSegmentOverlap(syls)    # merge overlapped segments
                     syls = [[int(s[0] * sr), int(s[1] * fs)] for s in syls]
 
                     if len(syls) == 0:                                  # Sanity check, when annotating syllables tight,
                         syls = [[0, int((seg[1]-seg[0])*fs)]]           # median clipping doesn't detect it.
                     if len(syls) > 1:
-                        syls = segment.mergeshort(syls, minlen)             # Merge short segments
-                    if len(syls) == 1 and syls[0][1]-syls[0][0] < minlen:   # Sanity check
+                        syls = segment.mergeshort(syls, minlen_samples)             # Merge short segments
+                    if len(syls) == 1 and syls[0][1]-syls[0][0] < minlen_samples:   # Sanity check
                         syls = [[0, int((seg[1]-seg[0])*fs)]]
                     temp = [[np.round((x[0] + start) / fs, 2), np.round((x[1] + start) / fs, 2)] for x in syls]
-                    print('\nCurrent:', seg, '--> Median clipping ', temp)
+                    print('\nCurrent:', seg, '--> syllables >', minlen, 'secs ', temp)
 
                     # Calculate features of the syllables in the current segment.
                     f = []
@@ -1101,7 +1100,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                     matched = False
                     if n_clusters == 0:
                         print('**Case 1: First class')
-                        newclass= class_create(label=seg[4][0], syl=syls, features=f, f_low=seg[2], f_high=seg[3],
+                        newclass= class_create(label=n_clusters+1, syl=syls, features=f, f_low=seg[2], f_high=seg[3],
                                                 segs=[(os.path.join(root, file), seg)], single=single,
                                                 dist_method=distance)
                         clusters.append(newclass)
@@ -1182,20 +1181,32 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                                   'class... ')
                             # min_ind = np.argmin(min_ds)
                             # classes are sorted in accesnding order of distance already
-                            print('Class ', clusters[0]["label"], ', dist ', min_ds[0],
-                                  '(in-class distance:', clusters[c]["d"], ')')
-                            # Update this class
-                            clusters[0] = class_update(cluster=clusters[0], newfeatures=f, newf_low=seg[2],
-                                                       newf_high=seg[3], newsyl=syls,
-                                                       newsegs=(os.path.join(root, file), seg), single=single,
-                                                       dist_method=distance)
-                            matched = True
+                            for c in range(len(clusters)):
+                                if min_ds[c] <= 4 * clusters[c]["d"] or clusters[c]["d"] == 0:
+                                    print('Class ', clusters[c]["label"], ', dist ', min_ds[c],
+                                          '(in-class distance:', clusters[c]["d"], ')')
+                                    # Update this class
+                                    clusters[c] = class_update(cluster=clusters[c], newfeatures=f, newf_low=seg[2],
+                                                               newf_high=seg[3], newsyl=syls,
+                                                               newsegs=(os.path.join(root, file), seg), single=single,
+                                                               dist_method=distance)
+                                    matched = True
+                                    break
+                            if not matched:
+                                print('Class ', clusters[0]["label"], ', dist ', min_ds[0],
+                                      '(in-class distance:', clusters[0]["d"], ')')
+                                # Update this class
+                                clusters[0] = class_update(cluster=clusters[0], newfeatures=f, newf_low=seg[2],
+                                                           newf_high=seg[3], newsyl=syls,
+                                                           newsegs=(os.path.join(root, file), seg), single=single,
+                                                           dist_method=distance)
+                                matched = True
                             continue    # Continue to next segment
 
                     #  If still no luck, create a new class
                     if not matched:
                         print('**Case 5: None of Case 1-4')
-                        newclass = class_create(label=seg[4][0], syl=syls, features=f, f_low=seg[2], f_high=seg[3],
+                        newclass = class_create(label=n_clusters+1, syl=syls, features=f, f_low=seg[2], f_high=seg[3],
                                                 segs=[(os.path.join(root, file), seg)], single=single,
                                                 dist_method=distance)
                         print('Created a new class: Class ', n_clusters + 1)
@@ -1205,10 +1216,18 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                               newclass["d"], '\tf_low: ', newclass["f_low"], '\tf_high: ', newclass["f_high"])
 
     print('\n\n--------------Clusters created-------------------')
+    clustered_segs = []
     for c in range(len(clusters)):
-        print('Class ', clusters[c]['label'])
+        print('Class ', clusters[c]['label'], ': ', len(clusters[c]['segs']))
         for s in range(len(clusters[c]['segs'])):
             print('\t', clusters[c]['segs'][s])
+            clustered_segs.append([clusters[c]['segs'][s][0], clusters[c]['segs'][s][1], clusters[c]['label']])
+
+    # Clustered segments
+    print('\n\n################### Clustered segments ############################')
+    for s in clustered_segs:
+        print(s)
+    # return clustered_segs
 
     # Display the segs
     import pyqtgraph as pg
@@ -1229,17 +1248,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
         for c in range(len(clusters)):
             col = 0
             for s in clusters[c]["segs"]:
-                wavobj = wavio.read(s[0], s[1][1]-s[1][0], s[1][0])
-                samplerate = wavobj.rate
-                audiodata = wavobj.data
-                if audiodata.dtype is not 'float':
-                    audiodata = audiodata.astype('float')
-                if np.shape(np.shape(audiodata))[0] > 1:
-                    audiodata = audiodata[:, 0]
-
-                if samplerate != fs:
-                    audiodata = librosa.core.audio.resample(audiodata, samplerate, fs)
-
+                audiodata, _ = loadFile(s[0], s[1][1]-s[1][0], s[1][0], fs)
                 sp = SignalProc.SignalProc(audiodata, fs, 512, 256)
                 sg = sp.spectrogram(audiodata, multitaper=False)
                 maxsg = np.min(sg)
@@ -1282,17 +1291,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
             row = 0
             col = 0
             for s in clusters[c]["segs"]:
-                wavobj = wavio.read(s[0], s[1][1] - s[1][0], s[1][0])
-                samplerate = wavobj.rate
-                audiodata = wavobj.data
-                if audiodata.dtype is not 'float':
-                    audiodata = audiodata.astype('float')
-                if np.shape(np.shape(audiodata))[0] > 1:
-                    audiodata = audiodata[:, 0]
-
-                if samplerate != fs:
-                    audiodata = librosa.core.audio.resample(audiodata, samplerate, fs)
-
+                audiodata, _ = loadFile(s[0], s[1][1]-s[1][0], s[1][0], fs)
                 sp = SignalProc.SignalProc(audiodata, fs, 512, 256)
                 sg = sp.spectrogram(audiodata, multitaper=False)
                 maxsg = np.min(sg)
@@ -1320,6 +1319,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2
                 else:
                     row += 2
             QtGui.QApplication.instance().exec_()
+
 
 def class_create(label, syl, features, f_low, f_high, segs, single=False, dist_method='dtw'):
     """ Create a new class
@@ -1419,15 +1419,14 @@ def class_update(cluster, newfeatures, newf_low, newf_high, newsyl, newsegs, sin
           cluster["f_high"])
     return cluster
 
-# cluster_by_dist('D:\AviaNZ\Sound_Files\demo\morepork', feature='we', denoise=False, single=False, distance='dtw')
 
-def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2=0, denoise=False,
-                    displayallinone=True):
+def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0, denoise=False,
+                    displayallinone=True, alg='agglomerative'):
     """
     Given wav + annotation files,
-        1) identify syllables using median clipping
-        2) generate features
-        3) calculate DTW distances and decide class/ generate new class
+        1) identify syllables using a general method (median clipping)
+        2) make them to fixed-length by padding or clipping
+        3) use existing clustering algorithems
     :param n_mels: number of mel coeff
     :param fs: prefered sampling frequency
     :param minlen: min syllable length in secs
@@ -1442,7 +1441,6 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2=
     warnings.filterwarnings("ignore", category=UserWarning)
     import Segment
     import SignalProc
-    from scipy import signal
 
     # Get flow and fhigh for bandpass from annotations
     lowlist = []
@@ -1468,7 +1466,7 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2=
     if f_1 == 0:
         f_1 = np.min(lowlist)
     if f_2 == 0:
-        f_2 = np.min(highlist)
+        f_2 = np.median(highlist)
 
     if fs == 0:
         arr = [4000, 8000, 16000]
@@ -1482,7 +1480,10 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2=
         fs = np.min(srlist)
 
     if fs < f_2 * 2 + 50:
-        f_2 = fs//2 + 50
+        f_2 = fs//2 - 50
+
+    if f_2 < f_1:
+        f_2 = np.mean(highlist)
 
     print('Frequency band:', f_1, '-', f_2)
     print('fs: ', fs)
@@ -1498,7 +1499,7 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2=
         ind_flow = (np.abs(linear - f_1)).argmin()
         ind_fhigh = (np.abs(linear - f_2)).argmin()
 
-    # Ready for clustering
+    # Find the syllables
     dataset = []
     for root, dirs, files in os.walk(str(dir)):
         for file in files:
@@ -1535,41 +1536,180 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.3, f_1=0, f_2=
                     syls = [[x[0] / fs, x[1] / fs] for x in syls]
                     print('\nCurrent:', seg, '--> Median clipping ', syls)
                     for syl in syls:
-                        dataset.append((os.path.join(root, file), seg, syl))
+                        dataset.append([os.path.join(root, file), seg, syl])
 
-    print(dataset)
-    # Now calculate the features, make them same length?
-    # TODO...
+    # Make them fixed-length
+    lengths = []
+    for data in dataset:
+        lengths.append(data[2][1]-data[2][0])
+    print('min: ', min(lengths), ' max: ', max(lengths), ' median: ', np.median(lengths))
+    duration = np.median(lengths)   # This is the fixed length of a syllable, if a syllable too long clip it otherwise
+                                    # padding with zero
+    # Now calculate the features
+    for record in dataset:
+        if record[2][1]-record[2][0] > duration:
+            # get the middle 'duration' secs
+            middle = (record[2][1]+record[2][0]) / 2
+            record[2][0] = middle - duration/2
+            record[2][1] = middle + duration / 2
 
-                    # # Calculate features of the syllables in the current segment.
-                    # f = []
-                    # for s in syls:
-                    #     data = audiodata[s[0]:s[1]]
-                    #     if feature == 'mfcc':    # MFCC
-                    #         mfcc = librosa.feature.mfcc(y=data, sr=fs, n_mfcc=n_mels)
-                    #         if f_1 != 0 and f_2 != 0:
-                    #             mfcc = mfcc[ind_flow:ind_fhigh, :]  # Limit the frequency to the fixed range [f_1, f_2]
-                    #         mfcc_delta = librosa.feature.delta(mfcc, mode='nearest')
-                    #         mfcc = np.concatenate((mfcc, mfcc_delta), axis=0)
-                    #         mfcc = scale(mfcc, axis=1)
-                    #         # librosa.display.specshow(mfcc, sr=fs, x_axis='time')
-                    #         # m = [i for sublist in mfcc for i in sublist]
-                    #         f.append(mfcc)
-                    #
-                    #     elif feature == 'we':    # Wavelet Energy
-                    #         ws = WaveletSegment.WaveletSegment(spInfo=[])
-                    #         we = ws.computeWaveletEnergy(data=data, sampleRate=fs, nlevels=5, wpmode='new')
-                    #         we = we.mean(axis=1)
-                    #         if f_1 != 0 and f_2 != 0:
-                    #             we = we[ind_flow:ind_fhigh]  # Limit the frequency to a fixed range f_1, f_2
-                    #         f.append(we)
-                    #     elif feature == 'chroma':
-                    #         chroma = librosa.feature.chroma_cqt(y=data, sr=fs)
-                    #         # chroma = librosa.feature.chroma_stft(y=data, sr=fs)
-                    #         chroma = scale(chroma, axis=1)
-                    #         f.append(chroma)
+    lengths = []
+    for data in dataset:
+        lengths.append(data[2][1] - data[2][0])
+    print('min: ', min(lengths), ' max: ', max(lengths), ' median: ', np.median(lengths))
 
-# cluster_by_agg(dir='D:\AviaNZ\Sound_Files\demo\morepork', feature='we', denoise=False)
+    # Read the syllables and generate features
+    features = []
+    for record in dataset:
+        audiodata, _ = loadFile(filename=record[0], duration=record[2][1] - record[2][0], offset=record[2][0],
+                                 fs=fs, denoise=denoise, f1=f_1, f2=f_2)
+        audiodata = audiodata.tolist()
+        if record[2][1] - record[2][0] < duration:
+            # Zero padding both ends to have fixed duration
+            gap = int((duration*fs - len(audiodata))//2)
+            z = [0] * gap
+            audiodata.extend(z)
+            z.extend(audiodata)
+            audiodata = z
+        if feature == 'mfcc':  # MFCC
+            mfcc = librosa.feature.mfcc(y=np.asarray(audiodata), sr=fs, n_mfcc=n_mels)
+            if f_1 != 0 and f_2 != 0:
+                mfcc = mfcc[ind_flow:ind_fhigh, :]  # Limit the frequency to the fixed range [f_1, f_2]
+            mfcc_delta = librosa.feature.delta(mfcc, mode='nearest')
+            mfcc = np.concatenate((mfcc, mfcc_delta), axis=0)
+            mfcc = scale(mfcc, axis=1)
+            mfcc = [i for sublist in mfcc for i in sublist]
+            features.append(mfcc)
+        elif feature == 'we':  # Wavelet Energy
+            ws = WaveletSegment.WaveletSegment(spInfo=[])
+            we = ws.computeWaveletEnergy(data=audiodata, sampleRate=fs, nlevels=5, wpmode='new')
+            we = we.mean(axis=1)
+            if f_1 != 0 and f_2 != 0:
+                we = we[ind_flow:ind_fhigh]  # Limit the frequency to a fixed range f_1, f_2
+            features.append(we)
+        elif feature == 'chroma':
+            chroma = librosa.feature.chroma_cqt(y=audiodata, sr=fs)
+            # chroma = librosa.feature.chroma_stft(y=data, sr=fs)
+            chroma = scale(chroma, axis=1)
+            features.append(chroma)
+    print(np.shape(features))
+
+    features = TSNE().fit_transform(features)
+    learners = Clustering(features, [])
+
+    if alg =='DBSCAN':
+        print('\nDBSCAN--------------------------------------')
+        model_dbscan = learners.DBscan(eps=0.3, min_samples=3)
+        predicted_labels = model_dbscan.labels_
+        print('# clusters', len(set(model_dbscan.labels_)))
+
+    elif alg == 'Birch':
+        print('\nBirch----------------------------------------')
+        model_birch = learners.birch(threshold=0.88, n_clusters=None)
+        predicted_labels = model_birch.labels_
+        print('# clusters', len(set(model_birch.labels_)))
+
+    if alg == 'agglomerative':
+        print('\nAgglomerative Clustering----------------------')
+        model_agg = learners.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=0.5,
+                                                 linkage='complete')
+        # Either set n_clusters=None and compute_full_tree=T or distance_threshold=None
+
+        model_agg.fit_predict(learners.features)
+        predicted_labels = model_agg.labels_
+        print('# clusters', len(set(model_agg.labels_)))
+
+    print(predicted_labels)
+    # Attach the label to each syllable in the dataset
+    for i in range(len(predicted_labels)):
+        dataset[i].insert(3, predicted_labels[i])
+
+    for record in dataset:
+        print(record)
+
+    # Majority voting
+    clustered_dataset = []
+    for record in dataset:
+        if record[:2] not in clustered_dataset:
+            clustered_dataset.append(record[:2])
+
+    labels = [[] for i in range(len(clustered_dataset))]
+
+    for i in range(len(predicted_labels)):
+        ind = clustered_dataset.index(dataset[i][:2])
+        labels[ind].append(predicted_labels[i])
+
+    from statistics import mode
+    for i in range(len(labels)):
+        try:
+            labels[i] = mode(labels[i])
+        except:
+            labels[i] = labels[i][0]
+
+    for i in range(len(clustered_dataset)):
+        print(clustered_dataset[i], labels[i])
+
+    # return clustered_dataset
+
+    # Sort the clusters and display for now
+    classes = set(labels)
+
+    # Display the segs
+    import pyqtgraph as pg
+    from pyqtgraph.Qt import QtCore, QtGui
+    if displayallinone:
+        app = QtGui.QApplication([])
+
+        mw = QtGui.QMainWindow()
+        mw.show()
+        mw.resize(1200, 800)
+        mw.setWindowTitle(
+            "Clustered segments (each row is a Class) - Feature: " + feature + " ; Denoise: " + str(denoise) +
+            " ; Bandpass: " + str(f_1) + "-" + str(f_2))
+
+        win = pg.GraphicsLayoutWidget()
+        mw.setCentralWidget(win)
+        row = 0
+
+        for c in classes:
+            col = 0
+            indc = np.where(labels == c)[0].tolist()
+            print('Class ', c, ': ', np.shape(indc)[0], ' segments')
+            clusterc = []
+            for i in indc:
+                print(clustered_dataset[i])
+                clusterc.append(clustered_dataset[i])
+            for x in clusterc:
+                audiodata, _ = loadFile(x[0], x[1][1]-x[1][0], x[1][0], fs)
+                sp = SignalProc.SignalProc(audiodata, fs, 512, 256)
+                sg = sp.spectrogram(audiodata, multitaper=False)
+                maxsg = np.min(sg)
+                sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
+                # Make it readable
+                minsg = np.min(sg)
+                maxsg = np.max(sg)
+                colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
+                colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
+
+                vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
+                vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row + 1, col=col)
+                im = pg.ImageItem(enableMouse=False)
+                vb2.addItem(im)
+                im.setImage(sg)
+                im.setBorder('w')
+                im.setLevels([colourStart, colourEnd])
+
+                txt = x[1][4][0]
+                # txt = s[0].split('\\')[-1]+'-'+s[1][4][0]
+                lbl = pg.LabelItem(txt, rotateAxis=(1, 0), angle=179)
+                vb.addItem(lbl)
+                col += 1
+            row += 2
+
+        QtGui.QApplication.instance().exec_()
+
+# cluster_by_dist('D:\AviaNZ\Sound_Files\demo\morepork', feature='we', denoise=False, single=False, distance='dtw')
+# cluster_by_agg('D:\AviaNZ\Sound_Files\demo\morepork', feature='we')
 
 def testLearning1():
     # Very simple test
