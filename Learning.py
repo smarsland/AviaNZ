@@ -1227,7 +1227,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
     print('\n\n################### Clustered segments ############################')
     for s in clustered_segs:
         print(s)
-    # return clustered_segs
+    # return clustered_segs, fs
 
     # Display the segs
     import pyqtgraph as pg
@@ -1611,8 +1611,10 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
 
     if alg == 'agglomerative':
         print('\nAgglomerative Clustering----------------------')
-        model_agg = learners.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=0.5,
-                                                 linkage='complete')
+        # model_agg = learners.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=0.5,
+        #                                          linkage='complete')
+        model_agg = learners.agglomerativeClustering(n_clusters=10, compute_full_tree=False, distance_threshold=None,
+                                                     linkage='complete')
         # Either set n_clusters=None and compute_full_tree=T or distance_threshold=None
 
         model_agg.fit_predict(learners.features)
@@ -1649,7 +1651,7 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
     for i in range(len(clustered_dataset)):
         print(clustered_dataset[i], labels[i])
 
-    # return clustered_dataset
+    # return clustered_dataset, fs
 
     # Sort the clusters and display for now
     classes = set(labels)
@@ -1681,7 +1683,7 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
                 clusterc.append(clustered_dataset[i])
             for x in clusterc:
                 audiodata, _ = loadFile(x[0], x[1][1]-x[1][0], x[1][0], fs)
-                sp = SignalProc.SignalProc(audiodata, fs, 512, 256)
+                sp = SignalProc.SignalProc(audiodata, fs, 1024, 512)
                 sg = sp.spectrogram(audiodata, multitaper=False)
                 maxsg = np.min(sg)
                 sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
@@ -1707,9 +1709,58 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
             row += 2
 
         QtGui.QApplication.instance().exec_()
+    else:
+        app = QtGui.QApplication([])
+        for c in classes:
+            indc = np.where(labels == c)[0].tolist()
+            print('Class ', c, ': ', np.shape(indc)[0], ' segments')
+            clusterc = []
+            for i in indc:
+                print(clustered_dataset[i])
+                clusterc.append(clustered_dataset[i])
+            mw = QtGui.QMainWindow()
+            mw.show()
+            mw.resize(1200, 800)
 
-# cluster_by_dist('D:\AviaNZ\Sound_Files\demo\morepork', feature='we', denoise=False, single=False, distance='dtw')
+            win = pg.GraphicsLayoutWidget()
+            mw.setCentralWidget(win)
+            row = 0
+            col = 0
+
+            for x in clusterc:
+                audiodata, _ = loadFile(x[0], x[1][1] - x[1][0], x[1][0], fs)
+                sp = SignalProc.SignalProc(audiodata, fs, 1024, 512)
+                sg = sp.spectrogram(audiodata, multitaper=False)
+                maxsg = np.min(sg)
+                sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
+                # Make it readable
+                minsg = np.min(sg)
+                maxsg = np.max(sg)
+                colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
+                colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
+
+                # vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
+                vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row + 1, col=col)
+                im = pg.ImageItem(enableMouse=False)
+                vb2.addItem(im)
+                im.setImage(sg)
+                im.setBorder('w')
+                im.setLevels([colourStart, colourEnd])
+
+                # txt = x[1][0][4]
+                # lbl = pg.LabelItem(txt, rotateAxis=(1, 0), angle=179)
+                # vb.addItem(lbl)
+                if row == 6:
+                    row = 0
+                    col += 1
+                else:
+                    row += 2
+            QtGui.QApplication.instance().exec_()
+
+# cluster_by_agg('D:\AviaNZ\Sound_Files\Fiordland_kiwi\Dataset\Dataset\TestData\Positive\Data\\birds', feature='we', displayallinone=False)
+# cluster_by_dist('D:\AviaNZ\Sound_Files\demo\morepork', feature='we', denoise=False)
 # cluster_by_agg('D:\AviaNZ\Sound_Files\demo\morepork', feature='we')
+
 
 def testLearning1():
     # Very simple test
