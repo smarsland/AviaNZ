@@ -355,19 +355,46 @@ class AviaNZ_batchProcess(QMainWindow):
                 # ALL SYSTEMS GO: process this file
                 print("Loading file...")
                 self.loadFile(wipe=(self.species == "All species"))
+
+                # Segment over pages separately, to allow dealing with large files smoothly:
+                # page size fixed for now
+                samplesInPage = 900*16000
+                # (ceil division for large integers)
+                numPages = (len(self.audiodata) - 1) // samplesInPage + 1
+
+                newSegments = []
                 print("Segmenting...")
+                # clean up old segments:
                 if self.species != 'All species':
                     # wipe same species:
+                    self.ws = WaveletSegment.WaveletSegment(self.speciesData, 'dmey2')
                     self.segments[:] = [s for s in self.segments if self.species not in s[4] and self.species+'?' not in s[4]]
-                    ws = WaveletSegment.WaveletSegment(self.speciesData, 'dmey2')
-                    # 'recaa' mode
-                    newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
-                                                    d=False, f=True, wpmode="new")
                 else:
                     # wipe all segments:
                     self.segments = []
-                    self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
-                    newSegments=self.seg.bestSegments()
+
+                # Actual segmentation happens here:
+                for page in range(numPages):
+                    print("Segmenting page %d / %d" % (page+1, numPages))
+                    start = page*samplesInPage
+                    end = min(start+samplesInPage, len(self.audiodata))
+                    thisPageLen = (end-start) / self.sampleRate
+
+                    if thisPageLen < 2:
+                        print("Warning: can't process short file ends (%0.2f s)" % thisPageLen)
+                        continue
+
+                    if self.species != 'All species':
+                        # note: using 'recaa' mode = partial anitalias
+                        thisPageSegs = self.ws.waveletSegment(data=self.audiodata[start:end], sampleRate=self.sampleRate, d=False, f=True, wpmode="new")
+                    else:
+                        # Create spectrogram for median clipping etc
+                        self.sgRaw = self.sp.spectrogram(self.audiodata[start:end], window_width=self.config['window_width'], incr=self.config['incr'], window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
+                        self.seg = Segment.Segment(self.audiodata[start:end], self.sgRaw, self.sp, self.sampleRate)
+                        thisPageSegs = self.seg.bestSegments()
+
+                    # combine segments from each page into a single list
+                    newSegments.extend(thisPageSegs)
                 print("Segmentation complete. %d new segments marked" % len(newSegments))
 
                 # post process to remove short segments, wind, rain, and use F0 check.
@@ -483,12 +510,12 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # These parameters will be set for the new segments:
         if self.species != 'All species':
-            y1 = self.speciesData['FreqRange'][0]//2
+            y1 = self.speciesData['FreqRange'][0]
             y2 = min(self.sampleRate//2, self.speciesData['FreqRange'][1])
             species = [self.species + "?"]
         else:
             y1 = 0
-            y2 = self.sampleRate//2
+            y2 = 0
             species = ["Don't Know"]
 
         for seg in segmentsOld:
@@ -588,11 +615,6 @@ class AviaNZ_batchProcess(QMainWindow):
         if not hasattr(self, 'sp'):
             self.sp = SignalProc.SignalProc()
 
-        # Get the data for the spectrogram
-        self.sgRaw = self.sp.spectrogram(self.audiodata, window_width=self.config['window_width'], incr=self.config['incr'], window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
-        maxsg = np.min(self.sgRaw)
-        self.sg = np.abs(np.where(self.sgRaw==0,0.0,10.0 * np.log10(self.sgRaw/maxsg)))
-
         # Read in stored segments (useful when doing multi-species)
         if wipe or not os.path.isfile(self.filename + '.data'):
             self.segments = []
@@ -606,13 +628,12 @@ class AviaNZ_batchProcess(QMainWindow):
             if len(self.segments) > 0:
                 for s in self.segments:
                     if 0 < s[2] < 1.1 and 0 < s[3] < 1.1:
-                        # *** Potential for major cockups here. First version didn't normalise the segmen     t data for dragged boxes.
-                        # The second version did, storing them as values between 0 and 1. It modified the      original versions by assuming that the spectrogram was 128 pixels high (256 width window).
-                        # This version does what it should have done in the first place, which is to reco     rd actual frequencies
+                        # *** Potential for major cockups here. First version didn't normalise the segment data for dragged boxes.
+                        # The second version did, storing them as values between 0 and 1. It modified theoriginal versions by assuming that the spectrogram was 128 pixels high (256 width window).
+                        # This version does what it should have done in the first place, which is to record actual frequencies
                         # The .1 is to take care of rounding errors
-                        # TODO: Because of this change (23/8/18) I run a backup on the datafiles in the i     nit
-                        s[2] = self.convertYtoFreq(s[2])
-                        s[3] = self.convertYtoFreq(s[3])
+                        s[2] = 0
+                        s[3] = 0
                         self.segmentsToSave = True
 
                     # convert single-species IDs to [species]
@@ -629,11 +650,6 @@ class AviaNZ_batchProcess(QMainWindow):
         self.impMask()
 
         # Update the data that is seen by the other classes
-        # TODO: keep an eye on this to add other classes as required
-        if hasattr(self, 'seg'):
-            self.seg.setNewData(self.audiodata,self.sgRaw, self.sampleRate,256,128)
-        else:
-            self.seg = Segment.Segment(self.audiodata, self.sgRaw, self.sp, self.sampleRate)
         self.sp.setNewData(self.audiodata, self.sampleRate)
 
     def impMask(self, engp=90, fp=0.75):
@@ -662,12 +678,6 @@ class AviaNZ_batchProcess(QMainWindow):
                 res[i] = edges_reps[t]
             t += 1
         return res
-
-    def convertYtoFreq(self,y,sgy=None):
-        """ Unit conversion """
-        if sgy is None:
-            sgy = np.shape(self.sg)[1]
-            return y * self.sampleRate//2 / sgy + self.minFreqShow
 
 
 class AviaNZ_reviewAll(QMainWindow):
@@ -946,6 +956,12 @@ class AviaNZ_reviewAll(QMainWindow):
                 # check if there are any segments for this single species
                 spPresent = False
                 for seg in self.segments:
+                    if 0 < seg[2] < 1.1 and 0 < seg[3] < 1.1:
+                        # reset old-style (0-1 instead of Hz freqs) boxes to segments
+                        seg[2] = 0
+                        seg[3] = 0
+                        self.segmentsToSave = True
+
                     # convert single-species IDs to [species]
                     if type(seg[4]) is not list:
                         seg[4] = [seg[4]]
@@ -1226,8 +1242,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.sg = self.sg[:,pixelstart:pixelend]
 
         # Update the data that is seen by the other classes
-        # TODO: keep an eye on this to add other classes as required
-        # self.seg.setNewData(self.audiodata,self.sgRaw,self.sampleRate,256,128)
         self.sp.setNewData(self.audiodata,self.sampleRate)
 
     def humanClassifyNextImage1(self):

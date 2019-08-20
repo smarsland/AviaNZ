@@ -862,28 +862,32 @@ class WaveletSegment:
 
         return (bestnodes, worstnodes)
 
-    def preprocess(self, data, sampleRate, d=False, f=False):
+    def preprocess(self, data, sampleRate, d=False, f=False, fastRes=True):
         """ Downsamples, denoises, and filters the data.
             sampleRate - actual sample rate of the input. Will be resampled based on spInfo.
             d/f - Bools to perform denoise/filtering.
+            fastRes - use kaiser_fast instead of best. Twice faster but pretty similar output.
         """
         # set target sample rate:
-        fs = self.spInfo['SampleRate']
+        fsOut = self.spInfo['SampleRate']
 
-        if sampleRate != fs:
-            print("Resampling from", sampleRate, "to", fs)
-            data = librosa.core.audio.resample(data, sampleRate, fs)
-            sampleRate = fs
+        if sampleRate != fsOut:
+            print("Resampling from", sampleRate, "to", fsOut)
+            if fastRes:
+                data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
+            else:
+                data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_best')
+            sampleRate = fsOut
 
         # Get the five level wavelet decomposition
         if d:
-            WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=fs)
+            WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
             denoisedData = WF.waveletDenoise(thresholdType='soft', maxLevel=5)
         else:
             denoisedData = data  # this is to avoid washing out very fade calls during the denoising
 
         if f:
-            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, sampleRate,
+            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, fsOut,
                                                                low=self.spInfo['FreqRange'][0], high=self.spInfo['FreqRange'][1])
         else:
             filteredDenoisedData = denoisedData

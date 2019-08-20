@@ -187,8 +187,8 @@ class postProcess:
                         m, _ = self.wind_cal(data=data[start:end], sampleRate=self.sampleRate)
                         wind[t] = m
                         start += window * self.sampleRate
-                    print(seg, np.max(wind), statistics.variance(wind), 'n=', n)
                     if n > 30:      # if it is at least 30 seconds check variance (of mean values over each sec)
+                        print(seg, np.max(wind), statistics.variance(wind), 'n=', n)
                         if np.max(wind) > windT and statistics.variance(wind) > windV:
                             print('long and windy')
                             newSegments.remove(seg)
