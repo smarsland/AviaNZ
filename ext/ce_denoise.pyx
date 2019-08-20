@@ -313,6 +313,7 @@ def ThresholdNodes2(self, list oldtree, bestleaves, threshold, str thrtype, int 
 
 def EnergyCurve(np.ndarray C, M):
         assert C.dtype==np.float64
+        assert len(C)>2*M+1
         # Args: 1. wav data 2. M (int), expansion in samples
         N = len(C)
         E = np.zeros(N)

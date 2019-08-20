@@ -1255,13 +1255,13 @@ class AviaNZ(QMainWindow):
                     if len(self.segments) > 0:
                         for s in self.segments:
                             if 0 < s[2] < 1.1 and 0 < s[3] < 1.1:
+                                print("Warning: ignoring old-format frequency marks")
                                 # *** Potential for major cockups here. First version didn't normalise the segment data for dragged boxes.
                                 # The second version did, storing them as values between 0 and 1. It modified the original versions by assuming that the spectrogram was 128 pixels high (256 width window).
                                 # This version does what it should have done in the first place, which is to record actual frequencies
                                 # The .1 is to take care of rounding errors
-                                # TODO: Because of this change (23/8/18) I run a backup on the datafiles in the init
-                                s[2] = self.convertYtoFreq(s[2])
-                                s[3] = self.convertYtoFreq(s[3])
+                                s[2] = 0
+                                s[3] = 0
                                 self.segmentsToSave = True
                             if type(s[4]) is not list:
                                 s[4] = [s[4]]
@@ -4603,21 +4603,19 @@ class AviaNZ(QMainWindow):
 
             # Generate annotation friendly output.
             if str(alg)=='Wavelets':
-                 if len(newSegments)>0:
-                    y1 = self.convertFreqtoY(speciesData['FreqRange'][0]/2)
-                    y2 = self.convertFreqtoY(speciesData['SampleRate']/2)
-                    if speciesData['SampleRate']/2 > self.sampleRate:
-                        y2 = self.convertFreqtoY(self.sampleRate/2-self.sampleRate*0.01)
+                if len(newSegments)>0:
+                    y1 = self.convertFreqtoY(speciesData['FreqRange'][0])
+                    y2 = min(self.sampleRate//2, speciesData['FreqRange'][1])
+                    y2 = self.convertFreqtoY(y2)
                     for seg in newSegments:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
                                         [species.title() + "?"],index=-1)
                         self.segmentsToSave = True
             elif str(alg)=='Cross-Correlation' and species_cc != 'Choose species...':
                 if len(newSegments) > 0:
-                    y1 = self.convertFreqtoY(speciesData['FreqRange'][0]/2)
-                    y2 = self.convertFreqtoY(speciesData['SampleRate']/2)
-                    if speciesData['SampleRate']/2 > self.sampleRate:
-                        y2 = self.convertFreqtoY(self.sampleRate / 2 - self.sampleRate * 0.01)
+                    y1 = self.convertFreqtoY(speciesData['FreqRange'][0])
+                    y2 = min(self.sampleRate//2, speciesData['FreqRange'][1])
+                    y2 = self.convertFreqtoY(y2)
                     for seg in newSegments:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
                                         [species_cc.title() + "?"], index=-1)
