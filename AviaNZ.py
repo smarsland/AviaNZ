@@ -4519,7 +4519,7 @@ class AviaNZ(QMainWindow):
         self.prevSegments = copy.deepcopy(self.segments)
 
         self.segmentsToSave = True
-        [alg, medThr,HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution,species_cc] = self.segmentDialog.getValues()
+        [alg, medThr, medSize, HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution,species_cc] = self.segmentDialog.getValues()
         with pg.BusyCursor():
             species = str(species)
             self.statusLeft.setText('Segmenting...')
@@ -4544,6 +4544,9 @@ class AviaNZ(QMainWindow):
             elif str(alg) == 'Median Clipping':
                 newSegments = self.seg.medianClip(float(str(medThr)), minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
+                # will also remove too short segments (medSize is set in ms because sliders limited to int)
+                print("before length", newSegments)
+                newSegments = self.seg.checkSegmentLength(newSegments, mingap=0.001, minlength=medSize/1000)
             elif str(alg) == 'Harma':
                 newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])

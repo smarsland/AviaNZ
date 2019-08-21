@@ -26,7 +26,7 @@
 import sys,os
 
 from PyQt5.QtGui import *
-from PyQt5.QtWidgets import QDialog, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit, QSlider, QCheckBox, QRadioButton, QButtonGroup
+from PyQt5.QtWidgets import QDialog, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit, QSlider, QCheckBox, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QDir, QPointF, QTime, Qt, QLineF
 
@@ -715,7 +715,7 @@ class Segmentation(QDialog):
 
         self.algs = QComboBox()
         if DOC:
-            self.algs.addItems(["Wavelets", "FIR"])
+            self.algs.addItems(["Wavelets", "FIR", "Median Clipping"])
         else:
             self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
@@ -776,6 +776,16 @@ class Segmentation(QDialog):
         self.medThr.setSingleStep(1)
         self.medThr.setDecimals(1)
         self.medThr.setValue(3)
+
+        # set min seg size for median clipping
+        self.medSize = QSlider(Qt.Horizontal)
+        self.medSize.setTickPosition(QSlider.TicksBelow)
+        self.medSize.setTickInterval(100)
+        self.medSize.setRange(100,2000)
+        self.medSize.setSingleStep(100)
+        self.medSize.setValue(1000)
+        self.medSize.valueChanged.connect(self.medSizeChange)
+        self.medSizeText = QLabel("Minimum length: 1000 ms")
 
         self.ecThr = QDoubleSpinBox()
         self.ecThr.setRange(0.001,6)
@@ -841,6 +851,9 @@ class Segmentation(QDialog):
         Box.addWidget(self.PowerThr)
 
         Box.addWidget(self.medThr)
+        Box.addWidget(self.medSizeText)
+        Box.addWidget(self.medSize)
+
         for i in range(len(self.ecthrtype)):
             Box.addWidget(self.ecthrtype[i])
         Box.addWidget(self.ecThr)
@@ -908,6 +921,8 @@ class Segmentation(QDialog):
         elif alg == "Median Clipping":
             self.medlabel.show()
             self.medThr.show()
+            self.medSize.show()
+            self.medSizeText.show()
         elif alg == "Fundamental Frequency":
             self.Fundminfreq.show()
             self.Fundminperiods.show()
@@ -932,14 +947,11 @@ class Segmentation(QDialog):
             self.specieslabel.show()
             self.species.show()
 
-    def bandclicked(self):
-        # TODO: Can they be grayed out?
-        self.start.setEnabled(not self.start.isEnabled())
-        self.end.setEnabled(not self.end.isEnabled())
+    def medSizeChange(self,value):
+        self.medSizeText.setText("Minimum length: %s ms" % value)
 
     def getValues(self):
-        return [self.algs.currentText(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value(), self.species_cc.currentText()]
-        #return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text(),self.species.currentText()]
+        return [self.algs.currentText(), self.medThr.text(), self.medSize.value(), self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value(), self.species_cc.currentText()]
 
 #======
 class Denoise(QDialog):

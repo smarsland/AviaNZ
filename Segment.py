@@ -334,14 +334,17 @@ class Segment:
         ind = np.squeeze(np.where(maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))))
         return self.identifySegments(ind, minlength=10)
 
-    def medianClip(self, thr=3.0, medfiltersize=5, minaxislength=5, minSegment=50):
+    def medianClip(self, thr=3.0, medfiltersize=5, minaxislength=5, minSegment=70):
         """ Median clipping for segmentation
         Based on Lasseck's method
+        minaxislength - min "length of the minor axis of the ellipse that has the same normalized second central moments as the region", based on skm.
+        minSegment - min number of pixels exceeding thr to declare an area as segment.
         This version only clips in time, ignoring frequency
         And it opens up the segments to be maximal (so assumes no overlap).
         The multitaper spectrogram helps a lot
 
         """
+        tt = time.time()
         sg = self.sg/np.max(self.sg)
 
         # This next line gives an exact match to Lasseck, but screws up bitterns!
@@ -374,15 +377,13 @@ class Segment:
         blobs = skm.regionprops(skm.label(clipped.astype(int)))
 
         # Delete blobs that are too small
-        todelete = []
-        for i in blobs:
-            if i.filled_area < minSegment or i.minor_axis_length < minaxislength:
-                todelete.append(i)
-
-        for i in todelete:
-            blobs.remove(i)
+        keep = []
+        for i in range(len(blobs)):
+            if blobs[i].filled_area > minSegment and blobs[i].minor_axis_length > minaxislength:
+                keep.append(i)
 
         list = []
+        blobs = [blobs[i] for i in keep]
 
         # convert bounding box pixels to milliseconds:
         for l in blobs:
