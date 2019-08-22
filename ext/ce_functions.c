@@ -111,14 +111,105 @@ void ce_energycurve(double *arrE, double *arrC, size_t N, int M)
 }
 
 // Sum-of-squared differences loop for Yin's fund. freq. calculation
-void ce_sumsquares(double *arr, int W, double *out){
+// Args: input audiodata, its size, window size, output array, threshold for accepting fund freq
+void ce_sumsquares(double *arr, const size_t arrs, const int W, double *besttau, const double thr){
         double diff;
+        double currtau;
+        double partial2;
+        double out[W];
+
+        // start positions shift by half a window.
+        // Hence, we can precalculate and re-use half of the internal stuff.
+        // For start=0, initial half window:
+        double partial[W];
         for(int tau=1; tau<W; tau++){
-                for(int j=0; j<W; j++){
+                partial[tau] = 0;
+                for(int j=0; j<W/2; j++){
                         diff = arr[j] - arr[tau + j];
-                        out[tau] += diff * diff;
+                        partial[tau] += diff * diff;
                 }
         }
+
+        int Wnum = 0;
+        for(size_t start=0; start<arrs-2*W; start+=W/2){
+                // first, compute the modified auto-correlation (Yin estimator)
+                double cumsum = 0;
+                out[0] = 1;
+                for(int tau=1; tau<W; tau++){
+                        // half of the window is precalculated, so do the second half
+                        partial2 = 0;
+                        for(int j=W/2; j<W; j++){
+                                diff = arr[j + start] - arr[tau + j + start];
+                                partial2 += diff * diff;
+                        }
+                        // add both halves
+                        currtau = partial[tau] + partial2;
+                        // store the second half as the first half for next winodw
+                        partial[tau] = partial2;
+
+                        // accumulate unnormalized corrs
+                        cumsum += currtau;
+                        // store diff normalized by cumulative mean
+                        out[tau] = currtau / cumsum * tau;
+                }
+
+                // now find the best tau for this start
+                int found = 0;
+                besttau[Wnum] = -1;
+                for(int tau=1; tau<W; tau++){
+                        // if we're in a trough and it starts rising, break
+                        if(found==1 && out[tau] >= out[tau-1]){
+                                // minimum is at tau-1.
+                                // Parabolic interpolation to improve the estimate
+                                double s0 = out[tau-2];
+                                double s2 = out[tau];
+                                double divisor = 2*out[tau-1] - s0 - s2;
+                                if(out[tau-1] >= thr || divisor==0){
+                                        // autocorr too weak or numeric error due to div 0
+                                        besttau[Wnum] = -1;
+                                        break;
+                                } else {
+                                        found = 2;
+                                        besttau[Wnum] = tau-1 + (s2 - s0) / (2 * divisor);
+                                        break;
+                                }
+                        }
+                        if(found==0 && out[tau] < thr){
+                                // found beginning of trough
+                                found = 1;
+                        }
+                }
+                Wnum++;
+        }
+
+        // ALTERNATIVE APPROACH: save 25 % by skipping after best tau
+        // we only look for the first smallest trough & stop if it's found - this marks it
+        /* for(int tau=1; tau<W; tau++){
+                if(found==2){
+                        // skip processing
+                        out[tau] = 99999.9;
+                } else {
+                        currtau = 0;
+                        for(int j=0; j<W; j++){
+                                diff = arr[j] - arr[tau + j];
+                                currtau += diff * diff;
+                        }
+                        // accumulate unnormalized corrs
+                        cumsum += currtau;
+                        // output diff normalized by cumulative mean
+                        out[tau] = currtau / cumsum * tau;
+
+                        // if we're in a trough and it starts rising, break
+                        if(found==1 && out[tau] >= out[tau-1]){
+                                // minimum is at tau-1
+                                found = 2;
+                        }
+                        if(found==0 && out[tau] < thr){
+                                // found beginning of trough
+                                found = 1;
+                        }
+                }
+        }*/
 }
 
 /*
