@@ -1480,17 +1480,20 @@ class AviaNZ(QMainWindow):
                 x = medfilt(x, 15)
 
                 # Get the individual pieces
-                segs = self.seg.identifySegments(ind, maxgap=10, minlength=5)
-                count = 0
-                self.segmentPlots = []
-                for s in segs:
-                    count += 1
-                    s[0] = s[0] * self.sampleRate / self.config['incr']
-                    s[1] = s[1] * self.sampleRate / self.config['incr']
-                    i = np.where((ind>s[0]) & (ind<s[1]))
-                    self.segmentPlots.append(pg.PlotDataItem())
-                    self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=3))
-                    self.p_spec.addItem(self.segmentPlots[-1])
+                if len(ind)==0:
+                    print("Warning: no fund. freq. identified in this page")
+                else:
+                    segs = self.seg.identifySegments(ind, maxgap=10, minlength=5)
+                    count = 0
+                    self.segmentPlots = []
+                    for s in segs:
+                        count += 1
+                        s[0] = s[0] * self.sampleRate / self.config['incr']
+                        s[1] = s[1] * self.sampleRate / self.config['incr']
+                        i = np.where((ind>s[0]) & (ind<s[1]))
+                        self.segmentPlots.append(pg.PlotDataItem())
+                        self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=3))
+                        self.p_spec.addItem(self.segmentPlots[-1])
             else:
                 self.statusLeft.setText("Removing fundamental frequency...")
                 for r in self.segmentPlots:
@@ -2914,6 +2917,7 @@ class AviaNZ(QMainWindow):
         else:
             self.config['brightness'] = 100-self.brightnessSlider.value()
         self.config['contrast'] = self.contrastSlider.value()
+        self.saveConfig = True
 
         self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
         self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart

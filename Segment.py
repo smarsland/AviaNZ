@@ -491,7 +491,6 @@ class Segment:
         """ Segmentation by computing the fundamental frequency.
         Uses the Yin algorithm of de Cheveigne and Kawahara (2002)
         """
-        st = time.time()
         if self.data.dtype == 'int16':
             data = self.data.astype(float)/32768.0
         else:
@@ -505,54 +504,29 @@ class Segment:
         if minwin > W:
             print("Extending window width to ", minwin)
             W = minwin
+
         # Make life easier, and make W be a function of the spectrogram window width
         W = int(round(W/self.window_width)*self.window_width)
-        pitch = np.zeros((int((len(data) - 2 * W) * 2. / W) + 1))
 
-        ints = np.arange(1, W)
-        starts = range(0, len(data) - 2 * W, W // 2)
-
+        # work on a copy of the main data, just to be safer
         data2 = np.zeros(len(data))
         data2[:] = data[:]
-        for i in starts:
-            # Compute squared diff between signal and shift
-            d = ce.FundFreqYin(data2, W, i, ints)
 
-            tau = 1
-            notFound = True
-            while tau < W-1 and notFound:
-                tau += 1
-                if d[tau] < thr:
-                    notFound = False
-                    while tau+1 < W and d[tau+1] < d[tau]:
-                        tau = tau+1
+        # Now, compute squared diffs between signal and shifted signal
+        # (Yin fund freq estimator)
+        # over all tau<W, for each start position.
+        # (starts are shifted by half a window size), i.e.:
+        starts = range(0, len(data) - 2 * W, W // 2)
 
-            if tau == W-1 or d[tau] >= thr:
-                #print "none found"
-                pitch[int(i*2./W)] = -1
-            else:
-                # Parabolic interpolation to improve the estimate
-                if tau==0:
-                    s0 = d[tau]
-                else:
-                    s0 = d[tau-1]
-                if tau==W-1:
-                    s2 = d[tau]
-                else:
-                    s2 = d[tau+1]
-                newtau = tau + (s2 - s0)/(2.0*(2.0*d[tau] - s0 - s2))
-
-                # Compute the pitch
-                pitch[int(i*2./W)] = float(self.fs)/newtau
+        # Will return pitch as self.fs/besttau for each window
+        pitch = ce.FundFreqYin(data2, W, thr, self.fs)
 
         if returnSegs:
             ind = np.squeeze(np.where(pitch > minfreq))
             segs = self.identifySegments(ind, notSpec=True)
-            #print(segs, len(ind), len(pitch))
             for s in segs:
-               s[0] = float(s[0])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr#W / self.window_width
-               s[1] = float(s[1])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr#W / self.window_width
-            #print(segs)
+                s[0] = float(s[0])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr # W / self.window_width
+                s[1] = float(s[1])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr # W / self.window_width
             return segs, pitch, np.array(starts)
         else:
             return pitch, np.array(starts), minfreq, W
