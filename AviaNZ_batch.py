@@ -393,6 +393,9 @@ class AviaNZ_batchProcess(QMainWindow):
                         self.seg = Segment.Segment(self.audiodata[start:end], self.sgRaw, self.sp, self.sampleRate)
                         thisPageSegs = self.seg.bestSegments()
 
+                    if start != 0 :
+                        thisPageSegs = [[seg[0]+start/self.sampleRate, seg[1]+start/self.sampleRate] for seg in thisPageSegs]
+
                     # combine segments from each page into a single list
                     newSegments.extend(thisPageSegs)
                 print("Segmentation complete. %d new segments marked" % len(newSegments))
@@ -470,6 +473,8 @@ class AviaNZ_batchProcess(QMainWindow):
                                 spList.add(birdName)
 
             # Save the new excels
+            print("Exporting to Excel ...")
+            self.statusBar().showMessage("Exporting to Excel ...")
             for filename in allwavs:
                 if not os.path.isfile(filename + '.data'):
                     continue
