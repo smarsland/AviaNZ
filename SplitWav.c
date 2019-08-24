@@ -13,22 +13,22 @@
 // COMPILATION: gcc SplitWav.c -o SplitWav
 // USAGE: ./SplitWav infile.wav outfile.wav maxSeconds
 
-int main(int argc, char *argv[]){
+int split(char *infilearg, char *outfilearg, int t){
         // parse arguments
         FILE *infile, *outfile;
-        char outfilestem[strlen(argv[2])], outfilename[strlen(argv[2])+5];
+        char outfilestem[strlen(outfilearg)], outfilename[strlen(outfilearg)+5];
 
-        if(argc != 4){
+        /*if(argc != 4){
                 fprintf(stderr, "ERROR: script needs 3 arguments, %d supplied.\n", argc-1);
                 exit(1);
-        }
-        infile = fopen(argv[1], "rb");
+        }*/
+        infile = fopen(infilearg, "rb");
         if(infile == NULL){
                 fprintf(stderr, "ERROR: couldn't open input file\n");
                 exit(1);
         }
 
-        int t = atoi(argv[3]);
+        // int t = atoi(cutlen);
         if(t<1 || t>36000){
                 fprintf(stderr, "ERROR: time must be between 1 s and 10 h\n");
                 exit(1);
@@ -78,7 +78,7 @@ int main(int argc, char *argv[]){
         char linebuf[BUFSIZE];
 
         // parse file name
-        strcpy(outfilestem, argv[2]);
+        strcpy(outfilestem, outfilearg);
         outfilestem[strlen(outfilestem)-4] = '\0';
 
         // parse time stamp
@@ -86,7 +86,7 @@ int main(int argc, char *argv[]){
         struct tm timestruc;
         char timestr[17];
         setlocale(LC_ALL,"/QSYS.LIB/EN_NZ.LOCALE");
-        printf("%s\n", argv[1]);
+        printf("%s\n", infilearg);
         if (strptime(outfilestem+strlen(outfilestem)-15, "%Y%m%d_%H%M%S", &timestruc) == NULL) {
                 printf("no timestamp detected\n");
                 timestamp = 0;
