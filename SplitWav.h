@@ -20,3 +20,5 @@ typedef struct WavHeader2 {
   uint32_t Subchunk2ID;
   uint32_t Subchunk2Size;
 } WavHeader2;
+
+int split(char *infilearg, char *outfilearg, int t);
