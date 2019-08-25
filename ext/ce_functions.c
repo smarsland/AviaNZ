@@ -116,12 +116,15 @@ void ce_sumsquares(double *arr, const size_t arrs, const int W, double *besttau,
         double diff;
         double currtau;
         double partial2;
-        double out[W];
+        // unfortunately, WIN complains:
+		// double partial[W];
+		// double out[W];
+		double *out = malloc(sizeof(double) * W);
+		double *partial = malloc(sizeof(double) * W);
 
         // start positions shift by half a window.
         // Hence, we can precalculate and re-use half of the internal stuff.
         // For start=0, initial half window:
-        double partial[W];
         for(int tau=1; tau<W; tau++){
                 partial[tau] = 0;
                 for(int j=0; j<W/2; j++){
@@ -181,6 +184,8 @@ void ce_sumsquares(double *arr, const size_t arrs, const int W, double *besttau,
                 }
                 Wnum++;
         }
+		free(out);
+		free(partial);
 
         // ALTERNATIVE APPROACH: save 25 % by skipping after best tau
         // we only look for the first smallest trough & stop if it's found - this marks it
@@ -222,9 +227,9 @@ void ce_sumsquares(double *arr, const size_t arrs, const int W, double *besttau,
 /*int upsampling_convolution_valid_sf(const double * const input, const int N,
                 const double * const filter, const int F,
                 double * const output, const int O){*/
-int upsampling_convolution_valid_sf(const double * const restrict input, const int N,
-                const double * const restrict filter, const int F,
-                double * const restrict output, const int O){
+int upsampling_convolution_valid_sf(const double * const input, const int N,
+                const double * const filter, const int F,
+                double * const output, const int O){
 
         size_t o, i;
 
