@@ -13,10 +13,65 @@
 // COMPILATION: gcc SplitWav.c -o SplitWav
 // USAGE: ./SplitWav infile.wav outfile.wav maxSeconds
 
-int split(char *infilearg, char *outfilearg, int t){
+// to deal with windows requirements for .pyds
+void PyInit_SplitWav() {}
+
+// I HATE WINDOWS
+// this is handwritten strptime(s, "%Y%m%d_%H%M%S", &timestruc)
+
+int strptime(char *s, char *format, struct tm *temp){
+		char *ptr;
+		
+		// TODO : figure out if this treats DST correctly (now off)
+		temp->tm_isdst = 0;
+		// hopefully these don't matter
+		// temp->tm_wday = 0;
+		// temp->tm_yday = 0;
+		
+		char substr2[3];
+		// s[strlen(s)-1] is \0
+		strncpy(substr2, &s[strlen(s)-2], 2);
+		substr2[2] = '\0';
+		temp->tm_sec = strtol(substr2, &ptr, 10);
+		strncpy(substr2, &s[strlen(s)-4], 2);
+		substr2[2] = '\0';
+		temp->tm_min = strtol(substr2, &ptr, 10);
+		strncpy(substr2, &s[strlen(s)-6], 2);
+		substr2[2] = '\0';
+		temp->tm_hour = strtol(substr2, &ptr, 10);
+		
+		// then skip _
+		
+		strncpy(substr2, &s[strlen(s)-9], 2);
+		substr2[2] = '\0';
+		temp->tm_mday = strtol(substr2, &ptr, 10);
+		strncpy(substr2, &s[strlen(s)-11], 2);
+		substr2[2] = '\0';
+		temp->tm_mon = strtol(substr2, &ptr, 10)-1;
+
+		
+		// YEAR needs 4 symbols
+		char substr4[5];
+		strncpy(substr4, &s[strlen(s)-15], 4);
+		substr4[4] = '\0';
+		temp->tm_year = strtol(substr4, &ptr, 10)-1900;
+		
+		return(0);
+}
+
+
+int split(char *infilearg, char *outfilearg, int t, int hasDt){
         // parse arguments
         FILE *infile, *outfile;
-        char outfilestem[strlen(outfilearg)], outfilename[strlen(outfilearg)+5];
+		
+        // for you non-win people, just use this instead:
+		// char outfilestem[strlen(outfilearg)], outfilename[strlen(outfilearg)+5];
+		char *outfilestem = malloc(sizeof(char) * strlen(outfilearg));
+		char *outfilename = malloc(sizeof(char) * (strlen(outfilearg)+5));
+		if(outfilestem==NULL || outfilename==NULL){
+			fprintf(stderr, "ERROR: could not allocate memory for arguments\n");
+			exit(1);
+		}
 
         /*if(argc != 4){
                 fprintf(stderr, "ERROR: script needs 3 arguments, %d supplied.\n", argc-1);
@@ -43,7 +98,7 @@ int split(char *infilearg, char *outfilearg, int t){
         fread(&header2, sizeof(WavHeader2), 1, infile);
 
         printf("Read %u MB of data, %u channels sampled at %u Hz, %d bit depth\n", header.ChunkSize/1024/1024, header.NumChannels, header.SampleRate, header.BitsPerSample);
-        if(header.ChunkSize<1000 | header.ChunkID!=1179011410){
+        if(header.ChunkSize<1000 || header.ChunkID!=1179011410){
                 fprintf(stderr, "ERROR: file empty or header malformed\n");
                 exit(1);
         }
@@ -75,25 +130,39 @@ int split(char *infilearg, char *outfilearg, int t){
         // read in part of file
         int BUFSIZE = header.ByteRate; // 1 second
         printf("-- reading chunks of %d bytes --\n", BUFSIZE);
-        char linebuf[BUFSIZE];
-
-        // parse file name
-        strcpy(outfilestem, outfilearg);
-        outfilestem[strlen(outfilestem)-4] = '\0';
+		
+		// for Win compatibility:
+        // char linebuf[BUFSIZE];
+		char *linebuf = malloc(sizeof(char) * BUFSIZE);
+		if(linebuf==NULL){
+			fprintf(stderr, "ERROR: could not allocate memory for reading\n");
+			exit(1);
+		}
+		
+        // parse file name		
+        strncpy(outfilestem, outfilearg, strlen(outfilearg)-4);
+		outfilestem[strlen(outfilearg)-4] = '\0';
 
         // parse time stamp
+
         int timestamp;
         struct tm timestruc;
         char timestr[17];
-        setlocale(LC_ALL,"/QSYS.LIB/EN_NZ.LOCALE");
+
+		setlocale(LC_ALL,"/QSYS.LIB/EN_NZ.LOCALE");
         printf("%s\n", infilearg);
-        if (strptime(outfilestem+strlen(outfilestem)-15, "%Y%m%d_%H%M%S", &timestruc) == NULL) {
+		
+        // wish I had unix
+		// if (strptime(outfilestem+strlen(outfilestem)-15, "%Y%m%d_%H%M%S", &timestruc) == NULL) {
+		if (hasDt==0){
                 printf("no timestamp detected\n");
                 timestamp = 0;
         } else {
                 printf("timestamp detected\n");
                 timestamp = 1;
+				strptime(outfilestem+strlen(outfilestem)-15, "%Y%m%d_%H%M%S", &timestruc);
                 outfilestem[strlen(outfilestem)-15] = '\0';
+
                 // dealing wiht DST: just enforce original hour
                 // i.e. recorders don't update their clocks,
                 // so just make sure the output time is continuous.
@@ -150,6 +219,9 @@ int split(char *infilearg, char *outfilearg, int t){
         }
 
         fclose(infile);
+		free(linebuf);
+		free(outfilestem);
+		free(outfilename);
         
         return(0);
 }
