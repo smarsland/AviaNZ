@@ -19,7 +19,7 @@ void PyInit_SplitWav() {}
 // I HATE WINDOWS
 // this is handwritten strptime(s, "%Y%m%d_%H%M%S", &timestruc)
 
-int strptime(char *s, char *format, struct tm *temp){
+int strptime2(char *s, char *format, struct tm *temp){
 		char *ptr;
 		
 		// TODO : figure out if this treats DST correctly (now off)
@@ -160,7 +160,7 @@ int split(char *infilearg, char *outfilearg, int t, int hasDt){
         } else {
                 printf("timestamp detected\n");
                 timestamp = 1;
-				strptime(outfilestem+strlen(outfilestem)-15, "%Y%m%d_%H%M%S", &timestruc);
+                strptime2(outfilestem+strlen(outfilestem)-15, "%Y%m%d_%H%M%S", &timestruc);
                 outfilestem[strlen(outfilestem)-15] = '\0';
 
                 // dealing wiht DST: just enforce original hour
