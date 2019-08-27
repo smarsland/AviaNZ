@@ -1,13 +1,15 @@
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <locale.h>
 
-typedef unsigned __int32 uint32_t;
-typedef unsigned __int16 uint16_t;
-
-
+// Win compatibility
+#ifdef _WIN32
+  typedef unsigned __int32 uint32_t;
+  typedef unsigned __int16 uint16_t;
+#endif
 
 typedef struct WavHeader {
   uint32_t ChunkID;
@@ -28,7 +30,7 @@ typedef struct WavHeader2 {
   uint32_t Subchunk2Size;
 } WavHeader2;
 
-// Win compatibility
-int strptime(char *s, char *format, struct tm *temp);
+// overwritten because Win
+int strptime2(char *s, char *format, struct tm *temp);
 int split(char *infilearg, char *outfilearg, int t, int hasDt);
 

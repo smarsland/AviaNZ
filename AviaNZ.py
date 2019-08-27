@@ -3868,13 +3868,18 @@ class AviaNZ(QMainWindow):
             if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
                 x1 = self.listRectanglesa2[self.box1id].pos().x()
                 x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
+                y1 = max(self.minFreq, self.segments[self.box1id][2])
+                y2 = min(self.segments[self.box1id][3], self.maxFreq)
             else:
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
-            x1 = math.floor(x1 * self.config['incr']) #/ self.sampleRate
-            x2 = math.floor(x2 * self.config['incr']) #/ self.sampleRate
+                y1 = self.minFreq
+                y2 = self.maxFreq
+            x1 = math.floor(x1 * self.config['incr'])
+            x2 = math.floor(x2 * self.config['incr'])
             filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.SoundFileDir, '*.wav')
             if filename:
-                wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
+                tosave = self.sp.bandpassFilter(self.audiodata[int(x1):int(x2)], start=y1, end=y2)
+                wavio.write(str(filename), tosave.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(os.path.basename(self.filename))
 
