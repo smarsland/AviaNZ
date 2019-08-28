@@ -57,7 +57,7 @@ class WaveletSegment:
         self.spInfo = spInfo
 
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
-        self.segmenter = Segment.Segment(None, None, self.sp, 0, window_width=256, incr=128, mingap=mingap, minlength=minlength)
+        self.segmenter = Segment.Segmenter(None, None, self.sp, 0, window_width=256, incr=128, mingap=mingap, minlength=minlength)
 
     def waveletSegment(self, data, sampleRate, d, f, wpmode="new"):
         """ Main analysis wrapper (segmentation in batch mode).

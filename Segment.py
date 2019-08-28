@@ -27,7 +27,97 @@ import skimage
 import time
 from ext import ce_denoise as ce
 
-class Segment:
+
+class Segment(list):
+    """ A single AviaNZ annotation ("segment" or "box" type).
+        Deals with identifying the right Label from this list.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if len(self) != 5:
+            print("ERROR: incorrect number of args provided to Segment (need 5, not %d)" % len(self))
+            return
+        if self[0]<0 or self[1]<0:
+            print("ERROR: Segment times must be positive or 0")
+            return
+        if self[2]<0 or self[3]<0:
+            print("ERROR: Segment frequencies must be positive or 0")
+            return
+        if not isinstance(self[4], list):
+            print("ERROR: Segment labels must be a list")
+            return
+
+        # check if labels have the right structure
+        for lab in self[4]:
+            if not isinstance(lab, dict):
+                print("ERROR: Segment label must be a dict")
+                return
+            if "species" not in lab or not isinstance(lab["species"], str):
+                print("ERROR: species bad or missing from label")
+                return
+            if "certainty" not in lab or not isinstance(lab["certainty"], (int, float)):
+                print("ERROR: certainty bad or missing from label")
+                return
+            if "filter" in lab and "filter"!="M" and "calltype" not in lab:
+                print("ERROR: calltype required when automated filter provided in label")
+                return
+
+        self.keys = [(lab['species'], lab['certainty']) for lab in self[4]]
+        if len(self.keys)>len(set(self.keys)):
+            print("ERROR: non-unique species/certainty combo detected")
+            return
+
+    def hasLabel(self, species, certainty):
+        """ Check if label identified by species-cert combo is present in this segment. """
+        return (species, certainty) in self.keys
+
+    def addLabel(self, species, certainty, **label):
+        """ Adds a label to this segment.
+            Species and certainty are required and passed positionally.
+            Any further label properties (filter, calltype...) must be passed as keyword args:
+              addLabel("LSK", 100, filter="M"...)
+        """
+        if not isinstance(species, str):
+            print("ERROR: bad species provided")
+            return
+        if not isinstance(certainty, (int, float)):
+            print("ERROR: bad certainty provided")
+            return
+        if self.hasLabel(species, certainty):
+            print("ERROR: this species-certainty label already present")
+            return
+        label["species"] = species
+        label["certainty"] = certainty
+
+        self[4].append(label)
+        self.keys.append((species, certainty))
+
+    def removeLabel(self, species, certainty):
+        """ Removes label from this segment.
+            Does not delete the actual segment - that's left for the interface to take care of.
+        """
+        deleted = False
+        for lab in self[4]:
+            if lab["species"]==species and lab["certainty"]==certainty:
+                self[4].remove(lab)
+                deleted = True
+                break
+
+        if not deleted:
+            print("ERROR: could not find species-certainty combo to remove:", species, certainty)
+            return
+
+        self.keys.remove((species, certainty))
+
+
+class SegmentList(list):
+    """ List of Segments. Deals with I/O - parsing JSON,
+        and retrieving the right Segment from this list.
+    """
+    pass
+
+
+class Segmenter:
     """ This class implements six forms of segmentation for the AviaNZ interface:
     Amplitude threshold (rubbish)
     Energy threshold
@@ -618,7 +708,7 @@ def testMC():
     import SignalProc
     sp = SignalProc.SignalProc(data,fs,256,128)
     sg = sp.spectrogram(data=data,window_width=256,incr=128,window='Hann',mean_normalise=True,onesided=True,multitaper=False,need_even=False)
-    s = Segment(data,sg,sp,fs)
+    s = Segmenter(data,sg,sp,fs)
 
     #print np.shape(sg)
 

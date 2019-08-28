@@ -390,7 +390,7 @@ class AviaNZ_batchProcess(QMainWindow):
                     else:
                         # Create spectrogram for median clipping etc
                         self.sgRaw = self.sp.spectrogram(self.audiodata[start:end], window_width=self.config['window_width'], incr=self.config['incr'], window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
-                        self.seg = Segment.Segment(self.audiodata[start:end], self.sgRaw, self.sp, self.sampleRate)
+                        self.seg = Segment.Segmenter(self.audiodata[start:end], self.sgRaw, self.sp, self.sampleRate)
                         thisPageSegs = self.seg.bestSegments()
 
                     if start != 0 :
