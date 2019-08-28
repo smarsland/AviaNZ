@@ -65,7 +65,6 @@ from sklearn.cluster import AffinityPropagation
 # from sklearn.cluster import OPTICS
 # from sklearn import cluster_optics_dbscan
 from sklearn import metrics
-import sompy
 from sklearn.manifold import TSNE
 
 # TODO:
@@ -386,6 +385,7 @@ class Clustering:
     def som(self, mapsize):
         """ Self Organising Map
         """
+        import sompy
         som = sompy.SOMFactory.build(self.features, [], mask=None, mapshape='planar', lattice='rect', normalization='var',
                                      initialization='pca', neighborhood='gaussian', training='batch', name='sompy')
         som.train()
@@ -917,7 +917,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
                     start = int(seg[0] * fs)
                     sp = SignalProc.SignalProc(audiodata, fs, 256, 128)
                     sgRaw = sp.spectrogram(audiodata, 256, 128)
-                    segment = Segment.Segment(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
+                    segment = Segment.Segmenter(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
                     syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
                     if len(syls) == 0:      # Try again with FIR
                         syls = segment.segmentByFIR(threshold=0.05)
@@ -1380,10 +1380,10 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
                     start = int(seg[0] * fs)
                     sp = SignalProc.SignalProc(audiodata, fs, 256, 128)
                     sgRaw = sp.spectrogram(audiodata, 256, 128)
-                    segment = Segment.Segment(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
+                    segment = Segment.Segmenter(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
                     syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
                     if len(syls) == 0:      # Sanity check
-                        segment = Segment.Segment(audiodata, sgRaw, sp, fs, 256, 128)
+                        segment = Segment.Segmenter(audiodata, sgRaw, sp, fs, 256, 128)
                         syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
                     syls = segment.checkSegmentOverlap(syls)    # merge overlapped segments
                     syls = [[int(s[0] * sr) + start, int(s[1] * fs + start)] for s in syls]

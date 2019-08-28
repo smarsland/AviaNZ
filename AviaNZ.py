@@ -670,7 +670,10 @@ class AviaNZ(QMainWindow):
         self.brightnessSlider = QSlider(Qt.Horizontal)
         self.brightnessSlider.setMinimum(0)
         self.brightnessSlider.setMaximum(100)
-        self.brightnessSlider.setValue(self.config['brightness'])
+        if self.config['invertColourMap']:
+            self.brightnessSlider.setValue(self.config['brightness'])
+        else:
+            self.brightnessSlider.setValue(100-self.config['brightness'])
         self.brightnessSlider.setTickInterval(1)
         self.brightnessSlider.valueChanged.connect(self.setColourLevels)
 
@@ -946,7 +949,7 @@ class AviaNZ(QMainWindow):
 
     def resetStorageArrays(self):
         """ Called when new files are loaded.
-        Resets the variables that hold the data to be saved and/or plotted. 
+        Resets the variables that hold the data to be saved and/or plotted.
         """
 
         # Remove the segments
@@ -1282,7 +1285,7 @@ class AviaNZ(QMainWindow):
                 if hasattr(self,'seg'):
                     self.seg.setNewData(self.audiodata,sgRaw,self.sampleRate,self.config['window_width'],self.config['incr'])
                 else:
-                    self.seg = Segment.Segment(self.audiodata, sgRaw, self.sp, self.sampleRate,
+                    self.seg = Segment.Segmenter(self.audiodata, sgRaw, self.sp, self.sampleRate,
                                                self.config['window_width'], self.config['incr'])
                 self.sp.setNewData(self.audiodata,self.sampleRate)
 
@@ -1471,8 +1474,7 @@ class AviaNZ(QMainWindow):
             if self.showFundamental.isChecked():
                 self.statusLeft.setText("Drawing fundamental frequency...")
                 pitch, y, minfreq, W = self.seg.yin()
-                #print("pitch: ", np.min(pitch), np.max(pitch))
-                ind = np.squeeze(np.where(pitch > self.minFreqShow))
+                ind = np.squeeze(np.where(np.logical_and(pitch > self.minFreqShow, pitch < self.maxFreqShow)))
                 pitch = pitch[ind]
                 ind = ind*W/(self.config['window_width'])
                 # Adjust to the frequency range to show
@@ -1499,6 +1501,7 @@ class AviaNZ(QMainWindow):
                 self.statusLeft.setText("Removing fundamental frequency...")
                 for r in self.segmentPlots:
                     self.p_spec.removeItem(r)
+                self.segmentPlots = []
             self.statusLeft.setText("Ready")
 
     def showMaxEnergy(self):
@@ -2548,6 +2551,17 @@ class AviaNZ(QMainWindow):
         if self.box1id>-1:
             self.deselectSegment(self.box1id)
 
+        # when drawing boxes near scene borders, it's easy to release mouse outside scene,
+        # and all the dragging gets messed up then. We map such cases to closest
+        # scene positions here:
+        if self.started and self.config['specMouseAction']==3:
+            bounds = self.p_spec.sceneBoundingRect()
+            if not bounds.contains(pos):
+                newX = min(bounds.right(), max(bounds.left(), pos.x()))
+                newY = min(bounds.bottom(), max(bounds.top(), pos.y()))
+                pos.setX(newX)
+                pos.setY(newY)
+
         # if clicked inside scene:
         if self.p_spec.sceneBoundingRect().contains(pos):
             mousePoint = self.p_spec.mapSceneToView(pos)
@@ -2709,6 +2723,16 @@ class AviaNZ(QMainWindow):
     def GrowBox_spec(self, pos):
         """ Listener for when a segment is being made in the spectrogram plot.
         Makes the blue box that follows the mouse change size. """
+        # When dragging spectrogram boxes near scene edges, we have special rules
+        # to keep tracking the potential box
+        if self.config['specMouseAction']==3:
+            bounds = self.p_spec.sceneBoundingRect()
+            if not bounds.contains(pos):
+                newX = min(bounds.right(), max(bounds.left(), pos.x()))
+                newY = min(bounds.bottom(), max(bounds.top(), pos.y()))
+                pos.setX(newX)
+                pos.setY(newY)
+
         if self.p_spec.sceneBoundingRect().contains(pos):
             mousePoint = self.p_spec.mapSceneToView(pos)
             self.drawingBox_ampl.setRegion([self.start_ampl_loc, self.convertSpectoAmpl(mousePoint.x())])
@@ -3503,10 +3527,10 @@ class AviaNZ(QMainWindow):
                 freqmin = self.convertFreqtoY(freqmin)
                 freqmax = self.convertFreqtoY(freqmax)
 
-                # get max E for each second
+                # get max (or mean) E for each second
                 # and normalize, so that we don't need to hardcode thr 
                 for w in range(int(self.datalengthSec)):
-                    maxE = np.max(E[w*spInfo['SampleRate'] : (w+1)*spInfo['SampleRate']])
+                    maxE = np.mean(E[w*spInfo['SampleRate'] : (w+1)*spInfo['SampleRate']])
                     ### DENOISE:
                     # based on wind strength in this second, calculate estimated |wind| in this node
                     # and subtract from maxE
@@ -4073,7 +4097,7 @@ class AviaNZ(QMainWindow):
                                     if np.shape(np.shape(data))[0] > 1:
                                         data = data[:, 0]
                                     sampleRate = wavobj.rate
-                                    if data is not 'float':
+                                    if data.dtype!='float':
                                         data = data.astype('float')
                                     if fs != sampleRate:
                                         data = librosa.core.audio.resample(data, sampleRate, fs)
@@ -4241,7 +4265,7 @@ class AviaNZ(QMainWindow):
         data, sampleRate = sc.denoise_filter(level=8)
         sp = SignalProc.SignalProc([], 0, 256, 128) #SignalProc.SignalProc([], 0, 512, 256)
         sgRaw = sp.spectrogram(data, 256, 128, mean_normalise=True, onesided=True, multitaper=False)
-        segment = Segment.Segment(data, sgRaw, sp, sampleRate, 256, 128)
+        segment = Segment.Segmenter(data, sgRaw, sp, sampleRate, 256, 128)
         pitch, y, minfreq, W = segment.yin(minfreq=100)
         ind = np.squeeze(np.where(pitch > minfreq))
         pitch = pitch[ind]
@@ -5165,6 +5189,7 @@ class AviaNZ(QMainWindow):
                     self.MouseDrawingButton = QtCore.Qt.RightButton
                 else:
                     self.MouseDrawingButton = QtCore.Qt.LeftButton
+                self.bar.btn = self.MouseDrawingButton
             elif childName == 'Mouse settings.Spectrogram mouse action':
                 self.config['specMouseAction'] = data
                 self.p_spec.enableDrag = data==3 and not self.readonly.isChecked()

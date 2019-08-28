@@ -359,7 +359,7 @@ class postProcess:
                 data, sampleRate = sc.denoise_filter(level=8)
                 sp = SignalProc.SignalProc([], 0, 256, 128)
                 sgRaw = sp.spectrogram(data, 256, 128, mean_normalise=True, onesided=True, multitaper=False)
-                segment = Segment.Segment(data, sgRaw, sp, sampleRate, 256, 128)
+                segment = Segment.Segmenter(data, sgRaw, sp, sampleRate, 256, 128)
                 pitch, y, minfreq, W = segment.yin(minfreq=100)
                 ind = np.squeeze(np.where(pitch > minfreq))
                 pitch = pitch[ind]
