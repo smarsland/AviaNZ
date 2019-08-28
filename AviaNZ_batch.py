@@ -1213,13 +1213,6 @@ class AviaNZ_reviewAll(QMainWindow):
         print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate,self.sampleRate)
         # self.w_dir.setPlainText(self.filename)
 
-        if (self.species=='Kiwi' or self.species=='Ruru') and self.sampleRate!=16000:
-            self.audiodata = librosa.core.audio.resample(self.audiodata,self.sampleRate,16000)
-            self.sampleRate=16000
-            self.audioFormat.setSampleRate(self.sampleRate)
-            self.datalength = np.shape(self.audiodata)[0]
-            print("File was downsampled to %d" % self.sampleRate)
-
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
             self.sp = SignalProc.SignalProc()

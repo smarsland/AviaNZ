@@ -116,8 +116,12 @@ class postProcess:
             self.minLen = spInfo['TimeRange'][0]
             if spInfo['F0']:
                 self.F0 = spInfo['F0Range']
+            self.fLow = spInfo['FreqRange'][0]
+            self.fHigh = spInfo['FreqRange'][1]
         else:
             self.minLen = 0
+            self.fLow = 0
+            self.fHigh = 0
         # self.confirmedSegments = []  # post processed detections with confidence TP
         # self.segmentstoCheck = []  # need more testing to confirm
 
@@ -152,18 +156,33 @@ class postProcess:
                                         # frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
         a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
 
-        return np.mean(a_wind), np.std(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the
-                                                # step 3 in Algorithm 2.1
+        fn = False
+        if self.fLow > 500:
+            # Check the presence/absence of the target species/call type > 500 Hz.
+            ind = np.abs(f - 500).argmin()
+            ind_fLow = np.abs(f - self.fLow).argmin() - ind
+            ind_fHigh = np.abs(f - self.fHigh).argmin() - ind
+            p = p[ind:]
+
+            peaks, _ = signal.find_peaks(p)
+            peaks = [i for i in peaks if i >= ind_fLow and i <= ind_fHigh]
+            prominences = signal.peak_prominences(p, peaks)[0]
+            # If there is at least one significant prominence in the target frequency band, then it could be a FN
+            if len(prominences) > 0:
+                if np.max(prominences) > 0.5:      # Note thr 0.5
+                    fn = True
+
+        return np.mean(a_wind), np.std(a_wind), fn    # mean of the PSD in the frequency band of interest.Upper part of
+                                                      # the step 3 in Algorithm 2.1
 
 
-    def wind(self, windT=2.5, windV=0.1):
+    def wind(self, windT=2.5):
         """
         Delete wind corrupted segments, mainly wind gust
         Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and
         Jose D.Lopez
         :param windT: wind threshold
-        :param windV: the variance
-        :return: None but self.segments get updated
+        :return: self.segments get updated
         """
         if len(self.segments) == 0 or len(self.segments) == 1 and self.segments[0][0] == -1:
             pass
@@ -178,31 +197,15 @@ class postProcess:
                     data = np.asarray(data)[ind].tolist()
                     if len(data) == 0:
                         continue
-                    n = math.ceil((len(data) / self.sampleRate))
-                    window = 1
-                    start = 0
-                    wind = np.zeros(n)
-                    for t in range(0, n, window):
-                        end = min(len(data), start + window * self.sampleRate)
-                        m, _ = self.wind_cal(data=data[start:end], sampleRate=self.sampleRate)
-                        wind[t] = m
-                        start += window * self.sampleRate
-                    if n > 30:      # if it is at least 30 seconds check variance (of mean values over each sec)
-                        print(seg, np.max(wind), statistics.variance(wind), 'n=', n)
-                        if np.max(wind) > windT and statistics.variance(wind) > windV:
-                            print('long and windy')
-                            newSegments.remove(seg)
-                    elif np.max(wind) > windT:
-                        print('short and windy')
+                    m, _, fn = self.wind_cal(data=data, sampleRate=self.sampleRate)
+                    if m > windT and not fn:
+                        print(seg, m, 'windy, deleted')
                         newSegments.remove(seg)
+                    elif m > windT and fn:
+                        print(seg, m, 'windy, but possible bird call')
+                    else:
+                        print(seg, m, 'not windy/possible bird call')
             self.segments = newSegments
-        # if you want to check out the power spectrum:
-        # import matplotlib.pyplot as plt
-        # plt.semilogy(f, p)
-        # plt.ylim([0.5e-3, 1])
-        # plt.xlabel('frequency [Hz]')
-        # plt.ylabel('PSD [V**2/Hz]')
-        # plt.show()
 
     def impulse_cal(self, fs, engp=90, fp=0.75, blocksize=10):
         """
