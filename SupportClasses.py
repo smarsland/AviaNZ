@@ -114,7 +114,7 @@ class postProcess:
         self.segments = segments
         if spInfo != {}:
             self.minLen = spInfo['TimeRange'][0]
-            if spInfo['F0']:
+            if hasattr(spInfo,'F0') and spInfo['F0']:
                 self.F0 = spInfo['F0Range']
             self.fLow = spInfo['FreqRange'][0]
             self.fHigh = spInfo['FreqRange'][1]

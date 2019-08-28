@@ -410,10 +410,10 @@ class AviaNZ_batchProcess(QMainWindow):
                 else:
                     post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                       segments=newSegments, spInfo=self.speciesData)
-                    if self.speciesData['Wind']:
+                    if hasattr(self.speciesData,'Wind') and self.speciesData['wind']:
                         post.wind()
                         print('After wind: ', post.segments)
-                    if self.speciesData['F0']:
+                    if hasattr(self.speciesData,'F0') and self.speciesData['F0']:
                         pass
                         # post.fundamentalFrq(self.filename, self.speciesData)
                         # print('After ff: ', post.segments)
@@ -960,7 +960,7 @@ class AviaNZ_reviewAll(QMainWindow):
             else:
                 # check if there are any segments for this single species
                 spPresent = False
-                for seg in self.segments:
+                for seg in self.segments[1:]:
                     if 0 < seg[2] < 1.1 and 0 < seg[3] < 1.1:
                         # reset old-style (0-1 instead of Hz freqs) boxes to segments
                         seg[2] = 0

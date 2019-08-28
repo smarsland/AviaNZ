@@ -1481,17 +1481,20 @@ class AviaNZ(QMainWindow):
                 x = medfilt(x, 15)
 
                 # Get the individual pieces
-                segs = self.seg.identifySegments(ind, maxgap=10, minlength=5)
-                count = 0
-                self.segmentPlots = []
-                for s in segs:
-                    count += 1
-                    s[0] = s[0] * self.sampleRate / self.config['incr']
-                    s[1] = s[1] * self.sampleRate / self.config['incr']
-                    i = np.where((ind>s[0]) & (ind<s[1]))
-                    self.segmentPlots.append(pg.PlotDataItem())
-                    self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=3))
-                    self.p_spec.addItem(self.segmentPlots[-1])
+                if len(ind)==0:
+                    print("Warning: no fund. freq. identified in this page")
+                else:
+                    segs = self.seg.identifySegments(ind, maxgap=10, minlength=5)
+                    count = 0
+                    self.segmentPlots = []
+                    for s in segs:
+                        count += 1
+                        s[0] = s[0] * self.sampleRate / self.config['incr']
+                        s[1] = s[1] * self.sampleRate / self.config['incr']
+                        i = np.where((ind>s[0]) & (ind<s[1]))
+                        self.segmentPlots.append(pg.PlotDataItem())
+                        self.segmentPlots[-1].setData(ind[i], x[i], pen=pg.mkPen('r', width=3))
+                        self.p_spec.addItem(self.segmentPlots[-1])
             else:
                 self.statusLeft.setText("Removing fundamental frequency...")
                 for r in self.segmentPlots:
@@ -2915,6 +2918,7 @@ class AviaNZ(QMainWindow):
         else:
             self.config['brightness'] = 100-self.brightnessSlider.value()
         self.config['contrast'] = self.contrastSlider.value()
+        self.saveConfig = True
 
         self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
         self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
@@ -3865,13 +3869,18 @@ class AviaNZ(QMainWindow):
             if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
                 x1 = self.listRectanglesa2[self.box1id].pos().x()
                 x2 = x1 + self.listRectanglesa2[self.box1id].size().x()
+                y1 = max(self.minFreq, self.segments[self.box1id][2])
+                y2 = min(self.segments[self.box1id][3], self.maxFreq)
             else:
                 x1, x2 = self.listRectanglesa2[self.box1id].getRegion()
-            x1 = math.floor(x1 * self.config['incr']) #/ self.sampleRate
-            x2 = math.floor(x2 * self.config['incr']) #/ self.sampleRate
+                y1 = self.minFreq
+                y2 = self.maxFreq
+            x1 = math.floor(x1 * self.config['incr'])
+            x2 = math.floor(x2 * self.config['incr'])
             filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.SoundFileDir, '*.wav')
             if filename:
-                wavio.write(str(filename), self.audiodata[int(x1):int(x2)].astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
+                tosave = self.sp.bandpassFilter(self.audiodata[int(x1):int(x2)], start=y1, end=y2)
+                wavio.write(str(filename), tosave.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(os.path.basename(self.filename))
 
