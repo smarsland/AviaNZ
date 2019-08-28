@@ -585,11 +585,11 @@ def testClustering():
     model = learners.agglomerativeClustering(n_clusters=None, distance_threshold=1, compute_full_tree=True,
                                              linkage='complete')
     learners.clusteringScore1(learners.targets, model.labels_)
-    spanner = learners.get_cluster_spanner(model)
-    newick_tree = learners.build_Newick_tree(model.children_, model.n_leaves_, learners.features, model.labels_, spanner)
-
-    tree = ete3.Tree(newick_tree)
-    tree.show()
+    # spanner = learners.get_cluster_spanner(model)
+    # newick_tree = learners.build_Newick_tree(model.children_, model.n_leaves_, learners.features, model.labels_, spanner)
+    #
+    # tree = ete3.Tree(newick_tree)
+    # tree.show()
 
     print('\nGMM------------------------------------------')
     model = learners.GMM(n_components=3)
@@ -598,138 +598,6 @@ def testClustering():
     print('\nAffinity Propagation--------------------------')
     model = learners.affinityPropagation()
     learners.clusteringScore1(learners.targets, model.labels_)
-
-# testClustering()
-
-def cluster_kiwi(sampRate):
-    import pyqtgraph as pg
-    from pyqtgraph.Qt import QtCore, QtGui
-    import SignalProc
-    import wavio
-
-    d = pd.read_csv('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\we.tsv', sep="\t", header=None)
-    data = d.values
-
-    target = data[:, -1]
-    fnames = data[:, 0]
-    data = data[:, 1:-1]
-    # dim reduction before clustering
-    pca = PCA(n_components=0.9)
-    data = pca.fit_transform(data)
-    # data = TSNE().fit_transform(data)
-    learners = Clustering(data, target)
-
-    print('\n**************Kiwi dataset ******************')
-    # Only choose algorithms that does not require n_clusters
-    m = []
-    print('\nDBSCAN--------------------------------------')
-    model_dbscan = learners.DBscan(eps=0.5, min_samples=5)
-    # print(model_dbscan.labels_)
-    print('# clusters', len(set(model_dbscan.labels_)))
-    m.append(learners.clusteringScore1(learners.targets, model_dbscan.labels_))
-
-    print('\nBirch----------------------------------------')
-    model_birch = learners.birch(threshold=0.95, n_clusters=None)
-    # print(model_birch.labels_)
-    print('# clusters', len(set(model_birch.labels_)))
-    m.append(learners.clusteringScore1(learners.targets, model_birch.labels_))
-
-    print('\nAgglomerative Clustering----------------------')
-    model_agg = learners.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=5.0,
-                                             linkage='complete')    # Either set n_clusters=None and compute_full_tree=T
-                                                                    # or distance_threshold=None
-    model_agg.fit_predict(learners.features)
-    # print(model_agg.labels_)
-    print('# clusters', len(set(model_agg.labels_)))
-    m.append(learners.clusteringScore1(learners.targets, model_agg.labels_))
-
-    print('\nAffinity Propagation--------------------------')
-    model_aff = learners.affinityPropagation(damping=0.8, max_iter=400, convergence_iter=50)
-    # print(model_aff.labels_)
-    print('# clusters', len(set(model_aff.labels_)))
-    m.append(learners.clusteringScore1(learners.targets, model_aff.labels_))
-
-    best_m = np.argmax(m, axis=0).tolist()      # Get algorithm with the best performance on each index
-    best_alg = max(set(best_m), key=best_m.count)   # Get the overall best alg
-
-    # Analysis
-    if best_alg == 0:
-        model_best = model_dbscan
-        print('\n***best clustering by: DBSCAN')
-        print('predicted:\n', model_dbscan.labels_)
-        print('actual:\n', learners.targets)
-    elif best_alg == 1:
-        model_best = model_birch
-        print('\n***best clustering by: Birch')
-        print('predicted:\n', model_birch.labels_)
-        print('actual:\n', learners.targets)
-    elif best_alg == 2:
-        model_best = model_agg
-        print('\n***best clustering by: Agglomerative')
-        print('predicted:\n', model_agg.labels_)
-        print('actual:\n', learners.targets)
-        # dump(model_best, 'D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\kiwi\kiwi_agg.joblib')
-    elif best_alg == 3:
-        model_best = model_aff
-        print('\n***best clustering by: Affinity')
-        print('predicted:\n', model_aff.labels_)
-        print('actual:\n', learners.targets)
-
-    # plot the examples using the best clustering model
-    n_clusters = len(set(model_best.labels_))
-    # get indices and plot them
-    labels = list(set(model_best.labels_))
-
-    app = QtGui.QApplication([])
-
-    for label in labels:
-
-        inds = np.where(model_best.labels_ == label)[0].tolist()
-
-        mw = QtGui.QMainWindow()
-        mw.show()
-        mw.resize(1200, 800)
-
-        win = pg.GraphicsLayoutWidget()
-        mw.setCentralWidget(win)
-
-        row = 0
-        col = 0
-
-        for i in inds:
-            wavobj = wavio.read(fnames[i])
-            fs = wavobj.rate
-            audiodata = wavobj.data
-            if audiodata.dtype is not 'float':
-                audiodata = audiodata.astype('float')
-            if np.shape(np.shape(audiodata))[0] > 1:
-                audiodata = audiodata[:, 0]
-
-            if fs != sampRate:
-                audiodata = librosa.core.audio.resample(audiodata, fs, sampRate)
-                fs = sampRate
-
-            sp = SignalProc.SignalProc(audiodata, fs, 128, 128)
-            sg = sp.spectrogram(audiodata, multitaper=False)
-
-            vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
-            vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row+1, col=col)
-            im = pg.ImageItem(enableMouse=False)
-            txt = fnames[i].split("/")[-1][:-4]
-            lbl = pg.LabelItem(txt, rotateAxis=(1,0), angle=179)
-            vb.addItem(lbl)
-            vb2.addItem(im)
-            im.setImage(sg)
-            im.setBorder('w')
-            mw.setWindowTitle("Class " + str(label) + ' - ' + str(np.shape(inds)[0]) + ' calls')
-
-            if row == 8:
-                row = 0
-                col += 1
-            else:
-                row += 2
-
-        QtGui.QApplication.instance().exec_()
 
 
 def cluster_ruru(sampRate):
@@ -862,7 +730,6 @@ def cluster_ruru(sampRate):
 
         QtGui.QApplication.instance().exec_()
 
-# cluster_kiwi(sampRate=16000)
 
 def loadFile(filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0):
     """
@@ -962,9 +829,6 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
     :param distance:
     :return: possible clusters
     """
-    import warnings
-    warnings.filterwarnings("ignore", category=FutureWarning)
-    warnings.filterwarnings("ignore", category=UserWarning)
     import Segment
     import SignalProc
     from scipy import signal
@@ -1162,9 +1026,6 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
                             if clusters[c]["d"] == 0 and min_ds[c] < thr:
                                 print('**Case 3: In-class dist of ', clusters[c]["label"],  '=', clusters[c]["d"],
                                       'and this example < ',  thr, ' dist')
-                                # or \
-                                # ((clusters[c]["f_low"] - 200 < seg[2] < clusters[c]["f_low"] + 200) and
-                                #  (clusters[c]["f_high"] - 200 < seg[3] < clusters[c]["f_high"] + 200)):
                                 print('Class ', clusters[c]["label"], ', dist ', min_ds[c])
                                 # Update this class
                                 clusters[c] = class_update(cluster=clusters[c], newfeatures=f, newf_low=seg[2],
@@ -1613,7 +1474,7 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
         print('\nAgglomerative Clustering----------------------')
         # model_agg = learners.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=0.5,
         #                                          linkage='complete')
-        model_agg = learners.agglomerativeClustering(n_clusters=10, compute_full_tree=False, distance_threshold=None,
+        model_agg = learners.agglomerativeClustering(n_clusters=6, compute_full_tree=False, distance_threshold=None,
                                                      linkage='complete')
         # Either set n_clusters=None and compute_full_tree=T or distance_threshold=None
 
@@ -1651,113 +1512,118 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
     for i in range(len(clustered_dataset)):
         print(clustered_dataset[i], labels[i])
 
-    # return clustered_dataset, fs
+    classes = set(labels).__len__()
 
-    # Sort the clusters and display for now
-    classes = set(labels)
+    for i in range(len(clustered_dataset)):
+        clustered_dataset[i].insert(2, labels[i])
 
-    # Display the segs
-    import pyqtgraph as pg
-    from pyqtgraph.Qt import QtCore, QtGui
-    if displayallinone:
-        app = QtGui.QApplication([])
+    return clustered_dataset, fs, classes
 
-        mw = QtGui.QMainWindow()
-        mw.show()
-        mw.resize(1200, 800)
-        mw.setWindowTitle(
-            "Clustered segments (each row is a Class) - Feature: " + feature + " ; Denoise: " + str(denoise) +
-            " ; Bandpass: " + str(f_1) + "-" + str(f_2))
+    # # Sort the clusters and display
+    # classes = set(labels)
+    #
+    # # Display the segs
+    # import pyqtgraph as pg
+    # from pyqtgraph.Qt import QtCore, QtGui
+    # if displayallinone:
+    #     app = QtGui.QApplication([])
+    #
+    #     mw = QtGui.QMainWindow()
+    #     mw.show()
+    #     mw.resize(1200, 800)
+    #     mw.setWindowTitle(
+    #         "Clustered segments (each row is a Class) - Feature: " + feature + " ; Denoise: " + str(denoise) +
+    #         " ; Bandpass: " + str(f_1) + "-" + str(f_2))
+    #
+    #     win = pg.GraphicsLayoutWidget()
+    #     mw.setCentralWidget(win)
+    #     row = 0
+    #
+    #     for c in classes:
+    #         col = 0
+    #         indc = np.where(labels == c)[0].tolist()
+    #         print('Class ', c, ': ', np.shape(indc)[0], ' segments')
+    #         clusterc = []
+    #         for i in indc:
+    #             print(clustered_dataset[i])
+    #             clusterc.append(clustered_dataset[i])
+    #         for x in clusterc:
+    #             audiodata, _ = loadFile(x[0], x[1][1]-x[1][0], x[1][0], fs)
+    #             sp = SignalProc.SignalProc(audiodata, fs, 1024, 512)
+    #             sg = sp.spectrogram(audiodata, multitaper=False)
+    #             maxsg = np.min(sg)
+    #             sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
+    #             # Make it readable
+    #             minsg = np.min(sg)
+    #             maxsg = np.max(sg)
+    #             colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
+    #             colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
+    #
+    #             vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
+    #             vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row + 1, col=col)
+    #             im = pg.ImageItem(enableMouse=False)
+    #             vb2.addItem(im)
+    #             im.setImage(sg)
+    #             im.setBorder('w')
+    #             im.setLevels([colourStart, colourEnd])
+    #
+    #             txt = x[1][4][0]
+    #             # txt = s[0].split('\\')[-1]+'-'+s[1][4][0]
+    #             lbl = pg.LabelItem(txt, rotateAxis=(1, 0), angle=179)
+    #             vb.addItem(lbl)
+    #             col += 1
+    #         row += 2
+    #
+    #     QtGui.QApplication.instance().exec_()
+    # else:
+    #     app = QtGui.QApplication([])
+    #     for c in classes:
+    #         indc = np.where(labels == c)[0].tolist()
+    #         print('Class ', c, ': ', np.shape(indc)[0], ' segments')
+    #         clusterc = []
+    #         for i in indc:
+    #             print(clustered_dataset[i])
+    #             clusterc.append(clustered_dataset[i])
+    #         mw = QtGui.QMainWindow()
+    #         mw.show()
+    #         mw.resize(1200, 800)
+    #
+    #         win = pg.GraphicsLayoutWidget()
+    #         mw.setCentralWidget(win)
+    #         row = 0
+    #         col = 0
+    #
+    #         for x in clusterc:
+    #             audiodata, _ = loadFile(x[0], x[1][1] - x[1][0], x[1][0], fs)
+    #             sp = SignalProc.SignalProc(audiodata, fs, 1024, 512)
+    #             sg = sp.spectrogram(audiodata, multitaper=False)
+    #             maxsg = np.min(sg)
+    #             sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
+    #             # Make it readable
+    #             minsg = np.min(sg)
+    #             maxsg = np.max(sg)
+    #             colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
+    #             colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
+    #
+    #             # vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
+    #             vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row + 1, col=col)
+    #             im = pg.ImageItem(enableMouse=False)
+    #             vb2.addItem(im)
+    #             im.setImage(sg)
+    #             im.setBorder('w')
+    #             im.setLevels([colourStart, colourEnd])
+    #
+    #             # txt = x[1][0][4]
+    #             # lbl = pg.LabelItem(txt, rotateAxis=(1, 0), angle=179)
+    #             # vb.addItem(lbl)
+    #             if row == 6:
+    #                 row = 0
+    #                 col += 1
+    #             else:
+    #                 row += 2
+    #         QtGui.QApplication.instance().exec_()
 
-        win = pg.GraphicsLayoutWidget()
-        mw.setCentralWidget(win)
-        row = 0
 
-        for c in classes:
-            col = 0
-            indc = np.where(labels == c)[0].tolist()
-            print('Class ', c, ': ', np.shape(indc)[0], ' segments')
-            clusterc = []
-            for i in indc:
-                print(clustered_dataset[i])
-                clusterc.append(clustered_dataset[i])
-            for x in clusterc:
-                audiodata, _ = loadFile(x[0], x[1][1]-x[1][0], x[1][0], fs)
-                sp = SignalProc.SignalProc(audiodata, fs, 1024, 512)
-                sg = sp.spectrogram(audiodata, multitaper=False)
-                maxsg = np.min(sg)
-                sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
-                # Make it readable
-                minsg = np.min(sg)
-                maxsg = np.max(sg)
-                colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
-                colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
-
-                vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
-                vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row + 1, col=col)
-                im = pg.ImageItem(enableMouse=False)
-                vb2.addItem(im)
-                im.setImage(sg)
-                im.setBorder('w')
-                im.setLevels([colourStart, colourEnd])
-
-                txt = x[1][4][0]
-                # txt = s[0].split('\\')[-1]+'-'+s[1][4][0]
-                lbl = pg.LabelItem(txt, rotateAxis=(1, 0), angle=179)
-                vb.addItem(lbl)
-                col += 1
-            row += 2
-
-        QtGui.QApplication.instance().exec_()
-    else:
-        app = QtGui.QApplication([])
-        for c in classes:
-            indc = np.where(labels == c)[0].tolist()
-            print('Class ', c, ': ', np.shape(indc)[0], ' segments')
-            clusterc = []
-            for i in indc:
-                print(clustered_dataset[i])
-                clusterc.append(clustered_dataset[i])
-            mw = QtGui.QMainWindow()
-            mw.show()
-            mw.resize(1200, 800)
-
-            win = pg.GraphicsLayoutWidget()
-            mw.setCentralWidget(win)
-            row = 0
-            col = 0
-
-            for x in clusterc:
-                audiodata, _ = loadFile(x[0], x[1][1] - x[1][0], x[1][0], fs)
-                sp = SignalProc.SignalProc(audiodata, fs, 1024, 512)
-                sg = sp.spectrogram(audiodata, multitaper=False)
-                maxsg = np.min(sg)
-                sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
-                # Make it readable
-                minsg = np.min(sg)
-                maxsg = np.max(sg)
-                colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
-                colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
-
-                # vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
-                vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row + 1, col=col)
-                im = pg.ImageItem(enableMouse=False)
-                vb2.addItem(im)
-                im.setImage(sg)
-                im.setBorder('w')
-                im.setLevels([colourStart, colourEnd])
-
-                # txt = x[1][0][4]
-                # lbl = pg.LabelItem(txt, rotateAxis=(1, 0), angle=179)
-                # vb.addItem(lbl)
-                if row == 6:
-                    row = 0
-                    col += 1
-                else:
-                    row += 2
-            QtGui.QApplication.instance().exec_()
-
-# cluster_by_agg('D:\AviaNZ\Sound_Files\Fiordland_kiwi\Dataset\Dataset\TestData\Positive\Data\\birds', feature='we', displayallinone=False)
 # cluster_by_dist('D:\AviaNZ\Sound_Files\demo\morepork', feature='we', denoise=False)
 # cluster_by_agg('D:\AviaNZ\Sound_Files\demo\morepork', feature='we')
 
@@ -2304,4 +2170,3 @@ def testClassifiers(dir_clf, dir_test, species, feature, clf=None, pca=False):
     else:
         model = load(os.path.join(dir_clf, species+'_' + feature + '_' + clf + '.joblib'))
         learners.performTest(model)
-

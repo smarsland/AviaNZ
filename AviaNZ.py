@@ -58,7 +58,7 @@ import Segment
 import WaveletSegment
 import WaveletFunctions
 #import Features
-#import Learning
+import Learning
 import AviaNZ_batch
 import fnmatch
 import librosa
@@ -416,6 +416,7 @@ class AviaNZ(QMainWindow):
             actionMenu.addSeparator()
 
         actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
+        actionMenu.addAction("Test clustering", self.ClusteringDialog)
         actionMenu.addSeparator()
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
@@ -1865,23 +1866,23 @@ class AviaNZ(QMainWindow):
 
         # plot energy in "wind" band
         if self.extra == "Wind energy":
-            we_mean = np.zeros(int(self.datalengthSec))
-            we_std = np.zeros(int(self.datalengthSec))
-            for w in range(int(self.datalengthSec)):
+            we_mean = np.zeros(int(np.ceil(self.datalengthSec)))
+            we_std = np.zeros(int(np.ceil(self.datalengthSec)))
+            for w in range(int(np.ceil(self.datalengthSec))):
                 data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
                 post = SupportClasses.postProcess(audioData=data, sampleRate=self.sampleRate, segments=[], spInfo={})
-                m, std = post.wind_cal(data, self.sampleRate)
+                m, std, _ = post.wind_cal(data, self.sampleRate)
                 we_mean[w] = m
                 we_std[w] = std
 
             print('mean wind: ', we_mean)
-            self.plotExtra = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean)
+            self.plotExtra = pg.PlotDataItem(np.arange(int(np.ceil(self.datalengthSec))), we_mean)
             self.plotExtra.setPen(fn.mkPen(color='k', width=2))
-            self.plotExtra2 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean+we_std)
+            self.plotExtra2 = pg.PlotDataItem(np.arange(int(np.ceil(self.datalengthSec))), we_mean+we_std)
             self.plotExtra2.setPen(fn.mkPen('c'))
-            self.plotExtra3 = pg.PlotDataItem(np.arange(self.datalengthSec), we_mean-we_std)
+            self.plotExtra3 = pg.PlotDataItem(np.arange(int(np.ceil(self.datalengthSec))), we_mean-we_std)
             self.plotExtra3.setPen(fn.mkPen('c'))
-            self.plotExtra4 = pg.PlotDataItem(np.arange(self.datalengthSec), np.ones((int(self.datalengthSec)))*2.5)
+            self.plotExtra4 = pg.PlotDataItem(np.arange(int(np.ceil(self.datalengthSec))), np.ones(int(np.ceil(self.datalengthSec)))*1.5)
             self.plotExtra4.setPen(fn.mkPen('r'))
             self.plotaxis.setLabel('Mean (SD) power, V^2/Hz')
             self.p_plot.addItem(self.plotExtra)
@@ -3930,6 +3931,17 @@ class AviaNZ(QMainWindow):
 
         QApplication.processEvents()
 
+    def ClusteringDialog(self):
+        """ cluster
+        """
+
+        clustered_segments, fs, n_classes = Learning.cluster_by_agg('D:\AviaNZ\Sound_Files\demo\morepork', feature='we')
+
+        self.clusterDialog = Dialogs.Cluster(clustered_segments, fs, n_classes, self.config)
+        self.clusterDialog.show()
+        self.clusterDialog.activateWindow()
+
+
     def trainWaveletDialog(self):
         """ Create the wavelet training dialog for the relevant menu item
         """
@@ -3937,7 +3949,7 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog = Dialogs.WaveletTrain(np.max(self.audiodata))
         self.waveletTDialog.show()
         self.waveletTDialog.activateWindow()
-        self.dName=None
+        self.dName = None
         self.waveletTDialog.browse.clicked.connect(self.browseTrainData)
         self.waveletTDialog.genGT.clicked.connect(self.prepareTrainData)
         self.waveletTDialog.train.clicked.connect(self.trainWavelet)
@@ -4237,8 +4249,7 @@ class AviaNZ(QMainWindow):
         """
         # Virginia: added window and increment to prepare annotation file
         # BE CAREFULL: they must be updated here
-        window = 1
-        inc = None
+
         species = self.waveletTDialog.species.currentText()
         if species == 'Choose species...':
             msg = SupportClasses.MessagePopup("w", "Species Error", "Please specify the species!")
@@ -4248,6 +4259,18 @@ class AviaNZ(QMainWindow):
             msg = SupportClasses.MessagePopup("w", "Data Error", "Please specify training data!")
             msg.exec_()
             return
+
+        clustered_segments, fs, n_classes = Learning.cluster_by_agg(self.dName, feature='we')
+
+        self.clusterDialog = Dialogs.Cluster(clustered_segments, fs, n_classes, self.config)
+        self.clusterDialog.show()
+        self.clusterDialog.activateWindow()
+
+        # TODO: Use cluster output to train mutiple filters
+
+        # Now generate GT binary
+        window = 1
+        inc = None
         f_low = []
         f_high = []
         fs =[]
@@ -4285,9 +4308,9 @@ class AviaNZ(QMainWindow):
         self.waveletTDialog.ff.setEnabled(True)
         self.waveletTDialog.train.setEnabled(True)
 
-        msg = SupportClasses.MessagePopup("d", "Preparation done!", "Follow Step 2 to complete training.")
-        msg.exec_()
-        return
+        # msg = SupportClasses.MessagePopup("d", "Preparation done!", "Follow Step 2 to complete training.")
+        # msg.exec_()
+        # return
 
     def annotation2GT(self, wavFile, species, duration=0):
         """

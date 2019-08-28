@@ -36,6 +36,7 @@ import pyqtgraph.functions as fn
 import numpy as np
 import SupportClasses as SupportClasses
 import json
+import SignalProc
 
 
 class StartScreen(QDialog):
@@ -2182,20 +2183,22 @@ class HumanClassify2(QDialog):
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, parent=None):
+    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, parent=None, cluster=False):
         super(PicButton, self).__init__(parent)
         self.index = index
         self.mark = "green"
         self.spec = spec
         self.unbufStart = unbufStart
         self.unbufStop = unbufStop
+        self.cluster = cluster
         self.setMouseTracking(True)
         # setImage reads some properties from self, to allow easy update
         # when color map changes
         self.setImage(lut, colStart, colEnd, cmapInv)
 
         self.buttonClicked = False
-        self.clicked.connect(self.changePic)
+        if not self.cluster:
+            self.clicked.connect(self.changePic)
         # fixed size
         self.setSizePolicy(0,0)
         self.setMinimumSize(self.im1.size())
@@ -2222,15 +2225,19 @@ class PicButton(QAbstractButton):
             print("ERROR: button not shown, likely bad spectrogram coordinates")
             return
 
-        # hardcode all image widths
-        self.specReductionFact = im1.size().width()/500
-        self.im1 = im1.scaled(500, im1.size().height())
+        # hardcode all image sizes
+        if self.cluster:
+            self.im1 = im1.scaled(200, 150)
+        else:
+            self.specReductionFact = im1.size().width()/500
+            self.im1 = im1.scaled(500, im1.size().height())
 
         # draw lines
-        unbufStartAdj = self.unbufStart / self.specReductionFact
-        unbufStopAdj = self.unbufStop / self.specReductionFact
-        self.line1 = QLineF(unbufStartAdj, 0, unbufStartAdj, im1.size().height())
-        self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, im1.size().height())
+        if not self.cluster:
+            unbufStartAdj = self.unbufStart / self.specReductionFact
+            unbufStopAdj = self.unbufStop / self.specReductionFact
+            self.line1 = QLineF(unbufStartAdj, 0, unbufStartAdj, im1.size().height())
+            self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, im1.size().height())
 
     def paintEvent(self, event):
         if type(event) is not bool:
@@ -2241,8 +2248,9 @@ class PicButton(QAbstractButton):
             elif self.mark == "red":
                 painter.setOpacity(0.5)
             painter.drawImage(event.rect(), self.im1)
-            painter.drawLine(self.line1)
-            painter.drawLine(self.line2)
+            if not self.cluster:
+                painter.drawLine(self.line1)
+                painter.drawLine(self.line2)
 
             # draw decision mark
             fontsize = int(self.im1.size().height() * 0.65)
@@ -2307,6 +2315,293 @@ class PicButton(QAbstractButton):
         #self.update()
         self.repaint()
         pg.QtGui.QApplication.processEvents()
+
+
+class Cluster(QDialog):
+    """ Cluster dialog.
+        Shows clustered segments
+        Allows to merge clusters and move segments from one class to another.
+    """
+
+    def __init__(self, segments, sampleRate, classes, config, parent=None):
+        QDialog.__init__(self, parent)
+
+        if len(segments) == 0:
+            print("No segments provided")
+            return
+
+        self.setWindowTitle('Clusters')
+
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+
+        # let the user quit without bothering rest of it
+        # self.setWindowFlags(self.windowFlags() & QtCore.Qt.WindowCloseButtonHint)
+
+        self.sampleRate = sampleRate
+        self.segments = segments
+        self.nclasses = classes
+        self.config = config
+
+        # Merge button
+        self.btnMerge = QPushButton('Merge Clusters')
+        self.btnMerge.clicked.connect(self.merge)
+
+        # Volume control
+        self.volSlider = QSlider(Qt.Horizontal)
+        self.volSlider.valueChanged.connect(self.volSliderMoved)
+        self.volSlider.setRange(0, 100)
+        self.volSlider.setValue(50)
+        self.volIcon = QLabel()
+        self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+
+        # Brightness, and contrast sliders
+        self.brightnessSlider = QSlider(Qt.Horizontal)
+        self.brightnessSlider.setMinimum(0)
+        self.brightnessSlider.setMaximum(100)
+        self.brightnessSlider.setValue(20)
+        self.brightnessSlider.setTickInterval(1)
+        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
+
+        self.contrastSlider = QSlider(Qt.Horizontal)
+        self.contrastSlider.setMinimum(0)
+        self.contrastSlider.setMaximum(100)
+        self.contrastSlider.setValue(20)
+        self.contrastSlider.setTickInterval(1)
+        self.contrastSlider.valueChanged.connect(self.setColourLevels)
+
+        hboxSpecContr = QHBoxLayout()
+        hboxSpecContr.addWidget(self.btnMerge)
+        labelBr = QLabel(" Bright.")
+        hboxSpecContr.addWidget(labelBr)
+        hboxSpecContr.addWidget(self.brightnessSlider)
+        labelCo = QLabel("Contr.")
+        hboxSpecContr.addWidget(labelCo)
+        hboxSpecContr.addWidget(self.contrastSlider)
+        labelVl = QLabel("Vol.")
+        hboxSpecContr.addWidget(labelVl)
+        hboxSpecContr.addWidget(self.volSlider)
+        label1 = QLabel('Adjust clusters if required')
+        label1.setFont(QtGui.QFont('SansSerif', 10))
+
+        # top part
+        vboxTop = QVBoxLayout()
+        vboxTop.addWidget(label1)
+        vboxTop.addLayout(hboxSpecContr)
+        # must be fixed size!
+        vboxTop.setSizeConstraint(QLayout.SetFixedSize)
+
+        # set up the images
+        self.flowLayout = pg.LayoutWidget()
+        self.flowLayout.setGeometry(QtCore.QRect(0, 0, 380, 247))
+
+        # Add the clusters to rows
+        self.addButtons()
+
+        self.scrollArea = QtGui.QScrollArea(self)
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setWidget(self.flowLayout)
+
+        # set overall layout of the dialog
+        self.vboxFull = QVBoxLayout()
+        # self.vboxFull.setSpacing(0)
+        self.vboxFull.addLayout(vboxTop)
+        # self.vboxSpacer = QSpacerItem(1, 1, 5, 5)
+        # self.vboxFull.addItem(self.vboxSpacer)
+        self.vboxFull.addWidget(self.scrollArea)
+
+        self.setLayout(self.vboxFull)
+
+    def merge(self):
+        """ Listner for the merge button. Merge the rows (clusters) checked into one cluster.
+        """
+        # Find which clusters/rows to merge
+        tomerge = []
+        i = 0
+        for cbox in self.cboxes:
+            if cbox.checkState() != 0:
+                tomerge.append(i)
+            i += 1
+        # print('rows/clusters to merge are:', tomerge)
+        if len(tomerge) < 2:
+            return
+
+        # Generate new class labels
+        nclasses = self.nclasses - len(tomerge) + 1
+        max_label = nclasses - 1
+        labels = []
+        c = self.nclasses - 1
+        while c > -1:
+            if c in tomerge:
+                labels.append((c, 0))
+            else:
+                labels.append((c, max_label))
+                max_label -= 1
+            c -= 1
+
+        self.nclasses = nclasses
+
+        # print('[old, new] labels')
+        labels = dict(labels)
+        print(labels)
+
+        # update the segments
+        for seg in self.segments:
+            seg[3] = labels[seg[3]]
+
+        # Clean and redraw
+        self.clearButtons()
+        # print('cleaned')
+
+        self.updateButtons()
+        print('updated')
+
+    def addButtons(self):
+        """ Make the buttons and display them
+        """
+        self.cboxes = []
+        for r in range(self.nclasses):
+            c = 0
+            cbox = QCheckBox("")
+            self.cboxes.append(cbox)
+            self.flowLayout.addWidget(self.cboxes[-1], r, c)
+            c += 1
+            # Find the segments under this class, create buttons, and show them
+            for seg in self.segments:
+                if seg[2] == r:
+                    sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1]-seg[1][0], seg[1][0])
+                    newButton = PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart,
+                                          self.colourEnd, False, cluster=True)
+                    seg.insert(2, newButton)
+                    self.flowLayout.addWidget(seg[2], r, c)
+                    c += 1
+            print('*', r, c-1)
+
+    def updateButtons(self):
+        """ Update the existing buttons, call when merging clusters
+        """
+        self.cboxes = []
+        for r in range(self.nclasses):
+            c = 0
+            cbox = QCheckBox("")
+            self.cboxes.append(cbox)
+            self.flowLayout.addWidget(self.cboxes[-1], r, c)
+            c += 1
+            # Find the segments under this class and show them
+            for seg in self.segments:
+                if seg[3] == r:
+                    self.flowLayout.addWidget(seg[2], r, c)
+                    c += 1
+            # print(r, c-1)
+        self.flowLayout.update()
+
+    def clearButtons(self):
+        """ Remove existing buttons, call when merging clusters
+        """
+        for ch in self.cboxes:
+            ch.hide()
+        for btnum in reversed(range(self.flowLayout.layout.count())):
+            item = self.flowLayout.layout.itemAt(btnum)
+            if item is not None:
+                self.flowLayout.layout.removeItem(item)
+                r, c = self.flowLayout.items[item.widget()]
+                del self.flowLayout.rows[r][c]
+        self.flowLayout.update()
+
+
+    def setColourLevels(self):
+        """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
+        Translates the brightness and contrast values into appropriate image levels.
+        """
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        brightness = self.brightnessSlider.value()
+        contrast = self.contrastSlider.value()
+        colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
+        colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + colourStart
+        for seg in self.segments:
+            seg[2].stopPlayback()
+            seg[2].setImage(self.lut, colourStart, colourEnd, False)
+            seg[2].update()
+
+
+    def volSliderMoved(self, value):
+        # try/pass to avoid race situations when smth is not initialized
+        try:
+            for seg in self.segments:
+                seg[2].media_obj.applyVolSlider(value)
+        except Exception:
+            pass
+
+
+    def loadFile(self, filename, duration=0, offset=0, fs=0):
+        """
+        Read audio file
+        """
+        # TODO: Move out of Dialogs
+        import wavio
+        import librosa
+        from PyQt5.QtMultimedia import QAudioFormat
+
+        if offset == 0 and duration == 0:
+            wavobj = wavio.read(filename)
+        else:
+            wavobj = wavio.read(filename, duration, offset)
+        sampleRate = wavobj.rate
+        audiodata = wavobj.data
+
+        audioFormat = QAudioFormat()
+        audioFormat.setCodec("audio/pcm")
+        audioFormat.setByteOrder(QAudioFormat.LittleEndian)
+        audioFormat.setSampleType(QAudioFormat.SignedInt)
+
+        audioFormat.setChannelCount(np.shape(audiodata)[1])
+        audioFormat.setSampleRate(sampleRate)
+        audioFormat.setSampleSize(wavobj.sampwidth * 8)
+
+        if audiodata.dtype is not 'float':
+            audiodata = audiodata.astype('float')  # / 32768.0
+        if np.shape(np.shape(audiodata))[0] > 1:
+            audiodata = audiodata[:, 0]
+
+        if fs != 0 and sampleRate != fs:
+            audiodata = librosa.core.audio.resample(audiodata, sampleRate, fs)
+            sampleRate = fs
+            audioFormat.setSampleRate(sampleRate)
+
+        sp = SignalProc.SignalProc()
+        sgRaw = sp.spectrogram(audiodata, window_width=512,
+                                         incr=256, window='Hann', mean_normalise=True, onesided=True,
+                                         multitaper=False, need_even=False)
+        maxsg = np.min(sgRaw)
+        self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+        self.setColourMap()
+
+        return self.sg, audiodata, audioFormat
+
+
+    def setColourMap(self):
+        """ Listener for the menu item that chooses a colour map.
+        Loads them from the file as appropriate and sets the lookup table.
+        """
+        cmap = self.config['cmap']
+
+        import colourMaps
+        pos, colour, mode = colourMaps.colourMaps(cmap)
+
+        cmap = pg.ColorMap(pos, colour,mode)
+        self.lut = cmap.getLookupTable(0.0, 1.0, 256)
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
+        self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
+
+
+    def resizeEvent(self, ev):
+        """ On this event, choose which (and how many) buttons to display
+            from self.buttons. It is also called on initialization.
+        """
+        pass
 
 
 class InterfaceSettings2(QDialog):
