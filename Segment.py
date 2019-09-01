@@ -154,6 +154,18 @@ class Segment(list):
             print("ERROR: could not find species-certainty combo to remove:", species, certainty)
             return
 
+    def infoString(self):
+        """ Returns a nicely-formatted string of this segment's info."""
+        s = []
+        for lab in self[4]:
+            labs = "sp.: {}, cert.: {}%".format(lab["species"], lab["certainty"])
+            if "filter" in lab and lab["filter"]!="M":
+                labs += ", filter: " + lab["filter"]
+            if "calltype" in lab:
+                labs += ", call: " + lab["calltype"]
+            s.append(labs)
+        return "; ".join(s)
+
 
 class SegmentList(list):
     """ List of Segments. Deals with I/O - parsing JSON,

@@ -1,1 +1,10 @@
-{"Name": "Kiwi, Nth Is Brown", "SampleRate": 16000, "TimeRange": [6, 32], "FreqRange": [800, 8000], "WaveletParams": [0.5, 0.5, [35, 36, 39, 40, 43, 44, 45]], "Wind": false, "Rain": false, "F0": false}
+{"species": "Kiwi (Nth Is Brown)",
+"SampleRate": 16000,
+"Filters": [
+  {"calltype": "all",
+  "TimeRange": [6, 32],
+  "FreqRange": [800, 8000],
+  "WaveletParams": [0.5, 0.5, [35, 36, 39, 40, 43, 44, 45]]
+  }],
+"Wind": false, "Rain": false, "F0": false
+}

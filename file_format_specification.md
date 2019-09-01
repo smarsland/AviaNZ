@@ -82,8 +82,8 @@ Any extra subfilter parameters may follow, such as `"F0"`.
 
 Thus, a full filter file may look like this:
 
-    { "Name": "Kiwi (Little spotted)", "SampleRate": 16000, "Rain": false, "Wind": true,
-      [
+    { "species": "Kiwi (Little spotted)", "SampleRate": 16000, "Rain": false, "Wind": true,
+      "Filters": [
         { "calltype": "M", "nodes": [44, 45, 46], "thr": 0.5, "M": 1.5 , "F0": true, "FreqRange": [1500, 5000] },
         { "calltype": "F", "nodes": [41, 44], "thr": 0.8, "M": 2, "FreqRange": [1000, 2500] }
       ]

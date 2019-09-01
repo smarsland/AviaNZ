@@ -1,9 +1,12 @@
 { 
-  "Name": "Kiwi, Great Spotted", 
+  "species": "Kiwi (Great Spotted)", 
   "SampleRate": 16000,
-  "TimeRange": [2, 25],
-  "FreqRange": [900, 7000], 
-  "WaveletParams": [0.25, 0.6, [35, 38, 43, 44, 52, 54]],
+  "Filters": [
+    {"calltype": "all",
+    "TimeRange": [2, 25],
+    "FreqRange": [900, 7000], 
+    "WaveletParams": [0.25, 0.6, [35, 38, 43, 44, 52, 54]]
+  }],
   "Wind": false, 
   "Rain": false, 
   "F0": false

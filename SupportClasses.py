@@ -64,6 +64,9 @@ class preProcess:
     def __init__(self,audioData=None, spInfo={}, d=False, f=True, wavelet='dmey2'):
         self.audioData = audioData
         self.spInfo = spInfo
+        # defaulting to first subfilter for now
+        for key, value in self.spInfo["Filters"][0].items():
+            self.spInfo[key] = value
         self.d = d  # denoise
         self.f = f  # band-pass
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
@@ -106,6 +109,9 @@ class postProcess:
         self.audioData = audioData
         self.sampleRate = sampleRate
         self.segments = segments
+        # defaulting to first subfilter for now
+        for key, value in spInfo["Filters"][0].items():
+            spInfo[key] = value
         if spInfo != {}:
             self.minLen = spInfo['TimeRange'][0]
             if hasattr(spInfo,'F0') and spInfo['F0']:
@@ -1260,14 +1266,34 @@ class ConfigLoader(object):
             sys.exit()
 
     def filters(self, dir):
-        # Returns a list of filter files.
+        """ Returns a dict of filter JSONs,
+            named after the corresponding file names. """
         print("Loading call filters from folder %s" % dir)
         try:
-            filters = [f[:-4] for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
-            return filters
+            filters = [f for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
         except Exception:
             print("Folder %s not found, no filters loaded" % dir)
             return None
+
+        goodfilters = dict()
+        for filtfile in filters:
+            try:
+                filt = json.load(open(os.path.join(dir, filtfile)))
+
+                # skip this filter if it looks fishy:
+                if not isinstance(filt, dict) or "species" not in filt or "SampleRate" not in filt or "Filters" not in filt or len(filt["Filters"])<1:
+                    raise ValueError("Filter JSON format wrong, skipping")
+                for subfilt in filt["Filters"]:
+                    if not isinstance(subfilt, dict) or "calltype" not in subfilt:
+                        raise ValueError("Subfilter JSON format wrong, skipping")
+
+                # if filter passed checks, store it,
+                # using filename (without extension) as the key
+                goodfilters[filtfile[:-4]] = filt
+            except Exception as e:
+                print("Could not load filter:", filtfile, e)
+        print("Loaded filters:", list(goodfilters.keys()))
+        return goodfilters
 
     def shortbl(self, file, configdir):
         # A fallback shortlist will be confirmed to exist in configdir.

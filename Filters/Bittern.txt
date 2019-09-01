@@ -1,8 +1,11 @@
-{ "Name": "Bittern", 
+{ "species": "Bittern", 
   "SampleRate": 1000,
-  "TimeRange": [1, 5],
-  "FreqRange": [100, 200], 
-  "WaveletParams": [0.25, 0.2, [8,10,21,22,43,44,45,46]],
+  "Filters": [
+    {"calltype": "all",
+    "TimeRange": [1, 5],
+    "FreqRange": [100, 200], 
+    "WaveletParams": [0.25, 0.2, [8,10,21,22,43,44,45,46]]
+  }],
   "Wind": false, 
   "Rain": false, 
   "F0": false

@@ -64,7 +64,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.saveConfig = True
 
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
-        self.FilterFiles = self.ConfigLoader.filters(self.filtersDir)
+        self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
@@ -105,7 +105,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.d_detection.addWidget(self.w_speLabel1,row=1,col=0)
         self.w_spe1 = QComboBox()
         # read filter list, replace subsp marks with brackets
-        spp = [*self.FilterFiles]
+        spp = list(self.FilterDicts.keys())
         for sp in spp:
             ind = sp.find('>')
             if ind > -1:
@@ -218,7 +218,9 @@ class AviaNZ_batchProcess(QMainWindow):
         if self.species == "All species":
             self.method = "Default"
         else:
-            self.speciesData = json.load(open(os.path.join(self.filtersDir, self.species+'.txt')))
+            self.speciesData = self.FilterDicts[self.species]
+            # Defaulting to first subfilter for now
+            self.speciesSubf = self.speciesData["Filters"][0]
             self.method = "Wavelets"
 
         # Parse the user-set time window to process
@@ -421,7 +423,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         pass
                         # post.fundamentalFrq(self.filename, self.speciesData)
                         # print('After ff: ', post.segments)
-                    if 'Kiwi' in self.speciesData['Name']:  # Not sure if it is appropriate for other species
+                    if 'Kiwi' in self.speciesData['species']:  # Not sure if it is appropriate for other species
                         print('Merging neighbours...')
                         post.mergeneighbours()
                         print('After merge neighbours: ', post.segments)
@@ -505,8 +507,8 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # These parameters will be set for the new segments:
         if self.species != 'All species':
-            y1 = self.speciesData['FreqRange'][0]
-            y2 = min(self.sampleRate//2, self.speciesData['FreqRange'][1])
+            y1 = self.speciesSubf['FreqRange'][0]
+            y2 = min(self.sampleRate//2, self.speciesSubf['FreqRange'][1])
             species = self.species
             cert = 50
         else:
