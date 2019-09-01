@@ -111,7 +111,7 @@ class AviaNZ(QMainWindow):
 
         # Load filters
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
-        self.FilterFiles = self.ConfigLoader.filters(self.filtersDir)
+        self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
         # Load the birdlists:
         # short list is necessary, long list can be None
@@ -148,7 +148,7 @@ class AviaNZ(QMainWindow):
         self.startTime = 0
         self.segmentsToSave = False
 
-        self.lastSpecies = ["Don't Know"]
+        self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
         self.DOC = self.config['DOC']
         self.Hartley = self.config['Hartley']
         self.extra = "none"
@@ -529,6 +529,7 @@ class AviaNZ(QMainWindow):
 
         # The print out at the bottom of the spectrogram with data in
         self.pointData = pg.TextItem(color=(255,0,0),anchor=(0,0))
+        self.segInfo = pg.TextItem(color=(255,0,0),anchor=(0,0))
         #self.p_spec.addItem(self.pointData)
 
         # The various plots
@@ -551,6 +552,7 @@ class AviaNZ(QMainWindow):
         # Connect up so can disconnect if not selected...
         self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
         self.p_spec.addItem(self.pointData)
+        self.p_spec.addItem(self.segInfo)
 
         # The content of the other two docks
         self.w_controls = pg.LayoutWidget()
@@ -856,6 +858,7 @@ class AviaNZ(QMainWindow):
 
         for item in self.shortBirdList[:20]:
             # Add ? marks if Ctrl menu is called
+            itemorig = item
             if unsure and item != "Don't Know":
                 cert = 50
                 item = item+'?'
@@ -871,11 +874,12 @@ class AviaNZ(QMainWindow):
 
             bird = self.menuBirdList.addAction(item)
             bird.setCheckable(True)
-            if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(item, cert):
+            if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(itemorig, cert):
                 bird.setChecked(True)
             self.menuBirdList.addAction(bird)
         self.menuBirdList.addMenu(self.menuBird2)
         for item in self.shortBirdList[20:]:
+            itemorig = item
             # Add ? marks if Ctrl menu is called
             if unsure and item != "Don't Know" and item != "Other":
                 cert = 50
@@ -892,7 +896,7 @@ class AviaNZ(QMainWindow):
 
             bird = self.menuBird2.addAction(item)
             bird.setCheckable(True)
-            if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(item, cert):
+            if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(itemorig, cert):
                 bird.setChecked(True)
             self.menuBird2.addAction(bird)
 
@@ -1687,6 +1691,7 @@ class AviaNZ(QMainWindow):
         # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
         self.pointData.setPos(minX,0)
+        self.segInfo.setPos(minX,-5)
         self.config['windowWidth'] = self.convertSpectoAmpl(maxX-minX)
         # self.saveConfig = True
         self.timeaxis.update()
@@ -2205,7 +2210,7 @@ class AviaNZ(QMainWindow):
             y2 = temp
         # since we allow passing empty list here:
         if len(species) == 0:
-            species = [{"species": "Don't Know", "certainty": 0}]
+            species = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
 
         if not saveSeg:
             timeRangeStart = self.startRead
@@ -2347,6 +2352,9 @@ class AviaNZ(QMainWindow):
         if type(self.listRectanglesa2[boxid]) == self.ROItype:
             self.playBandLimitedSegButton.setEnabled(True)
 
+        # show details of selection
+        self.segInfo.setText(self.segments[boxid].infoString())
+
     def deselectSegment(self, boxid):
         """ Restores the segment colors and disables playback buttons."""
         # print("deselected %d" % boxid)
@@ -2374,6 +2382,9 @@ class AviaNZ(QMainWindow):
 
         self.listRectanglesa1[boxid].update()
         self.listRectanglesa2[boxid].update()
+
+        # hide details of selection
+        self.segInfo.setText("")
 
 ### mouse management
 
@@ -2407,6 +2418,7 @@ class AviaNZ(QMainWindow):
         pos = evt.scenePos()
 
         # if any box is selected, deselect (wherever clicked)
+        wasSelected = self.box1id
         if self.box1id>-1:
             self.deselectSegment(self.box1id)
 
@@ -2511,14 +2523,15 @@ class AviaNZ(QMainWindow):
                     if box1id > -1:
                         # select the segment:
                         self.selectSegment(box1id)
-
-                        # popup dialog
-                        modifiers = QtGui.QApplication.keyboardModifiers()
-                        if modifiers == QtCore.Qt.ControlModifier:
-                            self.fillBirdList(unsure=True)
-                        else:
-                            self.fillBirdList()
-                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                        # is it the first click on this segment?
+                        if wasSelected==box1id:
+                            # popup dialog
+                            modifiers = QtGui.QApplication.keyboardModifiers()
+                            if modifiers == QtCore.Qt.ControlModifier:
+                                self.fillBirdList(unsure=True)
+                            else:
+                                self.fillBirdList()
+                            self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                     else:
                         # TODO: pan the view
                         pass
@@ -2531,6 +2544,7 @@ class AviaNZ(QMainWindow):
         pos = evt.scenePos()
 
         # if any box is selected, deselect (wherever clicked)
+        wasSelected = self.box1id
         if self.box1id>-1:
             self.deselectSegment(self.box1id)
 
@@ -2683,13 +2697,14 @@ class AviaNZ(QMainWindow):
                     if box1id > -1:
                         # select the segment:
                         self.selectSegment(box1id)
-
-                        modifiers = QtGui.QApplication.keyboardModifiers()
-                        if modifiers == QtCore.Qt.ControlModifier:
-                            self.fillBirdList(unsure=True)
-                        else:
-                            self.fillBirdList()
-                        self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                        # if this segment is clicked again, pop up bird menu:
+                        if wasSelected==box1id:
+                            modifiers = QtGui.QApplication.keyboardModifiers()
+                            if modifiers == QtCore.Qt.ControlModifier:
+                                self.fillBirdList(unsure=True)
+                            else:
+                                self.fillBirdList()
+                            self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
                     else:
                         # TODO: pan the view
                         pass
@@ -2822,7 +2837,7 @@ class AviaNZ(QMainWindow):
             # in case the only label so far was Don't Know,
             # change it to the new bird (to not waste time unticking it)
             if workingSeg.keys == [("Don't Know", 0)]:
-                workingSeg.addLabel(species, certainty)
+                workingSeg.addLabel(species, certainty, filter="M")
                 workingSeg.removeLabel("Don't Know", 0)
                 # also need to untick that context menu item manually
                 for act in self.menuBirdList.actions() + self.menuBird2.actions():
@@ -2830,7 +2845,7 @@ class AviaNZ(QMainWindow):
                         act.setChecked(False)
             else:
                 # in single-bird mode, just remove the current label:
-                workingSeg.addLabel(species, certainty)
+                workingSeg.addLabel(species, certainty, filter="M")
                 if not self.multipleBirds:
                     workingSeg.removeLabel(workingSeg[4][0]["species"], workingSeg[4][0]["certainty"])
 
@@ -2847,8 +2862,9 @@ class AviaNZ(QMainWindow):
         self.refreshOverviewWith(workingSeg)
 
         # Store the species in case the user wants it for the next segment
-        self.lastSpecies = species
+        self.lastSpecies = [{"species": species, "certainty": 100, "filter": "M"}]
         self.updateText()
+        self.segInfo.setText(workingSeg.infoString())
         self.segmentsToSave = True
 
         if not self.multipleBirds:
@@ -3436,7 +3452,7 @@ class AviaNZ(QMainWindow):
         """ Create the dialog to set diagnostic plot parameters.
         """
         if not hasattr(self, 'diagnosticDialog'):
-            self.diagnosticDialog = Dialogs.Diagnostic(self.FilterFiles)
+            self.diagnosticDialog = Dialogs.Diagnostic(self.FilterDicts)
             self.diagnosticDialog.activate.clicked.connect(self.setDiagnostic)
             self.diagnosticDialog.clear.clicked.connect(self.clearDiagnostic)
         self.diagnosticDialog.show()
@@ -3471,7 +3487,11 @@ class AviaNZ(QMainWindow):
 
             # take values: -2/-3/-4 for AA types, -2/-3 for En/Spec plot
             [filter, aaType, markSpec] = self.diagnosticDialog.getValues()
-            spInfo = json.load(open(os.path.join(self.filtersDir, filter + '.txt')))
+            spInfo = self.FilterDicts[filter]
+            # For now, just using params from the first subfilter
+            spSubf = spInfo["Filters"][0]
+            print("Using subfilter", spSubf["calltype"])
+            # spInfo = json.load(open(os.path.join(self.filtersDir, filter + '.txt')))
 
             # clear plot box and add legend
             self.clearDiagnostic()
@@ -3490,7 +3510,7 @@ class AviaNZ(QMainWindow):
 
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(5, 'symmetric', aaType==-4, antialiasFilter=True)
-            numNodes = len(spInfo['WaveletParams'][2])
+            numNodes = len(spSubf['WaveletParams'][2])
             Esep = np.zeros(( numNodes, int(self.datalengthSec) ))
 
             ### DENOISING reference: relative |amp| on rec signals from each WP node, when wind is present
@@ -3510,13 +3530,13 @@ class AviaNZ(QMainWindow):
 
             # 2. reconstruct from bands
             r = 0
-            M = spInfo['WaveletParams'][1]
-            for node in spInfo['WaveletParams'][2]:
+            M = spSubf['WaveletParams'][1]
+            for node in spSubf['WaveletParams'][2]:
                 # reconstruction as in detectCalls:
                 print("working on node", node)
                 C = WF.reconstructWP2(node, aaType != -2, True)
                 C = self.sp.ButterworthBandpass(C, spInfo['SampleRate'],
-                        low=spInfo['FreqRange'][0], high=spInfo['FreqRange'][1])
+                        low=spSubf['FreqRange'][0], high=spSubf['FreqRange'][1])
 
                 C = np.abs(C)
                 E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
@@ -3543,7 +3563,7 @@ class AviaNZ(QMainWindow):
                     Esep[r,w] = (np.log(maxE) - meanC) / sdC
 
                     # mark detected calls on spectrogram
-                    if markSpec and Esep[r,w] > spInfo['WaveletParams'][0]:
+                    if markSpec and Esep[r,w] > spSubf['WaveletParams'][0]:
                         diagCall = pg.ROI((specs*w, (freqmin+freqmax)/2),
                                 (specs, freqmax-freqmin),
                                 pen=(255*r//numNodes,0,0), movable=False)
@@ -3562,7 +3582,7 @@ class AviaNZ(QMainWindow):
             #             pen=fn.mkPen((0,130,0), width=2)))
             # add line corresponding to thr
             # self.p_plot.addItem(pg.InfiniteLine(-0.8, angle=0, pen=fn.mkPen(color=(40,40,40), width=1)))
-            self.p_plot.addItem(pg.InfiniteLine(spInfo['WaveletParams'][0], angle=0, pen=fn.mkPen(color=(40,40,40), width=1)))
+            self.p_plot.addItem(pg.InfiniteLine(spSubf['WaveletParams'][0], angle=0, pen=fn.mkPen(color=(40,40,40), width=1)))
             minX, maxX = self.overviewImageRegion.getRegion()
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), update=True, padding=0)
             self.plotaxis.setLabel('Power Z-score')
@@ -4011,7 +4031,8 @@ class AviaNZ(QMainWindow):
                 species = species + ')'
             else:
                 species = self.species
-            speciesData = json.load(open(os.path.join(self.filtersDir, species + '.txt')))
+
+            speciesData = self.FilterDicts[species]
             ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
             # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
             window = 1
@@ -4212,17 +4233,9 @@ class AviaNZ(QMainWindow):
                             reply = msg.exec_()
                             if reply == QMessageBox.Yes:
                                 print("Saving new filter to ", filename)
-                                f = open(filename, 'w')
-                                f.write(json.dumps(speciesData))
-                                f.close()
                                 msg = SupportClasses.MessagePopup("d", "Training completed!",
                                                                   'Training completed!\nFollow Step 3 and test on a '
                                                                   'separate dataset before actual use.')
-                                msg.exec_()
-                                plt.close()
-                                self.FilterFiles.append(self.species)
-                                self.waveletTDialog.browseTest.setEnabled(True)
-                                self.waveletTDialog.test.setEnabled(True)
                             else:
                                 # TODO: decide how to save the new filter when you don't want to overwrite
                                 # previous filter (or forgot to rename previous filter before coming to this
@@ -4230,33 +4243,30 @@ class AviaNZ(QMainWindow):
                                 filename = filename[:-4] + '_new.txt'
                                 print("Saving new filter to ", filename[:-4] + '_new.txt',
                                       " (have to rename new filter)")
-                                f = open(filename, 'w')
-                                f.write(json.dumps(speciesData))
-                                f.close()
                                 # Add it to the Filter list
                                 msg = SupportClasses.MessagePopup("d", "Training completed!",
                                                                   "Training completed! (but the filter saved with a "
                                                                   "new name)\nFollow Step 3 and test on a separate "
                                                                   "dataset before actual use.")
-                                msg.exec_()
-                                plt.close()
-                                self.FilterFiles.append(self.species)
-                                self.waveletTDialog.test.setEnabled(True)
-                                self.waveletTDialog.browseTest.setEnabled(True)
                         else:
                             print("Saving new filter to ", filename)
-                            f = open(filename, 'w')
-                            f.write(json.dumps(speciesData))
-                            f.close()
                             # Add it to the Filter list
                             msg = SupportClasses.MessagePopup("d", "Training completed!", 'Training completed!\nFollow '
                                                                                           'Step 3 and test on a separate'
                                                                                           'dataset before actual use.')
-                            msg.exec_()
-                            plt.close()
-                            self.FilterFiles.append(self.species)
-                            self.waveletTDialog.test.setEnabled(True)
-                            self.waveletTDialog.browseTest.setEnabled(True)
+                        # actually write out the filter
+                        f = open(filename, 'w')
+                        f.write(json.dumps(speciesData))
+                        f.close()
+                        # prompt the user
+                        msg.exec_()
+                        # regenerate filter list:
+                        self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
+                        # update UI
+                        plt.close()
+                        self.waveletTDialog.test.setEnabled(True)
+                        self.waveletTDialog.browseTest.setEnabled(True)
+
         cid = fig.canvas.mpl_connect('button_press_event', onclick)
         plt.show()
         # plt.raise_()
@@ -4547,7 +4557,7 @@ class AviaNZ(QMainWindow):
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
         """
-        self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata),DOC=self.DOC, species=self.FilterFiles)
+        self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata),DOC=self.DOC, species=self.FilterDicts)
         self.segmentDialog.show()
         self.segmentDialog.activateWindow()
         self.segmentDialog.undo.clicked.connect(self.segment_undo)
@@ -4565,23 +4575,24 @@ class AviaNZ(QMainWindow):
         self.prevSegments = copy.deepcopy(self.segments)
 
         self.segmentsToSave = True
-        [alg, medThr, medSize, HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1,species,resolution,species_cc] = self.segmentDialog.getValues()
+        [alg, medThr, medSize, HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1, filtname, resolution,species_cc] = self.segmentDialog.getValues()
         with pg.BusyCursor():
-            species = str(species)
+            filtname = str(filtname)
             self.statusLeft.setText('Segmenting...')
             # Delete old segments:
             # only this species, if using species-specific methods:
             if alg == 'Wavelets':
-                if species == 'Choose species...':
+                if filtname == 'Choose species...':
                     msg = SupportClasses.MessagePopup("w", "Species Error", 'Please select your species!')
                     msg.exec_()
                     return
 
-                oldsegs = self.segments.getSpecies(species)
+                filtspecies = self.FilterDicts[filtname]["species"]
+                oldsegs = self.segments.getSpecies(filtspecies)
                 # deleting from the end, because deleteSegments shifts IDs:
                 for si in reversed(oldsegs):
                     # remove all labels for the current species
-                    wipedAll = self.segments[si].wipeSpecies(species)
+                    wipedAll = self.segments[si].wipeSpecies(filtspecies)
                     # drop the segment if it's the only species, or just update the graphics
                     if wipedAll:
                         self.deleteSegment(si)
@@ -4617,7 +4628,8 @@ class AviaNZ(QMainWindow):
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
             # SPECIES-SPECIFIC methods from here:
             elif str(alg) == 'Wavelets':
-                speciesData = json.load(open(os.path.join(self.filtersDir, species+'.txt')))
+                speciesData = self.FilterDicts[filtname]
+                speciesSubf = speciesData["Filters"][0]
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
                                                 d=False, f=True, wpmode="new")
@@ -4632,7 +4644,7 @@ class AviaNZ(QMainWindow):
             print('Segments: ', newSegments)
 
             # post process to remove short segments, wind, rain, and use F0 check.
-            if species == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
+            if filtname == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
                 post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
                 post.wind()
                 print('After wind: ', post.segments)
@@ -4660,17 +4672,17 @@ class AviaNZ(QMainWindow):
             # Generate annotation friendly output.
             if str(alg)=='Wavelets':
                 if len(newSegments)>0:
-                    y1 = self.convertFreqtoY(speciesData['FreqRange'][0])
-                    y2 = min(self.sampleRate//2, speciesData['FreqRange'][1])
+                    y1 = self.convertFreqtoY(speciesSubf['FreqRange'][0])
+                    y2 = min(self.sampleRate//2, speciesSubf['FreqRange'][1])
                     y2 = self.convertFreqtoY(y2)
                     for seg in newSegments:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
-                                [{"species": species.title(), "certainty": 50}], index=-1)
+                                [{"species": filtspecies, "certainty": 50, "filter": filtname, "calltype": speciesSubf["calltype"]}], index=-1)
                         self.segmentsToSave = True
             elif str(alg)=='Cross-Correlation' and species_cc != 'Choose species...':
                 if len(newSegments) > 0:
-                    y1 = self.convertFreqtoY(speciesData['FreqRange'][0])
-                    y2 = min(self.sampleRate//2, speciesData['FreqRange'][1])
+                    y1 = self.convertFreqtoY(speciesSubf['FreqRange'][0])
+                    y2 = min(self.sampleRate//2, speciesSubf['FreqRange'][1])
                     y2 = self.convertFreqtoY(y2)
                     for seg in newSegments:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
@@ -5367,6 +5379,7 @@ class AviaNZ(QMainWindow):
             self.segmentsToSave = True
 
             self.box1id = -1
+            self.segInfo.setText("")
             # reset segment playback buttons
             self.playSegButton.setEnabled(False)
             self.playBandLimitedSegButton.setEnabled(False)
@@ -5426,6 +5439,7 @@ class AviaNZ(QMainWindow):
             self.SegmentRects[ovid].setBrush(pg.mkBrush('w'))
             self.SegmentRects[ovid].update()
 
+        self.segInfo.setText("")
         if delete:
             if hasattr(self, "segments"):
                 self.segments.clear()

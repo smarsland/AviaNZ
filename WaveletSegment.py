@@ -55,6 +55,9 @@ class WaveletSegment:
         self.annotation = annotation
         self.wavelet = wavelet
         self.spInfo = spInfo
+        # for now, we default to the first subfilter:
+        for key, value in self.spInfo["Filters"][0].items():
+            self.spInfo[key] = value
 
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
         self.segmenter = Segment.Segmenter(None, None, self.sp, 0, window_width=256, incr=128, mingap=mingap, minlength=minlength)

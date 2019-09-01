@@ -383,7 +383,7 @@ class Diagnostic(QDialog):
         self.filterLabel = QLabel("Select filter to use")
         self.filter = QComboBox()
         # add filter file names to combobox
-        self.filter.addItems(filters)
+        self.filter.addItems(list(filters.keys()))
 
         # antialiasing
         self.aaLabel = QLabel("Select antialiasing type:")
@@ -816,15 +816,13 @@ class Segmentation(QDialog):
         for w in range(Box.count()):
             Box.itemAt(w).widget().hide()
 
-        # TODO: Tidy this
         self.specieslabel_cc = QLabel("Species")
         self.species_cc = QComboBox()
         self.species_cc.addItems(["Choose species...", "Bittern"])
-        # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
-        spp = [*species]
+
+        spp = list(species.keys())
         spp.insert(0,"Choose species...")
         self.species.addItems(spp)
-        # self.species.currentIndexChanged[QString].connect(self.changeBoxes)
 
         Box.addWidget(self.specieslabel)
         Box.addWidget(self.species)
