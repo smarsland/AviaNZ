@@ -50,7 +50,7 @@ from sklearn.model_selection import learning_curve
 from sklearn.model_selection import validation_curve
 from sklearn.model_selection import GridSearchCV
 
-import json, time, os, math, csv, gc, wavio
+import time, os, math, csv, gc, wavio
 import WaveletSegment
 import librosa
 
@@ -843,14 +843,11 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
                 wavobj = wavio.read(os.path.join(root, file))
                 srlist.append(wavobj.rate)
                 # Read the annotation
-                with open(os.path.join(root, file + '.data')) as f1:
-                    segments = json.load(f1)
-                    for seg in segments:
-                        if seg[0] == -1:
-                            continue
-                        else:
-                            lowlist.append(seg[2])
-                            highlist.append(seg[3])
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(root, file+'.data'))
+                for seg in segments:
+                    lowlist.append(seg[2])
+                    highlist.append(seg[3])
     print(lowlist)
     print(highlist)
     print(srlist)
@@ -897,8 +894,8 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
         for file in files:
             if file.endswith('.wav') and file+'.data' in files:
                 # Read the annotation
-                with open(os.path.join(root, file + '.data')) as f1:
-                    segments = json.load(f1)
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(root, file+'.data'))
 
                 # Sort the segments longest to shortest, would be a good idea to avoid making first class with only
                 # one member :)
@@ -1313,14 +1310,11 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
                 wavobj = wavio.read(os.path.join(root, file))
                 srlist.append(wavobj.rate)
                 # Read the annotation
-                with open(os.path.join(root, file + '.data')) as f1:
-                    segments = json.load(f1)
-                    for seg in segments:
-                        if seg[0] == -1:
-                            continue
-                        else:
-                            lowlist.append(seg[2])
-                            highlist.append(seg[3])
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(root, file+'.data'))
+                for seg in segments:
+                    lowlist.append(seg[2])
+                    highlist.append(seg[3])
     print(lowlist)
     print(highlist)
     print(srlist)
@@ -1366,13 +1360,10 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
         for file in files:
             if file.endswith('.wav') and file+'.data' in files:
                 # Read the annotation
-                with open(os.path.join(root, file + '.data')) as f1:
-                    segments = json.load(f1)
-
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(root, file+'.data'))
                 # Now find syllables within each segment, median clipping
                 for seg in segments:
-                    if seg[0] == -1:
-                        continue
                     audiodata, sr = loadFile(filename=os.path.join(root, file), duration=seg[1]-seg[0], offset=seg[0],
                                              fs=fs, denoise=denoise, f1=f_1, f2=f_2)
                     assert sr == fs
