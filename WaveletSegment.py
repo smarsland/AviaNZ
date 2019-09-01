@@ -243,26 +243,27 @@ class WaveletSegment:
             # Generate .data for this file
             # Merge neighbours in order to convert the detections into segments
             # Note: detected np[0 1 1 1] becomes [[1,3]]
-            if savedetections:
-                detected_c = np.where(detected_c > 0)
-                if np.shape(detected_c)[1] > 1:
-                    detected_c = self.identifySegments(np.squeeze(detected_c))
-                elif np.shape(detected_c)[1] == 1:
-                    detected_c = np.array(detected_c).flatten().tolist()
-                    detected_c = self.identifySegments(detected_c)
-                else:
-                    detected_c = []
-                detected_c = self.mergeSeg(detected_c)
-                for item in detected_c:
-                    item[0] = int(item[0])
-                    item[1] = int(item[1])
-                    item = item.append(self.spInfo['FreqRange'][0])
-                for item in detected_c:
-                    item = item.append(self.spInfo['FreqRange'][1])
-                for item in detected_c:
-                    item = item.append(self.spInfo['Name'])
-                file = open(str(self.filenames[fileId]) + '.wav.data', 'w')
-                json.dump(detected_c, file)
+            # TODO currently disabled to avoid conflicts with new format
+            # if savedetections:
+            #     detected_c = np.where(detected_c > 0)
+            #     if np.shape(detected_c)[1] > 1:
+            #         detected_c = self.identifySegments(np.squeeze(detected_c))
+            #     elif np.shape(detected_c)[1] == 1:
+            #         detected_c = np.array(detected_c).flatten().tolist()
+            #         detected_c = self.identifySegments(detected_c)
+            #     else:
+            #         detected_c = []
+            #     detected_c = self.mergeSeg(detected_c)
+            #     for item in detected_c:
+            #         item[0] = int(item[0])
+            #         item[1] = int(item[1])
+            #         item = item.append(self.spInfo['FreqRange'][0])
+            #     for item in detected_c:
+            #         item = item.append(self.spInfo['FreqRange'][1])
+            #     for item in detected_c:
+            #         item = item.append(self.spInfo['Name'])
+            #     file = open(str(self.filenames[fileId]) + '.wav.data', 'w')
+            #     json.dump(detected_c, file)
 
             # memory cleanup:
             del self.WF

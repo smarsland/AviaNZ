@@ -304,7 +304,7 @@ class AviaNZ_batchProcess(QMainWindow):
             for filename in allwavs:
                 processingTimeStart = time.time()
                 self.filename = filename
-                self.segments = []
+                self.segments = Segment.SegmentList()
                 newSegments = []
                 # get remaining run time in min
                 hh,mm = divmod(processingTime * (total-cnt) / 60, 60)
@@ -356,22 +356,26 @@ class AviaNZ_batchProcess(QMainWindow):
                 print("Loading file...")
                 self.loadFile(wipe=(self.species == "All species"))
 
-                # Segment over pages separately, to allow dealing with large files smoothly:
-                # page size fixed for now
-                samplesInPage = 900*16000
-                # (ceil division for large integers)
-                numPages = (len(self.audiodata) - 1) // samplesInPage + 1
-
                 newSegments = []
                 print("Segmenting...")
                 # clean up old segments:
                 if self.species != 'All species':
                     # wipe same species:
                     self.ws = WaveletSegment.WaveletSegment(self.speciesData, 'dmey2')
-                    self.segments[:] = [s for s in self.segments if self.species not in s[4] and self.species+'?' not in s[4]]
+                    oldsegs = self.segments.getSpecies(self.species)
+                    for i in reversed(oldsegs):
+                        wipeAll = self.segments[i].wipeSpecies(self.species)
+                        if wipeAll:
+                            del self.segments[i]
                 else:
                     # wipe all segments:
-                    self.segments = []
+                    self.segments.clear()
+
+                # Segment over pages separately, to allow dealing with large files smoothly:
+                # page size fixed for now
+                samplesInPage = 900*16000
+                # (ceil division for large integers)
+                numPages = (len(self.audiodata) - 1) // samplesInPage + 1
 
                 # Actual segmentation happens here:
                 for page in range(numPages):
@@ -428,7 +432,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 print('Segments after post pro: ', newSegments)
 
                 # export segments
-                cleanexit = self.saveAnnotation(self.segments, newSegments)
+                cleanexit = self.saveAnnotation(newSegments)
                 if cleanexit != 1:
                     print("Warning: could not save segments!")
                 # Log success for this file
@@ -457,20 +461,12 @@ class AviaNZ_batchProcess(QMainWindow):
                 if not os.path.isfile(filename + '.data'):
                     continue
 
-                file = open(filename + '.data', 'r')
-                segments = json.load(file)
+                segments = Segment.SegmentList()
+                segments.parseJSON(filename + '.data')
                 print(filename,len(segments))
-                file.close()
 
-                if len(segments)>1:
-                    for seg in segments:
-                        if seg[0] == -1:
-                            continue
-                        for birdName in seg[4]:
-                            if birdName.endswith('?'):
-                                spList.add(birdName[:-1])
-                            else:
-                                spList.add(birdName)
+                for seg in segments:
+                    spList.update([lab["species"] for lab in seg[4]])
 
             # Save the new excels
             print("Exporting to Excel ...")
@@ -479,17 +475,14 @@ class AviaNZ_batchProcess(QMainWindow):
                 if not os.path.isfile(filename + '.data'):
                     continue
 
-                file = open(filename + '.data', 'r')
-                segments = json.load(file)
-                file.close()
+                segments = Segment.SegmentList()
+                segments.parseJSON(filename + '.data')
 
-                # This could be incompatible with old .data files that didn't store file size
-                pagelen = np.ceil(segments[0][1])
-                if pagelen<=0:
-                    pagelen = max([s[1] for s in segments])
+                # This will be incompatible with old .data files that didn't store file size!
+                datalen = np.ceil(segments.metadata["Duration"])
 
-                out = SupportClasses.exportSegments(self.dirName, filename, pagelen, segments=segments, resolution=self.w_res.value(), species=list(spList), batch=True)
-                out.excel()
+                success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
+                print(success)
 
         # END of processing and exporting. Final cleanup
         self.log.file.close()
@@ -500,42 +493,31 @@ class AviaNZ_batchProcess(QMainWindow):
         if reply == QMessageBox.Yes:
             QApplication.exit(1)
 
-    def saveAnnotation(self, segmentsOld, segmentsNew):
-        """ Saves current segments to file.
-            segmentsOld - saved untouched
-            segmentsNew - assign species to them. """
+    def saveAnnotation(self, segmentsNew):
+        """ Generates default batch-mode metadata,
+            and saves that and segmentsNew to a .data file. """
 
-        annotation = []
-        # annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), self.operator, self.reviewer, -1])
-        operator = "Auto"
-        reviewer = ""
-        noiseLevel = None
-        noiseTypes = []
-        annotation.append([-1, float(self.datalength)/self.sampleRate, operator, reviewer, [noiseLevel, noiseTypes]])
+        self.segments.metadata["Operator"] = "Auto"
+        self.segments.metadata["Reviewer"] = ""
+        self.segments.metadata["Duration"] = float(self.datalength)/self.sampleRate
+        self.segments.metadata["noiseLevel"] = None
+        self.segments.metadata["noiseTypes"] = []
 
         # These parameters will be set for the new segments:
         if self.species != 'All species':
             y1 = self.speciesData['FreqRange'][0]
             y2 = min(self.sampleRate//2, self.speciesData['FreqRange'][1])
-            species = [self.species + "?"]
+            species = self.species
+            cert = 50
         else:
             y1 = 0
             y2 = 0
-            species = ["Don't Know"]
+            species = "Don't Know"
+            cert = 0
 
-        for seg in segmentsOld:
-            annotation.append(seg)
-        for seg in segmentsNew:
-            annotation.append([float(seg[0]), float(seg[1]), y1, y2, species])
+        self.segments.addBasicSegments(segmentsNew, [y1, y2], species=species, certainty=cert)
+        self.segments.saveJSON(str(self.filename) + '.data')
 
-        if isinstance(self.filename, str):
-            file = open(self.filename + '.data', 'w')
-        else:
-            file = open(str(self.filename) + '.data', 'w')
-
-        json.dump(annotation, file)
-        file.write("\n")
-        file.close()
         return 1
 
 
@@ -621,33 +603,24 @@ class AviaNZ_batchProcess(QMainWindow):
             self.sp = SignalProc.SignalProc()
 
         # Read in stored segments (useful when doing multi-species)
+        self.segments = Segment.SegmentList()
         if wipe or not os.path.isfile(self.filename + '.data'):
-            self.segments = []
+            # Initialize default metadata values
+            self.segments.metadata = dict()
+            self.segments.metadata["Operator"] = "Auto"
+            self.segments.metadata["Reviewer"] = ""
+            self.segments.metadata["Duration"] = float(self.datalength)/self.sampleRate
         else:
-            file = open(self.filename + '.data', 'r')
-            self.segments = json.load(file)
-            file.close()
-            if len(self.segments) > 0:
-                if self.segments[0][0] == -1:
-                    del self.segments[0]
-            if len(self.segments) > 0:
-                for s in self.segments:
-                    if 0 < s[2] < 1.1 and 0 < s[3] < 1.1:
-                        # *** Potential for major cockups here. First version didn't normalise the segment data for dragged boxes.
-                        # The second version did, storing them as values between 0 and 1. It modified theoriginal versions by assuming that the spectrogram was 128 pixels high (256 width window).
-                        # This version does what it should have done in the first place, which is to record actual frequencies
-                        # The .1 is to take care of rounding errors
-                        s[2] = 0
-                        s[3] = 0
-                        self.segmentsToSave = True
+            self.segments.parseJSON(self.filename+'.data')
 
-                    # convert single-species IDs to [species]
-                    if type(s[4]) is not list:
-                        s[4] = [s[4]]
-
-                    # wipe segments if running species-specific analysis:
-                    if s[4] == [self.species]:
-                        self.segments.remove(s)
+            # wipe segments if running species-specific analysis:
+            oldsegs = self.segments.getSpecies(self.species)
+            # deleting from the end, to avoid shifting IDs:
+            for si in reversed(oldsegs):
+                # remove labels or drop the segment if it's the only species
+                wipedAll = self.segments[si].wipeSpecies(self.species)
+                if wipedAll:
+                    del self.segments[si]
 
             print("%d segments loaded from .data file" % len(self.segments))
 
@@ -868,22 +841,11 @@ class AviaNZ_reviewAll(QMainWindow):
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 if filename.endswith('.wav') and filename+'.data' in files:
-                    with open(os.path.join(root, filename+'.data')) as f:
-                        segments = json.load(f)
-                        for seg in segments:
-                            # meta segments
-                            if seg[0] == -1:
-                                continue
-
-                            # convert single-species IDs to [species]
-                            if type(seg[4]) is not list:
-                                seg[4] = [seg[4]]
-
-                            for birdName in seg[4]:
-                                # strip question mark and convert sp>spp format
-                                birdName = re.sub(r'\?$', '', birdName)
-                                birdName = re.sub(r'(.*)>(.*)', '\\1 (\\2)', birdName)
-                                self.spList.add(birdName)
+                    f = os.path.join(root, filename+'.data')
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(f)
+                    for seg in segments:
+                        self.spList.update([lab["species"] for lab in seg[4]])
         self.spList = list(self.spList)
         # Can't review only "Don't Knows". Ideally this should call AllSpecies dialog tho
         try:
@@ -946,9 +908,10 @@ class AviaNZ_reviewAll(QMainWindow):
                 sTime = 0
 
             # load segments
-            self.segments = json.load(open(filename + '.data'))
+            self.segments = Segment.SegmentList()
+            self.segments.parseJSON(filename+'.data')
 
-            if len(self.segments) < 2: # First is metadata
+            if len(self.segments)==0:
                 # skip review dialog, but save the name into excel
                 print("No segments found in file %s" % filename)
                 filesuccess = 1
@@ -959,21 +922,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 filesuccess = self.review_all(sTime)
             else:
                 # check if there are any segments for this single species
-                spPresent = False
-                for seg in self.segments[1:]:
-                    if 0 < seg[2] < 1.1 and 0 < seg[3] < 1.1:
-                        # reset old-style (0-1 instead of Hz freqs) boxes to segments
-                        seg[2] = 0
-                        seg[3] = 0
-                        self.segmentsToSave = True
-
-                    # convert single-species IDs to [species]
-                    if type(seg[4]) is not list:
-                        seg[4] = [seg[4]]
-
-                    if self.species in seg[4] or self.species+'?' in seg[4]:
-                        spPresent = True
-                if not spPresent:
+                if len(self.segments.getSpecies(self.species))==0:
                     print("No segments found in file %s" % filename)
                 else:
                     # thus, we can be sure that >=1 relevant segment exists
@@ -986,7 +935,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 print("Review stopped")
                 break
             # otherwise save the corrected segment JSON
-            cleanexit = self.saveAnnotation(self.segments)
+            cleanexit = self.segments.saveJSON(filename+'.data')
             if cleanexit != 1:
                 print("Warning: could not save segments!")
         # END of main review loop
@@ -1010,36 +959,28 @@ class AviaNZ_reviewAll(QMainWindow):
                 if not os.path.isfile(filename + '.data'):
                     continue
 
-                file = open(filename + '.data', 'r')
-                segments = json.load(file)
-                file.close()
+                segments = Segment.SegmentList()
+                segments.parseJSON(filename + '.data')
+                print(filename,len(segments))
 
                 for seg in segments:
-                    if seg[0] == -1:
-                        continue
-                    for birdName in seg[4]:
-                        if birdName.endswith('?'):
-                            spList.add(birdName[:-1])
-                        else:
-                            spList.add(birdName)
+                    spList.update([lab["species"] for lab in seg[4]])
 
             # Collect all .data contents to an Excel file (no matter if review dialog exit was clean)
+            print("Exporting to Excel ...")
+            self.statusBar().showMessage("Exporting to Excel ...")
             for filename in allwavs:
                 if not os.path.isfile(filename + '.data'):
                     continue
 
-                file = open(filename + '.data', 'r')
-                segments = json.load(file)
-                file.close()
+                segments = Segment.SegmentList()
+                segments.parseJSON(filename + '.data')
 
-                # This could be incompatible with old .data files that didn't store file size
-                pagelen = np.ceil(segments[0][1])
-                if pagelen<=0:
-                    pagelen = max([s[1] for s in segments])
+                # This will be incompatible with old .data files that didn't store file size!
+                datalen = np.ceil(segments.metadata["Duration"])
 
-                # Still exporting the current species even if no calls were detected
-                out = SupportClasses.exportSegments(self.dirName, filename, pagelen, segments=segments, resolution=self.w_res.value(), species=list(spList), batch=True)
-                out.excel()
+                success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
+                print(success)
 
         # END of review and exporting. Final cleanup
         self.statusBar().showMessage("Reviewed files " + str(cnt) + "/" + str(total))
@@ -1092,29 +1033,26 @@ class AviaNZ_reviewAll(QMainWindow):
             # btn.index carries the index of segment shown on btn
             if btn.mark=="red":
                 outputErrors.append(currSeg)
-                if len(currSeg[4])==1:
-                    # delete if this was the only species label:
+                # remove all labels for the current species
+                wipedAll = currSeg.wipeSpecies(self.species)
+                # drop the segment if it's the only species, or just update the graphics
+                if wipedAll:
                     todelete.append(btn.index)
-                else:
-                    # otherwise just delete this species from the label
-                    if self.species in currSeg[4]:
-                        currSeg[4].remove(self.species)
-                    if self.species+'?' in currSeg[4]:
-                        currSeg[4].remove(self.species+'?')
-            # fix name or name+? of the analyzed species
+            # fix certainty of the analyzed species
             elif btn.mark=="yellow":
                 for lbindex in range(len(currSeg[4])):
                     label = currSeg[4][lbindex]
                     # find "greens", swap to "yellows"
-                    if label==self.species:
+                    if label["species"]==self.species and label["certainty"]==100:
                         outputErrors.append(currSeg)
-                        currSeg[4][lbindex] = self.species+'?'
+                        label["certainty"] = 50
+                        currSeg.keys[lbindex] = (label["species"], label["certainty"])
+                # update the graphics
+                self.updateText(btn.index)
+                self.updateColour(btn.index)
             elif btn.mark=="green":
-                for lbindex in range(len(currSeg[4])):
-                    label = currSeg[4][lbindex]
-                    # find "yellows", swap to "greens"
-                    if label==self.species+'?':
-                        currSeg[4][lbindex] = self.species
+                # find "yellows", swap to "greens"
+                currSeg.confirmLabels(self.species)
 
         # store position to popup the next one in there
         self.dialogSize = self.humanClassifyDialog2.size()
@@ -1177,70 +1115,53 @@ class AviaNZ_reviewAll(QMainWindow):
 
         return(1)
 
-    def saveAnnotation(self, segments):
-        """ Saves current segments to file.
-            All provided segments are saved as-is. """
-
-        for seg in segments:
-            if seg[0] == -1:
-                # update reviewer
-                seg[3] = self.reviewer
-        if isinstance(self.filename, str):
-            file = open(self.filename + '.data', 'w')
-        else:
-            file = open(str(self.filename) + '.data', 'w')
-
-        json.dump(segments, file)
-        file.write("\n")
-        file.close()
-        return 1
-
     def loadFile(self, filename):
-        wavobj = wavio.read(filename)
-        self.sampleRate = wavobj.rate
-        self.audiodata = wavobj.data
-        self.audioFormat.setChannelCount(np.shape(self.audiodata)[1])
-        self.audioFormat.setSampleRate(self.sampleRate)
-        self.audioFormat.setSampleSize(wavobj.sampwidth*8)
-        print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
+        with pg.BusyCursor():
+            wavobj = wavio.read(filename)
+            self.sampleRate = wavobj.rate
+            self.audiodata = wavobj.data
+            self.audioFormat.setChannelCount(np.shape(self.audiodata)[1])
+            self.audioFormat.setSampleRate(self.sampleRate)
+            self.audioFormat.setSampleSize(wavobj.sampwidth*8)
+            print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
-        # None of the following should be necessary for librosa
-        if self.audiodata.dtype is not 'float':
-            self.audiodata = self.audiodata.astype('float') #/ 32768.0
-        if np.shape(np.shape(self.audiodata))[0]>1:
-            self.audiodata = self.audiodata[:,0]
-        self.datalength = np.shape(self.audiodata)[0]
-        print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate,self.sampleRate)
-        # self.w_dir.setPlainText(self.filename)
+            # None of the following should be necessary for librosa
+            if self.audiodata.dtype!='float':
+                self.audiodata = self.audiodata.astype('float')
+            if np.shape(np.shape(self.audiodata))[0]>1:
+                self.audiodata = self.audiodata[:,0]
+            self.datalength = np.shape(self.audiodata)[0]
+            print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate,self.sampleRate)
+            # self.w_dir.setPlainText(self.filename)
 
-        # Create an instance of the Signal Processing class
-        if not hasattr(self,'sp'):
-            self.sp = SignalProc.SignalProc()
+            # Create an instance of the Signal Processing class
+            if not hasattr(self,'sp'):
+                self.sp = SignalProc.SignalProc()
 
-        # Filter the audiodata based on initial sliders
-        minFreq = max(self.fLow.value(), 0)
-        maxFreq = min(self.fHigh.value(), self.sampleRate//2)
-        if maxFreq - minFreq < 100:
-            print("ERROR: less than 100 Hz band set for spectrogram")
-            return
-        print("Filtering samples to %d - %d Hz" % (minFreq, maxFreq))
-        self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, minFreq, maxFreq)
+            # Filter the audiodata based on initial sliders
+            minFreq = max(self.fLow.value(), 0)
+            maxFreq = min(self.fHigh.value(), self.sampleRate//2)
+            if maxFreq - minFreq < 100:
+                print("ERROR: less than 100 Hz band set for spectrogram")
+                return
+            print("Filtering samples to %d - %d Hz" % (minFreq, maxFreq))
+            self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, minFreq, maxFreq)
 
-        # Get the data for the spectrogram
-        self.sgRaw = self.sp.spectrogram(self.audiodata, window_width=self.config['window_width'], incr=self.config['incr'], window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
-        maxsg = np.min(self.sgRaw)
-        self.sg = np.abs(np.where(self.sgRaw==0, 0.0, 10.0 * np.log10(self.sgRaw/maxsg)))
-        self.setColourMap()
+            # Get the data for the spectrogram
+            self.sgRaw = self.sp.spectrogram(self.audiodata, window_width=self.config['window_width'], incr=self.config['incr'], window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
+            maxsg = np.min(self.sgRaw)
+            self.sg = np.abs(np.where(self.sgRaw==0, 0.0, 10.0 * np.log10(self.sgRaw/maxsg)))
+            self.setColourMap()
 
-        # trim the spectrogram
-        # TODO: could actually skip filtering above
-        height = self.sampleRate//2 / np.shape(self.sg)[1]
-        pixelstart = int(minFreq/height)
-        pixelend = int(maxFreq/height)
-        self.sg = self.sg[:,pixelstart:pixelend]
+            # trim the spectrogram
+            # TODO: could actually skip filtering above
+            height = self.sampleRate//2 / np.shape(self.sg)[1]
+            pixelstart = int(minFreq/height)
+            pixelend = int(maxFreq/height)
+            self.sg = self.sg[:,pixelstart:pixelend]
 
-        # Update the data that is seen by the other classes
-        self.sp.setNewData(self.audiodata,self.sampleRate)
+            # Update the data that is seen by the other classes
+            self.sp.setNewData(self.audiodata,self.sampleRate)
 
     def humanClassifyNextImage1(self):
         # Get the next image
@@ -1252,9 +1173,19 @@ class AviaNZ_reviewAll(QMainWindow):
             # If there was a section without segments this would be a bit inefficient, actually no, it was wrong!
 
             # Show the next segment
-            #print(self.segments[self.box1id])
-            x1nob = self.segments[self.box1id][0]
-            x2nob = self.segments[self.box1id][1]
+            seg = self.segments[self.box1id]
+
+            # get a list of all species names present
+            specnames = []
+            for lab in seg[4]:
+                if 0<lab["certainty"]<100:
+                    specnames.append(lab["species"]+'?')
+                else:
+                    specnames.append(lab["species"])
+            specnames = list(set(specnames))
+
+            x1nob = seg[0]
+            x2nob = seg[1]
             x1 = int(self.convertAmpltoSpec(x1nob - self.config['reviewSpecBuffer']))
             x1 = max(x1, 0)
             x2 = int(self.convertAmpltoSpec(x2nob + self.config['reviewSpecBuffer']))
@@ -1267,9 +1198,8 @@ class AviaNZ_reviewAll(QMainWindow):
             minFreq = max(self.fLow.value(), 0)
             maxFreq = min(self.fHigh.value(), self.sampleRate//2)
             self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
-                                           self.segments[self.box1id][4], self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1,
-                                           self.segments[self.box1id][0], self.segments[self.box1id][1],
-                                           minFreq, maxFreq)
+                                           specnames, self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1,
+                                           seg[0], seg[1], minFreq, maxFreq)
 
         else:
             msg = SupportClasses.MessagePopup("d", "Finished", "All segments in this file checked")
@@ -1289,13 +1219,18 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
+        currSeg = self.segments[self.box1id]
+
         self.humanClassifyDialog1.stopPlayback()
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
 
-        if len(checkText) > 0:
-            if label != checkText:
-                label = str(checkText)
-                self.humanClassifyDialog1.birdTextEntered()
+        # is this needed? this does not exist in AviaNZ.py?
+        # if len(checkText) > 0:
+        #     if label != checkText:
+        #         label = str(checkText)
+        #         self.humanClassifyDialog1.birdTextEntered()
+
+        # deal with manual bird entries under "Other"
         if len(checkText) > 0:
             if checkText in self.longBirdList:
                 pass
@@ -1306,28 +1241,29 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.longBirdList.append('Unidentifiable')
                 self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
 
-        if label != self.segments[self.box1id][4]:
+        if label != [lab["species"] for lab in currSeg[4]]:
             if self.config['saveCorrections']:
                 # Save the correction
-                outputError = [self.segments[self.box1id], label]
+                outputError = [currSeg, label]
                 file = open(self.filename + '.corrections', 'a')
                 json.dump(outputError, file, indent=1)
                 file.close()
 
-            # Update the label on the box if it is in the current page
-            self.segments[self.box1id][4] = label
+            # Create new segment label, assigning certainty 100 for each species:
+            newlabel = []
+            for species in label:
+                if species == "Don't Know":
+                    newlabel.append({"species": "Don't Know", "certainty": 0})
+                else:
+                    newlabel.append({"species": species, "certainty": 100})
+            self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
 
-            if self.saveConfig:
-                self.longBirdList.append(checkText)
-                self.longBirdList = sorted(self.longBirdList, key=str.lower)
-                self.longBirdList.remove('Unidentifiable')
-                self.longBirdList.append('Unidentifiable')
-                self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
-        elif '?' in ''.join(label):
-            # Remove the question mark, since the user has agreed
-            for i in range(len(self.segments[self.box1id][4])):
-                if self.segments[self.box1id][4][i][-1] == '?':
-                    self.segments[self.box1id][4][i] = self.segments[self.box1id][4][i][:-1]
+        elif 0 < min([lab["certainty"] for lab in currSeg[4]]) < 100:
+            # If all species remained the same, just raise certainty to 100
+            currSeg.confirmLabels()
+        else:
+            # segment info matches, so don't do anything
+            pass
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
