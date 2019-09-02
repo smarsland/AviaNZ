@@ -23,18 +23,14 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #     from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtWidgets import QAbstractButton, QMessageBox
+from PyQt5.QtWidgets import QMessageBox
 from PyQt5.QtCore import QTime, QIODevice, QBuffer, QByteArray
 from PyQt5.QtMultimedia import QAudio, QAudioOutput
-from PyQt5.QtGui import QPainter, QIcon, QPixmap
+from PyQt5.QtGui import QIcon, QPixmap
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
-
-from openpyxl import load_workbook, Workbook
-from openpyxl.styles import colors
-from openpyxl.styles import Font
 
 from scipy import signal
 from scipy.signal import medfilt
@@ -51,10 +47,8 @@ import math
 import numpy as np
 import os, json
 import sys
-import re
 import copy
 
-import Wavelet
 import wavio
 
 import io
@@ -70,6 +64,9 @@ class preProcess:
     def __init__(self,audioData=None, spInfo={}, d=False, f=True, wavelet='dmey2'):
         self.audioData = audioData
         self.spInfo = spInfo
+        # defaulting to first subfilter for now
+        for key, value in self.spInfo["Filters"][0].items():
+            self.spInfo[key] = value
         self.d = d  # denoise
         self.f = f  # band-pass
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
@@ -112,6 +109,9 @@ class postProcess:
         self.audioData = audioData
         self.sampleRate = sampleRate
         self.segments = segments
+        # defaulting to first subfilter for now
+        for key, value in spInfo["Filters"][0].items():
+            spInfo[key] = value
         if spInfo != {}:
             self.minLen = spInfo['TimeRange'][0]
             if 'F0' in spInfo:
@@ -366,7 +366,7 @@ class postProcess:
                 data, sampleRate = sc.denoise_filter(level=8)
                 sp = SignalProc.SignalProc([], 0, 256, 128)
                 sgRaw = sp.spectrogram(data, 256, 128, mean_normalise=True, onesided=True, multitaper=False)
-                segment = Segment.Segment(data, sgRaw, sp, sampleRate, 256, 128)
+                segment = Segment.Segmenter(data, sgRaw, sp, sampleRate, 256, 128)
                 pitch, y, minfreq, W = segment.yin(minfreq=100)
                 ind = np.squeeze(np.where(pitch > minfreq))
                 pitch = pitch[ind]
@@ -550,271 +550,6 @@ class postProcess:
         #    self.detections[i] = 0        # remove clicks
         return energy, e2
 
-class exportSegments:
-    """ This class exports .data to xlsx in batch processing, review, or manual mode.
-        Three different sheets are produced in the workbook:
-        time stamps, presence/absence, and per second presence/absence.
-        It makes the workbook if necessary.
-
-        Inputs
-            dirName:    xlsx will be stored here
-            filename:   file name to be recorded inside the xlsx
-            pagelen:    page length, seconds. If =datalength, entire data is treated as a single page.
-            segments:   detected segments in form of [[s1,e1], [s2,e2],...]
-                        OR in format [[s1, e1, fs1, fe1, sp1], [s2, e2, fs2, fe2, sp2], ...]
-            species:    Species that is currently processed.
-                        Species in this list will get an xlsx even if none were detected,
-                        and any [s1,e1] segments will be assigned to this.
-            resolution: output resolution on excel (sheet 3) in seconds. Default is 1
-            batch:      if the output is coming from batch mode, will default to appending
-            minLen:     minimum length of a segment in secs
-            numpages:   number of pages in this file (of size pagelen)
-    """
-
-    def __init__(self, dirName, filename, pagelen, segments, species=["Don't Know"], resolution=1, batch=False, minLen=0, numpages=1):
-
-        self.species=species
-        # convert 2-col lists to 5-col lists, if needed
-        self.segments = self.correctSegFormat(segments, [])
-
-        self.dirName=dirName
-        self.filename=filename
-        # extract start time of the recording (in DoC format). Default is 0
-        DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
-        if DOCRecording:
-            startTime = DOCRecording.group(2)
-            self.startTime = int(startTime[:2])*3600 + int(startTime[2:4])*60 + int(startTime[4:6])
-        else:
-            self.startTime = 0
-        self.numpages=numpages
-        self.pagelen = math.ceil(pagelen)
-        self.resolution = resolution
-        self.minLen = minLen
-        self.batch = batch
-
-    def correctSegFormat(self, seglist, species):
-        # Checks and if needed corrects 2-col segments to 5-col segments.
-        if len(seglist)>0:
-            if len(seglist[0])==2:
-                print("Using old format segment list")
-                # convert to new format
-                for seg in seglist:
-                    seg.append(0)
-                    seg.append(0)
-                    seg.append(species)
-                return(seglist)
-            elif len(seglist[0])==5:
-                # using new format segment list
-                return(seglist)
-            else:
-                print("ERROR: incorrect segment format")
-                return
-        else:
-            return([])
-
-    def makeNewWorkbook(self, species):
-        self.wb = Workbook()
-        self.wb.create_sheet(title='Time Stamps', index=1)
-        self.wb.create_sheet(title='Presence Absence', index=2)
-        self.wb.create_sheet(title='Per Time Period', index=3)
-
-        ws = self.wb['Time Stamps']
-        ws.cell(row=1, column=1, value="File Name")
-        ws.cell(row=1, column=2, value="start (hh:mm:ss)")
-        ws.cell(row=1, column=3, value="end (hh:mm:ss)")
-        ws.cell(row=1, column=4, value="min freq. (Hz)")
-        ws.cell(row=1, column=5, value="max freq. (Hz)")
-        if species=="All_species":
-            ws.cell(row=1, column=6, value="species")
-
-        # Second sheet
-        ws = self.wb['Presence Absence']
-        ws.cell(row=1, column=1, value="File Name")
-        ws.cell(row=1, column=2, value="Presence/Absence")
-
-        # Third sheet
-        ws = self.wb['Per Time Period']
-        ws.cell(row=1, column=1, value="File Name")
-        ws.cell(row=1, column=2, value="Page")
-        ws.cell(row=1, column=3, value="Presence=1, Absence=0")
-
-        # Hack to delete original sheet
-        del self.wb['Sheet']
-        return self.wb
-
-    def excel(self):
-        """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence in an excel workbook. It makes the workbook if necessary.
-        Saves each species into a separate workbook,
-        + an extra workbook for all species (to function as a readable segment printout).
-        """
-        # identify all unique species
-        speciesList = set()
-        for sp in self.species:
-            speciesList.add(sp)
-        for seg in self.segments:
-            if seg[0]==-1:
-                continue
-            for birdName in seg[4]:
-                segmentSpecies = birdName
-                if birdName.endswith('?'):
-                    segmentSpecies = segmentSpecies[:-1]
-                speciesList.add(segmentSpecies)
-        speciesList.add("All species")
-        print("The following species were detected for export:")
-        print(speciesList)
-
-        def writeToExcelp1(segments):
-            ws = wb['Time Stamps']
-            r = ws.max_row + 1
-            # Print the filename
-            ws.cell(row=r, column=1, value=relfname)
-            # Loop over the segments
-            for seg in segments:
-                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
-                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
-                if seg[3]!=0:
-                    ws.cell(row=r, column=4, value=int(seg[2]))
-                    ws.cell(row=r, column=5, value=int(seg[3]))
-                if species=="All species":
-                    ws.cell(row=r, column=6, value=", ".join(seg[4]))
-                r += 1
-
-        def writeToExcelp2(segments):
-            ws = wb['Presence Absence']
-            r = ws.max_row + 1
-            ws.cell(row=r, column=1, value=relfname)
-            ws.cell(row=r, column=2, value='_')
-            if len(segments)>0:
-                # if seg[1]-seg[0] > self.minLen: # skip very short segments
-                ws.cell(row=r, column=2, value='Yes')
-                # break
-            else:
-                ws.cell(row=r, column=2, value='No')
-
-        def writeToExcelp3(detected, pagenum):
-            # writes binary output DETECTED (per s) from page PAGENUM of length SELF.PAGELEN
-            starttime = pagenum * self.pagelen
-            ws = wb['Per Time Period']
-            # print resolution "header"
-            r = ws.max_row + 1
-            ws.cell(row=r, column=1, value=str(self.resolution) + ' secs resolution')
-            ft = Font(color=colors.DARKYELLOW)
-            ws.cell(row=r, column=1).font=ft
-            # print file name and page number
-            ws.cell(row=r+1, column=1, value=relfname)
-            ws.cell(row=r+1, column=2, value=str(pagenum+1))
-            # fill the header and detection columns
-            c = 3
-            for t in range(0, len(detected), self.resolution):
-                # absolue (within-file) times:
-                win_start = starttime + t
-                win_end = min(win_start+self.resolution, int(self.pagelen * self.numpages))
-                ws.cell(row=r, column=c, value=str(win_start) + '-' + str(win_end))
-                ws.cell(row=r, column=c).font = ft
-                # within-page times:
-                det = 1 if np.sum(detected[t:win_end-starttime])>0 else 0
-                ws.cell(row=r+1, column=c, value=det)
-                c += 1
-
-        # now, generate the actual files, SEPARATELY FOR EACH SPECIES:
-        for species in speciesList:
-            print("Exporting species %s" % species)
-            # clean version for filename
-            speciesClean = re.sub(r'\W', "_", species)
-
-            # setup output files:
-            # if an Excel exists, append (so multiple files go into one worksheet)
-            # if not, create new
-            self.eFile = self.dirName + '/DetectionSummary_' + speciesClean + '.xlsx'
-
-            if os.path.isfile(self.eFile):
-                if self.batch:
-                    # must not throw a dialog for every file in batch mode!
-                    action = "append"
-                else:
-                    # check with user
-                    msg = MessagePopup("w", "Excel file exists", "Output file " + self.eFile + " exists. Overwrite it, append to it, or cancel the operation?")
-                    msg.setStandardButtons(QMessageBox.Cancel)
-                    msg.addButton("Overwrite", QMessageBox.YesRole)
-                    msg.addButton("Append", QMessageBox.YesRole)
-                    # cancelBtn = msg.addButton(QMessageBox.Cancel)
-                    reply = msg.exec_()
-                    print(reply)
-                    if reply == 4194304:  # weird const for Cancel
-                        return 0
-                    elif reply == 1:
-                        action = "append"
-                    elif reply == 0:
-                        action = "overwrite"
-                    else:
-                        print("ERROR: Unrecognized reply", reply)
-                        return 0
-            else:
-                # well make new book actually
-                action = "overwrite"
-
-            if action == "append":
-                try:
-                    wb = load_workbook(self.eFile)
-                except Exception as e:
-                    print("ERROR: cannot open file %s to append" % self.eFile)  # no read permissions or smth
-                    print(e)
-                    return 0
-            elif action == "overwrite":
-                try:
-                    wb = self.makeNewWorkbook(speciesClean)
-                except Exception as e:
-                    print("ERROR: could not create new file %s" % self.eFile)  # no read permissions or smth
-                    print(e)
-                    return 0
-            else:
-                print("ERROR: unrecognized action", action)
-                return 0
-
-            try:
-                relfname = str(os.path.relpath(str(self.filename), str(self.dirName)))
-            except Exception as e:
-                print("Falling back to absolute paths. Encountered exception:")
-                print(e)
-                relfname = str(os.path.abspath(str(self.filename)))
-            # extract SINGLE-SPECIES ONLY segments,
-            # incl. potential assignments ('Kiwi?').
-            # if species=="All", take ALL segments.
-            segmentsWPossible = []
-            for seg in self.segments:
-                if seg[0] == -1:
-                    continue
-                if len(seg) == 2:
-                    seg.append(0)
-                    seg.append(0)
-                    seg.append(species)
-                if species in seg[4] or species+'?' in seg[4] or species == "All species":
-                    segmentsWPossible.append(seg)
-            # if len(segmentsWPossible)==0:
-            #     print("Warning: no segments found for species %s" % species)
-            #     continue
-
-            # export segments
-            writeToExcelp1(segmentsWPossible)
-            # export presence/absence
-            writeToExcelp2(segmentsWPossible)
-
-            # Generate per second binary output
-            # (assuming all pages are of same length as current data)
-            for p in range(0, self.numpages):
-                detected = np.zeros(self.pagelen)
-                for seg in segmentsWPossible:
-                    for t in range(self.pagelen):
-                        # convert within-page time to segment (within-file) time
-                        truet = t + p*self.pagelen
-                        if math.floor(seg[0]) <= truet and truet < math.ceil(seg[1]):
-                            detected[t] = 1
-                # write page p to xlsx
-                writeToExcelp3(detected, p)
-
-            # Save the file
-            wb.save(self.eFile)
-        return 1
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
@@ -1538,14 +1273,34 @@ class ConfigLoader(object):
             sys.exit()
 
     def filters(self, dir):
-        # Returns a list of filter files.
+        """ Returns a dict of filter JSONs,
+            named after the corresponding file names. """
         print("Loading call filters from folder %s" % dir)
         try:
-            filters = [f[:-4] for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
-            return filters
+            filters = [f for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
         except Exception:
             print("Folder %s not found, no filters loaded" % dir)
             return None
+
+        goodfilters = dict()
+        for filtfile in filters:
+            try:
+                filt = json.load(open(os.path.join(dir, filtfile)))
+
+                # skip this filter if it looks fishy:
+                if not isinstance(filt, dict) or "species" not in filt or "SampleRate" not in filt or "Filters" not in filt or len(filt["Filters"])<1:
+                    raise ValueError("Filter JSON format wrong, skipping")
+                for subfilt in filt["Filters"]:
+                    if not isinstance(subfilt, dict) or "calltype" not in subfilt:
+                        raise ValueError("Subfilter JSON format wrong, skipping")
+
+                # if filter passed checks, store it,
+                # using filename (without extension) as the key
+                goodfilters[filtfile[:-4]] = filt
+            except Exception as e:
+                print("Could not load filter:", filtfile, e)
+        print("Loaded filters:", list(goodfilters.keys()))
+        return goodfilters
 
     def shortbl(self, file, configdir):
         # A fallback shortlist will be confirmed to exist in configdir.

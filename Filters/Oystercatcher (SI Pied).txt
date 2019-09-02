@@ -1,8 +1,10 @@
 { 
-  "Name": "Oystercatcher, SI Pied", 
+  "species": "Oystercatcher (SI Pied)", 
   "SampleRate": 8000,
-  "TimeRange": [1, 5],
-  "FreqRange": [1200, 10000], 
-  "F0Range": [1200, 3800], 
-  "WaveletParams": [0.25, 0.2, [61, 59, 54, 51, 60, 58, 49, 47]]
-}
+  "Filters": [
+    {"calltype": "all",
+     "TimeRange": [1, 5],
+     "FreqRange": [1200, 10000], 
+     "F0Range": [1200, 3800], 
+     "WaveletParams": [0.25, 0.2, [61, 59, 54, 51, 60, 58, 49, 47]]}
+]}

@@ -50,7 +50,7 @@ from sklearn.model_selection import learning_curve
 from sklearn.model_selection import validation_curve
 from sklearn.model_selection import GridSearchCV
 
-import json, time, os, math, csv, gc, wavio
+import time, os, math, csv, gc, wavio
 import WaveletSegment
 import librosa
 
@@ -65,7 +65,6 @@ from sklearn.cluster import AffinityPropagation
 # from sklearn.cluster import OPTICS
 # from sklearn import cluster_optics_dbscan
 from sklearn import metrics
-import sompy
 from sklearn.manifold import TSNE
 
 # TODO:
@@ -386,6 +385,7 @@ class Clustering:
     def som(self, mapsize):
         """ Self Organising Map
         """
+        import sompy
         som = sompy.SOMFactory.build(self.features, [], mask=None, mapshape='planar', lattice='rect', normalization='var',
                                      initialization='pca', neighborhood='gaussian', training='batch', name='sompy')
         som.train()
@@ -845,14 +845,11 @@ def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0
                 wavobj = wavio.read(os.path.join(root, file))
                 srlist.append(wavobj.rate)
                 # Read the annotation
-                with open(os.path.join(root, file + '.data')) as f1:
-                    segments = json.load(f1)
-                    for seg in segments:
-                        if seg[0] == -1:
-                            continue
-                        else:
-                            lowlist.append(seg[2])
-                            highlist.append(seg[3])
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(root, file+'.data'))
+                for seg in segments:
+                    lowlist.append(seg[2])
+                    highlist.append(seg[3])
     print(lowlist)
     print(highlist)
     print(srlist)
@@ -899,8 +896,8 @@ def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0
         for file in files:
             if file.endswith('.wav') and file+'.data' in files:
                 # Read the annotation
-                with open(os.path.join(root, file + '.data')) as f1:
-                    segments = json.load(f1)
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(root, file+'.data'))
 
                 # Sort the segments longest to shortest, would be a good idea to avoid making first class with only
                 # one member :)
@@ -919,7 +916,7 @@ def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0
                     start = int(seg[0] * fs)
                     sp = SignalProc.SignalProc(audiodata, fs, 256, 128)
                     sgRaw = sp.spectrogram(audiodata, 256, 128)
-                    segment = Segment.Segment(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
+                    segment = Segment.Segmenter(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
                     syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
                     if len(syls) == 0:      # Try again with FIR
                         syls = segment.segmentByFIR(threshold=0.05)
@@ -1319,14 +1316,11 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
                 wavobj = wavio.read(os.path.join(root, file))
                 srlist.append(wavobj.rate)
                 # Read the annotation
-                with open(os.path.join(root, file + '.data')) as f1:
-                    segments = json.load(f1)
-                    for seg in segments:
-                        if seg[0] == -1:
-                            continue
-                        else:
-                            lowlist.append(seg[2])
-                            highlist.append(seg[3])
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(root, file+'.data'))
+                for seg in segments:
+                    lowlist.append(seg[2])
+                    highlist.append(seg[3])
     print(lowlist)
     print(highlist)
     print(srlist)
@@ -1372,13 +1366,10 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
         for file in files:
             if file.endswith('.wav') and file+'.data' in files:
                 # Read the annotation
-                with open(os.path.join(root, file + '.data')) as f1:
-                    segments = json.load(f1)
-
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(root, file+'.data'))
                 # Now find syllables within each segment, median clipping
                 for seg in segments:
-                    if seg[0] == -1:
-                        continue
                     audiodata, sr = loadFile(filename=os.path.join(root, file), duration=seg[1]-seg[0], offset=seg[0],
                                              fs=fs, denoise=denoise, f1=f_1, f2=f_2)
                     assert sr == fs
@@ -1386,10 +1377,10 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
                     start = int(seg[0] * fs)
                     sp = SignalProc.SignalProc(audiodata, fs, 256, 128)
                     sgRaw = sp.spectrogram(audiodata, 256, 128)
-                    segment = Segment.Segment(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
+                    segment = Segment.Segmenter(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
                     syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
                     if len(syls) == 0:      # Sanity check
-                        segment = Segment.Segment(audiodata, sgRaw, sp, fs, 256, 128)
+                        segment = Segment.Segmenter(audiodata, sgRaw, sp, fs, 256, 128)
                         syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
                     syls = segment.checkSegmentOverlap(syls)    # merge overlapped segments
                     syls = [[int(s[0] * sr) + start, int(s[1] * fs + start)] for s in syls]
