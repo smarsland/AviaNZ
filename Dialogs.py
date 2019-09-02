@@ -1927,6 +1927,11 @@ class HumanClassify2(QDialog):
         self.buttonNext.clicked.connect(self.nextPage)
         self.pageLabel = QLabel()
 
+        self.none = QPushButton("Toggle all")
+        self.none.setSizePolicy(QSizePolicy(5,5))
+        self.none.setMaximumSize(250, 30)
+        self.none.clicked.connect(self.toggleAll)
+
         self.finish = QPushButton("Confirm and close")
         self.finish.setSizePolicy(QSizePolicy(5,5))
         self.finish.setMaximumSize(250, 30)
@@ -1938,6 +1943,7 @@ class HumanClassify2(QDialog):
         vboxBot.addSpacing(20)
         vboxBot.addWidget(self.pageLabel)
         vboxBot.addSpacing(20)
+        vboxBot.addWidget(self.none)
         vboxBot.addWidget(self.finish)
 
         # set up the middle section of images
@@ -2139,6 +2145,10 @@ class HumanClassify2(QDialog):
                 del self.flowLayout.rows[r][c]
                 item.widget().hide()
         self.flowLayout.update()
+
+    def toggleAll(self):
+            for btn in self.buttons:
+                btn.changePic(False)
 
     def setColourLevels(self):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
