@@ -4294,8 +4294,8 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             return
 
-        # clustered_segments, fs, n_classes = Learning.cluster_by_agg(self.dName, feature='we', n_clusters=6)
-        clustered_segments, fs, n_classes = Learning.cluster_by_dist(self.dName, feature='we', max_clusters=6, single=True)
+        clustered_segments, fs, n_classes = Learning.cluster_by_agg(self.dName, feature='we', n_clusters=6)
+        # clustered_segments, fs, n_classes = Learning.cluster_by_dist(self.dName, feature='we', max_clusters=6, single=True)
 
         self.clusterDialog = Dialogs.Cluster(clustered_segments, fs, n_classes, self.config)
         self.clusterDialog.show()

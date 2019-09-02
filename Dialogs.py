@@ -2417,6 +2417,9 @@ class Cluster(QDialog):
     def merge(self):
         """ Listner for the merge button. Merge the rows (clusters) checked into one cluster.
         """
+        # Save any cluster name changes by user
+        self.updateClusterNames()
+
         # Find which clusters/rows to merge
         tomerge = []
         i = 0
@@ -2544,7 +2547,7 @@ class Cluster(QDialog):
 
 
     def updateClusterNames(self):
-        """ Listner for Update LCuster Names button"""
+        """ Listner for Update Cluster Names button"""
         # Check duplicate names
         names = [self.tboxes[ID].toPlainText() for ID in range(self.nclasses)]
         if len(names) != len(set(names)):
