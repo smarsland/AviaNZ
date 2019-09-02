@@ -9,30 +9,15 @@ from PyQt5.QtCore import QDir
 from PyQt5.QtGui import QIcon, QPixmap
 import sys
 import os
-import platform
-import json
 import datetime as dt
-import ctypes
 
 sys.path.append('..')
 #import SupportClasses
 from ext import SplitLauncher
+import Segment
 
 ## Don't forget to compile the C file beforehand:
 # gcc -fPIC -shared SplitWav.c -o SplitWav.so
-# if platform.system() == 'Windows':
-    # for f in os.listdir("."):
-        # such hack instead of pattern matching
-        # if f.endswith(".pyd"):
-            # CEXT = os.path.abspath(os.path.join(os.path.dirname(__file__), f))
-            # print(CEXT)
-            # CEXT = ctypes.CDLL(CEXT)
-            # break
-# else:
-    # CEXT = ctypes.CDLL(os.path.abspath(os.path.join(os.path.dirname(__file__), 'SplitWav.so')))
-# dir(CEXT)
-# CEXT.split.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int)
-
 
 class SplitData(QMainWindow):
     def __init__(self):
@@ -298,7 +283,7 @@ class SplitData(QMainWindow):
             # the splitter will figure out if numbers or times need to be attached
             infile_c = os.path.join(self.dirName, f).encode('ascii')
             outfile_c = os.path.join(self.dirO, f).encode('ascii')
-            
+
             # To avoid dealing with strptime too much which is missing on Win,
             # we check the format here - but we can't really pass the C-format struct entirely
             wavHasDt = int(0)
@@ -311,7 +296,7 @@ class SplitData(QMainWindow):
             except ValueError:
                 print("Could not identify timestamp in", f)
                 wavHasDt = int(0)
-            
+
             succ = SplitLauncher.launchCython(infile_c, outfile_c, self.cutLen, wavHasDt)
             if succ!=0:
                 print("ERROR: C splitter failed on file", f)
@@ -342,9 +327,9 @@ class SplitData(QMainWindow):
             Determines the original input length from the metadata segment[1].
         """
         print("Splitting data file", infile)
+        segs = Segment.SegmentList()
         try:
-            file = open(infile, 'r')
-            segs = json.load(file)
+            segs.parseJSON(infile)
         except Exception as e:
             print(e)
             print("ERROR: could not parse file", infile)
@@ -362,10 +347,7 @@ class SplitData(QMainWindow):
             print("Could not identify timestamp in", infile)
             time = 0
 
-        metaseg = segs[0]
-        dataseg = segs[1:]
-
-        maxtime = metaseg[1]
+        maxtime = segs.metadata["Duration"]
         if maxtime<=0:
             print("ERROR: bad audio duration %s read from .data" % maxtime)
             return
@@ -375,10 +357,14 @@ class SplitData(QMainWindow):
 
         # repeat initial meta-segment for each output file
         # (output is determined by ceiling division)
-        all = [[metaseg] for i in range(int(maxtime-1) // cutlen + 1)]
+        all = []
+        for i in range(int(maxtime-1) // cutlen + 1):
+            onelist = Segment.SegmentList()
+            onelist.metadata = segs.metadata
+            all.append(onelist)
 
         # separate segments into output files and adjust segment timestamps
-        for b in dataseg:
+        for b in segs:
             filenum, adjst = divmod(b[0], cutlen)
             adjend = b[1] - filenum*cutlen
             # a segment can jut out past the end of a split file, so we trim it:
@@ -389,9 +375,9 @@ class SplitData(QMainWindow):
                 # cut at the end of the starting file
                 adjend = (filenum+1)*cutlen
                 # keep rest for later
-                dataseg.append([adjend, b[1], b[2], b[3], b[4]])
+                segs.append([adjend, b[1], b[2], b[3], b[4]])
 
-            all[int(filenum)].append([adjst, adjend, b[2], b[3], b[4]])
+            all[int(filenum)].addSegment([adjst, adjend, b[2], b[3], b[4]])
 
         # save files, while increasing the filename datestamps
         for a in range(len(all)):
@@ -404,9 +390,7 @@ class SplitData(QMainWindow):
                 f2 = str(outprefix) + '_' + str(a) + '.wav.data'
                 f2 = os.path.join(outdir, f2)
                 print("outputting to", f2)
-            f2 = open(f2, 'w')
-            json.dump(all[a], f2)
-            f2.close()
+            all[a].saveJSON(f2)
 
 
 class MessagePopup(QMessageBox):

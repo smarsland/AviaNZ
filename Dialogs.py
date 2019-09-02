@@ -35,8 +35,8 @@ from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
 import numpy as np
 import SupportClasses as SupportClasses
-import json
 import SignalProc
+import Segment
 
 
 class StartScreen(QDialog):
@@ -383,7 +383,7 @@ class Diagnostic(QDialog):
         self.filterLabel = QLabel("Select filter to use")
         self.filter = QComboBox()
         # add filter file names to combobox
-        self.filter.addItems(filters)
+        self.filter.addItems(list(filters.keys()))
 
         # antialiasing
         self.aaLabel = QLabel("Select antialiasing type:")
@@ -657,24 +657,9 @@ class WaveletTrain(QDialog):
                 for filename in files:
                     if filename.endswith('.wav') and filename+'.data' in files:
                         # this wav has data, so see what species are in there
-                        with open(os.path.join(root, filename+'.data')) as f:
-                            segments = json.load(f)
-                            for seg in segments:
-                                # meta/empty segments
-                                if seg[0] == -1 or len(seg[4])==0:
-                                    continue
-
-                                # compatibility with old-style segments
-                                if type(seg[4]) is not list:
-                                    seg[4] = [seg[4]]
-
-                                for birdName in seg[4]:
-                                    if birdName == "Don't Know":
-                                        continue
-                                    elif len(birdName)>0 and birdName[-1] == '?':
-                                        spList.add(birdName[:-1])
-                                    else:
-                                        spList.add(birdName)
+                        segments = Segment.SegmentList()
+                        segments.parseJSON(os.path.join(root, filename+'.data'))
+                        spList.update([lab["species"] for seg in segments for lab in seg[4]])
             spList = list(spList)
             spList.insert(0, 'Choose species...')
             self.species.clear()
@@ -831,15 +816,13 @@ class Segmentation(QDialog):
         for w in range(Box.count()):
             Box.itemAt(w).widget().hide()
 
-        # TODO: Tidy this
         self.specieslabel_cc = QLabel("Species")
         self.species_cc = QComboBox()
         self.species_cc.addItems(["Choose species...", "Bittern"])
-        # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
-        spp = [*species]
+
+        spp = list(species.keys())
         spp.insert(0,"Choose species...")
         self.species.addItems(spp)
-        # self.species.currentIndexChanged[QString].connect(self.changeBoxes)
 
         Box.addWidget(self.specieslabel)
         Box.addWidget(self.species)
@@ -1564,11 +1547,14 @@ class HumanClassify1(QDialog):
         self.numberLeft.setText(text2)
 
     def setImage(self, sg, audiodata, sampleRate, incr, label, unbufStart, unbufStop, time1, time2, minFreq=0, maxFreq=0):
+        """ label - list of species in the current segment.
+            Currently, we ignore the certainty and just display the species.
+            During review, this updates self.label.
+        """
         self.audiodata = audiodata
         self.sg = sg
         self.sampleRate = sampleRate
         self.incr = incr
-        self.label = label
         self.bar.setValue(0)
         if maxFreq==0:
             maxFreq = sampleRate / 2
@@ -1631,31 +1617,35 @@ class HumanClassify1(QDialog):
         else:
             self.plot.setLevels([self.colourStart, self.colourEnd])
 
-        # Select the right options
-        if label == []:
-            label = ["Don't Know"]
+        # DEAL WITH SPECIES NAMES
+
+        # currently, we ignore the certainty and only display species:
         self.species.setText(','.join(label))
+        # Select the right species tickboxes / buttons
         self.birds3.clearSelection()
         self.updateButtonList()
-        for l in label:
-            if l[-1]=='?':
-                l= l[:-1]
-            if l in self.shortBirdList[:29]:
-                ind = self.shortBirdList.index(l)
+        for lsp in label:
+            # question marks are displayed on the first pass,
+            # but any clicking sets certainty to 100 in effect.
+            if lsp.endswith('?'):
+                lsp = lsp[:-1]
+            if lsp in self.shortBirdList[:29]:
+                ind = self.shortBirdList.index(lsp)
                 self.birdbtns[ind].setChecked(True)
-                print(ind,l)
+                print(ind,lsp)
             else:
                 self.birdbtns[29].setChecked(True)
                 self.birds3.setEnabled(True)
-                if l not in self.longBirdList:
-                    if '(' in l:
-                        ind = l.index('(')
-                        l = l[:ind-1] + ">" + l[ind+1:-1]
-                if l not in self.longBirdList:
-                    self.longBirdList.append(l)
+                if lsp not in self.longBirdList:
+                    if '(' in lsp:
+                        ind = lsp.index('(')
+                        lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
+                if lsp not in self.longBirdList:
+                    self.longBirdList.append(lsp)
                     self.saveConfig = True
-                ind = self.longBirdList.index(l)
+                ind = self.longBirdList.index(lsp)
                 self.birds3.item(ind).setSelected(True)
+        self.label = label
 
     def tickBirdsClicked(self):
         # Listener for when the user selects a bird tick box
@@ -1675,11 +1665,11 @@ class HumanClassify1(QDialog):
                     dontknowButton = button
                 # figure out which one was changed now
                 if button.isChecked():
-                    if button.text() not in self.label and button.text()+'?' not in self.label:
+                    if button.text() not in self.label:
                         # this was just ticked ON
                         checkedButton = button
                 else:
-                    if button.text() in self.label or button.text()+'?' in self.label:
+                    if button.text() in self.label:
                         # this was just ticked OFF
                         checkedButton = button
         if checkedButton is None:
@@ -1697,8 +1687,6 @@ class HumanClassify1(QDialog):
             # a button was unchecked:
             if checkedButton.text() in self.label:
                 self.label.remove(checkedButton.text())
-            elif checkedButton.text()+'?' in self.label:
-                self.label.remove(checkedButton.text()+'?')
             # if this erased everything, revert to don't know:
             if self.label == []:
                 self.label = ["Don't Know"]
@@ -1711,7 +1699,6 @@ class HumanClassify1(QDialog):
         # Update the text and store the data
         for button in self.birdbtns:
             if button.isChecked():
-                #print("clicked", button.text())
                 if button.text() == "Other":
                     self.birds3.setEnabled(True)
                 else:
@@ -1728,14 +1715,11 @@ class HumanClassify1(QDialog):
             # Save the entry
             self.tbox.setEnabled(False)
             if self.multipleBirds:
-                if item.isSelected() and item.text() not in self.label and item.text()+'?' not in self.label:
+                if item.isSelected() and item.text() not in self.label:
                     self.label.append(str(item.text()))
-                if not item.isSelected():
-                    if item.text() in self.label:
-                        self.label.remove(str(item.text()))
-                    elif item.text()+'?' in self.label:
-                        self.label.remove(str(item.text()))
-            else:           
+                if not item.isSelected() and item.text in self.label:
+                    self.label.remove(str(item.text()))
+            else:
                 self.label = [str(item.text())]
             self.species.setText(','.join(self.label))
 
@@ -1749,14 +1733,11 @@ class HumanClassify1(QDialog):
             pass
         else:
             self.birds3.addItem(textitem)
-        #self.label.append(str(textitem))
-        #print(self.multipleBirds)
         if self.multipleBirds:
             self.label.append(str(textitem))
-        else:           
+        else:
             self.label = [str(textitem)]
         self.species.setText(','.join(self.label))
-        #print(self.label)
         self.saveConfig = True
 
     def setColourLevels(self):
@@ -1783,10 +1764,9 @@ class HumanClassify1(QDialog):
         else:
             self.plot.setLevels([self.colourStart, self.colourEnd])
 
-
     def getValues(self):
-        #print('out',self.label)
         return [self.label, self.saveConfig, self.tbox.text()]
+
 
 class HumanClassify2a(QDialog):
     # This is a small popup dialog for selecting species to review in Classify2
@@ -1839,7 +1819,7 @@ class HumanClassify2(QDialog):
         Construction:
         1-3. spectrogram, audiodata, segments. Just provide full versions of these,
           and this dialog will select the needed parts/segments.
-        4. species which will be reviewed (includes "?" alternatives currently)
+        4. name of the species that we are reviewing
         5-6. sampleRate, audioFormat for playback
         7. increment which was used for the spectrogram
         8-13. spec color parameters
@@ -1878,16 +1858,13 @@ class HumanClassify2(QDialog):
         self.sg = np.fliplr(sg)
 
         # filter segments for the requested species
-        self.indices2show = []
         self.segments = segments
-        self.label = label
-        for i in range(len(segments)):
+        self.indices2show = self.segments.getSpecies(label)
+        for i in reversed(self.indices2show):
             # show segments which have midpoint in this page (ensures all are shown only once)
             mid = (segments[i][0] + segments[i][1]) / 2
             if mid < startRead or mid > startRead + len(audiodata)//sampleRate:
-                continue
-            if label in segments[i][4] or label+'?' in segments[i][4]:
-                self.indices2show.append(i)
+                del self.indices2show[i]
 
         self.errors = []
 

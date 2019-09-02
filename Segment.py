@@ -26,8 +26,467 @@ import scipy.ndimage as spi
 import skimage
 import time
 from ext import ce_denoise as ce
+import json
+import os
+import re
+import math
 
-class Segment:
+from PyQt5.QtCore import QTime
+from openpyxl import load_workbook, Workbook
+from openpyxl.styles import colors
+from openpyxl.styles import Font
+
+
+class Segment(list):
+    """ A single AviaNZ annotation ("segment" or "box" type).
+        Deals with identifying the right Label from this list.
+
+        Labels should be added either when initiating Segment,
+        or through Segment.addLabel.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if len(self) != 5:
+            print("ERROR: incorrect number of args provided to Segment (need 5, not %d)" % len(self))
+            return
+        if self[0]<0 or self[1]<0:
+            print("ERROR: Segment times must be positive or 0")
+            return
+        if self[2]<0 or self[3]<0:
+            print("ERROR: Segment frequencies must be positive or 0")
+            return
+        if not isinstance(self[4], list):
+            print("ERROR: Segment labels must be a list")
+            return
+
+        # check if labels have the right structure
+        for lab in self[4]:
+            if not isinstance(lab, dict):
+                print("ERROR: Segment label must be a dict")
+                return
+            if "species" not in lab or not isinstance(lab["species"], str):
+                print("ERROR: species bad or missing from label")
+                return
+            if "certainty" not in lab or not isinstance(lab["certainty"], (int, float)):
+                print("ERROR: certainty bad or missing from label")
+                return
+            if "filter" in lab and lab["filter"]!="M" and "calltype" not in lab:
+                print("ERROR: calltype required when automated filter provided in label")
+                return
+
+        # fix types to avoid numpy types etc
+        self[0] = float(self[0])
+        self[1] = float(self[1])
+        self[2] = int(self[2])
+        self[3] = int(self[3])
+
+        self.keys = [(lab['species'], lab['certainty']) for lab in self[4]]
+        if len(self.keys)>len(set(self.keys)):
+            print("ERROR: non-unique species/certainty combo detected")
+            return
+
+    def hasLabel(self, species, certainty):
+        """ Check if label identified by species-cert combo is present in this segment. """
+        return (species, certainty) in self.keys
+
+    def addLabel(self, species, certainty, **label):
+        """ Adds a label to this segment.
+            Species and certainty are required and passed positionally.
+            Any further label properties (filter, calltype...) must be passed as keyword args:
+              addLabel("LSK", 100, filter="M"...)
+        """
+        if not isinstance(species, str):
+            print("ERROR: bad species provided")
+            return
+        if not isinstance(certainty, (int, float)):
+            print("ERROR: bad certainty provided")
+            return
+        if "filter" in label and label["filter"]!="M" and "calltype" not in label:
+            print("ERROR: calltype required when automated filter provided in label")
+            return
+        if self.hasLabel(species, certainty):
+            print("ERROR: this species-certainty label already present")
+            return
+        label["species"] = species
+        label["certainty"] = certainty
+
+        self[4].append(label)
+        self.keys.append((species, certainty))
+
+    ### --- couple functions to process all labels for a given species ---
+
+    def wipeSpecies(self, species):
+        """ Remove all labels for species, return True if all labels were wiped
+            (and the interface should delete the segment).
+        """
+        deletedAll = list(set([lab["species"] for lab in self[4]])) == [species]
+        # note that removeLabel will re-add a Don't Know in the end, so can't just check the final label.
+        for lab in self[4]:
+            self.removeLabel(lab["species"], lab["certainty"])
+        return deletedAll
+
+    def confirmLabels(self, species=None):
+        """ Raise the certainty of this segment's uncertain labels to 100.
+            Affects all species (if None) or indicated species.
+        """
+        for labix in range(len(self[4])):
+            lab = self[4][labix]
+            if (species is None or lab["species"]==species) and lab["certainty"] < 100:
+                lab["certainty"] = 100
+                self.keys[labix] = (lab["species"], lab["certainty"])
+
+    def removeLabel(self, species, certainty):
+        """ Removes label from this segment.
+            Does not delete the actual segment - that's left for the interface to take care of.
+        """
+        deleted = False
+        for lab in self[4]:
+            if lab["species"]==species and lab["certainty"]==certainty:
+                self[4].remove(lab)
+                self.keys.remove((species, certainty))
+                # if that was the last label, flip to Don't Know
+                if len(self[4])==0:
+                    self.addLabel("Don't Know", 0)
+                deleted = True
+                break
+
+        if not deleted:
+            print("ERROR: could not find species-certainty combo to remove:", species, certainty)
+            return
+
+    def infoString(self):
+        """ Returns a nicely-formatted string of this segment's info."""
+        s = []
+        for lab in self[4]:
+            labs = "sp.: {}, cert.: {}%".format(lab["species"], lab["certainty"])
+            if "filter" in lab and lab["filter"]!="M":
+                labs += ", filter: " + lab["filter"]
+            if "calltype" in lab:
+                labs += ", call: " + lab["calltype"]
+            s.append(labs)
+        return "; ".join(s)
+
+
+class SegmentList(list):
+    """ List of Segments. Deals with I/O - parsing JSON,
+        and retrieving the right Segment from this list.
+    """
+
+    def parseJSON(self, file, duration=0):
+        """ Takes in a filename and reads metadata to self.metadata,
+            and other segments to just the main body of self.
+            If wav file is loaded, pass the true duration in s to check
+            (it will override any duration read from the JSON).
+        """
+        try:
+            file = open(file, 'r')
+            annots = json.load(file)
+            file.close()
+        except Exception as e:
+            print("ERROR: file %s failed to load with error:" % file)
+            print(e)
+            return
+
+        # first segment stores metadata
+        self.metadata = dict()
+        if isinstance(annots[0], list) and annots[0][0] == -1:
+            print("old format metadata detected")
+            self.metadata = {"Operator": annots[0][2], "Reviewer": annots[0][3]}
+            # when file is loaded, true duration can be passed. Otherwise,
+            # some old files have duration in samples, so need a rough check
+            if duration>0:
+                self.metadata["Duration"] = duration
+            elif annots[0][1]>0 and annots[0][1]<100000:
+                self.metadata["Duration"] = annots[0][1]
+            else:
+                print("ERROR: duration not found in metadata, need to supply as argument")
+                return
+            del annots[0]
+
+        elif isinstance(annots[0], dict):
+            self.metadata = annots[0]
+            if duration>0:
+                self.metadata["Duration"] = duration
+            del annots[0]
+
+        # original code also stored+parsed noise data from array-format metadata,
+        # should we keep this?
+        # if type(self.segments[0][4]) is int:
+        #     self.noiseLevel = None
+        #     self.noiseTypes = []
+        # else:
+        #     self.noiseLevel = self.segments[0][4][0]
+        #     self.noiseTypes = self.segments[0][4][1]
+
+        # read the segments
+        self.clear()
+        for annot in annots:
+            if not isinstance(annot, list) or len(annot)!=5:
+                print("ERROR: annotation in wrong format:", annot)
+                return
+
+            # deal with old formats here, so that the Segment class
+            # could require (and validate) clean input
+
+            # Early version of AviaNZ stored freqs as values between 0 and 1.
+            # The .1 is to take care of rounding errors
+            if 0 < annot[2] < 1.1 and 0 < annot[3] < 1.1:
+                print("Warning: ignoring old-format frequency marks")
+                annot[2] = 0
+                annot[3] = 0
+
+            # single string-type species labels
+            if isinstance(annot[4], str):
+                annot[4] = [annot[4]]
+            # for list-type labels, parse each into certainty and species
+            if isinstance(annot[4], list):
+                listofdicts = []
+                for lab in annot[4]:
+                    # new format:
+                    if isinstance(lab, dict):
+                        labdict = lab
+                    # old format parsing:
+                    elif lab == "Don't Know":
+                        labdict = {"species": "Don't Know", "certainty": 0}
+                    elif lab.endswith('?'):
+                        labdict = {"species": lab[:-1], "certainty": 50}
+                    else:
+                        labdict = {"species": lab, "certainty": 100}
+                    listofdicts.append(labdict)
+                # if no labels were present, i.e. "[]", addSegment will create a Don't Know
+                annot[4] = listofdicts
+
+            self.addSegment(annot)
+        print("%d segments read" % len(self))
+
+    def addSegment(self, segment):
+        """ Just a cleaner wrapper to allow adding segments quicker.
+            Passes a list "segment" to the Segment class.
+        """
+        # allows passing empty label list - creates "Don't Know" then
+        if len(segment[4]) == 0:
+            segment[4] = [{"species": "Don't Know", "certainty": 0}]
+        self.append(Segment(segment))
+
+    def addBasicSegments(self, seglist, freq=[0,0], **kwd):
+        """ Allows to add bunch of basic segments from segmentation
+            with identical species/certainty/freq values.
+            seglist - list of 2-col segments [t1, t2]
+            label is built from kwd.
+            These will be converted to [t1, t2, freq[0], freq[1], label]
+            and stored.
+        """
+        if not isinstance(freq, list) or freq[0]<0 or freq[1]<0:
+            print("ERROR: cannot use frequencies", freq)
+            return
+
+        for seg in seglist:
+            newseg = [seg[0], seg[1], freq[0], freq[1], [kwd]]
+            self.addSegment(newseg)
+
+    def getSpecies(self, species):
+        """ Returns indices of all segments that have the indicated species in label. """
+        out = []
+        for segi in range(len(self)):
+            # check each label in this segment:
+            labs = self[segi][4]
+            for lab in labs:
+                if lab["species"]==species:
+                    out.append(segi)
+                    # go to next seg
+                    break
+        return(out)
+
+    def saveJSON(self, file):
+        """ Returns 1 on succesful save."""
+        annots = [self.metadata]
+        for seg in self:
+            annots.append(seg)
+
+        file = open(file, 'w')
+        json.dump(annots, file)
+        file.write("\n")
+        file.close()
+        return 1
+
+    def exportExcel(self, dirName, filename, action, pagelen, numpages=1, speciesList=[], startTime=0, resolution=1):
+        """ Exports the annotations to xlsx, with three sheets:
+        time stamps, presence/absence, and per second presence/absence.
+        Saves each species into a separate workbook,
+        + an extra workbook for all species (to function as a readable segment printout).
+        It makes the workbook if necessary.
+
+        Inputs
+            dirName:    xlsx will be stored here
+            filename:   name of the wav file, to be recorded inside the xlsx
+            action:     "append" or "overwrite" any found Excels
+            pagelen:    page length, seconds (for filling out absence)
+            numpages:   number of pages in this file (of size pagelen)
+            speciesList:    list of species that are currently processed -- will force an xlsx output even if none were detected
+            startTime:  timestamp for cell names
+            resolution: output resolution on excel (sheet 3) in seconds. Default is 1
+        """
+
+        pagelen = math.ceil(pagelen)
+
+        # will export species present in self, + passed as arg, + "all species" excel
+        speciesList = set(speciesList)
+        for seg in self:
+            speciesList.update([lab["species"] for lab in seg[4]])
+        speciesList.add("All species")
+        print("The following species were detected for export:", speciesList)
+
+        # ideally, we store relative paths, but that's not possible across drives:
+        try:
+            relfname = str(os.path.relpath(filename, dirName))
+        except Exception as e:
+            print("Falling back to absolute paths. Encountered exception:")
+            print(e)
+            relfname = str(os.path.abspath(filename))
+
+        # functions for filling out the excel sheets:
+        def writeToExcelp1(wb, segix, currsp):
+            ws = wb['Time Stamps']
+            r = ws.max_row + 1
+            # Print the filename
+            ws.cell(row=r, column=1, value=relfname)
+            # Loop over the segments
+            for segi in segix:
+                seg = self[segi]
+                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTime).toString('hh:mm:ss')))
+                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTime).toString('hh:mm:ss')))
+                if seg[3]!=0:
+                    ws.cell(row=r, column=4, value=int(seg[2]))
+                    ws.cell(row=r, column=5, value=int(seg[3]))
+                if currsp=="All species":
+                    text = [lab["species"] for lab in seg[4]]
+                    ws.cell(row=r, column=6, value=", ".join(text))
+                r += 1
+
+        def writeToExcelp2(wb, segix):
+            ws = wb['Presence Absence']
+            r = ws.max_row + 1
+            ws.cell(row=r, column=1, value=relfname)
+            ws.cell(row=r, column=2, value='_')
+            if len(segix)>0:
+                ws.cell(row=r, column=2, value='Yes')
+            else:
+                ws.cell(row=r, column=2, value='No')
+
+        def writeToExcelp3(wb, detected, pagenum):
+            # writes binary output DETECTED (per s) from page PAGENUM of length PAGELEN
+            starttime = pagenum * pagelen
+            ws = wb['Per Time Period']
+            # print resolution "header"
+            r = ws.max_row + 1
+            ws.cell(row=r, column=1, value=str(resolution) + ' secs resolution')
+            ft = Font(color=colors.DARKYELLOW)
+            ws.cell(row=r, column=1).font=ft
+            # print file name and page number
+            ws.cell(row=r+1, column=1, value=relfname)
+            ws.cell(row=r+1, column=2, value=str(pagenum+1))
+            # fill the header and detection columns
+            c = 3
+            for t in range(0, len(detected), resolution):
+                # absolue (within-file) times:
+                win_start = starttime + t
+                win_end = min(win_start+resolution, int(pagelen * numpages))
+                ws.cell(row=r, column=c, value=str(win_start) + '-' + str(win_end))
+                ws.cell(row=r, column=c).font = ft
+                # within-page times:
+                det = 1 if np.sum(detected[t:win_end-starttime])>0 else 0
+                ws.cell(row=r+1, column=c, value=det)
+                c += 1
+
+        # now, generate the actual files, SEPARATELY FOR EACH SPECIES:
+        for species in speciesList:
+            print("Exporting species %s" % species)
+            # clean version for filename
+            speciesClean = re.sub(r'\W', "_", species)
+
+            # setup output files:
+            # if an Excel exists, append (so multiple files go into one worksheet)
+            # if not, create new
+            eFile = dirName + '/DetectionSummary_' + speciesClean + '.xlsx'
+
+            if action == "overwrite" or not os.path.isfile(eFile):
+                # make a new workbook:
+                wb = Workbook()
+                wb.create_sheet(title='Time Stamps', index=1)
+                wb.create_sheet(title='Presence Absence', index=2)
+                wb.create_sheet(title='Per Time Period', index=3)
+
+                # First sheet
+                ws = wb['Time Stamps']
+                ws.cell(row=1, column=1, value="File Name")
+                ws.cell(row=1, column=2, value="start (hh:mm:ss)")
+                ws.cell(row=1, column=3, value="end (hh:mm:ss)")
+                ws.cell(row=1, column=4, value="min freq. (Hz)")
+                ws.cell(row=1, column=5, value="max freq. (Hz)")
+                if species=="All_species":
+                    ws.cell(row=1, column=6, value="species")
+
+                # Second sheet
+                ws = wb['Presence Absence']
+                ws.cell(row=1, column=1, value="File Name")
+                ws.cell(row=1, column=2, value="Presence/Absence")
+
+                # Third sheet
+                ws = wb['Per Time Period']
+                ws.cell(row=1, column=1, value="File Name")
+                ws.cell(row=1, column=2, value="Page")
+                ws.cell(row=1, column=3, value="Presence=1, Absence=0")
+
+                # Hack to delete original sheet
+                del wb['Sheet']
+            elif action == "append":
+                try:
+                    wb = load_workbook(eFile)
+                except Exception as e:
+                    print("ERROR: cannot open file %s to append" % eFile)  # no read permissions or smth
+                    print(e)
+                    return 0
+            else:
+                print("ERROR: unrecognized action", action)
+                return 0
+
+            # extract segments for the current species
+            # if species=="All", take ALL segments.
+            if species=="All species":
+                speciesSegs = range(len(self))
+            else:
+                speciesSegs = self.getSpecies(species)
+
+            # export segments
+            writeToExcelp1(wb, speciesSegs, species)
+            # export presence/absence
+            writeToExcelp2(wb, speciesSegs)
+
+            # Generate per second binary output
+            # (assuming all pages are of same length as current data)
+            for p in range(0, numpages):
+                detected = np.zeros(pagelen)
+                for segi in speciesSegs:
+                    seg = self[segi]
+                    for t in range(pagelen):
+                        # convert within-page time to segment (within-file) time
+                        truet = t + p*pagelen
+                        if math.floor(seg[0]) <= truet and truet < math.ceil(seg[1]):
+                            detected[t] = 1
+                # write page p to xlsx
+                writeToExcelp3(wb, detected, p)
+
+            # Save the file
+            try:
+                wb.save(eFile)
+            except Exception as e:
+                print("ERROR: could not create new file %s" % eFile)  # no read permissions or smth
+                print(e)
+                return 0
+        return 1
+
+
+class Segmenter:
     """ This class implements six forms of segmentation for the AviaNZ interface:
     Amplitude threshold (rubbish)
     Energy threshold
@@ -49,7 +508,8 @@ class Segment:
     Cross-correlation
     DTW
 
-    Each returns start and stop times for each segment (in seconds) as a Python list of pairs
+    Each returns start and stop times for each segment (in seconds) as a Python list of pairs.
+    It is up to the caller to convert these to a true SegmentList.
     See also the species-specific segmentation in WaveletSegment
     """
 
@@ -94,7 +554,7 @@ class Segment:
         If ignoreInsideEnvelope is true this is the first of those, otherwise the second
         """
 
-        from intervaltree import Interval, IntervalTree
+        from intervaltree import IntervalTree
         t = IntervalTree()
 
         # Put the first set into the tree
@@ -618,7 +1078,7 @@ def testMC():
     import SignalProc
     sp = SignalProc.SignalProc(data,fs,256,128)
     sg = sp.spectrogram(data=data,window_width=256,incr=128,window='Hann',mean_normalise=True,onesided=True,multitaper=False,need_even=False)
-    s = Segment(data,sg,sp,fs)
+    s = Segmenter(data,sg,sp,fs)
 
     #print np.shape(sg)
 
