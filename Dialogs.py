@@ -137,6 +137,7 @@ class Spectrogram(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(300)
         self.DOC = DOC
 
@@ -239,6 +240,7 @@ class OperatorReviewer(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Set Operator/Reviewer')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         self.setMinimumWidth(320)
 
         self.operatorlabel = QLabel("Operator")
@@ -271,6 +273,7 @@ class addNoiseData(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Noise Information')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(320)
 
         print(noiseLevel,noiseTypes)
@@ -378,6 +381,7 @@ class Diagnostic(QDialog):
         self.setWindowTitle('Diagnostic Plot Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(300)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
 
         # species / filter
         self.filterLabel = QLabel("Select filter to use")
@@ -443,6 +447,7 @@ class WaveletTrain(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Train a Species Detector')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint & QtCore.Qt.CustomizeWindowHint)
         self.setMinimumWidth(475)
         self.setMinimumHeight(500)
 
@@ -697,6 +702,7 @@ class Segmentation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Segmentation Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(350)
 
         self.algs = QComboBox()
@@ -944,6 +950,8 @@ class Denoise(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Denoising Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+
         self.setMinimumWidth(300)
         self.setMinimumHeight(250)
         self.DOC=DOC
@@ -1250,6 +1258,8 @@ class HumanClassify1(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint & QtCore.Qt.CustomizeWindowHint)
+
         self.frame = QWidget()
 
         self.lut = lut
@@ -1774,6 +1784,8 @@ class HumanClassify2a(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+
 
         self.birds = QListWidget(self)
         self.birds.setMaximumWidth(350)
@@ -1841,8 +1853,8 @@ class HumanClassify2(QDialog):
 
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint & QtCore.Qt.CustomizeWindowHint)
         # let the user quit without bothering rest of it
-        self.setWindowFlags(self.windowFlags() & QtCore.Qt.WindowCloseButtonHint)
 
         self.sampleRate = sampleRate
         self.audiodata = audiodata
@@ -2330,9 +2342,9 @@ class Cluster(QDialog):
         self.setWindowTitle('Clusters')
 
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        #self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint & QtCore.Qt.CustomizeWindowHint)
 
         # let the user quit without bothering rest of it
-        # self.setWindowFlags(self.windowFlags() & QtCore.Qt.WindowCloseButtonHint)
 
         self.sampleRate = sampleRate
         self.segments = segments
@@ -2772,6 +2784,7 @@ class InterfaceSettings2(QDialog):
       self.tab3UI()
       self.setWindowTitle("Interface Settings")
       self.setWindowIcon(QIcon('img/Avianz.ico'))
+      self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
       self.setMinimumWidth(400)
 
       mainLayout = QVBoxLayout()
