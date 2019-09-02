@@ -573,3 +573,35 @@ class SignalProc:
 
         print(sgnew)
         return sgnew
+
+    def mark_rain(self, sg, thr=0.9):
+        row, col = np.shape(sg.T)
+        print(row, col)
+        inds = np.where(sg > thr * np.max(sg))
+        longest = np.zeros(col)
+        start = np.zeros(col)
+        for c in range(col):
+            r = 0
+            l = 0
+            s = 0
+            j = 0
+            while inds[0][r] == c:
+                if inds[1][r + 1] == inds[1][r] + 1:
+                    l += 1
+                else:
+                    if l > longest[c]:
+                        longest[c] = l
+                        start[c] = s
+                        l = 0
+                        s = j + 1
+                r += 1
+
+        newsg = np.zeros(np.shape(sg))
+        newsg = newsg.T
+        for c in range(col):
+            if longest[c] > 10:
+                newsg[c, start[c]:start[c] + longest[c]] = 1
+        print(longest)
+        return newsg.T
+
+
