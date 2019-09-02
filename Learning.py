@@ -811,22 +811,23 @@ def within_cluster_dist(dir):
 
 # within_cluster_dist('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\\ruru')
 
-def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0, denoise=False, single=False,
-                    displayallinone=True, distance='dtw'):
+def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0, denoise=False, single=False,
+                    distance='dtw', max_clusters=10):
     """
     Given wav + annotation files,
-        1) identify syllables using median clipping
-        2) generate features
+        1) identify syllables using median clipping/ FIR
+        2) generate features WE/MFCC/chroma
         3) calculate DTW distances and decide class/ generate new class
-    :param n_mels: number of mel coeff
-    :param fs: prefered sampling frequency
+    :param dir: directory of audio and annotations
+    :param feature: 'WE' or 'MFCC' or 'chroma'
+    :param n_mels: number of mel coefs for MFCC
+    :param fs: prefered sampling frequency, 0 leads to calculate it from the anotations
     :param minlen: min syllable length in secs
-    :param f_1:
-    :param f_2:
-    :param denoise:
-    :param single:
-    :param displayallinone:
-    :param distance:
+    :param f_1: lower frequency bound, 0 leads to calculate it from the anotations
+    :param f_2: upper frequency bound, 0 leads to calculate it from the anotations
+    :param denoise: wavelet denoise
+    :param single: True means when there are multiple syllables in a segment, add only one syllable to the cluster info
+    :param distance: 'dtw' or 'xcor'
     :return: possible clusters
     """
     import Segment
@@ -887,7 +888,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
         ind_fhigh = (np.abs(linear - f_2)).argmin()
 
     # Ready for clustering
-    max_clusters = 10
+    max_clusters = max_clusters
     n_clusters = 0
     clusters = []
     for root, dirs, files in os.walk(str(dir)):
@@ -961,7 +962,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
                     matched = False
                     if n_clusters == 0:
                         print('**Case 1: First class')
-                        newclass= class_create(label=n_clusters+1, syl=syls, features=f, f_low=seg[2], f_high=seg[3],
+                        newclass = class_create(label=n_clusters, syl=syls, features=f, f_low=seg[2], f_high=seg[3],
                                                 segs=[(os.path.join(root, file), seg)], single=single,
                                                 dist_method=distance)
                         clusters.append(newclass)
@@ -996,24 +997,23 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
                         # make the cluster order
                         clusters = [clusters[i] for i in ind]
                         for c in range(len(clusters)):
-                            if (clusters[c]["d"] != 0) and \
-                                    min_ds[c] < (clusters[c]["d"] + clusters[c]["d"] * 0.1):
+                            if (clusters[c]["d"] != 0) and min_ds[c] < (clusters[c]["d"] + clusters[c]["d"] * 0.1):
                                 print('**Case 2: Found a match with a class > one syllable')
                                 print('Class ', clusters[c]["label"], ', dist ', min_ds[c])
                                 # Update this class
                                 clusters[c] = class_update(cluster=clusters[c], newfeatures=f, newf_low=seg[2],
                                                            newf_high=seg[3], newsyl=syls,
-                                                           newsegs=(os.path.join(root, file), seg), single=single,
+                                                           newseg=(os.path.join(root, file), seg), single=single,
                                                            dist_method=distance)
                                 matched = True
-                                break       # found match, exit from the search, go to the next segment
+                                break       # found a match, exit from the for loop, go to the next segment
 
                             elif c < len(clusters)-1:
                                 continue    # continue to the next class
 
                     # Checked most of the classes by now, if still no match found, check the classes with only one
-                    # syllable.
-                    # Note the arbitrary thr, 50 for the case with clusters with only one data point.
+                    # data point (clusters[c]["d"] == 0).
+                    # Note the arbitrary thr.
                     if not matched:
                         if distance == 'dtw':
                             thr = 25
@@ -1027,18 +1027,18 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
                                 # Update this class
                                 clusters[c] = class_update(cluster=clusters[c], newfeatures=f, newf_low=seg[2],
                                                            newf_high=seg[3], newsyl=syls,
-                                                           newsegs=(os.path.join(root, file), seg), single=single,
+                                                           newseg=(os.path.join(root, file), seg), single=single,
                                                            dist_method=distance)
                                 matched = True
                                 break    # Break the search and go to the next segment
 
-                    # No match found yet, check the max clusters
+                    # If no match found yet, check the max clusters
                     if not matched:
                         if n_clusters == max_clusters:
                             print('**Case 4: Reached max classes, therefore adding current seg to the closest '
                                   'class... ')
                             # min_ind = np.argmin(min_ds)
-                            # classes are sorted in accesnding order of distance already
+                            # classes are sorted in ascending order of distance already
                             for c in range(len(clusters)):
                                 if min_ds[c] <= 4 * clusters[c]["d"] or clusters[c]["d"] == 0:
                                     print('Class ', clusters[c]["label"], ', dist ', min_ds[c],
@@ -1046,7 +1046,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
                                     # Update this class
                                     clusters[c] = class_update(cluster=clusters[c], newfeatures=f, newf_low=seg[2],
                                                                newf_high=seg[3], newsyl=syls,
-                                                               newsegs=(os.path.join(root, file), seg), single=single,
+                                                               newseg=(os.path.join(root, file), seg), single=single,
                                                                dist_method=distance)
                                     matched = True
                                     break
@@ -1054,9 +1054,10 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
                                 print('Class ', clusters[0]["label"], ', dist ', min_ds[0],
                                       '(in-class distance:', clusters[0]["d"], ')')
                                 # Update this class
+                                # TODO: don't update the class as it is an outlier?
                                 clusters[0] = class_update(cluster=clusters[0], newfeatures=f, newf_low=seg[2],
                                                            newf_high=seg[3], newsyl=syls,
-                                                           newsegs=(os.path.join(root, file), seg), single=single,
+                                                           newseg=(os.path.join(root, file), seg), single=single,
                                                            dist_method=distance)
                                 matched = True
                             continue    # Continue to next segment
@@ -1064,7 +1065,7 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
                     #  If still no luck, create a new class
                     if not matched:
                         print('**Case 5: None of Case 1-4')
-                        newclass = class_create(label=n_clusters+1, syl=syls, features=f, f_low=seg[2], f_high=seg[3],
+                        newclass = class_create(label=n_clusters, syl=syls, features=f, f_low=seg[2], f_high=seg[3],
                                                 segs=[(os.path.join(root, file), seg)], single=single,
                                                 dist_method=distance)
                         print('Created a new class: Class ', n_clusters + 1)
@@ -1079,104 +1080,17 @@ def cluster_by_dist(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2
         print('Class ', clusters[c]['label'], ': ', len(clusters[c]['segs']))
         for s in range(len(clusters[c]['segs'])):
             print('\t', clusters[c]['segs'][s])
-            clustered_segs.append([clusters[c]['segs'][s][0], clusters[c]['segs'][s][1], clusters[c]['label']])
+            if single:
+                clustered_segs.append([clusters[c]['segs'][s][0], clusters[c]['segs'][s][1],
+                                       [clusters[c]['features'][s]], clusters[c]['label']])
+            else:
+                clustered_segs.append([clusters[c]['segs'][s][0], clusters[c]['segs'][s][1], clusters[c]['label']])
 
     # Clustered segments
     print('\n\n################### Clustered segments ############################')
     for s in clustered_segs:
         print(s)
-    # return clustered_segs, fs
-
-    # Display the segs
-    import pyqtgraph as pg
-    from pyqtgraph.Qt import QtCore, QtGui
-    if displayallinone:
-        app = QtGui.QApplication([])
-
-        mw = QtGui.QMainWindow()
-        mw.show()
-        mw.resize(1200, 800)
-        mw.setWindowTitle("Clustered segments (each row is a Class) - Feature: " + feature + " ; Denoise: " + str(denoise) +
-                          " ; Bandpass: " + str(f_1) + "-" + str(f_2))
-
-        win = pg.GraphicsLayoutWidget()
-        mw.setCentralWidget(win)
-        row = 0
-
-        for c in range(len(clusters)):
-            col = 0
-            for s in clusters[c]["segs"]:
-                audiodata, _ = loadFile(s[0], s[1][1]-s[1][0], s[1][0], fs)
-                sp = SignalProc.SignalProc(audiodata, fs, 512, 256)
-                sg = sp.spectrogram(audiodata, multitaper=False)
-                maxsg = np.min(sg)
-                sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
-                # Make it readable
-                minsg = np.min(sg)
-                maxsg = np.max(sg)
-                colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
-                colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
-
-                vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
-                vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row+1, col=col)
-                im = pg.ImageItem(enableMouse=False)
-                vb2.addItem(im)
-                im.setImage(sg)
-                im.setBorder('w')
-                im.setLevels([colourStart, colourEnd])
-
-                txt = s[1][4][0]
-                # txt = s[0].split('\\')[-1]+'-'+s[1][4][0]
-                lbl = pg.LabelItem(txt, rotateAxis=(1,0), angle=179)
-                vb.addItem(lbl)
-                col += 1
-            row += 2
-
-        QtGui.QApplication.instance().exec_()
-
-    else:
-        app = QtGui.QApplication([])
-        for c in range(len(clusters)):
-            print(clusters[c]["label"])
-            # app = QtGui.QApplication([])
-
-            mw = QtGui.QMainWindow()
-            mw.show()
-            mw.resize(1200, 800)
-
-            win = pg.GraphicsLayoutWidget()
-            mw.setCentralWidget(win)
-            row = 0
-            col = 0
-            for s in clusters[c]["segs"]:
-                audiodata, _ = loadFile(s[0], s[1][1]-s[1][0], s[1][0], fs)
-                sp = SignalProc.SignalProc(audiodata, fs, 512, 256)
-                sg = sp.spectrogram(audiodata, multitaper=False)
-                maxsg = np.min(sg)
-                sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
-                # Make it readable
-                minsg = np.min(sg)
-                maxsg = np.max(sg)
-                colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
-                colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
-
-                vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
-                vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row + 1, col=col)
-                im = pg.ImageItem(enableMouse=False)
-                vb2.addItem(im)
-                im.setImage(sg)
-                im.setBorder('w')
-                im.setLevels([colourStart, colourEnd])
-
-                txt = s[1][4][0]
-                lbl = pg.LabelItem(txt, rotateAxis=(1, 0), angle=179)
-                vb.addItem(lbl)
-                if row == 6:
-                    row = 0
-                    col += 1
-                else:
-                    row += 2
-            QtGui.QApplication.instance().exec_()
+    return clustered_segs, fs, n_clusters
 
 
 def class_create(label, syl, features, f_low, f_high, segs, single=False, dist_method='dtw'):
@@ -1210,7 +1124,7 @@ def class_create(label, syl, features, f_low, f_high, segs, single=False, dist_m
         inclass_d = 0
 
     if single:
-        features = [features[len(features)//2]]
+        features = [features[len(features)//2]]     # get the features of the middle syllable
 
     newclass = {
         "label": label,
@@ -1224,7 +1138,7 @@ def class_create(label, syl, features, f_low, f_high, segs, single=False, dist_m
     return newclass
 
 
-def class_update(cluster, newfeatures, newf_low, newf_high, newsyl, newsegs, single, dist_method='dtw'):
+def class_update(cluster, newfeatures, newf_low, newf_high, newsyl, newseg, single, dist_method='dtw'):
     """ Update an existing class
     :param cluster: the class to update
     :param newfeatures:
@@ -1271,18 +1185,18 @@ def class_update(cluster, newfeatures, newf_low, newf_high, newsyl, newsegs, sin
     cluster["d"] = inclass_d
     cluster["f_low"] = (newf_low + cluster["f_low"]) / 2  # not sure if this is correct
     cluster["f_high"] = (newf_high + cluster["f_high"]) / 2
-    cluster["segs"].append(newsegs)
+    cluster["segs"].append(newseg)
     print('Updated Class ', "'", cluster["label"], "'" '\tin-class_d: ',
           cluster["d"], '\tf_low: ', cluster["f_low"], '\tf_high: ',
           cluster["f_high"])
     return cluster
 
 
-def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0, denoise=False,
-                    displayallinone=True, alg='agglomerative'):
+def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0, denoise=False,
+                    alg='agglomerative', n_clusters=None):
     """
     Given wav + annotation files,
-        1) identify syllables using a general method (median clipping)
+        1) identify syllables using median clipping/ FIR
         2) make them to fixed-length by padding or clipping
         3) use existing clustering algorithems
     :param n_mels: number of mel coeff
@@ -1291,12 +1205,11 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
     :param f_1:
     :param f_2:
     :param denoise:
-    :param displayallinone:
+    :param alg: algorithm to use
+    :param n_clusters: number of clusters
     :return: possible clusters
     """
-    import warnings
-    warnings.filterwarnings("ignore", category=FutureWarning)
-    warnings.filterwarnings("ignore", category=UserWarning)
+
     import Segment
     import SignalProc
 
@@ -1414,7 +1327,7 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
     features = []
     for record in dataset:
         audiodata, _ = loadFile(filename=record[0], duration=record[2][1] - record[2][0], offset=record[2][0],
-                                 fs=fs, denoise=denoise, f1=f_1, f2=f_2)
+                                fs=fs, denoise=denoise, f1=f_1, f2=f_2)
         audiodata = audiodata.tolist()
         if record[2][1] - record[2][0] < duration:
             # Zero padding both ends to have fixed duration
@@ -1432,6 +1345,7 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
             mfcc = scale(mfcc, axis=1)
             mfcc = [i for sublist in mfcc for i in sublist]
             features.append(mfcc)
+            record.insert(3, mfcc)
         elif feature == 'we':  # Wavelet Energy
             ws = WaveletSegment.WaveletSegment(spInfo=[])
             we = ws.computeWaveletEnergy(data=audiodata, sampleRate=fs, nlevels=5, wpmode='new')
@@ -1439,12 +1353,14 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
             if f_1 != 0 and f_2 != 0:
                 we = we[ind_flow:ind_fhigh]  # Limit the frequency to a fixed range f_1, f_2
             features.append(we)
+            record.insert(3, we)
         elif feature == 'chroma':
             chroma = librosa.feature.chroma_cqt(y=audiodata, sr=fs)
             # chroma = librosa.feature.chroma_stft(y=data, sr=fs)
             chroma = scale(chroma, axis=1)
             features.append(chroma)
-    print(np.shape(features))
+            record.insert(3, chroma)
+    # print(np.shape(features))
 
     features = TSNE().fit_transform(features)
     learners = Clustering(features, [])
@@ -1453,46 +1369,50 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
         print('\nDBSCAN--------------------------------------')
         model_dbscan = learners.DBscan(eps=0.3, min_samples=3)
         predicted_labels = model_dbscan.labels_
-        print('# clusters', len(set(model_dbscan.labels_)))
+        clusters = set(model_dbscan.labels_)
 
     elif alg == 'Birch':
         print('\nBirch----------------------------------------')
-        model_birch = learners.birch(threshold=0.88, n_clusters=None)
+        if not n_clusters:
+            model_birch = learners.birch(threshold=0.5, n_clusters=n_clusters)
+        else:
+            model_birch = learners.birch(threshold=0.88, n_clusters=None)
         predicted_labels = model_birch.labels_
-        print('# clusters', len(set(model_birch.labels_)))
+        clusters = set(model_birch.labels_)
 
     if alg == 'agglomerative':
         print('\nAgglomerative Clustering----------------------')
-        # model_agg = learners.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=0.5,
-        #                                          linkage='complete')
-        model_agg = learners.agglomerativeClustering(n_clusters=6, compute_full_tree=False, distance_threshold=None,
-                                                     linkage='complete')
+        if not n_clusters:
+            model_agg = learners.agglomerativeClustering(n_clusters=None, compute_full_tree=True,
+                                                         distance_threshold=0.5, linkage='complete')
+        else:
+            model_agg = learners.agglomerativeClustering(n_clusters=n_clusters, compute_full_tree=False,
+                                                         distance_threshold=None, linkage='complete')
         # Either set n_clusters=None and compute_full_tree=T or distance_threshold=None
 
         model_agg.fit_predict(learners.features)
         predicted_labels = model_agg.labels_
-        print('# clusters', len(set(model_agg.labels_)))
+        clusters = set(model_agg.labels_)
 
-    print(predicted_labels)
-    # Attach the label to each syllable in the dataset
+    print('predicted labels\n', predicted_labels)
+    print('clusters:', clusters)
+    print('# clusters :', len(clusters))
+
+    # Attach the label to each syllable
     for i in range(len(predicted_labels)):
-        dataset[i].insert(3, predicted_labels[i])
+        dataset[i].insert(4, predicted_labels[i])
 
-    for record in dataset:
-        print(record)
-
-    # Majority voting
     clustered_dataset = []
     for record in dataset:
         if record[:2] not in clustered_dataset:
             clustered_dataset.append(record[:2])
 
     labels = [[] for i in range(len(clustered_dataset))]
-
     for i in range(len(predicted_labels)):
         ind = clustered_dataset.index(dataset[i][:2])
         labels[ind].append(predicted_labels[i])
 
+    # Majority voting when multiple syllables in a segment
     from statistics import mode
     for i in range(len(labels)):
         try:
@@ -1500,123 +1420,35 @@ def cluster_by_agg(dir, feature='mfcc', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=
         except:
             labels[i] = labels[i][0]
 
+    # add the features
+    for record in clustered_dataset:
+        record.insert(2, [])
+        for rec in dataset:
+            if record[:2] == rec[:2]:
+                record[2].append(rec[3])
+
+    # make the labels continous
+    ulabels = list(set(labels))
+    print('ulabels:', ulabels)
+    nclasses = len(ulabels)
+    dic = []
+    for i in range(nclasses):
+        dic.append((ulabels[i], i))
+
+    # print('[old, new] labels')
+    dic = dict(dic)
+    # print(dic)
+
+    # add the labels
     for i in range(len(clustered_dataset)):
-        print(clustered_dataset[i], labels[i])
+        clustered_dataset[i].insert(3, dic[labels[i]])
 
-    classes = set(labels).__len__()
+    for record in clustered_dataset:
+        print(record[3])
 
-    for i in range(len(clustered_dataset)):
-        clustered_dataset[i].insert(2, labels[i])
+    # TODO: Find cluster centers and sort the segments accordingly
 
-    return clustered_dataset, fs, classes
-
-    # # Sort the clusters and display
-    # classes = set(labels)
-    #
-    # # Display the segs
-    # import pyqtgraph as pg
-    # from pyqtgraph.Qt import QtCore, QtGui
-    # if displayallinone:
-    #     app = QtGui.QApplication([])
-    #
-    #     mw = QtGui.QMainWindow()
-    #     mw.show()
-    #     mw.resize(1200, 800)
-    #     mw.setWindowTitle(
-    #         "Clustered segments (each row is a Class) - Feature: " + feature + " ; Denoise: " + str(denoise) +
-    #         " ; Bandpass: " + str(f_1) + "-" + str(f_2))
-    #
-    #     win = pg.GraphicsLayoutWidget()
-    #     mw.setCentralWidget(win)
-    #     row = 0
-    #
-    #     for c in classes:
-    #         col = 0
-    #         indc = np.where(labels == c)[0].tolist()
-    #         print('Class ', c, ': ', np.shape(indc)[0], ' segments')
-    #         clusterc = []
-    #         for i in indc:
-    #             print(clustered_dataset[i])
-    #             clusterc.append(clustered_dataset[i])
-    #         for x in clusterc:
-    #             audiodata, _ = loadFile(x[0], x[1][1]-x[1][0], x[1][0], fs)
-    #             sp = SignalProc.SignalProc(audiodata, fs, 1024, 512)
-    #             sg = sp.spectrogram(audiodata, multitaper=False)
-    #             maxsg = np.min(sg)
-    #             sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
-    #             # Make it readable
-    #             minsg = np.min(sg)
-    #             maxsg = np.max(sg)
-    #             colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
-    #             colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
-    #
-    #             vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
-    #             vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row + 1, col=col)
-    #             im = pg.ImageItem(enableMouse=False)
-    #             vb2.addItem(im)
-    #             im.setImage(sg)
-    #             im.setBorder('w')
-    #             im.setLevels([colourStart, colourEnd])
-    #
-    #             txt = x[1][4][0]
-    #             # txt = s[0].split('\\')[-1]+'-'+s[1][4][0]
-    #             lbl = pg.LabelItem(txt, rotateAxis=(1, 0), angle=179)
-    #             vb.addItem(lbl)
-    #             col += 1
-    #         row += 2
-    #
-    #     QtGui.QApplication.instance().exec_()
-    # else:
-    #     app = QtGui.QApplication([])
-    #     for c in classes:
-    #         indc = np.where(labels == c)[0].tolist()
-    #         print('Class ', c, ': ', np.shape(indc)[0], ' segments')
-    #         clusterc = []
-    #         for i in indc:
-    #             print(clustered_dataset[i])
-    #             clusterc.append(clustered_dataset[i])
-    #         mw = QtGui.QMainWindow()
-    #         mw.show()
-    #         mw.resize(1200, 800)
-    #
-    #         win = pg.GraphicsLayoutWidget()
-    #         mw.setCentralWidget(win)
-    #         row = 0
-    #         col = 0
-    #
-    #         for x in clusterc:
-    #             audiodata, _ = loadFile(x[0], x[1][1] - x[1][0], x[1][0], fs)
-    #             sp = SignalProc.SignalProc(audiodata, fs, 1024, 512)
-    #             sg = sp.spectrogram(audiodata, multitaper=False)
-    #             maxsg = np.min(sg)
-    #             sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
-    #             # Make it readable
-    #             minsg = np.min(sg)
-    #             maxsg = np.max(sg)
-    #             colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
-    #             colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
-    #
-    #             # vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
-    #             vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row + 1, col=col)
-    #             im = pg.ImageItem(enableMouse=False)
-    #             vb2.addItem(im)
-    #             im.setImage(sg)
-    #             im.setBorder('w')
-    #             im.setLevels([colourStart, colourEnd])
-    #
-    #             # txt = x[1][0][4]
-    #             # lbl = pg.LabelItem(txt, rotateAxis=(1, 0), angle=179)
-    #             # vb.addItem(lbl)
-    #             if row == 6:
-    #                 row = 0
-    #                 col += 1
-    #             else:
-    #                 row += 2
-    #         QtGui.QApplication.instance().exec_()
-
-
-# cluster_by_dist('D:\AviaNZ\Sound_Files\demo\morepork', feature='we', denoise=False)
-# cluster_by_agg('D:\AviaNZ\Sound_Files\demo\morepork', feature='we')
+    return clustered_dataset, fs, nclasses
 
 
 def testLearning1():

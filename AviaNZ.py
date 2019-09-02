@@ -412,7 +412,6 @@ class AviaNZ(QMainWindow):
             actionMenu.addSeparator()
 
         actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
-        actionMenu.addAction("Test clustering", self.ClusteringDialog)
         actionMenu.addSeparator()
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
@@ -3989,16 +3988,6 @@ class AviaNZ(QMainWindow):
 
         QApplication.processEvents()
 
-    def ClusteringDialog(self):
-        """ cluster
-        """
-
-        clustered_segments, fs, n_classes = Learning.cluster_by_agg('D:\AviaNZ\Sound_Files\demo\morepork', feature='we')
-
-        self.clusterDialog = Dialogs.Cluster(clustered_segments, fs, n_classes, self.config)
-        self.clusterDialog.show()
-        self.clusterDialog.activateWindow()
-
 
     def trainWaveletDialog(self):
         """ Create the wavelet training dialog for the relevant menu item
@@ -4305,7 +4294,8 @@ class AviaNZ(QMainWindow):
             msg.exec_()
             return
 
-        clustered_segments, fs, n_classes = Learning.cluster_by_agg(self.dName, feature='we')
+        clustered_segments, fs, n_classes = Learning.cluster_by_agg(self.dName, feature='we', n_clusters=6)
+        # clustered_segments, fs, n_classes = Learning.cluster_by_dist(self.dName, feature='we', max_clusters=6, single=True)
 
         self.clusterDialog = Dialogs.Cluster(clustered_segments, fs, n_classes, self.config)
         self.clusterDialog.show()
