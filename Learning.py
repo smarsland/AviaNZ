@@ -812,7 +812,7 @@ def within_cluster_dist(dir):
 # within_cluster_dist('D:\AviaNZ\Sound_Files\Denoising_paper_data\Primary_dataset\\ruru')
 
 def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0, denoise=False, single=False,
-                    distance='dtw', max_clusters=10, displayallinone=True):
+                    distance='dtw', max_clusters=10):
     """
     Given wav + annotation files,
         1) identify syllables using median clipping/ FIR
@@ -827,7 +827,6 @@ def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0
     :param f_2: upper frequency bound, 0 leads to calculate it from the anotations
     :param denoise: wavelet denoise
     :param single: True means when there are multiple syllables in a segment, add only one syllable to the cluster info
-    :param displayallinone: just an display option
     :param distance: 'dtw' or 'xcor'
     :return: possible clusters
     """
@@ -1093,97 +1092,6 @@ def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0
         print(s)
     return clustered_segs, fs, n_clusters
 
-    # # Display the segs
-    # import pyqtgraph as pg
-    # from pyqtgraph.Qt import QtCore, QtGui
-    # if displayallinone:
-    #     app = QtGui.QApplication([])
-    #
-    #     mw = QtGui.QMainWindow()
-    #     mw.show()
-    #     mw.resize(1200, 800)
-    #     mw.setWindowTitle("Clustered segments (each row is a Class) - Feature: " + feature + " ; Denoise: " + str(denoise) +
-    #                       " ; Bandpass: " + str(f_1) + "-" + str(f_2))
-    #
-    #     win = pg.GraphicsLayoutWidget()
-    #     mw.setCentralWidget(win)
-    #     row = 0
-    #
-    #     for c in range(len(clusters)):
-    #         col = 0
-    #         for s in clusters[c]["segs"]:
-    #             audiodata, _ = loadFile(s[0], s[1][1]-s[1][0], s[1][0], fs)
-    #             sp = SignalProc.SignalProc(audiodata, fs, 512, 256)
-    #             sg = sp.spectrogram(audiodata, multitaper=False)
-    #             maxsg = np.min(sg)
-    #             sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
-    #             # Make it readable
-    #             minsg = np.min(sg)
-    #             maxsg = np.max(sg)
-    #             colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
-    #             colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
-    #
-    #             vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
-    #             vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row+1, col=col)
-    #             im = pg.ImageItem(enableMouse=False)
-    #             vb2.addItem(im)
-    #             im.setImage(sg)
-    #             im.setBorder('w')
-    #             im.setLevels([colourStart, colourEnd])
-    #
-    #             txt = s[1][4][0]
-    #             # txt = s[0].split('\\')[-1]+'-'+s[1][4][0]
-    #             lbl = pg.LabelItem(txt, rotateAxis=(1,0), angle=179)
-    #             vb.addItem(lbl)
-    #             col += 1
-    #         row += 2
-    #
-    #     QtGui.QApplication.instance().exec_()
-    #
-    # else:
-    #     app = QtGui.QApplication([])
-    #     for c in range(len(clusters)):
-    #         print(clusters[c]["label"])
-    #         # app = QtGui.QApplication([])
-    #
-    #         mw = QtGui.QMainWindow()
-    #         mw.show()
-    #         mw.resize(1200, 800)
-    #
-    #         win = pg.GraphicsLayoutWidget()
-    #         mw.setCentralWidget(win)
-    #         row = 0
-    #         col = 0
-    #         for s in clusters[c]["segs"]:
-    #             audiodata, _ = loadFile(s[0], s[1][1]-s[1][0], s[1][0], fs)
-    #             sp = SignalProc.SignalProc(audiodata, fs, 512, 256)
-    #             sg = sp.spectrogram(audiodata, multitaper=False)
-    #             maxsg = np.min(sg)
-    #             sg = np.abs(np.where(sg == 0, 0.0, 10.0 * np.log10(sg / maxsg)))
-    #             # Make it readable
-    #             minsg = np.min(sg)
-    #             maxsg = np.max(sg)
-    #             colourStart = (20 / 100.0 * 20 / 100.0) * (maxsg - minsg) + minsg
-    #             colourEnd = (maxsg - minsg) * (1.0 - 20 / 100.0) + colourStart
-    #
-    #             vb = win.addViewBox(enableMouse=False, enableMenu=False, row=row, col=col, invertX=True)
-    #             vb2 = win.addViewBox(enableMouse=False, enableMenu=False, row=row + 1, col=col)
-    #             im = pg.ImageItem(enableMouse=False)
-    #             vb2.addItem(im)
-    #             im.setImage(sg)
-    #             im.setBorder('w')
-    #             im.setLevels([colourStart, colourEnd])
-    #
-    #             txt = s[1][4][0]
-    #             lbl = pg.LabelItem(txt, rotateAxis=(1, 0), angle=179)
-    #             vb.addItem(lbl)
-    #             if row == 6:
-    #                 row = 0
-    #                 col += 1
-    #             else:
-    #                 row += 2
-    #         QtGui.QApplication.instance().exec_()
-
 
 def class_create(label, syl, features, f_low, f_high, segs, single=False, dist_method='dtw'):
     """ Create a new class
@@ -1285,7 +1193,7 @@ def class_update(cluster, newfeatures, newf_low, newf_high, newsyl, newseg, sing
 
 
 def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0, denoise=False,
-                    alg='agglomerative', n_clusters=None, displayallinone=True):
+                    alg='agglomerative', n_clusters=None):
     """
     Given wav + annotation files,
         1) identify syllables using median clipping/ FIR
@@ -1299,7 +1207,6 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
     :param denoise:
     :param alg: algorithm to use
     :param n_clusters: number of clusters
-    :param displayallinone:
     :return: possible clusters
     """
 
@@ -1542,10 +1449,6 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
     # TODO: Find cluster centers and sort the segments accordingly
 
     return clustered_dataset, fs, nclasses
-
-
-# cluster_by_dist('D:\AviaNZ\Sound_Files\demo\morepork', feature='we', denoise=False, single=True)
-# cluster_by_agg('D:\AviaNZ\Sound_Files\demo\morepork', feature='we')
 
 
 def testLearning1():
