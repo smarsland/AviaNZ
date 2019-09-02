@@ -114,8 +114,9 @@ class postProcess:
         self.segments = segments
         if spInfo != {}:
             self.minLen = spInfo['TimeRange'][0]
-            if hasattr(spInfo,'F0') and spInfo['F0']:
-                self.F0 = spInfo['F0Range']
+            if 'F0' in spInfo:
+                if spInfo['F0']:
+                    self.F0 = spInfo['F0Range']
             self.fLow = spInfo['FreqRange'][0]
             self.fHigh = spInfo['FreqRange'][1]
         else:
@@ -141,7 +142,7 @@ class postProcess:
                 continue
         self.segments = newSegments
 
-    def wind_cal(self, data, sampleRate):
+    def wind_cal(self, data, sampleRate, fn_peak=0.35):
         """ Calculate wind """
         wind_lower = 2.0 * 50 / sampleRate
         wind_upper = 2.0 * 500 / sampleRate
@@ -157,26 +158,32 @@ class postProcess:
         a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
 
         fn = False
-        if self.fLow > 500:
+        if self.fLow > 500 or self.fLow == 0:   # fLow==0 when non-species-specific
             # Check the presence/absence of the target species/call type > 500 Hz.
             ind = np.abs(f - 500).argmin()
-            ind_fLow = np.abs(f - self.fLow).argmin() - ind
-            ind_fHigh = np.abs(f - self.fHigh).argmin() - ind
+            if self.fLow == 0:
+                ind_fLow = ind
+            else:
+                ind_fLow = np.abs(f - self.fLow).argmin() - ind
+            if self.fHigh == 0:
+                ind_fHigh = len(f) - 1
+            else:
+                ind_fHigh = np.abs(f - self.fHigh).argmin() - ind
             p = p[ind:]
 
             peaks, _ = signal.find_peaks(p)
-            peaks = [i for i in peaks if i >= ind_fLow and i <= ind_fHigh]
+            peaks = [i for i in peaks if (ind_fLow <= i <= ind_fHigh)]
             prominences = signal.peak_prominences(p, peaks)[0]
             # If there is at least one significant prominence in the target frequency band, then it could be a FN
-            if len(prominences) > 0:
-                if np.max(prominences) > 0.5:      # Note thr 0.5
+            print('np.max(prominences):', np.max(prominences))
+            if len(prominences) > 0 and np.max(prominences) > fn_peak:
                     fn = True
 
         return np.mean(a_wind), np.std(a_wind), fn    # mean of the PSD in the frequency band of interest.Upper part of
                                                       # the step 3 in Algorithm 2.1
 
 
-    def wind(self, windT=2.5):
+    def wind(self, windT=2.5, fn_peak=0.35):
         """
         Delete wind corrupted segments, mainly wind gust
         Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and
@@ -197,7 +204,7 @@ class postProcess:
                     data = np.asarray(data)[ind].tolist()
                     if len(data) == 0:
                         continue
-                    m, _, fn = self.wind_cal(data=data, sampleRate=self.sampleRate)
+                    m, _, fn = self.wind_cal(data=data, sampleRate=self.sampleRate, fn_peak=fn_peak)
                     if m > windT and not fn:
                         print(seg, m, 'windy, deleted')
                         newSegments.remove(seg)

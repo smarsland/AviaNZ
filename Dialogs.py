@@ -2197,8 +2197,8 @@ class PicButton(QAbstractButton):
         self.setImage(lut, colStart, colEnd, cmapInv)
 
         self.buttonClicked = False
-        if not self.cluster:
-            self.clicked.connect(self.changePic)
+        # if not self.cluster:
+        self.clicked.connect(self.changePic)
         # fixed size
         self.setSizePolicy(0,0)
         self.setMinimumSize(self.im1.size())
@@ -2243,10 +2243,14 @@ class PicButton(QAbstractButton):
         if type(event) is not bool:
             painter = QPainter(self)
             painter.setPen(QPen(QColor(80,255,80), 2))
-            if self.mark == "yellow":
-                painter.setOpacity(0.8)
-            elif self.mark == "red":
-                painter.setOpacity(0.5)
+            if self.cluster:
+                if self.mark == "yellow":
+                    painter.setOpacity(0.5)
+            else:
+                if self.mark == "yellow":
+                    painter.setOpacity(0.8)
+                elif self.mark == "red":
+                    painter.setOpacity(0.5)
             painter.drawImage(event.rect(), self.im1)
             if not self.cluster:
                 painter.drawLine(self.line1)
@@ -2305,12 +2309,18 @@ class PicButton(QAbstractButton):
 
     def changePic(self,event):
         # cycle through CONFIRM / DELETE / RECHECK marks
-        if self.mark == "green":
-            self.mark = "red"
-        elif self.mark == "red":
-            self.mark = "yellow"
-        elif self.mark == "yellow":
-            self.mark = "green"
+        if self.cluster:
+            if self.mark == "green":
+                self.mark = "yellow"
+            elif self.mark == "yellow":
+                self.mark = "green"
+        else:
+            if self.mark == "green":
+                self.mark = "red"
+            elif self.mark == "red":
+                self.mark = "yellow"
+            elif self.mark == "yellow":
+                self.mark = "green"
         self.paintEvent(event)
         #self.update()
         self.repaint()
@@ -2339,12 +2349,9 @@ class Cluster(QDialog):
 
         self.sampleRate = sampleRate
         self.segments = segments
+        print('segments:\n', self.segments)
         self.nclasses = classes
         self.config = config
-
-        # Merge button
-        self.btnMerge = QPushButton('Merge Clusters')
-        self.btnMerge.clicked.connect(self.merge)
 
         # Volume control
         self.volSlider = QSlider(Qt.Horizontal)
@@ -2371,7 +2378,6 @@ class Cluster(QDialog):
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
         hboxSpecContr = QHBoxLayout()
-        hboxSpecContr.addWidget(self.btnMerge)
         labelBr = QLabel(" Bright.")
         hboxSpecContr.addWidget(labelBr)
         hboxSpecContr.addWidget(self.brightnessSlider)
@@ -2381,15 +2387,34 @@ class Cluster(QDialog):
         labelVl = QLabel("Vol.")
         hboxSpecContr.addWidget(labelVl)
         hboxSpecContr.addWidget(self.volSlider)
-        label1 = QLabel('Adjust clusters if required')
+
+        hboxBtns = QHBoxLayout()
+        self.btnMerge = QPushButton('Merge Clusters')
+        self.btnMerge.clicked.connect(self.merge)
+        self.btnUpdateClusterNames = QPushButton('Update Cluster Names')
+        self.btnUpdateClusterNames.clicked.connect(self.updateClusterNames)
+        lb = QLabel('Move Selected Segment/s to Cluster')
+        # lb.setStyleSheet("text-align: right;")
+        lb.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.cmbUpdateSeg = QComboBox()
+        self.btnUpdateSeg = QPushButton('Apply')
+        self.btnUpdateSeg.clicked.connect(self.moveSelectedSegs)
+        hboxBtns.addWidget(self.btnMerge)
+        hboxBtns.addWidget(self.btnUpdateClusterNames)
+        hboxBtns.addWidget(lb)
+        hboxBtns.addWidget(self.cmbUpdateSeg)
+        hboxBtns.addWidget(self.btnUpdateSeg)
+
+        label1 = QLabel('Adjust the automated clusters as required')
         label1.setFont(QtGui.QFont('SansSerif', 10))
 
         # top part
         vboxTop = QVBoxLayout()
         vboxTop.addWidget(label1)
         vboxTop.addLayout(hboxSpecContr)
+        vboxTop.addLayout(hboxBtns)
         # must be fixed size!
-        vboxTop.setSizeConstraint(QLayout.SetFixedSize)
+        # vboxTop.setSizeConstraint(QLayout.SetFixedSize)
 
         # set up the images
         self.flowLayout = pg.LayoutWidget()
@@ -2422,7 +2447,7 @@ class Cluster(QDialog):
             if cbox.checkState() != 0:
                 tomerge.append(i)
             i += 1
-        # print('rows/clusters to merge are:', tomerge)
+        print('rows/clusters to merge are:', tomerge)
         if len(tomerge) < 2:
             return
 
@@ -2439,15 +2464,32 @@ class Cluster(QDialog):
                 max_label -= 1
             c -= 1
 
-        self.nclasses = nclasses
-
         # print('[old, new] labels')
         labels = dict(labels)
         print(labels)
 
+        keys = [i for i in range(self.nclasses) if i not in tomerge]        # the old keys those didn't merge
+        print('old keys left: ', keys)
+
+        # update clusters dictionary {ID: cluster_name}
+        clusters = {0: self.clusters[tomerge[0]]}
+        for i in keys:
+            clusters.update({labels[i]: self.clusters[i]})
+
+        print('before update: ', self.clusters)
+        self.clusters = clusters
+        print('after update: ', self.clusters)
+
+        self.nclasses = nclasses
+
         # update the segments
         for seg in self.segments:
-            seg[3] = labels[seg[3]]
+            seg[-1] = labels[seg[-1]]
+
+        # update the cluster combobox
+        self.cmbUpdateSeg.clear()
+        for x in self.clusters:
+            self.cmbUpdateSeg.addItem(self.clusters[x])
 
         # Clean and redraw
         self.clearButtons()
@@ -2456,40 +2498,157 @@ class Cluster(QDialog):
         self.updateButtons()
         print('updated')
 
+    def moveSelectedSegs(self):
+        """ Listner for Apply button to move the selected segments to another cluster.
+            Change the cluster ID of those selected buttons and redraw all the clusters.
+        """
+        moveto = self.cmbUpdateSeg.currentText()
+        # find the clusterID from name
+        for key in self.clusters.keys():
+            if moveto == self.clusters[key]:
+                movetoID = key
+                break
+        print(moveto, movetoID)
+
+        for seg in self.segments:
+            if seg[2].mark == 'yellow':
+                seg[-1] = movetoID
+                seg[2].mark = 'green'
+
+        # update self.clusters, delete clusters with no members
+        todelete = []
+        for ID, label in self.clusters.items():
+            empty = True
+            for seg in self.segments:
+                if seg[-1] == ID:
+                    empty = False
+                    break
+            if empty:
+                todelete.append(ID)
+
+        self.clearButtons()
+
+        # Generate new class labels
+        if len(todelete) > 0:
+            keys = [i for i in range(self.nclasses) if i not in todelete]        # the old keys those didn't delete
+            print('old keys left: ', keys)
+
+            nclasses = self.nclasses - len(todelete)
+            max_label = nclasses - 1
+            labels = []
+            c = self.nclasses - 1
+            while c > -1:
+                if c in keys:
+                    labels.append((c, max_label))
+                    max_label -= 1
+                c -= 1
+
+            # print('[old, new] labels')
+            labels = dict(labels)
+            print(labels)
+
+            # update clusters dictionary {ID: cluster_name}
+            clusters = {}
+            for i in keys:
+                clusters.update({labels[i]: self.clusters[i]})
+
+            print('before move: ', self.clusters)
+            self.clusters = clusters
+            print('after move: ', self.clusters)
+
+            # update the segments
+            for seg in self.segments:
+                seg[-1] = labels[seg[-1]]
+
+            self.nclasses = nclasses
+
+        # redraw the buttons
+        self.updateButtons()
+
+
+    def updateClusterNames(self):
+        """ Listner for Update LCuster Names button"""
+        # Check duplicate names
+        names = [self.tboxes[ID].toPlainText() for ID in range(self.nclasses)]
+        if len(names) != len(set(names)):
+            msg = SupportClasses.MessagePopup("w", "Name error", "Duplicate cluster names! \ntry again")
+            msg.exec_()
+            return
+
+        for ID in range(self.nclasses):
+            self.clusters[ID] = self.tboxes[ID].toPlainText()
+
+        self.cmbUpdateSeg.clear()
+        for x in self.clusters:
+            self.cmbUpdateSeg.addItem(self.clusters[x])
+        print('updated clusters: ', self.clusters)
+
     def addButtons(self):
         """ Make the buttons and display them
         """
-        self.cboxes = []
-        for r in range(self.nclasses):
+        self.cboxes = []    # List of check boxes
+        self.tboxes = []    # Corresponding list of text boxes
+        self.clusters = []
+        for i in range(self.nclasses):
+            self.clusters.append((i, 'Cluster ' + str(i)))
+        self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
+        print('clusters dict: ', self.clusters)
+
+        for x in self.clusters:
+            self.cmbUpdateSeg.addItem(self.clusters[x])
+
+        for r in range(self.nclasses):      # Class IDs are 0, 1, 2, 3,...
             c = 0
+            tbox = QTextEdit('Cluster ' + str(r))
+            tbox.setMaximumHeight(150)
+            # tbox.setStyleSheet("border: none; background: rgba(0,0,0,0%); text-align: center; vertical-align: middle;")
+            tbox.setStyleSheet("border: none;")
+            tbox.setAlignment(QtCore.Qt.AlignCenter)
+            # lbl.setEnabled(False)
+            self.tboxes.append(tbox)
+            self.flowLayout.addWidget(self.tboxes[-1], r, c)
+            c += 1
             cbox = QCheckBox("")
             self.cboxes.append(cbox)
             self.flowLayout.addWidget(self.cboxes[-1], r, c)
             c += 1
             # Find the segments under this class, create buttons, and show them
+            # i = 0
             for seg in self.segments:
-                if seg[2] == r:
+                print(seg)
+                if seg[-1] == r:
                     sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1]-seg[1][0], seg[1][0])
                     newButton = PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart,
                                           self.colourEnd, False, cluster=True)
                     seg.insert(2, newButton)
                     self.flowLayout.addWidget(seg[2], r, c)
                     c += 1
-            print('*', r, c-1)
+                # i += 1
+            print('*-', r, c-2)
 
     def updateButtons(self):
-        """ Update the existing buttons, call when merging clusters
+        """ Redraw the existing buttons, call when merging clusters
         """
         self.cboxes = []
+        self.tboxes = []
         for r in range(self.nclasses):
             c = 0
+            tbox = QTextEdit(self.clusters[r])
+            tbox.setMaximumHeight(150)
+            # tbox.setStyleSheet("border: none; background: rgba(0,0,0,0%); text-align: center; vertical-align: middle;")
+            tbox.setStyleSheet("border: none;")
+            tbox.setAlignment(QtCore.Qt.AlignCenter)
+            # lbl.setEnabled(False)
+            self.tboxes.append(tbox)
+            self.flowLayout.addWidget(self.tboxes[-1], r, c)
+            c += 1
             cbox = QCheckBox("")
             self.cboxes.append(cbox)
             self.flowLayout.addWidget(self.cboxes[-1], r, c)
             c += 1
             # Find the segments under this class and show them
             for seg in self.segments:
-                if seg[3] == r:
+                if seg[-1] == r:
                     self.flowLayout.addWidget(seg[2], r, c)
                     c += 1
             # print(r, c-1)
@@ -2500,6 +2659,8 @@ class Cluster(QDialog):
         """
         for ch in self.cboxes:
             ch.hide()
+        for tbx in self.tboxes:
+            tbx.hide()
         for btnum in reversed(range(self.flowLayout.layout.count())):
             item = self.flowLayout.layout.itemAt(btnum)
             if item is not None:
