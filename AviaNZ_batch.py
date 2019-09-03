@@ -392,7 +392,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
                     if self.species != 'All species':
                         # note: using 'recaa' mode = partial anitalias
-                        thisPageSegs = self.ws.waveletSegment(data=self.audiodata[start:end], sampleRate=self.sampleRate, d=False, f=True, wpmode="new")
+                        thisPageSegs = self.ws.waveletSegment(data=self.audiodata[start:end], sampleRate=self.sampleRate, d=False, wpmode="new")
                     else:
                         # Create spectrogram for median clipping etc
                         self.sgRaw = self.sp.spectrogram(self.audiodata[start:end], window_width=self.config['window_width'], incr=self.config['incr'], window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)

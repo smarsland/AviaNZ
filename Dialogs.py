@@ -24,6 +24,7 @@
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
 import sys,os
+import platform
 
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import QDialog, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit, QSlider, QCheckBox, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox
@@ -137,6 +138,10 @@ class Spectrogram(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        if platform.system() == 'Linux':
+            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        else:
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(300)
         self.DOC = DOC
 
@@ -239,6 +244,7 @@ class OperatorReviewer(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Set Operator/Reviewer')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         self.setMinimumWidth(320)
 
         self.operatorlabel = QLabel("Operator")
@@ -271,6 +277,10 @@ class addNoiseData(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Noise Information')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        if platform.system() == 'Linux':
+            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        else:
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(320)
 
         print(noiseLevel,noiseTypes)
@@ -378,6 +388,10 @@ class Diagnostic(QDialog):
         self.setWindowTitle('Diagnostic Plot Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(300)
+        if platform.system() == 'Linux':
+            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        else:
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
 
         # species / filter
         self.filterLabel = QLabel("Select filter to use")
@@ -443,6 +457,10 @@ class WaveletTrain(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Train a Species Detector')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        if platform.system() == 'Linux':
+            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        else:
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(475)
         self.setMinimumHeight(500)
 
@@ -697,6 +715,11 @@ class Segmentation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Segmentation Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        # for some reason CloseButtonHint disables window floating for me
+        if platform.system() == 'Linux':
+            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        else:
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(350)
 
         self.algs = QComboBox()
@@ -944,6 +967,11 @@ class Denoise(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Denoising Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        if platform.system() == 'Linux':
+            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        else:
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+
         self.setMinimumWidth(300)
         self.setMinimumHeight(250)
         self.DOC=DOC
@@ -1250,6 +1278,11 @@ class HumanClassify1(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        if platform.system() == 'Linux':
+            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        else:
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+
         self.frame = QWidget()
 
         self.lut = lut
@@ -1389,7 +1422,7 @@ class HumanClassify1(QDialog):
         birds3Layout = QVBoxLayout()
         count = 0
         for btn in self.birdbtns:
-            if count<10: 
+            if count<10:
                 birds1Layout.addWidget(btn)
             elif count<20:
                 birds2Layout.addWidget(btn)
@@ -1621,31 +1654,53 @@ class HumanClassify1(QDialog):
 
         # currently, we ignore the certainty and only display species:
         self.species.setText(','.join(label))
-        # Select the right species tickboxes / buttons
+
+        # temporarily, update the short bird list to have the current species at the top
+        if not self.parent.config['ReorderList']:
+            tempShortList = list(self.shortBirdList)
+        # question marks are displayed on the first pass,
+        # but any clicking sets certainty to 100 in effect.
+        for lsp_ix in range(len(label)):
+            if label[lsp_ix].endswith('?'):
+                label[lsp_ix] = label[lsp_ix][:-1]
+            # move the label to the top of the list
+            if label[lsp_ix] in self.shortBirdList:
+                self.shortBirdList.remove(label[lsp_ix])
+            self.shortBirdList.insert(0, label[lsp_ix])
+
+        # clear selection
         self.birds3.clearSelection()
         self.updateButtonList()
+        # Select the right species tickboxes / buttons
         for lsp in label:
-            # question marks are displayed on the first pass,
-            # but any clicking sets certainty to 100 in effect.
-            if lsp.endswith('?'):
-                lsp = lsp[:-1]
+            # add ticks to the right checkboxes
             if lsp in self.shortBirdList[:29]:
                 ind = self.shortBirdList.index(lsp)
                 self.birdbtns[ind].setChecked(True)
-                print(ind,lsp)
             else:
                 self.birdbtns[29].setChecked(True)
                 self.birds3.setEnabled(True)
-                if lsp not in self.longBirdList:
-                    if '(' in lsp:
-                        ind = lsp.index('(')
-                        lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
+
+            # mark this species in the long list box
+            if lsp not in self.longBirdList:
+                # try genus>species instead of genus (species)
+                if '(' in lsp:
+                    ind = lsp.index('(')
+                    lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
+                # add to long bird list then
                 if lsp not in self.longBirdList:
                     self.longBirdList.append(lsp)
                     self.saveConfig = True
+
+            # all species by now are in the long bird list
+            if self.longBirdList is not None:
                 ind = self.longBirdList.index(lsp)
                 self.birds3.item(ind).setSelected(True)
+
         self.label = label
+        # reset bird list for next image, if needed
+        if not self.parent.config['ReorderList']:
+            self.shortBirdList = tempShortList
 
     def tickBirdsClicked(self):
         # Listener for when the user selects a bird tick box
@@ -1708,36 +1763,64 @@ class HumanClassify1(QDialog):
 
     def listBirdsClicked(self, item):
         # Listener for clicks in the listbox of birds
+        # check for a corresponding button in the short list
+        # - if the user is silly enough to click here when it's there as well
+        checkedButton = None
+        dontknowButton = None
+        for button in self.birds.buttons():
+            if button.text() == item.text() and button.text() != "Other":
+                checkedButton = button
+            if button.text() == "Don't Know":
+                dontknowButton = button
+
         if (item.text() == "Other"):
             self.tbox.setEnabled(True)
         else:
-            #TODO: Check if selected or not
             # Save the entry
             self.tbox.setEnabled(False)
             if self.multipleBirds:
+                # mark this
                 if item.isSelected() and item.text() not in self.label:
-                    self.label.append(str(item.text()))
-                if not item.isSelected() and item.text in self.label:
+                    # if label was empty, just change from DontKnow:
+                    if self.label == ["Don't Know"]:
+                        self.label = [str(item.text())]
+                        if dontknowButton is not None:
+                            dontknowButton.setChecked(False)
+                    else:
+                        self.label.append(str(item.text()))
+                        if checkedButton is not None:
+                            checkedButton.setChecked(True)
+
+                # unmark this
+                if not item.isSelected() and item.text() in self.label:
                     self.label.remove(str(item.text()))
+                    if checkedButton is not None:
+                        checkedButton.setChecked(False)
+                # if this erased everything, revert to don't know:
+                if self.label == []:
+                    self.label = ["Don't Know"]
+                    if dontknowButton is not None:
+                        dontknowButton.setChecked(True)
             else:
                 self.label = [str(item.text())]
+                # for radio buttons, only "Other" will be selected already
+
             self.species.setText(','.join(self.label))
 
     def birdTextEntered(self):
         # Listener for the text entry in the bird list
         # Check text isn't already in the listbox, and add if not
-        # Doesn't sort the list, but will when dialog is reopened
+        # Then calls the usual handler for listbox selections
         textitem = self.tbox.text()
         item = self.birds3.findItems(textitem, Qt.MatchExactly)
-        if item:
-            pass
-        else:
+        if not item:
             self.birds3.addItem(textitem)
-        if self.multipleBirds:
-            self.label.append(str(textitem))
-        else:
-            self.label = [str(textitem)]
-        self.species.setText(','.join(self.label))
+            item = self.birds3.findItems(textitem, Qt.MatchExactly)
+
+        item[0].setSelected(True)
+        # this will deal with updating the label and buttons
+        self.listBirdsClicked(item[0])
+
         self.saveConfig = True
 
     def setColourLevels(self):
@@ -1774,6 +1857,7 @@ class HumanClassify2a(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
 
         self.birds = QListWidget(self)
         self.birds.setMaximumWidth(350)
@@ -1841,8 +1925,11 @@ class HumanClassify2(QDialog):
 
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
+        if platform.system() == 'Linux':
+            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        else:
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
         # let the user quit without bothering rest of it
-        self.setWindowFlags(self.windowFlags() & QtCore.Qt.WindowCloseButtonHint)
 
         self.sampleRate = sampleRate
         self.audiodata = audiodata
@@ -2363,9 +2450,9 @@ class Cluster(QDialog):
         self.setWindowTitle('Clusters')
 
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        #self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint & QtCore.Qt.CustomizeWindowHint)
 
         # let the user quit without bothering rest of it
-        # self.setWindowFlags(self.windowFlags() & QtCore.Qt.WindowCloseButtonHint)
 
         self.sampleRate = sampleRate
         self.segments = segments
@@ -2805,6 +2892,7 @@ class InterfaceSettings2(QDialog):
       self.tab3UI()
       self.setWindowTitle("Interface Settings")
       self.setWindowIcon(QIcon('img/Avianz.ico'))
+      self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
       self.setMinimumWidth(400)
 
       mainLayout = QVBoxLayout()

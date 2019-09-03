@@ -28,6 +28,7 @@
 # TODO: Full list of next steps
 
 import sys, os, json, platform, re, shutil
+from jsonschema import validate
 from shutil import copyfile
 from openpyxl import load_workbook, Workbook
 
@@ -3131,7 +3132,14 @@ class AviaNZ(QMainWindow):
                 # Check which page is first to have segments on
                 self.currentFileSection = -1
 
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.brightnessSlider.value(), self.contrastSlider.value(), self.shortBirdList, self.longBirdList, self.multipleBirds, self)
+            # work on a copy if list shouldn't be reordered
+            if self.config['ReorderList']:
+                dialogBirdList = list(self.shortBirdList)
+            else:
+                dialogBirdList = self.shortBirdList
+
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.brightnessSlider.value(), self.contrastSlider.value(), dialogBirdList, self.longBirdList, self.multipleBirds, self)
+
             # load the first image:
             self.box1id = -1
             self.humanClassifyDialog1.setSegNumbers(0, len(self.segments))
@@ -4035,7 +4043,7 @@ class AviaNZ(QMainWindow):
                         wavFile = root + '/' + file
                         _ = self.annotation2GT_OvWin(wavFile, species, window=window, inc=inc)
 
-            Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, d=False, f=True, rf=True,
+            Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, d=False, rf=True,
                                                                learnMode='recaa', savedetections=False, window=window,
                                                                inc=inc)
             print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
@@ -4141,7 +4149,7 @@ class AviaNZ(QMainWindow):
             window = 1
             inc = None
             nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, d=False,
-                                                            f=True, rf=True, learnMode="recaa", window=window, inc=inc)
+                                                            rf=True, learnMode="recaa", window=window, inc=inc)
             print("Filtered nodes: ", nodes)
             print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
 
@@ -4620,11 +4628,12 @@ class AviaNZ(QMainWindow):
             # SPECIES-SPECIFIC methods from here:
             elif str(alg) == 'Wavelets':
                 speciesData = self.FilterDicts[filtname]
-                speciesSubf = speciesData["Filters"][0]
+                # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
-                                                d=False, f=True, wpmode="new")
+                                                d=False, wpmode="new")
             # TODO
+            # TODO: make sure cross corr outputs lists of lists
             elif str(alg) == 'Cross-Correlation':
                 if species_cc != 'Choose species...':
                     # need to load template/s
@@ -4641,51 +4650,56 @@ class AviaNZ(QMainWindow):
                 print('After wind: ', post.segments)
                 # post.rainClick()
                 # print('After rain: ', post.segments)
+                newSegments = post.segments
             else:
-                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                  segments=newSegments, spInfo=speciesData)
-                post.short()  #TODO: keep 'deleteShort' in filter file?
-                if speciesData['Wind']:
-                    post.wind()
-                    print('After wind: ', post.segments)
-                if speciesData['Rain']:
-                    pass
-                    # post.rainClick() - omitted in sppSpecific=T cases
-                    # print('After rain: ', post.segments)
-                if speciesData['F0']:
-                    pass
-                    # post.fundamentalFrq(self.filename, speciesData)
-                    # print('After ff: ', post.segments)
+                # postProcess currently operates on single-level list of segments,
+                # so we run it over subfilters for wavelets:
+                for filtix in range(len(speciesData['Filters'])):
+                    post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                                                      segments=newSegments[filtix],
+                                                      subfilter=speciesData['Filters'][filtix])
+                    post.short()
+                    if speciesData['Wind']:
+                        post.wind()
+                        print('After wind: ', post.segments)
+                    if speciesData['Rain']:
+                        pass
+                        # post.rainClick() - omitted in sppSpecific=T cases
+                        # print('After rain: ', post.segments)
+                    if speciesData['F0']:
+                        pass
+                        # post.fundamentalFrq(self.filename, speciesData)
+                        # print('After ff: ', post.segments)
+                    newSegments[filtix] = post.segments
 
-            newSegments = post.segments
             print("After post processing: ", newSegments)
 
-            # Generate annotation friendly output.
+            # Generate Segment-type output.
             if str(alg)=='Wavelets':
-                if len(newSegments)>0:
+                for filtix in range(len(speciesData['Filters'])):
+                    speciesSubf = speciesData['Filters'][filtix]
                     y1 = self.convertFreqtoY(speciesSubf['FreqRange'][0])
                     y2 = min(self.sampleRate//2, speciesSubf['FreqRange'][1])
                     y2 = self.convertFreqtoY(y2)
-                    for seg in newSegments:
+                    for seg in newSegments[filtix]:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
                                 [{"species": filtspecies, "certainty": 50, "filter": filtname, "calltype": speciesSubf["calltype"]}], index=-1)
                         self.segmentsToSave = True
             elif str(alg)=='Cross-Correlation' and species_cc != 'Choose species...':
-                if len(newSegments) > 0:
+                for filtix in range(len(speciesData['Filters'])):
+                    speciesSubf = speciesData['Filters'][filtix]
                     y1 = self.convertFreqtoY(speciesSubf['FreqRange'][0])
                     y2 = min(self.sampleRate//2, speciesSubf['FreqRange'][1])
                     y2 = self.convertFreqtoY(y2)
-                    for seg in newSegments:
+                    for seg in newSegments[filtix]:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
                                 [{"species": species_cc.title(), "certainty": 50}], index=-1)
                         self.segmentsToSave = True
             else:
-                if len(newSegments)>0:
-                    for seg in newSegments:
-                        self.addSegment(seg[0],seg[1])
-                        self.segmentsToSave = True
+                for seg in newSegments:
+                    self.addSegment(seg[0],seg[1])
+                    self.segmentsToSave = True
 
-            self.lenNewSegments = len(newSegments)
             self.segmentDialog.undo.setEnabled(True)
             self.statusLeft.setText('Ready')
         print('Segmentation finished at %s' % (time.time() - opstartingtime))
@@ -5574,21 +5588,42 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
     # if config and bird files not found, copy from distributed backups.
     # so these files will always exist on load (although they could be corrupt)
     # (exceptions here not handled and should always result in crashes)
-    necessaryFiles = ["AviaNZconfig.txt", "ListCommonBirds.txt", "ListDOCBirds.txt"]
     if not os.path.isdir(configdir):
         print("Creating config dir %s" % configdir)
         try:
             os.makedirs(configdir)
-        except:
+        except Exception as e:
             print("ERROR: failed to make config dir")
+            print(e)
             sys.exit()
+
+    # pre-run check of config file validity
+    confloader = SupportClasses.ConfigLoader()
+    configschema = json.load(open("Config/config.schema"))
+    try:
+        config = confloader.config(os.path.join(configdir, "AviaNZconfig.txt"))
+        validate(instance=config, schema=configschema)
+        print("successfully validated config file")
+    except Exception as e:
+        print("Warning: config file failed validation with:")
+        print(e)
+        try:
+            shutil.copy2("Config/AviaNZconfig.txt", configdir)
+        except Exception as e:
+            print("ERROR: failed to copy essential config files")
+            print(e)
+            sys.exit()
+
+    # check and if needed copy any other necessary files
+    necessaryFiles = ["ListCommonBirds.txt", "ListDOCBirds.txt"]
     for f in necessaryFiles:
         if not os.path.isfile(os.path.join(configdir, f)):
             print("File %s not found in config dir, providing default" % f)
             try:
                 shutil.copy2(os.path.join("Config", f), configdir)
-            except:
+            except Exception as e:
                 print("ERROR: failed to copy essential config files")
+                print(e)
                 sys.exit()
 
     # copy over filters to ~/.avianz/Filters/:

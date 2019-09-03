@@ -98,27 +98,25 @@ class preProcess:
 
         return filteredDenoisedData, fs
 
+
 class postProcess:
     """ This class implements few post processing methods to avoid false positives
+    Operates on detections from a single subfilter.
 
     segments:   detected segments in form of [[s1,e1], [s2,e2],...]
-    species:    species to consider
+    subfilter:  AviaNZ format subfilter
     """
 
-    def __init__(self, audioData=None, sampleRate=0, segments=[], spInfo={}):
+    def __init__(self, audioData=None, sampleRate=0, segments=[], subfilter={}):
         self.audioData = audioData
         self.sampleRate = sampleRate
         self.segments = segments
-        # defaulting to first subfilter for now
-        for key, value in spInfo["Filters"][0].items():
-            spInfo[key] = value
-        if spInfo != {}:
-            self.minLen = spInfo['TimeRange'][0]
-            if 'F0' in spInfo:
-                if spInfo['F0']:
-                    self.F0 = spInfo['F0Range']
-            self.fLow = spInfo['FreqRange'][0]
-            self.fHigh = spInfo['FreqRange'][1]
+        if subfilter != {}:
+            self.minLen = subfilter['TimeRange'][0]
+            if 'F0Range' in subfilter:
+                self.F0 = subfilter['F0Range']
+            self.fLow = subfilter['FreqRange'][0]
+            self.fHigh = subfilter['FreqRange'][1]
         else:
             self.minLen = 0
             self.fLow = 0
