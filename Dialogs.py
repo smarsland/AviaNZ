@@ -1916,15 +1916,17 @@ class HumanClassify2(QDialog):
         vboxTop.addLayout(hboxSpecContr)
 
         # Controls at the bottom
-        self.buttonPrev = QtGui.QToolButton()
-        self.buttonPrev.setArrowType(Qt.LeftArrow)
-        self.buttonPrev.setIconSize(QtCore.QSize(30,30))
-        self.buttonPrev.clicked.connect(self.prevPage)
+        #self.buttonPrev = QtGui.QToolButton()
+        #self.buttonPrev.setArrowType(Qt.LeftArrow)
+        #self.buttonPrev.setIconSize(QtCore.QSize(30,30))
+        #self.buttonPrev.clicked.connect(self.prevPage)
 
-        self.buttonNext = QtGui.QToolButton()
-        self.buttonNext.setArrowType(Qt.RightArrow)
-        self.buttonNext.setIconSize(QtCore.QSize(30,30))
-        self.buttonNext.clicked.connect(self.nextPage)
+        #self.buttonNext = QtGui.QToolButton()
+        #self.buttonNext.setArrowType(Qt.RightArrow)
+        #self.buttonNext.setIconSize(QtCore.QSize(30,30))
+        #self.buttonNext.clicked.connect(self.nextPage)
+
+        # TODO: Is this useful?
         self.pageLabel = QLabel()
 
         self.none = QPushButton("Toggle all")
@@ -1932,19 +1934,26 @@ class HumanClassify2(QDialog):
         self.none.setMaximumSize(250, 30)
         self.none.clicked.connect(self.toggleAll)
 
-        self.finish = QPushButton("Confirm and close")
+        # Either the next or finish button is visible. They have different internal
+        # functionality, but look the same to the user
+        self.next = QPushButton("Next")
+        self.next.setSizePolicy(QSizePolicy(5,5))
+        self.next.setMaximumSize(250, 30)
+        self.next.clicked.connect(self.nextPage)
+
+        self.finish = QPushButton("Next")
         self.finish.setSizePolicy(QSizePolicy(5,5))
         self.finish.setMaximumSize(250, 30)
 
         # movement buttons and page numbers
-        vboxBot = QHBoxLayout()
-        vboxBot.addWidget(self.buttonPrev)
-        vboxBot.addWidget(self.buttonNext)
-        vboxBot.addSpacing(20)
-        vboxBot.addWidget(self.pageLabel)
-        vboxBot.addSpacing(20)
-        vboxBot.addWidget(self.none)
-        vboxBot.addWidget(self.finish)
+        self.vboxBot = QHBoxLayout()
+        #vboxBot.addWidget(self.buttonPrev)
+        #vboxBot.addWidget(self.buttonNext)
+        #vboxBot.addSpacing(20)
+        self.vboxBot.addWidget(self.pageLabel)
+        self.vboxBot.addSpacing(20)
+        self.vboxBot.addWidget(self.none)
+        self.vboxBot.addWidget(self.next)
 
         # set up the middle section of images
         self.numPicsV = 0
@@ -1971,11 +1980,11 @@ class HumanClassify2(QDialog):
         self.vboxSpacer = QSpacerItem(1,1, 5, 5)
         self.vboxFull.addItem(self.vboxSpacer)
         self.vboxFull.addWidget(self.flowLayout)
-        self.vboxFull.addLayout(vboxBot)
+        self.vboxFull.addLayout(self.vboxBot)
         # must be fixed size!
         vboxTop.setSizeConstraint(QLayout.SetFixedSize)
         # must be fixed size!
-        vboxBot.setSizeConstraint(QLayout.SetFixedSize)
+        self.vboxBot.setSizeConstraint(QLayout.SetFixedSize)
 
         # we need to know the true size of space available for flowLayout.
         # the idea is that spacer absorbs all height changes
@@ -2091,22 +2100,45 @@ class HumanClassify2(QDialog):
         buttonsPerPage = self.numPicsV * self.numPicsH
         if buttonsPerPage == 0:
             # dialog still initializing or too small to show segments
-            self.buttonPrev.setEnabled(False)
-            self.buttonNext.setEnabled(False)
+            #self.buttonPrev.setEnabled(False)
+            #self.buttonNext.setEnabled(False)
             return
-        self.totalPages = np.ceil(len(self.buttons) / buttonsPerPage)
         # basically, count how many segments are "before" the current
         # top-lef one, and see how many pages we need to fit them.
-        currpage = np.ceil(self.butStart / buttonsPerPage)+1
+        currpage = int(np.ceil(self.butStart / buttonsPerPage)+1)
+        self.totalPages = max(int(np.ceil(len(self.buttons) / buttonsPerPage)),currpage)
+        print("*",self.butStart,buttonsPerPage,currpage,self.totalPages)
+        print("Page %d out of %d" % (currpage, self.totalPages))
         self.pageLabel.setText("Page %d out of %d" % (currpage, self.totalPages))
-        if currpage==1:
-            self.buttonPrev.setEnabled(False)
+
+        if currpage == self.totalPages:
+            try:
+                self.vboxBot.removeWidget(self.next)
+                self.next.setVisible(False)
+                self.vboxBot.addWidget(self.finish)
+                self.finish.setVisible(True)
+            except:
+                pass
         else:
-            self.buttonPrev.setEnabled(True)
-        if currpage==self.totalPages:
-            self.buttonNext.setEnabled(False)
-        else:
-            self.buttonNext.setEnabled(True)
+            if self.finish.isVisible():
+                try:
+                    self.vboxBot.removeWidget(self.finish)
+                    self.finish.setVisible(False)
+                    self.vboxBot.addWidget(self.next)
+                    self.next.setVisible(True)
+                except:
+                    pass
+
+        self.repaint()
+            
+        #if currpage==1:
+            #self.buttonPrev.setEnabled(False)
+        #else:
+            #self.buttonPrev.setEnabled(True)
+        #if currpage==self.totalPages:
+            #self.buttonNext.setEnabled(False)
+        #else:
+            #self.buttonNext.setEnabled(True)
 
     def nextPage(self):
         """ Called on arrow button clicks.
@@ -2117,6 +2149,7 @@ class HumanClassify2(QDialog):
         # clear buttons while self.butStart is still old:
         self.clearButtons()
         self.butStart = min(len(self.buttons), self.butStart+buttonsPerPage)
+        print(len(self.buttons),self.butStart,buttonsPerPage)
         self.countPages()
         # redraw buttons:
         self.redrawButtons()
