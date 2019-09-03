@@ -3387,6 +3387,7 @@ class AviaNZ(QMainWindow):
             self.humanClassifyDialog2.exec_()
 
     def humanClassifyClose2(self):
+        print("Closed")
         self.segmentsToSave = True
         todelete = []
         # initialize correction file. All "downgraded" segments will be stored
