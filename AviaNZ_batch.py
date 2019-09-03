@@ -1053,9 +1053,6 @@ class AviaNZ_reviewAll(QMainWindow):
                         outputErrors.append(currSeg)
                         label["certainty"] = 50
                         currSeg.keys[lbindex] = (label["species"], label["certainty"])
-                # update the graphics
-                self.updateText(btn.index)
-                self.updateColour(btn.index)
             elif btn.mark=="green":
                 # find "yellows", swap to "greens"
                 currSeg.confirmLabels(self.species)
@@ -1100,8 +1097,12 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.shortBirdList = self.shortBirdList[:40]
             else:
                 self.longBirdList = None
+        if not self.config['ReorderList']:
+            dialogBirdList = list(self.shortBirdList)
+        else:
+            dialogBirdList = self.shortBirdList
 
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.config['MultipleSpecies'], self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], dialogBirdList, self.longBirdList, self.config['MultipleSpecies'], self)
         self.box1id = 0
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
