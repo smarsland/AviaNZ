@@ -1422,7 +1422,7 @@ class HumanClassify1(QDialog):
         birds3Layout = QVBoxLayout()
         count = 0
         for btn in self.birdbtns:
-            if count<10: 
+            if count<10:
                 birds1Layout.addWidget(btn)
             elif count<20:
                 birds2Layout.addWidget(btn)
@@ -1654,31 +1654,53 @@ class HumanClassify1(QDialog):
 
         # currently, we ignore the certainty and only display species:
         self.species.setText(','.join(label))
-        # Select the right species tickboxes / buttons
+
+        # temporarily, update the short bird list to have the current species at the top
+        if not self.parent.config['ReorderList']:
+            tempShortList = list(self.shortBirdList)
+        # question marks are displayed on the first pass,
+        # but any clicking sets certainty to 100 in effect.
+        for lsp_ix in range(len(label)):
+            if label[lsp_ix].endswith('?'):
+                label[lsp_ix] = label[lsp_ix][:-1]
+            # move the label to the top of the list
+            if label[lsp_ix] in self.shortBirdList:
+                self.shortBirdList.remove(label[lsp_ix])
+            self.shortBirdList.insert(0, label[lsp_ix])
+
+        # clear selection
         self.birds3.clearSelection()
         self.updateButtonList()
+        # Select the right species tickboxes / buttons
         for lsp in label:
-            # question marks are displayed on the first pass,
-            # but any clicking sets certainty to 100 in effect.
-            if lsp.endswith('?'):
-                lsp = lsp[:-1]
+            # add ticks to the right checkboxes
             if lsp in self.shortBirdList[:29]:
                 ind = self.shortBirdList.index(lsp)
                 self.birdbtns[ind].setChecked(True)
-                print(ind,lsp)
             else:
                 self.birdbtns[29].setChecked(True)
                 self.birds3.setEnabled(True)
-                if lsp not in self.longBirdList:
-                    if '(' in lsp:
-                        ind = lsp.index('(')
-                        lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
+
+            # mark this species in the long list box
+            if lsp not in self.longBirdList:
+                # try genus>species instead of genus (species)
+                if '(' in lsp:
+                    ind = lsp.index('(')
+                    lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
+                # add to long bird list then
                 if lsp not in self.longBirdList:
                     self.longBirdList.append(lsp)
                     self.saveConfig = True
+
+            # all species by now are in the long bird list
+            if self.longBirdList is not None:
                 ind = self.longBirdList.index(lsp)
                 self.birds3.item(ind).setSelected(True)
+
         self.label = label
+        # reset bird list for next image, if needed
+        if not self.parent.config['ReorderList']:
+            self.shortBirdList = tempShortList
 
     def tickBirdsClicked(self):
         # Listener for when the user selects a bird tick box
@@ -1741,36 +1763,64 @@ class HumanClassify1(QDialog):
 
     def listBirdsClicked(self, item):
         # Listener for clicks in the listbox of birds
+        # check for a corresponding button in the short list
+        # - if the user is silly enough to click here when it's there as well
+        checkedButton = None
+        dontknowButton = None
+        for button in self.birds.buttons():
+            if button.text() == item.text() and button.text() != "Other":
+                checkedButton = button
+            if button.text() == "Don't Know":
+                dontknowButton = button
+
         if (item.text() == "Other"):
             self.tbox.setEnabled(True)
         else:
-            #TODO: Check if selected or not
             # Save the entry
             self.tbox.setEnabled(False)
             if self.multipleBirds:
+                # mark this
                 if item.isSelected() and item.text() not in self.label:
-                    self.label.append(str(item.text()))
-                if not item.isSelected() and item.text in self.label:
+                    # if label was empty, just change from DontKnow:
+                    if self.label == ["Don't Know"]:
+                        self.label = [str(item.text())]
+                        if dontknowButton is not None:
+                            dontknowButton.setChecked(False)
+                    else:
+                        self.label.append(str(item.text()))
+                        if checkedButton is not None:
+                            checkedButton.setChecked(True)
+
+                # unmark this
+                if not item.isSelected() and item.text() in self.label:
                     self.label.remove(str(item.text()))
+                    if checkedButton is not None:
+                        checkedButton.setChecked(False)
+                # if this erased everything, revert to don't know:
+                if self.label == []:
+                    self.label = ["Don't Know"]
+                    if dontknowButton is not None:
+                        dontknowButton.setChecked(True)
             else:
                 self.label = [str(item.text())]
+                # for radio buttons, only "Other" will be selected already
+
             self.species.setText(','.join(self.label))
 
     def birdTextEntered(self):
         # Listener for the text entry in the bird list
         # Check text isn't already in the listbox, and add if not
-        # Doesn't sort the list, but will when dialog is reopened
+        # Then calls the usual handler for listbox selections
         textitem = self.tbox.text()
         item = self.birds3.findItems(textitem, Qt.MatchExactly)
-        if item:
-            pass
-        else:
+        if not item:
             self.birds3.addItem(textitem)
-        if self.multipleBirds:
-            self.label.append(str(textitem))
-        else:
-            self.label = [str(textitem)]
-        self.species.setText(','.join(self.label))
+            item = self.birds3.findItems(textitem, Qt.MatchExactly)
+
+        item[0].setSelected(True)
+        # this will deal with updating the label and buttons
+        self.listBirdsClicked(item[0])
+
         self.saveConfig = True
 
     def setColourLevels(self):
