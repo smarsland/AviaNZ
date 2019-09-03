@@ -138,7 +138,7 @@ class Spectrogram(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        if platform.system() == 'Linux':
+        if platform.system() == 'Linux' or platform.system() == 'Darwin':
             self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         else:
             self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
@@ -277,7 +277,7 @@ class addNoiseData(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Noise Information')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        if platform.system() == 'Linux':
+        if platform.system() == 'Linux' or platform.system() == 'Darwin':
             self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         else:
             self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
@@ -388,7 +388,7 @@ class Diagnostic(QDialog):
         self.setWindowTitle('Diagnostic Plot Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(300)
-        if platform.system() == 'Linux':
+        if platform.system() == 'Linux' or platform.system() == 'Darwin':
             self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         else:
             self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
@@ -457,7 +457,7 @@ class WaveletTrain(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Train a Species Detector')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        if platform.system() == 'Linux':
+        if platform.system() == 'Linux' or platform.system() == 'Darwin':
             self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         else:
             self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
@@ -716,7 +716,7 @@ class Segmentation(QDialog):
         self.setWindowTitle('Segmentation Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         # for some reason CloseButtonHint disables window floating for me
-        if platform.system() == 'Linux':
+        if platform.system() == 'Linux' or platform.system() == 'Darwin':
             self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         else:
             self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
@@ -967,7 +967,7 @@ class Denoise(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Denoising Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        if platform.system() == 'Linux':
+        if platform.system() == 'Linux' or platform.system() == 'Darwin':
             self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         else:
             self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
@@ -1278,7 +1278,7 @@ class HumanClassify1(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        if platform.system() == 'Linux':
+        if platform.system() == 'Linux' or platform.system() == 'Darwin':
             self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         else:
             self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
@@ -1925,7 +1925,7 @@ class HumanClassify2(QDialog):
 
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
-        if platform.system() == 'Linux':
+        if platform.system() == 'Linux' or platform.system() == 'Darwin':
             self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         else:
             self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
