@@ -283,7 +283,6 @@ class addNoiseData(QDialog):
             self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(320)
 
-        print(noiseLevel,noiseTypes)
         HBox1 = QVBoxLayout()
         levelLabel = QLabel("Level of Noise")
         HBox1.addWidget(levelLabel)
@@ -370,7 +369,6 @@ class addNoiseData(QDialog):
         self.setLayout(Box)
 
     def getNoiseData(self):
-        #print(self.name1.text(),self.name2.text())
         if self.level.checkedButton() is None:
             self.btnLow.setChecked(True)
         types = []
@@ -2194,8 +2192,6 @@ class HumanClassify2(QDialog):
         # top-lef one, and see how many pages we need to fit them.
         currpage = int(np.ceil(self.butStart / buttonsPerPage)+1)
         self.totalPages = max(int(np.ceil(len(self.buttons) / buttonsPerPage)),currpage)
-        print("*",self.butStart,buttonsPerPage,currpage,self.totalPages)
-        print("Page %d out of %d" % (currpage, self.totalPages))
         self.pageLabel.setText("Page %d out of %d" % (currpage, self.totalPages))
 
         if currpage == self.totalPages:
@@ -2236,7 +2232,6 @@ class HumanClassify2(QDialog):
         # clear buttons while self.butStart is still old:
         self.clearButtons()
         self.butStart = min(len(self.buttons), self.butStart+buttonsPerPage)
-        print(len(self.buttons),self.butStart,buttonsPerPage)
         self.countPages()
         # redraw buttons:
         self.redrawButtons()
