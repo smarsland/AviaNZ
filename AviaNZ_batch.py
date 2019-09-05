@@ -409,13 +409,11 @@ class AviaNZ_batchProcess(QMainWindow):
                 # post process to remove short segments, wind, rain, and use F0 check.
                 print("Post processing...")
                 if self.species == 'All species':
-                    post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                      segments=newSegments, spInfo={})
+                    post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, subfilter={})
                     post.wind()
                     print('After wind: ', post.segments)
                 else:
-                    post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                      segments=newSegments, spInfo=self.speciesData)
+                    post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, subfilter={})
                     print('self.speciesData: ', self.speciesData)
                     if 'Wind' in self.speciesData:
                         if self.speciesData['Wind']:
@@ -644,7 +642,7 @@ class AviaNZ_batchProcess(QMainWindow):
         :return: None, but reset audiodata
         """
         print('Impulse masking...')
-        postp = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=[], spInfo={})
+        postp = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=[], subfilter={})
         imps = postp.impulse_cal(fs=self.sampleRate, engp=engp, fp=fp)    # 0 - presence of impulse noise
         print('Samples to mask: ', len(self.audiodata) - np.sum(imps))
         # Mask only the affected samples
