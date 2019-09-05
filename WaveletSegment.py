@@ -114,7 +114,7 @@ class WaveletSegment:
             else:
                 detected = []
             detected = self.mergeSeg(detected)
-            detected_allsubf.append(detected)
+            detected_allsubf.extend(detected)
         print("Wavelet segmenting completed in", time.time() - opst)
         return detected_allsubf
 
