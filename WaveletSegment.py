@@ -55,8 +55,9 @@ class WaveletSegment:
         self.annotation = annotation
         self.wavelet = wavelet
         self.spInfo = spInfo
-        # for now, we default to the first subfilter:
-        print("Detected %d subfilters in this filter" % len(spInfo["Filters"]))
+        if not spInfo == {}:
+            # for now, we default to the first subfilter:
+            print("Detected %d subfilters in this filter" % len(spInfo["Filters"]))
 
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
         self.segmenter = Segment.Segmenter(None, None, self.sp, 0, window_width=256, incr=128, mingap=mingap, minlength=minlength)
@@ -666,6 +667,7 @@ class WaveletSegment:
 
         if window != 1 or inc != window:
             N = int(math.ceil(duration/ samplerate))  # numbers of seconds
+            N = int(math.ceil(duration/ spInfo['SampleRate']))  # numbers of seconds
             detect_ann = np.zeros(N)
             start = 0
             # follow the windows checking in what second they start or end
@@ -919,7 +921,7 @@ class WaveletSegment:
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-' + self.spInfo["Filters"][0]["calltype"] + '-res'+str(float(resol))+'sec.txt' in files:
                     opstartingtime = time.time()
                     wavFile = os.path.join(root, file[:-4])
 
@@ -961,7 +963,8 @@ class WaveletSegment:
         filename = fName + '.wav'
         print('\n\n', filename)
         # Virginia: added resol for identify annotation txt
-        filenameAnnotation = fName + '-res'+str(float(resol))+'sec.txt'
+        filenameAnnotation = fName + '-' + self.spInfo["Filters"][0]["calltype"] + '-res' + str(float(resol)) + 'sec.txt'
+        # filenameAnnotation = fName + '-res'+str(float(resol))+'sec.txt'
         try:
             wavobj = wavio.read(filename)
         except Exception as e:
@@ -978,22 +981,14 @@ class WaveletSegment:
         #Virginia-> number of entries in annotation file: built on resol scale
         n = math.ceil((len(data) / sampleRate)/resol)
 
-        # Impulse masking
-        postp = SupportClasses.postProcess(audioData=data, sampleRate=sampleRate, segments=[], spInfo={})
-        imps = postp.impulse_cal(fs=sampleRate)    # 0 - presence of impulse noise, 1 - otherwise
-
-        # Option 1: Mask 1 sec durations
-        # start = 0
-        # for t in range(0, n, window):
-        #     end = min(len(data), start + window * self.sampleRate)
-        #     if np.sum(imp[start:end]) > 0:
-        #         self.noise[t] = 0
-        #     start += window * self.sampleRate
-
-        # Option2: Mask only the affected samples
-        if n - np.sum(imps) > 0:
-            print('impulse detected: ', n - np.sum(imps), ' samples')
-        data = np.multiply(data, imps)
+        # # Impulse masking
+        # postp = SupportClasses.postProcess(audioData=data, sampleRate=sampleRate, segments=[], spInfo={})
+        # imps = postp.impulse_cal(fs=sampleRate)    # 0 - presence of impulse noise, 1 - otherwise
+        #
+        # # Mask only the affected samples
+        # if n - np.sum(imps) > 0:
+        #     print('impulse detected: ', n - np.sum(imps), ' samples')
+        # data = np.multiply(data, imps)
 
         fileAnnotations = []
         # Get the segmentation from the txt file

@@ -98,7 +98,6 @@ class preProcess:
 
         return filteredDenoisedData, fs
 
-
 class postProcess:
     """ This class implements few post processing methods to avoid false positives
     Operates on detections from a single subfilter.

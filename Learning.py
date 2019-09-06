@@ -1228,9 +1228,9 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
                 for seg in segments:
                     lowlist.append(seg[2])
                     highlist.append(seg[3])
-    print(lowlist)
-    print(highlist)
-    print(srlist)
+    # print(lowlist)
+    # print(highlist)
+    # print(srlist)
     if f_1 == 0:
         f_1 = np.min(lowlist)
     if f_2 == 0:
@@ -1241,10 +1241,10 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
         pos = np.abs(arr - np.median(highlist)*2).argmin()
         fs = arr[pos]
 
-    print('fs: ', fs)
+    # print('fs: ', fs)
 
     if fs > np.min(srlist):
-        print(fs)
+        # print(fs)
         fs = np.min(srlist)
 
     if fs < f_2 * 2 + 50:
@@ -1253,8 +1253,8 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
     if f_2 < f_1:
         f_2 = np.mean(highlist)
 
-    print('Frequency band:', f_1, '-', f_2)
-    print('fs: ', fs)
+    # print('Frequency band:', f_1, '-', f_2)
+    # print('fs: ', fs)
 
     # Find the lower and upper bounds (relevant to the frq range), when the range is given
     if feature == 'mfcc' and f_1 != 0 and f_2 != 0:
@@ -1299,7 +1299,7 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
                     if len(syls) == 1 and syls[0][1]-syls[0][0] < minlen:   # Sanity check
                         syls = [[start, int(seg[1]*fs)]]
                     syls = [[x[0] / fs, x[1] / fs] for x in syls]
-                    print('\nCurrent:', seg, '--> Median clipping ', syls)
+                    # print('\nCurrent:', seg, '--> Median clipping ', syls)
                     for syl in syls:
                         dataset.append([os.path.join(root, file), seg, syl])
 
@@ -1307,7 +1307,7 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
     lengths = []
     for data in dataset:
         lengths.append(data[2][1]-data[2][0])
-    print('min: ', min(lengths), ' max: ', max(lengths), ' median: ', np.median(lengths))
+    # print('min: ', min(lengths), ' max: ', max(lengths), ' median: ', np.median(lengths))
     duration = np.median(lengths)   # This is the fixed length of a syllable, if a syllable too long clip it otherwise
                                     # padding with zero
     # Now calculate the features
@@ -1321,7 +1321,7 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
     lengths = []
     for data in dataset:
         lengths.append(data[2][1] - data[2][0])
-    print('min: ', min(lengths), ' max: ', max(lengths), ' median: ', np.median(lengths))
+    # print('min: ', min(lengths), ' max: ', max(lengths), ' median: ', np.median(lengths))
 
     # Read the syllables and generate features
     features = []
@@ -1347,7 +1347,7 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
             features.append(mfcc)
             record.insert(3, mfcc)
         elif feature == 'we':  # Wavelet Energy
-            ws = WaveletSegment.WaveletSegment(spInfo=[])
+            ws = WaveletSegment.WaveletSegment(spInfo={})
             we = ws.computeWaveletEnergy(data=audiodata, sampleRate=fs, nlevels=5, wpmode='new')
             we = we.mean(axis=1)
             if f_1 != 0 and f_2 != 0:
@@ -1394,9 +1394,9 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
         predicted_labels = model_agg.labels_
         clusters = set(model_agg.labels_)
 
-    print('predicted labels\n', predicted_labels)
-    print('clusters:', clusters)
-    print('# clusters :', len(clusters))
+    # print('predicted labels\n', predicted_labels)
+    # print('clusters:', clusters)
+    # print('# clusters :', len(clusters))
 
     # Attach the label to each syllable
     for i in range(len(predicted_labels)):
@@ -1429,7 +1429,7 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
 
     # make the labels continous
     ulabels = list(set(labels))
-    print('ulabels:', ulabels)
+    # print('ulabels:', ulabels)
     nclasses = len(ulabels)
     dic = []
     for i in range(nclasses):
@@ -1443,8 +1443,8 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
     for i in range(len(clustered_dataset)):
         clustered_dataset[i].insert(3, dic[labels[i]])
 
-    for record in clustered_dataset:
-        print(record[3])
+    # for record in clustered_dataset:
+    #     print(record[3])
 
     # TODO: Find cluster centers and sort the segments accordingly
 

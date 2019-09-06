@@ -23,14 +23,18 @@
 
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
-import sys,os
+import sys, os
 import platform
 
 from PyQt5.QtGui import *
-from PyQt5.QtWidgets import QDialog, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit, QSlider, QCheckBox, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QDir, QPointF, QTime, Qt, QLineF
-
+import matplotlib.markers as mks
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import FigureCanvasQT
+from matplotlib.figure import Figure
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
@@ -444,264 +448,6 @@ class Diagnostic(QDialog):
 
     def getValues(self):
         return [self.filter.currentText(), self.aaGroup.checkedId(), self.mark.isChecked()]
-
-#======
-class WaveletTrain(QDialog):
-    # Class for the segmentation dialog box
-    # TODO: add the wavelet params
-    # TODO: work out how to return varying size of params, also process them
-    # TODO: test and play
-    def __init__(self, maxv, parent=None):
-        QDialog.__init__(self, parent)
-        self.setWindowTitle('Train a Species Detector')
-        self.setWindowIcon(QIcon('img/Avianz.ico'))
-        if platform.system() == 'Linux' or platform.system() == 'Darwin':
-            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
-        else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
-        self.setMinimumWidth(475)
-        self.setMinimumHeight(500)
-
-        # Step1 - prepare for training
-        self.layout_step1 = QVBoxLayout()
-        self.form1_step1 = QFormLayout()
-        self.form2_step1 = QFormLayout()
-        self.hBox_step1 = QHBoxLayout()
-        self.blank = QLabel('           ')
-        self.Step1Label1 = QLabel('Step 1: Prepare')
-        self.Step1Label1.setFont(QtGui.QFont('TimesNewRoman', 12))
-        self.browse = QPushButton('Browse')
-        self.form1_step1.addRow('Load data', self.browse)
-        self.listFiles = QListWidget()
-        self.listFiles.setMinimumWidth(150)
-        self.listFiles.setMinimumHeight(275)
-        self.form1_step1.addRow(' ', self.listFiles)
-        self.species = QComboBox()  # fill during browse
-        self.species.addItems(['Choose species...'])
-        self.form2_step1.addRow('Species   ', self.species)
-        self.genGT = QPushButton('Prepare for Training')
-        self.genGT.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
-        self.genGT.setEnabled(False)
-        self.hBox_step1.addStretch(1)
-        self.hBox_step1.addWidget(self.genGT)
-        # Step1 layout
-        self.layout_step1.addWidget( self.Step1Label1)
-        self.layout_step1.addWidget(self.blank)
-        self.layout_step1.addLayout(self.form1_step1)
-        self.layout_step1.addWidget(self.blank)
-        self.layout_step1.addLayout(self.form2_step1)
-        self.layout_step1.addStretch(1)
-        self.layout_step1.addLayout(self.hBox_step1)
-
-        # Step2 - actual training
-        self.layout_step2 = QVBoxLayout()
-        self.form1_step2 = QFormLayout()
-        self.hBox_step2 = QHBoxLayout()
-        self.Step1Label2 = QLabel('Step 2: Train')
-        self.Step1Label2.setFont(QtGui.QFont('TimesNewRoman', 12))
-        self.minlen = QLineEdit(self)
-        self.minlen.setText('')
-        self.minlen.setEnabled(False)
-        self.form1_step2.addRow('Min call length (secs)', self.minlen)
-        self.maxlen = QLineEdit(self)
-        self.maxlen.setText('')
-        self.maxlen.setEnabled(False)
-        self.form1_step2.addRow('Max call length (secs)', self.maxlen)
-        self.fLow = QSlider(Qt.Horizontal)
-        self.fLow.setTickPosition(QSlider.TicksBelow)
-        self.fLow.setTickInterval(2000)
-        self.fLow.setRange(0, 32000)
-        self.fLow.setSingleStep(100)
-        self.fLow.setEnabled(False)
-        self.fLow.valueChanged.connect(self.fLowChange)
-        self.fLowtext = QLabel('')
-        self.form1_step2.addRow('', self.fLowtext)
-        self.form1_step2.addRow('Lower frq. (Hz)', self.fLow)
-        self.fHigh = QSlider(Qt.Horizontal)
-        self.fHigh.setTickPosition(QSlider.TicksBelow)
-        self.fHigh.setTickInterval(2000)
-        self.fHigh.setRange(0, 32000)
-        self.fHigh.setSingleStep(100)
-        self.fHigh.setEnabled(False)
-        self.fHigh.valueChanged.connect(self.fHighChange)
-        self.fHightext = QLabel('')
-        self.form1_step2.addRow('', self.fHightext)
-        self.form1_step2.addRow('Higher frq. (Hz)', self.fHigh)
-        self.fs = QSlider(Qt.Horizontal)
-        self.fs.setTickPosition(QSlider.TicksBelow)
-        self.fs.setTickInterval(2000)
-        self.fs.setRange(0, 32000)
-        self.fs.setSingleStep(2000)
-        self.fs.valueChanged.connect(self.fsChange)
-        self.fs.setEnabled(False)
-        self.fstext = QLabel('')
-        self.form1_step2.addRow('', self.fstext)
-        self.form1_step2.addRow('Preferred sampling frq. (Hz)', self.fs)
-        self.hBox2_step2 = QHBoxLayout()
-        self.wind = QCheckBox()
-        self.wind_label = QLabel('Wind')
-        self.wind.setChecked(False)
-        self.rain = QCheckBox()
-        self.rain_label = QLabel('Rain')
-        self.rain.setChecked(False)
-        self.ff = QCheckBox()
-        self.ff_label = QLabel('Fundamental frequency     ')
-        self.ff.setChecked(False)
-        self.wind.setEnabled(False)
-        self.rain.setEnabled(False)
-        self.ff.setEnabled(False)
-        self.hBox2_step2.addWidget(self.wind_label)
-        self.hBox2_step2.addWidget(self.wind)
-        self.hBox2_step2.addWidget(self.rain_label)
-        self.hBox2_step2.addWidget(self.rain)
-        self.hBox2_step2.addWidget(self.ff_label)
-        self.hBox2_step2.addWidget(self.ff)
-
-        # thr and M spinboxes
-        self.hBox3_step2 = QHBoxLayout()
-        self.setthr = QSpinBox()
-        self.setthr_label = QLabel("thr iterations")
-        self.setM = QSpinBox()
-        self.setM_label = QLabel("M iterations")
-        self.setthr.setMinimum(3)
-        self.setM.setMinimum(1)
-        self.setM.setValue(3)
-        self.setthr.setMaximum(20)
-        self.setM.setMaximum(10)
-        self.setM.setEnabled(False)
-        self.setthr.setEnabled(False)
-        self.hBox3_step2.addWidget(self.setthr_label)
-        self.hBox3_step2.addWidget(self.setthr)
-        self.hBox3_step2.addWidget(self.setM_label)
-        self.hBox3_step2.addWidget(self.setM)
-
-        self.train = QPushButton('Train')
-        self.train.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
-        self.train.setEnabled(False)
-        self.hBox_step2.addStretch(1)
-        self.hBox_step2.addWidget(self.train)
-        # Step2 layout
-        self.layout_step2.addWidget(self.Step1Label2)
-        self.layout_step2.addWidget(self.blank)
-        self.layout_step2.addLayout(self.form1_step2)
-        self.note_step2 = QLabel(' ')
-        self.note_step2.setFont(QtGui.QFont('TimesNewRoman', 9))
-        self.layout_step2.addWidget(self.blank)
-        self.layout_step2.addWidget(self.note_step2)
-        self.layout_step2.addWidget(self.blank)
-        self.layout_step2.addLayout(self.hBox2_step2)
-        self.layout_step2.addLayout(self.hBox3_step2)
-        self.layout_step2.addStretch(1)
-        self.layout_step2.addLayout(self.hBox_step2)
-
-        # Step3 - test
-        self.layout_step3 = QVBoxLayout()
-        self.form1_step3 = QFormLayout()
-        self.hBox_step3 = QHBoxLayout()
-        self.Step1Label3 = QLabel('Step 3: Test')
-        self.Step1Label3.setFont(QtGui.QFont('TimesNewRoman', 12))
-        self.browseTest = QPushButton('Browse')
-        self.browseTest.setEnabled(False)
-        self.form1_step3.addRow('Load data', self.browseTest)
-        self.listFilesTest = QListWidget()
-        self.listFilesTest.setMinimumWidth(150)
-        self.listFilesTest.setMinimumHeight(225)
-        self.form1_step3.addRow(' ', self.listFilesTest)
-        self.test = QPushButton('Test')
-        self.test.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
-        self.test.setEnabled(False)
-        self.hBox_step3.addStretch(1)
-        self.hBox_step3.addWidget(self.test)
-        # Step3 layout
-        self.layout_step3.addWidget(self.Step1Label3)
-        self.layout_step3.addWidget(self.blank)
-        self.layout_step3.addLayout(self.form1_step3)
-        self.layout_step3.addWidget(self.blank)
-        self.note_step3 = QLabel(' ')
-        self.note_step3.setFont(QtGui.QFont('TimesNewRoman', 9))
-        self.layout_step3.addWidget(self.note_step3)
-        self.layout_step3.addStretch(1)
-        self.layout_step3.addLayout(self.hBox_step3)
-
-        # Put together
-        self.layout = QHBoxLayout()
-        self.layout.addLayout(self.layout_step1)
-        self.layout.addWidget(self.blank)
-        self.layout.addLayout(self.layout_step2)
-        self.layout.addWidget(self.blank)
-        self.layout.addLayout(self.layout_step3)
-        self.setLayout(self.layout)
-
-        self.rain_label.setHidden(True)
-        self.rain.setHidden(True)
-
-    def fLowChange(self, value):
-        value = value - (value % 10)
-        if value < 50:
-            value = 50
-        self.fLowtext.setText(str(value))
-
-    def fHighChange(self, value):
-        value = value - (value % 10)
-        if value < 100:
-            value = 100
-        self.fHightext.setText(str(value))
-
-    def fsChange(self, value):
-        value = value - (value % 1000)
-        if value < 1000:
-            value = 1000
-        self.fstext.setText(str(value))
-
-
-    def fillFileList(self, dirName, train=True):
-        """ Generates the list of files for the file listbox.
-        fileName - currently opened file (marks it in the list).
-        Most of the work is to deal with directories in that list.
-        It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
-        red in the list, and the second to know if the files are long."""
-
-        if not os.path.isdir(dirName):
-            print("ERROR: Directory doesn't exist")
-            return
-
-        if train:
-            self.listFiles.clear()
-            spList = set()
-            # collect possible species from annotations:
-            for root, dirs, files in os.walk(dirName):
-                for filename in files:
-                    if filename.endswith('.wav') and filename+'.data' in files:
-                        # this wav has data, so see what species are in there
-                        segments = Segment.SegmentList()
-                        segments.parseJSON(os.path.join(root, filename+'.data'))
-                        spList.update([lab["species"] for seg in segments for lab in seg[4]])
-            spList = list(spList)
-            spList.insert(0, 'Choose species...')
-            self.species.clear()
-            self.species.addItems(spList)
-        else:
-            self.listFilesTest.clear()
-
-        listOfFiles = QDir(dirName).entryInfoList(['*.wav'],filters=QDir.AllDirs|QDir.NoDotAndDotDot|QDir.Files,sort=QDir.DirsFirst)
-        listOfDataFiles = QDir(dirName).entryList(['*.wav.data'])
-        for file in listOfFiles:
-            # Add the filename to the right list
-            if train:
-                item = QListWidgetItem(self.listFiles)
-            else:
-                item = QListWidgetItem(self.listFilesTest)
-            # count wavs in directories:
-            if file.isDir():
-                numwavs = 0
-                for root, dirs, files in os.walk(file.filePath()):
-                    numwavs += sum(f.endswith('.wav') for f in files)
-                item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
-            else:
-                item.setText(file.fileName())
-            # If there is a .data version, colour the name red to show it has been labelled
-            if file.fileName()+'.data' in listOfDataFiles:
-                item.setForeground(Qt.red)
 
 #======
 class Segmentation(QDialog):
@@ -2213,7 +1959,7 @@ class HumanClassify2(QDialog):
                     pass
 
         self.repaint()
-            
+
         #if currpage==1:
             #self.buttonPrev.setEnabled(False)
         #else:
@@ -2428,32 +2174,378 @@ class PicButton(QAbstractButton):
         self.repaint()
         pg.QtGui.QApplication.processEvents()
 
+#======
+class buildRecAdvWizard(QWizard):
+    def __init__(self, config, parent):
+        super(buildRecAdvWizard, self).__init__(parent)
+        self.browsedataPage = WPage1(self)
+        self.addPage(self.browsedataPage)
+        self.selectsppPage = WPage2(self)
+        self.addPage(self.selectsppPage)
+        self.clusterPage = WPage3(self)
+        self.clusterPage.config = config
+        self.addPage(self.clusterPage)
+        self.setWindowTitle("Build Recogniser")
+        self.setWizardStyle(QWizard.ModernStyle)
 
-class Cluster(QDialog):
-    """ Cluster dialog.
-        Shows clustered segments
-        Allows to merge clusters and move segments from one class to another.
-    """
+        self.filterpages = []
 
-    def __init__(self, segments, sampleRate, classes, config, parent=None):
-        QDialog.__init__(self, parent)
+    def updatePage2(self):
+        self.selectsppPage.label1.setText('Training data: ' + self.browsedataPage.txtDir.text())
 
-        if len(segments) == 0:
-            print("No segments provided")
-            return
+#======
+class WPage1(QWizardPage):
+    def __init__(self, parent=None):
+        super(WPage1, self).__init__(parent)
+        self.setTitle('Load data')
+        self.setSubTitle('Navigate to the directory where the annotated audio files to build the recogniser.')
 
-        self.setWindowTitle('Clusters')
+        self.txtDir = QLineEdit()
+        self.txtDir.setText('Choose training directory...')
+        self.txtDir.setReadOnly(True)
+        self.btnBrowse = QPushButton('Browse')
+        self.lblUpdate = QLabel('')
+        self.lblUpdate.setAlignment(Qt.AlignRight)
+        self.lblUpdate.setStyleSheet("QLabel { color : red; }")
+        space = QLabel()
+        space.setFixedHeight(50)
 
-        self.setWindowIcon(QIcon('img/Avianz.ico'))
-        #self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint & QtCore.Qt.CustomizeWindowHint)
+        layout1 = QHBoxLayout()
+        layout1.addWidget(self.txtDir)
+        layout1.addWidget(self.btnBrowse)
+        layout = QVBoxLayout()
+        layout.addWidget(space)
+        layout.addLayout(layout1)
+        layout.addWidget(space)
+        layout.addWidget(self.lblUpdate)
+        layout.setAlignment(Qt.AlignVCenter)
+        self.setLayout(layout)
 
-        # let the user quit without bothering rest of it
+    def initializePage(self):
+        self.setMinimumSize(800, 50)
 
-        self.sampleRate = sampleRate
-        self.segments = segments
+    def validatePage(self):
+        if self.txtDir.text() == 'Choose training directory...' or self.txtDir.text() == '':
+            self.lblUpdate.setText('Please specify the directory!')
+            return False
+        else:
+            self.lblUpdate.setText('')
+            return True
+
+#======
+class WPage2(QWizardPage):
+    def __init__(self, parent=None):
+        super(WPage2, self).__init__(parent)
+        self.setTitle('Select species')
+        self.setSubTitle('Choose the species which you want to build the recogniser')
+        self.confirmed = False
+        self.lblTrainDir = QLabel()
+        self.lblTrainDir.setStyleSheet("QLabel { color : #808080; }")
+        lbl = QLabel('     Species')
+        lbl.setAlignment(Qt.AlignCenter)
+        self.qbxSpecies = QComboBox()  # fill during browse
+        self.qbxSpecies.addItems(['Select'])
+        self.btnConfirm = QPushButton('Confirm')
+        self.lblUpdate = QLabel('')
+        self.lblUpdate.setStyleSheet("QLabel { color : red; }")
+        self.lblUpdate.setAlignment(Qt.AlignRight)
+        space = QLabel()
+        space.setFixedHeight(50)
+        layout1 = QHBoxLayout()
+        layout1.addWidget(lbl)
+        layout1.addWidget(self.qbxSpecies)
+        layout1.addWidget(self.btnConfirm)
+        layout = QVBoxLayout()
+        layout.addWidget(self.lblTrainDir)
+        layout.addWidget(space)
+        layout.addLayout(layout1)
+        layout.addWidget(space)
+        layout.addWidget(self.lblUpdate)
+        self.setLayout(layout)
+
+    def initializePage(self):
+        self.setMinimumSize(800, 50)
+
+    def validatePage(self):
+        if self.qbxSpecies.currentText() == 'Select' and not self.confirmed:
+            self.lblUpdate.setText('Please specify the Species and Confirm!')
+            return False
+        elif self.qbxSpecies.currentText() == 'Select':
+            self.lblUpdate.setText('Please specify the Species!')
+            return False
+        elif not self.confirmed:
+            self.lblUpdate.setText('Please Confirm the species!')
+            return False
+        else:
+            return True
+
+#======
+class WLastPage(QWizardPage):
+    def __init__(self, parent=None):
+        super(WLastPage, self).__init__(parent)
+        self.setTitle('Save recogniser')
+        self.setSubTitle('Check the overall call detection summary and Save the recogniser.')
+        self.species = ''
+
+        self.lblTrainDir = QLabel()
+        self.lblTrainDir.setStyleSheet("QLabel { color : #808080; }")
+        self.lblSpecies = QLabel()
+        self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
+        space = QLabel()
+        space.setFixedHeight(25)
+        spaceH = QLabel()
+        spaceH.setFixedWidth(30)
+        vboxHead = QVBoxLayout()
+        vboxHead.addWidget(self.lblTrainDir)
+        vboxHead.addWidget(self.lblSpecies)
+        vboxHead.addWidget(space)
+
+        lbl1 = QLabel('Filter Wind ')
+        lbl1.setAlignment(Qt.AlignRight)
+        lbl2 = QLabel('Filter Rain ')
+        lbl2.setAlignment(Qt.AlignRight)
+
+        vbox1 = QVBoxLayout()
+        vbox1.addWidget(lbl1)
+        vbox1.addWidget(lbl2)
+
+        self.ckbWind = QCheckBox()
+        self.ckbRain = QCheckBox()
+
+        vbox2 = QVBoxLayout()
+        vbox2.addWidget(self.ckbWind)
+        vbox2.addWidget(self.ckbRain)
+
+        hbox1 = QHBoxLayout()
+        hbox1.addLayout(vbox1)
+        hbox1.addLayout(vbox2)
+
+        self.btnSave = QPushButton('Save Recogniser')
+        self.lblUpdate = QLabel('Summary goes here...')
+        space = QLabel()
+        space.setFixedHeight(50)
+        self.lblUpdate2 = QLabel('')
+        self.lblUpdate2.setStyleSheet("QLabel { color : red; }")
+        self.lblUpdate2.setAlignment(Qt.AlignRight)
+
+        layout = QVBoxLayout()
+        layout.addLayout(vboxHead)
+        layout.addLayout(hbox1)
+        layout.addWidget(space)
+        layout.addWidget(self.lblUpdate)
+        layout.addWidget(space)
+        layout.addWidget(self.btnSave)
+        layout.addWidget(self.lblUpdate2)
+
+        self.setLayout(layout)
+
+#======
+class WPageTrain(QWizardPage):
+    def __init__(self, parent=None):
+        super(WPageTrain, self).__init__(parent)
+        self.setTitle('Train')
+        self.setSubTitle('Train recogniser for this cluster')
+        self.segments = []
+        self.clusterName = ''
+        self.fs = 0
+        self.minLen = 0
+        self.maxLen = 0
+        self.f1 = 0
+        self.f2 = 0
+        self.fileList = []
+        self.trainDir = ''
+        self.confirmed = False
+
+        self.lblTrainDir = QLabel()
+        self.lblTrainDir.setStyleSheet("QLabel { color : #808080; }")
+        self.lblSpecies = QLabel()
+        self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
+        self.lblCluster = QLabel()
+        self.lblCluster.setStyleSheet("QLabel { color : #808080; }")
+        space = QLabel()
+        space.setFixedHeight(25)
+        spaceH = QLabel()
+        spaceH.setFixedWidth(30)
+        vboxHead = QVBoxLayout()
+        vboxHead.addWidget(self.lblTrainDir)
+        vboxHead.addWidget(self.lblSpecies)
+        vboxHead.addWidget(self.lblCluster)
+        vboxHead.addWidget(space)
+
+        self.tbxminDuration = QLineEdit()
+        self.tbxminDuration.setFixedWidth(50)
+        self.tbxmaxDuration = QLineEdit()
+        self.tbxmaxDuration.setFixedWidth(50)
+        self.ckbWind = QCheckBox()
+        self.ckbRain = QCheckBox()
+        self.ckbFF = QCheckBox()
+        self.cbxThr = QComboBox()
+        self.cbxThr.addItems(['4', '5', '6', '7', '8', '9', '10'])
+        self.cbxM = QComboBox()
+        self.cbxM.addItems(['2', '3', '4', '5'])
+        self.btnTrain = QPushButton('Train')
+        self.lblUpdate = QLabel()
+        self.btnConfirm = QPushButton('Confirm')
+
+        # this is the Canvas Widget that displays the plot
+        self.figCanvas = Canvas(self)
+        self.figCanvas.plotme()
+
+        vbox1 = QVBoxLayout()
+        vbox1.addWidget(QLabel('Call duration (min-max) sec'))
+        vbox1.addWidget(QLabel('ROC curve lines'))
+        vbox1.addWidget(QLabel('ROC curve points (per line)'))
+        vbox1.setSpacing(20)
+
+        hboxlen = QHBoxLayout()
+        hboxlen.addWidget(self.tbxminDuration)
+        hboxlen.addWidget(QLabel('-'))
+        hboxlen.addWidget(self.tbxmaxDuration)
+
+        vbox2 = QVBoxLayout()
+        vbox2.addLayout(hboxlen)
+        vbox2.addWidget(self.cbxM)
+        vbox2.addWidget(self.cbxThr)
+        vbox2.setSpacing(20)
+
+        hbox1 = QHBoxLayout()
+        hbox1.addLayout(vbox1, 1)
+        hbox1.addLayout(vbox2, 0.5)
+
+        vbox3 = QVBoxLayout()
+        vbox3.addLayout(hbox1)
+        vbox3.addWidget(space)
+        vbox3.addWidget(space)
+        vbox3.addWidget(self.btnTrain)
+        vbox3.addWidget(self.lblUpdate)
+        vbox3.addWidget(self.btnConfirm)
+
+        hbox2 = QHBoxLayout()
+        hbox2.addLayout(vbox3, 1)
+        hbox2.addWidget(self.figCanvas, 2)
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(vboxHead)
+        vbox.addLayout(hbox2)
+
+        hboxFull = QHBoxLayout()
+        hboxFull.addLayout(vbox)
+        hboxFull.addWidget(spaceH)
+
+        self.lblUpdate2 = QLabel('')
+        self.lblUpdate2.setStyleSheet("QLabel { color : blue; }")
+        self.lblUpdate2.setAlignment(Qt.AlignRight)
+
+        vboxFull = QVBoxLayout()
+        vboxFull.addLayout(hboxFull)
+        vboxFull.addWidget(self.lblUpdate2)
+
+        self.setLayout(vboxFull)
+
+    def initializePage(self):
+        self.setMinimumSize(750, 400)
+
+#======
+class Canvas(FigureCanvas):
+    def __init__(self, parent=None, width=5, height=6, dpi=100):
+        plt.style.use('ggplot')
+        self.MList = []
+        self.thrList = []
+        self.TPR = []
+        self.FPR = []
+        self.fpr_cl = None
+        self.tpr_cl =None
+        self.parent = parent
+
+        self.lines = None
+        self.plotLines = []
+
+        fig = Figure(figsize=(width, height), dpi=dpi)
+
+        FigureCanvas.__init__(self, fig)
+        self.setParent(parent)
+
+    def plotme(self):
+        valid_markers = ([item[0] for item in mks.MarkerStyle.markers.items() if
+                          item[1] is not 'nothing' and not item[1].startswith('tick') and not item[1].startswith(
+                              'caret')])
+        markers = np.random.choice(valid_markers, 5, replace=False)
+
+        self.ax = self.figure.subplots()
+        for i in range(5):
+            self.lines, = self.ax.plot([], [], marker=markers[i])
+            self.plotLines.append(self.lines)
+        self.ax.set_title('ROC curve')
+        self.ax.set_xlabel('False Positive Rate (FPR)')
+        self.ax.set_ylabel('True Positive Rate (TPR)')
+        # fig.canvas.set_window_title('ROC Curve')
+        self.ax.set_ybound(0, 1)
+        self.ax.set_xbound(0, 1)
+        self.ax.yaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
+        self.ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
+        # ax.legend()
+
+        def onclick(event):
+            if event.dblclick:
+                fpr_cl = event.xdata
+                tpr_cl = event.ydata
+                if tpr_cl is not None and fpr_cl is not None:
+                    # get M and thr for closest point
+                    distarr = (tpr_cl - self.TPR) ** 2 + (fpr_cl - self.FPR) ** 2
+                    M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
+                    tpr_cl = self.TPR[M_min_ind, thr_min_ind]
+                    fpr_cl = self.FPR[M_min_ind, thr_min_ind]
+                print("fpr_cl, tpr_cl: ", fpr_cl, tpr_cl)
+                self.parent.lblUpdate.setText('DETECTION SUMMARY\n\nTPR:\t' + str(round(tpr_cl * 100, 2)) + '%'
+                                                '\nFPR:\t' + str(round(fpr_cl * 100, 2)) + '%\n\nDo you want to Confirm?')
+                M = self.MList[M_min_ind]
+                thr = self.thrList[thr_min_ind]
+                # Get nodes for closest point
+                optimumNodesSel = self.nodes[M_min_ind][thr_min_ind]
+
+                self.parent.filter['WaveletParams'] = []
+                self.parent.filter['WaveletParams'].append(thr)
+                self.parent.filter['WaveletParams'].append(M)
+                self.parent.filter['WaveletParams'].append(optimumNodesSel)
+
+        cid = self.figure.canvas.mpl_connect('button_press_event', onclick)
+
+    def plotmeagain(self):
+        # Update data (with the new _and_ the old points)
+        for i in range(len(self.MList)):
+            self.plotLines[i].set_xdata(self.FPR[i])
+            self.plotLines[i].set_ydata(self.TPR[i])
+
+        # Need both of these in order to rescale
+        self.ax.relim()
+        self.ax.autoscale_view()
+        # We need to draw *and* flush
+        self.figure.canvas.draw()
+        self.figure.canvas.flush_events()
+
+
+#======
+class WPage3(QWizardPage):
+    def __init__(self, parent=None):
+        super(WPage3, self).__init__(parent)
+        self.setTitle('Cluster similar looking calls')
+        self.setSubTitle('This page displays the automatically created cluters for the dataset. Change if required and '
+                         'confirm.')
+
+        self.sampleRate = 0
+        self.segments = []
         print('segments:\n', self.segments)
-        self.nclasses = classes
-        self.config = config
+        self.nclasses = 0
+        self.config = None
+        self.confirmed = False
+
+        self.lblTrainDir = QLabel()
+        self.lblTrainDir.setStyleSheet("QLabel { color : #808080; }")
+        self.lblSpecies = QLabel()
+        self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
+        layout1 = QVBoxLayout()
+        layout1.addWidget(self.lblTrainDir)
+        layout1.addWidget(self.lblSpecies)
 
         # Volume control
         self.volSlider = QSlider(Qt.Horizontal)
@@ -2507,12 +2599,19 @@ class Cluster(QDialog):
         hboxBtns.addWidget(self.cmbUpdateSeg)
         hboxBtns.addWidget(self.btnUpdateSeg)
 
-        label1 = QLabel('Adjust the automated clusters as required')
-        label1.setFont(QtGui.QFont('SansSerif', 10))
+        self.btnConfirm = QPushButton("Confirm")
+        self.btnConfirm.setSizePolicy(QSizePolicy(5, 5))
+        self.btnConfirm.setMaximumSize(250, 30)
+        self.lblUpdate = QLabel('')
+        self.lblUpdate.setAlignment(Qt.AlignRight)
+        self.lblUpdate.setStyleSheet("QLabel { color : red; }")
+        hboxBot = QHBoxLayout()
+        hboxBot.addWidget(self.btnConfirm)
+        hboxBot.addWidget(self.lblUpdate)
+        hboxBot.setSpacing(500)
 
         # top part
         vboxTop = QVBoxLayout()
-        vboxTop.addWidget(label1)
         vboxTop.addLayout(hboxSpecContr)
         vboxTop.addLayout(hboxBtns)
         # must be fixed size!
@@ -2532,12 +2631,27 @@ class Cluster(QDialog):
         # set overall layout of the dialog
         self.vboxFull = QVBoxLayout()
         # self.vboxFull.setSpacing(0)
+        self.vboxFull.addLayout(layout1)
         self.vboxFull.addLayout(vboxTop)
         # self.vboxSpacer = QSpacerItem(1, 1, 5, 5)
         # self.vboxFull.addItem(self.vboxSpacer)
         self.vboxFull.addWidget(self.scrollArea)
-
+        # self.vboxFull.addWidget(self.btnConfirm)
+        self.vboxFull.addLayout(hboxBot)
         self.setLayout(self.vboxFull)
+
+    def initializePage(self):
+        self.setButtonText(QWizard.FinishButton, 'Next')
+        self.setMinimumSize(1200, 500)
+
+    def validatePage(self):
+        if not self.confirmed:
+            self.lblUpdate.setText('Please confirm!')
+            return False
+
+        else:
+            self.lblUpdate.setText('')
+            return True
 
     def merge(self):
         """ Listner for the merge button. Merge the rows (clusters) checked into one cluster.
@@ -2686,7 +2800,7 @@ class Cluster(QDialog):
         self.cmbUpdateSeg.clear()
         for x in self.clusters:
             self.cmbUpdateSeg.addItem(self.clusters[x])
-        print('updated clusters: ', self.clusters)
+        # print('updated clusters: ', self.clusters)
 
     def addButtons(self):
         """ Make the buttons and display them
@@ -2697,7 +2811,7 @@ class Cluster(QDialog):
         for i in range(self.nclasses):
             self.clusters.append((i, 'Cluster ' + str(i)))
         self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
-        print('clusters dict: ', self.clusters)
+        # print('clusters dict: ', self.clusters)
 
         for x in self.clusters:
             self.cmbUpdateSeg.addItem(self.clusters[x])
@@ -2720,7 +2834,7 @@ class Cluster(QDialog):
             # Find the segments under this class, create buttons, and show them
             # i = 0
             for seg in self.segments:
-                print(seg)
+                # print(seg)
                 if seg[-1] == r:
                     sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1]-seg[1][0], seg[1][0])
                     newButton = PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart,
@@ -2729,7 +2843,7 @@ class Cluster(QDialog):
                     self.flowLayout.addWidget(seg[2], r, c)
                     c += 1
                 # i += 1
-            print('*-', r, c-2)
+            # print('*-', r, c-2)
 
     def updateButtons(self):
         """ Redraw the existing buttons, call when merging clusters
@@ -2790,7 +2904,6 @@ class Cluster(QDialog):
             seg[2].setImage(self.lut, colourStart, colourEnd, False)
             seg[2].update()
 
-
     def volSliderMoved(self, value):
         # try/pass to avoid race situations when smth is not initialized
         try:
@@ -2798,7 +2911,6 @@ class Cluster(QDialog):
                 seg[2].media_obj.applyVolSlider(value)
         except Exception:
             pass
-
 
     def loadFile(self, filename, duration=0, offset=0, fs=0):
         """
@@ -2845,7 +2957,6 @@ class Cluster(QDialog):
 
         return self.sg, audiodata, audioFormat
 
-
     def setColourMap(self):
         """ Listener for the menu item that chooses a colour map.
         Loads them from the file as appropriate and sets the lookup table.
@@ -2862,14 +2973,7 @@ class Cluster(QDialog):
         self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
         self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
-
-    def resizeEvent(self, ev):
-        """ On this event, choose which (and how many) buttons to display
-            from self.buttons. It is also called on initialization.
-        """
-        pass
-
-
+#======
 class InterfaceSettings2(QDialog):
     def __init__(self, parent = None):
       super(InterfaceSettings2, self).__init__(parent)

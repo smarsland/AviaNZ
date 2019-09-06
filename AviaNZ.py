@@ -28,7 +28,7 @@
 # TODO: Full list of next steps
 
 import sys, os, json, platform, re, shutil
-from jsonschema import validate
+# from jsonschema import validate
 from shutil import copyfile
 from openpyxl import load_workbook, Workbook
 
@@ -63,11 +63,6 @@ import Learning
 import AviaNZ_batch
 import fnmatch
 import librosa
-
-from openpyxl import load_workbook, Workbook
-import matplotlib.markers as mks
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mtick
 
 from pyqtgraph.parametertree import Parameter, ParameterTree 
 
@@ -406,14 +401,17 @@ class AviaNZ(QMainWindow):
         #self.showAllTick.setChecked(self.config['showAllPages'])
 
         if not self.Hartley:
-            actionMenu.addAction("Human Review [All segments]",self.humanClassifyDialog1,"Ctrl+1")
-            actionMenu.addAction("Human Review [Choose species]",self.humanRevDialog2,"Ctrl+2")
+            actionMenu.addAction("Human review [All segments]",self.humanClassifyDialog1,"Ctrl+1")
+            actionMenu.addAction("Human review [Choose species]",self.humanRevDialog2,"Ctrl+2")
             actionMenu.addSeparator()
             actionMenu.addAction("Export segments to Excel",self.exportSeg)
             actionMenu.addSeparator()
 
-        actionMenu.addAction("Train a species detector", self.trainWaveletDialog)
+        trainMenu = actionMenu.addMenu("Build an automated recogniser")
+        trainMenu.addAction("Easy", self.buildRecogniserEasy)
+        trainMenu.addAction("Advanced", self.buildRecogniserAdvanced)
         actionMenu.addSeparator()
+
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
         actionMenu.addSeparator()
@@ -3997,277 +3995,262 @@ class AviaNZ(QMainWindow):
 
         QApplication.processEvents()
 
+    def buildRecogniserEasy(self):
+        """
+        Listner for 'Build a recogniser' - Easy mode
+        """
+        print('Not implemented')
 
-    def trainWaveletDialog(self):
-        """ Create the wavelet training dialog for the relevant menu item
+    def buildRecogniserAdvanced(self):
+        """Listner for 'Build a recogniser' - Advanced mode
+           This mode expects to have more engagement with the user, the user can give sensible names to the clusters
+           and adjust some parameters based on user's expertise on the particular species.
         """
         self.saveSegments()
-        self.waveletTDialog = Dialogs.WaveletTrain(np.max(self.audiodata))
-        self.waveletTDialog.show()
-        self.waveletTDialog.activateWindow()
-        self.dName = None
-        self.waveletTDialog.browse.clicked.connect(self.browseTrainData)
-        self.waveletTDialog.genGT.clicked.connect(self.prepareTrainData)
-        self.waveletTDialog.train.clicked.connect(self.trainWavelet)
-        self.waveletTDialog.browseTest.clicked.connect(self.browseTestData)
-        self.waveletTDialog.test.clicked.connect(self.testWavelet)
+        self.buildRecAdvWizard = Dialogs.buildRecAdvWizard(config=self.config, parent=self)
+        self.buildRecAdvWizard.activateWindow()
+        self.buildRecAdvWizard.show()
+        self.trainDir = None
+        self.buildRecAdvWizard.browsedataPage.btnBrowse.clicked.connect(self.browseTrainDataAdv)
+        self.buildRecAdvWizard.selectsppPage.qbxSpecies.currentTextChanged.connect(self.updatePage3)
+        self.buildRecAdvWizard.selectsppPage.btnConfirm.clicked.connect(self.drawClusters)
+        self.buildRecAdvWizard.clusterPage.btnConfirm.clicked.connect(self.setConfirmed)
 
-    def testWavelet(self):
-        if not hasattr(self, 'dNameTest'):
-            msg = SupportClasses.MessagePopup("w", "Testing data", "Please specify testing data")
-            msg.exec_()
-            return
-        if not hasattr(self, 'species'):
-            msg = SupportClasses.MessagePopup("w", "Train first", "Please train the detector first!")
-            msg.exec_()
-            return
-
+    def setConfirmed(self):
+        self.buildRecAdvWizard.clusterPage.confirmed = True
+        self.buildRecAdvWizard.clusterPage.lblUpdate.setText('')
+        # also create more pages
         with pg.BusyCursor():
-            ind = self.species.find('>')
-            if ind != -1:
-                species = self.species.replace('>', '(')
-                species = species + ')'
-            else:
-                species = self.species
+            for i in self.buildRecAdvWizard.clusterPage.clusters:
+                newPage = Dialogs.WPageTrain()
+                newPage.setTitle('Train - ' + self.buildRecAdvWizard.clusterPage.clusters[i])
+                newPage.setSubTitle('Train recogniser for ' + "'" + self.buildRecAdvWizard.clusterPage.clusters[i] +
+                                    "'" + ' call type.\nYou can adjust the call duration and the resolution of the ROC. '
+                                          'Press Train to plot the ROC. Choose a point in the ROC (by double clicking) '
+                                          'and press Confirm to register this recogniser.')
+                newPage.lblTrainDir.setText('Training data:\t' + self.trainDir)
+                newPage.lblSpecies.setText('Species:\t' + self.buildRecAdvWizard.selectsppPage.qbxSpecies.currentText())
+                newPage.lblCluster.setText('Call type:\t' + self.buildRecAdvWizard.clusterPage.clusters[i])
+                newPage.clusterName = self.buildRecAdvWizard.clusterPage.clusters[i]
+                # find the segments for this page/cluster
+                for seg in self.buildRecAdvWizard.clusterPage.segments:
+                    # print(seg)
+                    if seg[-1] == i:
+                        s = seg[:2]
+                        s.append(seg[-1])
+                        newPage.segments.append(s)
+                # print('new page Segs:\n', newPage.segments)
 
-            speciesData = self.FilterDicts[species]
-            ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
-            # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
-            window = 1
-            inc = None
-            # Generate GT files from annotations in test folder
-            print('Generating GT...')
-            for root, dirs, files in os.walk(str(self.dNameTest)):
-                for file in files:
-                    if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
-                        wavFile = root + '/' + file
-                        _ = self.annotation2GT_OvWin(wavFile, species, window=window, inc=inc)
+                fs, f1, f2, minLen, maxLen, fileList = self.getMeta(newPage.segments)
+                newPage.fileList = fileList
+                newPage.fs = fs
+                newPage.f1 = f1
+                newPage.f2 = f2
+                newPage.minLen = minLen
+                newPage.tbxminDuration.setText(str(minLen))
+                newPage.maxLen = maxLen
+                newPage.tbxmaxDuration.setText(str(maxLen))
+                newPage.btnTrain.clicked.connect(self.trainFilter)
+                newPage.btnConfirm.clicked.connect(self.confirmFilter)
+                newPage.filter = {"calltype": self.buildRecAdvWizard.clusterPage.clusters[i],
+                                  "TimeRange": [minLen, maxLen], "FreqRange": [f1, f2], "SampleRate": fs,
+                                  "WaveletParams": []}
+                newPage.trainDir = self.trainDir
+                self.buildRecAdvWizard.filterpages.append(newPage)
+                self.buildRecAdvWizard.addPage(newPage)
+            # also create the last page of the wizard to collect all the filters and save into filter file.
+            lastPage = Dialogs.WLastPage()
+            lastPage.lblTrainDir.setText('Training data:\t' + self.trainDir)
+            lastPage.lblSpecies.setText('Species:\t' + self.buildRecAdvWizard.selectsppPage.qbxSpecies.currentText())
+            lastPage.species = self.buildRecAdvWizard.selectsppPage.qbxSpecies.currentText()
+            lastPage.btnSave.clicked.connect(self.saveRecogniser)
+            self.buildRecAdvWizard.addPage(lastPage)
+            self.buildRecAdvWizard.update()
+            self.buildRecAdvWizard.back()
+            self.buildRecAdvWizard.next()
 
-            Segments, TP, FP, TN, FN, = ws.waveletSegment_test(dirName=self.dNameTest, d=False, rf=True,
-                                                               learnMode='recaa', savedetections=False, window=window,
-                                                               inc=inc)
-            print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
-            if TP+FN != 0:
-                recall = TP/(TP+FN)
-            else:
-                recall = 0
-            if TP+FP != 0:
-                precision = TP/(TP+FP)
-            else:
-                precision = 0
-            if TN+FP != 0:
-                specificity = TN/(TN+FP)
-            else:
-                specificity = 0
-            if TP+FP+TN+FN != 0:
-                accuracy = (TP+TN)/(TP+FP+TN+FN)
-                self.waveletTDialog.note_step3.setText(' Detection summary:TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
-
-    def trainWavelet(self):
-        """ Listener for the wavelet training dialog.
+    def saveRecogniser(self):
         """
-        self.species = str(self.waveletTDialog.species.currentText()).title()
-        minLen = float(self.waveletTDialog.minlen.text())
-        maxLen = float(self.waveletTDialog.maxlen.text())
-        minFrq = int(self.waveletTDialog.fLow.value())
-        maxFrq = int(self.waveletTDialog.fHigh.value())
-        fs = int(self.waveletTDialog.fs.value()//1000*1000) # rounded to thousands
-
-        if minFrq == fs/2:  # Sanity check
-            minFrq = 0
-
-        if maxFrq == 0:
-            maxFrq = fs/2
-
-        if self.waveletTDialog.wind.checkState() == 0:
-            wind = False
+        Listner for the Save button in the last page of the wizard
+        """
+        readyToSave = True
+        for i in range(len(self.buildRecAdvWizard.filterpages)):
+            if not self.buildRecAdvWizard.filterpages[i].confirmed:
+                readyToSave = False
+                break
+        if not readyToSave:
+            self.buildRecAdvWizard.currentPage().lblUpdate2.setText('Please confirm the Train pages!')
+            self.buildRecAdvWizard.currentPage().lblUpdate2.setStyleSheet("QLabel { color : red; }")
         else:
-            wind = True
-        if self.waveletTDialog.rain.checkState() == 0:
-            rain = False
-        else:
-            rain = True
-        if self.waveletTDialog.ff.checkState() == 0:
-            ff = False
-        else:
-            ff = True
-        # print("wind, rain, ff:", wind, rain, ff)
-        speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen], 'FreqRange': [minFrq, maxFrq]}
-        # ws = WaveletSegment.WaveletSegment(speciesData)
-        # calculate f0_low and f0_high from GT
-        if ff:
-            f0_low = []     # int(self.waveletTDialog.f0Low.text())
-            f0_high = []    # int(self.waveletTDialog.f0High.text())
-            for root, dirs, files in os.walk(str(self.dName)):
-                for file in files:
-                    if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-sec.txt' in files and file + '.data' in files:
-                        wavFile = root + '/' + file[:-4]
-                        datFile = root + '/' + file + '.data'
-                        # calculate f0_low and f0_high from GT
-                        if os.path.isfile(datFile):
-                            segments = Segment.SegmentList()
-                            segments.parseJSON(datFile)
-                            # get segments which contain this species
-                            thisSpSegs = segments.getSpecies(self.species)
-
-                            for segix in thisSpSegs:
-                                seg = segments[segix]
-                                secs = seg[1] - seg[0]
-                                wavobj = wavio.read(wavFile+'.wav', nseconds=secs, offset=seg[0])
-                                data = wavobj.data
-                                if np.shape(np.shape(data))[0] > 1:
-                                    data = data[:, 0]
-                                sampleRate = wavobj.rate
-                                if data.dtype!='float':
-                                    data = data.astype('float')
-                                if fs != sampleRate:
-                                    data = librosa.core.audio.resample(data, sampleRate, fs)
-                                f0_l, f0_h = self.ff(data, speciesData)
-                                if f0_l != 0 and f0_h != 0:
-                                    f0_low.append(f0_l)
-                                    f0_high.append(f0_h)
-            if len(f0_low) > 0 and len(f0_high) > 0:
-                f0_low = np.min(f0_low)
-                f0_high = np.max(f0_high)
+            # ACTUAL WRITING OF THE FILTER FILE HERE
+            species = self.buildRecAdvWizard.currentPage().species
+            filters = []
+            for i in range(len(self.buildRecAdvWizard.filterpages)):
+                filters.append(self.buildRecAdvWizard.filterpages[i].filter)
+            if self.buildRecAdvWizard.currentPage().ckbWind.checkState() == 0:
+                wind = False
             else:
-                # user to enter?
-                f0_low = minFrq
-                f0_high = maxFrq
+                wind = True
+            if self.buildRecAdvWizard.currentPage().ckbRain.checkState() == 0:
+                rain = False
+            else:
+                rain = True
 
-        # Get detection measures over all M,thr combinations
+            finalRecogniser = {'species': species, 'filters': filters, 'wind': wind, 'rain': rain}
+
+            print('\n')
+            print(finalRecogniser)
+            self.buildRecAdvWizard.currentPage().lblUpdate2.setText('Saved the Recogniser! Press Finish to exit')
+            self.buildRecAdvWizard.currentPage().lblUpdate2.setStyleSheet("QLabel { color : blue; }")
+            # TODO: Save as a .txt file
+
+    def confirmFilter(self):
+        """
+        Listner for the Confirm button in Train pages (one page for each cluster)
+        """
+        filterpage = self.buildRecAdvWizard.currentId() - 3
+
+        if self.buildRecAdvWizard.filterpages[filterpage].filter["WaveletParams"] == []:
+            self.buildRecAdvWizard.filterpages[filterpage].lblUpdate2.setText('Please press Train to plot ROC curve, then pick a point on the plot!')
+            self.buildRecAdvWizard.filterpages[filterpage].lblUpdate2.setStyleSheet("QLabel { color : red; }")
+        else:
+            self.buildRecAdvWizard.filterpages[filterpage].confirmed = True
+            self.buildRecAdvWizard.filterpages[filterpage].lblUpdate2.setText('Confirmed!')
+            self.buildRecAdvWizard.filterpages[filterpage].lblUpdate2.setStyleSheet("QLabel { color : blue; }")
+            confirmedFilter = self.buildRecAdvWizard.filterpages[filterpage].filter
+            # print(confirmedFilter)
+
+    def trainFilter(self):
+        """
+        Listner for Train button in Train pages (one page for each cluster)
+        """
+        # Determine the current filter page
+        filterpage = self.buildRecAdvWizard.currentId()-3
+        self.buildRecAdvWizard.filterpages[filterpage].lblUpdate.setText('Double-click on the most suitable point on '
+                                                                         'the ROC curve \nto set the tolerance')
+
+        segments = self.buildRecAdvWizard.filterpages[filterpage].segments
+        clusterName = self.buildRecAdvWizard.filterpages[filterpage].clusterName
+        fileList = self.buildRecAdvWizard.filterpages[filterpage].fileList
+        dName = self.buildRecAdvWizard.filterpages[filterpage].trainDir
+
+        # Get the parameter values for training
+        minLen = float(self.buildRecAdvWizard.filterpages[filterpage].tbxminDuration.text())
+        maxLen = float(self.buildRecAdvWizard.filterpages[filterpage].tbxmaxDuration.text())
+        fs = self.buildRecAdvWizard.filterpages[filterpage].fs
+        thr = int(self.buildRecAdvWizard.filterpages[filterpage].cbxThr.currentText())
+        M = int(self.buildRecAdvWizard.filterpages[filterpage].cbxM.currentText())
+
+        # Generat the ground truth
+        self.annotation2GT(fileList=fileList, segments=segments, clusterName=clusterName)
+
+        filter = self.buildRecAdvWizard.filterpages[filterpage].filter
+        filter["timeRange"] = [minLen, maxLen]
+        species = self.buildRecAdvWizard.filterpages[filterpage].lblSpecies.text()
+        # TODO: Remove SampleRate from individual filters and add to Species level
+        spInfo = {"Species": species, "SampleRate": 16000, "Filters": [filter], "Wind": False, "Rain": False, "F0": False}
+
+        # Grid search M*thr
         with pg.BusyCursor():
             opstartingtime = time.time()
-            speciesData = {'Name': self.species, 'SampleRate': fs, 'TimeRange': [minLen, maxLen],
-                           'FreqRange': [minFrq, maxFrq]}
-            ws = WaveletSegment.WaveletSegment(speciesData)
+            ws = WaveletSegment.WaveletSegment(spInfo=spInfo)
             # returns 2d lists of nodes over M x thr, or stats over M x thr
-            #thrList = np.linspace(0.1, 1, num=self.waveletTDialog.setthr.value()) Virginia test to finde inconsistency
-            thrList = np.linspace(0.2, 1, num=self.waveletTDialog.setthr.value())
-            MList = np.linspace(0.25, 1.5, num=self.waveletTDialog.setM.value())    # TODO: generate from syllable length
-            # options for training are: recsep (old), recmulti (joint reconstruction), ethr (threshold energies), elearn (model from energies)
-            # Virginia: added window and increment as input. Window and inc are supposed to be in seconds
+            thrList = np.linspace(0.2, 1, num=thr)
+            MList = np.linspace(0.25, 1.5, num=M)
             window = 1
             inc = None
-            nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.dName, thrList, MList, d=False,
+            print('dName:', dName)
+            nodes, TP, FP, TN, FN = ws.waveletSegment_train(dName, thrList, MList, d=False,
                                                             rf=True, learnMode="recaa", window=window, inc=inc)
             print("Filtered nodes: ", nodes)
             print("TRAINING COMPLETED IN ", time.time() - opstartingtime)
 
-            TPR = TP/(TP+FN)
-            FPR = 1 - TN/(FP+TN)
+            TPR = TP / (TP + FN)
+            FPR = 1 - TN / (FP + TN)
             print("TP rate: ", TPR)
             print("FP rate: ", FPR)
 
         # Plot AUC and let the user to choose threshold and M
-        self.thr = 0.5  # default, get updated when user double-clicks on ROC curve
-        self.M = 0.25  # default, get updated when user double-clicks on ROC curve
-        self.optimumNodesSel = []
+        self.buildRecAdvWizard.filterpages[filterpage].figCanvas.MList = MList
+        self.buildRecAdvWizard.filterpages[filterpage].figCanvas.thrList = thrList
+        self.buildRecAdvWizard.filterpages[filterpage].figCanvas.TPR = TPR
+        self.buildRecAdvWizard.filterpages[filterpage].figCanvas.FPR = FPR
+        self.buildRecAdvWizard.filterpages[filterpage].figCanvas.nodes = nodes
+        self.buildRecAdvWizard.filterpages[filterpage].figCanvas.plotmeagain()
+        self.buildRecAdvWizard.filterpages[filterpage].lblUpdate2.setText('')
 
-        plt.style.use('ggplot')
-        valid_markers = ([item[0] for item in mks.MarkerStyle.markers.items() if
-                          item[1] is not 'nothing' and not item[1].startswith('tick') and not item[1].startswith(
-                              'caret')])
-        markers = np.random.choice(valid_markers, len(MList), replace=False)
-        fig, ax = plt.subplots()
-        for i in range(len(MList)):
-            # each line - different M (rows of result arrays)
-            ax.plot(FPR[i], TPR[i], marker=markers[i], label='M='+str(MList[i]))
-        ax.set_title('Double click to choose TPR and FPR and set tolerance')
-        ax.set_xlabel('False Positive Rate (FPR)')
-        ax.set_ylabel('True Positive Rate (TPR)')
-        fig.canvas.set_window_title('ROC Curve - %s' % (self.species))
-        ax.set_ybound(0, 1)
-        ax.set_xbound(0, 1)
-        ax.yaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
-        ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
-        ax.legend()
-        # plt.get_current_fig_manager().window.setWindowIcon(QtGui.QIcon('img/Avianz.ico'))
-        def onclick(event):
-            if event.dblclick:
-                fpr_cl = event.xdata
-                tpr_cl = event.ydata
-                print("fpr_cl, tpr_cl: ",fpr_cl, tpr_cl)
+    def getMeta(self, segments):
+        lowlist = []
+        highlist = []
+        len = []
+        filelist = []
+        for seg in segments:
+            lowlist.append(seg[1][2])
+            highlist.append(seg[1][3])
+            len.append(seg[1][1]-seg[1][0])
+            if seg[0] not in filelist:
+                filelist.append(seg[0])
 
-                if tpr_cl is not None and fpr_cl is not None:
-                    # TODO: Interpolate?, currently get the closest point
-                    # get M and thr for closest point
-                    distarr = (tpr_cl - TPR)**2 + (fpr_cl - FPR)**2
-                    M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
-                    tpr_cl = TPR[M_min_ind, thr_min_ind]
-                    fpr_cl = FPR[M_min_ind, thr_min_ind]
-                    msg = SupportClasses.MessagePopup("t", 'Set Tolerance - %s' % (self.species), 'Confirm %d%% Sensitivity with %d%% FPR?' % (tpr_cl*100, fpr_cl*100))
-                    msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-                    reply = msg.exec_()
-                    if reply == QMessageBox.Yes:
-                        self.M = MList[M_min_ind]
-                        self.thr = thrList[thr_min_ind]
-                        # Get nodes for closest point
-                        self.optimumNodesSel = nodes[M_min_ind][thr_min_ind]
+        f1 = np.min(lowlist)
+        f2 = np.median(highlist)
 
-                        # plt.close()   # If the user changed mind, let them choose another point without repeating heavy work
-                        speciesData['Wind'] = wind
-                        speciesData['Rain'] = rain
-                        speciesData['F0'] = ff
-                        if ff:
-                            speciesData['F0Range'] = [f0_low, f0_high]
-                        speciesData['WaveletParams'] = []
-                        speciesData['WaveletParams'].append(self.thr)
-                        speciesData['WaveletParams'].append(self.M)
-                        speciesData['WaveletParams'].append(self.optimumNodesSel)
+        arr = [4000, 8000, 16000]
+        pos = np.abs(arr - np.median(highlist) * 2).argmin()
+        fs = arr[pos]
 
-                        ind = self.species.find('>')
-                        if ind != -1:
-                            species = self.species.replace('>', '(')
-                            species = species + ')'
-                        else:
-                            species = self.species
-                        filename = os.path.join(self.filtersDir, species + '.txt')
-                        if os.path.isfile(filename):
-                            # Add it to the Filter list
-                            msg = SupportClasses.MessagePopup("t", "Save Filter",
-                                                              'Are you sure you want to Overwrite the existing filter'
-                                                              '\nfor %s?' %(species))
-                            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-                            reply = msg.exec_()
-                            if reply == QMessageBox.Yes:
-                                print("Saving new filter to ", filename)
-                                msg = SupportClasses.MessagePopup("d", "Training completed!",
-                                                                  'Training completed!\nFollow Step 3 and test on a '
-                                                                  'separate dataset before actual use.')
-                            else:
-                                # TODO: decide how to save the new filter when you don't want to overwrite
-                                # previous filter (or forgot to rename previous filter before coming to this
-                                # point and no need to loose all the heavy work done with grid search
-                                filename = filename[:-4] + '_new.txt'
-                                print("Saving new filter to ", filename[:-4] + '_new.txt',
-                                      " (have to rename new filter)")
-                                # Add it to the Filter list
-                                msg = SupportClasses.MessagePopup("d", "Training completed!",
-                                                                  "Training completed! (but the filter saved with a "
-                                                                  "new name)\nFollow Step 3 and test on a separate "
-                                                                  "dataset before actual use.")
-                        else:
-                            print("Saving new filter to ", filename)
-                            # Add it to the Filter list
-                            msg = SupportClasses.MessagePopup("d", "Training completed!", 'Training completed!\nFollow '
-                                                                                          'Step 3 and test on a separate'
-                                                                                          'dataset before actual use.')
-                        # actually write out the filter
-                        f = open(filename, 'w')
-                        f.write(json.dumps(speciesData))
-                        f.close()
-                        # prompt the user
-                        msg.exec_()
-                        # regenerate filter list:
-                        self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
-                        # update UI
-                        plt.close()
-                        self.waveletTDialog.test.setEnabled(True)
-                        self.waveletTDialog.browseTest.setEnabled(True)
+        return fs, f1, f2, round(min(len), 2), round(max(len), 2), filelist
 
-        cid = fig.canvas.mpl_connect('button_press_event', onclick)
-        plt.show()
-        # plt.raise_()
+    def drawClusters(self):
+        self.buildRecAdvWizard.selectsppPage.lblUpdate.setText('Processing. Please wait...')
+        if self.buildRecAdvWizard.selectsppPage.qbxSpecies.currentText() == 'Select':
+            self.buildRecAdvWizard.selectsppPage.lblUpdate.setText('Please specify the species!')
+            self.buildRecAdvWizard.selectsppPage.lblUpdate.setStyleSheet("QLabel { color : red; }")
+            return
+        with pg.BusyCursor():
+            self.buildRecAdvWizard.selectsppPage.lblUpdate.setText('Processing. Please wait...')
+            clustered_segments, fs, n_classes = Learning.cluster_by_agg(self.trainDir, feature='we', n_clusters=5)
+            # clustered_segments, fs, n_classes = Learning.cluster_by_dist(self.dName, feature='we', max_clusters=5, single=True)
+
+            self.buildRecAdvWizard.clusterPage.segments = clustered_segments
+            # print('****self.buildRecAdvWizard.clusterPage.segments:\n', self.buildRecAdvWizard.clusterPage.segments)
+            self.buildRecAdvWizard.clusterPage.sampleRate = fs
+            self.buildRecAdvWizard.clusterPage.nclasses = n_classes
+            self.buildRecAdvWizard.clusterPage.addButtons()
+
+            self.buildRecAdvWizard.selectsppPage.confirmed = True
+            self.buildRecAdvWizard.selectsppPage.lblUpdate.setText('Ready to go to next page')
+            self.buildRecAdvWizard.selectsppPage.lblUpdate.setStyleSheet("QLabel { color : blue; }")
+
+    def updatePage3(self):
+        self.buildRecAdvWizard.clusterPage.lblSpecies.setText('Species:\t' + self.buildRecAdvWizard.selectsppPage.qbxSpecies.currentText())
+        if self.buildRecAdvWizard.selectsppPage.qbxSpecies.currentText() != 'Select':
+            self.buildRecAdvWizard.selectsppPage.lblUpdate.setText('')
+
+    def browseTrainDataAdv(self):
+        """ Listener for the browse button in page1
+        """
+        self.buildRecAdvWizard.browsedataPage.txtDir.setReadOnly(False)
+        self.trainDir = QtGui.QFileDialog.getExistingDirectory(self, 'Choose Folder to Process')
+        self.buildRecAdvWizard.browsedataPage.lblUpdate.setText('')
+        self.buildRecAdvWizard.browsedataPage.txtDir.setText(self.trainDir)
+        self.buildRecAdvWizard.browsedataPage.txtDir.setReadOnly(True)
+        self.buildRecAdvWizard.selectsppPage.lblTrainDir.setText('Training data:\t' + self.trainDir)
+        self.buildRecAdvWizard.clusterPage.lblTrainDir.setText('Training data:\t' + self.trainDir)
+
+        spList = set()
+        # collect possible species from annotations:
+        for root, dirs, files in os.walk(self.trainDir):
+            for filename in files:
+                if filename.endswith('.wav') and filename + '.data' in files:
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(os.path.join(root, filename + '.data'))
+                    spList.update([lab["species"] for seg in segments for lab in seg[4]])
+        spList = list(spList)
+        print(spList)
+        spList.insert(0, 'Select')
+        self.buildRecAdvWizard.selectsppPage.qbxSpecies.clear()
+        self.buildRecAdvWizard.selectsppPage.qbxSpecies.addItems(spList)
+        self.buildRecAdvWizard.selectsppPage.confirmed = False
 
     def ff(self, data, speciesData):
         # TODO: fs in speciesData could not be the actual fs of the audio, does it matter?
@@ -4287,150 +4270,56 @@ class AviaNZ(QMainWindow):
         else:
             return round(np.min(pitch)), round(np.max(pitch))
 
-    def prepareTrainData(self):
-        """ Listener for the wavelet training dialog.
+    def annotation2GT(self, fileList, segments, clusterName):
         """
-        # Virginia: added window and increment to prepare annotation file
-        # BE CAREFULL: they must be updated here
-
-        species = self.waveletTDialog.species.currentText()
-        if species == 'Choose species...':
-            msg = SupportClasses.MessagePopup("w", "Species Error", "Please specify the species!")
-            msg.exec_()
-            return
-        if self.dName is None or self.dName == '':
-            msg = SupportClasses.MessagePopup("w", "Data Error", "Please specify training data!")
-            msg.exec_()
-            return
-
-        clustered_segments, fs, n_classes = Learning.cluster_by_agg(self.dName, feature='we', n_clusters=6)
-        # clustered_segments, fs, n_classes = Learning.cluster_by_dist(self.dName, feature='we', max_clusters=6, single=True)
-
-        self.clusterDialog = Dialogs.Cluster(clustered_segments, fs, n_classes, self.config)
-        self.clusterDialog.show()
-        self.clusterDialog.activateWindow()
-
-        # TODO: Use cluster output to train mutiple filters
-
-        # Now generate GT binary
-        window = 1
-        inc = None
-        f_low = []
-        f_high = []
-        fs =[]
-        len_min = []
-        len_max = []
-        for root, dirs, files in os.walk(str(self.dName)):
-            for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
-                    wavFile = root + '/' + file
-                    metaData = self.annotation2GT_OvWin(wavFile, species, window=window, inc=inc)
-                    len_min.append(metaData[0])
-                    len_max.append(metaData[1])
-                    f_low.append(metaData[2])
-                    f_high.append(metaData[3])
-                    fs.append(metaData[4])
-        self.waveletTDialog.minlen.setText(str(round(np.min(len_min),2)))
-        self.waveletTDialog.maxlen.setText(str(round(np.max(len_max),2)))
-        self.waveletTDialog.fLow.setRange(0, int(np.min(fs))/2)
-        self.waveletTDialog.fLow.setValue(int(np.min(f_low)))
-        self.waveletTDialog.fHigh.setRange(0, int(np.min(fs))/2)
-        self.waveletTDialog.fHigh.setValue(int(np.max(f_high)))
-        self.waveletTDialog.fs.setValue(int(np.min(fs)))
-        self.waveletTDialog.fs.setRange(0, int(np.min(fs)))
-        self.waveletTDialog.note_step2.setText('Above fields propagated using training data.\nAdjust if required.')
-
-        self.waveletTDialog.minlen.setEnabled(True)
-        self.waveletTDialog.maxlen.setEnabled(True)
-        self.waveletTDialog.fLow.setEnabled(True)
-        self.waveletTDialog.fHigh.setEnabled(True)
-        self.waveletTDialog.fs.setEnabled(True)
-        self.waveletTDialog.setM.setEnabled(True)
-        self.waveletTDialog.setthr.setEnabled(True)
-        self.waveletTDialog.wind.setEnabled(True)
-        self.waveletTDialog.rain.setEnabled(True)
-        self.waveletTDialog.ff.setEnabled(True)
-        self.waveletTDialog.train.setEnabled(True)
-
-        # msg = SupportClasses.MessagePopup("d", "Preparation done!", "Follow Step 2 to complete training.")
-        # msg.exec_()
-        # return
-
-    def annotation2GT(self, wavFile, species, duration=0):
+        This generates the ground truth for different call types in .txt format
         """
-        This generates the ground truth for a given sound file
-        Given the AviaNZ annotation, returns the ground truth as a txt file
-        """
-        # TODO: Allow empty files (no target calls) when testing but not when training - a flag
-        #       Species combobox should compatible with labels in annotations, e.g. show Kiwi (Nth Is Brown) when
-        #       variations of it exists Kiwi (Nth Is Brown)(M)1, Kiwi (Nth Is Brown)(M)2 etc.
-        datFile = wavFile + '.data'
-        eFile = datFile[:-9] + '-1sec.txt'
-        if duration == 0:
-            wavobj = wavio.read(wavFile)
-            sampleRate = wavobj.rate
-            data = wavobj.data
-            duration = int(np.ceil(len(data) / sampleRate))  # number of secs
-        GT = np.zeros((duration, 4))
-        GT = GT.tolist()
-        GT[:][1] = str(0)
-        GT[:][2] = ''
-        GT[:][3] = ''
-        # fHigh and fLow for text boxes
-        fLow = sampleRate/2
-        fHigh = 0
-        lenMin = duration
-        lenMax =0
-        if os.path.isfile(datFile):
-            segments = Segment.SegmentList()
-            segments.parseJSON(datFile)
-            thisSpSegs = segments.getSpecies(species)
-            for segix in thisSpSegs:
-                seg = segments[segix]
-                # print("lenMin, seg[1]-seg[0]", lenMin, seg[1]-seg[0])
-                if lenMin > seg[1]-seg[0]:
-                    lenMin = seg[1]-seg[0]
-                if lenMax < seg[1]-seg[0]:
-                    lenMax = seg[1]-seg[0]
-                if fLow > seg[2]:
-                    fLow = seg[2]
-                if fHigh < seg[3]:
-                    fHigh = seg[3]
-                type = species
-                quality = ''
-                s = int(math.floor(seg[0]))
-                e = min(duration, int(math.ceil(seg[1])))
-                #print("start and end: ", s, e)
-                for i in range(s, e):
-                    GT[i][1] = str(1)
-                    GT[i][2] = type
-                    GT[i][3] = quality
+        for wavFile in fileList:
+            GTFile = wavFile[:-4] + '-' + clusterName + '-res1.0sec.txt'
+            datFile = wavFile + '.data'
+            duration = 0
+            if os.path.isfile(datFile):
+                segments1 = Segment.SegmentList()
+                segments1.parseJSON(datFile)
+                duration = int(segments1.metadata["Duration"])
+            if duration == 0:
+                pass    # TODO: find the actual duration
+            GT = np.zeros((duration, 4))
+            GT = GT.tolist()
+            GT[:][1] = str(0)
+            GT[:][2] = ''
+            GT[:][3] = ''
+            for seg in segments:
+                print(seg, wavFile)
+                if wavFile == seg[0]:
+                    print(seg)
+                    quality = ''
+                    s = int(math.floor(seg[1][0]))
+                    e = min(duration, int(math.ceil(seg[1][1])))
+                    print("start and end: ", s, e)
+                    for i in range(s, e):
+                        GT[i][1] = str(1)
+                        GT[i][2] = clusterName
+                        GT[i][3] = quality
 
-        # Empty files cannot be used now, and lead to problems
-        if len(GT)==0:
-            print("ERROR: no calls for this species in file", datFile)
-            return
-
-        for line in GT:
-            if line[1] == 0.0:
-                line[1] = '0'
-            if line[2] == 0.0:
-                line[2] = ''
-            if line[3] == 0.0:
-                line[3] = ''
-        # now save GT as a .txt file
-        for i in range(1, duration + 1):
-            GT[i - 1][0] = str(i)  # add time as the first column to make GT readable
-        # strings = (str(item) for item in GT)
-        with open(eFile, "w") as f:
-            for l, el in enumerate(GT):
-                string = '\t'.join(map(str, el))
-                for item in string:
-                    f.write(item)
-                f.write('\n')
-            f.write('\n')
-        # print(lenMin, lenMax, fLow, fHigh, sampleRate)
-        return [lenMin, lenMax, fLow, fHigh, sampleRate]
+            for line in GT:
+                if line[1] == 0.0:
+                    line[1] = '0'
+                if line[2] == 0.0:
+                    line[2] = ''
+                if line[3] == 0.0:
+                    line[3] = ''
+            # now save GT as a .txt file
+            for i in range(1, duration + 1):
+                GT[i - 1][0] = str(i)  # add time as the first column to make GT readable
+            # strings = (str(item) for item in GT)
+            with open(GTFile, "w") as f:
+                for l, el in enumerate(GT):
+                    string = '\t'.join(map(str, el))
+                    for item in string:
+                        f.write(item)
+                    f.write('\n')
+                print('created GT:', GTFile)
 
     def annotation2GT_OvWin(self, wavFile, species, duration=0, window=1, inc=None):
         """
@@ -4524,35 +4413,6 @@ class AviaNZ(QMainWindow):
         #print(lenMin, lenMax, fLow, fHigh, sampleRate)
         return [lenMin, lenMax, fLow, fHigh, sampleRate]
 
-    def browseTrainData(self):
-        """ Listener for the wavelet training dialog.
-        """
-        self.dName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose Folder to Process')
-        # get the species list from annotations
-        self.waveletTDialog.fillFileList(self.dName)
-        self.waveletTDialog.genGT.setEnabled(True)
-        self.waveletTDialog.minlen.setEnabled(False)
-        self.waveletTDialog.maxlen.setEnabled(False)
-        self.waveletTDialog.fLow.setEnabled(False)
-        self.waveletTDialog.fHigh.setEnabled(False)
-        self.waveletTDialog.fs.setEnabled(False)
-        self.waveletTDialog.setM.setEnabled(False)
-        self.waveletTDialog.setthr.setEnabled(False)
-        self.waveletTDialog.wind.setEnabled(False)
-        self.waveletTDialog.rain.setEnabled(False)
-        self.waveletTDialog.ff.setEnabled(False)
-        self.waveletTDialog.train.setEnabled(False)
-        self.waveletTDialog.raise_()
-
-    def browseTestData(self):
-        """ Listener for the wavelet training dialog.
-        """
-        self.waveletTDialog.note_step3.clear()
-        self.dNameTest = QtGui.QFileDialog.getExistingDirectory(self, 'Choose Folder to Test')
-        self.waveletTDialog.fillFileList(self.dNameTest, False)
-        self.waveletTDialog.test.setEnabled(True)
-        self.waveletTDialog.raise_()
-
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
         """
@@ -4586,7 +4446,7 @@ class AviaNZ(QMainWindow):
                     msg.exec_()
                     return
 
-                filtspecies = self.FilterDicts[filtname]["species"]
+                filtspecies = self.FilterDicts[filtname]["Species"]
                 oldsegs = self.segments.getSpecies(filtspecies)
                 # deleting from the end, because deleteSegments shifts IDs:
                 for si in reversed(oldsegs):
