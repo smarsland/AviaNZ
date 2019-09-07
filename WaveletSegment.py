@@ -77,7 +77,12 @@ class WaveletSegment:
             return
 
         opst = time.time()
+
+        # resample or adjust nodes in self.spInfo if needed
         denoisedData = self.preprocess(data, sampleRate, d=d)
+
+        # Find out which nodes will be needed:
+        allnodes = [node for subfilter in self.spInfo["Filters"] for node in subfilter["WaveletParams"][2]]
 
         # Generate a full 5 level wavelet packet decomposition (stored in WF.tree)
         self.WF = WaveletFunctions.WaveletFunctions(data=denoisedData, wavelet=self.wavelet, maxLevel=20, samplerate=sampleRate)
@@ -85,15 +90,9 @@ class WaveletSegment:
             print("ERROR: pywt wpmode is deprecated, use new or aa")
             return
         if wpmode == "new" or wpmode == "old":
-            self.WF.WaveletPacket(mode='symmetric', maxlevel=5, antialias=False)
+            self.WF.WaveletPacket(allnodes, mode='symmetric', antialias=False)
         if wpmode == "aa":
-            self.WF.WaveletPacket(mode='symmetric', maxlevel=5, antialias=True, antialiasFilter=True)
-
-        # For memory concerns, could reset some nodes to 0:
-        # for ni in range(len(self.WF.tree)):
-        #     # note that we don't reset node 0 as it's good to keep original data
-        #     if ni not in goodnodes and ni!=0:
-        #         self.WF.tree[ni] = [0]
+            self.WF.WaveletPacket(allnodes, mode='symmetric', antialias=True, antialiasFilter=True)
 
         ### Now, find segments with each subfilter separately
         detected_allsubf = []
@@ -115,7 +114,7 @@ class WaveletSegment:
             else:
                 detected = []
             detected = self.mergeSeg(detected)
-            detected_allsubf.extend(detected)
+            detected_allsubf.append(detected)
         print("Wavelet segmenting completed in", time.time() - opst)
         return detected_allsubf
 
@@ -153,6 +152,7 @@ class WaveletSegment:
         wpmode = "new"
         self.nodeCorrs = []
         self.bestNodes = []
+        self.worstNodes = []
         self.maxEs = []
         inc = 1
         for filenum in range(len(self.audioList)):
@@ -162,8 +162,10 @@ class WaveletSegment:
             nodeCorr = self.compute_r(self.annotation[filenum], currWCs)
             self.nodeCorrs.append(nodeCorr)
             # find best nodes
-            bestnodes, _ = self.listTopNodes(filenum)
+            bestnodes, worstnodes = self.listTopNodes(filenum, self.spInfo["FreqRange"])
             self.bestNodes.append(bestnodes)
+            self.worstNodes.append(worstnodes)
+            print("Adding to negative nodes", worstnodes)
 
         # 3. generate WPs for each file and store the max energies
         for filenum in range(len(self.audioList)):
@@ -172,9 +174,9 @@ class WaveletSegment:
             self.WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
             # Generate a full 5 level wavelet packet decomposition
             if learnMode == "recaa" or learnMode == "recold":
-                self.WF.WaveletPacket(mode='symmetric', maxlevel=nlevels, antialias=False)
+                self.WF.WaveletPacket(self.bestNodes[filenum], mode='symmetric', antialias=False)
             elif learnMode == "recaafull":
-                self.WF.WaveletPacket(mode='symmetric', maxlevel=nlevels, antialias=True, antialiasFilter=True)
+                self.WF.WaveletPacket(self.bestNodes[filenum], mode='symmetric', antialias=True, antialiasFilter=True)
             else:
                 print("ERROR: learnMode unrecognized")
                 return
@@ -236,11 +238,11 @@ class WaveletSegment:
             self.WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20,
                                                         samplerate=self.spInfo['SampleRate'])
             if learnMode == "recaa" or learnMode =="recold":
-                self.WF.WaveletPacket(mode='symmetric', maxlevel=5, antialias=False)
+                self.WF.WaveletPacket(self.nodes, mode='symmetric', antialias=False)
                 detected_c = self.detectCalls(self.WF, nodelist=self.nodes, spInfo=self.spInfo, rf=rf, window=1,
                                               inc=None)
             elif learnMode == "recaafull":
-                self.WF.WaveletPacket(mode='symmetric', maxlevel=5, antialias=True, antialiasFilter=True)
+                self.WF.WaveletPacket(self.nodes, mode='symmetric', antialias=True, antialiasFilter=True)
                 detected_c = self.detectCalls(self.WF, nodelist=self.nodes, spInfo=self.spInfo, rf=rf, window=1,
                                               inc=None)
             else:
@@ -337,9 +339,11 @@ class WaveletSegment:
                 print("ERROR: pywt mode deprecated, use new or aa")
                 return
             if wpmode == "new":
-                WF.WaveletPacket(mode='symmetric', maxlevel=nlevels, antialias=False)
+                allnodes = range(2 ** (nlevels + 1) - 1)
+                WF.WaveletPacket(allnodes, mode='symmetric', antialias=False)
             if wpmode == "aa":
-                WF.WaveletPacket(mode='symmetric', maxlevel=nlevels, antialias=True, antialiasFilter=True)
+                allnodes = range(2 ** (nlevels + 1) - 1)
+                WF.WaveletPacket(allnodes, mode='symmetric', antialias=True, antialiasFilter=True)
 
             # Calculate energies
             for level in range(1, nlevels + 1):
@@ -667,7 +671,6 @@ class WaveletSegment:
 
         if window != 1 or inc != window:
             N = int(math.ceil(duration/ samplerate))  # numbers of seconds
-            N = int(math.ceil(duration/ spInfo['SampleRate']))  # numbers of seconds
             detect_ann = np.zeros(N)
             start = 0
             # follow the windows checking in what second they start or end
@@ -781,16 +784,12 @@ class WaveletSegment:
                     finalnodesMT.append(finalnodesF)
                     print("Iteration f %d/%d complete" % (indexF + 1, len(self.audioList)))
 
-                    ##### TODO clean this once confirmed that it works
-                    nodesToTest, worstnodes = self.listTopNodes(indexF)
+                    # fill top node lists
                     if np.sum(annot) > 0:
                         top_nodes.extend(nodesToTest[0:2])
-                    negative_nodes.extend(worstnodes)
-                    print("Adding to negative nodes", worstnodes)
 
                     # Memory cleanup:
                     gc.collect()
-
 
                     # build long vectors of detections and annotations
                     detected_all.extend(detect_best)
@@ -813,7 +812,7 @@ class WaveletSegment:
             print("Iteration M %d/%d complete\t M=%f\n-----------------------------------------------------------------"
                   "\n-----------------------------------------------------------------" % (indexM + 1, len(MList), MList[indexM]))
         # remove duplicates
-        negative_nodes = set(negative_nodes)
+        negative_nodes = set(self.worstNodes)
         negative_nodes = list(negative_nodes)
         # Remove any top nodes from negative list
         negative_nodes = [i for i in negative_nodes if i not in top_nodes]
@@ -838,10 +837,16 @@ class WaveletSegment:
         nodes1 = np.flip(np.argsort(nodeCorrs)[:], 0).tolist()
         bestnodes = []
 
+        # filter nodes that are outside target species freq range
+        WF = WaveletFunctions.WaveletFunctions(data=[], wavelet=self.wavelet, maxLevel=1, samplerate=self.spInfo["SampleRate"])
+        freqrange = [subf["FreqRange"] for subf in self.spInfo["Filters"]]
+        freqrange = (np.min(freqrange), np.max(freqrange))
+
         # avoid low-level nodes
         low_level_nodes = list(range(15))
         for item in nodes1:
-            if item not in low_level_nodes:
+            itemfrl, itemfru = WF.getWCFreq(item)
+            if item not in low_level_nodes and itemfrl < freqrange[1] and itemfru > freqrange[0]:
                 bestnodes.append(item)
 
         # Find 10 most positively correlated nodes
@@ -883,12 +888,37 @@ class WaveletSegment:
         fsOut = self.spInfo['SampleRate']
 
         if sampleRate != fsOut:
-            print("Resampling from", sampleRate, "to", fsOut)
-            if fastRes:
-                data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
+            if fsOut == 2*sampleRate:
+                print("Adjusting nodes for upsampling to", fsOut)
+                # don't actually upsample audio, just "downsample" the nodes needed
+                WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
+                for subfilter in self.spInfo["Filters"]:
+                    subfilter["WaveletParams"][2] = WF.adjustNodes(subfilter["WaveletParams"][2], "down2")
+                self.spInfo["SampleRate"] = sampleRate
+            elif fsOut == 4*sampleRate:
+                print("Adjusting nodes for upsampling to", fsOut)
+                # same. Wouldn't recommend repeating for larger ratios than 4x
+                WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
+                for subfilter in self.spInfo["Filters"]:
+                    downsampled2x = WF.adjustNodes(subfilter["WaveletParams"][2], "down2")
+                    subfilter["WaveletParams"][2] = WF.adjustNodes(downsampled2x, "down2")
+                self.spInfo["SampleRate"] = sampleRate
+            # Could also similarly "downsample" by adding an extra convolution, but it's way slower
+            # elif sampleRate == 2*fsOut:
+            #     # don't actually downsample audio, just "upsample" the nodes needed
+            #     WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
+            #     for subfilter in self.spInfo["Filters"]:
+            #         subfilter["WaveletParams"][2] = WF.adjustNodes(subfilter["WaveletParams"][2], "up2")
+            #     print("upsampled nodes")
+            #     self.spInfo["SampleRate"] = sampleRate
             else:
-                data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_best')
-            sampleRate = fsOut
+                print("Resampling from", sampleRate, "to", fsOut)
+                # actually up/down-sample
+                if fastRes:
+                    data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
+                else:
+                    data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_best')
+                sampleRate = fsOut
 
         # Get the five level wavelet decomposition
         if d:

@@ -28,7 +28,7 @@
 # TODO: Full list of next steps
 
 import sys, os, json, platform, re, shutil
-# from jsonschema import validate
+from jsonschema import validate
 from shutil import copyfile
 from openpyxl import load_workbook, Workbook
 
@@ -1914,17 +1914,17 @@ class AviaNZ(QMainWindow):
 
             # For now, not using antialiasFilter in the reconstructions as it's quick anyway
             if self.extra == "Filtered spectrogram, new + AA":
-                WF.WaveletPacket(5, 'symmetric', True, True)
+                WF.WaveletPacket(plotNodes, 'symmetric', True, True)
                 C = WF.reconstructWP2(plotNodes[0], True, False)[:len(self.audiodata)]
                 for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(node, True, False)[:len(C)]
             if self.extra == "Filtered spectrogram, new":
-                WF.WaveletPacket(5, 'symmetric', False)
+                WF.WaveletPacket(plotNodes, 'symmetric', False)
                 C = WF.reconstructWP2(plotNodes[0], True, False)[:len(self.audiodata)]
                 for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(node, True, False)[:len(C)]
             if self.extra == "Filtered spectrogram, old":
-                WF.WaveletPacket(5, 'symmetric', False)
+                WF.WaveletPacket(plotNodes, 'symmetric', False)
                 C = WF.reconstructWP2(plotNodes[0], False)[:len(self.audiodata)]
                 for node in plotNodes[1:]:
                     C = C + WF.reconstructWP2(node, False)[:len(C)]
@@ -3515,7 +3515,7 @@ class AviaNZ(QMainWindow):
                 datatoplot = self.audiodata
 
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
-            WF.WaveletPacket(5, 'symmetric', aaType==-4, antialiasFilter=True)
+            WF.WaveletPacket(spSubf['WaveletParams'][2], 'symmetric', aaType==-4, antialiasFilter=True)
             numNodes = len(spSubf['WaveletParams'][2])
             Esep = np.zeros(( numNodes, int(self.datalengthSec) ))
 
@@ -3670,7 +3670,9 @@ class AviaNZ(QMainWindow):
         print("Decomposing to WP...")
         ot = time.time()
         self.WFinst = WaveletFunctions.WaveletFunctions(data=self.audiodata, wavelet="dmey2", maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
-        self.WFinst.WaveletPacket(maxlevel=5, mode='symmetric', antialias=False)
+        maxLevel = 5
+        allnodes = range(2 ** (maxLevel + 1) - 1)
+        self.WFinst.WaveletPacket(allnodes, mode='symmetric', antialias=False)
         print("Done")
         print(time.time() - ot)
 
@@ -4148,7 +4150,7 @@ class AviaNZ(QMainWindow):
         filter["timeRange"] = [minLen, maxLen]
         species = self.buildRecAdvWizard.filterpages[filterpage].lblSpecies.text()
         # TODO: Remove SampleRate from individual filters and add to Species level
-        spInfo = {"Species": species, "SampleRate": 16000, "Filters": [filter], "Wind": False, "Rain": False, "F0": False}
+        spInfo = {"species": species, "SampleRate": 16000, "Filters": [filter], "Wind": False, "Rain": False, "F0": False}
 
         # Grid search M*thr
         with pg.BusyCursor():
@@ -4446,7 +4448,7 @@ class AviaNZ(QMainWindow):
                     msg.exec_()
                     return
 
-                filtspecies = self.FilterDicts[filtname]["Species"]
+                filtspecies = self.FilterDicts[filtname]["species"]
                 oldsegs = self.segments.getSpecies(filtspecies)
                 # deleting from the end, because deleteSegments shifts IDs:
                 for si in reversed(oldsegs):
