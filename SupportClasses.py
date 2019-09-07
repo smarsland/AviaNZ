@@ -56,13 +56,23 @@ import io
 from itertools import chain, repeat
 import statistics
 
+
 class preProcess:
     """ This class implements few pre processing methods to avoid noise
     """
     # todo: remove duplicate preprocess in 'Wavelet Segments'
 
-    def __init__(self,audioData=None, spInfo={}, d=False, f=True, wavelet='dmey2'):
-        self.audioData = audioData
+    def __init__(self, wavObj=None, spInfo={}, d=False, f=True, wavelet='dmey2'):
+        data = wavObj.data
+        if np.shape(np.shape(data))[0] > 1:
+            data = data[:, 0]
+        sampleRate = wavObj.rate
+        if data.dtype!='float':
+            data = data.astype('float')
+        if spInfo['SampleRate'] != sampleRate:
+            data = librosa.core.audio.resample(data, sampleRate, spInfo['SampleRate'])
+
+        self.audioData = data
         self.spInfo = spInfo
         # defaulting to first subfilter for now
         for key, value in self.spInfo["Filters"][0].items():
@@ -97,6 +107,7 @@ class preProcess:
             filteredDenoisedData = denoisedData
 
         return filteredDenoisedData, fs
+
 
 class postProcess:
     """ This class implements few post processing methods to avoid false positives
@@ -349,17 +360,9 @@ class postProcess:
                 secs = int(seg[1] - seg[0])
                 # Got to read from the source instead of using self.audioData - ff is wrong if you use self.audioData somehow
                 # data = self.audioData[int(seg[0]*speciesData['SampleRate']):int(seg[1]*speciesData['SampleRate'])]
-                wavobj = wavio.read(fileName, nseconds=secs, offset=seg[0])
-                data = wavobj.data
-                if np.shape(np.shape(data))[0] > 1:
-                    data = data[:, 0]
-                sampleRate = wavobj.rate
-                if data is not 'float':
-                    data = data.astype('float')
-                if speciesData['SampleRate'] != sampleRate:
-                    data = librosa.core.audio.resample(data, sampleRate, speciesData['SampleRate'])
                 # denoise before fundamental frq. extraction
-                sc = preProcess(audioData=data, spInfo=speciesData, d=True, f=False)  # avoid bandpass filter
+                wavobj = wavio.read(fileName, nseconds=secs, offset=seg[0])
+                sc = preProcess(wavObj=wavobj, spInfo=speciesData, d=True, f=False)  # avoid bandpass filter
                 data, sampleRate = sc.denoise_filter(level=8)
                 sp = SignalProc.SignalProc([], 0, 256, 128)
                 sgRaw = sp.spectrogram(data, 256, 128, mean_normalise=True, onesided=True, multitaper=False)
