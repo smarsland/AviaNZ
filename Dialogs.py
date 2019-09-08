@@ -2111,11 +2111,16 @@ class PicButton(QAbstractButton):
             fontsize = int(self.im1.size().height() * 0.65)
             if self.mark == "green":
                 pass
-            elif self.mark == "yellow":
+            elif self.mark == "yellow" and not self.cluster:
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220,220,0)))
                 painter.setFont(QFont("Helvetica", fontsize))
                 painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "?")
+            elif self.mark == "yellow" and self.cluster:
+                painter.setOpacity(0.9)
+                painter.setPen(QPen(QColor(220, 220, 0)))
+                painter.setFont(QFont("Helvetica", fontsize))
+                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "√")
             elif self.mark == "red":
                 painter.setOpacity(0.8)
                 painter.setPen(QPen(QColor(220,0,0)))
@@ -2532,8 +2537,7 @@ class WPage3(QWizardPage):
     def __init__(self, parent=None):
         super(WPage3, self).__init__(parent)
         self.setTitle('Cluster similar looking calls')
-        self.setSubTitle('This page displays the automatically created cluters for the dataset. Change if required and '
-                         'confirm.')
+        self.setSubTitle('This page displays the automatically created clusters. Change if required and confirm.')
 
         self.sampleRate = 0
         self.segments = []
