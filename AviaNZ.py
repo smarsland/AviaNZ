@@ -59,7 +59,7 @@ import Segment
 import WaveletSegment
 import WaveletFunctions
 #import Features
-import Learning
+import Clustering
 import AviaNZ_batch
 import fnmatch
 import librosa
@@ -4222,8 +4222,8 @@ class AviaNZ(QMainWindow):
             return
         with pg.BusyCursor():
             self.buildRecAdvWizard.selectsppPage.lblUpdate.setText('Processing. Please wait...')
-            clustered_segments, fs, n_classes = Learning.cluster_by_agg(self.trainDir, feature='we', n_clusters=5)
-            # clustered_segments, fs, n_classes = Learning.cluster_by_dist(self.dName, feature='we', max_clusters=5, single=True)
+            clustered_segments, fs, n_classes = Clustering.cluster_by_agg(self.trainDir, feature='we', n_clusters=5)
+            # clustered_segments, fs, n_classes = Clustering.cluster_by_dist(self.dName, feature='we', max_clusters=5, single=True)
 
             self.buildRecAdvWizard.clusterPage.segments = clustered_segments
             # print('****self.buildRecAdvWizard.clusterPage.segments:\n', self.buildRecAdvWizard.clusterPage.segments)
