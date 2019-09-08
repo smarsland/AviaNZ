@@ -3136,6 +3136,18 @@ class AviaNZ(QMainWindow):
             else:
                 dialogBirdList = self.shortBirdList
 
+            # Get the list of birds from the file, and make sure they are in the shortlist
+            labels = []
+            for segi in range(len(self.segments)):
+                label = self.segments[segi][4]
+                for lab in label:
+                    labels.append(lab['species'])
+                
+            birdspresent = set(labels)
+            for bird in birdspresent:
+                if bird not in self.shortBirdList:
+                    dialogBirdList.insert(0,str(bird))
+
             self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.brightnessSlider.value(), self.contrastSlider.value(), dialogBirdList, self.longBirdList, self.multipleBirds, self)
 
             # load the first image:

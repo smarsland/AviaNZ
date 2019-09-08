@@ -1123,7 +1123,7 @@ class HumanClassify1(QDialog):
         self.birds3.itemClicked.connect(self.listBirdsClicked)
 
         # An array of check boxes and a list and a text entry box
-        # Create an array of check bixes for the most common birds (2 columns of 10 choices)
+        # Create an array of check boxes for the most common birds 
         self.birds = QButtonGroup()
         self.birdbtns = []
         if self.multipleBirds:
@@ -1400,17 +1400,20 @@ class HumanClassify1(QDialog):
         self.species.setText(','.join(label))
 
         # temporarily, update the short bird list to have the current species at the top
-        if not self.parent.config['ReorderList']:
-            tempShortList = list(self.shortBirdList)
+        # TODO: Probably remove this. It's not the correct functionality.
+        #if not self.parent.config['ReorderList']:
+            #tempShortList = list(self.shortBirdList)
+
         # question marks are displayed on the first pass,
         # but any clicking sets certainty to 100 in effect.
         for lsp_ix in range(len(label)):
             if label[lsp_ix].endswith('?'):
                 label[lsp_ix] = label[lsp_ix][:-1]
             # move the label to the top of the list
-            if label[lsp_ix] in self.shortBirdList:
-                self.shortBirdList.remove(label[lsp_ix])
-            self.shortBirdList.insert(0, label[lsp_ix])
+            # TODO: remove, or at least debug
+            #if label[lsp_ix] in self.shortBirdList:
+                #self.shortBirdList.remove(label[lsp_ix])
+            #self.shortBirdList.insert(0, label[lsp_ix])
 
         # clear selection
         self.birds3.clearSelection()

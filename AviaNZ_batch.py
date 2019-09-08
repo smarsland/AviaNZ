@@ -1082,8 +1082,10 @@ class AviaNZ_reviewAll(QMainWindow):
         # short list is necessary, long list can be None
         self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], self.configdir)
         if self.shortBirdList is None:
+            # TODO: Use a default one?
+            print("Need a short bird list")
             sys.exit()
-
+    
         # Will be None if fails to load or filename was "None"
         self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
         if self.config['BirdListLong'] is None:
@@ -1100,8 +1102,13 @@ class AviaNZ_reviewAll(QMainWindow):
         else:
             dialogBirdList = self.shortBirdList
 
+        # Get the list of birds from the files, and make sure they are in the shortlist
+        for bird in self.spList:
+            if bird not in self.shortBirdList and bird != "All species":
+                dialogBirdList.insert(0,str(bird))
+
         self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], dialogBirdList, self.longBirdList, self.config['MultipleSpecies'], self)
-        self.box1id = 0
+        self.box1id = -1
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
             self.humanClassifyDialog1.move(self.dialogPos)
