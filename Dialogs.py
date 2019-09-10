@@ -52,7 +52,7 @@ import SupportClasses as SupportClasses
 import SignalProc
 import WaveletSegment
 import Segment
-import Learning
+import Clustering
 
 
 class StartScreen(QDialog):
@@ -2446,8 +2446,8 @@ class BuildRecAdvWizard(QWizard):
                 # fs: sampling freq
                 # self.nclasses: number of class_labels
                 self.picbuttons = []
-                self.segments, fs, self.nclasses = Learning.cluster_by_agg(self.field("trainDir"), feature='we', n_clusters=5)
-                # self.segments, fs, self.nclasses = Learning.cluster_by_dist(self.dName, feature='we', max_cluste       rs=5, single=True)
+                self.segments, fs, self.nclasses = Clustering.cluster_by_agg(self.field("trainDir"), feature='we', n_clusters=5)
+                # self.segments, fs, self.nclasses = Clustering.cluster_by_dist(self.dName, feature='we', max_cluste       rs=5, single=True)
                 # clusterPage.sampleRate = fs
 
                 # Add the clusters to rows
@@ -2901,7 +2901,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, id, clust, parent=None):
             super(BuildRecAdvWizard.WPageTrain, self).__init__(parent)
             self.setTitle('Training results')
-            self.setMinimumSize(600, 400)
+            self.setMinimumSize(600, 500)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
@@ -2997,7 +2997,6 @@ class BuildRecAdvWizard(QWizard):
 
         # ACTUAL TRAINING IS DONE HERE
         def initializePage(self):
-            self.setMinimumSize(750, 400)
             self.lblTrainDir.setText(self.field("trainDir"))
             self.lblSpecies.setText(self.field("species"))
             self.lblCluster.setText(self.clust)
