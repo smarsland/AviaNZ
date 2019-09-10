@@ -2635,6 +2635,7 @@ class BuildRecAdvWizard(QWizard):
             self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
             # print('clusters dict: ', self.clusters)
 
+            self.cmbUpdateSeg.clear()
             for x in self.clusters:
                 self.cmbUpdateSeg.addItem(self.clusters[x])
 
@@ -3209,6 +3210,7 @@ class BuildRecAdvWizard(QWizard):
                 print(newSubfilt)
                 self.wizard().speciesData["Filters"].append(newSubfilt)
 
+            self.updateFilter()
             self.lblFilter.setText(str(self.wizard().speciesData))
 
         def updateFilter(self):
