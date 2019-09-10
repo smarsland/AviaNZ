@@ -155,6 +155,19 @@ class WaveletSegment:
         self.worstNodes = []
         self.maxEs = []
         inc = 1
+
+        if len(self.spInfo["Filters"])>1:
+            print("ERROR: must provide only 1 subfilter at a time!")
+            return
+        else:
+            subfilter = self.spInfo["Filters"][0]
+
+        # 2a. prefilter audio to species freq range
+        for filenum in range(len(self.audioList)):
+            self.audioList[filenum] = self.sp.ButterworthBandpass(self.audioList[filenum],
+                                            self.spInfo['SampleRate'],
+                                            low=subfilter['FreqRange'][0], high=subfilter['FreqRange'][1])
+        # 2b. actually compute correlations
         for filenum in range(len(self.audioList)):
             print("Computing wavelet node correlations in file", filenum+1)
             currWCs = self.computeWaveletEnergy(self.audioList[filenum], self.spInfo['SampleRate'], nlevels, wpmode, window=window, inc=inc)
@@ -162,7 +175,7 @@ class WaveletSegment:
             nodeCorr = self.compute_r(self.annotation[filenum], currWCs)
             self.nodeCorrs.append(nodeCorr)
             # find best nodes
-            bestnodes, worstnodes = self.listTopNodes(filenum, self.spInfo["FreqRange"])
+            bestnodes, worstnodes = self.listTopNodes(filenum)
             self.bestNodes.append(bestnodes)
             self.worstNodes.append(worstnodes)
             print("Adding to negative nodes", worstnodes)
@@ -171,7 +184,9 @@ class WaveletSegment:
         for filenum in range(len(self.audioList)):
             print("Extracting energies from file", filenum+1)
             data = self.audioList[filenum]
+
             self.WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
+
             # Generate a full 5 level wavelet packet decomposition
             if learnMode == "recaa" or learnMode == "recold":
                 self.WF.WaveletPacket(self.bestNodes[filenum], mode='symmetric', antialias=False)
@@ -812,8 +827,7 @@ class WaveletSegment:
             print("Iteration M %d/%d complete\t M=%f\n-----------------------------------------------------------------"
                   "\n-----------------------------------------------------------------" % (indexM + 1, len(MList), MList[indexM]))
         # remove duplicates
-        negative_nodes = set(self.worstNodes)
-        negative_nodes = list(negative_nodes)
+        negative_nodes = np.unique(self.worstNodes)
         # Remove any top nodes from negative list
         negative_nodes = [i for i in negative_nodes if i not in top_nodes]
         # Convert negative correlated nodes
@@ -845,7 +859,7 @@ class WaveletSegment:
         # avoid low-level nodes
         low_level_nodes = list(range(15))
         for item in nodes1:
-            itemfrl, itemfru = WF.getWCFreq(item)
+            itemfrl, itemfru = WF.getWCFreq(item, self.spInfo["SampleRate"])
             if item not in low_level_nodes and itemfrl < freqrange[1] and itemfru > freqrange[0]:
                 bestnodes.append(item)
 
@@ -951,7 +965,7 @@ class WaveletSegment:
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-' + self.spInfo["Filters"][0]["calltype"] + '-res'+str(float(resol))+'sec.txt' in files:
+                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
                     opstartingtime = time.time()
                     wavFile = os.path.join(root, file[:-4])
 
@@ -993,7 +1007,7 @@ class WaveletSegment:
         filename = fName + '.wav'
         print('\n\n', filename)
         # Virginia: added resol for identify annotation txt
-        filenameAnnotation = fName + '-' + self.spInfo["Filters"][0]["calltype"] + '-res' + str(float(resol)) + 'sec.txt'
+        filenameAnnotation = fName + '-res' + str(float(resol)) + 'sec.txt'
         # filenameAnnotation = fName + '-res'+str(float(resol))+'sec.txt'
         try:
             wavobj = wavio.read(filename)
