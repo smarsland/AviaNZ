@@ -307,7 +307,6 @@ class AviaNZ_batchProcess(QMainWindow):
                 processingTimeStart = time.time()
                 self.filename = filename
                 self.segments = Segment.SegmentList()
-                newSegments = []
                 # get remaining run time in min
                 hh,mm = divmod(processingTime * (total-cnt) / 60, 60)
                 cnt = cnt+1
@@ -358,7 +357,6 @@ class AviaNZ_batchProcess(QMainWindow):
                 print("Loading file...")
                 self.loadFile(wipe=(self.species == "All species"))
 
-                newSegments = []
                 print("Segmenting...")
                 # clean up old segments:
                 if self.species != 'All species':
@@ -387,11 +385,11 @@ class AviaNZ_batchProcess(QMainWindow):
                     thisPageLen = (end-start) / self.sampleRate
 
                     if thisPageLen < 2:
-                        print("Warning: can't process short file ends (%0.2f s)" % thisPageLen)
+                        print("Warning: can't process short file ends (%.2f s)" % thisPageLen)
                         continue
 
                     if self.species != 'All species':
-                        # note: using 'recaa' mode = partial anitalias
+                        # note: using 'recaa' mode = partial antialias
                         thisPageSegs = self.ws.waveletSegment(data=self.audiodata[start:end], sampleRate=self.sampleRate, d=False, wpmode="new")
                     else:
                         # Create spectrogram for median clipping etc
@@ -399,44 +397,56 @@ class AviaNZ_batchProcess(QMainWindow):
                         self.seg = Segment.Segmenter(self.audiodata[start:end], self.sgRaw, self.sp, self.sampleRate)
                         thisPageSegs = self.seg.bestSegments()
 
-                    if start != 0 :
-                        thisPageSegs = [[seg[0]+start/self.sampleRate, seg[1]+start/self.sampleRate] for seg in thisPageSegs]
+                    # post process to remove short segments, wind, rain, and use F0 check.
+                    print("Post processing...")
+                    if self.species == 'All species':
+                        post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={})
+                        post.wind()
+                        print('After wind: ', post.segments)
+                        # adjust segment starts for 15min "pages"
+                        if start != 0:
+                            for seg in post.segments:
+                                seg[0] += start/self.sammpleRate
+                                seg[1] += start/self.sampleRate
+                        # attach mandatory "Don't Know"s etc and put on self.segments
+                        self.makeSegments(post.segments)
+                    else:
+                        # postProcess currently operates on single-level list of segments,
+                        # so we run it over subfilters for wavelets:
+                        for filtix in range(len(self.speciesData['Filters'])):
+                            post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs[filtix], subfilter={})
+                            if 'Wind' in self.speciesData:
+                                if self.speciesData['Wind']:
+                                    print('Deleting wind...')
+                                    post.wind(windT=2.5, fn_peak=0.35)
+                                    print('After wind: ', post.segments)
+                            if 'F0' in self.speciesData:
+                                if self.speciesData['F0']:
+                                    pass
+                                # post.fundamentalFrq(self.filename, self.speciesData)
+                                # print('After ff: ', post.segments)
+                            if 'Kiwi' in self.speciesData['species']:  # Not sure if it is appropriate for other species
+                                print('Merging neighbours...')
+                                post.mergeneighbours()
+                                print('After merge neighbours: ', post.segments)
+                                print('Deleting short...')
+                                post.short(minLen=2)  # TODO: keep 'deleteShort' in filter file?
+                                print('After del short: ', post.segments)
 
-                    # combine segments from each page into a single list
-                    newSegments.extend(thisPageSegs)
-                print("Segmentation complete. %d new segments marked" % len(newSegments))
+                            # adjust segment starts for 15min "pages"
+                            if start != 0:
+                                for seg in post.segments:
+                                    seg[0] += start/self.sammpleRate
+                                    seg[1] += start/self.sampleRate
 
-                # post process to remove short segments, wind, rain, and use F0 check.
-                print("Post processing...")
-                if self.species == 'All species':
-                    post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, subfilter={})
-                    post.wind()
-                    print('After wind: ', post.segments)
-                else:
-                    post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, subfilter={})
-                    print('self.speciesData: ', self.speciesData)
-                    if 'Wind' in self.speciesData:
-                        if self.speciesData['Wind']:
-                            print('Deleting wind...')
-                            post.wind(windT=2.5, fn_peak=0.35)
-                            print('After wind: ', post.segments)
-                    if 'F0' in self.speciesData:
-                        if self.speciesData['F0']:
-                            pass
-                        # post.fundamentalFrq(self.filename, self.speciesData)
-                        # print('After ff: ', post.segments)
-                    if 'Kiwi' in self.speciesData['species']:  # Not sure if it is appropriate for other species
-                        print('Merging neighbours...')
-                        post.mergeneighbours()
-                        print('After merge neighbours: ', post.segments)
-                        print('Deleting short...')
-                        post.short(minLen=2)  # TODO: keep 'deleteShort' in filter file?
-                        print('After del short: ', post.segments)
-                newSegments = post.segments
-                print('Segments after post pro: ', newSegments)
+                            # attach filter info and put on self.segments:
+                            self.makeSegments(post.segments, self.species, self.speciesData['Filters'][filtix])
+
+                print('Segments in this file: ', self.segments)
+                print("Segmentation complete. %d new segments marked" % len(self.segments))
 
                 # export segments
-                cleanexit = self.saveAnnotation(newSegments)
+                cleanexit = self.saveAnnotation()
                 if cleanexit != 1:
                     print("Warning: could not save segments!")
                 # Log success for this file
@@ -497,9 +507,27 @@ class AviaNZ_batchProcess(QMainWindow):
         if reply == QMessageBox.Yes:
             QApplication.exit(1)
 
-    def saveAnnotation(self, segmentsNew):
+    def makeSegments(self, segmentsNew, filtName=None, subfilter=None):
+        """ Adds segments to self.segments """
+        # for wavelet segments: (same as self.species!="All species")
+        if subfilter is not None:
+            y1 = subfilter["FreqRange"][0]
+            y2 = min(subfilter["FreqRange"][1], self.sampleRate//2)
+            species = [{"species": self.speciesData["species"], "certainty": 50, "filter": filtName, "calltype": subfilter["calltype"]}]
+            for s in segmentsNew:
+                segment = Segment.Segment([s[0], s[1], y1, y2, species])
+                self.segments.addSegment(segment)
+        # for generic all-species segments:
+        else:
+            y1 = 0
+            y2 = 0
+            species = "Don't Know"
+            cert = 0
+            self.segments.addBasicSegments(segmentsNew, [y1, y2], species=species, certainty=cert)
+
+    def saveAnnotation(self):
         """ Generates default batch-mode metadata,
-            and saves that and segmentsNew to a .data file. """
+            and saves the current self.segments to a .data file. """
 
         self.segments.metadata["Operator"] = "Auto"
         self.segments.metadata["Reviewer"] = ""
@@ -507,23 +535,9 @@ class AviaNZ_batchProcess(QMainWindow):
         self.segments.metadata["noiseLevel"] = None
         self.segments.metadata["noiseTypes"] = []
 
-        # These parameters will be set for the new segments:
-        if self.species != 'All species':
-            y1 = self.speciesSubf['FreqRange'][0]
-            y2 = min(self.sampleRate//2, self.speciesSubf['FreqRange'][1])
-            species = self.species
-            cert = 50
-        else:
-            y1 = 0
-            y2 = 0
-            species = "Don't Know"
-            cert = 0
-
-        self.segments.addBasicSegments(segmentsNew, [y1, y2], species=species, certainty=cert)
         self.segments.saveJSON(str(self.filename) + '.data')
 
         return 1
-
 
     def fillFileList(self,fileName):
         """ Generates the list of files for the file listbox.
