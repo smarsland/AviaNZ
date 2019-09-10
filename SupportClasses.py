@@ -25,7 +25,7 @@
 #     from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QMessageBox
 from PyQt5.QtCore import QTime, QIODevice, QBuffer, QByteArray
-from PyQt5.QtMultimedia import QAudio, QAudioOutput
+from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 from PyQt5.QtGui import QIcon, QPixmap
 
 import pyqtgraph as pg
@@ -69,18 +69,32 @@ class preProcess:
         sampleRate = wavObj.rate
         if data.dtype!='float':
             data = data.astype('float')
-        if spInfo['SampleRate'] != sampleRate:
+        if spInfo!={} and spInfo['SampleRate'] != sampleRate:
             data = librosa.core.audio.resample(data, sampleRate, spInfo['SampleRate'])
+            # update actual samplerate:
+            sampleRate = spInfo['SampleRate']
+
+        # needed for playback
+        self.audioFormat = QAudioFormat()
+        self.audioFormat.setCodec("audio/pcm")
+        self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
+        self.audioFormat.setSampleType(QAudioFormat.SignedInt)
+
+        # above code forces mono currently
+        self.audioFormat.setChannelCount(1)
+        self.audioFormat.setSampleRate(sampleRate)
+        self.audioFormat.setSampleSize(wavObj.sampwidth * 8)
 
         self.audioData = data
         self.spInfo = spInfo
         # defaulting to first subfilter for now
-        for key, value in self.spInfo["Filters"][0].items():
-            self.spInfo[key] = value
+        if "Filters" in self.spInfo:
+            for key, value in self.spInfo["Filters"][0].items():
+                self.spInfo[key] = value
         self.d = d  # denoise
         self.f = f  # band-pass
         self.sp = SignalProc.SignalProc([], 0, 256, 128)
-        self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet=wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
+        self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet=wavelet, maxLevel=20, samplerate=sampleRate)
 
     def denoise_filter(self, level=5):
         # set df=True to perform both denoise and filter

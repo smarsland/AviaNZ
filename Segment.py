@@ -30,6 +30,7 @@ import json
 import os
 import re
 import math
+from intervaltree import IntervalTree
 
 from PyQt5.QtCore import QTime
 from openpyxl import load_workbook, Workbook
@@ -309,6 +310,64 @@ class SegmentList(list):
         file.close()
         return 1
 
+    def exportGT(self, filename, species, window=1, inc=None):
+        """ Given the AviaNZ annotations, exports a 0/1 ground truth as a txt file,
+            and returns other parameters for populating the training dialogs.
+        filename - current wav file name.
+        species - string, will export the annotations for it.
+        Window and inc defined as in waveletSegment.
+        """
+
+        if inc is None:
+            inc = window
+        resolution = math.gcd(int(100*window), int(100*inc)) / 100
+
+        # number of segments of width window at inc overlap
+        duration = int(np.ceil(self.metadata["Duration"] / resolution))
+
+        # TODO: empty files (no annotations or no sound) will lead to problems
+        thisSpSegs = self.getSpecies(species)
+        if len(thisSpSegs)==0:
+            print("Warning: no annotations for this species found in file", filename)
+            # return some default constants
+            return((100, 0, 32000, 0, 32000))
+
+        GT = np.tile([0, 0, None], (duration,1))
+        # fill first column with "time"
+        GT[:,0] = range(1, duration+1)
+        GT[:,0] = GT[:,0] * resolution
+
+        for segix in thisSpSegs:
+            seg = self[segix]
+            # start and end in resolution base
+            s = int(math.floor(seg[0] / resolution))
+            e = int(math.ceil(seg[1] / resolution))
+            for i in range(s, e):
+                GT[i,1] = 1
+                GT[i,2] = species
+        GT = GT.tolist()
+
+        # now save the resulting txt:
+        eFile = filename[:-4] + '-res' + str(float(resolution)) + 'sec.txt'
+        with open(eFile, "w") as f:
+            for l, el in enumerate(GT):
+                string = '\t'.join(map(str,el))
+                for item in string:
+                    f.write(item)
+                f.write('\n')
+            f.write('\n')
+            print("output successfully saved to file", eFile)
+
+        # get parameter limits for populating training dialogs:
+        # FreqRange, in Hz
+        fLow = np.min([self[segix][2] for segix in thisSpSegs])
+        fHigh = np.max([self[segix][3] for segix in thisSpSegs])
+        # TimeRange, in s
+        lenMin = np.min([self[segix][1] - self[segix][0] for segix in thisSpSegs])
+        lenMax = np.max([self[segix][1] - self[segix][0] for segix in thisSpSegs])
+
+        return((lenMin, lenMax, fLow, fHigh))
+
     def exportExcel(self, dirName, filename, action, pagelen, numpages=1, speciesList=[], startTime=0, resolution=1):
         """ Exports the annotations to xlsx, with three sheets:
         time stamps, presence/absence, and per second presence/absence.
@@ -554,7 +613,6 @@ class Segmenter:
         If ignoreInsideEnvelope is true this is the first of those, otherwise the second
         """
 
-        from intervaltree import IntervalTree
         t = IntervalTree()
 
         # Put the first set into the tree
