@@ -30,6 +30,14 @@ import wavio
 import copy
 import json
 
+import pdb
+from PyQt5.QtCore import pyqtRemoveInputHook
+from pdb import set_trace
+
+def debug_trace():
+    pyqtRemoveInputHook()
+    set_trace()
+
 from PyQt5.QtGui import QIcon, QPixmap, QValidator, QAbstractItemView
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import QDialog, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit, QSlider, QCheckBox, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QWizard, QWizardPage, QComboBox, QListWidget, QListWidgetItem, QWidget, QFormLayout, QTextEdit, QTabWidget, QMessageBox
@@ -2022,8 +2030,8 @@ class HumanClassify2(QDialog):
         self.flowLayout.update()
 
     def toggleAll(self):
-            for btn in self.buttons:
-                btn.changePic(False)
+        for btn in self.buttons:
+            btn.changePic(False)
 
     def setColourLevels(self):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
@@ -2348,7 +2356,10 @@ class BuildRecAdvWizard(QWizard):
 
             self.sampleRate = 0
             self.segments = []
+            self.clusters = {}
             self.picbuttons = []
+            self.cboxes = []
+            self.tboxes = []
             self.nclasses = 0
             self.config = config
             self.segsChanged = False
@@ -2445,19 +2456,20 @@ class BuildRecAdvWizard(QWizard):
                 # self.segments: [parent_audio_file, [segment], [features], class_label]
                 # fs: sampling freq
                 # self.nclasses: number of class_labels
-                self.picbuttons = []
                 self.segments, fs, self.nclasses = Clustering.cluster_by_agg(self.field("trainDir"), feature='we', n_clusters=5)
                 # self.segments, fs, self.nclasses = Clustering.cluster_by_dist(self.dName, feature='we', max_cluste       rs=5, single=True)
                 # clusterPage.sampleRate = fs
 
-                # Add the clusters to rows
+                # Create and show the buttons
+                self.clearButtons()
                 self.addButtons()
+                self.updateButtons()
                 self.segsChanged = True
                 self.completeChanged.emit()
 
         def isComplete(self):
             # empty cluster names?
-            if self.clusters=={}:
+            if len(self.clusters)==0:
                 return False
             # duplicate cluster names aren't updated:
             for ID in range(self.nclasses):
@@ -2531,7 +2543,6 @@ class BuildRecAdvWizard(QWizard):
 
             # Clean and redraw
             self.clearButtons()
-
             self.updateButtons()
             self.completeChanged.emit()
             print('updated')
@@ -2625,47 +2636,24 @@ class BuildRecAdvWizard(QWizard):
             print('updated clusters: ', self.clusters)
 
         def addButtons(self):
-            """ Make the buttons and display them
+            """ Only makes the PicButtons and self.clusters dict
             """
-            self.cboxes = []    # List of check boxes
-            self.tboxes = []    # Corresponding list of text boxes
             self.clusters = []
+            self.picbuttons = []
             for i in range(self.nclasses):
                 self.clusters.append((i, 'Cluster ' + str(i)))
             self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
-            # print('clusters dict: ', self.clusters)
 
             self.cmbUpdateSeg.clear()
             for x in self.clusters:
                 self.cmbUpdateSeg.addItem(self.clusters[x])
 
-            for r in range(self.nclasses):      # Class IDs are 0, 1, 2, 3,...
-                c = 0
-                tbox = QLineEdit('Cluster ' + str(r))
-                tbox.setMinimumWidth(80)
-                tbox.setMaximumHeight(150)
-                # tbox.setStyleSheet("border: none; background: rgba(0,0,0,0%); text-align: center; vertical-align: middle;")
-                tbox.setStyleSheet("border: none; vertical-align: middle")
-                tbox.setAlignment(QtCore.Qt.AlignCenter)
-                tbox.textChanged.connect(self.updateClusterNames)
-                self.tboxes.append(tbox)
-                self.flowLayout.addWidget(self.tboxes[-1], r, c)
-                c += 1
-                cbox = QCheckBox("")
-                cbox.clicked.connect(self.checkMerge)
-                self.cboxes.append(cbox)
-                self.flowLayout.addWidget(self.cboxes[-1], r, c)
-                c += 1
-                # Find the segments under this class, create buttons, and show them
-                # i = 0
-                for seg in self.segments:
-                    if seg[-1] == r:
-                        sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1]-seg[1][0], seg[1][0])
-                        newButton = PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart,
-                                              self.colourEnd, False, cluster=True)
-                        self.picbuttons.append(newButton)
-                        self.flowLayout.addWidget(newButton, r, c)
-                        c += 1
+            # Create the buttons for each segment
+            for seg in self.segments:
+                sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1]-seg[1][0], seg[1][0])
+                newButton = PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart, self.colourEnd, False, cluster=True)
+                self.picbuttons.append(newButton)
+            # (updateButtons will place them in layouts and show them)
 
         def checkMerge(self):
             """ Updates merge buttons state when two clusters are selected """
@@ -2676,10 +2664,10 @@ class BuildRecAdvWizard(QWizard):
                 self.btnMerge.setEnabled(False)
 
         def updateButtons(self):
-            """ Redraw the existing buttons, call when merging clusters
-            """
-            self.cboxes = []
-            self.tboxes = []
+            """ Draw the existing buttons, and create check- and text-boxes.
+            Called when merging clusters or initializing the page. """
+            self.cboxes = []    # List of check boxes
+            self.tboxes = []    # Corresponding list of text boxes
             for r in range(self.nclasses):
                 c = 0
                 tbox = QLineEdit(self.clusters[r])
@@ -2689,7 +2677,6 @@ class BuildRecAdvWizard(QWizard):
                 tbox.setStyleSheet("border: none;")
                 tbox.setAlignment(QtCore.Qt.AlignCenter)
                 tbox.textChanged.connect(self.updateClusterNames)
-                # lbl.setEnabled(False)
                 self.tboxes.append(tbox)
                 self.flowLayout.addWidget(self.tboxes[-1], r, c)
                 c += 1
@@ -2703,7 +2690,7 @@ class BuildRecAdvWizard(QWizard):
                     if self.segments[segix][-1] == r:
                         self.flowLayout.addWidget(self.picbuttons[segix], r, c)
                         c += 1
-                # print(r, c-1)
+                        self.picbuttons[segix].show()
             self.flowLayout.update()
 
         def clearButtons(self):
@@ -2718,7 +2705,9 @@ class BuildRecAdvWizard(QWizard):
                 if item is not None:
                     self.flowLayout.layout.removeItem(item)
                     r, c = self.flowLayout.items[item.widget()]
+                    del self.flowLayout.items[item.widget()]
                     del self.flowLayout.rows[r][c]
+                    item.widget().hide()
             self.flowLayout.update()
 
         def setColourLevels(self):
