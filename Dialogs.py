@@ -2208,14 +2208,14 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, parent=None):
             super(BuildRecAdvWizard.WPageData, self).__init__(parent)
             self.setTitle('Training data')
+            self.setSubTitle('Select the folder with training data, then choose species')
 
             self.setMinimumSize(250, 150)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
-            browseTrainLabel = QLabel("Select a folder with training data:")
-
             self.trainDirName = QLineEdit()
+            self.trainDirName.setReadOnly(True)
             self.btnBrowse = QPushButton('Browse')
             self.btnBrowse.clicked.connect(self.browseTrainData)
 
@@ -2248,7 +2248,6 @@ class BuildRecAdvWizard(QWizard):
             layout1.addWidget(self.trainDirName)
             layout1.addWidget(self.btnBrowse)
             layout = QVBoxLayout()
-            layout.addWidget(browseTrainLabel)
             layout.addWidget(space)
             layout.addLayout(layout1)
             layout.addWidget(self.listFiles)
@@ -2322,6 +2321,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, parent=None):
             super(BuildRecAdvWizard.WPagePrecluster, self).__init__(parent)
             self.setTitle('Confirm data input')
+            self.setSubTitle('When ready, press \"Cluster\" to start clustering. The process may take a long time.')
             self.setMinimumSize(250, 150)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
@@ -2329,13 +2329,10 @@ class BuildRecAdvWizard(QWizard):
             revtop = QLabel("The following parameters were set:")
             self.params = QLabel("")
             self.params.setStyleSheet("QLabel { color : #808080; }")
-            revbot = QLabel("When ready, press \"Cluster\" to start clustering. The process may take a long time.")
-            revbot.setWordWrap(True)
 
             layout2 = QVBoxLayout()
             layout2.addWidget(revtop)
             layout2.addWidget(self.params)
-            layout2.addWidget(revbot)
             self.setLayout(layout2)
             self.setButtonText(QWizard.NextButton, 'Cluster >')
 
@@ -2349,7 +2346,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, config, parent=None):
             super(BuildRecAdvWizard.WPageCluster, self).__init__(parent)
             self.setTitle('Cluster similar looking calls')
-            self.setSubTitle('This page displays the automatically created clusters for the dataset. Change if required and confirm.')
+            self.setSubTitle('This page displays the automatically created clusters for the dataset. Change if required.')
             self.setMinimumSize(800, 500)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
             self.adjustSize()
@@ -2763,19 +2760,24 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, cluster, segments, parent=None):
             super(BuildRecAdvWizard.WPageParams, self).__init__(parent)
             self.setTitle("Training parameters: %s" % cluster)
+            self.setSubTitle("These fields were propagated using training data. Adjust if required.\nWhen ready, "
+                             "press \"Train\". The process may take a long time.")
             self.setMinimumSize(250, 350)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
-            page4label = QLabel("These fields were propagated using training data.\nAdjust if required.")
             self.lblSpecies = QLabel("")
+            self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
             self.numSegs = QLabel("")
+            self.numSegs.setStyleSheet("QLabel { color : #808080; }")
             self.segments = segments
+            lblCluster = QLabel(cluster)
+            lblCluster.setStyleSheet("QLabel { color : #808080; }")
 
             # TimeRange parameters
             form1_step4 = QFormLayout()
             form1_step4.addRow('Species:', self.lblSpecies)
-            form1_step4.addRow('Call type:', QLabel(cluster))
+            form1_step4.addRow('Call type:', lblCluster)
             form1_step4.addRow('Number of segments:', self.numSegs)
             self.minlen = QLineEdit(self)
             self.minlen.setText('')
@@ -2817,11 +2819,12 @@ class BuildRecAdvWizard(QWizard):
 
             ### Step4 layout
             layout_step4 = QVBoxLayout()
-            layout_step4.addWidget(page4label)
             layout_step4.addItem(QSpacerItem(1, 1, 5, 5))
             layout_step4.addLayout(form1_step4)
             layout_step4.addLayout(form2_step4)
             self.setLayout(layout_step4)
+
+            self.setButtonText(QWizard.NextButton, 'Train >')
 
         def fLowChange(self, value):
             value = value - (value % 10)
@@ -2965,17 +2968,18 @@ class BuildRecAdvWizard(QWizard):
             vboxHead.addRow("Target calltype:", self.lblCluster)
             vboxHead.addWidget(space)
 
-            vbox3 = QVBoxLayout()
-            vbox3.addLayout(filtSummary)
-            vbox3.addWidget(self.lblUpdate)
-
             hbox2 = QHBoxLayout()
-            hbox2.addLayout(vbox3, 1)
-            hbox2.addWidget(self.figCanvas, 3)
+            hbox2.addWidget(self.figCanvas)
+
+            hbox3 = QHBoxLayout()
+            hbox3.addLayout(filtSummary)
+            hbox3.addWidget(spaceH)
+            hbox3.addWidget(self.lblUpdate)
 
             vbox = QVBoxLayout()
             vbox.addLayout(vboxHead)
             vbox.addLayout(hbox2)
+            vbox.addLayout(hbox3)
 
             self.setLayout(vbox)
 
