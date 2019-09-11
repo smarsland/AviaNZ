@@ -291,6 +291,7 @@ class AviaNZ(QMainWindow):
         fileMenu.addAction("&Open sound file", self.openFile, "Ctrl+O")
         # fileMenu.addAction("&Change Directory", self.chDir)
         fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
+        fileMenu.addAction("&Manage filters", self.manageFilters)
         fileMenu.addSeparator()
         fileMenu.addAction("Restart Program",self.restart,"Ctrl+R")
         fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
@@ -4524,6 +4525,10 @@ class AviaNZ(QMainWindow):
         self.statusRight.setText("Operator: " + self.operator + ", Reviewer: "+self.reviewer)
         self.setOperatorReviewerDialog.close()
         self.segmentsToSave = True
+
+    def manageFilters(self):
+        self.filterManager = Dialogs.FilterManager(self.filtersDir)
+        self.filterManager.show()
 
     def addNoiseData(self):
         """ Listener for the adding metadata about noise action """

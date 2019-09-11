@@ -23,20 +23,11 @@
 
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
-import sys, os
+import os
 import time
 import platform
 import wavio
-import copy
 import json
-
-import pdb
-from PyQt5.QtCore import pyqtRemoveInputHook
-from pdb import set_trace
-
-def debug_trace():
-    pyqtRemoveInputHook()
-    set_trace()
 
 from PyQt5.QtGui import QIcon, QPixmap, QValidator, QAbstractItemView
 from PyQt5.QtGui import *
@@ -48,7 +39,6 @@ import matplotlib.markers as mks
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import FigureCanvasQT
 from matplotlib.figure import Figure
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -2202,6 +2192,159 @@ class PicButton(QAbstractButton):
         pg.QtGui.QApplication.processEvents()
 
 
+class FilterManager(QDialog):
+    def __init__(self, filtdir, parent=None):
+        super(FilterManager, self).__init__(parent)
+        self.setWindowTitle("Manage filters")
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+
+        if platform.system() == 'Linux' or platform.system() == 'Darwin':
+            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        else:
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+        self.filtdir = filtdir
+
+        # filter dir name
+        labDirName = QLineEdit()
+        labDirName.setText(filtdir)
+        labDirName.setReadOnly(True)
+        labDirName.setFocusPolicy(Qt.NoFocus)
+        labDirName.setStyleSheet("background-color: #e0e0e0")
+
+        # filter dir contents
+        self.listFiles = QListWidget()
+        self.listFiles.setMinimumWidth(150)
+        self.listFiles.setMinimumHeight(275)
+        self.listFiles.setSelectionMode(QAbstractItemView.SingleSelection)
+
+        self.readContents()
+
+        # rename a filter
+        self.enterFiltName = QLineEdit()
+
+        class FiltValidator(QValidator):
+            def validate(self, input, pos):
+                if not input.endswith('.txt'):
+                    input = input+'.txt'
+                if input==".txt" or input=="":
+                    return(QValidator.Intermediate, input, pos)
+                if self.listFiles.findItems(input, Qt.MatchExactly):
+                    print("duplicated input", input)
+                    return(QValidator.Intermediate, input, pos)
+                else:
+                    return(QValidator.Acceptable, input, pos)
+
+        renameFiltValid = FiltValidator()
+        renameFiltValid.listFiles = self.listFiles
+        self.enterFiltName.setValidator(renameFiltValid)
+
+        self.renameBtn = QPushButton("Rename")
+        self.renameBtn.clicked.connect(self.rename)
+
+        # delete a filter
+        self.deleteBtn = QPushButton("Delete")
+        self.deleteBtn.clicked.connect(self.delete)
+
+        # upload a filter
+        self.uploadBtn = QPushButton("Upload")
+        self.uploadBtn.clicked.connect(self.upload)
+
+        # download more filters
+        self.downloadBtn = QPushButton("Download")
+        self.downloadBtn.clicked.connect(self.download)
+
+        # make button state respond to selection + name entry
+        self.refreshButtons()
+        self.listFiles.itemSelectionChanged.connect(self.refreshButtons)
+        self.enterFiltName.textChanged.connect(self.refreshButtons)
+
+        # layouts
+        box_rename = QHBoxLayout()
+        box_rename.addWidget(self.enterFiltName)
+        box_rename.addWidget(self.renameBtn)
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Filters are stored in:"))
+        layout.addWidget(labDirName)
+        layout.addWidget(QLabel("The following filters are present:"))
+        layout.addWidget(self.listFiles)
+        layout.addWidget(QLabel("To rename a filter, select one and enter a new (unique) name below:"))
+        layout.addLayout(box_rename)
+
+        layout.addWidget(self.deleteBtn)
+        layout.addWidget(self.uploadBtn)
+        layout.addWidget(self.downloadBtn)
+        self.setLayout(layout)
+
+    def readContents(self):
+        self.listFiles.clear()
+        filelist = QDir(self.filtdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
+        for file in filelist:
+            item = QListWidgetItem(self.listFiles)
+            item.setText(file)
+
+    def refreshButtons(self):
+        if len(self.listFiles.selectedItems())==0:
+            self.deleteBtn.setEnabled(False)
+            self.uploadBtn.setEnabled(False)
+            self.enterFiltName.setEnabled(False)
+            self.renameBtn.setEnabled(False)
+        else:
+            self.deleteBtn.setEnabled(True)
+            self.uploadBtn.setEnabled(True)
+            self.enterFiltName.setEnabled(True)
+            if self.enterFiltName.hasAcceptableInput():
+                self.renameBtn.setEnabled(True)
+            else:
+                self.renameBtn.setEnabled(False)
+
+    def rename(self):
+        """ move the filter file. """
+        source = self.listFiles.currentItem().text()
+        source = os.path.join(self.filtdir, source)
+        target = self.enterFiltName.text()
+        target = os.path.join(self.filtdir, target)
+        # figured we should have our own gentle error handling
+        # before trying to force move with shutil
+        if os.path.isfile(target) or not target.endswith(".txt"):
+            print("ERROR: unable to rename, bad target", target)
+            return
+        if not os.path.isfile(source):
+            print("ERROR: unable to rename, bad source", source)
+            return
+        try:
+            os.rename(source, target)
+            self.readContents()
+            self.enterFiltName.setText("")
+        except Exception as e:
+            print("ERROR: could not rename:", e)
+
+    def delete(self):
+        """ confirm and delete the file. """
+        source = self.listFiles.currentItem().text()
+        source = os.path.join(self.filtdir, source)
+        if not os.path.isfile(source):
+            print("ERROR: unable to delete, bad source", source)
+            return
+        msg = SupportClasses.MessagePopup("w", "Confirm delete", "Warning: you are about to permanently delete filter %s.\nAre you sure?" % source)
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        reply = msg.exec_()
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            print("removing", source)
+            os.remove(source)
+            self.readContents()
+        except Exception as e:
+            print("ERROR: could not delete:", e)
+
+    def download(self):
+        print("Not implemented yet")
+
+    def upload(self):
+        print("Not implemented yet")
+
+
 class BuildRecAdvWizard(QWizard):
     # page for selecting training data
     class WPageData(QWizardPage):
@@ -3227,6 +3370,7 @@ class BuildRecAdvWizard(QWizard):
     def __init__(self, filtdir, config, parent=None):
         super(BuildRecAdvWizard, self).__init__()
         self.setWindowTitle("Build Recogniser")
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         if platform.system() == 'Linux':
             self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
