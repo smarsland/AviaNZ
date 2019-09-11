@@ -2397,7 +2397,6 @@ class BuildRecAdvWizard(QWizard):
             self.btnMerge.clicked.connect(self.merge)
             self.btnMerge.setEnabled(False)
             lb = QLabel('Move Selected Segment/s to Cluster')
-            # lb.setStyleSheet("text-align: right;")
             lb.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             self.cmbUpdateSeg = QComboBox()
             self.btnUpdateSeg = QPushButton('Apply')
@@ -2424,8 +2423,6 @@ class BuildRecAdvWizard(QWizard):
             vboxTop = QVBoxLayout()
             vboxTop.addLayout(hboxSpecContr)
             vboxTop.addLayout(hboxBtns)
-            # must be fixed size!
-            # vboxTop.setSizeConstraint(QLayout.SetFixedSize)
 
             # set up the images
             self.flowLayout = pg.LayoutWidget()
@@ -2437,11 +2434,8 @@ class BuildRecAdvWizard(QWizard):
 
             # set overall layout of the dialog
             self.vboxFull = QVBoxLayout()
-            # self.vboxFull.setSpacing(0)
             self.vboxFull.addLayout(layout1)
             self.vboxFull.addLayout(vboxTop)
-            # self.vboxSpacer = QSpacerItem(1, 1, 5, 5)
-            # self.vboxFull.addItem(self.vboxSpacer)
             self.vboxFull.addWidget(self.scrollArea)
             self.setLayout(self.vboxFull)
 
@@ -2641,7 +2635,7 @@ class BuildRecAdvWizard(QWizard):
             self.clusters = []
             self.picbuttons = []
             for i in range(self.nclasses):
-                self.clusters.append((i, 'Cluster ' + str(i)))
+                self.clusters.append((i, 'Cluster_' + str(i)))
             self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
 
             self.cmbUpdateSeg.clear()
@@ -2856,7 +2850,7 @@ class BuildRecAdvWizard(QWizard):
                 for root, dirs, files in os.walk(self.field("trainDir")):
                     for file in files:
                         if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
-                            wavFile = root + '/' + file
+                            wavFile = os.path.join(root, file)
                             segments = Segment.SegmentList()
                             segments.parseJSON(wavFile + '.data')
 
@@ -2866,7 +2860,7 @@ class BuildRecAdvWizard(QWizard):
                                 del segments[segix]
                             for longseg in self.segments:
                                 # long seg has format: [file [segment] clusternum]
-                                if longseg[0]==wavFile:
+                                if longseg[0] == wavFile:
                                     segments.addSegment(longseg[1])
 
                             # So, each page will overwrite a file with the 0/1 annots,
@@ -3274,7 +3268,7 @@ class BuildRecAdvWizard(QWizard):
             newsegs = []
             for seg in self.clusterPage.segments:
                 # save source file, actual segment, and cluster ID
-                if seg[-1]==key:
+                if seg[-1] == key:
                     newsegs.append([seg[0], seg[1], seg[-1]])
 
             # page 4: set training params
