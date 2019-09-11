@@ -4142,7 +4142,7 @@ class AviaNZ(QMainWindow):
                         pass
                         # post.rainClick() - omitted in sppSpecific=T cases
                         # print('After rain: ', post.segments)
-                    if speciesData['F0']:
+                    if speciesData['FF']:
                         pass
                         # post.fundamentalFrq(self.filename, speciesData)
                         # print('After ff: ', post.segments)

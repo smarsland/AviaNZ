@@ -420,8 +420,8 @@ class AviaNZ_batchProcess(QMainWindow):
                                     print('Deleting wind...')
                                     post.wind(windT=2.5, fn_peak=0.35)
                                     print('After wind: ', post.segments)
-                            if 'F0' in self.speciesData:
-                                if self.speciesData['F0']:
+                            if 'FF' in self.speciesData:
+                                if self.speciesData['FF']:
                                     pass
                                 # post.fundamentalFrq(self.filename, self.speciesData)
                                 # print('After ff: ', post.segments)
