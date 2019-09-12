@@ -196,30 +196,29 @@ class SegmentList(list):
             # some old files have duration in samples, so need a rough check
             if duration>0:
                 self.metadata["Duration"] = duration
-            elif isinstance(annots[0][1],str):
-                # TODO: Best thing to do for this?
-                self.metadata["Duration"] = 0
             elif annots[0][1]>0 and annots[0][1]<100000:
                 self.metadata["Duration"] = annots[0][1]
             else:
                 print("ERROR: duration not found in metadata, need to supply as argument")
                 return
+            # noise metadata
+            if isinstance(annots[0][4], list):
+                self.metadata["noiseLevel"] = annots[0][4][0]
+                self.metadata["noiseTypes"] = annots[0][4][1]
+            else:
+                self.metadata["noiseLevel"] = None
+                self.metadata["noiseTypes"] = []
             del annots[0]
 
         elif isinstance(annots[0], dict):
+            # New format has 3 required fields:
             self.metadata = annots[0]
             if duration>0:
                 self.metadata["Duration"] = duration
+            if "Operator" not in self.metadata or "Reviewer" not in self.metadata or "Duration" not in self.metadata:
+                print("ERROR: required metadata fields not found")
+                return
             del annots[0]
-
-        # original code also stored+parsed noise data from array-format metadata,
-        # should we keep this?
-        # if type(self.segments[0][4]) is int:
-        #     self.noiseLevel = None
-        #     self.noiseTypes = []
-        # else:
-        #     self.noiseLevel = self.segments[0][4][0]
-        #     self.noiseTypes = self.segments[0][4][1]
 
         # read the segments
         self.clear()

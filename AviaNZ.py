@@ -1051,8 +1051,9 @@ class AviaNZ(QMainWindow):
                     self.previousFile = self.previousFile[0]
 
             # Check if user requires noise data
-            if self.config['RequireNoiseData'] and self.segments.metadata["noiseLevel"] is None:
-                self.addNoiseData()
+            if self.config['RequireNoiseData']:
+                if "noiseLevel" not in self.segments.metadata or self.segments.metadata["noiseLevel"] is None:
+                    self.addNoiseData()
 
             # setting this to True forces initial save
             # self.segmentsToSave = True
@@ -1945,66 +1946,6 @@ class AviaNZ(QMainWindow):
                                  (3*SpecRange/4,round(3*MaxFreq/4000, 2)),
                                  (SpecRange,round(MaxFreq/1000, 2))]])
             self.plotaxis.setLabel('kHz')
-
-
-            # pproc = SupportClasses.postProcess(self.audiodata,self.sampleRate)
-            #energy, e = pproc.detectClicks()
-            #energy, e = pproc.eRatioConfd()
-            #if len(clicks)>0:
-            #self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),energy)
-            #self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),e*np.ones(np.shape(self.sg)[0]))
-            #self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(self.sg)[0],endpoint=True),e2)
-
-            #ws = WaveletSegment.WaveletSegment(species='kiwi')
-            #e = ws.computeWaveletEnergy(self.audiodata,self.sampleRate)
-
-            # # Call MFCC in Features and plot some of them :)
-            # ff = Features.Features(self.audiodata,self.sampleRate)
-            # e = ff.get_mfcc()
-            #
-            # # self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),np.sum(e,axis=0))
-            # # self.plotPlot.setPen(fn.mkPen('k'))
-            # # self.plotPlot2.setData(np.linspace(0.0, float(self.datalength) / self.sampleRate, num=np.shape(e)[1], endpoint=True), e[0,:])
-            # # self.plotPlot2.setPen(fn.mkPen('c'))
-            # e1 = e[1,:]
-            # e1 = (e[1,:]- np.mean(e[1,:]))/np.std(e[1,:])
-            # self.plotPlot2.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e1)
-            # self.plotPlot2.setPen(fn.mkPen('r'))
-            # mean = np.mean(e1)
-            # std = np.std(e1)
-            # thr = mean - 2 * std
-            # thr = np.ones((1, 100)) * thr
-            # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=100, endpoint=True), thr[0,:])
-            # self.plotPlot7.setPen(fn.mkPen('c'))
-            # # self.plotPlot3.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[2,:])
-            # # self.plotPlot3.setPen(fn.mkPen('c'))
-            # # self.plotPlot4.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[3,:])
-            # # self.plotPlot4.setPen(fn.mkPen('r'))
-            # # self.plotPlot5.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[4,:])
-            # # self.plotPlot5.setPen(fn.mkPen('g'))
-            # # self.plotPlot6.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[5,:])
-            # # self.plotPlot6.setPen(fn.mkPen('g'))
-            # # self.plotPlot7.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[6,:])
-            # # self.plotPlot7.setPen(fn.mkPen('g'))
-            # # self.plotPlot8.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[7,:])
-            # # self.plotPlot8.setPen(fn.mkPen('g'))
-            # # self.plotPlot9.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[8,:])
-            # # self.plotPlot9.setPen(fn.mkPen('g'))
-            # # self.plotPlot10.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[9,:])
-            # # self.plotPlot10.setPen(fn.mkPen('g'))
-            # # self.plotPlot11.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e)[1],endpoint=True),e[10,:])
-            # # self.plotPlot11.setPen(fn.mkPen('c'))
-
-            # # plot eRatio
-            # post = SupportClasses.postProcess(self.audiodata, self.sampleRate, [])
-            # e = post.eRatioConfd([], AviaNZ_extra=True)
-            # # print np.shape(e)
-            # # print e[0]
-            # # print np.shape(e[0])[0]
-            # self.plotPlot.setData(np.linspace(0.0,float(self.datalength)/self.sampleRate,num=np.shape(e[0])[0],endpoint=True),e[0])
-            # self.plotPlot.setPen(fn.mkPen('b'))
-
-
 
     def updateRegion_spec(self):
         """ This is the listener for when a segment box is changed in the spectrogram.
@@ -4524,6 +4465,12 @@ class AviaNZ(QMainWindow):
 
     def addNoiseData(self):
         """ Listener for the adding metadata about noise action """
+        # this field isn't required and may not be present at all
+        if "noiseLevel" not in self.segments.metadata:
+            self.segments.metadata["noiseLevel"] = None
+        if "noiseTypes" not in self.segments.metadata:
+            self.segments.metadata["noiseTypes"] = []
+
         self.getNoiseDataDialog = Dialogs.addNoiseData(self.segments.metadata["noiseLevel"], self.segments.metadata["noiseTypes"])
         self.getNoiseDataDialog.activate.clicked.connect(self.getNoiseData)
         self.getNoiseDataDialog.exec()
@@ -4970,8 +4917,9 @@ class AviaNZ(QMainWindow):
         print("Restarting")
 
         # Check if user requires noise data
-        if self.config['RequireNoiseData'] and self.segments.metadata["noiseLevel"] is None:
-            self.addNoiseData()
+        if self.config['RequireNoiseData']:
+            if "noiseLevel" not in self.segments.metadata or self.segments.metadata["noiseLevel"] is None:
+                self.addNoiseData()
 
         self.saveSegments()
         if self.saveConfig:
@@ -4998,8 +4946,9 @@ class AviaNZ(QMainWindow):
         print("Quitting")
 
         # Check if user requires noise data
-        if self.config['RequireNoiseData'] and self.segments.metadata["noiseLevel"] is None:
-            self.addNoiseData()
+        if self.config['RequireNoiseData']:
+            if "noiseLevel" not in self.segments.metadata or self.segments.metadata["noiseLevel"] is None:
+                self.addNoiseData()
 
         self.saveSegments()
         if self.saveConfig:
