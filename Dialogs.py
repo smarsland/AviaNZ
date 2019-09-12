@@ -3026,9 +3026,10 @@ class BuildRecAdvWizard(QWizard):
             self.minlen.setText(str(round(np.min(len_min),2)))
             self.maxlen.setText(str(round(np.max(len_max),2)))
             self.fLow.setRange(0, fs/2)
-            self.fLow.setValue(int(np.min(f_low)))
+            # TODO ?
+            self.fLow.setValue(max(0,int(np.min(f_low))))
             self.fHigh.setRange(0, fs/2)
-            self.fHigh.setValue(int(np.max(f_high)))
+            self.fHigh.setValue(min(fs/2,int(np.max(f_high))))
 
     # page 5 - run training, show ROC
     class WPageTrain(QWizardPage):
@@ -3341,7 +3342,7 @@ class BuildRecAdvWizard(QWizard):
                 M = float(self.field("bestM"+str(pageId)))
                 nodes = eval(self.field("bestNodes"+str(pageId)))
 
-                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen], 'FreqRange': [fLow, fHigh], 'WaveletParams': [thr, M, nodes], 'ClusterCentre': self.wizard().page(pageId+1).clustercentre, 'Feature': self.wizard().clusterPage.feature}
+                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen], 'FreqRange': [fLow, fHigh], 'WaveletParams': [thr, M, nodes], 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
                 print(newSubfilt)
                 self.wizard().speciesData["Filters"].append(newSubfilt)
 
