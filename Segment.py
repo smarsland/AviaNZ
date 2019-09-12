@@ -197,6 +197,9 @@ class SegmentList(list):
             # some old files have duration in samples, so need a rough check
             if duration>0:
                 self.metadata["Duration"] = duration
+            elif isinstance(annots[0][1],str):
+                # TODO: Best thing to do for this?
+                self.metadata["Duration"] = 0
             elif annots[0][1]>0 and annots[0][1]<100000:
                 self.metadata["Duration"] = annots[0][1]
             else:
