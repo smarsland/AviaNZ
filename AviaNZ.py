@@ -168,7 +168,7 @@ class AviaNZ(QMainWindow):
         # Make life easier for now: preload a birdsong
         print("Loaded")
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
-            firstFile = self.SoundFileDir + '/' + 'tril1.wav' #'male1.wav' # 'kiwi.wav'
+            firstFile = self.SoundFileDir + '/' + 'kiwi_1min.wav' 
             #firstFile = "/home/julius/Documents/kiwis/test/kiwi_1min.wav"
 
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
