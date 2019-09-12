@@ -186,23 +186,22 @@ class WaveletSegment:
 
         return res
 
-    def waveletSegment_test(self, dirName, listnodes=None, d=False, rf=True, learnMode='recaa',
+    def waveletSegment_test(self, dirName, subfilter, d=False, rf=True, learnMode='recaa',
                             savedetections=False, window=1, inc=None):
         """ Wrapper for segmentation to be used when testing a new filter
             (called at the end of training from AviaNZ.py).
             Basically a simplified gridSearch.
+            Args:
+            dirName - training dir
+            subfilter - a dict subfilter
+            d - denoise before detecting calls?
+            rf - filter before detecting calls?
+            learnMode - recold (no AA) or recaa (partial AA) or recaafull (full AA)
+            saveDetections - output .data of the testing results?
+            window, inc - window and increment length in seconds
         """
-        # Virginia changes
-        # Added window and inc input
-        # window -> window length in seconds
-        # Inc -> increment length in seconds
-        # Resol is the base of the annotations
-
-        # Load the relevant list of nodes
-        if listnodes is None:
-            self.nodes = self.spInfo['WaveletParams'][2]
-        else:
-            self.nodes = listnodes
+        # Load the relevant subfilter
+        self.nodes = subfilter["WaveletParams"][2]
 
         # clear storage for multifile processing
         self.annotation = []
@@ -213,7 +212,7 @@ class WaveletSegment:
 
         # Loads all audio data to memory
         # and downsamples to self.spInfo['SampleRate']
-        self.loadDirectory(dirName=dirName, denoise=d, filter=f, window=window, inc=inc)
+        self.loadDirectory(dirName=dirName, denoise=d, window=window, inc=inc)
 
         # remember to convert main structures to np arrays
         self.annotation = np.array(self.annotation)
@@ -228,18 +227,18 @@ class WaveletSegment:
                 print("Warning: recsep and recmulti modes deprecated, defaulting to recaa")
                 learnMode = "recaa"
 
+            # prefilter audio to species freq range
             data = self.audioList[fileId]
+
             # Generate a full 5 level wavelet packet decomposition and detect calls
             self.WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20,
                                                         samplerate=self.spInfo['SampleRate'])
             if learnMode == "recaa" or learnMode =="recold":
                 self.WF.WaveletPacket(self.nodes, mode='symmetric', antialias=False)
-                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, spInfo=self.spInfo, rf=rf, window=1,
-                                              inc=None)
+                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, samplerate=self.spInfo['SampleRate'], subfilter=subfilter, rf=rf, window=1, inc=None)
             elif learnMode == "recaafull":
                 self.WF.WaveletPacket(self.nodes, mode='symmetric', antialias=True, antialiasFilter=True)
-                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, spInfo=self.spInfo, rf=rf, window=1,
-                                              inc=None)
+                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, sampleRate=self.spInfo['SampleRate'], subfilter=subfilter, rf=rf, window=1, inc=None)
             else:
                 print("ERROR: the specified learning mode is not implemented in this function yet")
                 return

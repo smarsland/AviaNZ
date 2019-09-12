@@ -397,6 +397,7 @@ class AviaNZ(QMainWindow):
         trainMenu = actionMenu.addMenu("Build an automated recogniser")
         trainMenu.addAction("Easy", self.buildRecogniserEasy)
         trainMenu.addAction("Advanced", self.buildRecogniserAdvanced)
+        actionMenu.addAction("Test recogniser", self.testRecogniser)
         actionMenu.addSeparator()
 
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
@@ -4015,6 +4016,11 @@ class AviaNZ(QMainWindow):
         self.buildRecAdvWizard.show()
         # reread filters list with the new one
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
+
+    def testRecogniser(self):
+        """ Listener for the Test Recogniser action """
+        self.testRecWizard = Dialogs.TestRecWizard(self.filtersDir)
+        self.testRecWizard.show()
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.

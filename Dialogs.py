@@ -2364,6 +2364,7 @@ class BuildRecAdvWizard(QWizard):
             self.listFiles = QListWidget()
             self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(275)
+            self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
 
             selectSpLabel = QLabel("Choose the species for which you want to build the recogniser")
             self.species = QComboBox()  # fill during browse
@@ -2998,8 +2999,8 @@ class BuildRecAdvWizard(QWizard):
             with pg.BusyCursor():
                 for root, dirs, files in os.walk(self.field("trainDir")):
                     for file in files:
-                        if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file + '.data' in files:
-                            wavFile = os.path.join(root, file)
+                        wavFile = os.path.join(root, file)
+                        if file.endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
                             segments = Segment.SegmentList()
                             segments.parseJSON(wavFile + '.data')
 
@@ -3469,6 +3470,222 @@ class BuildRecAdvWizard(QWizard):
                 self.adjustSize()
         except Exception as e:
             print(e)
+
+
+class TestRecWizard(QWizard):
+    class WPageData(QWizardPage):
+        def __init__(self, parent=None):
+            super(TestRecWizard.WPageData, self).__init__(parent)
+            self.setTitle('Testing data')
+            self.setSubTitle('Select the folder with testing data, then choose species')
+
+            self.setMinimumSize(250, 150)
+            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.adjustSize()
+
+            self.testDirName = QLineEdit()
+            self.testDirName.setReadOnly(True)
+            self.btnBrowse = QPushButton('Browse')
+            self.btnBrowse.clicked.connect(self.browseTestData)
+
+            self.listFiles = QListWidget()
+            self.listFiles.setMinimumWidth(150)
+            self.listFiles.setMinimumHeight(275)
+            self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
+
+            selectSpLabel = QLabel("Choose the filter that you want to test")
+            self.species = QComboBox()  # fill during browse
+            self.species.addItems(['Choose filter...'])
+
+            space = QLabel()
+            space.setFixedHeight(20)
+
+            # data selection page layout
+            layout1 = QHBoxLayout()
+            layout1.addWidget(self.testDirName)
+            layout1.addWidget(self.btnBrowse)
+            layout = QVBoxLayout()
+            layout.addWidget(space)
+            layout.addLayout(layout1)
+            layout.addWidget(self.listFiles)
+            layout.addWidget(space)
+            layout.addWidget(selectSpLabel)
+            layout.addWidget(self.species)
+            layout.setAlignment(Qt.AlignVCenter)
+            self.setLayout(layout)
+
+        def initializePage(self):
+            filternames = [key + ".txt" for key in self.wizard().filterlist.keys()]
+            self.species.addItems(filternames)
+            try:
+                self.species.currentTextChanged.connect(self.wizard().redoTestPages)
+            except Exception:
+                pass
+
+        def browseTestData(self):
+            dirName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose folder for testing')
+            self.testDirName.setText(dirName)
+
+            self.listFiles.clear()
+            listOfFiles = QDir(dirName).entryInfoList(['*.wav'], filters=QDir.AllDirs | QDir.NoDotAndDotDot | QDir.Files,sort=QDir.DirsFirst)
+            listOfDataFiles = QDir(dirName).entryList(['*.wav.data'])
+            for file in listOfFiles:
+                # Add the filename to the right list
+                item = QListWidgetItem(self.listFiles)
+                # count wavs in directories:
+                if file.isDir():
+                    numwavs = 0
+                    for root, dirs, files in os.walk(file.filePath()):
+                        numwavs += sum(f.endswith('.wav') for f in files)
+                    item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
+                else:
+                    item.setText(file.fileName())
+                # If there is a .data version, colour the name red to show it has been labelled
+                if file.fileName()+'.data' in listOfDataFiles:
+                    item.setForeground(Qt.red)
+
+    class WPageTest(QWizardPage):
+        def __init__(self, clustnum, parent=None):
+            super(TestRecWizard.WPageTest, self).__init__(parent)
+            self.setTitle('Testing results')
+            self.setSubTitle('Testing results are shown here')
+
+            self.setMinimumSize(250, 150)
+            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.adjustSize()
+
+            self.lblTestDir = QLabel()
+            self.lblTestDir.setStyleSheet("QLabel { color : #808080; }")
+            self.lblSpecies = QLabel()
+            self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
+            self.lblCluster = QLabel()
+            self.lblCluster.setStyleSheet("QLabel { color : #808080; }")
+            space = QLabel()
+            space.setFixedHeight(25)
+            self.testRes = QLabel()
+
+            # NOTE: this is not the subfilter name, but the number!
+            self.clustnum = clustnum
+
+            filtSummary = QLabel("")
+
+            # testing results page layout
+            vboxHead = QFormLayout()
+            vboxHead.addRow("Testing data:", self.lblTestDir)
+            vboxHead.addRow("Filter name:", self.lblSpecies)
+            vboxHead.addRow("Target calltype:", self.lblCluster)
+            vboxHead.addWidget(space)
+            vboxHead.addWidget(filtSummary)
+
+            vboxHead.addWidget(QLabel("Detection summary:"))
+            vboxHead.addWidget(self.testRes)
+
+            self.setLayout(vboxHead)
+            self.setButtonText(QWizard.NextButton, 'Test >')
+
+        # Actual testing is done here
+        def initializePage(self):
+            speciesData = self.wizard().filterlist[self.field("species")[:-4]]
+            subfilter = speciesData["Filters"][self.clustnum]
+
+            self.lblTestDir.setText(self.field("testDir"))
+            self.lblSpecies.setText(speciesData["species"])
+            self.lblCluster.setText(subfilter["calltype"])
+
+            with pg.BusyCursor():
+                species = speciesData["species"]
+                # not sure if this is needed?
+                ind = species.find('>')
+                if ind != -1:
+                    species = species.replace('>', '(')
+                    species = species + ')'
+
+                ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
+                window = 1
+                inc = None
+                # Generate GT files from annotations in test folder
+                print('Generating GT...')
+                for root, dirs, files in os.walk(self.field("testDir")):
+                    for file in files:
+                        wavFile = os.path.join(root, file)
+                        if file.endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                            segments = Segment.SegmentList()
+                            segments.parseJSON(wavFile + '.data')
+
+                            # keep segments if any label has the current calltype
+                            for segix in reversed(range(len(segments))):
+                                keepSeg = False
+                                for lab in segments[segix][4]:
+                                    if lab["species"]==species:
+                                        if "calltype" in lab.keys() and lab["calltype"]==subfilter["calltype"]:
+                                            keepSeg = True
+                                if not keepSeg:
+                                    del segments[segix]
+
+                            # export 0/1 annotations for this calltype
+                            # (next page will overwrite the same files)
+                            _ = segments.exportGT(wavFile, species, window=window, inc=inc)
+
+                Segments, TP, FP, TN, FN = ws.waveletSegment_test(self.field("testDir"),
+                                               subfilter, d=False, rf=True, learnMode='recaa',
+                                               savedetections=False, window=window, inc=inc)
+                print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
+                if TP+FP+TN+FN == 0:
+                    print("ERROR: failed to find any testing data")
+                    return
+                if TP+FN != 0:
+                    recall = TP/(TP+FN)
+                else:
+                    recall = 0
+                if TP+FP != 0:
+                    precision = TP/(TP+FP)
+                else:
+                    precision = 0
+                if TN+FP != 0:
+                    specificity = TN/(TN+FP)
+                else:
+                    specificity = 0
+
+                accuracy = (TP+TN)/(TP+FP+TN+FN)
+                self.testRes.setText('TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
+
+    # Main init of the testing wizard
+    def __init__(self, filtdir, parent=None):
+        super(TestRecWizard, self).__init__()
+        self.setWindowTitle("Test Recogniser")
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        if platform.system() == 'Linux':
+            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        else:
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+        self.setWizardStyle(QWizard.ModernStyle)
+
+        cl = SupportClasses.ConfigLoader()
+        self.filterlist = cl.filters(filtdir)
+        browsedataPage = TestRecWizard.WPageData()
+        browsedataPage.registerField("testDir", browsedataPage.testDirName)
+        browsedataPage.registerField("species*", browsedataPage.species, "currentText", browsedataPage.species.currentTextChanged)
+        self.addPage(browsedataPage)
+        self.testpages = []
+
+    def redoTestPages(self):
+        speciesData = self.filterlist[self.field("species")[:-4]]
+        print("using filter", speciesData)
+        # remove old test pages
+        for page in self.testpages:
+            self.removePage(page)
+        self.testpages = []
+
+        # add new
+        # TODO: how to deal with multiple call subtypes?
+        for subf in range(len(speciesData["Filters"])):
+            testRes = TestRecWizard.WPageTest(0)
+            pageid = self.addPage(testRes)
+            self.testpages.append(pageid)
+
+        # self.addPage(FINALPAGE)
+        self.currentPage().setFinalPage(False)
 
 
 class ROCCanvas(FigureCanvas):

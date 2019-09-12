@@ -326,11 +326,14 @@ class SegmentList(list):
 
         # number of segments of width window at inc overlap
         duration = int(np.ceil(self.metadata["Duration"] / resolution))
+        eFile = filename[:-4] + '-res' + str(float(resolution)) + 'sec.txt'
 
         # TODO: empty files (no annotations or no sound) will lead to problems
         thisSpSegs = self.getSpecies(species)
         if len(thisSpSegs)==0:
             print("Warning: no annotations for this species found in file", filename)
+            # delete the file to avoid problems with old GT files
+            os.remove(eFile)
             # return some default constants
             return((100, 0, 32000, 0, 32000))
 
@@ -350,7 +353,6 @@ class SegmentList(list):
         GT = GT.tolist()
 
         # now save the resulting txt:
-        eFile = filename[:-4] + '-res' + str(float(resolution)) + 'sec.txt'
         with open(eFile, "w") as f:
             for l, el in enumerate(GT):
                 string = '\t'.join(map(str,el))
