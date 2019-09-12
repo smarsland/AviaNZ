@@ -44,8 +44,9 @@ import pyqtgraph.functions as fn
 import pyqtgraph.exporters as pge
 from pyqtgraph.parametertree import Parameter, ParameterTree
 
-import SupportClasses as SupportClasses
-import Dialogs as Dialogs
+import SupportClasses
+import Dialogs
+import DialogsTraining
 import SignalProc
 import Segment
 import WaveletSegment
@@ -3949,7 +3950,7 @@ class AviaNZ(QMainWindow):
            All training and file I/O are done in Dialogs.py currently.
         """
         self.saveSegments()
-        self.buildRecAdvWizard = Dialogs.BuildRecAdvWizard(self.filtersDir, self.config)
+        self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config)
         self.buildRecAdvWizard.activateWindow()
         self.buildRecAdvWizard.show()
         # reread filters list with the new one
@@ -3957,7 +3958,7 @@ class AviaNZ(QMainWindow):
 
     def testRecogniser(self):
         """ Listener for the Test Recogniser action """
-        self.testRecWizard = Dialogs.TestRecWizard(self.filtersDir)
+        self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir)
         self.testRecWizard.show()
 
     def segmentationDialog(self):

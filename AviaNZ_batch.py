@@ -715,17 +715,19 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # Make the docks
         self.d_detection = Dock("Review",size=(500,500))
+        self.d_detection.layout.setContentsMargins(10,10,10,10)
+        self.d_detection.layout.setSpacing(5)
         # self.d_detection.hideTitleBar()
         self.d_files = Dock("File list", size=(270, 500))
 
         self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
 
-        self.w_revLabel = QLabel("  Reviewer")
+        self.w_revLabel = QLabel("Reviewer")
         self.w_reviewer = QLineEdit()
         self.d_detection.addWidget(self.w_revLabel, row=0, col=0)
         self.d_detection.addWidget(self.w_reviewer, row=0, col=1, colspan=2)
-        self.w_browse = QPushButton("  &Browse Folder")
+        self.w_browse = QPushButton("&Browse Folder")
         self.w_browse.setToolTip("Can select a folder with sub folders to process")
         self.w_browse.setFixedHeight(50)
         self.w_browse.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
@@ -736,20 +738,28 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.w_dir,row=1,col=1,colspan=2)
         self.d_detection.addWidget(self.w_browse,row=1,col=0)
 
-        self.w_speLabel1 = QLabel("  Select Species")
+        self.w_speLabel1 = QLabel("Select Species")
         self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
         self.w_spe1 = QComboBox()
         self.spList = ['All species']
         self.w_spe1.addItems(self.spList)
         self.d_detection.addWidget(self.w_spe1,row=2,col=1,colspan=2)
 
-        self.w_resLabel = QLabel("  Time Resolution in Excel Output (s)")
-        self.d_detection.addWidget(self.w_resLabel, row=3, col=0)
+        minCertLab = QLabel("Skip if certainty above:")
+        self.d_detection.addWidget(minCertLab, row=3, col=0)
+        self.certBox = QSpinBox()
+        self.certBox.setRange(0,100)
+        self.certBox.setSingleStep(10)
+        self.certBox.setValue(100)
+        self.d_detection.addWidget(self.certBox, row=3, col=1)
+
+        self.w_resLabel = QLabel("Time Resolution in\nExcel Output (s)")
+        self.d_detection.addWidget(self.w_resLabel, row=4, col=0)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
         self.w_res.setSingleStep(5)
         self.w_res.setValue(60)
-        self.d_detection.addWidget(self.w_res, row=3, col=1, colspan=2)
+        self.d_detection.addWidget(self.w_res, row=4, col=1)
 
         # sliders to select min/max frequencies for ALL SPECIES only
         self.fLow = QSlider(Qt.Horizontal)
@@ -757,7 +767,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fLow.setTickInterval(500)
         self.fLow.setRange(0, 5000)
         self.fLow.setSingleStep(100)
-        self.fLowtext = QLabel('  Show freq. above (Hz)')
+        self.fLowtext = QLabel('Show freq. above (Hz)')
         self.fLowvalue = QLabel('0')
         receiverL = lambda value: self.fLowvalue.setText(str(value))
         self.fLow.valueChanged.connect(receiverL)
@@ -767,17 +777,17 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fHigh.setRange(4000, 32000)
         self.fHigh.setSingleStep(250)
         self.fHigh.setValue(8000)
-        self.fHightext = QLabel('  Show freq. below (Hz)')
+        self.fHightext = QLabel('Show freq. below (Hz)')
         self.fHighvalue = QLabel('8000')
         receiverH = lambda value: self.fHighvalue.setText(str(value))
         self.fHigh.valueChanged.connect(receiverH)
         # add sliders to dock
-        self.d_detection.addWidget(self.fLowtext, row=4, col=0)
-        self.d_detection.addWidget(self.fLow, row=4, col=1)
-        self.d_detection.addWidget(self.fLowvalue, row=4, col=2)
-        self.d_detection.addWidget(self.fHightext, row=5, col=0)
-        self.d_detection.addWidget(self.fHigh, row=5, col=1)
-        self.d_detection.addWidget(self.fHighvalue, row=5, col=2)
+        self.d_detection.addWidget(self.fLowtext, row=5, col=0)
+        self.d_detection.addWidget(self.fLow, row=5, col=1)
+        self.d_detection.addWidget(self.fLowvalue, row=5, col=2)
+        self.d_detection.addWidget(self.fHightext, row=6, col=0)
+        self.d_detection.addWidget(self.fHigh, row=6, col=1)
+        self.d_detection.addWidget(self.fHighvalue, row=6, col=2)
 
         self.w_processButton = QPushButton("&Review Folder")
         self.w_processButton.clicked.connect(self.review)
@@ -924,6 +934,16 @@ class AviaNZ_reviewAll(QMainWindow):
             # load segments
             self.segments = Segment.SegmentList()
             self.segments.parseJSON(filename+'.data')
+            # separate out segments which do not need review
+            self.goodsegments = []
+            for seg in reversed(self.segments):
+                goodenough = True
+                for lab in seg[4]:
+                    if lab["certainty"] <= self.certBox.value():
+                        goodenough = False
+                if goodenough:
+                    self.goodsegments.append(seg)
+                    self.segments.remove(seg)
 
             if len(self.segments)==0:
                 # skip review dialog, but save the name into excel
@@ -943,12 +963,15 @@ class AviaNZ_reviewAll(QMainWindow):
                     # if this dialog is called.
                     self.loadFile(filename)
                     filesuccess = self.review_single(sTime)
+
             # break out of review loop if Esc detected
             # (return value will be 1 for correct close, 0 for Esc)
             if filesuccess == 0:
                 print("Review stopped")
                 break
-            # otherwise save the corrected segment JSON
+            # otherwise re-add the segments that were good enough to skip review,
+            # and save the corrected segment JSON
+            self.segments.extend(self.goodsegments)
             cleanexit = self.segments.saveJSON(filename+'.data')
             if cleanexit != 1:
                 print("Warning: could not save segments!")
@@ -1090,12 +1113,11 @@ class AviaNZ_reviewAll(QMainWindow):
         """
         # Load the birdlists:
         # short list is necessary, long list can be None
+        # (on load, shortBirdList is copied over from config, and if that fails - can't start anything)
         self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], self.configdir)
         if self.shortBirdList is None:
-            # TODO: Use a default one?
-            print("Need a short bird list")
             sys.exit()
-    
+
         # Will be None if fails to load or filename was "None"
         self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
         if self.config['BirdListLong'] is None:
