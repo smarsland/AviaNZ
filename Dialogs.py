@@ -2497,6 +2497,8 @@ class BuildRecAdvWizard(QWizard):
             self.sampleRate = 0
             self.segments = []
             self.clusters = {}
+            self.clustercentres = {}
+            self.feature = 'we'
             self.picbuttons = []
             self.cboxes = []
             self.tboxes = []
@@ -2590,7 +2592,7 @@ class BuildRecAdvWizard(QWizard):
                 # self.segments: [parent_audio_file, [segment], [features], class_label]
                 # fs: sampling freq
                 # self.nclasses: number of class_labels
-                self.segments, fs, self.nclasses = Clustering.cluster_by_agg(self.field("trainDir"), feature='we', n_clusters=5)
+                self.segments, fs, self.nclasses, self.clustercentres = Clustering.cluster(self.field("trainDir"), feature=self.feature, n_clusters=5)
                 # self.segments, fs, self.nclasses = Clustering.cluster_by_dist(self.dName, feature='we', max_cluste       rs=5, single=True)
                 # clusterPage.sampleRate = fs
 
@@ -2616,6 +2618,8 @@ class BuildRecAdvWizard(QWizard):
             # if all good, then check if we need to redo the pages.
             # segsChanged should be updated by any user changes!
             if self.segsChanged:
+                # update the cluster centres
+                self.clustercentres = Clustering.getClusterCenters(self.segments, self.nclasses)
                 self.segsChanged = False
                 self.wizard().redoTrainPages()
             return True
@@ -3028,7 +3032,7 @@ class BuildRecAdvWizard(QWizard):
 
     # page 5 - run training, show ROC
     class WPageTrain(QWizardPage):
-        def __init__(self, id, clust, parent=None):
+        def __init__(self, id, clust, clustercentre, parent=None):
             super(BuildRecAdvWizard.WPageTrain, self).__init__(parent)
             self.setTitle('Training results')
             self.setMinimumSize(600, 500)
@@ -3037,6 +3041,7 @@ class BuildRecAdvWizard(QWizard):
 
             self.segments = []
             self.clust = clust
+            self.clustercentre = clustercentre
             # this ID links it to the parameter fields
             self.pageId = id
 
@@ -3336,7 +3341,7 @@ class BuildRecAdvWizard(QWizard):
                 M = float(self.field("bestM"+str(pageId)))
                 nodes = eval(self.field("bestNodes"+str(pageId)))
 
-                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen], 'FreqRange': [fLow, fHigh], 'WaveletParams': [thr, M, nodes]}
+                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen], 'FreqRange': [fLow, fHigh], 'WaveletParams': [thr, M, nodes], 'ClusterCentre': self.wizard().page(pageId+1).clustercentre, 'Feature': self.wizard().clusterPage.feature}
                 print(newSubfilt)
                 self.wizard().speciesData["Filters"].append(newSubfilt)
 
@@ -3435,7 +3440,7 @@ class BuildRecAdvWizard(QWizard):
             page4.registerField("M"+str(pageid), page4.cbxM, "currentText", page4.cbxM.currentTextChanged)
 
             # page 5: get training results
-            page5 = BuildRecAdvWizard.WPageTrain(pageid, value)
+            page5 = BuildRecAdvWizard.WPageTrain(pageid, value, self.clusterPage.clustercentres[key])
             self.addPage(page5)
 
             # note: pageid is the same for both page fields

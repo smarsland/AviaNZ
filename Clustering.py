@@ -22,11 +22,14 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import numpy as np
-import pandas as pd
 import random
 import os, wavio
-import WaveletSegment
 import librosa
+
+import WaveletSegment
+import WaveletFunctions
+import SignalProc
+import Segment
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import scale
@@ -254,8 +257,6 @@ def loadFile(filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0):
     :param f2:
     :return:
     """
-    import WaveletFunctions
-    import SignalProc
     if offset == 0 and duration == 0:
         wavobj = wavio.read(filename)
     else:
@@ -666,7 +667,7 @@ def class_update(cluster, newfeatures, newf_low, newf_high, newsyl, newseg, sing
     return cluster
 
 
-def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0, denoise=False,
+def cluster(dir, feature='we', n_mels=24, minlen=0.2, denoise=False,
                     alg='agglomerative', n_clusters=None):
     """
     Given wav + annotation files,
@@ -683,10 +684,6 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
     :param n_clusters: number of clusters
     :return: possible clusters
     """
-
-    import Segment
-    import SignalProc
-
     # Get flow and fhigh for bandpass from annotations
     lowlist = []
     highlist = []
@@ -702,23 +699,16 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
                 for seg in segments:
                     lowlist.append(seg[2])
                     highlist.append(seg[3])
-    # print(lowlist)
-    # print(highlist)
-    # print(srlist)
-    if f_1 == 0:
-        f_1 = np.min(lowlist)
-    if f_2 == 0:
-        f_2 = np.median(highlist)
 
-    if fs == 0:
-        arr = [4000, 8000, 16000]
-        pos = np.abs(arr - np.median(highlist)*2).argmin()
-        fs = arr[pos]
+    f_1 = np.min(lowlist)
+    f_2 = np.median(highlist)
 
-    # print('fs: ', fs)
+    arr = [4000, 8000, 16000, 32000]
+    pos = np.abs(arr - np.median(highlist)*2).argmin()
+    fs = arr[pos]
 
+    # TODO: is this necessary?
     if fs > np.min(srlist):
-        # print(fs)
         fs = np.min(srlist)
 
     if fs < f_2 * 2 + 50:
@@ -726,9 +716,6 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
 
     if f_2 < f_1:
         f_2 = np.mean(highlist)
-
-    # print('Frequency band:', f_1, '-', f_2)
-    # print('fs: ', fs)
 
     # Find the lower and upper bounds (relevant to the frq range), when the range is given
     if feature == 'mfcc' and f_1 != 0 and f_2 != 0:
@@ -777,13 +764,13 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
                     for syl in syls:
                         dataset.append([os.path.join(root, file), seg, syl])
 
-    # Make them fixed-length
+    # Make syllables fixed-length
     lengths = []
     for data in dataset:
         lengths.append(data[2][1]-data[2][0])
     # print('min: ', min(lengths), ' max: ', max(lengths), ' median: ', np.median(lengths))
-    duration = np.median(lengths)   # This is the fixed length of a syllable, if a syllable too long clip it otherwise
-                                    # padding with zero
+    # This is going to be the fixed length of a syllable, if a syllable too long clip it otherwise padding with zero
+    duration = np.median(lengths)
     # Now calculate the features
     for record in dataset:
         if record[2][1]-record[2][0] > duration:
@@ -792,9 +779,9 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
             record[2][0] = middle - duration/2
             record[2][1] = middle + duration / 2
 
-    lengths = []
-    for data in dataset:
-        lengths.append(data[2][1] - data[2][0])
+    # lengths = []
+    # for data in dataset:
+    #     lengths.append(data[2][1] - data[2][0])
     # print('min: ', min(lengths), ' max: ', max(lengths), ' median: ', np.median(lengths))
 
     # Read the syllables and generate features
@@ -920,6 +907,27 @@ def cluster_by_agg(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0,
     # for record in clustered_dataset:
     #     print(record[3])
 
-    # TODO: Find cluster centers and sort the segments accordingly
+    clustercentres = getClusterCenters(clustered_dataset, nclasses)
 
-    return clustered_dataset, fs, nclasses
+    return clustered_dataset, fs, nclasses, clustercentres
+
+
+def getClusterCenters(clusters, nclasses):
+    """
+    Computer cluster-centres
+    :param clusters: clustered segments, a list of lists, each sublist represents a
+                        segment [parent_audio_file, [segment], [features], class_label]
+    :param nclasses: number of clusters, cluster labels are always 0, 1, 2, ..., nclasses-1
+    :return:
+    """
+    # I simply compute the mean of each cluster here
+    clustercentres = {}
+    fc = []
+    for c in range(nclasses):
+        for seg in clusters:
+            if seg[-1] == c:
+                for f in seg[-2]:
+                    fc.append(f)
+        clustercentres[c] = np.mean(fc, axis=0)
+
+    return clustercentres
