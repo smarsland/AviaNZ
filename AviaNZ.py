@@ -20,17 +20,9 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# TODO: Move fundamental freq and spec derivs if y axis changes
-# TODO: Automate some of the training options, also the extra filters
-# TODO: And the false positive graph
-# TODO: Think about the filter dictionary a bit more for option checking, and adding new options
-# TODO: Sort out the segmentation code, particularly wrt merging sets of segments
-# TODO: Full list of next steps
-
 import sys, os, json, platform, re, shutil
 from jsonschema import validate
 from shutil import copyfile
-from openpyxl import load_workbook, Workbook
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence
 from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut
@@ -39,7 +31,6 @@ from PyQt5.QtMultimedia import QAudio, QAudioFormat
 
 import wavio
 import numpy as np
-from scipy import signal
 from scipy.signal import medfilt
 from scipy.ndimage.filters import median_filter
 
@@ -51,6 +42,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.dockarea import DockArea, Dock
 import pyqtgraph.functions as fn
 import pyqtgraph.exporters as pge
+from pyqtgraph.parametertree import Parameter, ParameterTree
 
 import SupportClasses as SupportClasses
 import Dialogs as Dialogs
@@ -58,17 +50,11 @@ import SignalProc
 import Segment
 import WaveletSegment
 import WaveletFunctions
-#import Features
-import Clustering
 import AviaNZ_batch
-import fnmatch
 import librosa
 
-from pyqtgraph.parametertree import Parameter, ParameterTree 
-
-import locale, time
-
 import click, webbrowser, colourMaps, copy, math
+import time
 
 print("Package import complete.")
 

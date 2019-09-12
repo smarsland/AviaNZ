@@ -54,8 +54,6 @@ import wavio
 import io
 
 from itertools import chain, repeat
-import statistics
-
 
 class preProcess:
     """ This class implements few pre processing methods to avoid noise
@@ -203,7 +201,6 @@ class postProcess:
 
         return np.mean(a_wind), np.std(a_wind), fn    # mean of the PSD in the frequency band of interest.Upper part of
                                                       # the step 3 in Algorithm 2.1
-
 
     def wind(self, windT=2.5, fn_peak=0.35):
         """

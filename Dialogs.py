@@ -31,7 +31,6 @@ import json
 
 from PyQt5.QtGui import QIcon, QPixmap, QValidator, QAbstractItemView
 from PyQt5.QtGui import *
-from PyQt5.QtWidgets import QDialog, QPushButton, QLabel, QVBoxLayout, QHBoxLayout, QLineEdit, QSlider, QCheckBox, QRadioButton, QButtonGroup, QSpinBox, QDoubleSpinBox, QWizard, QWizardPage, QComboBox, QListWidget, QListWidgetItem, QWidget, QFormLayout, QTextEdit, QTabWidget, QMessageBox
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QDir, QPointF, QTime, Qt, QLineF
 
@@ -3522,64 +3521,4 @@ class ROCCanvas(FigureCanvas):
         # We need to draw *and* flush
         self.figure.canvas.draw()
         self.figure.canvas.flush_events()
-
-
-class InterfaceSettings2(QDialog):
-    def __init__(self, parent = None):
-      super(InterfaceSettings2, self).__init__(parent)
-
-      self.tabWidget = QTabWidget()
-      self.tabWidget.tab1 = QWidget()
-      self.tabWidget.tab2 = QWidget()
-      self.tabWidget.tab3 = QWidget()
-
-      self.tabWidget.addTab(self.tabWidget.tab1,"Tab 1")
-      self.tabWidget.addTab(self.tabWidget.tab2,"Tab 2")
-      self.tabWidget.addTab(self.tabWidget.tab3,"Tab 3")
-      self.tab1UI()
-      self.tab2UI()
-      self.tab3UI()
-      self.setWindowTitle("Interface Settings")
-      self.setWindowIcon(QIcon('img/Avianz.ico'))
-      self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
-      self.setMinimumWidth(400)
-
-      mainLayout = QVBoxLayout()
-      mainLayout.addWidget(self.tabWidget)
-      self.setLayout(mainLayout)
-
-    def tab1UI(self):
-      layout = QFormLayout()
-      colorNamed=pg.ColorButton()
-      colorNamed.setColor(color='FF0000')
-      colorPossible = pg.ColorButton()
-      colorPossible.setColor(color='FFFF00')
-      colorNone=pg.ColorButton()
-      colorNone.setColor(color='0000FF')
-      colorSelected = pg.ColorButton()
-      colorSelected.setColor(color='00FF00')
-      layout.addRow(QLabel("Confirmed"),colorNamed)
-      layout.addRow(QLabel("Possible"), colorPossible)
-      layout.addRow(QLabel("Don't Know"),colorNone)
-      layout.addRow(QLabel("Currently Selected"), colorSelected)
-      self.tabWidget.setTabText(0, "Segment Colours")
-      self.tabWidget.tab1.setLayout(layout)
-
-    def tab2UI(self):
-      layout = QFormLayout()
-      sex = QHBoxLayout()
-      sex.addWidget(QRadioButton("Male"))
-      sex.addWidget(QRadioButton("Female"))
-      layout.addRow(QLabel("Sex"), sex)
-      layout.addRow("Date of Birth", QLineEdit())
-      self.tabWidget.setTabText(1, "Bird Names")
-      self.tabWidget.tab2.setLayout(layout)
-
-    def tab3UI(self):
-      layout = QHBoxLayout()
-      layout.addWidget(QLabel("subjects"))
-      layout.addWidget(QCheckBox("Physics"))
-      layout.addWidget(QCheckBox("Maths"))
-      self.tabWidget.setTabText(2, "Spectrogram Settings")
-      self.tabWidget.tab3.setLayout(layout)
 

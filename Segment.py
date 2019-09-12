@@ -23,7 +23,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 import scipy.ndimage as spi
-import skimage
 import time
 from ext import ce_denoise as ce
 import json
@@ -295,7 +294,7 @@ class SegmentList(list):
             # check each label in this segment:
             labs = self[segi][4]
             for lab in labs:
-                if lab["species"]==species:
+                if lab["species"] == species:
                     out.append(segi)
                     # go to next seg
                     break
