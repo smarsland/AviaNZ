@@ -23,30 +23,10 @@
 import WaveletFunctions
 import wavio, librosa
 import numpy as np
-import json, time, os, math, csv, gc
+import time, os, math, csv, gc
 import SignalProc
-import SupportClasses
 import Segment
 from ext import ce_denoise as ce
-import psutil
-import copy, pickle, tempfile
-
-# Nirosha's approach of simultaneous segmentation and recognition using wavelets
-# (0) Bandpass filter with different parameters for each species
-# (1) 5 level wavelet packet decomposition
-# (2) Sort nodes of (1) into order by point-biserial correlation with training labels
-# This is based on energy
-# (3) Retain top nodes (up to 20)
-# (4) Re-sort to favour child nodes
-# (5) Reduce number using F_2 score
-# This is based on thresholded reconstruction
-# (6) Classify as call if OR of (5) is true
-
-# Virginia: added window overlap
-# NOTE: inc is supposed to be a "fair" fraction of window
-
-# TODO: Inconsisient about symmlots of or zeros for the wavelet packet
-# TODO: This still needs lots of tidying up
 
 class WaveletSegment:
     # This class implements wavelet segmentation for the AviaNZ interface

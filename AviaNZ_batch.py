@@ -20,7 +20,7 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import os, re, platform, fnmatch, sys
+import os, re, fnmatch, sys
 
 from PyQt5.QtGui import QIcon, QPixmap, QApplication
 from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem
@@ -28,11 +28,7 @@ from PyQt5.QtMultimedia import QAudioFormat
 from PyQt5.QtCore import Qt, QDir
 
 import wavio
-import librosa
 import numpy as np
-import math
-import statistics
-from itertools import chain, repeat
 
 from pyqtgraph.Qt import QtGui
 from pyqtgraph.dockarea import *
@@ -44,7 +40,7 @@ import WaveletSegment
 import SupportClasses
 import Dialogs
 
-import json, copy, time
+import json, time
 
 
 class AviaNZ_batchProcess(QMainWindow):

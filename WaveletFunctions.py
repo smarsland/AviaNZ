@@ -95,20 +95,6 @@ class WaveletFunctions:
             currentlevelmaxE = np.max([self.ShannonEntropy(self.tree[n]) for n in range(2**level-1, 2**(level+1)-1)])
         return level
 
-    def ConvertWaveletNodeName(self,i):
-        """ Convert from an integer to the 'ad' representations of the wavelet packets
-        The root is 0 (''), the next level are 1 and 2 ('a' and 'd'), the next 3, 4, 5, 6 ('aa','ad','da','dd) and so on
-        """
-        level = int(np.floor(np.log2(i + 1)))
-        first = 2 ** level - 1
-        if i == 0:
-            b = ''
-        else:
-            b = np.binary_repr(int(i) - first, width=int(level))
-            b = b.replace('0', 'a')
-            b = b.replace('1', 'd')
-        return b
-
     def BestTree(self,wp,threshold,costfn='threshold'):
         """ Compute the best wavelet tree using one of three cost functions: threshold, entropy, or SURE.
         Scores each node and uses those scores to identify new leaves of the tree by working up the tree.
