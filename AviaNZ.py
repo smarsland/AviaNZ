@@ -1136,10 +1136,7 @@ class AviaNZ(QMainWindow):
                     self.timeaxis = SupportClasses.TimeAxisHour(orientation='bottom',linkView=self.p_ampl)
                 else:
                     self.startTime = 0
-                    if self.cheatsheet:
-                        self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
-                    else:
-                        self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
+                    self.timeaxis = SupportClasses.TimeAxisMin(orientation='bottom',linkView=self.p_ampl)
 
                 if not self.zooniverse:
                     self.w_spec.addItem(self.timeaxis, row=1, col=1)

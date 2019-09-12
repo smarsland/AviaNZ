@@ -2592,7 +2592,10 @@ class BuildRecAdvWizard(QWizard):
                 # self.segments: [parent_audio_file, [segment], [features], class_label]
                 # fs: sampling freq
                 # self.nclasses: number of class_labels
-                self.segments, fs, self.nclasses, self.clustercentres = Clustering.cluster(self.field("trainDir"), feature=self.feature, n_clusters=5)
+                self.cluster = Clustering.Clustering([], [])
+                self.segments, fs, self.nclasses, self.clustercentres = self.cluster.cluster(self.field("trainDir"),
+                                                                                        feature=self.feature,
+                                                                                        n_clusters=5)
                 # self.segments, fs, self.nclasses = Clustering.cluster_by_dist(self.dName, feature='we', max_cluste       rs=5, single=True)
                 # clusterPage.sampleRate = fs
 
@@ -2619,7 +2622,7 @@ class BuildRecAdvWizard(QWizard):
             # segsChanged should be updated by any user changes!
             if self.segsChanged:
                 # update the cluster centres
-                self.clustercentres = Clustering.getClusterCenters(self.segments, self.nclasses)
+                self.clustercentres = self.cluster.getClusterCenters(self.segments, self.nclasses)
                 self.segsChanged = False
                 self.wizard().redoTrainPages()
             return True
