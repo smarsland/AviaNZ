@@ -37,20 +37,16 @@ from scipy.signal import medfilt
 import SignalProc
 import WaveletFunctions
 import Segment
+import librosa
+import wavio
 
 from time import sleep
 import time
-
-import librosa
-
 import math
 import numpy as np
 import os, json
 import sys
 import copy
-
-import wavio
-
 import io
 
 from itertools import chain, repeat
@@ -163,21 +159,24 @@ class postProcess:
         self.segments = newSegments
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):
-        """ Calculate wind """
+        """ Calculate wind
+        Adopted from Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya et al.
+        :param data: audio data
+        :param sampleRate: sample rate
+        :param fn_peak: min height of a peak to be considered it as a significant peak
+        :return: mean and std of wind, a binary indicator of false negative
+        """
         wind_lower = 2.0 * 50 / sampleRate
         wind_upper = 2.0 * 500 / sampleRate
         f, p = signal.welch(data, fs=sampleRate, window='hamming', nperseg=512, detrend=False)
         p = np.log10(p)
 
-        limite_inf = int(round(
-            p.__len__() * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625
-                                        # (in normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
+        limite_inf = int(round(p.__len__() * wind_lower))
         limite_sup = int(round(
-            p.__len__() * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in normalized
-                                        # frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
-        a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
+            p.__len__() * wind_upper))
+        a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density
 
-        fn = False
+        fn = False  # is this a false negative?
         if self.fLow > 500 or self.fLow == 0:   # fLow==0 when non-species-specific
             # Check the presence/absence of the target species/call type > 500 Hz.
             ind = np.abs(f - 500).argmin()
@@ -195,9 +194,8 @@ class postProcess:
             peaks = [i for i in peaks if (ind_fLow <= i <= ind_fHigh)]
             prominences = signal.peak_prominences(p, peaks)[0]
             # If there is at least one significant prominence in the target frequency band, then it could be a FN
-            print('np.max(prominences):', np.max(prominences))
             if len(prominences) > 0 and np.max(prominences) > fn_peak:
-                    fn = True
+                fn = True
 
         return np.mean(a_wind), np.std(a_wind), fn    # mean of the PSD in the frequency band of interest.Upper part of
                                                       # the step 3 in Algorithm 2.1
@@ -205,9 +203,8 @@ class postProcess:
     def wind(self, windT=2.5, fn_peak=0.35):
         """
         Delete wind corrupted segments, mainly wind gust
-        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and
-        Jose D.Lopez
         :param windT: wind threshold
+        :param fn_peak: min height of a peak to be considered it as a significant peak
         :return: self.segments get updated
         """
         if len(self.segments) == 0 or len(self.segments) == 1 and self.segments[0][0] == -1:
@@ -578,6 +575,7 @@ class TimeAxisHour(pg.AxisItem):
         self.offset = offset
         #self.update()
 
+
 class TimeAxisMin(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
     # Writes the time as mm:ss, and can add an offset
@@ -594,28 +592,6 @@ class TimeAxisMin(pg.AxisItem):
         self.offset = offset
         self.update()
 
-class TimeAxisSec(pg.AxisItem):
-    # Time axis (at bottom of spectrogram)
-    # Writes the time as mm:ss, and can add an offset
-    def __init__(self, *args, **kwargs):
-        super(TimeAxisSec, self).__init__(*args, **kwargs)
-        self.offset = 0
-        self.setLabel('Time', units='s')
-
-    def tickStrings(self, values, scale, spacing):
-        # Overwrite the axis tick code
-        return [QTime(0,0,0).addSecs(value+self.offset).toString('s') for value in values]
-
-    def setOffset(self,offset):
-        self.offset = offset
-        self.update()
-
-class FixedLineROI(pg.LineSegmentROI):
-    def clearHandles(self):
-        self.scene().removeItem(self.handles[0]['item'])
-        self.scene().removeItem(self.handles[1]['item'])
-        #while len(self.handles) > 0:
-        #    self.removeHandle(self.handles[0]['item'])
 
 class ShadedROI(pg.ROI):
     # A region of interest that is shaded, for marking segments
@@ -673,6 +649,7 @@ class ShadedROI(pg.ROI):
             self.currentBrush = self.brush
         self.update()
 
+
 def mouseDragEventFlexible(self, ev):
     if ev.button() == self.rois[0].parent.MouseDrawingButton:
         return
@@ -700,6 +677,7 @@ def mouseDragEventFlexible(self, ev):
         pos = ev.scenePos() + self.cursorOffset
         self.movePoint(pos, ev.modifiers(), finish=False)
 
+
 def mouseDragEventFlexibleLine(self, ev):
     if self.movable and ev.button() != self.btn:
         if ev.isStart():
@@ -716,6 +694,7 @@ def mouseDragEventFlexibleLine(self, ev):
         if ev.isFinish():
             self.moving = False
             self.sigPositionChangeFinished.emit(self)
+
 
 class ShadedRectROI(ShadedROI):
     # A rectangular ROI that it shaded, for marking segments
@@ -770,6 +749,7 @@ class ShadedRectROI(ShadedROI):
 
 pg.graphicsItems.ROI.Handle.mouseDragEvent = mouseDragEventFlexible
 pg.graphicsItems.InfiniteLine.InfiniteLine.mouseDragEvent = mouseDragEventFlexibleLine
+
 
 class LinearRegionItem2(pg.LinearRegionItem):
     def __init__(self, parent, *args, **kwds):
@@ -863,6 +843,7 @@ class DragViewBox(pg.ViewBox):
         super(DragViewBox, self).keyPressEvent(ev)
         self.keyPressed.emit(ev.key())
 
+
 class ChildInfoViewBox(pg.ViewBox):
     # Normal ViewBox, but with ability to pass a message back from a child
     sigChildMessage = QtCore.Signal(object)
@@ -881,6 +862,7 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
     def mousePressEvent(self, ev):
         super(ClickableRectItem, self).mousePressEvent(ev)
         self.parentWidget().resend(self.mapRectToParent(self.boundingRect()).x())
+
 
 class ControllableAudio(QAudioOutput):
     # This links all the PyQt5 audio playback things -
@@ -1022,6 +1004,7 @@ class ControllableAudio(QAudioOutput):
         value = (math.exp(value/50)-1)/(math.exp(2)-1)
         self.setVolume(value)
 
+
 class FlowLayout(QtGui.QLayout):
     # This is the flow layout which lays out a set of spectrogram pictures on buttons (for HumanClassify2) as
     # nicely as possible
@@ -1119,6 +1102,7 @@ class FlowLayout(QtGui.QLayout):
             lineHeight = max(lineHeight, item.sizeHint().height())
 
         return y + lineHeight - rect.y()
+
 
 class Log(object):
     """ Used for logging info during batch processing.
