@@ -71,12 +71,13 @@ Any extra parameters to be applied for all subfilters may be provided (such as `
 
 `Filters` - JSON array of filters corresponding to each type of call (at least one element). Each is a JSON object:
 
-    { "calltype": "clust1", "nodes": [35, 37, 40], "thr": 0.5, "M": 1.5, "FreqRange": [1000, 3000], ... }
+    { "calltype": "clust1", "WaveletParams": {"thr": 0.5, "M": 1.5, "nodes": [35, 37, 40]}, "FreqRange": [1000, 3000], ... }
     
 `calltype` - either user-defined call type, or automatically generated cluster ID. String. Required.  
-`nodes` - JSON array of wavelet nodes used in this filter. Required.  
+`WaveletParams` - JSON object of parameters needed for wavelet filtering. Required. Currently needs:
 `thr` - numeric, threshold for detecting calls. Required.  
 `M` - numeric, energy curve window in seconds. Required.  
+`nodes` - JSON array of wavelet nodes used in this filter. Required.  
 `FreqRange` - frequency band for analysis. Identified calls will be marked as boxes with these limits, or as full-band segments if not provided.
 Any extra subfilter parameters may follow, such as `"F0"`.
 
@@ -84,8 +85,8 @@ Thus, a full filter file may look like this:
 
     { "species": "Kiwi (Little spotted)", "SampleRate": 16000, "Rain": false, "Wind": true,
       "Filters": [
-        { "calltype": "M", "nodes": [44, 45, 46], "thr": 0.5, "M": 1.5 , "F0": true, "FreqRange": [1500, 5000] },
-        { "calltype": "F", "nodes": [41, 44], "thr": 0.8, "M": 2, "FreqRange": [1000, 2500] }
+        { "calltype": "M", "WaveletParams": {"nodes": [44, 45, 46], "thr": 0.5, "M": 1.5}, "F0": true, "FreqRange": [1500, 5000] },
+        { "calltype": "F", "WaveletParams": {"nodes": [41, 44], "thr": 0.8, "M": 2}, "FreqRange": [1000, 2500] }
       ]
     }
 

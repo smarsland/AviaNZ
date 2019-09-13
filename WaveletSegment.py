@@ -62,7 +62,7 @@ class WaveletSegment:
         denoisedData = self.preprocess(data, sampleRate, d=d)
 
         # Find out which nodes will be needed:
-        allnodes = [node for subfilter in self.spInfo["Filters"] for node in subfilter["WaveletParams"][2]]
+        allnodes = [node for subfilter in self.spInfo["Filters"] for node in subfilter["WaveletParams"]["nodes"]]
 
         # Generate a full 5 level wavelet packet decomposition (stored in WF.tree)
         self.WF = WaveletFunctions.WaveletFunctions(data=denoisedData, wavelet=self.wavelet, maxLevel=20, samplerate=sampleRate)
@@ -80,7 +80,7 @@ class WaveletSegment:
             print("Identifying calls using subfilter", subfilter["calltype"])
 
             # Segment detection and neighbour merging
-            goodnodes = subfilter['WaveletParams'][2]
+            goodnodes = subfilter['WaveletParams']["nodes"]
             detected = self.detectCalls(self.WF, nodelist=goodnodes, samplerate=self.spInfo["SampleRate"], subfilter=subfilter, rf=True, aa=wpmode!="old")
 
             # merge neighbours in order to convert the detections into segments
@@ -201,7 +201,7 @@ class WaveletSegment:
             window, inc - window and increment length in seconds
         """
         # Load the relevant subfilter
-        self.nodes = subfilter["WaveletParams"][2]
+        self.nodes = subfilter["WaveletParams"]["nodes"]
 
         # clear storage for multifile processing
         self.annotation = []
@@ -592,10 +592,10 @@ class WaveletSegment:
         # Resolution length in samples
         resol_sr = math.ceil(resol * samplerate)
 
-        thr = subfilter['WaveletParams'][0]
+        thr = subfilter['WaveletParams']['thr']
         # Compute the number of samples in a window -- species specific
         # Virginia: changed sampleRate with win_sr
-        M = int(subfilter['WaveletParams'][1] * win_sr)
+        M = int(subfilter['WaveletParams']['M'] * win_sr)
         nw = int(np.ceil(duration / inc_sr))
         detected = np.zeros((nw, len(nodelist)))
         count = 0
@@ -886,22 +886,22 @@ class WaveletSegment:
                 # don't actually upsample audio, just "downsample" the nodes needed
                 WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
                 for subfilter in self.spInfo["Filters"]:
-                    subfilter["WaveletParams"][2] = WF.adjustNodes(subfilter["WaveletParams"][2], "down2")
+                    subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
                 self.spInfo["SampleRate"] = sampleRate
             elif fsOut == 4*sampleRate:
                 print("Adjusting nodes for upsampling to", fsOut)
                 # same. Wouldn't recommend repeating for larger ratios than 4x
                 WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
                 for subfilter in self.spInfo["Filters"]:
-                    downsampled2x = WF.adjustNodes(subfilter["WaveletParams"][2], "down2")
-                    subfilter["WaveletParams"][2] = WF.adjustNodes(downsampled2x, "down2")
+                    downsampled2x = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                    subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(downsampled2x, "down2")
                 self.spInfo["SampleRate"] = sampleRate
             # Could also similarly "downsample" by adding an extra convolution, but it's way slower
             # elif sampleRate == 2*fsOut:
             #     # don't actually downsample audio, just "upsample" the nodes needed
             #     WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
             #     for subfilter in self.spInfo["Filters"]:
-            #         subfilter["WaveletParams"][2] = WF.adjustNodes(subfilter["WaveletParams"][2], "up2")
+            #         subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
             #     print("upsampled nodes")
             #     self.spInfo["SampleRate"] = sampleRate
             else:

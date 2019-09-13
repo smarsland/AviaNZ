@@ -3452,8 +3452,8 @@ class AviaNZ(QMainWindow):
                 datatoplot = self.audiodata
 
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
-            WF.WaveletPacket(spSubf['WaveletParams'][2], 'symmetric', aaType==-4, antialiasFilter=True)
-            numNodes = len(spSubf['WaveletParams'][2])
+            WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
+            numNodes = len(spSubf['WaveletParams']['nodes'])
             Esep = np.zeros(( numNodes, int(self.datalengthSec) ))
 
             ### DENOISING reference: relative |amp| on rec signals from each WP node, when wind is present
@@ -3473,13 +3473,13 @@ class AviaNZ(QMainWindow):
 
             # 2. reconstruct from bands
             r = 0
-            M = spSubf['WaveletParams'][1]
-            for node in spSubf['WaveletParams'][2]:
+            M = spSubf['WaveletParams']['M']
+            for node in spSubf['WaveletParams']['nodes']:
                 # reconstruction as in detectCalls:
                 print("working on node", node)
                 C = WF.reconstructWP2(node, aaType != -2, True)
                 C = self.sp.ButterworthBandpass(C, spInfo['SampleRate'],
-                        low=spSubf['FreqRange'][0], high=spSubf['FreqRange'][1])
+                        low=spSubf['FreqRange']['thr'], high=spSubf['FreqRange']['M'])
 
                 C = np.abs(C)
                 E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
@@ -3506,7 +3506,7 @@ class AviaNZ(QMainWindow):
                     Esep[r,w] = (np.log(maxE) - meanC) / sdC
 
                     # mark detected calls on spectrogram
-                    if markSpec and Esep[r,w] > spSubf['WaveletParams'][0]:
+                    if markSpec and Esep[r,w] > spSubf['WaveletParams']['thr']:
                         diagCall = pg.ROI((specs*w, (freqmin+freqmax)/2),
                                 (specs, freqmax-freqmin),
                                 pen=(255*r//numNodes,0,0), movable=False)
@@ -3525,7 +3525,7 @@ class AviaNZ(QMainWindow):
             #             pen=fn.mkPen((0,130,0), width=2)))
             # add line corresponding to thr
             # self.p_plot.addItem(pg.InfiniteLine(-0.8, angle=0, pen=fn.mkPen(color=(40,40,40), width=1)))
-            self.p_plot.addItem(pg.InfiniteLine(spSubf['WaveletParams'][0], angle=0, pen=fn.mkPen(color=(40,40,40), width=1)))
+            self.p_plot.addItem(pg.InfiniteLine(spSubf['WaveletParams']['thr'], angle=0, pen=fn.mkPen(color=(40,40,40), width=1)))
             minX, maxX = self.overviewImageRegion.getRegion()
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), update=True, padding=0)
             self.plotaxis.setLabel('Power Z-score')
@@ -4885,18 +4885,6 @@ class AviaNZ(QMainWindow):
             self.segmentsToSave = False
         else:
             print("Nothing to save")
-
-    """def makeNewFilter(species,minLen,maxLen,minFrq,maxFrq,fs,f0_low,f0_high,thr,M,optimumNodes):
-        # Write out a new dictionary for a filter for a particular species
-
-        dict = {'Name': species, 'SampleRate': fs, 'TimeRange': [minLen,maxLen], 'FreqRange': [minFrq, maxFrq], 'F0Range': [f0_low, f0_high], 'WaveletParams': [thr, M, optimumNodes]}
-
-        # Check if file exists
-        filename = self.config['FiltersDir']+species+'.txt'
-        # TODO: More?
-        if isfile(filename):
-            print("File already exists, overwriting")
-        json.dump(dict,filename)"""
 
     def restart(self):
         """ Listener for the restart option, which uses exit(1) to restart the program at the splash screen """

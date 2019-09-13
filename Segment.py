@@ -326,6 +326,24 @@ class SegmentList(list):
         file.close()
         return 1
 
+    def getSummaries(self):
+        """ Calculates some summary parameters relevant for populating training dialogs.
+            and returns other parameters for populating the training dialogs.
+        """
+        if len(self)==0:
+            print("ERROR: no annotations for this calltype found")
+            return
+
+        # get parameter limits for populating training dialogs:
+        # FreqRange, in Hz
+        fLow = np.min([seg[2] for seg in self])
+        fHigh = np.max([seg[3] for seg in self])
+        # TimeRange, in s
+        lenMin = np.min([seg[1] - seg[0] for seg in self])
+        lenMax = np.max([seg[1] - seg[0] for seg in self])
+
+        return(lenMin, lenMax, fLow, fHigh)
+
     def exportGT(self, filename, species, window=1, inc=None):
         """ Given the AviaNZ annotations, exports a 0/1 ground truth as a txt file,
             and returns other parameters for populating the training dialogs.
