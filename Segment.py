@@ -35,9 +35,9 @@ import os
 import re
 import math
 import copy
+import wavio
 from intervaltree import IntervalTree
 from itertools import chain, repeat
-import wavio
 
 from PyQt5.QtCore import QTime
 from openpyxl import load_workbook, Workbook
@@ -187,9 +187,9 @@ class SegmentList(list):
             (it will override any duration read from the JSON).
         """
         try:
-            file = open(file, 'r')
-            annots = json.load(file)
-            file.close()
+            f = open(file, 'r')
+            annots = json.load(f)
+            f.close()
         except Exception as e:
             print("ERROR: file %s failed to load with error:" % file)
             print(e)
@@ -204,10 +204,17 @@ class SegmentList(list):
             # some old files have duration in samples, so need a rough check
             if duration>0:
                 self.metadata["Duration"] = duration
-            elif annots[0][1]>0 and annots[0][1]<100000:
+            elif isinstance(annots[0][1], (int, float)) and annots[0][1]>0 and annots[0][1]<100000:
                 self.metadata["Duration"] = annots[0][1]
             else:
-                print("ERROR: duration not found in metadata, need to supply as argument")
+                # fallback to reading the wav:
+                try:
+                    wav = wavio.read(file[:-5])
+                    self.metadata["Duration"] = len(wav.data)/wav.rate
+                except Exception as e:
+                    print("ERROR: duration not found in metadata, arguments, or read from wav")
+                    print(file)
+                    print(e)
                 return
             # noise metadata
             if isinstance(annots[0][4], list):
@@ -340,7 +347,10 @@ class SegmentList(list):
         if len(thisSpSegs)==0:
             print("Warning: no annotations for this species found in file", filename)
             # delete the file to avoid problems with old GT files
-            os.remove(eFile)
+            try:
+                os.remove(eFile)
+            except Exception:
+                pass
             # return some default constants
             return((100, 0, 32000, 0, 32000))
 

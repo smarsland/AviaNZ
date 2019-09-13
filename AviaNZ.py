@@ -395,9 +395,7 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Export segments to Excel",self.exportSeg)
             actionMenu.addSeparator()
 
-        trainMenu = actionMenu.addMenu("Build an automated recogniser")
-        trainMenu.addAction("Easy", self.buildRecogniserEasy)
-        trainMenu.addAction("Advanced", self.buildRecogniserAdvanced)
+        actionMenu.addAction("Train an automated recogniser", self.buildRecogniser)
         actionMenu.addAction("Test recogniser", self.testRecogniser)
         actionMenu.addSeparator()
 
@@ -3936,13 +3934,7 @@ class AviaNZ(QMainWindow):
 
         QApplication.processEvents()
 
-    def buildRecogniserEasy(self):
-        """
-        Listner for 'Build a recogniser' - Easy mode
-        """
-        print('Not implemented')
-
-    def buildRecogniserAdvanced(self):
+    def buildRecogniser(self):
         """Listener for 'Build a recogniser' - Advanced mode
            This mode expects to have more engagement with the user, the user can give sensible names to the clusters
            and adjust some parameters based on user's expertise on the particular species.
