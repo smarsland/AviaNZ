@@ -28,6 +28,7 @@ import time
 import platform
 import wavio
 import json
+import shutil
 
 from PyQt5.QtGui import QIcon, QPixmap, QValidator, QAbstractItemView
 from PyQt5.QtGui import *
@@ -2244,12 +2245,12 @@ class FilterManager(QDialog):
         self.deleteBtn = QPushButton("Delete")
         self.deleteBtn.clicked.connect(self.delete)
 
-        # upload a filter
-        self.uploadBtn = QPushButton("Upload")
+        # export a filter for upload
+        self.uploadBtn = QPushButton("Export")
         self.uploadBtn.clicked.connect(self.upload)
 
-        # download more filters
-        self.downloadBtn = QPushButton("Download")
+        # import downloaded filters
+        self.downloadBtn = QPushButton("Import")
         self.downloadBtn.clicked.connect(self.download)
 
         # make button state respond to selection + name entry
@@ -2338,7 +2339,48 @@ class FilterManager(QDialog):
             print("ERROR: could not delete:", e)
 
     def download(self):
-        print("Not implemented yet")
+        source, _ = QtGui.QFileDialog.getOpenFileName(self, 'Select the downloaded filter file', os.path.expanduser("~"), "Text files (*.txt)")
+        target = os.path.join(self.filtdir, os.path.basename(source))
+
+        print("Importing from %s to %s" % (source, target))
+        if not os.path.isfile(source):
+            print("ERROR: unable to import, bad source %s" % source)
+            return
+        if os.path.isfile(target):
+            msg = SupportClasses.MessagePopup("t", "Confirm overwrite", "Warning: a filter named %s already exists in this software.\nDo you want to overwrite it?" % target)
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.No or reply == QMessageBox.Cancel:
+                return
+        try:
+            shutil.copy2(source, target)
+            msg = SupportClasses.MessagePopup("d", "Successfully imported", "Import successful. Now you can use the filter %s" % os.path.basename(target))
+            msg.exec_()
+            self.readContents()
+        except Exception as e:
+            print("ERROR: failed to import")
+            print(e)
+            return
 
     def upload(self):
-        print("Not implemented yet")
+        fn = self.listFiles.currentItem().text()
+        source = os.path.join(self.filtdir, fn)
+        target = QtGui.QFileDialog.getExistingDirectory(self, 'Choose where to save the filter')
+        target = os.path.join(target, fn)
+
+        print("Exporting from %s to %s" % (source, target))
+        if not os.path.isfile(source):
+            print("ERROR: unable to export, bad source %s" % source)
+            return
+        if os.path.isfile(target):
+            print("ERROR: target file %s exists" % target)
+            return
+        try:
+            shutil.copy2(source, target)
+            msg = SupportClasses.MessagePopup("d", "Successfully exported", "Export successful. Now you can share the file %s" % target)
+            msg.exec_()
+        except Exception as e:
+            print("ERROR: failed to export")
+            print(e)
+            return
+

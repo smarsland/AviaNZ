@@ -5,9 +5,6 @@
     {"calltype": "all",
      "TimeRange": [1, 30],
      "FreqRange": [500, 7000], 
-     "WaveletParams": [0.25, 0.5, [33,37,38]]}
-  ], 
-  "Wind": false,
-  "Rain": false,
-  "F0": false
+     "WaveletParams": {"thr": 0.25, "M": 0.5, "nodes": [33,37,38]}}
+  ] 
 }
