@@ -34,6 +34,7 @@ import copy
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap
 from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox
+from PyQt5.QtMultimedia import QAudioFormat
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -597,15 +598,29 @@ class BuildRecAdvWizard(QWizard):
             else:
                 wavobj = wavio.read(filename, duration, offset)
 
-            prepro = SupportClasses.preProcess(wavObj=wavobj)
-            sgRaw = prepro.sp.spectrogram(prepro.audioData, window_width=512,
+            audioData = wavobj.data
+            if np.shape(np.shape(audioData))[0] > 1:
+                audioData = audioData[:, 0]
+            if audioData.dtype != 'float':
+                audioData = audioData.astype('float')
+
+            audioFormat = QAudioFormat()
+            audioFormat.setCodec("audio/pcm")
+            audioFormat.setByteOrder(QAudioFormat.LittleEndian)
+            audioFormat.setSampleType(QAudioFormat.SignedInt)
+            audioFormat.setChannelCount(1)
+            audioFormat.setSampleRate(wavobj.rate)
+            audioFormat.setSampleSize(wavobj.sampwidth*8)
+
+            sp = SignalProc.SignalProc([], 0, 512, 256)
+            sgRaw = sp.spectrogram(audioData, window_width=512,
                                           incr=256, window='Hann', mean_normalise=True, onesided=True,
                                           multitaper=False, need_even=False)
             maxsg = np.min(sgRaw)
             self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
             self.setColourMap()
 
-            return self.sg, prepro.audioData, prepro.audioFormat
+            return self.sg, audioData, audioFormat
 
         def setColourMap(self):
             """ Listener for the menu item that chooses a colour map.
