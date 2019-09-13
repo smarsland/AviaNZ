@@ -29,8 +29,9 @@ import time
 import platform
 import wavio
 import json
+import copy
 
-from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView
+from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap
 from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox
 
@@ -58,7 +59,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, parent=None):
             super(BuildRecAdvWizard.WPageData, self).__init__(parent)
             self.setTitle('Training data')
-            self.setSubTitle('Select the folder with training data, then choose species')
+            self.setSubTitle('TODO: INSTRUCTION ABOUT ANNOTATING. Select the folder with training data, then choose species')
 
             self.setMinimumSize(250, 150)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
@@ -87,7 +88,6 @@ class BuildRecAdvWizard(QWizard):
             self.fs.setTickInterval(2000)
             self.fs.setRange(0, 32000)
             self.fs.setValue(0)
-            self.fs.setSingleStep(2000)
             self.fs.valueChanged.connect(self.fsChange)
             self.fstext = QLabel('')
             form1 = QFormLayout()
@@ -115,9 +115,9 @@ class BuildRecAdvWizard(QWizard):
             self.fillFileList(trainDir)
 
         def fsChange(self, value):
-            value = value - (value % 1000)
-            if value < 1000:
-                value = 1000
+            value = value // 4000 * 4000
+            if value < 4000:
+                value = 4000
             self.fstext.setText(str(value))
 
         def fillFileList(self, dirName):
@@ -144,7 +144,9 @@ class BuildRecAdvWizard(QWizard):
 
             # might need better limits on selectable sample rate here
             self.fs.setValue(int(np.min(fs)))
-            self.fs.setRange(0, int(np.max(fs)))
+            self.fs.setRange(4000, int(np.max(fs)))
+            self.fs.setSingleStep(4000)
+            self.fs.setTickInterval(4000)
 
             spList = list(spList)
             spList.insert(0, 'Choose species...')
@@ -180,16 +182,23 @@ class BuildRecAdvWizard(QWizard):
             revtop = QLabel("The following parameters were set:")
             self.params = QLabel("")
             self.params.setStyleSheet("QLabel { color : #808080; }")
+            self.warnLabel = QLabel("")
+            self.warnLabel.setStyleSheet("QLabel { color : #800000; }")
 
             layout2 = QVBoxLayout()
             layout2.addWidget(revtop)
             layout2.addWidget(self.params)
+            layout2.addWidget(self.warnLabel)
             self.setLayout(layout2)
             self.setButtonText(QWizard.NextButton, 'Cluster >')
 
         def initializePage(self):
             # parse some params
-            fs = int(self.field("fs"))//1000*1000
+            fs = int(self.field("fs"))//4000*4000
+            if fs not in [8000, 16000, 24000, 32000, 36000, 48000]:
+                self.warnLabel.setText("Warning: unusual sampling rate selected, make sure it is intended.")
+            else:
+                self.warnLabel.setText("")
             self.params.setText("Species: %s\nTraining data: %s\nSampling rate: %d\n" % (self.field("species"), self.field("trainDir"), fs))
 
     # page 3 - calculate and adjust clusters
@@ -615,7 +624,7 @@ class BuildRecAdvWizard(QWizard):
 
     # page 4 - set params for training
     class WPageParams(QWizardPage):
-        def __init__(self, cluster, segments, parent=None):
+        def __init__(self, cluster, segments, picbtn, parent=None):
             super(BuildRecAdvWizard.WPageParams, self).__init__(parent)
             self.setTitle("Training parameters: %s" % cluster)
             self.setSubTitle("These fields were propagated using training data. Adjust if required.\nWhen ready, "
@@ -632,11 +641,16 @@ class BuildRecAdvWizard(QWizard):
             lblCluster = QLabel(cluster)
             lblCluster.setStyleSheet("QLabel { color : #808080; }")
 
+            # small image of the cluster and other info
+            calldescr = QFormLayout()
+            calldescr.addRow('Species:', self.lblSpecies)
+            calldescr.addRow('Call type:', lblCluster)
+            calldescr.addRow('Number of segments:', self.numSegs)
+            imgCluster = QLabel()
+            imgCluster.setPixmap(QPixmap.fromImage(picbtn.im1))
+
             # TimeRange parameters
             form1_step4 = QFormLayout()
-            form1_step4.addRow('Species:', self.lblSpecies)
-            form1_step4.addRow('Call type:', lblCluster)
-            form1_step4.addRow('Number of segments:', self.numSegs)
             self.minlen = QLineEdit(self)
             self.minlen.setText('')
             form1_step4.addRow('Min call length (secs)', self.minlen)
@@ -665,8 +679,8 @@ class BuildRecAdvWizard(QWizard):
             form1_step4.addRow('Upper frq. limit (Hz)', self.fHigh)
 
             # thr, M parameters
-            MLabel = QLabel('ROC curve lines (M)')
             thrLabel = QLabel('ROC curve points per line (thr)')
+            MLabel = QLabel('ROC curve lines (M)')
             self.cbxThr = QComboBox()
             self.cbxThr.addItems(['4', '5', '6', '7', '8', '9', '10'])
             self.cbxM = QComboBox()
@@ -676,8 +690,17 @@ class BuildRecAdvWizard(QWizard):
             form2_step4.addRow(MLabel, self.cbxM)
 
             ### Step4 layout
+            hboxTop = QHBoxLayout()
+            hboxTop.addLayout(calldescr)
+            hboxTop.addSpacing(30)
+            hboxTop.addWidget(imgCluster)
             layout_step4 = QVBoxLayout()
+            layout_step4.setSpacing(10)
+            layout_step4.addWidget(QLabel("<b>Current call type</b>"))
+            layout_step4.addLayout(hboxTop)
+            layout_step4.addWidget(QLabel("<b>Call parameters</b>"))
             layout_step4.addLayout(form1_step4)
+            layout_step4.addWidget(QLabel("<b>Training parameters</b>"))
             layout_step4.addLayout(form2_step4)
             self.setLayout(layout_step4)
 
@@ -776,10 +799,10 @@ class BuildRecAdvWizard(QWizard):
             self.bestM.setReadOnly(True)
             self.bestThr.setReadOnly(True)
             self.bestNodes.setReadOnly(True)
-            filtSummary = QFormLayout()
-            filtSummary.addRow("Current M:", self.bestM)
-            filtSummary.addRow("Current thr:", self.bestThr)
-            filtSummary.addRow("Current nodes:", self.bestNodes)
+            self.filtSummary = QFormLayout()
+            self.filtSummary.addRow("Current M:", self.bestM)
+            self.filtSummary.addRow("Current thr:", self.bestThr)
+            self.filtSummary.addRow("Current nodes:", self.bestNodes)
 
             # this is the Canvas Widget that displays the plot
             self.figCanvas = ROCCanvas(self)
@@ -817,6 +840,8 @@ class BuildRecAdvWizard(QWizard):
                 self.bestThr.setText("%.4f" % self.thrList[thr_min_ind])
                 # Get nodes for closest point
                 self.bestNodes.setText(str(self.nodes[M_min_ind][thr_min_ind]))
+                for itemnum in range(self.filtSummary.count()):
+                    self.filtSummary.itemAt(itemnum).widget().show()
 
             self.figCanvas.figure.canvas.mpl_connect('button_press_event', onclick)
 
@@ -831,13 +856,14 @@ class BuildRecAdvWizard(QWizard):
             hbox2.addWidget(self.figCanvas)
 
             hbox3 = QHBoxLayout()
-            hbox3.addLayout(filtSummary)
+            hbox3.addLayout(self.filtSummary)
             hbox3.addWidget(spaceH)
             hbox3.addWidget(self.lblUpdate)
 
             vbox = QVBoxLayout()
             vbox.addLayout(vboxHead)
             vbox.addLayout(hbox2)
+            vbox.addSpacing(10)
             vbox.addLayout(hbox3)
 
             self.setLayout(vbox)
@@ -847,6 +873,8 @@ class BuildRecAdvWizard(QWizard):
             self.lblTrainDir.setText(self.field("trainDir"))
             self.lblSpecies.setText(self.field("species"))
             self.lblCluster.setText(self.clust)
+            for itemnum in range(self.filtSummary.count()):
+                self.filtSummary.itemAt(itemnum).widget().hide()
 
             # parse fields specific to this subfilter
             minlen = float(self.field("minlen"+str(self.pageId)))
@@ -1057,7 +1085,12 @@ class BuildRecAdvWizard(QWizard):
                 self.wizard().speciesData["Filters"].append(newSubfilt)
 
             self.updateFilter()
-            self.lblFilter.setText(str(self.wizard().speciesData))
+            speciesDataText = copy.deepcopy(self.wizard().speciesData)
+            for f in speciesDataText["Filters"]:
+                f["ClusterCentre"] = "(cluster centre)"
+                f["WaveletParams"] = "(wavelet parameters)"
+
+            self.lblFilter.setText(str(speciesDataText))
 
         def updateFilter(self):
             self.wizard().speciesData["Wind"] = self.ckbWind.isChecked()
@@ -1130,13 +1163,15 @@ class BuildRecAdvWizard(QWizard):
             print("adding pages for ", key, value)
             # retrieve the segments for this cluster:
             newsegs = []
-            for seg in self.clusterPage.segments:
+            for segix in range(len(self.clusterPage.segments)):
                 # save source file, actual segment, and cluster ID
+                seg = self.clusterPage.segments[segix]
                 if seg[-1] == key:
                     newsegs.append([seg[0], seg[1], seg[-1]])
+                    picbtn = self.clusterPage.picbuttons[segix]
 
             # page 4: set training params
-            page4 = BuildRecAdvWizard.WPageParams(value, newsegs)
+            page4 = BuildRecAdvWizard.WPageParams(value, newsegs, picbtn)
             page4.lblSpecies.setText(self.field("species"))
             page4.numSegs.setText(str(len(newsegs)))
             pageid = self.addPage(page4)

@@ -625,7 +625,7 @@ class AviaNZ_batchProcess(QMainWindow):
             self.segments.metadata["Reviewer"] = ""
             self.segments.metadata["Duration"] = float(self.datalength)/self.sampleRate
         else:
-            self.segments.parseJSON(self.filename+'.data')
+            self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
 
             # wipe segments if running species-specific analysis:
             oldsegs = self.segments.getSpecies(self.species)
@@ -858,7 +858,6 @@ class AviaNZ_reviewAll(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
-        #print("Dir:", self.dirName)
         self.w_dir.setPlainText(self.dirName)
         self.spList = set()
         # find species names from the annotations
