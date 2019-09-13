@@ -396,7 +396,7 @@ class AviaNZ_batchProcess(QMainWindow):
                     # post process to remove short segments, wind, rain, and use F0 check.
                     print("Post processing...")
                     if self.species == 'All species':
-                        post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={})
+                        post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={})
                         post.wind()
                         print('After wind: ', post.segments)
                         # adjust segment starts for 15min "pages"
@@ -410,7 +410,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         # postProcess currently operates on single-level list of segments,
                         # so we run it over subfilters for wavelets:
                         for filtix in range(len(self.speciesData['Filters'])):
-                            post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs[filtix], subfilter={})
+                            post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs[filtix], subfilter={})
                             if 'Wind' in self.speciesData:
                                 if self.speciesData['Wind']:
                                     print('Deleting wind...')
@@ -652,7 +652,7 @@ class AviaNZ_batchProcess(QMainWindow):
         :return: None, but reset audiodata
         """
         print('Impulse masking...')
-        postp = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=[], subfilter={})
+        postp = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=[], subfilter={})
         imps = postp.impulse_cal(fs=self.sampleRate, engp=engp, fp=fp)    # 0 - presence of impulse noise
         print('Samples to mask: ', len(self.audiodata) - np.sum(imps))
         # Mask only the affected samples
