@@ -1837,7 +1837,7 @@ class AviaNZ(QMainWindow):
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(np.ceil(self.datalengthSec))):
                 data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
-                post = SupportClasses.postProcess(audioData=data, sampleRate=self.sampleRate, segments=[], spInfo={})
+                post = Segment.PostProcess(audioData=data, sampleRate=self.sampleRate, segments=[], spInfo={})
                 m, std, _ = post.wind_cal(data, self.sampleRate)
                 we_mean[w] = m
                 we_std[w] = std
@@ -4052,7 +4052,7 @@ class AviaNZ(QMainWindow):
 
             # post process to remove short segments, wind, rain, and use F0 check.
             if filtname == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
-                post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, spInfo={})
+                post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, subfilter={})
                 post.wind()
                 print('After wind: ', post.segments)
                 # post.rainClick()
@@ -4062,7 +4062,7 @@ class AviaNZ(QMainWindow):
                 # postProcess currently operates on single-level list of segments,
                 # so we run it over subfilters for wavelets:
                 for filtix in range(len(speciesData['Filters'])):
-                    post = SupportClasses.postProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                    post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                       segments=newSegments[filtix],
                                                       subfilter=speciesData['Filters'][filtix])
                     post.short()
@@ -4073,10 +4073,6 @@ class AviaNZ(QMainWindow):
                         pass
                         # post.rainClick() - omitted in sppSpecific=T cases
                         # print('After rain: ', post.segments)
-                    if speciesData['FF']:
-                        pass
-                        # post.fundamentalFrq(self.filename, speciesData)
-                        # print('After ff: ', post.segments)
                     newSegments[filtix] = post.segments
 
             print("After post processing: ", newSegments)

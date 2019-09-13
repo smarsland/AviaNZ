@@ -2880,7 +2880,7 @@ class BuildRecAdvWizard(QWizard):
             else:
                 wavobj = wavio.read(filename, duration, offset)
 
-            prepro = SupportClasses.preProcess(wavObj=wavobj)
+            prepro = Segment.preProcess(wavObj=wavobj)
             sgRaw = prepro.sp.spectrogram(prepro.audioData, window_width=512,
                                           incr=256, window='Hann', mean_normalise=True, onesided=True,
                                           multitaper=False, need_even=False)
@@ -3221,8 +3221,14 @@ class BuildRecAdvWizard(QWizard):
                 seg = segments[segix]
                 secs = seg[1] - seg[0]
                 wavobj = wavio.read(file, nseconds=secs, offset=seg[0])
-                sc = SupportClasses.preProcess(wavObj=wavobj, spInfo=speciesData, d=True, f=False)  # avoid bandpass filter
-                data, sampleRate = sc.denoise_filter(level=8)
+                self.sampleRate = wavobj.rate
+                self.audioData = wavobj.data
+                if np.shape(np.shape(self.audioData))[0] > 1:
+                    self.audioData = self.audioData[:, 0]
+                if self.audioData.dtype != 'float':
+                    self.audioData = self.audioData.astype('float')
+                post = Segment.PostProcess(audioData=self.audioData, sampleRate=self.sampleRate, segments=[], subfilter={})
+                data, sampleRate = post.denoise_filter(level=8, d=True, f=False, f1=fLow, f2=fHigh)
                 sp = SignalProc.SignalProc([], 0, 256, 128)
                 # spectrogram is not necessary if we're not returning segments
                 segment = Segment.Segmenter(data, [], sp, sampleRate, 256, 128)
