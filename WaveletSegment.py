@@ -21,7 +21,7 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import WaveletFunctions
-import wavio, librosa
+import librosa
 import numpy as np
 import time, os, math, csv, gc
 import SignalProc
@@ -39,8 +39,8 @@ class WaveletSegment:
             # for now, we default to the first subfilter:
             print("Detected %d subfilters in this filter" % len(spInfo["Filters"]))
 
-        self.sp = SignalProc.SignalProc([], 0, 256, 128)
-        self.segmenter = Segment.Segmenter(None, None, self.sp, 0, window_width=256, incr=128, mingap=mingap, minlength=minlength)
+        self.sp = SignalProc.SignalProc(256, 128)
+        self.segmenter = Segment.Segmenter(self.sp, mingap=mingap, minlength=minlength)
 
     def waveletSegment(self, data, sampleRate, d, wpmode="new"):
         """ Main analysis wrapper (segmentation in batch mode).
@@ -948,13 +948,13 @@ class WaveletSegment:
                     opstartingtime = time.time()
                     wavFile = os.path.join(root, file[:-4])
 
-                    # adds to self.annotation array
-                    data, sampleRate = self.loadData(wavFile, window, inc, resol)
+                    # adds to self.annotation array, also sets self.sp data
+                    self.loadData(wavFile, window, inc, resol)
 
                     # denoise and store actual audio data:
                     # note: preprocessing is a side effect on data
                     # (preprocess only reads target SampleRate from spInfo)
-                    denoisedData = self.preprocess(data, sampleRate, d=denoise)
+                    denoisedData = self.preprocess(self.sp.data, self.sp.sampleRate, d=denoise)
                     self.audioList.append(denoisedData)
 
                     print("file loaded in", time.time() - opstartingtime)
@@ -968,7 +968,6 @@ class WaveletSegment:
         # ann = np.reshape(self.annotation, (len(self.annotation), 1))
         # MLdata = np.append(WC, ann, axis=1)
         # np.savetxt(os.path.join(dirName, "energies.tsv"), MLdata, delimiter="\t")
-        del data
         del denoisedData
         totalcalls = sum([sum(a) for a in self.annotation])
         totalblocks = sum([len(a) for a in self.annotation])
@@ -988,21 +987,11 @@ class WaveletSegment:
         # Virginia: added resol for identify annotation txt
         filenameAnnotation = fName + '-res' + str(float(resol)) + 'sec.txt'
         # filenameAnnotation = fName + '-res'+str(float(resol))+'sec.txt'
-        try:
-            wavobj = wavio.read(filename)
-        except Exception as e:
-            print("unsupported file: ", filename)
-            print("encountered exception: ", e)
-            pass
 
-        sampleRate = wavobj.rate
-        data = wavobj.data
-        if data.dtype != 'float':
-            data = data.astype('float')  # / 32768.0
-        if np.shape(np.shape(data))[0] > 1:
-            data = np.squeeze(data[:, 0])
+        self.sp.readWav(filename)
+
         #Virginia-> number of entries in annotation file: built on resol scale
-        n = math.ceil((len(data) / sampleRate)/resol)
+        n = math.ceil((len(self.sp.data) / self.sp.sampleRate)/resol)
 
         # # Impulse masking
         # postp = SupportClasses.postProcess(audioData=data, sampleRate=sampleRate, segments=[], spInfo={})
@@ -1049,7 +1038,7 @@ class WaveletSegment:
 
         totalblocks = sum([len(a) for a in self.annotation])
         print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, presblocks, totalblocks))
-        return data, sampleRate
+        return
 
     def identifySegments(self, detection):  # , maxgap=1, minlength=1):
         """ Turn binary detection to segments """

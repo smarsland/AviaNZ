@@ -611,26 +611,30 @@ class Segmenter:
     See also the species-specific segmentation in WaveletSegment
     """
 
-    def __init__(self, data, sg, sp, fs, window_width=256, incr=128, mingap=0.3, minlength=0.2):
-        self.data = data
-        self.fs = fs
-        # Spectrogram
-        self.sg = sg
+    def __init__(self, sp, mingap=0.3, minlength=0.2):
         # This is the reference to SignalProc
         self.sp = sp
+        self.data = sp.data
+        self.fs = sp.sampleRate
+        # Spectrogram
+        if hasattr(sp, 'sg'):
+            self.sg = sp.sg
+        else:
+            self.sg = None
         # These are the spectrogram params. Needed to compute times.
-        self.window_width = window_width
-        self.incr = incr
+        self.window_width = sp.window_width
+        self.incr = sp.incr
         self.mingap = mingap
         self.minlength = minlength
 
-    def setNewData(self, data, sg, fs, window_width, incr):
+    def setNewData(self, sp):
         # To be called when a new sound file is loaded
-        self.data = data
-        self.fs = fs
-        self.sg = sg
-        self.window_width = window_width
-        self.incr = incr
+        self.sp = sp
+        self.data = sp.data
+        self.fs = sp.sampleRate
+        self.sg = sp.sg
+        self.window_width = sp.window_width
+        self.incr = sp.incr
 
     def bestSegments(self,FIRthr=0.7,medianClipthr=3.0,yinthr=0.9,mingap=0, minlength=0, maxlength=5.0):
         # Have a go at performing generally reasonably segmentation
@@ -1280,8 +1284,10 @@ class PostProcess:
         pos = np.abs(arr - w1).argmin()
         window = arr[pos]
 
-        sp = SignalProc.SignalProc(self.audioData, self.sampleRate, window, window)     # No overlap
-        sg = sp.spectrogram(self.audioData, multitaper=False)
+        sp = SignalProc.SignalProc(window, window)     # No overlap
+        sp.data = self.audioData
+        sp.sampleRate = self.sampleRate
+        sg = sp.spectrogram(multitaper=False)
 
         # For each frq band get sections where energy exceeds some (90%) percentile, engp
         # and generate a binary spectrogram
@@ -1364,8 +1370,10 @@ class PostProcess:
         newSegments = copy.deepcopy(self.segments)
         if newSegments.__len__() > 1:
             # Get avg energy
-            sp = SignalProc.SignalProc(data=self.audioData, sampleRate=self.sampleRate)
-            rawsg = sp.spectrogram(self.audioData)
+            sp = SignalProc.SignalProc()
+            sp.data = self.audioData
+            sp.sampleRate = self.sampleRate
+            rawsg = sp.spectrogram()
             # Normalise
             rawsg -= np.mean(rawsg, axis=0)
             rawsg /= np.max(np.abs(rawsg), axis=0)
@@ -1400,17 +1408,17 @@ class PostProcess:
                 # Got to read from the source instead of using self.audioData - ff is wrong if you use self.audioData somehow
                 # data = self.audioData[int(seg[0]*speciesData['SampleRate']):int(seg[1]*speciesData['SampleRate'])]
                 # denoise before fundamental frq. extraction
-                wavobj = wavio.read(fileName, nseconds=secs, offset=seg[0])
-                self.sampleRate = wavobj.rate
-                self.audioData = wavobj.data
-                if np.shape(np.shape(self.audioData))[0] > 1:
-                    self.audioData = self.audioData[:, 0]
-                if self.audioData.dtype != 'float':
-                    self.audioData = self.audioData.astype('float')
+                sp = SignalProc.SignalProc(256, 128)
+                sp.readWav(fileName, secs, seg[0])
+                self.sampleRate = sp.rate
+                self.audioData = sp.data
+
                 data, sampleRate = self.denoise_filter(level=8, d=True, f=False, f1=self.fLow, f2=self.fHigh)
-                sp = SignalProc.SignalProc([], 0, 256, 128)
-                sgRaw = sp.spectrogram(data, 256, 128, mean_normalise=True, onesided=True, multitaper=False)
-                segment = Segment.Segmenter(data, sgRaw, sp, sampleRate, 256, 128)
+                sp.data = data
+                sp.sampleRate = sampleRate
+                _ = sp.spectrogram(mean_normalise=True, onesided=True, multitaper=False)
+
+                segment = Segment.Segmenter(sp)
                 pitch, y, minfreq, W = segment.yin(minfreq=100)
                 ind = np.squeeze(np.where(pitch > minfreq))
                 pitch = pitch[ind]

@@ -24,26 +24,83 @@
 import numpy as np
 import scipy.signal as signal
 import scipy.fftpack as fft
+import wavio
+import librosa
+
+from PyQt5.QtMultimedia import QAudioFormat
+# for multitaper spec:
+from spectrum import dpss, pmtm
+# for spec derivs:
+from spectrum import dpss
+# for fund freq
+from scipy.signal import medfilt
+
 
 class SignalProc:
-    """ This class implements various signal processing algorithms for the AviaNZ interface.
-    Primary one is the spectrogram, together with its inverse.
+    """ This class reads and holds the audiodata and spectrogram, to be used in the main interface.
+    Inverse, denoise, and other processing algorithms are provided here.
     Also bandpass and Butterworth bandpass filters.
     Primary parameters are the width of a spectrogram window (window_width) and the shift between them (incr)
     """
 
-    def __init__(self,data=[],sampleRate=0,window_width=256,incr=128):
+    def __init__(self, window_width=256, incr=128, minFreqShow=0, maxFreqShow=0):
+        # maxFreq = 0 means fall back to Fs/2 for any file.
         self.window_width=window_width
         self.incr=incr
+        self.minFreqShow = minFreqShow
+        self.maxFreqShow = maxFreqShow
+        self.data = []
 
-        if data != []:
-            self.data = data
-            self.sampleRate = sampleRate
+        # only accepting wav files of this format
+        self.audioFormat = QAudioFormat()
+        self.audioFormat.setCodec("audio/pcm")
+        self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
+        self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
-    def setNewData(self,data,sampleRate):
-        # Does what it says. To be called when a new sound file is loaded
-        self.data = data
-        self.sampleRate = sampleRate
+    def readWav(self, file, len=None, off=None):
+        """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
+        wavobj = wavio.read(file, len, off)
+        self.data = wavobj.data
+
+        # take only left channel
+        if np.shape(np.shape(self.data))[0] > 1:
+            self.data = self.data[:, 0]
+        self.audioFormat.setChannelCount(1)
+
+        # force float type
+        if self.data.dtype != 'float':
+            self.data = self.data.astype('float')
+        self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
+
+        # total file length in s read from header (useful for paging)
+        self.fileLength = wavobj.nframes
+
+        self.sampleRate = wavobj.rate
+        self.audioFormat.setSampleRate(self.sampleRate)
+
+        print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
+
+        # *Freq sets hard bounds, *Show can limit the spec display
+        self.minFreq = 0
+        self.maxFreq = self.sampleRate // 2
+        self.minFreqShow = max(self.minFreq, self.minFreqShow)
+        self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
+
+    def resample(self, target):
+        if len(self.data)==0:
+            print("Warning: no data set to resmample")
+            return
+        if target==self.sampleRate:
+            print("No resampling needed")
+            return
+
+        self.data = librosa.core.audio.resample(self.data, self.sampleRate, target)
+
+        self.sampleRate = target
+        self.audioFormat.setSampleRate(target)
+
+        self.minFreq = 0
+        self.maxFreq = self.sampleRate // 2
 
     def setWidth(self,window_width,incr):
         # Does what it says. Called when the user modifies the spectrogram parameters
@@ -82,7 +139,7 @@ class SignalProc:
 
         return data
 
-    def spectrogram(self,data,window_width=None,incr=None,window='Hann',equal_loudness=False,mean_normalise=True,onesided=True,multitaper=False,need_even=False):
+    def spectrogram(self, window_width=None,incr=None,window='Hann',equal_loudness=False,mean_normalise=True,onesided=True,multitaper=False,need_even=False):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
@@ -90,12 +147,13 @@ class SignalProc:
         This version is faster than the default versions in pylab and scipy.signal
         Assumes that the values are not normalised.
         """
-        if data is None:
-            print("Error")
+        if self.data is None or len(self.data)==0:
+            print("ERROR: attempted to calculate spectrogram without audiodata")
+            return
 
-        sg = np.copy(data)
-        if sg.dtype != 'float':
-            sg = sg.astype('float')
+        self.sg = np.copy(self.data)
+        if self.sg.dtype != 'float':
+            self.sg = self.sg.astype('float')
 
         if window_width is None:
             window_width = self.window_width
@@ -138,39 +196,38 @@ class SignalProc:
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(window_width) / (window_width - 1)))
 
         if equal_loudness:
-            sg = self.equalLoudness(sg)
+            self.sg = self.equalLoudness(self.sg)
 
         if mean_normalise:
-            sg -= sg.mean()
+            self.sg -= self.sg.mean()
 
-        starts = range(0, len(sg) - window_width, incr)
+        starts = range(0, len(self.sg) - window_width, incr)
         if multitaper:
-            from spectrum import dpss, pmtm
             [tapers, eigen] = dpss(window_width, 2.5, 4)
             counter = 0
-            sg = np.zeros((len(starts),window_width // 2))
+            out = np.zeros((len(starts),window_width // 2))
             for start in starts:
-                Sk, weights, eigen = pmtm(sg[start:start + window_width], v=tapers, e=eigen, show=False)
+                Sk, weights, eigen = pmtm(self.sg[start:start + window_width], v=tapers, e=eigen, show=False)
                 Sk = abs(Sk)**2
                 Sk = np.mean(Sk.T * weights, axis=1)
-                sg[counter:counter + 1,:] = Sk[window_width // 2:].T
+                out[counter:counter + 1,:] = Sk[window_width // 2:].T
                 counter += 1
-            sg = np.fliplr(sg)
+            self.sg = np.fliplr(out)
         else:
             if need_even:
-                starts = np.hstack((starts, np.zeros((window_width - len(sg) % window_width),dtype=int)))
+                starts = np.hstack((starts, np.zeros((window_width - len(self.sg) % window_width),dtype=int)))
 
             ft = np.zeros((len(starts), window_width))
             for i in starts:
-                ft[i // incr, :] = window * sg[i:i + window_width]
+                ft[i // incr, :] = window * self.sg[i:i + window_width]
             ft = fft.fft(ft)
             #ft = np.fft.fft(ft)
             if onesided:
-                sg = np.absolute(ft[:, :window_width // 2])
+                self.sg = np.absolute(ft[:, :window_width // 2])
             else:
-                sg = np.absolute(ft)
+                self.sg = np.absolute(ft)
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T
-        return sg
+        return self.sg
 
     def bandpassFilter(self,data=None,sampleRate=None,start=0,end=None):
         """ FIR bandpass filter
@@ -467,35 +524,37 @@ class SignalProc:
     def goodness_of_pitch(self,spectral_deriv,sg):
         return np.max(np.abs(fft.fft(spectral_deriv/sg, axis=0)),axis=0)
 
-    def spectral_derivative(self, data, sampleRate, window_width, incr, K=2, threshold=0.5, returnAll=False):
+    def spectral_derivative(self, window_width, incr, K=2, threshold=0.5, returnAll=False):
         """ Compute the spectral derivative """
-        from spectrum import dpss
+        if self.data is None or len(self.data)==0:
+            print("ERROR: attempted to calculate spectrogram without audiodata")
+            return
 
         # Compute the set of multi-tapered spectrograms
-        starts = range(0, len(data) - window_width, incr)
+        starts = range(0, len(self.data) - window_width, incr)
         [tapers, eigen] = dpss(window_width, 2.5, K)
         sg = np.zeros((len(starts), window_width, K), dtype=complex)
         for k in range(K):
             for i in starts:
-                sg[i // incr, :, k] = tapers[:, k] * data[i:i + window_width]
+                sg[i // incr, :, k] = tapers[:, k] * self.data[i:i + window_width]
             sg[:, :, k] = fft.fft(sg[:, :, k])
         sg = sg[:, window_width//2:, :]
-        
+
         # Spectral derivative is the real part of exp(i \phi) \sum_ k s_k conj(s_{k+1}) where s_k is the k-th tapered spectrogram
         # and \phi is the direction of maximum change (tan inverse of the ratio of pure time and pure frequency components)
         S = np.sum(sg[:, :, :-1]*np.conj(sg[:, :, 1:]), axis=2)
         timederiv = np.real(S)
         freqderiv = np.imag(S)
-        
+
         # Frequency modulation is the angle $\pi/2 - direction of max change$
         fm = np.arctan(np.max(timederiv**2, axis=0) / np.max(freqderiv**2, axis=0))
         spectral_deriv = -timederiv*np.sin(fm) + freqderiv*np.cos(fm)
 
         sg = np.sum(np.real(sg*np.conj(sg)), axis=2)
         sg /= np.max(sg)
-        
+
         # Suppress the noise (spectral continuity)
-    
+
         # Compute the zero crossings of the spectral derivative in all directions
         # Pixel is a contour pixel if it is at a zero crossing and both neighbouring pixels in that direction are > threshold
         sdt = spectral_deriv * np.roll(spectral_deriv, 1, 0)
@@ -503,10 +562,10 @@ class SignalProc:
         sdtf = spectral_deriv * np.roll(spectral_deriv, 1, (0, 1))
         sdft = spectral_deriv * np.roll(spectral_deriv, (1, -1), (0, 1))
         indt, indf = np.where(((sdt < 0) | (sdf < 0) | (sdtf < 0) | (sdft < 0)) & (spectral_deriv < 0))
-    
+
         # Noise reduction using a threshold
         we = np.abs(self.wiener_entropy(sg))
-        freqs, mf = self.mean_frequency(sampleRate, timederiv, freqderiv)
+        freqs, mf = self.mean_frequency(self.sampleRate, timederiv, freqderiv)
 
         # Given a time and frequency bin
         contours = np.zeros(np.shape(spectral_deriv))
@@ -529,6 +588,47 @@ class SignalProc:
         else:
             return np.fliplr(contours)
 
+    def drawSpectralDeriv(self):
+        # helper function to parse output for plotting spectral derivs.
+        sd = self.spectral_derivative(self.window_width, self.incr, 2, 5.0)
+        x, y = np.where(sd > 0)
+
+        # remove points beyond frq range to show
+        y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
+        y1 = np.asarray(y1)
+        valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
+
+        inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
+        x = x[inds]
+        y = y[inds]
+        y = [i - valminfrq for i in y]
+
+        return x, y
+
+    def drawFundFreq(self, seg):
+        # produces marks of fundamental freq to be drawn on the spectrogram.
+        pitch, _, _, W = seg.yin()
+        ind = np.squeeze(np.where(np.logical_and(pitch > self.minFreqShow, pitch < self.maxFreqShow)))
+        pitch = pitch[ind]
+        ind = ind * W / self.window_width
+        # Adjust to the frequency range to show
+        x = ((pitch-self.minFreqShow)*2/self.sampleRate*np.shape(self.sg)[1]).astype('int')
+
+        x = medfilt(x, 15)
+
+        out_marks = []
+        if len(ind)==0:
+            print("Warning: no fund. freq. identified in this page")
+        else:
+            segs = seg.identifySegments(ind, maxgap=10, minlength=5)
+            for s in segs:
+                s[0] = s[0] * self.sampleRate / self.incr
+                s[1] = s[1] * self.sampleRate / self.incr
+                i = np.where((s[1]>ind) & (ind>s[0]))
+                out_marks.append((ind[i], x[i]))
+
+        return out_marks
+
     def max_energy(self, sg,thr=1.2):
         sg = sg/np.max(sg)
 
@@ -543,8 +643,21 @@ class SignalProc:
         inds = np.where(colmax>thr*colmedians)
         print(len(inds))
         points[colmaxinds[inds],inds] = 1
-        
-        return points
+
+        x, y = np.where(points > 0)
+
+        # remove points beyond frq range to show
+        y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
+        y1 = np.asarray(y1)
+
+        valminfrq = self.minFreqShow / (self.sampleRate // 2 / np.shape(self.sg)[1])
+
+        inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
+        x = x[inds]
+        y = y[inds]
+        y = [i - valminfrq for i in y]
+
+        return x, y
 
     def denoiseImage(self,sg,thr=1.2):
         from skimage.restoration import (denoise_tv_chambolle, denoise_bilateral, denoise_wavelet, estimate_sigma)
@@ -602,5 +715,21 @@ class SignalProc:
                 newsg[c, start[c]:start[c] + longest[c]] = 1
         print(longest)
         return newsg.T
+
+    def denoise(self, alg, start=None, end=None, width=None):
+        """ alg - string, algorithm type from the Denoise dialog
+        start, end - filtering limits, from Denoise dialog
+        width - median parameter, from Denoise dialog
+        """
+        if str(alg) == "Wavelets":
+            print("Don't use this interface for wavelets")
+            return
+        elif str(alg) == "Bandpass":
+            self.data = self.bandpassFilter(self.data,self.sampleRate, start=start, end=end)
+        elif str(alg) == "Butterworth Bandpass":
+            self.data = self.ButterworthBandpass(self.data, self.sampleRate, low=start, high=end)
+        else:
+            # Median Filter
+            self.data = self.medianFilter(self.data,int(str(width)))
 
 
