@@ -593,34 +593,18 @@ class BuildRecAdvWizard(QWizard):
                 pass
 
         def loadFile(self, filename, duration=0, offset=0):
-            if offset == 0 and duration == 0:
-                wavobj = wavio.read(filename)
-            else:
-                wavobj = wavio.read(filename, duration, offset)
+            if duration == 0:
+                duration = None
+            sp = SignalProc.SignalProc(512, 256)
+            sp.readWav(filename, duration, offset)
 
-            audioData = wavobj.data
-            if np.shape(np.shape(audioData))[0] > 1:
-                audioData = audioData[:, 0]
-            if audioData.dtype != 'float':
-                audioData = audioData.astype('float')
-
-            audioFormat = QAudioFormat()
-            audioFormat.setCodec("audio/pcm")
-            audioFormat.setByteOrder(QAudioFormat.LittleEndian)
-            audioFormat.setSampleType(QAudioFormat.SignedInt)
-            audioFormat.setChannelCount(1)
-            audioFormat.setSampleRate(wavobj.rate)
-            audioFormat.setSampleSize(wavobj.sampwidth*8)
-
-            sp = SignalProc.SignalProc([], 0, 512, 256)
-            sgRaw = sp.spectrogram(audioData, window_width=512,
-                                          incr=256, window='Hann', mean_normalise=True, onesided=True,
+            sgRaw = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,
                                           multitaper=False, need_even=False)
             maxsg = np.min(sgRaw)
             self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
             self.setColourMap()
 
-            return self.sg, audioData, audioFormat
+            return self.sg, sp.audioData, sp.audioFormat
 
         def setColourMap(self):
             """ Listener for the menu item that chooses a colour map.
@@ -1025,14 +1009,15 @@ class BuildRecAdvWizard(QWizard):
             self.lblSpecies.setText(self.field("species"))
             self.lblCluster.setText(self.clust)
             # obtain fundamental frequency from each segment
-            print("measuring fundamental frequency range...")
-            f0_low = []  # could add a field to input these
-            f0_high = []
-            for picbtn in self.picbuttons:
-                f0_l, f0_h = self.getFundFreq(picbtn.audiodata, picbtn.media_obj.format.sampleRate())
-                if f0_l != 0 and f0_h != 0:
-                    f0_low.append(f0_l)
-                    f0_high.append(f0_h)
+            with pg.BusyCursor():
+                print("measuring fundamental frequency range...")
+                f0_low = []  # could add a field to input these
+                f0_high = []
+                for picbtn in self.picbuttons:
+                    f0_l, f0_h = self.getFundFreq(picbtn.audiodata, picbtn.media_obj.format.sampleRate())
+                    if f0_l != 0 and f0_h != 0:
+                        f0_low.append(f0_l)
+                        f0_high.append(f0_h)
 
             # get range
             if len(f0_low) > 0 and len(f0_high) > 0:
@@ -1053,9 +1038,11 @@ class BuildRecAdvWizard(QWizard):
 
         def getFundFreq(self, data, sampleRate):
             """ Extracts fund freq range from audiodata """
-            sp = SignalProc.SignalProc([], 0, 256, 128)
+            sp = SignalProc.SignalProc(256, 128)
+            sp.data = data
+            sp.sampleRate = sampleRate
             # spectrogram is not necessary if we're not returning segments
-            segment = Segment.Segmenter(data, [], sp, sampleRate, 256, 128)
+            segment = Segment.Segmenter(sp)
             pitch, y, minfreq, W = segment.yin(minfreq=100, returnSegs=False)
             ind = np.squeeze(np.where(pitch > minfreq))
             pitch = pitch[ind]

@@ -323,12 +323,14 @@ class Clustering:
                                                  offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
                         minlen = minlen * fs
                         start = int(seg[0] * fs)
-                        sp = SignalProc.SignalProc(audiodata, fs, 256, 128)
-                        sgRaw = sp.spectrogram(audiodata, 256, 128)
-                        segment = Segment.Segmenter(data=audiodata, sg=sgRaw, sp=sp, fs=fs, window_width=256, incr=128)
+                        sp = SignalProc.SignalProc(256, 128)
+                        sp.data = audiodata
+                        sp.sampleRate = fs
+                        sgRaw = sp.spectrogram(256, 128)
+                        segment = Segment.Segmenter(sp)
                         syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
                         if len(syls) == 0:  # Sanity check
-                            segment = Segment.Segmenter(audiodata, sgRaw, sp, fs, 256, 128)
+                            segment = Segment.Segmenter(sp)
                             syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
                         syls = segment.checkSegmentOverlap(syls)  # merge overlapped segments
                         syls = [[int(s[0] * fs) + start, int(s[1] * fs + start)] for s in syls]
@@ -497,21 +499,14 @@ class Clustering:
         """
         Read audio file and preprocess as required.
         """
-        if offset == 0 and duration == 0:
-            wavobj = wavio.read(filename)
-        else:
-            wavobj = wavio.read(filename, duration, offset)
-        sampleRate = wavobj.rate
-        audiodata = wavobj.data
+        if duration == 0:
+            duration = None
 
-        if audiodata.dtype is not 'float':
-            audiodata = audiodata.astype('float')
-        if np.shape(np.shape(audiodata))[0] > 1:
-            audiodata = audiodata[:, 0]
-
-        if fs != 0 and sampleRate != fs:
-            audiodata = librosa.core.audio.resample(audiodata, sampleRate, fs)
-            sampleRate = fs
+        sp = SignalProc.SignalProc(256, 128)
+        sp.readWav(filename, duration, offset)
+        sp.resample(fs)
+        sampleRate = sp.sampleRate
+        audiodata = sp.data
 
         # # pre-process
         if denoise:
@@ -519,7 +514,6 @@ class Clustering:
             audiodata = WF.waveletDenoise(thresholdType='soft', maxLevel=10)
 
         if f1 != 0 and f2 != 0:
-            sp = SignalProc.SignalProc([], 0, 256, 128)
             # audiodata = sp.ButterworthBandpass(audiodata, sampleRate, f1, f2)
             audiodata = sp.bandpassFilter(audiodata, sampleRate, f1, f2)
 

@@ -27,7 +27,6 @@ from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QP
 from PyQt5.QtMultimedia import QAudioFormat
 from PyQt5.QtCore import Qt, QDir
 
-import wavio
 import numpy as np
 
 from pyqtgraph.Qt import QtGui
@@ -389,8 +388,9 @@ class AviaNZ_batchProcess(QMainWindow):
                         thisPageSegs = self.ws.waveletSegment(data=self.audiodata[start:end], sampleRate=self.sampleRate, d=False, wpmode="new")
                     else:
                         # Create spectrogram for median clipping etc
-                        self.sgRaw = self.sp.spectrogram(self.audiodata[start:end], window_width=self.config['window_width'], incr=self.config['incr'], window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
-                        self.seg = Segment.Segmenter(self.audiodata[start:end], self.sgRaw, self.sp, self.sampleRate)
+                        self.sp.data = self.audiodata[start:end]
+                        self.sgRaw = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
+                        self.seg = Segment.Segmenter(self.sp)
                         thisPageSegs = self.seg.bestSegments()
 
                     # post process to remove short segments, wind, rain, and use F0 check.
@@ -599,22 +599,15 @@ class AviaNZ_batchProcess(QMainWindow):
 
     def loadFile(self, wipe=True):
         print(self.filename)
-        wavobj = wavio.read(self.filename)
-        self.sampleRate = wavobj.rate
-        self.audiodata = wavobj.data
+        # Create an instance of the Signal Processing class
+        if not hasattr(self,'sp'):
+            self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+        self.sp.readWav(self.filename)
+        self.sampleRate = self.sp.sampleRate
+        self.audiodata = self.sp.data
 
-        # None of the following should be necessary for librosa
-        if np.shape(np.shape(self.audiodata))[0] > 1:
-            self.audiodata = np.squeeze(self.audiodata[:, 0])
-        if self.audiodata.dtype != 'float':
-            self.audiodata = self.audiodata.astype('float') #/ 32768.0
-            # self.audiodata = self.audiodata[:, 0]
         self.datalength = np.shape(self.audiodata)[0]
         print("Read %d samples, %f s at %d Hz" % (len(self.audiodata), float(self.datalength)/self.sampleRate, self.sampleRate))
-
-        # Create an instance of the Signal Processing class
-        if not hasattr(self, 'sp'):
-            self.sp = SignalProc.SignalProc()
 
         # Read in stored segments (useful when doing multi-species)
         self.segments = Segment.SegmentList()
@@ -641,9 +634,6 @@ class AviaNZ_batchProcess(QMainWindow):
         # Do impulse masking by default
         self.impMask()
 
-        # Update the data that is seen by the other classes
-        self.sp.setNewData(self.audiodata, self.sampleRate)
-
     def impMask(self, engp=90, fp=0.75):
         """
         Impulse mask
@@ -656,7 +646,8 @@ class AviaNZ_batchProcess(QMainWindow):
         imps = postp.impulse_cal(fs=self.sampleRate, engp=engp, fp=fp)    # 0 - presence of impulse noise
         print('Samples to mask: ', len(self.audiodata) - np.sum(imps))
         # Mask only the affected samples
-        self.audiodata = np.multiply(self.audiodata, imps)
+        self.sp.data = np.multiply(self.audiodata, imps)
+        self.audiodata = self.sp.data
 
     def countConsecutive(self, nums, length):
         gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s + 1 < e]
@@ -689,12 +680,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.ConfigLoader = SupportClasses.ConfigLoader()
         self.config = self.ConfigLoader.config(self.configfile)
         self.saveConfig = True
-
-        # audio things
-        self.audioFormat = QAudioFormat()
-        self.audioFormat.setCodec("audio/pcm")
-        self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
-        self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
@@ -1041,7 +1026,7 @@ class AviaNZ_reviewAll(QMainWindow):
         """
         # Initialize the dialog for this file
         self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments,
-                                                           self.species, self.sampleRate, self.audioFormat,
+                                                           self.species, self.sampleRate, self.sp.audioFormat,
                                                            self.config['incr'], self.lut, self.colourStart,
                                                            self.colourEnd, self.config['invertColourMap'],
                                                            self.config['brightness'], self.config['contrast'], filename=self.filename)
@@ -1160,26 +1145,17 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def loadFile(self, filename):
         with pg.BusyCursor():
-            wavobj = wavio.read(filename)
-            self.sampleRate = wavobj.rate
-            self.audiodata = wavobj.data
-            self.audioFormat.setChannelCount(np.shape(self.audiodata)[1])
-            self.audioFormat.setSampleRate(self.sampleRate)
-            self.audioFormat.setSampleSize(wavobj.sampwidth*8)
-            print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
-
-            # None of the following should be necessary for librosa
-            if self.audiodata.dtype!='float':
-                self.audiodata = self.audiodata.astype('float')
-            if np.shape(np.shape(self.audiodata))[0]>1:
-                self.audiodata = self.audiodata[:,0]
-            self.datalength = np.shape(self.audiodata)[0]
-            print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate,self.sampleRate)
-            # self.w_dir.setPlainText(self.filename)
-
             # Create an instance of the Signal Processing class
             if not hasattr(self,'sp'):
-                self.sp = SignalProc.SignalProc()
+                self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+            self.sp.readWav(filename)
+            self.sampleRate = self.sp.sampleRate
+            self.audiodata = self.sp.data
+
+            print("Detected format: %d channels, %d Hz, %d bit samples" % (self.sp.audioFormat.channelCount(), self.sp.audioFormat.sampleRate(), self.sp.audioFormat.sampleSize()))
+
+            self.datalength = np.shape(self.audiodata)[0]
+            print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate,self.sampleRate)
 
             # Filter the audiodata based on initial sliders
             minFreq = max(self.fLow.value(), 0)
@@ -1188,23 +1164,20 @@ class AviaNZ_reviewAll(QMainWindow):
                 print("ERROR: less than 100 Hz band set for spectrogram")
                 return
             print("Filtering samples to %d - %d Hz" % (minFreq, maxFreq))
-            self.audiodata = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, minFreq, maxFreq)
+            self.sp.data = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, minFreq, maxFreq)
+            self.audiodata = self.sp.data
 
             # Get the data for the spectrogram
-            self.sgRaw = self.sp.spectrogram(self.audiodata, window_width=self.config['window_width'], incr=self.config['incr'], window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
+            self.sgRaw = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
             maxsg = np.min(self.sgRaw)
             self.sg = np.abs(np.where(self.sgRaw==0, 0.0, 10.0 * np.log10(self.sgRaw/maxsg)))
             self.setColourMap()
 
             # trim the spectrogram
-            # TODO: could actually skip filtering above
             height = self.sampleRate//2 / np.shape(self.sg)[1]
             pixelstart = int(minFreq/height)
             pixelend = int(maxFreq/height)
             self.sg = self.sg[:,pixelstart:pixelend]
-
-            # Update the data that is seen by the other classes
-            self.sp.setNewData(self.audiodata,self.sampleRate)
 
     def humanClassifyNextImage1(self):
         # Get the next image
