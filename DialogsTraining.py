@@ -323,22 +323,16 @@ class BuildRecAdvWizard(QWizard):
                 # Create and show the buttons
                 self.clearButtons()
                 self.addButtons()
-                print('attempting to draw clusters')
                 self.updateButtons()
                 self.segsChanged = True
                 self.completeChanged.emit()
-                print('clusters were drawn')
 
         def isComplete(self):
             # empty cluster names?
             if len(self.clusters)==0:
                 return False
             # duplicate cluster names aren't updated:
-            for ID in range(self.nclasses):
-                print(self.clusters[ID])
-            print('tbox:', len(self.tboxes))
-            for ID in range(len(self.tboxes)):
-                print(self.tboxes[ID].text())
+
             for ID in range(self.nclasses):
                 if self.clusters[ID] != self.tboxes[ID].text():
                     return False
@@ -385,10 +379,10 @@ class BuildRecAdvWizard(QWizard):
 
             # print('[old, new] labels')
             labels = dict(labels)
-            print(labels)
+            # print(labels)
 
             keys = [i for i in range(self.nclasses) if i not in tomerge]        # the old keys those didn't merge
-            print('old keys left: ', keys)
+            # print('old keys left: ', keys)
 
             # update clusters dictionary {ID: cluster_name}
             clusters = {0: self.clusters[tomerge[0]]}
@@ -414,7 +408,7 @@ class BuildRecAdvWizard(QWizard):
             self.clearButtons()
             self.updateButtons()
             self.completeChanged.emit()
-            print('updated')
+            # print('updated')
 
         def moveSelectedSegs(self):
             """ Listner for Apply button to move the selected segments to another cluster.
@@ -427,7 +421,7 @@ class BuildRecAdvWizard(QWizard):
                 if moveto == self.clusters[key]:
                     movetoID = key
                     break
-            print(moveto, movetoID)
+            # print(moveto, movetoID)
 
             for ix in range(len(self.picbuttons)):
                 if self.picbuttons[ix].mark == 'yellow':
@@ -450,7 +444,7 @@ class BuildRecAdvWizard(QWizard):
             # Generate new class labels
             if len(todelete) > 0:
                 keys = [i for i in range(self.nclasses) if i not in todelete]        # the old keys those didn't delete
-                print('old keys left: ', keys)
+                # print('old keys left: ', keys)
 
                 nclasses = self.nclasses - len(todelete)
                 max_label = nclasses - 1
@@ -488,63 +482,75 @@ class BuildRecAdvWizard(QWizard):
         def deleteSelectedSegs(self):
             """ Listner for Delete button to delete the selected segments completely.
             """
-            self.segsChanged = True
-
+            inds = []
             for ix in range(len(self.picbuttons)):
                 if self.picbuttons[ix].mark == 'yellow':
-                    del self.segments[ix]
-                    del self.picbuttons[ix]
+                    inds.append(ix)
 
-            # update self.clusters, delete clusters with no members
-            todelete = []
-            for ID, label in self.clusters.items():
-                empty = True
-                for seg in self.segments:
-                    if seg[-1] == ID:
-                        empty = False
-                        break
-                if empty:
-                    todelete.append(ID)
+            if len(inds) > 0:
+                self.segsChanged = True
+                segments = []
+                picbuttons = []
+                for ix in range(len(self.picbuttons)):
+                    if ix not in inds:
+                        segments.append(self.segments[ix])
+                        picbuttons.append(self.picbuttons[ix])
+                self.segments = segments
+                self.picbuttons = picbuttons
 
-            self.clearButtons()
+                # update self.clusters, delete clusters with no members
+                todelete = []
+                for ID, label in self.clusters.items():
+                    empty = True
+                    for seg in self.segments:
+                        if seg[-1] == ID:
+                            empty = False
+                            break
+                    if empty:
+                        todelete.append(ID)
 
-            # Generate new class labels
-            if len(todelete) > 0:
-                keys = [i for i in range(self.nclasses) if i not in todelete]        # the old keys those didn't delete
-                print('old keys left: ', keys)
+                self.clearButtons()
 
-                nclasses = self.nclasses - len(todelete)
-                max_label = nclasses - 1
-                labels = []
-                c = self.nclasses - 1
-                while c > -1:
-                    if c in keys:
-                        labels.append((c, max_label))
-                        max_label -= 1
-                    c -= 1
+                # Generate new class labels
+                if len(todelete) > 0:
+                    keys = [i for i in range(self.nclasses) if i not in todelete]        # the old keys those didn't delete
+                    # print('old keys left: ', keys)
 
-                # print('[old, new] labels')
-                labels = dict(labels)
-                print(labels)
+                    nclasses = self.nclasses - len(todelete)
+                    max_label = nclasses - 1
+                    labels = []
+                    c = self.nclasses - 1
+                    while c > -1:
+                        if c in keys:
+                            labels.append((c, max_label))
+                            max_label -= 1
+                        c -= 1
 
-                # update clusters dictionary {ID: cluster_name}
-                clusters = {}
-                for i in keys:
-                    clusters.update({labels[i]: self.clusters[i]})
+                    # print('[old, new] labels')
+                    labels = dict(labels)
+                    # print(labels)
 
-                print('before delete: ', self.clusters)
-                self.clusters = clusters
-                print('after delete: ', self.clusters)
+                    # update clusters dictionary {ID: cluster_name}
+                    clusters = {}
+                    for i in keys:
+                        clusters.update({labels[i]: self.clusters[i]})
 
-                # update the segments
-                for seg in self.segments:
-                    seg[-1] = labels[seg[-1]]
+                    print('before delete: ', self.clusters)
+                    self.clusters = clusters
+                    print('after delete: ', self.clusters)
 
-                self.nclasses = nclasses
+                    # update the segments
+                    for seg in self.segments:
+                        seg[-1] = labels[seg[-1]]
 
-            # redraw the buttons
-            self.updateButtons()
-            self.completeChanged.emit()
+                    self.nclasses = nclasses
+                    self.cmbUpdateSeg.clear()
+                    for x in self.clusters:
+                        self.cmbUpdateSeg.addItem(self.clusters[x])
+
+                # redraw the buttons
+                self.updateButtons()
+                self.completeChanged.emit()
 
         def updateClusterNames(self):
             # Check duplicate names
@@ -600,7 +606,7 @@ class BuildRecAdvWizard(QWizard):
             self.tboxes = []    # Corresponding list of text boxes
             for r in range(self.nclasses):
                 c = 0
-                print('**', self.clusters[r])
+                # print('**', self.clusters[r])
                 tbox = QLineEdit(self.clusters[r])
                 tbox.setMinimumWidth(80)
                 tbox.setMaximumHeight(150)
