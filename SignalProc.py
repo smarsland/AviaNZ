@@ -59,7 +59,10 @@ class SignalProc:
 
     def readWav(self, file, len=None, off=None):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
-        wavobj = wavio.read(file, len, off)
+        if not len or not off:
+            wavobj = wavio.read(file)
+        else:
+            wavobj = wavio.read(file, len, off)
         self.data = wavobj.data
 
         # take only left channel
