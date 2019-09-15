@@ -611,11 +611,11 @@ class Segmenter:
     See also the species-specific segmentation in WaveletSegment
     """
 
-    def __init__(self, sp, mingap=0.3, minlength=0.2):
+    def __init__(self, sp, fs=0, mingap=0.3, minlength=0.2):
         # This is the reference to SignalProc
         self.sp = sp
         self.data = sp.data
-        self.fs = sp.sampleRate
+        self.fs = fs
         # Spectrogram
         if hasattr(sp, 'sg'):
             self.sg = sp.sg
