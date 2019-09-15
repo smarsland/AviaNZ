@@ -1223,7 +1223,7 @@ class AviaNZ(QMainWindow):
                 if hasattr(self,'seg'):
                     self.seg.setNewData(self.sp)
                 else:
-                    self.seg = Segment.Segmenter(self.sp)
+                    self.seg = Segment.Segmenter(self.sp, self.sampleRate)
 
                 # Update the Dialogs
                 if hasattr(self,'spectrogramDialog'):

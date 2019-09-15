@@ -390,7 +390,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         # Create spectrogram for median clipping etc
                         self.sp.data = self.audiodata[start:end]
                         self.sgRaw = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
-                        self.seg = Segment.Segmenter(self.sp)
+                        self.seg = Segment.Segmenter(self.sp, self.sampleRate)
                         thisPageSegs = self.seg.bestSegments()
 
                     # post process to remove short segments, wind, rain, and use F0 check.
