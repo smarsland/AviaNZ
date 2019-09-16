@@ -110,6 +110,11 @@ class SignalProc:
         self.window_width = window_width
         self.incr = incr
 
+    def setData(self,audiodata,sampleRate=None):
+        self.data = audiodata
+        if sampleRate is not None:
+            self.sampleRate = sampleRate
+
     def SnNR(self,startSignal,startNoise):
         # Compute the estimated signal-to-noise ratio
         pS = np.sum(self.data[startSignal:startSignal+self.length]**2)/self.length
@@ -399,22 +404,6 @@ class SignalProc:
         return data
 
     # The next functions perform spectrogram inversion
-
-    def show_invS(self,sg=None):
-        print("Inverting spectrogam with window ", self.window_width, " and increment ", int(self.window_width/4.))
-        if sg is None:
-            oldIncr = self.incr
-            self.incr = int(self.window_width/4.)
-            sg = self.spectrogram(self.data)
-            #print(np.shape(sg))
-        sgi = self.invertSpectrogram(sg,self.window_width,self.incr)
-        self.incr = oldIncr
-        sg = self.spectrogram(sgi)
-        # sgi = sgi.astype('int16')
-        # wavfile.write('test.wav',self.sampleRate, sgi)
-        # wavio.write('test.wav',sgi,self.sampleRate)
-        return sg,sgi
-
     def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10):
         # Assumes that this is the plain (not power) spectrogram
         import copy
@@ -423,14 +412,15 @@ class SignalProc:
 
         sg_best = copy.deepcopy(sg)
         for i in range(nits):
-            sgi = self.invert_spectrogram(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0))
-            est = self.spectrogram(sgi, window_width, incr, onesided=False,need_even=True)
+            invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0))
+            self.setData(invertedSgram)
+            est = self.spectrogram(window_width, incr, onesided=False,need_even=True)
             phase = est / np.maximum(np.max(sg)/1E8, np.abs(est))
             sg_best = sg * phase[:len(sg)]
-        sgi = self.invert_spectrogram(sg_best, incr, calculate_offset=True,set_zero_phase=False)
-        return np.real(sgi)
+        invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=False)
+        return np.real(invertedSgram)
 
-    def invert_spectrogram(self,sg, incr, calculate_offset=True, set_zero_phase=True, window='Hann'):
+    def inversion_iteration(self,sg, incr, calculate_offset=True, set_zero_phase=True, window='Hann'):
         """
         Under MSR-LA License
         Based on MATLAB implementation from Spectrogram Inversion Toolbox
