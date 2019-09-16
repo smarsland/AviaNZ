@@ -60,7 +60,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, parent=None):
             super(BuildRecAdvWizard.WPageData, self).__init__(parent)
             self.setTitle('Training data')
-            self.setSubTitle('TODO: INSTRUCTION ABOUT ANNOTATING. Select the folder with training data, then choose species')
+            self.setSubTitle('To start training, you need labelled calls from your species as training data (use the manual interface to create this). Select the folder where this data is located. Then select the  species.')
 
             self.setMinimumSize(250, 150)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
@@ -207,7 +207,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, config, parent=None):
             super(BuildRecAdvWizard.WPageCluster, self).__init__(parent)
             self.setTitle('Cluster similar looking calls')
-            self.setSubTitle('This page displays the automatically created clusters for the dataset. Change if required.')
+            self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please merge clusters, and transfer any errors as appropriate. You might also want o name each type of call.')
             self.setMinimumSize(800, 500)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
             self.adjustSize()
@@ -704,7 +704,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, cluster, segments, picbtn, parent=None):
             super(BuildRecAdvWizard.WPageParams, self).__init__(parent)
             self.setTitle("Training parameters: %s" % cluster)
-            self.setSubTitle("These fields were propagated using training data. Adjust if required.\nWhen ready, "
+            self.setSubTitle("These fields were completed using the training data. Adjust if required.\nWhen ready, "
                              "press \"Train\". The process may take a long time.")
             self.setMinimumSize(250, 350)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
@@ -1440,7 +1440,7 @@ class TestRecWizard(QWizard):
         def __init__(self, clustnum, parent=None):
             super(TestRecWizard.WPageTest, self).__init__(parent)
             self.setTitle('Testing results')
-            self.setSubTitle('Testing results are shown here')
+            #self.setSubTitle('Testing results are shown here')
 
             self.setMinimumSize(250, 150)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)

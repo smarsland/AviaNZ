@@ -1457,21 +1457,24 @@ class AviaNZ(QMainWindow):
 
     def showInvertedSpectrogram(self):
         """ Listener for the menu item that draws the spectrogram of the waveform of the inverted spectrogram."""
+        # TODO: Make this useful?!
+        # TODO: Save the inverted sgram? Will then need undo? 
         with pg.BusyCursor():
             if self.showInvSpec.isChecked():
-                # TODO !!!!!
-                # Make a new spectrogram at 4 times the resolution
-                #sg = self.sp.spectrogram(incr=self.config['incr']//4)
-                #sgRaw = self.sp.denoiseImage2(sg)
-                sgRaw,wave = self.sp.show_invS()
+                print("Inverting spectrogam with window ", self.config['window_width'], " and increment ",self.config['window_width']//4)
+                sgRaw = self.sp.spectrogram(self.config['window_width'], self.config['window_width']//4, mean_normalise=self.sgMeanNormalise, equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided, multitaper=self.sgMultitaper)
+                invertedSgram = self.sp.invertSpectrogram(sgRaw,self.config['window_width'],self.config['window_width']//4)
+                self.sp.setData(invertedSgram)
+                self.amplPlot.setData(np.linspace(0.0,len(invertedSgram)/self.sampleRate,num=len(invertedSgram),endpoint=True),invertedSgram)
             else:
-                sgRaw = self.sp.spectrogram(mean_normalise=self.sgMeanNormalise, equal_loudness=self.sgEqualLoudness, window_width=self.config['window_width'], incr=self.config['incr'], onesided=self.sgOneSided, multitaper=self.sgMultitaper)
+                self.sp.setData(self.audiodata)
+                self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=self.datalength,endpoint=True),self.audiodata)
+
+            sgRaw = self.sp.spectrogram(self.config['window_width'], self.config['incr'], mean_normalise=self.sgMeanNormalise, equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided, multitaper=self.sgMultitaper)
             maxsg = np.min(sgRaw)
             self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
             self.overviewImage.setImage(self.sg)
             self.specPlot.setImage(self.sg)
-            # TODO: check!
-            self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=len(wave),endpoint=True),wave)
 
     def medianFilterSpec(self):
         """ Median filter the spectrogram. To be used in conjunction with spectrogram inversion. """
