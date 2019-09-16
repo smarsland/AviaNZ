@@ -194,6 +194,7 @@ class BuildRecAdvWizard(QWizard):
             self.setButtonText(QWizard.NextButton, 'Cluster >')
 
         def initializePage(self):
+            self.wizard().saveTestBtn.setVisible(False)
             # parse some params
             fs = int(self.field("fs"))//4000*4000
             if fs not in [8000, 16000, 24000, 32000, 36000, 48000]:
@@ -207,7 +208,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, config, parent=None):
             super(BuildRecAdvWizard.WPageCluster, self).__init__(parent)
             self.setTitle('Cluster similar looking calls')
-            self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please merge clusters, and transfer any errors as appropriate. You might also want o name each type of call.')
+            self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please merge clusters, and transfer any errors as appropriate. You might also want to name each type of call.')
             self.setMinimumSize(800, 500)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
             self.adjustSize()
@@ -304,6 +305,7 @@ class BuildRecAdvWizard(QWizard):
             self.setLayout(self.vboxFull)
 
         def initializePage(self):
+            self.wizard().saveTestBtn.setVisible(False)
             # parse field shared by all subfilters
             fs = int(self.field("fs"))//4000*4000
             self.wizard().speciesData = {"species": self.field("species"), "SampleRate": fs, "Filters": []}
@@ -797,6 +799,7 @@ class BuildRecAdvWizard(QWizard):
             self.fHightext.setText(str(value))
 
         def initializePage(self):
+            self.wizard().saveTestBtn.setVisible(False)
             # populates values based on training files
             f_low = []
             f_high = []
@@ -927,6 +930,7 @@ class BuildRecAdvWizard(QWizard):
         def initializePage(self):
             self.lblTrainDir.setText(self.field("trainDir"))
             self.lblSpecies.setText(self.field("species"))
+            self.wizard().saveTestBtn.setVisible(False)
             self.lblCluster.setText(self.clust)
             for itemnum in range(self.filtSummary.count()):
                 self.filtSummary.itemAt(itemnum).widget().hide()
@@ -1093,6 +1097,7 @@ class BuildRecAdvWizard(QWizard):
             self.lblTrainDir.setText(self.field("trainDir"))
             self.lblSpecies.setText(self.field("species"))
             self.lblCluster.setText(self.clust)
+            self.wizard().saveTestBtn.setVisible(False)
             # obtain fundamental frequency from each segment
             with pg.BusyCursor():
                 print("measuring fundamental frequency range...")
@@ -1248,6 +1253,18 @@ class BuildRecAdvWizard(QWizard):
                 f["WaveletParams"] = "(...)"
 
             self.lblFilter.setText(str(speciesDataText))
+            self.wizard().saveTestBtn.setVisible(True)
+            self.wizard().saveTestBtn.setEnabled(False)
+            try:
+                self.completeChanged.connect(self.refreshCustomBtn)
+            except Exception:
+                pass
+
+        def refreshCustomBtn(self):
+            if self.isComplete():
+                self.wizard().saveTestBtn.setEnabled(True)
+            else:
+                self.wizard().saveTestBtn.setEnabled(False)
 
         def validatePage(self):
             # actually write out the filter
@@ -1278,6 +1295,12 @@ class BuildRecAdvWizard(QWizard):
             self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
         self.setWizardStyle(QWizard.ModernStyle)
 
+        # add the Save & Test button
+        self.saveTestBtn = QPushButton("Save and Test")
+        self.setButton(QWizard.CustomButton1, self.saveTestBtn)
+        self.setButtonLayout([QWizard.Stretch, QWizard.BackButton, QWizard.NextButton, QWizard.CustomButton1, QWizard.FinishButton, QWizard.CancelButton])
+        self.setOptions(QWizard.HaveCustomButton1)
+
         self.filtersDir = filtdir
 
         # page 1: select training data
@@ -1300,6 +1323,7 @@ class BuildRecAdvWizard(QWizard):
         # then a pair of pages for each calltype will be created by redoTrainPages.
 
         # Size adjustment between pages:
+        self.saveTestBtn.setVisible(False)
         self.currentIdChanged.connect(self.pageChangeResize)
 
     def redoTrainPages(self):
@@ -1417,6 +1441,7 @@ class TestRecWizard(QWizard):
             layout.addWidget(self.species)
             layout.setAlignment(Qt.AlignVCenter)
             self.setLayout(layout)
+            self.setButtonText(QWizard.NextButton, 'Test >')
 
         def initializePage(self):
             filternames = [key + ".txt" for key in self.wizard().filterlist.keys()]
@@ -1466,12 +1491,15 @@ class TestRecWizard(QWizard):
             self.lblCluster.setStyleSheet("QLabel { color : #808080; }")
             space = QLabel()
             space.setFixedHeight(25)
-            self.testRes = QLabel()
+
+            self.manSegs = QLabel()
+            self.manTime = QLabel()
+            self.autoSegs = QLabel()
+            self.autoTime = QLabel()
+            self.sensTime = QLabel()
 
             # NOTE: this is not the subfilter name, but the number!
             self.clustnum = clustnum
-
-            filtSummary = QLabel("")
 
             # testing results page layout
             vboxHead = QFormLayout()
@@ -1479,13 +1507,20 @@ class TestRecWizard(QWizard):
             vboxHead.addRow("Filter name:", self.lblSpecies)
             vboxHead.addRow("Target calltype:", self.lblCluster)
             vboxHead.addWidget(space)
-            vboxHead.addWidget(filtSummary)
 
-            vboxHead.addWidget(QLabel("Detection summary:"))
-            vboxHead.addWidget(self.testRes)
+            form2 = QFormLayout()
+            form2.addRow("Manually labelled segments:", self.manSegs)
+            form2.addRow("\ttotal seconds:", self.manTime)
+            form2.addRow("Segments detected:", self.autoSegs)
+            form2.addRow("\ttotal seconds:", self.autoTime)
+            form2.addRow("Recall (sensitivity) in 1 s resolution:", self.sensTime)
 
-            self.setLayout(vboxHead)
-            self.setButtonText(QWizard.NextButton, 'Test >')
+            vbox = QVBoxLayout()
+            vbox.addLayout(vboxHead)
+            vbox.addWidget(QLabel("<b>Detection summary</b>"))
+            vbox.addLayout(form2)
+
+            self.setLayout(vbox)
 
         # Actual testing is done here
         def initializePage(self):
@@ -1505,6 +1540,7 @@ class TestRecWizard(QWizard):
                     species = species + ')'
 
                 ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
+                manSegNum = 0
                 window = 1
                 inc = None
                 # Generate GT files from annotations in test folder
@@ -1515,43 +1551,147 @@ class TestRecWizard(QWizard):
                         if file.endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
                             segments = Segment.SegmentList()
                             segments.parseJSON(wavFile + '.data')
+                            manSegNum += len(segments)
 
-                            # keep segments if any label has the current calltype
-                            for segix in reversed(range(len(segments))):
-                                keepSeg = False
-                                for lab in segments[segix][4]:
-                                    if lab["species"]==species:
-                                        if "calltype" in lab.keys() and lab["calltype"]==subfilter["calltype"]:
-                                            keepSeg = True
-                                if not keepSeg:
-                                    del segments[segix]
-
+                            # Currently, we ignore call types here and just
+                            # look for all calls for the target species.
                             # export 0/1 annotations for this calltype
                             # (next page will overwrite the same files)
-                            _ = segments.exportGT(wavFile, species, window=window, inc=inc)
+                            segments.exportGT(wavFile, species, window=window, inc=inc)
 
-                Segments, TP, FP, TN, FN = ws.waveletSegment_test(self.field("testDir"),
+                self.detected01, TP, FP, TN, FN = ws.waveletSegment_test(self.field("testDir"),
                                                subfilter, d=False, rf=True, learnMode='recaa',
                                                savedetections=False, window=window, inc=inc)
+                # save the 0/1 annotations as well
+                self.wizard().annotations = copy.deepcopy(ws.annotation)
+
                 print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
-                if TP+FP+TN+FN == 0:
+                total = TP+FP+TN+FN
+                if total == 0:
                     print("ERROR: failed to find any testing data")
                     return
-                if TP+FN != 0:
-                    recall = TP/(TP+FN)
-                else:
-                    recall = 0
-                if TP+FP != 0:
-                    precision = TP/(TP+FP)
-                else:
-                    precision = 0
-                if TN+FP != 0:
-                    specificity = TN/(TN+FP)
-                else:
-                    specificity = 0
 
-                accuracy = (TP+TN)/(TP+FP+TN+FN)
-                self.testRes.setText('TPR:%.2f%% -- FPR:%.2f%%\n\t\t  Recall:%.2f%%\n\t\t  Precision:%.2f%%\n\t\t  Specificity:%.2f%%\n\t\t  Accuracy:%.2f%%' % (recall*100, 100-specificity*100, recall*100, precision*100, specificity*100, accuracy*100))
+                # merge neighbours in order to convert the detections into segments
+                # note: detected np[0 1 1 1] becomes [[1,3]]
+                detected = np.where(self.detected01 > 0)
+                if np.shape(detected)[1] > 1:
+                    detected = ws.identifySegments(np.squeeze(detected))
+                elif np.shape(detected)[1] == 1:
+                    detected = np.array(detected).flatten().tolist()
+                    detected = ws.identifySegments(detected)
+                else:
+                    detected = []
+                detected = ws.mergeSeg(detected)
+
+                # update fields
+                self.manSegs.setText(str(manSegNum))
+                self.manTime.setText("%.1f" % (TP+FN))
+                self.autoSegs.setText(str(len(detected)))
+                self.autoTime.setText("%.1f" % (TP+FP))
+                self.sensTime.setText("%d %%" % (TP/(TP+FN)*100))
+
+    class WPageLast(QWizardPage):
+        def __init__(self, parent=None):
+            super(TestRecWizard.WPageLast, self).__init__(parent)
+            self.setTitle('Overall testing results')
+
+            self.setMinimumSize(250, 150)
+            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.adjustSize()
+
+            self.lblTestDir = QLabel()
+            self.lblTestDir.setStyleSheet("QLabel { color : #808080; }")
+            self.lblSpecies = QLabel()
+            self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
+            space = QLabel()
+            space.setFixedHeight(25)
+
+            # final overall results:
+            self.labTP = QLabel()
+            self.labFP = QLabel()
+            self.labTN = QLabel()
+            self.labFN = QLabel()
+            self.spec = QLabel()
+            self.sens = QLabel()
+            self.FPR = QLabel()
+            self.prec = QLabel()
+            self.acc = QLabel()
+
+            # overall results page layout
+            vboxHead = QFormLayout()
+            vboxHead.addRow("Testing data:", self.lblTestDir)
+            vboxHead.addRow("Filter name:", self.lblSpecies)
+            vboxHead.addWidget(space)
+
+            form2 = QFormLayout()
+            form2.addRow("True positives:", self.labTP)
+            form2.addRow("False positives:", self.labFP)
+            form2.addRow("True negatives:", self.labTN)
+            form2.addRow("False negatives:", self.labFN)
+            form2.addWidget(space)
+            form2.addRow("Specificity:", self.spec)
+            form2.addRow("Recall (sensitivity):", self.sens)
+            form2.addRow("FPR:", self.FPR)
+            form2.addRow("Precision (PPV):", self.prec)
+            form2.addRow("Accuracy:", self.acc)
+
+            vbox = QVBoxLayout()
+            vbox.addLayout(vboxHead)
+            # vbox.addWidget(QLabel("<b>Detection summary</b>"))
+            vbox.addLayout(form2)
+
+            self.setLayout(vbox)
+
+        def initializePage(self):
+            speciesData = self.wizard().filterlist[self.field("species")[:-4]]
+
+            self.lblTestDir.setText(self.field("testDir"))
+            self.lblSpecies.setText(speciesData["species"])
+
+            ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
+
+            # "OR"-combine detection results from each calltype
+            first = True
+            for pageId in self.wizard().testpages[:-1]:
+                page = self.wizard().page(pageId)
+                if first:
+                    self.detections = page.detected01
+                    first = False
+                else:
+                    self.detections = np.maximum.reduce([page.detected01, self.detections])
+
+            # get and parse the agreement metrics
+            fB, recall, TP, FP, TN, FN = ws.fBetaScore(self.wizard().annotations, self.detections)
+            total = TP+FP+TN+FN
+            if total == 0:
+                print("ERROR: failed to find any testing data")
+                return
+
+            if TP+FN != 0:
+                recall = TP/(TP+FN)
+            else:
+                recall = 0
+            if TP+FP != 0:
+                precision = TP/(TP+FP)
+            else:
+                precision = 0
+            if TN+FP != 0:
+                specificity = TN/(TN+FP)
+            else:
+                specificity = 0
+
+            accuracy = (TP+TN)/(TP+FP+TN+FN)
+
+            self.labTP.setText("%.1f %%" % (TP*100/total))
+            self.labFP.setText("%.1f %%" % (FP*100/total))
+            self.labTN.setText("%.1f %%" % (TN*100/total))
+            self.labFN.setText("%.1f %%" % (FN*100/total))
+
+            self.spec.setText("%.1f %%" % (specificity*100))
+            self.sens.setText("%.1f %%" % (recall*100))
+            self.FPR.setText("%.1f %%" % (100-specificity*100))
+            self.prec.setText("%.1f %%" % (precision*100))
+            self.acc.setText("%.1f %%" % (accuracy*100))
 
     # Main init of the testing wizard
     def __init__(self, filtdir, parent=None):
@@ -1574,6 +1714,9 @@ class TestRecWizard(QWizard):
         self.testpages = []
 
     def redoTestPages(self):
+        if self.field("species")=="Choose filter...":
+            return
+
         speciesData = self.filterlist[self.field("species")[:-4]]
         print("using filter", speciesData)
         # remove old test pages
@@ -1582,13 +1725,14 @@ class TestRecWizard(QWizard):
         self.testpages = []
 
         # add new
-        # TODO: how to deal with multiple call subtypes?
         for subf in range(len(speciesData["Filters"])):
-            testRes = TestRecWizard.WPageTest(0)
+            testRes = TestRecWizard.WPageTest(subf)
             pageid = self.addPage(testRes)
             self.testpages.append(pageid)
 
-        # self.addPage(FINALPAGE)
+        pageLast = TestRecWizard.WPageLast()
+        pageid = self.addPage(pageLast)
+        self.testpages.append(pageid)
         self.currentPage().setFinalPage(False)
 
 

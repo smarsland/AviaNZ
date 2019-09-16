@@ -3872,6 +3872,7 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config)
+        self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
         self.buildRecAdvWizard.activateWindow()
         self.buildRecAdvWizard.show()
         # reread filters list with the new one
@@ -3881,6 +3882,16 @@ class AviaNZ(QMainWindow):
         """ Listener for the Test Recogniser action """
         self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir)
         self.testRecWizard.show()
+
+    def saveTestRecogniser(self):
+        # done() actually calls validatePage on the wizard's last page, which takes care of the
+        # popup message and such.
+        try:
+            self.buildRecAdvWizard.done(1)
+            self.testRecogniser()
+        except Exception as e:
+            print("ERROR: could not save filter because:", e)
+            self.buildRecAdvWizard.done(0)
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.

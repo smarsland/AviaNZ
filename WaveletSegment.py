@@ -275,6 +275,7 @@ class WaveletSegment:
 
         self.annotation = np.concatenate(self.annotation, axis=0)
         fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
+
         return detected, TP, FP, TN, FN
 
 
