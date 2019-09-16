@@ -358,7 +358,7 @@ class Clustering:
         for data in dataset:
             lengths.append(data[2][1] - data[2][0])
         duration = np.median(lengths)
-        # duration is going to be the fixed length of a syllable, if a syllable too long clip it otherwise padding edges
+        # duration is going to be the fixed length of a syllable, if a syllable too long clip it
         for record in dataset:
             if record[2][1] - record[2][0] > duration:
                 middle = (record[2][1] + record[2][0]) / 2
@@ -457,12 +457,19 @@ class Clustering:
             except:
                 labels[i] = labels[i][0]
 
-        # Add the features
+        # Add the detected syllables
         for record in clustered_dataset:
             record.insert(2, [])
             for rec in dataset:
                 if record[:2] == rec[:2]:
-                    record[2].append(rec[3])
+                    record[2].append(rec[2])
+
+        # Add the features
+        for record in clustered_dataset:
+            record.insert(3, [])
+            for rec in dataset:
+                if record[:2] == rec[:2]:
+                    record[3].append(rec[3])
 
         # Make the labels continous, e.g. agglomerative may have produced 0, 2, 3, ...
         ulabels = list(set(labels))
@@ -474,31 +481,68 @@ class Clustering:
 
         # Update the labels
         for i in range(len(clustered_dataset)):
-            clustered_dataset[i].insert(3, dic[labels[i]])
+            clustered_dataset[i].insert(4, dic[labels[i]])
 
-        clustercentres = self.getClusterCenters(clustered_dataset, nclasses)
+        return clustered_dataset, fs, nclasses, duration
 
-        return clustered_dataset, fs, nclasses, clustercentres
 
-    def getClusterCenters(self, clusters, nclasses):
+    def getClusterCenter(self, cluster, fs, f1, f2, feature, duration, n_mels=24, denoise=False):
         """
-        Computer cluster centres
-        :param clusters: clustered segments, a list of lists, each sublist represents a
-                            segment [parent_audio_file, [segment], [features], class_label]
-        :param nclasses: number of clusters, cluster labels are always 0, 1, 2, ..., nclasses-1
-        :return: a dictionary, key is cluster label, value is cluster centre
+        Compute cluster centre of a cluster
+        :param cluster: segments of a cluster - a list of lists, each sublist represents a segment
+                        [parent_audio_file, [segment], [syllables], [features], class_label]
+        :param feature: 'we' or 'mfcc' or 'chroma'
+        :param duration: the fixed duration of a syllable
+        :return: cluster centre, an array
         """
-        # Simply compute the mean of each cluster.
-        clustercentres = {}
+        # Re-compute features to match with frquency range [f1, f2]
+        # Find the lower and upper bounds (relevant to the frq range), when the range is given
+        if feature == 'mfcc' and f1 != 0 and f2 != 0:
+            mels = librosa.core.mel_frequencies(n_mels=n_mels, fmin=0.0, fmax=fs / 2, htk=False)
+            ind_flow = (np.abs(mels - f1)).argmin()
+            ind_fhigh = (np.abs(mels - f2)).argmin()
+
+        elif feature == 'we' and f1 != 0 and f2 != 0:
+            linear = np.linspace(0, fs / 2, 62)
+            ind_flow = (np.abs(linear - f1)).argmin()
+            ind_fhigh = (np.abs(linear - f2)).argmin()
+
         fc = []
-        for c in range(nclasses):
-            for seg in clusters:
-                if seg[-1] == c:
-                    for f in seg[-2]:
-                        fc.append(f)
-            clustercentres[c] = np.mean(fc, axis=0)
-
-        return clustercentres
+        for record in cluster:
+            # Compute the features of each syllable in this segment
+            for syl in record[2]:
+                audiodata = self.loadFile(filename=record[0], duration=syl[1] - syl[0], offset=syl[0], fs=fs,
+                                          denoise=denoise, f1=f1, f2=f2)
+                audiodata = audiodata.tolist()
+                if syl[1] - syl[0] < duration:
+                    # Zero padding both ends to have fixed duration
+                    gap = int((duration * fs - len(audiodata)) // 2)
+                    z = [0] * gap
+                    audiodata.extend(z)
+                    z.extend(audiodata)
+                    audiodata = z
+                if feature == 'mfcc':  # MFCC
+                    mfcc = librosa.feature.mfcc(y=np.asarray(audiodata), sr=fs, n_mfcc=n_mels)
+                    if f1 != 0 and f2 != 0:
+                        mfcc = mfcc[ind_flow:ind_fhigh, :]  # Limit the frequency to the fixed range [f1, f2]
+                    mfcc_delta = librosa.feature.delta(mfcc, mode='nearest')
+                    mfcc = np.concatenate((mfcc, mfcc_delta), axis=0)
+                    mfcc = scale(mfcc, axis=1)
+                    mfcc = [i for sublist in mfcc for i in sublist]
+                    fc.append(mfcc)
+                elif feature == 'we':  # Wavelet Energy
+                    ws = WaveletSegment.WaveletSegment(spInfo={})
+                    we = ws.computeWaveletEnergy(data=audiodata, sampleRate=fs, nlevels=5, wpmode='new')
+                    we = we.mean(axis=1)
+                    if f1 != 0 and f2 != 0:
+                        we = we[ind_flow:ind_fhigh]  # Limit the frequency to a fixed range f1, f2
+                    fc.append(we)
+                elif feature == 'chroma':
+                    chroma = librosa.feature.chroma_cqt(y=audiodata, sr=fs)
+                    # chroma = librosa.feature.chroma_stft(y=data, sr=fs)
+                    chroma = scale(chroma, axis=1)
+                    fc.append(chroma)
+        return np.mean(fc, axis=0)
 
 
     def loadFile(self, filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0):

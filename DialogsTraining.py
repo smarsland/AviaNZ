@@ -55,7 +55,7 @@ import Dialogs
 
 
 class BuildRecAdvWizard(QWizard):
-    # page for selecting training data
+    # page 1 - select training data
     class WPageData(QWizardPage):
         def __init__(self, parent=None):
             super(BuildRecAdvWizard.WPageData, self).__init__(parent)
@@ -171,6 +171,7 @@ class BuildRecAdvWizard(QWizard):
                 if file.fileName()+'.data' in listOfDataFiles:
                     item.setForeground(Qt.red)
 
+    # page 2 - precluster
     class WPagePrecluster(QWizardPage):
         def __init__(self, parent=None):
             super(BuildRecAdvWizard.WPagePrecluster, self).__init__(parent)
@@ -217,6 +218,7 @@ class BuildRecAdvWizard(QWizard):
             self.segments = []
             self.clusters = {}
             self.clustercentres = {}
+            self.duration = 0
             self.feature = 'we'
             self.picbuttons = []
             self.cboxes = []
@@ -262,8 +264,8 @@ class BuildRecAdvWizard(QWizard):
             self.cmbUpdateSeg = QComboBox()
             self.btnUpdateSeg = QPushButton('Apply')
             self.btnUpdateSeg.clicked.connect(self.moveSelectedSegs)
-            self.btnDeleteSeg = QPushButton("Remove segment")
-            self.btnDeleteSeg.setFixedWidth(150)
+            self.btnDeleteSeg = QPushButton("Remove selected segment/s")
+            self.btnDeleteSeg.setFixedWidth(200)
             self.btnDeleteSeg.clicked.connect(self.deleteSelectedSegs)
 
             # page 2 layout
@@ -313,12 +315,12 @@ class BuildRecAdvWizard(QWizard):
             with pg.BusyCursor():
                 print("Processing. Please wait...")
                 # return format:
-                # self.segments: [parent_audio_file, [segment], [features], class_label]
+                # self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
                 # fs: sampling freq
                 # self.nclasses: number of class_labels
                 self.cluster = Clustering.Clustering([], [])
-                self.segments, fs, self.nclasses, self.clustercentres = self.cluster.cluster(self.field("trainDir"),
-                                                                                        self.field("species"),
+                self.segments, fs, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"),
+                                                                                       self.field("species"),
                                                                                         feature=self.feature,
                                                                                         n_clusters=5)
                 # self.segments, fs, self.nclasses = Clustering.cluster_by_dist(self.dName, feature='we', max_clusters=5, single=True)
@@ -347,7 +349,10 @@ class BuildRecAdvWizard(QWizard):
             # segsChanged should be updated by any user changes!
             if self.segsChanged:
                 # update the cluster centres
-                self.clustercentres = self.cluster.getClusterCenters(self.segments, self.nclasses)
+                # TODO: safely update cluster centres after all wavelet trainings are done, required frq range etc. are editable by the user
+                # clustercentres = {}
+                # for c in range(self.nclasses):
+                #     clustercentres[c] = self.getClusterCenter(self.segments, c, self.field("fs"), f1, f2, self.feature, self.duration)
                 self.segsChanged = False
                 self.wizard().redoTrainPages()
             return True
@@ -824,7 +829,7 @@ class BuildRecAdvWizard(QWizard):
 
     # page 5 - run training, show ROC
     class WPageTrain(QWizardPage):
-        def __init__(self, id, clust, segments, clustercentre, parent=None):
+        def __init__(self, id, clustID, clustname, segments, parent=None):
             super(BuildRecAdvWizard.WPageTrain, self).__init__(parent)
             self.setTitle('Training results')
             self.setMinimumSize(600, 500)
@@ -832,8 +837,8 @@ class BuildRecAdvWizard(QWizard):
             self.adjustSize()
 
             self.segments = segments
-            self.clust = clust
-            self.clustercentre = clustercentre
+            self.clust = clustname
+            self.clusterID = clustID
             # this ID links it to the parameter fields
             self.pageId = id
 
@@ -998,6 +1003,7 @@ class BuildRecAdvWizard(QWizard):
                 self.marker.set_visible(False)
                 self.figCanvas.plotmeagain(self.TPR, self.FPR)
 
+    # page 6 - fundamental frequency calculation
     class WFFPage(QWizardPage):
         def __init__(self, clust, picbuttons, parent=None):
             super(BuildRecAdvWizard.WFFPage, self).__init__(parent)
@@ -1149,6 +1155,7 @@ class BuildRecAdvWizard(QWizard):
             else:
                 return round(np.min(pitch)), round(np.max(pitch))
 
+    # page 7 - save the filter
     class WLastPage(QWizardPage):
         def __init__(self, filtdir, parent=None):
             super(BuildRecAdvWizard.WLastPage, self).__init__(parent)
@@ -1239,7 +1246,11 @@ class BuildRecAdvWizard(QWizard):
                 F0low = int(self.field("F0low"+str(pageId)))
                 F0high = int(self.field("F0high"+str(pageId)))
 
-                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
+                # calculate cluster centre
+                # TODO: each train page to store the segments of that cluster - following self.field("segments"+str(pageId)) does not exist
+                cl = Clustering.Clustering([], [])
+                clustcentre = cl.getClusterCenter(self.field("segments"+str(pageId)), self.field("fs"), fLow, fHigh, self.wizard().clusterPage.feature, self.wizard().clusterPage.duration)
+                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(clustcentre), 'Feature': self.wizard().clusterPage.feature}
 
                 if F0:
                     newSubfilt["F0"] = True
@@ -1344,7 +1355,7 @@ class BuildRecAdvWizard(QWizard):
                 seg = self.clusterPage.segments[segix]
                 if seg[-1] == key:
                     # save source file, actual segment, and cluster ID
-                    newsegs.append([seg[0], seg[1], seg[-1]])
+                    newsegs.append([seg[0], seg[1], seg[2], seg[-1]])
                     # save the pic button for sound/spec, to be used in post
                     newbtns.append(self.clusterPage.picbuttons[segix])
 
@@ -1364,7 +1375,7 @@ class BuildRecAdvWizard(QWizard):
             page4.registerField("M"+str(pageid), page4.cbxM, "currentText", page4.cbxM.currentTextChanged)
 
             # page 5: get training results
-            page5 = BuildRecAdvWizard.WPageTrain(pageid, value, newsegs, self.clusterPage.clustercentres[key])
+            page5 = BuildRecAdvWizard.WPageTrain(pageid, key, value, newsegs)
             self.addPage(page5)
 
             # note: pageid is the same for both page fields
