@@ -57,12 +57,9 @@ class SignalProc:
         self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
         self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
-    def readWav(self, file, len=None, off=None):
+    def readWav(self, file, len=None, off=0):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
-        if not len or not off:
-            wavobj = wavio.read(file)
-        else:
-            wavobj = wavio.read(file, len, off)
+        wavobj = wavio.read(file, len, off)
         self.data = wavobj.data
 
         # take only left channel
