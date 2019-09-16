@@ -217,12 +217,12 @@ class SegmentList(list):
                     print(e)
                 return
             # noise metadata
-            if isinstance(annots[0][4], list):
-                self.metadata["noiseLevel"] = annots[0][4][0]
-                self.metadata["noiseTypes"] = annots[0][4][1]
-            else:
+            if len(annots[0])<5 or not isinstance(annots[0][4], list):
                 self.metadata["noiseLevel"] = None
                 self.metadata["noiseTypes"] = []
+            else:
+                self.metadata["noiseLevel"] = annots[0][4][0]
+                self.metadata["noiseTypes"] = annots[0][4][1]
             del annots[0]
 
         elif isinstance(annots[0], dict):
@@ -402,16 +402,6 @@ class SegmentList(list):
                 f.write('\n')
             f.write('\n')
             print("output successfully saved to file", eFile)
-
-        # get parameter limits for populating training dialogs:
-        # FreqRange, in Hz
-        fLow = np.min([self[segix][2] for segix in thisSpSegs])
-        fHigh = np.max([self[segix][3] for segix in thisSpSegs])
-        # TimeRange, in s
-        lenMin = np.min([self[segix][1] - self[segix][0] for segix in thisSpSegs])
-        lenMax = np.max([self[segix][1] - self[segix][0] for segix in thisSpSegs])
-
-        return((lenMin, lenMax, fLow, fHigh))
 
     def exportExcel(self, dirName, filename, action, pagelen, numpages=1, speciesList=[], startTime=0, resolution=1):
         """ Exports the annotations to xlsx, with three sheets:
