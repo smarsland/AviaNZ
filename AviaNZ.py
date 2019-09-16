@@ -339,6 +339,19 @@ class AviaNZ(QMainWindow):
                 extraGroup.addAction(em)
 
         specMenu.addSeparator()
+        extraMenu = specMenu.addMenu("Mar&k on spectrogram")
+        self.showFundamental = extraMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
+        self.showFundamental.setCheckable(True)
+        self.showFundamental.setChecked(False)
+        if not self.DOC:
+            self.showSpectral = extraMenu.addAction("Show spectral derivative", self.showSpectralDeriv)
+            self.showSpectral.setCheckable(True)
+            self.showSpectral.setChecked(False)
+            self.showEnergies = extraMenu.addAction("Show maximum energies", self.showMaxEnergy)
+            self.showEnergies.setCheckable(True)
+            self.showEnergies.setChecked(False)
+
+        specMenu.addSeparator()
 
         self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
         self.readonly.setCheckable(True)
@@ -354,17 +367,6 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Denoise",self.showDenoiseDialog)
             actionMenu.addAction("Add metadata about noise", self.addNoiseData, "Ctrl+N")
             #actionMenu.addAction("Find matches",self.findMatches)
-            actionMenu.addSeparator()
-            self.showFundamental = actionMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
-            self.showFundamental.setCheckable(True)
-            self.showFundamental.setChecked(False)
-            if not self.DOC:
-                self.showSpectral = actionMenu.addAction("Show spectral derivative", self.showSpectralDeriv)
-                self.showSpectral.setCheckable(True)
-                self.showSpectral.setChecked(False)
-                self.showEnergies = actionMenu.addAction("Show maximum energies", self.showMaxEnergy)
-                self.showEnergies.setCheckable(True)
-                self.showEnergies.setChecked(False)
 
         if not self.DOC and not self.Hartley:
             actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
