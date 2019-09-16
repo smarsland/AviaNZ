@@ -554,7 +554,7 @@ class WaveletSegment:
 
     def detectCalls(self, wf, nodelist, samplerate, subfilter, rf=True, annotation=None, window=1, inc=None, aa=True):
         """
-        For both TRAIN and NON_TRAIN modes
+        For wavelet TESTING and general SEGMENTATION
         Regenerates the signal from the node and threshold.
         Args:
         1. wf - WaveletFunctions with a homebrew wavelet tree (list of ndarray nodes)

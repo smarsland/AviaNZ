@@ -242,6 +242,12 @@ class SegmentList(list):
                 print("ERROR: annotation in wrong format:", annot)
                 return
 
+            # This could be turned on to skip segments outside Duration bounds, 
+            # but may result in deleting actually useful annotations if Duration was wrong
+            # if annot[0] > self.metadata["Duration"] and annot[1] > self.metadata["Duration"]:
+            #     print("Warning: ignoring segment outside set duration", annot)
+            #     continue
+
             # deal with old formats here, so that the Segment class
             # could require (and validate) clean input
 

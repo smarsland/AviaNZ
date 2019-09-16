@@ -248,7 +248,7 @@ class Clustering:
 
         return som
 
-    def cluster(self, dir, feature='we', n_mels=24, minlen=0.2, denoise=False,
+    def cluster(self, dir, species, feature='we', n_mels=24, minlen=0.2, denoise=False,
                 alg='agglomerative', n_clusters=None):
         """
         Cluster segments during training to make sub-filters.
@@ -257,6 +257,7 @@ class Clustering:
             2) make them to fixed-length by padding or clipping
             3) use existing clustering algorithems
         :param dir: path to directory with wav & wav.data files
+        :param species: string, will train on segments containing this label
         :param feature: 'we' (wavelet energy), 'mfcc', or 'chroma'
         :param n_mels: number of mel coeff when feature='mfcc'
         :param minlen: min syllable length in secs
@@ -277,7 +278,10 @@ class Clustering:
                     # Read the annotation
                     segments = Segment.SegmentList()
                     segments.parseJSON(os.path.join(root, file + '.data'))
-                    for seg in segments:
+                    # keep the right species
+                    thisSpSegs = segments.getSpecies(species)
+                    for segix in thisSpSegs:
+                        seg = segments[segix]
                         lowlist.append(seg[2])
                         highlist.append(seg[3])
 
@@ -317,8 +321,10 @@ class Clustering:
                     # Read the annotation
                     segments = Segment.SegmentList()
                     segments.parseJSON(os.path.join(root, file + '.data'))
+                    thisSpSegs = segments.getSpecies(species)
                     # Now find syllables within each segment, median clipping
-                    for seg in segments:
+                    for segix in thisSpSegs:
+                        seg = segments[segix]
                         audiodata = self.loadFile(filename=os.path.join(root, file), duration=seg[1] - seg[0],
                                                  offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
                         minlen = minlen * fs

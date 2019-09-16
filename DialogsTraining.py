@@ -316,9 +316,10 @@ class BuildRecAdvWizard(QWizard):
                 # self.nclasses: number of class_labels
                 self.cluster = Clustering.Clustering([], [])
                 self.segments, fs, self.nclasses, self.clustercentres = self.cluster.cluster(self.field("trainDir"),
+                                                                                        self.field("species"),
                                                                                         feature=self.feature,
                                                                                         n_clusters=5)
-                # self.segments, fs, self.nclasses = Clustering.cluster_by_dist(self.dName, feature='we', max_cluste       rs=5, single=True)
+                # self.segments, fs, self.nclasses = Clustering.cluster_by_dist(self.dName, feature='we', max_clusters=5, single=True)
 
                 # Create and show the buttons
                 self.clearButtons()
@@ -1013,10 +1014,15 @@ class BuildRecAdvWizard(QWizard):
             self.lblCluster.setStyleSheet("QLabel { color : #808080; }")
 
             # fund freq checkbox
+            self.hadF0label = QLabel("")
+            self.hadNoF0label = QLabel("")
             self.f0_label = QLabel('Fundamental frequency')
             self.ckbF0 = QCheckBox()
             self.ckbF0.setChecked(False)
             self.ckbF0.toggled.connect(self.toggleF0)
+            formFFinfo = QFormLayout()
+            formFFinfo.addRow("Training segments with detected fund. freq.:", self.hadF0label)
+            formFFinfo.addRow("Training segments without fund. freq.:", self.hadNoF0label)
 
             # fund freq range
             # FreqRange parameters
@@ -1052,6 +1058,7 @@ class BuildRecAdvWizard(QWizard):
 
             vbox = QVBoxLayout()
             vbox.addLayout(vboxHead)
+            vbox.addLayout(formFFinfo)
             vbox.addLayout(hBox)
             vbox.addSpacing(20)
             vbox.addLayout(form1_step6)
@@ -1091,16 +1098,24 @@ class BuildRecAdvWizard(QWizard):
                 print("measuring fundamental frequency range...")
                 f0_low = []  # could add a field to input these
                 f0_high = []
+                # for each segment:
                 for picbtn in self.picbuttons:
                     f0_l, f0_h = self.getFundFreq(picbtn.audiodata, picbtn.media_obj.format.sampleRate())
-                    if f0_l != 0 and f0_h != 0:
-                        f0_low.append(f0_l)
-                        f0_high.append(f0_h)
+                    # we use NaNs to represent "no F0 found"
+                    f0_low.append(f0_l)
+                    f0_high.append(f0_h)
 
-            # get range
-            if len(f0_low) > 0 and len(f0_high) > 0:
-                f0_low = round(np.min(f0_low))
-                f0_high = round(np.max(f0_high))
+            # how many had F0?
+            hadNoF0 = sum(np.isnan(f0_low))
+            hadF0 = sum(np.invert(np.isnan(f0_high)))
+            self.hadF0label.setText("%d (%d %%)" % (hadF0, hadF0/len(f0_low)*100))
+            self.hadNoF0label.setText("%d (%d %%)" % (hadNoF0, hadNoF0/len(f0_low)*100))
+            if hadF0 == 0:
+                print("Warning: no F0 found in the training segments")
+                self.ckbF0.setChecked(False)
+            else:
+                f0_low = round(np.nanmin(f0_low))
+                f0_high = round(np.nanmax(f0_high))
 
                 # update the actual fields
                 self.ckbF0.setChecked(True)
@@ -1109,10 +1124,6 @@ class BuildRecAdvWizard(QWizard):
                 self.F0lowtext.setText(str(f0_low))
                 self.F0hightext.setText(str(f0_high))
                 print("Determined ff bounds:", f0_low, f0_high)
-            else:
-                self.ckbF0.setChecked(False)
-                print("Warning: no f0 found!")
-
 
         def getFundFreq(self, data, sampleRate):
             """ Extracts fund freq range from audiodata """
@@ -1124,8 +1135,9 @@ class BuildRecAdvWizard(QWizard):
             pitch, y, minfreq, W = segment.yin(minfreq=100, returnSegs=False)
             ind = np.squeeze(np.where(pitch > minfreq))
             pitch = pitch[ind]
+            # we use NaNs to represent "no F0 found"
             if pitch.size == 0:
-                return 0, 0
+                return float("nan"), float("nan")
             if ind.size < 2:
                 f0 = pitch
                 return f0, f0

@@ -1204,7 +1204,8 @@ class AviaNZ(QMainWindow):
                 # Load any previous segments stored
                 if os.path.isfile(self.filename + '.data'):
                     # populate it, add the metadata attribute
-                    self.segments.parseJSON(self.filename+'.data', self.datalengthSec)
+                    # (note: we're overwriting the JSON duration with actual full wav size)
+                    self.segments.parseJSON(self.filename+'.data', self.sp.fileLength / self.sp.sampleRate)
                     self.operator = self.segments.metadata["Operator"]
                     self.reviewer = self.segments.metadata["Reviewer"]
                     self.segmentsToSave = True
