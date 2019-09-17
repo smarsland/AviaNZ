@@ -3013,6 +3013,7 @@ class AviaNZ(QMainWindow):
         The only difference is that that version requires sorting the segments and loading of new file sections and making the spectrogram intermittently.
         """
 
+        self.saveSegments()
         # Store the current page to return to
         self.currentPage = self.currentFileSection
         self.segmentsDone = 0
@@ -3235,6 +3236,7 @@ class AviaNZ(QMainWindow):
     def humanRevDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
         """
+        self.saveSegments()
         # First, determine which segments will be shown (i.e. visible in current page):
         segsInPage = []
         for s in self.segments:
@@ -3300,7 +3302,6 @@ class AviaNZ(QMainWindow):
             self.refreshOverviewWith(currSeg, delete=True)
 
             # btn.index carries the index of segment shown on btn
-            print(btn.index.btn.mark)
             if btn.mark=="red":
                 outputErrors.append(currSeg)
                 # remove all labels for the current species
