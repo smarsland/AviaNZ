@@ -3300,6 +3300,7 @@ class AviaNZ(QMainWindow):
             self.refreshOverviewWith(currSeg, delete=True)
 
             # btn.index carries the index of segment shown on btn
+            print(btn.index.btn.mark)
             if btn.mark=="red":
                 outputErrors.append(currSeg)
                 # remove all labels for the current species
