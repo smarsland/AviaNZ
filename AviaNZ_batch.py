@@ -1132,7 +1132,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
         self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
-        self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyNextImage1)
         success = self.humanClassifyDialog1.exec_() # 1 on clean exit
 
         if success == 0:

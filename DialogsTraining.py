@@ -811,7 +811,6 @@ class BuildRecAdvWizard(QWizard):
             len_min = []
             len_max = []
             fs = int(self.field("fs")) // 4000 * 4000
-            print("Working on segments", self.segments)
 
             # self.segments is already selected to be this cluster only
             pageSegs = Segment.SegmentList()
@@ -975,6 +974,12 @@ class BuildRecAdvWizard(QWizard):
 
                             # exports 0/1 annotations and retrieves segment time, freq bounds
                             pageSegs.exportGT(wavFile, self.field("species"), window=window, inc=inc)
+
+            # calculate cluster centres
+            # (self.segments is already selected to be this cluster only)
+            with pg.BusyCursor():
+                cl = Clustering.Clustering([], [])
+                self.clustercentre = cl.getClusterCenter(self.segments, self.field("fs"), fLow, fHigh, self.wizard().clusterPage.feature, self.wizard().clusterPage.duration)
 
             # Get detection measures over all M,thr combinations
             print("starting wavelet training")
@@ -1246,18 +1251,7 @@ class BuildRecAdvWizard(QWizard):
                 F0low = int(self.field("F0low"+str(pageId)))
                 F0high = int(self.field("F0high"+str(pageId)))
 
-                # calculate cluster centre
-                for clustID, clustName in self.wizard().clusterPage.clusters.items():
-                    if self.wizard().page(pageId+1).clust == clustName:
-                        ID = clustID
-                        break
-                segments = []
-                for segment in self.wizard().clusterPage.segments:
-                    if segment[-1] == ID:
-                        segments.append(segment)
-                cl = Clustering.Clustering([], [])
-                clustcentre = cl.getClusterCenter(segments, self.field("fs"), fLow, fHigh, self.wizard().clusterPage.feature, self.wizard().clusterPage.duration)
-                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(clustcentre), 'Feature': self.wizard().clusterPage.feature}
+                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
 
                 if F0:
                     newSubfilt["F0"] = True
@@ -1362,7 +1356,7 @@ class BuildRecAdvWizard(QWizard):
                 seg = self.clusterPage.segments[segix]
                 if seg[-1] == key:
                     # save source file, actual segment, and cluster ID
-                    newsegs.append([seg[0], seg[1], seg[2], seg[-1]])
+                    newsegs.append(seg)
                     # save the pic button for sound/spec, to be used in post
                     newbtns.append(self.clusterPage.picbuttons[segix])
 
@@ -1497,7 +1491,7 @@ class TestRecWizard(QWizard):
             self.setTitle('Testing results')
             #self.setSubTitle('Testing results are shown here')
 
-            self.setMinimumSize(250, 150)
+            self.setMinimumSize(250, 200)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
@@ -1516,6 +1510,13 @@ class TestRecWizard(QWizard):
             self.autoTime = QLabel()
             self.sensTime = QLabel()
 
+            # same, after post-processing
+            self.manSegsP = QLabel()
+            self.manTimeP = QLabel()
+            self.autoSegsP = QLabel()
+            self.autoTimeP = QLabel()
+            self.sensTimeP = QLabel()
+
             # NOTE: this is not the subfilter name, but the number!
             self.clustnum = clustnum
 
@@ -1527,16 +1528,28 @@ class TestRecWizard(QWizard):
             vboxHead.addWidget(space)
 
             form2 = QFormLayout()
+            form2.addWidget(QLabel("<b>Detection summary</b>"))
             form2.addRow("Manually labelled segments:", self.manSegs)
             form2.addRow("\ttotal seconds:", self.manTime)
             form2.addRow("Segments detected:", self.autoSegs)
             form2.addRow("\ttotal seconds:", self.autoTime)
             form2.addRow("Recall (sensitivity) in 1 s resolution:", self.sensTime)
 
+            form_post = QFormLayout()
+            form_post.addWidget(QLabel("<b>After post-processing</b>"))
+            form_post.addRow("Manually labelled segments:", self.manSegsP)
+            form_post.addRow("\ttotal seconds:", self.manTimeP)
+            form_post.addRow("Segments detected:", self.autoSegsP)
+            form_post.addRow("\ttotal seconds:", self.autoTimeP)
+            form_post.addRow("Recall (sensitivity) in 1 s resolution:", self.sensTimeP)
+
+            mainhbox = QHBoxLayout()
+            mainhbox.addLayout(form2)
+            mainhbox.addLayout(form_post)
+
             vbox = QVBoxLayout()
             vbox.addLayout(vboxHead)
-            vbox.addWidget(QLabel("<b>Detection summary</b>"))
-            vbox.addLayout(form2)
+            vbox.addLayout(mainhbox)
 
             self.setLayout(vbox)
 
@@ -1613,7 +1626,7 @@ class TestRecWizard(QWizard):
             super(TestRecWizard.WPageLast, self).__init__(parent)
             self.setTitle('Overall testing results')
 
-            self.setMinimumSize(250, 150)
+            self.setMinimumSize(250, 200)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
