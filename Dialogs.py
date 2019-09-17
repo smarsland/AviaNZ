@@ -2004,8 +2004,9 @@ class HumanClassify2(QDialog):
         self.flowLayout.update()
 
     def toggleAll(self):
-        for btn in self.buttons:
-            btn.changePic(False)
+        buttonsPerPage = self.numPicsV * self.numPicsH
+        for butNum in range(self.butStart,min(self.butStart+buttonsPerPage,len(self.buttons))):
+            self.buttons[butNum].changePic(False)
 
     def setColourLevels(self):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
