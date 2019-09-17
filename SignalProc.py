@@ -26,6 +26,7 @@ import scipy.signal as signal
 import scipy.fftpack as fft
 import wavio
 import librosa
+import copy
 
 from PyQt5.QtMultimedia import QAudioFormat
 # for multitaper spec:
@@ -403,7 +404,6 @@ class SignalProc:
     # The next functions perform spectrogram inversion
     def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10):
         # Assumes that this is the plain (not power) spectrogram
-        import copy
         # Make the spectrogram two-sided and make the values small
         sg = np.concatenate([sg, sg[:, ::-1]], axis=1)
 

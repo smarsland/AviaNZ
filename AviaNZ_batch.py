@@ -38,7 +38,9 @@ import Segment
 import WaveletSegment
 import SupportClasses
 import Dialogs
+import colourMaps
 
+import webbrowser
 import json, time
 
 
@@ -165,8 +167,6 @@ class AviaNZ_batchProcess(QMainWindow):
 
     def showHelp(self):
         """ Show the user manual (a pdf file)"""
-        # TODO: manual is not distributed as pdf now
-        import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
         webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
@@ -814,8 +814,6 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def showHelp(self):
         """ Show the user manual (a pdf file)"""
-        # TODO: manual is not distributed as pdf now
-        import webbrowser
         # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
         webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
@@ -1310,7 +1308,6 @@ class AviaNZ_reviewAll(QMainWindow):
         """
         cmap = self.config['cmap']
 
-        import colourMaps
         pos, colour, mode = colourMaps.colourMaps(cmap)
 
         cmap = pg.ColorMap(pos, colour,mode)
