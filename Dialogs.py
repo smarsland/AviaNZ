@@ -1114,10 +1114,6 @@ class HumanClassify1(QDialog):
         self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
         self.delete.setIconSize(iconSize)
 
-        self.buttonNext = QtGui.QToolButton()
-        self.buttonNext.setIcon(self.style().standardIcon(QtGui.QStyle.SP_ArrowForward))
-        self.buttonNext.setIconSize(iconSize)
-
         # The list of less common birds
         self.birds3 = QListWidget(self)
         if self.longBirdList is not None and self.longBirdList != 'None':
@@ -1166,7 +1162,7 @@ class HumanClassify1(QDialog):
         self.tbox.setEnabled(False)
 
         # Audio playback object
-        self.media_obj2 = SupportClasses.ControllableAudio(self.parent.audioFormat)
+        self.media_obj2 = SupportClasses.ControllableAudio(self.parent.sp.audioFormat)
         self.media_obj2.notify.connect(self.endListener)
 
         # The layouts
@@ -1201,7 +1197,6 @@ class HumanClassify1(QDialog):
         hboxNextPrev.addWidget(self.buttonPrev)
         hboxNextPrev.addWidget(self.correct)
         hboxNextPrev.addWidget(self.delete)
-        hboxNextPrev.addWidget(self.buttonNext)
         hboxNextPrev.addWidget(self.numberLeft)
 
         self.playButton = QtGui.QToolButton()
@@ -1455,8 +1450,8 @@ class HumanClassify1(QDialog):
 
         self.label = label
         # reset bird list for next image, if needed
-        if not self.parent.config['ReorderList']:
-            self.shortBirdList = tempShortList
+        # if not self.parent.config['ReorderList']:
+        #     self.shortBirdList = tempShortList
 
     def tickBirdsClicked(self):
         # Listener for when the user selects a bird tick box
@@ -1764,11 +1759,6 @@ class HumanClassify2(QDialog):
         #self.buttonPrev.setIconSize(QtCore.QSize(30,30))
         #self.buttonPrev.clicked.connect(self.prevPage)
 
-        #self.buttonNext = QtGui.QToolButton()
-        #self.buttonNext.setArrowType(Qt.RightArrow)
-        #self.buttonNext.setIconSize(QtCore.QSize(30,30))
-        #self.buttonNext.clicked.connect(self.nextPage)
-
         # TODO: Is this useful?
         self.pageLabel = QLabel()
 
@@ -1791,7 +1781,6 @@ class HumanClassify2(QDialog):
         # movement buttons and page numbers
         self.vboxBot = QHBoxLayout()
         #vboxBot.addWidget(self.buttonPrev)
-        #vboxBot.addWidget(self.buttonNext)
         #vboxBot.addSpacing(20)
         self.vboxBot.addWidget(self.pageLabel)
         self.vboxBot.addSpacing(20)
@@ -1944,7 +1933,6 @@ class HumanClassify2(QDialog):
         if buttonsPerPage == 0:
             # dialog still initializing or too small to show segments
             #self.buttonPrev.setEnabled(False)
-            #self.buttonNext.setEnabled(False)
             return
         # basically, count how many segments are "before" the current
         # top-lef one, and see how many pages we need to fit them.
@@ -1976,10 +1964,6 @@ class HumanClassify2(QDialog):
             #self.buttonPrev.setEnabled(False)
         #else:
             #self.buttonPrev.setEnabled(True)
-        #if currpage==self.totalPages:
-            #self.buttonNext.setEnabled(False)
-        #else:
-            #self.buttonNext.setEnabled(True)
 
     def nextPage(self):
         """ Called on arrow button clicks.

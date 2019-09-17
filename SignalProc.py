@@ -240,7 +240,6 @@ class SignalProc:
         128 taps, Hamming window, very basic.
         """
 
-        #Virginia corrections: cutted references to self.sampleRate
         if data is None:
             data = self.data
         if sampleRate is None:
@@ -255,7 +254,7 @@ class SignalProc:
             return data
 
         nyquist = sampleRate/2
-        ntaps = 128
+        ntaps = 129
 
         if start == 0:
             # Low pass
