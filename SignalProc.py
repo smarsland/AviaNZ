@@ -596,27 +596,37 @@ class SignalProc:
 
     def drawFundFreq(self, seg):
         # produces marks of fundamental freq to be drawn on the spectrogram.
-        pitch, _, _, W = seg.yin()
-        ind = np.squeeze(np.where(np.logical_and(pitch > self.minFreqShow, pitch < self.maxFreqShow)))
-        pitch = pitch[ind]
-        ind = ind * W / self.window_width
-        # Adjust to the frequency range to show
-        x = ((pitch-self.minFreqShow)*2/self.sampleRate*np.shape(self.sg)[1]).astype('int')
-
-        x = medfilt(x, 15)
-
-        out_marks = []
-        if len(ind)==0:
+        pitch, starts, _, W = seg.yin()
+        # find out which marks should be visible
+        ind = np.logical_and(pitch > self.minFreqShow+50, pitch < self.maxFreqShow)
+        if not np.any(ind):
             print("Warning: no fund. freq. identified in this page")
-        else:
-            segs = seg.identifySegments(ind, maxgap=10, minlength=5)
-            for s in segs:
-                s[0] = s[0] * self.sampleRate / self.incr
-                s[1] = s[1] * self.sampleRate / self.incr
-                i = np.where((s[1]>ind) & (ind>s[0]))
-                out_marks.append((ind[i], x[i]))
+            return
 
-        return out_marks
+        # ffreq is calculated over windows of size W
+        # first, identify segments using that original scale:
+        segs = seg.convert01(ind)
+        segs = seg.deleteShort(segs, 2)
+        segs = seg.joinGaps(segs, 2)
+
+        yadjfact = 2/self.sampleRate*np.shape(self.sg)[1]
+
+        # then map starts from samples to spec windows
+        starts = starts / self.incr
+        # then convert segments back to positions in each array:
+        out = []
+        for s in segs:
+            # convert [s, e] to [s s+1 ... e-1 e]
+            i = np.arange(s[0], s[1])
+            # retrieve all pitch and start positions corresponding to this segment
+            pitchSeg = pitch[i]
+            # Adjust pitch marks to the visible freq range on the spec
+            y = ((pitchSeg-self.minFreqShow)*yadjfact).astype('int')
+            # smooth the pitch lines
+            y = medfilt(y, 15)
+
+            out.append((starts[i], y))
+        return out
 
     def max_energy(self, sg,thr=1.2):
         sg = sg/np.max(sg)

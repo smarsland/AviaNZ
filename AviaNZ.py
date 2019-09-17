@@ -3438,7 +3438,7 @@ class AviaNZ(QMainWindow):
                 print("working on node", node)
                 C = WF.reconstructWP2(node, aaType != -2, True)
                 C = self.sp.ButterworthBandpass(C, spInfo['SampleRate'],
-                        low=spSubf['FreqRange']['thr'], high=spSubf['FreqRange']['M'])
+                        low=spSubf['FreqRange'][0], high=spSubf['FreqRange'][1])
 
                 C = np.abs(C)
                 E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
