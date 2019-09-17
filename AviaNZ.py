@@ -27,7 +27,7 @@ from shutil import copyfile
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence
 from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex
-from PyQt5.QtMultimedia import QAudio, QAudioFormat
+from PyQt5.QtMultimedia import QAudio
 
 import wavio
 import numpy as np
@@ -129,6 +129,7 @@ class AviaNZ(QMainWindow):
         self.startedInAmpl = False
         self.startTime = 0
         self.segmentsToSave = False
+        self.viewCallType = False
 
         self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
         self.DOC = self.config['DOC']
@@ -621,11 +622,11 @@ class AviaNZ(QMainWindow):
         # self.quickDenNButton.clicked.connect(self.denoiseSegN)
         # self.quickDenNButton.setEnabled(False)
 
-        # self.quickWPButton = QtGui.QToolButton()
-        # self.quickWPButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_ArrowDown))
-        # self.quickWPButton.setIconSize(QtCore.QSize(20, 20))
-        # self.quickWPButton.setToolTip("Decompose to WP")
-        # self.quickWPButton.clicked.connect(self.decomposeWP)
+        self.viewSpButton = QtGui.QToolButton()
+        self.viewSpButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_FileDialogInfoView))
+        self.viewSpButton.setIconSize(QtCore.QSize(20, 20))
+        self.viewSpButton.setToolTip("Toggle between species/calltype views")
+        self.viewSpButton.clicked.connect(self.toggleViewSp)
 
         self.playBandLimitedSegButton = QtGui.QToolButton()
         self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
@@ -680,7 +681,7 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
         self.w_controls.addWidget(self.quickDenButton,row=1,col=0)
         # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
-        # self.w_controls.addWidget(self.quickWPButton,row=1,col=0)
+        self.w_controls.addWidget(self.viewSpButton,row=1,col=1)
         self.w_controls.addWidget(self.timePlayed,row=2,col=0, colspan=4)
         self.w_controls.addWidget(self.volIcon, row=3, col=0)
         self.w_controls.addWidget(self.volSlider, row=3, col=1, colspan=3)
@@ -832,60 +833,79 @@ class AviaNZ(QMainWindow):
         The first 20 items are in the first menu, the next in a second menu.
         Any extras go into the combobox at the end of the second list.
         This is called a lot because the order of birds in the list changes since the last choice
-        is moved to the top of the list. """
+        is moved to the top of the list.
+        When calltype-level display is on, fills the list with some possible call types."""
         self.menuBirdList.clear()
         self.menuBird2.clear()
 
-        for item in self.shortBirdList[:20]:
-            # Add ? marks if Ctrl menu is called
-            itemorig = item
-            if unsure and item != "Don't Know":
-                cert = 50
-                item = item+'?'
-            elif item == "Don't Know":
-                cert = 0
-            else:
-                cert = 100
+        if self.viewCallType:
+            # populate with call types from known filters
+            possibleCTs = set()
+            for filt in self.FilterDicts.values():
+                possibleCTs.update([subf["calltype"] for subf in filt["Filters"]])
+            # add some standard call type suggestions?
+            possibleCTs.update(["male", "female", "juvenile"])
+            for item in possibleCTs:
+                menuitem = self.menuBirdList.addAction(item)
+                menuitem.setCheckable(True)
+                # update check marks based on this segment
+                if hasattr(self, 'segments'):
+                    for lab in self.segments[self.box1id][4]:
+                        if "calltype" in lab and lab["calltype"]==item:
+                            menuitem.setChecked(True)
+                            break
+        else:
+            # otherwise, fill the species list
+            for item in self.shortBirdList[:20]:
+                # Add ? marks if Ctrl menu is called
+                itemorig = item
+                if unsure and item != "Don't Know":
+                    cert = 50
+                    item = item+'?'
+                elif item == "Don't Know":
+                    cert = 0
+                else:
+                    cert = 100
 
-            # Transform > marks
-            pos = item.find('>')
-            if pos > -1:
-                item = item[:pos] + ' (' + item[pos+1:] + ')'
+                # Transform > marks
+                pos = item.find('>')
+                if pos > -1:
+                    item = item[:pos] + ' (' + item[pos+1:] + ')'
 
-            bird = self.menuBirdList.addAction(item)
-            bird.setCheckable(True)
-            if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(itemorig, cert):
-                bird.setChecked(True)
-            self.menuBirdList.addAction(bird)
-        self.menuBirdList.addMenu(self.menuBird2)
-        for item in self.shortBirdList[20:]:
-            itemorig = item
-            # Add ? marks if Ctrl menu is called
-            if unsure and item != "Don't Know" and item != "Other":
-                cert = 50
-                item = item+'?'
-            elif item == "Don't Know":
-                cert = 0
-            else:
-                cert = 100
+                bird = self.menuBirdList.addAction(item)
+                bird.setCheckable(True)
+                if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(itemorig, cert):
+                    bird.setChecked(True)
+                self.menuBirdList.addAction(bird)
+            self.menuBirdList.addMenu(self.menuBird2)
+            for item in self.shortBirdList[20:]:
+                itemorig = item
+                # Add ? marks if Ctrl menu is called
+                if unsure and item != "Don't Know" and item != "Other":
+                    cert = 50
+                    item = item+'?'
+                elif item == "Don't Know":
+                    cert = 0
+                else:
+                    cert = 100
 
-            # Transform > marks
-            pos = item.find('>')
-            if pos > -1:
-                item = item[:pos] + ' (' + item[pos+1:] + ')'
+                # Transform > marks
+                pos = item.find('>')
+                if pos > -1:
+                    item = item[:pos] + ' (' + item[pos+1:] + ')'
 
-            bird = self.menuBird2.addAction(item)
-            bird.setCheckable(True)
-            if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(itemorig, cert):
-                bird.setChecked(True)
-            self.menuBird2.addAction(bird)
+                bird = self.menuBird2.addAction(item)
+                bird.setCheckable(True)
+                if hasattr(self,'segments') and self.segments[self.box1id].hasLabel(itemorig, cert):
+                    bird.setChecked(True)
+                self.menuBird2.addAction(bird)
 
-        if not self.Hartley:
-            self.fullbirdlist = self.makeFullBirdList()  # a QComboBox
-            self.showFullbirdlist = QWidgetAction(self.menuBirdList)
-            self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
-            self.menuBird2.addAction(self.showFullbirdlist)
-            self.fullbirdlist.activated.connect(self.birdSelectedList)
+            if not self.Hartley:
+                self.fullbirdlist = self.makeFullBirdList()  # a QComboBox
+                self.showFullbirdlist = QWidgetAction(self.menuBirdList)
+                self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
+                self.menuBird2.addAction(self.showFullbirdlist)
+                self.fullbirdlist.activated.connect(self.birdSelectedList)
 
     def fillFileList(self,fileName):
         """ Generates the list of files for the file listbox.
@@ -2608,6 +2628,22 @@ class AviaNZ(QMainWindow):
                 # making a segment
                 self.drawingBox_spec.setRegion([self.convertAmpltoSpec(self.start_ampl_loc), mousePoint.x()])
 
+    def toggleViewSp(self):
+        """ Toggles between species-calltype level displays.
+            Needs to swap the context menu, and the segment label text.
+        """
+        self.menuBirdList.triggered.disconnect()
+        if self.viewCallType:
+            self.viewCallType = False
+            self.menuBirdList.triggered.connect(self.birdSelectedMenu)
+        else:
+            self.viewCallType = True
+            self.menuBirdList.triggered.connect(self.callSelectedMenu)
+
+        for seg in range(len(self.listLabels)):
+            if self.listLabels[seg] is not None:
+                self.updateText(seg)
+
     def birdSelectedList(self,index):
         """ If the user clicks in the full bird list, update the text, and copy the species into the short list """
         birdname = self.fullbirdlist.view().currentIndex().parent().data(0)
@@ -2738,6 +2774,20 @@ class AviaNZ(QMainWindow):
             # select the bird and close
             self.menuBirdList.hide()
 
+    def callSelectedMenu(self, ctitem):
+        """ Simplified version of the above for dealing with calltype selection
+        from the popup context menu. """
+        if type(ctitem) is not str:
+            ctitem = ctitem.text()
+        if ctitem is None or ctitem=="":
+            return
+
+        workingSeg = self.segments[self.box1id]
+        for lab in workingSeg[4]:
+            if lab["species"] != "Don't Know":
+                lab["calltype"] = ctitem
+        self.updateText()
+
     def updateText(self, segID=None):
         """ When the user sets or changes the name in a segment, update the text label.
             Only requires the segment ID, or defaults to the selected one, and
@@ -2747,17 +2797,26 @@ class AviaNZ(QMainWindow):
             segID = self.box1id
         seg = self.segments[segID]
 
-        # why not have a special labelling for this mode:
-        if seg.keys == [("Don't Know", 0)] and self.Hartley:
-            text = ""
+        if not self.viewCallType:
+            # why not have a special labelling for this mode:
+            if seg.keys == [("Don't Know", 0)] and self.Hartley:
+                text = ""
+            else:
+                # produce text from list of dicts
+                text = []
+                for lab in seg[4]:
+                    if lab["certainty"] == 50:
+                        text.append(lab["species"] + '?')
+                    else:
+                        text.append(lab["species"])
+                text = ','.join(text)
         else:
-            # produce text from list of dicts
             text = []
             for lab in seg[4]:
-                if lab["certainty"] == 50:
-                    text.append(lab["species"] + '?')
+                if "calltype" in lab:
+                    text.append(lab["calltype"])
                 else:
-                    text.append(lab["species"])
+                    text.append("(?)")
             text = ','.join(text)
 
         # update the label
@@ -3999,13 +4058,13 @@ class AviaNZ(QMainWindow):
                                                       segments=newSegments[filtix],
                                                       subfilter=speciesData['Filters'][filtix])
                     post.short()
-                    if speciesData['Wind']:
-                        post.wind()
-                        print('After wind: ', post.segments)
-                    if speciesData['Rain']:
-                        pass
-                        # post.rainClick() - omitted in sppSpecific=T cases
-                        # print('After rain: ', post.segments)
+                    # if speciesData['Wind']:
+                    #     post.wind()
+                    #     print('After wind: ', post.segments)
+                    # if speciesData['Rain']:
+                    #     pass
+                    #     # post.rainClick() - omitted in sppSpecific=T cases
+                    #     # print('After rain: ', post.segments)
                     newSegments[filtix] = post.segments
 
             print("After post processing: ", newSegments)

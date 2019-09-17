@@ -48,6 +48,7 @@ from sklearn.cluster import AffinityPropagation
 # from sklearn import cluster_optics_dbscan
 from sklearn import metrics
 from sklearn.manifold import TSNE
+from statistics import mode
 
 
 class Clustering:
@@ -450,7 +451,6 @@ class Clustering:
             labels[ind].append(predicted_labels[i])
 
         # Majority voting when multiple syllables in a segment
-        from statistics import mode
         for i in range(len(labels)):
             try:
                 labels[i] = mode(labels[i])

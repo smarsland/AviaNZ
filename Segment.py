@@ -38,6 +38,9 @@ import copy
 import wavio
 from intervaltree import IntervalTree
 from itertools import chain, repeat
+from scipy.interpolate import interp1d
+from scipy.signal import medfilt
+import skimage.measure as skm
 
 from PyQt5.QtCore import QTime
 from openpyxl import load_workbook, Workbook
@@ -743,7 +746,6 @@ class Segmenter:
     def segmentByFIR(self, threshold):
         """ Segmentation using FIR envelope.
         """
-        from scipy.interpolate import interp1d
         nsecs = len(self.data) / float(self.fs)
         fftrate = int(np.shape(self.sg)[0]) / nsecs
         upperlimit = 100
@@ -853,7 +855,6 @@ class Segmenter:
         maxFreqs = 10. * np.log10(np.max(self.sg, axis = 1))
         """
         maxFreqs = 10. * np.log10(np.max(self.sg, axis=1))
-        from scipy.signal import medfilt
         maxFreqs = medfilt(maxFreqs,21)
         biggest = np.max(maxFreqs)
         segs = []
@@ -885,7 +886,6 @@ class Segmenter:
         """ Segmentation simply on the power
         """
         maxFreqs = 10. * np.log10(np.max(self.sg, axis=1))
-        from scipy.signal import medfilt
         maxFreqs = medfilt(maxFreqs, 21)
         ind = np.squeeze(np.where(maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))))
         return self.identifySegments(ind, minlength=10)
@@ -923,13 +923,11 @@ class Segmenter:
         #diamond[2, 1:4] = 1
         #diamond[1:4, 2] = 1
 
-        import scipy.ndimage as spi
         clipped = spi.binary_closing(clipped,structure=diamond).astype(int)
         clipped = spi.binary_dilation(clipped,structure=diamond).astype(int)
         clipped = spi.median_filter(clipped,size=medfiltersize)
         clipped = spi.binary_fill_holes(clipped)
 
-        import skimage.measure as skm
         blobs = skm.regionprops(skm.label(clipped.astype(int)))
 
         # Delete blobs that are too small
