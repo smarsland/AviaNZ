@@ -402,7 +402,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         # adjust segment starts for 15min "pages"
                         if start != 0:
                             for seg in post.segments:
-                                seg[0] += start/self.sammpleRate
+                                seg[0] += start/self.sampleRate
                                 seg[1] += start/self.sampleRate
                         # attach mandatory "Don't Know"s etc and put on self.segments
                         self.makeSegments(post.segments)
@@ -432,7 +432,7 @@ class AviaNZ_batchProcess(QMainWindow):
                             # adjust segment starts for 15min "pages"
                             if start != 0:
                                 for seg in post.segments:
-                                    seg[0] += start/self.sammpleRate
+                                    seg[0] += start/self.sampleRate
                                     seg[1] += start/self.sampleRate
 
                             # attach filter info and put on self.segments:

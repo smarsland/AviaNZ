@@ -638,11 +638,11 @@ class Segmenter:
     def bestSegments(self,FIRthr=0.7,medianClipthr=3.0,yinthr=0.9,mingap=0, minlength=0, maxlength=5.0):
         # Have a go at performing generally reasonably segmentation
         # TODO: Decide on this!
-        segs1 = self.checkSegmentLength(self.segmentByFIR(FIRthr),mingap,minlength,maxlength)
-        segs2 = self.checkSegmentLength(self.medianClip(medianClipthr),mingap,minlength,maxlength)
+        segs1 = self.deleteShort(self.segmentByFIR(FIRthr),mingap,minlength)
+        segs2 = self.deleteShort(self.medianClip(medianClipthr),mingap,minlength)
         segs3, p, t = self.yin(100, thr=yinthr, returnSegs=True)
         segs3 = self.checkSegmentOverlap(segs3,mingap)
-        segs3 = self.checkSegmentLength(segs3,mingap,minlength,maxlength)
+        segs3 = self.deleteShort(segs3,mingap,minlength)
         segs1 = self.mergeSegments(segs1, segs2)
         segs = self.mergeSegments(segs1,segs3)
         segs = segs[::-1]
@@ -700,48 +700,48 @@ class Segmenter:
             segs.append([a[0],a[1]])
         return segs
 
-    def checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0):
-        """ Checks whether start/stop segments are long enough
-        These are species specific!
+    def convert01(self, presabs, window=1):
+        """ Turns a list of presence/absence [0 1 1 1]
+            into a list of start-end segments [[1,3]].
+            Can use non-1 s units of pres/abs.
         """
-        if mingap == 0:
-            mingap = self.mingap
+        presabs = np.squeeze(presabs)
+        out = []
+        t = 0
+        while t < len(presabs):
+            if presabs[t]==1:
+                start = t
+                while t<len(presabs) and presabs[t]!=0:
+                    t += 1
+                out.append([start*window, t*window])
+            t += 1
+        return out
+
+    def deleteShort(self, segs, minlength=0):
+        """ Checks whether segments are long enough.
+            Operates on start-end list [[1,3], [4,5]] -> [[1,3]].
+        """
+        out = []
         if minlength == 0:
             minlength = self.minlength
-        # TODO: Doesn't currently use maxlength
-        for i in range(len(segs))[-1::-1]:
-            if i<len(segs)-1:
-                if np.abs(segs[i][1] - segs[i+1][0]) < mingap:
-                    segs[i][1] = segs[i+1][1]
-                    del segs[i+1]
-            if np.abs(segs[i][1] - segs[i][0]) < minlength:
-                del segs[i]
-        return segs
+        for seg in segs:
+            if seg[1]-seg[0] >= minlength:
+                out.append(seg)
+        return out
 
-    def identifySegments(self, seg, maxgap=1, minlength=1, notSpec=False):
-        """ Turns presence/absence segments into a list of start/stop times
-        Note the two parameters
+    def joinGaps(self, segs, maxgap=3):
+        """ Merges segments within maxgap units.
+            Operates on start-end list [[1,2], [3,4]] -> [[1,4]].
         """
-        segments = []
-        start = seg[0]
-        for i in range(1, len(seg)):
-            if seg[i] <= seg[i - 1] + maxgap:
-                pass
-            else:
-                # See if segment is long enough to be worth bothering with
-                if (seg[i - 1] - start) > minlength:
-                    if notSpec:
-                        segments.append([start, seg[i - 1]])
-                    else:
-                        segments.append([float(start) * self.incr / self.fs, float(seg[i - 1]) * self.incr / self.fs])
-                start = seg[i]
-        if seg[-1] - start > minlength:
-            if notSpec:
-                segments.append([start, seg[i-1]])
-            else:
-                segments.append([float(start) * self.incr / self.fs, float(seg[-1]) * self.incr / self.fs])
-
-        return segments
+        out = []
+        i = 0
+        while i < len(segs):
+            start = segs[i][0]
+            while i+1 < len(segs) and segs[i+1][0]-segs[i][1] <= maxgap:
+                i += 1
+            out.append([start, segs[i][1]])
+            i += 1
+        return out
 
     def segmentByFIR(self, threshold):
         """ Segmentation using FIR envelope.
@@ -776,8 +776,11 @@ class Segmenter:
         samples = f(np.arange(1, upperlimit, float(upperlimit) / int(fftrate / 10.)))
         padded = np.concatenate((np.zeros(int(fftrate / 10.)), np.mean(self.sg, axis=1), np.zeros(int(fftrate / 10.))))
         envelope = spi.filters.convolve(padded, samples, mode='constant')[:-int(fftrate / 10.)]
-        ind = np.squeeze(np.where(envelope > np.median(envelope) + threshold * np.std(envelope)))
-        return self.identifySegments(ind, minlength=10)
+        ind = envelope > np.median(envelope) + threshold * np.std(envelope)
+        ind = self.convert01(ind, self.incr / self.fs)
+        ind = self.deleteShort(ind, 0.2)
+        ind = self.joinGaps(ind, 1)
+        return ind
 
     def segmentByAmplitude(self, threshold, usePercent=True):
         """ Bog standard amplitude segmentation.
@@ -785,11 +788,11 @@ class Segmenter:
         """
         if usePercent:
             threshold = threshold*np.max(self.data)
-        seg = np.where(np.abs(self.data)>threshold)
-        if np.shape(np.squeeze(seg))[0]>0:
-            return self.identifySegments(np.squeeze(seg)/float(self.incr))
-        else:
-            return []
+        seg = np.abs(self.data)>threshold
+        seg = self.convert01(seg, self.fs)
+        seg = self.deleteShort(seg, 0.2)
+        seg = self.joinGaps(seg, 1)
+        return seg
 
     def segmentByEnergy(self, thr, width, min_width=450):
         """ Based on description in Jinnai et al. 2012 paper in Acoustics
@@ -887,8 +890,11 @@ class Segmenter:
         """
         maxFreqs = 10. * np.log10(np.max(self.sg, axis=1))
         maxFreqs = medfilt(maxFreqs, 21)
-        ind = np.squeeze(np.where(maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))))
-        return self.identifySegments(ind, minlength=10)
+        ind = maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))
+        ind = self.convert01(ind, self.incr / self.fs)
+        ind = self.deleteShort(ind, 0.2)
+        ind = self.joinGaps(ind, 1)
+        return ind
 
     def medianClip(self, thr=3.0, medfiltersize=5, minaxislength=5, minSegment=70):
         """ Median clipping for segmentation
@@ -1075,11 +1081,15 @@ class Segmenter:
         pitch = ce.FundFreqYin(data2, W, thr, self.fs)
 
         if returnSegs:
-            ind = np.squeeze(np.where(pitch > minfreq))
-            segs = self.identifySegments(ind, notSpec=True)
-            for s in segs:
-                s[0] = float(s[0])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr # W / self.window_width
-                s[1] = float(s[1])/len(pitch) * np.shape(self.sg)[0]/self.fs*self.incr # W / self.window_width
+            ind = pitch > minfreq
+            # ffreq is calculated over windows of size W
+            # 1/len(pitch) maps is to 0-1
+            # * np.shape(sg) maps it to spec windows
+            # * self.incr/self.fs maps it to actual seconds
+            units = self.incr/self.fs * np.shape(self.sg)[0] / len(pitch)
+            segs = self.convert01(ind, units)
+            segs = self.deleteShort(segs, 0.2)
+            segs = self.joinGaps(segs, 1)
             return segs, pitch, np.array(starts)
         else:
             return pitch, np.array(starts), minfreq, W
@@ -1152,7 +1162,7 @@ class PostProcess:
     """ This class implements few post processing methods basically to avoid false positives.
     Operates on detections from a single subfilter.
 
-    segments:   detected segments in form of [[s1,e1], [s2,e2],...]
+    segments:   detected segments in form of [[s1,e1], [s2,e2],...
     subfilter:  AviaNZ format subfilter
     """
 
@@ -1160,6 +1170,7 @@ class PostProcess:
         self.audioData = audioData
         self.sampleRate = sampleRate
         self.segments = segments
+
         if subfilter != {}:
             self.minLen = subfilter['TimeRange'][0]
             if 'F0Range' in subfilter:

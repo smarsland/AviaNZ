@@ -22,6 +22,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import WaveletFunctions
 import librosa
+import copy
 import numpy as np
 import time, os, math, csv, gc
 import SignalProc
@@ -35,6 +36,7 @@ class WaveletSegment:
         self.annotation = annotation
         self.wavelet = wavelet
         self.spInfo = spInfo
+        self.currentSR = 0
         if not spInfo == {}:
             # for now, we default to the first subfilter:
             print("Detected %d subfilters in this filter" % len(spInfo["Filters"]))
@@ -58,14 +60,14 @@ class WaveletSegment:
 
         opst = time.time()
 
-        # resample or adjust nodes in self.spInfo if needed
-        denoisedData = self.preprocess(data, sampleRate, d=d)
+        # resample or adjust nodes if needed
+        denoisedData, fs, spInfo = self.preprocess(data, sampleRate, d=d, fastRes=True)
 
         # Find out which nodes will be needed:
-        allnodes = [node for subfilter in self.spInfo["Filters"] for node in subfilter["WaveletParams"]["nodes"]]
+        allnodes = [node for subfilter in spInfo["Filters"] for node in subfilter["WaveletParams"]["nodes"]]
 
         # Generate a full 5 level wavelet packet decomposition (stored in WF.tree)
-        self.WF = WaveletFunctions.WaveletFunctions(data=denoisedData, wavelet=self.wavelet, maxLevel=20, samplerate=sampleRate)
+        self.WF = WaveletFunctions.WaveletFunctions(data=denoisedData, wavelet=self.wavelet, maxLevel=20, samplerate=fs)
         if wpmode == "pywt":
             print("ERROR: pywt wpmode is deprecated, use new or aa")
             return
@@ -76,12 +78,12 @@ class WaveletSegment:
 
         ### Now, find segments with each subfilter separately
         detected_allsubf = []
-        for subfilter in self.spInfo["Filters"]:
+        for subfilter in spInfo["Filters"]:
             print("Identifying calls using subfilter", subfilter["calltype"])
 
             # Segment detection and neighbour merging
             goodnodes = subfilter['WaveletParams']["nodes"]
-            detected = self.detectCalls(self.WF, nodelist=goodnodes, samplerate=self.spInfo["SampleRate"], subfilter=subfilter, rf=True, aa=wpmode!="old")
+            detected = self.detectCalls(self.WF, nodelist=goodnodes, subfilter=subfilter, rf=True, aa=wpmode!="old")
 
             # merge neighbours in order to convert the detections into segments
             # note: detected np[0 1 1 1] becomes [[1,3]]
@@ -235,10 +237,10 @@ class WaveletSegment:
                                                         samplerate=self.spInfo['SampleRate'])
             if learnMode == "recaa" or learnMode =="recold":
                 self.WF.WaveletPacket(self.nodes, mode='symmetric', antialias=False)
-                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, samplerate=self.spInfo['SampleRate'], subfilter=subfilter, rf=rf, window=1, inc=None)
+                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, subfilter=subfilter, rf=rf, window=1, inc=None)
             elif learnMode == "recaafull":
                 self.WF.WaveletPacket(self.nodes, mode='symmetric', antialias=True, antialiasFilter=True)
-                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, sampleRate=self.spInfo['SampleRate'], subfilter=subfilter, rf=rf, window=1, inc=None)
+                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, subfilter=subfilter, rf=rf, window=1, inc=None)
             else:
                 print("ERROR: the specified learning mode is not implemented in this function yet")
                 return
@@ -486,12 +488,12 @@ class WaveletSegment:
 
         duration = len(wf.tree[0])
 
-        # Window length in samples
-        win_sr = math.ceil(window * self.spInfo['SampleRate'])
-        # Increment length in samples
-        inc_sr = math.ceil(inc * self.spInfo['SampleRate'])
-        # Resolution length in samples
-        resol_sr = math.ceil(resol * self.spInfo['SampleRate'])
+        # Window, inrement, and resolution are converted to
+        # true seconds based on the tree samplerate
+        samplerate = wf.treefs
+        win_sr = math.ceil(window * samplerate)
+        inc_sr = math.ceil(inc * samplerate)
+        resol_sr = math.ceil(resol * samplerate)
 
         # number of windows of length inc
         nw = int(np.ceil(duration / inc_sr))
@@ -553,19 +555,18 @@ class WaveletSegment:
         gc.collect()
         return maxE
 
-    def detectCalls(self, wf, nodelist, samplerate, subfilter, rf=True, annotation=None, window=1, inc=None, aa=True):
+    def detectCalls(self, wf, nodelist, subfilter, rf=True, annotation=None, window=1, inc=None, aa=True):
         """
         For wavelet TESTING and general SEGMENTATION
         Regenerates the signal from the node and threshold.
         Args:
         1. wf - WaveletFunctions with a homebrew wavelet tree (list of ndarray nodes)
         2. nodelist - will reconstruct signal and run detections on each of these nodes separately
-        3. samplerate
-        4. subfilter - used to pass thr, M, and other parameters
-        5. rf - bandpass to species freq range?
-        6. annotation - for calculating noise properties during training
-        7-8. window, inc
-        9. antialias - True/False
+        3. subfilter - used to pass thr, M, and other parameters
+        4. rf - bandpass to species freq range?
+        5. annotation - for calculating noise properties during training
+        6-7. window, inc
+        8. antialias - True/False
 
         Return: ndarray of 1/0 annotations for each of T windows
         """
@@ -586,12 +587,12 @@ class WaveletSegment:
 
         duration = len(wf.tree[0])
 
-        # Virginia: added window sample rate
-        win_sr = math.ceil(window * samplerate)
-        # Increment length in samples
-        inc_sr = math.ceil(inc * samplerate)
-        # Resolution length in samples
-        resol_sr = math.ceil(resol * samplerate)
+        # To convert window / increment / resolution to samples,
+        # we use the actual sampling rate of the tree
+        # i.e. "wf.treefs" samples of wf.tree[0] will always correspond to 1 s
+        win_sr = math.ceil(window * wf.treefs)
+        inc_sr = math.ceil(inc * wf.treefs)
+        resol_sr = math.ceil(resol * wf.treefs)
 
         thr = subfilter['WaveletParams']['thr']
         # Compute the number of samples in a window -- species specific
@@ -872,58 +873,65 @@ class WaveletSegment:
 
         return (bestnodes, worstnodes)
 
-    def preprocess(self, data, sampleRate, d=False, fastRes=True):
+    def preprocess(self, data, sampleRate, d=False, fastRes=False):
         """ Downsamples, denoises, and filters the data.
             sampleRate - actual sample rate of the input. Will be resampled based on spInfo.
             d - boolean, perform denoising?
-            fastRes - use kaiser_fast instead of best. Twice faster but pretty similar output.
+            fastRes - use node-adjusting, or kaiser_fast instead of best. Twice faster but pretty similar output. To use only in batch mode! Otherwise need to deal with returned nodes properly.
         """
         # set target sample rate:
         fsOut = self.spInfo['SampleRate']
+        # copy the filter so that the original wouldn't be affected between files
+        adjSpInfo = copy.deepcopy(self.spInfo)
 
+        currentSR = sampleRate
         if sampleRate != fsOut:
-            if fsOut == 2*sampleRate:
-                print("Adjusting nodes for upsampling to", fsOut)
-                # don't actually upsample audio, just "downsample" the nodes needed
-                WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
-                for subfilter in self.spInfo["Filters"]:
-                    subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                self.spInfo["SampleRate"] = sampleRate
-            elif fsOut == 4*sampleRate:
-                print("Adjusting nodes for upsampling to", fsOut)
-                # same. Wouldn't recommend repeating for larger ratios than 4x
-                WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
-                for subfilter in self.spInfo["Filters"]:
-                    downsampled2x = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                    subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(downsampled2x, "down2")
-                self.spInfo["SampleRate"] = sampleRate
-            # Could also similarly "downsample" by adding an extra convolution, but it's way slower
-            # elif sampleRate == 2*fsOut:
-            #     # don't actually downsample audio, just "upsample" the nodes needed
-            #     WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
-            #     for subfilter in self.spInfo["Filters"]:
-            #         subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
-            #     print("upsampled nodes")
-            #     self.spInfo["SampleRate"] = sampleRate
-            else:
+            if not fastRes:
                 print("Resampling from", sampleRate, "to", fsOut)
                 # actually up/down-sample
-                if fastRes:
-                    data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
+                data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_best')
+                currentSR = fsOut
+            else:
+                # in batch mode, it's worth trying some tricks to do it faster
+                if fsOut == 2*sampleRate:
+                    print("Adjusting nodes for upsampling to", fsOut)
+                    # don't actually upsample audio, just "downsample" the nodes needed
+                    WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
+                    for subfilter in adjSpInfo["Filters"]:
+                        subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                    currentSR = sampleRate
+                elif fsOut == 4*sampleRate:
+                    print("Adjusting nodes for upsampling to", fsOut)
+                    # same. Wouldn't recommend repeating for larger ratios than 4x
+                    WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
+                    for subfilter in adjSpInfo["Filters"]:
+                        downsampled2x = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                        subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(downsampled2x, "down2")
+                    currentSR = sampleRate
+                # Could also similarly "downsample" by adding an extra convolution, but it's way slower
+                # elif sampleRate == 2*fsOut:
+                #     # don't actually downsample audio, just "upsample" the nodes needed
+                #     WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
+                #     for subfilter in self.spInfo["Filters"]:
+                #         subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
+                #     print("upsampled nodes")
+                #     self.spInfo["SampleRate"] = sampleRate
                 else:
-                    data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_best')
-                sampleRate = fsOut
+                    print("Resampling from", sampleRate, "to", fsOut)
+                    # actually up/down-sample
+                    data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
+                    currentSR = fsOut
 
         # Get the five level wavelet decomposition
         if d:
-            WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
+            WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=currentSR)
             denoisedData = WF.waveletDenoise(thresholdType='soft', maxLevel=5)
         else:
             denoisedData = data  # this is to avoid washing out very fade calls during the denoising
 
         WF = []
         del WF
-        return denoisedData
+        return denoisedData, currentSR, adjSpInfo
 
     def loadDirectory(self, dirName, denoise, window=1, inc=None):
         """
@@ -955,7 +963,7 @@ class WaveletSegment:
                     # denoise and store actual audio data:
                     # note: preprocessing is a side effect on data
                     # (preprocess only reads target SampleRate from spInfo)
-                    denoisedData = self.preprocess(self.sp.data, self.sp.sampleRate, d=denoise)
+                    denoisedData, _, _ = self.preprocess(self.sp.data, self.sp.sampleRate, d=denoise)
                     self.audioList.append(denoisedData)
 
                     print("file loaded in", time.time() - opstartingtime)
