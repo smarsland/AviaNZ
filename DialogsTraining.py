@@ -1247,9 +1247,16 @@ class BuildRecAdvWizard(QWizard):
                 F0high = int(self.field("F0high"+str(pageId)))
 
                 # calculate cluster centre
-                # TODO: each train page to store the segments of that cluster - following self.field("segments"+str(pageId)) does not exist
+                for clustID, clustName in self.wizard().clusterPage.clusters.items():
+                    if self.wizard().page(pageId+1).clust == clustName:
+                        ID = clustID
+                        break
+                segments = []
+                for segment in self.wizard().clusterPage.segments:
+                    if segment[-1] == ID:
+                        segments.append(segment)
                 cl = Clustering.Clustering([], [])
-                clustcentre = cl.getClusterCenter(self.field("segments"+str(pageId)), self.field("fs"), fLow, fHigh, self.wizard().clusterPage.feature, self.wizard().clusterPage.duration)
+                clustcentre = cl.getClusterCenter(segments, self.field("fs"), fLow, fHigh, self.wizard().clusterPage.feature, self.wizard().clusterPage.duration)
                 newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(clustcentre), 'Feature': self.wizard().clusterPage.feature}
 
                 if F0:
