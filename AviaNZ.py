@@ -1752,7 +1752,7 @@ class AviaNZ(QMainWindow):
             self.p_plot.addItem(self.plotExtra)
 
             # passing dummy spInfo because we only use this for a function
-            ws = WaveletSegment.WaveletSegment(spInfo=[], wavelet='dmey2')
+            ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
             e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
             # e is 2^nlevels x nseconds
 
@@ -1773,7 +1773,7 @@ class AviaNZ(QMainWindow):
             data = self.sp.ButterworthBandpass(data, self.sampleRate, 100, 16000)
 
             # passing dummy spInfo because we only use this for a function
-            ws = WaveletSegment.WaveletSegment(spInfo=[], wavelet='dmey2')
+            ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
             e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
             annotation = np.zeros(np.shape(e)[1])
             for s in self.segments:
@@ -1810,7 +1810,7 @@ class AviaNZ(QMainWindow):
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(np.ceil(self.datalengthSec))):
                 data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
-                post = Segment.PostProcess(audioData=data, sampleRate=self.sampleRate, segments=[], spInfo={})
+                post = Segment.PostProcess(audioData=data, sampleRate=self.sampleRate, segments=[], subfilter={})
                 m, std, _ = post.wind_cal(data, self.sampleRate)
                 we_mean[w] = m
                 we_std[w] = std
