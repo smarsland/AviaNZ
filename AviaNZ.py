@@ -2846,6 +2846,8 @@ class AviaNZ(QMainWindow):
 
         # update the label
         self.listLabels[segID].setText(text,'k')
+        self.listLabels[segID].update()
+        QApplication.processEvents()
 
     def updateColour(self, segID=None):
         """ Updates the color of a segment (useful for reviewing segments, for example).
@@ -2890,6 +2892,7 @@ class AviaNZ(QMainWindow):
                 col.setAlpha(100)
             self.listRectanglesa1[segID].update()
             self.listRectanglesa2[segID].update()
+        QApplication.processEvents()
 
     def setColourMap(self,cmap):
         """ Listener for the menu item that chooses a colour map.
@@ -3321,6 +3324,7 @@ class AviaNZ(QMainWindow):
             self.refreshOverviewWith(currSeg, delete=True)
 
             # btn.index carries the index of segment shown on btn
+            print("checking", btn.index, currSeg, "to", btn.mark)
             if btn.mark=="red":
                 outputErrors.append(currSeg)
                 # remove all labels for the current species
@@ -3349,6 +3353,7 @@ class AviaNZ(QMainWindow):
                 # update the graphics
                 self.updateText(btn.index)
                 self.updateColour(btn.index)
+            print("afterwards", currSeg)
 
             self.refreshOverviewWith(currSeg)
 
