@@ -1046,7 +1046,7 @@ class Segmenter:
             segments.append([times[onsets[i]],times[onsets[i]]+0.2])
         return segments
 
-    def yin(self,minfreq=100, minperiods=3, thr=0.5, W=1000, returnSegs=False):
+    def yin(self, minfreq=100, minperiods=3, thr=0.5, W=1000, returnSegs=False):
         """ Segmentation by computing the fundamental frequency.
         Uses the Yin algorithm of de Cheveigne and Kawahara (2002)
         """
