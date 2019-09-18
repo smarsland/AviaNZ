@@ -126,6 +126,7 @@ class WaveletSegment:
             Return: tuple of arrays (nodes, tp, fp, tn, fn)
         """
         # 1. read wavs and annotations into self.annotation, self.audioList
+        self.filenames = []
         self.loadDirectory(dirName=dirName, denoise=d, window=window, inc=inc)
 
         # 2. find top nodes for each file (self.nodeCorrs)

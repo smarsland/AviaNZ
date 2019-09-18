@@ -154,7 +154,16 @@ class Segment(list):
         for lab in self[4]:
             if lab["species"]==species and lab["certainty"]==certainty:
                 self[4].remove(lab)
-                self.keys.remove((species, certainty))
+                try:
+                    self.keys.remove((species, certainty))
+                except Exception as e:
+                    text = "************ WARNING ************\n"
+                    text += str(e)
+                    text += "\nWhile trying to remove key"+str(species)+"-"+str(certainty) + "from"+ str(self[4])
+                    text += "\nWhich had keys" + str(self.keys)
+                    import SupportClasses
+                    msg = SupportClasses.MessagePopup("w", "ERROR - please report", text)
+                    msg.exec_()
                 # if that was the last label, flip to Don't Know
                 if len(self[4])==0:
                     self.addLabel("Don't Know", 0)
