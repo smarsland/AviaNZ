@@ -201,6 +201,10 @@ class WaveletSegment:
             learnMode - recold (no AA) or recaa (partial AA) or recaafull (full AA)
             saveDetections - output .data of the testing results?
             window, inc - window and increment length in seconds
+
+            Return values:
+            1. 0/1 annotations concatenated over all files
+            2. list of ([segments], filename, filelength) over all files
         """
         # Load the relevant subfilter
         self.nodes = subfilter["WaveletParams"]["nodes"]
@@ -208,7 +212,6 @@ class WaveletSegment:
         # clear storage for multifile processing
         self.annotation = []
         self.audioList = []
-        self.filelengths = []
         self.filenames = []
         detected = np.array([])
 
@@ -222,6 +225,7 @@ class WaveletSegment:
                                                                         np.sum(self.annotation == 0)))
 
         # wavelet decomposition and call detection
+        self.detected_out = []
         for fileId in range(len(self.audioList)):
             print('Processing file # ', fileId + 1)
 
@@ -245,21 +249,28 @@ class WaveletSegment:
                 print("ERROR: the specified learning mode is not implemented in this function yet")
                 return
 
+            # store presence/absence for fBetaScore
             detected = np.concatenate((detected, detected_c))
+
+            # store segments for return output
+            # detected np [0 1 1 1] becomes [[1,3]]
+            detected_c_segs = np.where(detected_c > 0)
+            if np.shape(detected_c_segs)[1] > 1:
+                detected_c_segs = np.squeeze(detected_c_segs)
+                detected_c_segs = self.identifySegments(detected_c_segs)
+            elif np.shape(detected_c_segs)[1] == 1:
+                detected_c_segs = np.array(detected_c_segs).flatten().tolist()
+                detected_c_segs = self.identifySegments(detected_c_segs)
+            else:
+                detected_c_segs = []
+            detected_c_segs = self.mergeSeg(detected_c_segs)
+            self.detected_out.append((detected_c_segs, self.filenames[fileId], len(detected_c)))
+
             # Generate .data for this file
             # Merge neighbours in order to convert the detections into segments
             # Note: detected np[0 1 1 1] becomes [[1,3]]
             # TODO currently disabled to avoid conflicts with new format
             # if savedetections:
-            #     detected_c = np.where(detected_c > 0)
-            #     if np.shape(detected_c)[1] > 1:
-            #         detected_c = self.identifySegments(np.squeeze(detected_c))
-            #     elif np.shape(detected_c)[1] == 1:
-            #         detected_c = np.array(detected_c).flatten().tolist()
-            #         detected_c = self.identifySegments(detected_c)
-            #     else:
-            #         detected_c = []
-            #     detected_c = self.mergeSeg(detected_c)
             #     for item in detected_c:
             #         item[0] = int(item[0])
             #         item[1] = int(item[1])
@@ -276,9 +287,9 @@ class WaveletSegment:
             gc.collect()
 
         self.annotation = np.concatenate(self.annotation, axis=0)
-        fB, recall, TP, FP, TN, FN = self.fBetaScore(self.annotation, detected)
+        print("final output of testing", self.detected_out)
 
-        return detected, TP, FP, TN, FN
+        return detected, self.detected_out
 
 
     def computeWaveletEnergy(self, data, sampleRate, nlevels=5, wpmode="new", window=1, inc=1, resol=1):
@@ -953,9 +964,10 @@ class WaveletSegment:
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.endswith('.wav') and os.stat(root + '/' + file).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
+                if file.endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
                     opstartingtime = time.time()
-                    wavFile = os.path.join(root, file[:-4])
+                    wavFile = os.path.join(root, file)
+                    self.filenames.append(wavFile)
 
                     # adds to self.annotation array, also sets self.sp data
                     self.loadData(wavFile, window, inc, resol)
@@ -984,18 +996,16 @@ class WaveletSegment:
         # print(np.shape(self.annotation))
 
 
-    def loadData(self, fName, window, inc, resol):
+    def loadData(self, filename, window, inc, resol):
         """ Loads a single file.
-            Input: fName - filestem for wav and annotation files
+            Input: filename - wav file name
             Output: fills self.annotation, returns data, samplerate
         """
         # Virginia chamges
         # Added resol input as basic unit for read annotation file
-        filename = fName + '.wav'
         print('\n\n', filename)
         # Virginia: added resol for identify annotation txt
-        filenameAnnotation = fName + '-res' + str(float(resol)) + 'sec.txt'
-        # filenameAnnotation = fName + '-res'+str(float(resol))+'sec.txt'
+        filenameAnnotation = filename[:-4] + '-res' + str(float(resol)) + 'sec.txt'
 
         self.sp.readWav(filename)
 

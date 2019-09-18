@@ -1528,7 +1528,6 @@ class TestRecWizard(QWizard):
             vboxHead.addWidget(space)
 
             form2 = QFormLayout()
-            form2.addWidget(QLabel("<b>Detection summary</b>"))
             form2.addRow("Manually labelled segments:", self.manSegs)
             form2.addRow("\ttotal seconds:", self.manTime)
             form2.addRow("Segments detected:", self.autoSegs)
@@ -1536,20 +1535,16 @@ class TestRecWizard(QWizard):
             form2.addRow("Recall (sensitivity) in 1 s resolution:", self.sensTime)
 
             form_post = QFormLayout()
-            form_post.addWidget(QLabel("<b>After post-processing</b>"))
-            form_post.addRow("Manually labelled segments:", self.manSegsP)
-            form_post.addRow("\ttotal seconds:", self.manTimeP)
             form_post.addRow("Segments detected:", self.autoSegsP)
             form_post.addRow("\ttotal seconds:", self.autoTimeP)
             form_post.addRow("Recall (sensitivity) in 1 s resolution:", self.sensTimeP)
 
-            mainhbox = QHBoxLayout()
-            mainhbox.addLayout(form2)
-            mainhbox.addLayout(form_post)
-
             vbox = QVBoxLayout()
             vbox.addLayout(vboxHead)
-            vbox.addLayout(mainhbox)
+            vbox.addWidget(QLabel("<b>Detection summary</b>"))
+            vbox.addLayout(form2)
+            vbox.addWidget(QLabel("<b>After post-processing</b>"))
+            vbox.addLayout(form_post)
 
             self.setLayout(vbox)
 
@@ -1590,36 +1585,56 @@ class TestRecWizard(QWizard):
                             # (next page will overwrite the same files)
                             segments.exportGT(wavFile, species, window=window, inc=inc)
 
-                self.detected01, TP, FP, TN, FN = ws.waveletSegment_test(self.field("testDir"),
+                # first return value: single array of 0/1 detections over all files
+                # second return value: list of tuples ([segments], filename, filelen) for each file
+                detected01, detectedS = ws.waveletSegment_test(self.field("testDir"),
                                                subfilter, d=False, rf=True, learnMode='recaa',
                                                savedetections=False, window=window, inc=inc)
                 # save the 0/1 annotations as well
                 self.wizard().annotations = copy.deepcopy(ws.annotation)
 
+                fB, recall, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, detected01)
                 print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
                 total = TP+FP+TN+FN
                 if total == 0:
                     print("ERROR: failed to find any testing data")
                     return
 
-                # merge neighbours in order to convert the detections into segments
-                # note: detected np[0 1 1 1] becomes [[1,3]]
-                detected = np.where(self.detected01 > 0)
-                if np.shape(detected)[1] > 1:
-                    detected = ws.identifySegments(np.squeeze(detected))
-                elif np.shape(detected)[1] == 1:
-                    detected = np.array(detected).flatten().tolist()
-                    detected = ws.identifySegments(detected)
-                else:
-                    detected = []
-                detected = ws.mergeSeg(detected)
+                totallen = sum([len(detfile[0]) for detfile in detectedS])
 
                 # update fields
                 self.manSegs.setText(str(manSegNum))
                 self.manTime.setText("%.1f" % (TP+FN))
-                self.autoSegs.setText(str(len(detected)))
+                self.autoSegs.setText(str(totallen))
                 self.autoTime.setText("%.1f" % (TP+FP))
                 self.sensTime.setText("%d %%" % (TP/(TP+FN)*100))
+
+                # Post process:
+                print("Post-processing...")
+                detectedSpost = []
+                self.detected01post = []
+                for detfile in detectedS:
+                    post = Segment.PostProcess(segments=detfile[0], subfilter=subfilter)
+                    print("got segments", len(post.segments))
+                    post.fundamentalFrq(fileName=detfile[1])
+                    detectedSpost.extend(post.segments)
+                    print("kept segments", len(post.segments))
+
+                    # back-convert to 0/1:
+                    det01post = np.zeros(detfile[2])
+                    for seg in post.segments:
+                        det01post[int(seg[0]):int(seg[1])] = 1
+                    self.detected01post.extend(det01post)
+
+                # now, detectedS and detectedSpost contain lists of segments before/after post
+                # and detected01 and self.detected01post - corresponding pres/abs marks
+
+                # update fields
+                _, _, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, self.detected01post)
+                print('--Post-processing summary--\n%d %d %d %d' %(TP, FP, TN, FN))
+                self.autoSegsP.setText(str(len(detectedSpost)))
+                self.autoTimeP.setText("%.1f" % (TP+FP))
+                self.sensTimeP.setText("%d %%" % (TP/(TP+FN)*100))
 
     class WPageLast(QWizardPage):
         def __init__(self, parent=None):
@@ -1686,10 +1701,10 @@ class TestRecWizard(QWizard):
             for pageId in self.wizard().testpages[:-1]:
                 page = self.wizard().page(pageId)
                 if first:
-                    self.detections = page.detected01
+                    self.detections = page.detected01post
                     first = False
                 else:
-                    self.detections = np.maximum.reduce([page.detected01, self.detections])
+                    self.detections = np.maximum.reduce([page.detected01post, self.detections])
 
             # get and parse the agreement metrics
             fB, recall, TP, FP, TN, FN = ws.fBetaScore(self.wizard().annotations, self.detections)

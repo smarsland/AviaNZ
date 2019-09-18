@@ -1399,60 +1399,49 @@ class PostProcess:
                         newSegments.remove(seg)
         self.segments = newSegments
 
-    def fundamentalFrq(self, fileName, speciesData):
+    def fundamentalFrq(self, fileName):
         '''
         Check for fundamental frequency of the segments, discard the segments that do not indicate the species.
         '''
-        newSegments = copy.deepcopy(self.segments)
-        for seg in self.segments:
-            if seg[0] == -1:
-                continue
-            else:
-                # read the sound segment and check fundamental frq.
-                secs = int(seg[1] - seg[0])
-                # Got to read from the source instead of using self.audioData - ff is wrong if you use self.audioData somehow
-                # data = self.audioData[int(seg[0]*speciesData['SampleRate']):int(seg[1]*speciesData['SampleRate'])]
-                # denoise before fundamental frq. extraction
-                sp = SignalProc.SignalProc(256, 128)
-                sp.readWav(fileName, secs, seg[0])
-                self.sampleRate = sp.rate
-                self.audioData = sp.data
+        for segix in reversed(range(len(self.segments))):
+            seg = self.segments[segix]
 
-                data, sampleRate = self.denoise_filter(level=8, d=True, f=False, f1=self.fLow, f2=self.fHigh)
-                sp.data = data
-                sp.sampleRate = sampleRate
-                _ = sp.spectrogram(mean_normalise=True, onesided=True, multitaper=False)
+            # read the sound segment and check fundamental frq.
+            secs = int(seg[1] - seg[0])
+            # Got to read from the source instead of using self.audioData - ff is wrong if you use self.audioData somehow
+            sp = SignalProc.SignalProc(256, 128)
+            sp.readWav(fileName, secs, seg[0])
+            self.sampleRate = sp.sampleRate
+            self.audioData = sp.data
 
-                segment = Segment.Segmenter(sp)
-                pitch, y, minfreq, W = segment.yin(minfreq=100)
-                ind = np.squeeze(np.where(pitch > minfreq))
-                pitch = pitch[ind]
-                print(seg, pitch)
-                if pitch.size == 0:
-                    print('Segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
-                    # newSegments.remove(seg) # for now keep it
-                    continue    # continue to the next seg
-                if ind.size < 2:
-                    if (pitch > self.F0[0]) and (pitch < self.F0[1]):
-                        # print("Match with F0 of the bird, ", pitch)
-                        continue
-                    else:
-                        print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
-                        newSegments.remove(seg)
-                elif (np.mean(pitch) > self.F0[0]) and (np.mean(pitch) < self.F0[1]):
-                        continue
-                else:
-                    print('segment* ', seg, round(np.mean(pitch)), pitch, np.median(pitch), ' *-- fundamental freq is out of range, could be noise')
-                    newSegments.remove(seg)
-                    continue
-        self.segments = newSegments
+            # denoise before fundamental frq. extraction
+            # data = self.denoise_filter(level=8, d=True, f=False, f1=self.fLow, f2=self.fHigh)
+            # sp.data = data
+            # sp.sampleRate = self.sampleRate
+            _ = sp.spectrogram(mean_normalise=True, onesided=True, multitaper=False)
+
+            segment = Segmenter(sp, fs=sp.sampleRate)
+            pitch, y, minfreq, W = segment.yin(minfreq=100)
+            ind = np.squeeze(np.where(pitch > minfreq))
+            pitch = pitch[ind]
+
+            if pitch.size == 0:
+                print('Segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
+                del self.segments[segix]
+            elif pitch.size == 1:
+                if (pitch < self.F0[0]) or (pitch > self.F0[1]):
+                    print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
+                    del self.segments[segix]
+            elif (np.mean(pitch) < self.F0[0]) or (np.mean(pitch) > self.F0[1]):
+                print('segment* ', seg, round(np.mean(pitch)), pitch, np.median(pitch), ' *-- fundamental freq is out of range, could be noise')
+                del self.segments[segix]
 
     def denoise_filter(self, level=5, d=False, f=False, f1=0, f2=0):
         """ Wavelet denoise and band-pass filter for fundamental frquency
         """
         # TODO: only used in fundamental frq calculation. Remove when sorting out FF.
         if d:
-            wf = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet='dmey', maxLevel=level, samplerate=self.sampleRate)
+            wf = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet='dmey2', maxLevel=level, samplerate=self.sampleRate)
             denoisedData = wf.waveletDenoise(thresholdType="soft", maxLevel=level)
         else:
             denoisedData=self.audioData
