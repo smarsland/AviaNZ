@@ -2369,3 +2369,160 @@ class FilterManager(QDialog):
             print(e)
             return
 
+class Cluster(QDialog):
+    def __init__(self, segments, sampleRate, classes, config, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Clustered segments')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+
+        if len(segments) == 0:
+            print("No segments provided")
+            return
+
+        self.sampleRate = sampleRate
+        self.segments = segments
+        self.nclasses = classes
+        self.config = config
+
+        # Volume control
+        self.volSlider = QSlider(Qt.Horizontal)
+        self.volSlider.valueChanged.connect(self.volSliderMoved)
+        self.volSlider.setRange(0, 100)
+        self.volSlider.setValue(50)
+        volIcon = QLabel()
+        volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+
+        # Brightness, and contrast sliders
+        labelBr = QLabel(" Bright.")
+        self.brightnessSlider = QSlider(Qt.Horizontal)
+        self.brightnessSlider.setMinimum(0)
+        self.brightnessSlider.setMaximum(100)
+        self.brightnessSlider.setValue(20)
+        self.brightnessSlider.setTickInterval(1)
+        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
+
+        labelCo = QLabel("Contr.")
+        self.contrastSlider = QSlider(Qt.Horizontal)
+        self.contrastSlider.setMinimum(0)
+        self.contrastSlider.setMaximum(100)
+        self.contrastSlider.setValue(20)
+        self.contrastSlider.setTickInterval(1)
+        self.contrastSlider.valueChanged.connect(self.setColourLevels)
+
+        hboxSpecContr = QHBoxLayout()
+        hboxSpecContr.addWidget(labelBr)
+        hboxSpecContr.addWidget(self.brightnessSlider)
+        hboxSpecContr.addWidget(labelCo)
+        hboxSpecContr.addWidget(self.contrastSlider)
+        hboxSpecContr.addWidget(volIcon)
+        hboxSpecContr.addWidget(self.volSlider)
+
+        # set up the images
+        self.flowLayout = pg.LayoutWidget()
+        self.flowLayout.setGeometry(QtCore.QRect(0, 0, 380, 247))
+
+        self.scrollArea = QtGui.QScrollArea(self)
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setWidget(self.flowLayout)
+
+        # set overall layout of the dialog
+        self.vboxFull = QVBoxLayout()
+        self.vboxFull.addLayout(hboxSpecContr)
+        self.vboxFull.addWidget(self.scrollArea)
+        self.setLayout(self.vboxFull)
+
+        # Add the clusters to rows
+        self.addButtons()
+        self.updateButtons()
+
+    def addButtons(self):
+        """ Only makes the PicButtons and self.clusters dict
+        """
+        self.clusters = []
+        self.picbuttons = []
+        for i in range(self.nclasses):
+            self.clusters.append((i, 'Type_' + str(i)))
+        self.clusters = dict(self.clusters)  # Dictionary of {ID: cluster_name}
+
+        # Create the buttons for each segment
+        for seg in self.segments:
+            sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1] - seg[1][0], seg[1][0])
+            newButton = PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1],
+                                          self.lut, self.colourStart, self.colourEnd, False, cluster=True)
+            self.picbuttons.append(newButton)
+        # (updateButtons will place them in layouts and show them)
+
+    def updateButtons(self):
+        """ Draw the existing buttons, and create check- and text-boxes.
+        Called when merging clusters or initializing the page. """
+        self.tboxes = []    # Corresponding list of text boxes
+        for r in range(self.nclasses):
+            c = 0
+            tbox = QLineEdit(self.clusters[r])
+            tbox.setMinimumWidth(80)
+            tbox.setMaximumHeight(150)
+            tbox.setStyleSheet("border: none;")
+            tbox.setAlignment(QtCore.Qt.AlignCenter)
+            self.tboxes.append(tbox)
+            self.flowLayout.addWidget(self.tboxes[-1], r, c)
+            c += 1
+            # Find the segments under this class and show them
+            for segix in range(len(self.segments)):
+                if self.segments[segix][-1] == r:
+                    self.flowLayout.addWidget(self.picbuttons[segix], r, c)
+                    c += 1
+                    self.picbuttons[segix].show()
+        self.flowLayout.update()
+
+    def setColourLevels(self):
+        """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
+        Translates the brightness and contrast values into appropriate image levels.
+        """
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        brightness = self.brightnessSlider.value()
+        contrast = self.contrastSlider.value()
+        colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
+        colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + colourStart
+        for btn in self.picbuttons:
+            btn.stopPlayback()
+            btn.setImage(self.lut, colourStart, colourEnd, False)
+            btn.update()
+
+    def volSliderMoved(self, value):
+        # try/pass to avoid race situations when smth is not initialized
+        try:
+            for btn in self.picbuttons:
+                btn.media_obj.applyVolSlider(value)
+        except Exception:
+            pass
+
+    def loadFile(self, filename, duration=0, offset=0):
+        if duration == 0:
+            duration = None
+        sp = SignalProc.SignalProc(512, 256)
+        sp.readWav(filename, duration, offset)
+
+        sgRaw = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,
+                                      multitaper=False, need_even=False)
+        maxsg = np.min(sgRaw)
+        self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+        self.setColourMap()
+
+        return self.sg, sp.data, sp.audioFormat
+
+    def setColourMap(self):
+        """ Listener for the menu item that chooses a colour map.
+        Loads them from the file as appropriate and sets the lookup table.
+        """
+        cmap = self.config['cmap']
+
+        pos, colour, mode = colourMaps.colourMaps(cmap)
+
+        cmap = pg.ColorMap(pos, colour,mode)
+        self.lut = cmap.getLookupTable(0.0, 1.0, 256)
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
+        self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart

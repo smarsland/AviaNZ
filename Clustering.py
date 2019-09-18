@@ -249,7 +249,7 @@ class Clustering:
 
         return som
 
-    def cluster(self, dir, species, feature='we', n_mels=24, minlen=0.2, denoise=False,
+    def cluster(self, dir, species=None, feature='we', n_mels=24, minlen=0.2, denoise=False,
                 alg='agglomerative', n_clusters=None):
         """
         Cluster segments during training to make sub-filters.
@@ -267,24 +267,53 @@ class Clustering:
         :param n_clusters: number of clusters, optional
         :return: clustered segments
         """
+        self.alg = alg
+        self.n_clusters = n_clusters
         # Get the frequency band from annotations
         lowlist = []
         highlist = []
         srlist = []
-        for root, dirs, files in os.walk(str(dir)):
-            for file in files:
-                if file.endswith('.wav') and file + '.data' in files:
-                    wavobj = wavio.read(os.path.join(root, file))
-                    srlist.append(wavobj.rate)
-                    # Read the annotation
-                    segments = Segment.SegmentList()
-                    segments.parseJSON(os.path.join(root, file + '.data'))
-                    # keep the right species
+        # Directory mode
+        if os.path.isdir(dir):
+            for root, dirs, files in os.walk(str(dir)):
+                for file in files:
+                    if file.endswith('.wav') and file + '.data' in files:
+                        wavobj = wavio.read(os.path.join(root, file))
+                        srlist.append(wavobj.rate)
+                        # Read the annotation
+                        segments = Segment.SegmentList()
+                        segments.parseJSON(os.path.join(root, file + '.data'))
+                        # keep the right species
+                        if species:
+                            thisSpSegs = segments.getSpecies(species)
+                        else:
+                            thisSpSegs = np.arange(len(segments)).tolist()
+                        for segix in thisSpSegs:
+                            seg = segments[segix]
+                            lowlist.append(seg[2])
+                            highlist.append(seg[3])
+        # File mode
+        elif os.path.isfile(dir):
+            if dir.endswith('.wav') and os.path.exists(dir + '.data'):
+                wavobj = wavio.read(dir)
+                srlist.append(wavobj.rate)
+                # Read the annotation
+                segments = Segment.SegmentList()
+                segments.parseJSON(dir + '.data')
+                # keep the right species
+                if species:
                     thisSpSegs = segments.getSpecies(species)
-                    for segix in thisSpSegs:
-                        seg = segments[segix]
-                        lowlist.append(seg[2])
-                        highlist.append(seg[3])
+                else:
+                    thisSpSegs = np.arange(len(segments)).tolist()
+                for segix in thisSpSegs:
+                    seg = segments[segix]
+                    lowlist.append(seg[2])
+                    highlist.append(seg[3])
+
+        if len(thisSpSegs) < self.n_clusters:
+            self.n_clusters = len(thisSpSegs)*2 + 1
+            # why this is more than #segments? self.n_clusters relevents to syllable level clusters, differs to segment
+            # level clusters with majority voting
 
         f1 = np.min(lowlist)
         f2 = np.median(highlist)
@@ -316,43 +345,86 @@ class Clustering:
 
         # Clustering at syllable level, therefore find the syllables in each segment
         dataset = []
-        for root, dirs, files in os.walk(str(dir)):
-            for file in files:
-                if file.endswith('.wav') and file + '.data' in files:
-                    # Read the annotation
-                    segments = Segment.SegmentList()
-                    segments.parseJSON(os.path.join(root, file + '.data'))
-                    thisSpSegs = segments.getSpecies(species)
-                    # Now find syllables within each segment, median clipping
-                    for segix in thisSpSegs:
-                        seg = segments[segix]
-                        audiodata = self.loadFile(filename=os.path.join(root, file), duration=seg[1] - seg[0],
-                                                 offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
-                        minlen = minlen * fs
-                        start = int(seg[0] * fs)
-                        sp = SignalProc.SignalProc(256, 128)
-                        sp.data = audiodata
-                        sp.sampleRate = fs
-                        sgRaw = sp.spectrogram(256, 128)
-                        segment = Segment.Segmenter(sp, fs)
-                        syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
-                        if len(syls) == 0:  # Sanity check
+        if os.path.isdir(dir):
+            for root, dirs, files in os.walk(str(dir)):
+                for file in files:
+                    if file.endswith('.wav') and file + '.data' in files:
+                        # Read the annotation
+                        segments = Segment.SegmentList()
+                        segments.parseJSON(os.path.join(root, file + '.data'))
+                        if species:
+                            thisSpSegs = segments.getSpecies(species)
+                        else:
+                            thisSpSegs = np.arange(len(segments)).tolist()
+                        # Now find syllables within each segment, median clipping
+                        for segix in thisSpSegs:
+                            seg = segments[segix]
+                            audiodata = self.loadFile(filename=os.path.join(root, file), duration=seg[1] - seg[0],
+                                                     offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
+                            minlen = minlen * fs
+                            start = int(seg[0] * fs)
+                            sp = SignalProc.SignalProc(256, 128)
+                            sp.data = audiodata
+                            sp.sampleRate = fs
+                            sgRaw = sp.spectrogram(256, 128)
                             segment = Segment.Segmenter(sp, fs)
-                            syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
-                        syls = segment.checkSegmentOverlap(syls)  # merge overlapped segments
-                        syls = [[int(s[0] * fs) + start, int(s[1] * fs + start)] for s in syls]
+                            syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
+                            if len(syls) == 0:  # Sanity check
+                                segment = Segment.Segmenter(sp, fs)
+                                syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
+                            syls = segment.checkSegmentOverlap(syls)  # merge overlapped segments
+                            syls = [[int(s[0] * fs) + start, int(s[1] * fs + start)] for s in syls]
 
-                        # Sanity check, e.g. when user annotates syllables tight, median clipping may not detect it.
-                        if len(syls) == 0:
-                            syls = [[start, int(seg[1] * fs)]]
-                        if len(syls) > 1:
-                            syls = segment.mergeshort(syls, minlen)  # Merge short segments
-                        if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen:  # Sanity check
-                            syls = [[start, int(seg[1] * fs)]]
-                        syls = [[x[0] / fs, x[1] / fs] for x in syls]
-                        # print('\nCurrent:', seg, '--> Median clipping ', syls)
-                        for syl in syls:
-                            dataset.append([os.path.join(root, file), seg, syl])
+                            # Sanity check, e.g. when user annotates syllables tight, median clipping may not detect it.
+                            if len(syls) == 0:
+                                syls = [[start, int(seg[1] * fs)]]
+                            if len(syls) > 1:
+                                syls = segment.mergeshort(syls, minlen)  # Merge short segments
+                            if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen:  # Sanity check
+                                syls = [[start, int(seg[1] * fs)]]
+                            syls = [[x[0] / fs, x[1] / fs] for x in syls]
+                            # print('\nCurrent:', seg, '--> Median clipping ', syls)
+                            for syl in syls:
+                                dataset.append([os.path.join(root, file), seg, syl])
+        elif os.path.isfile(dir):
+            if dir.endswith('.wav') and os.path.exists(dir + '.data'):
+                # Read the annotation
+                segments = Segment.SegmentList()
+                segments.parseJSON(dir + '.data')
+                if species:
+                    thisSpSegs = segments.getSpecies(species)
+                else:
+                    thisSpSegs = np.arange(len(segments)).tolist()
+                # Now find syllables within each segment, median clipping
+                for segix in thisSpSegs:
+                    seg = segments[segix]
+                    audiodata = self.loadFile(filename=dir, duration=seg[1] - seg[0],
+                                              offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
+                    minlen = minlen * fs
+                    start = int(seg[0] * fs)
+                    sp = SignalProc.SignalProc(256, 128)
+                    sp.data = audiodata
+                    sp.sampleRate = fs
+                    sgRaw = sp.spectrogram(256, 128)
+                    segment = Segment.Segmenter(sp, fs)
+                    syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
+                    if len(syls) == 0:  # Sanity check
+                        segment = Segment.Segmenter(sp, fs)
+                        syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
+                    syls = segment.checkSegmentOverlap(syls)  # merge overlapped segments
+                    syls = [[int(s[0] * fs) + start, int(s[1] * fs + start)] for s in syls]
+
+                    # Sanity check, e.g. when user annotates syllables tight, median clipping may not detect it.
+                    if len(syls) == 0:
+                        syls = [[start, int(seg[1] * fs)]]
+                    if len(syls) > 1:
+                        syls = segment.mergeshort(syls, minlen)  # Merge short segments
+                    if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen:  # Sanity check
+                        syls = [[start, int(seg[1] * fs)]]
+                    syls = [[x[0] / fs, x[1] / fs] for x in syls]
+                    # print('\nCurrent:', seg, '--> Median clipping ', syls)
+                    for syl in syls:
+                        dataset.append([dir, seg, syl])
 
         # Make syllables fixed-length
         lengths = []
@@ -408,33 +480,9 @@ class Clustering:
         # learners = Clustering(features, [])
         self.features = features
 
-        if alg == 'DBSCAN':
-            print('\nDBSCAN--------------------------------------')
-            model = self.DBscan(eps=0.3, min_samples=3)
-            predicted_labels = model.labels_
-            # clusters = set(model.labels_)
-
-        elif alg == 'Birch':
-            print('\nBirch----------------------------------------')
-            if not n_clusters:
-                model = self.birch(threshold=0.5, n_clusters=n_clusters)
-            else:
-                model = self.birch(threshold=0.88, n_clusters=None)
-            predicted_labels = model.labels_
-            # clusters = set(model.labels_)
-
-        if alg == 'agglomerative':
-            print('\nAgglomerative Clustering----------------------')
-            # Either set n_clusters=None and compute_full_tree=T or distance_threshold=None
-            if not n_clusters:
-                model = self.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=0.5,
-                                                     linkage='complete')
-            else:
-                model = self.agglomerativeClustering(n_clusters=n_clusters, compute_full_tree=False,
-                                                     distance_threshold=None, linkage='complete')
-            model.fit_predict(self.features)
-            predicted_labels = model.labels_
-            # clusters = set(model.labels_)
+        model = self.trainModel()
+        predicted_labels = model.labels_
+        # clusters = len(set(model.labels_))
 
         # Attach the label to each syllable
         for i in range(len(predicted_labels)):
@@ -485,6 +533,29 @@ class Clustering:
 
         return clustered_dataset, fs, nclasses, duration
 
+    def trainModel(self,):
+        if self.alg == 'DBSCAN':
+            print('\nDBSCAN--------------------------------------')
+            model = self.DBscan(eps=0.3, min_samples=3)
+
+        elif self.alg == 'Birch':
+            print('\nBirch----------------------------------------')
+            if not self.n_clusters:
+                model = self.birch(threshold=0.5, n_clusters=self.n_clusters)
+            else:
+                model = self.birch(threshold=0.88, n_clusters=None)
+
+        if self.alg == 'agglomerative':
+            print('\nAgglomerative Clustering----------------------')
+            # Either set n_clusters=None and compute_full_tree=T or distance_threshold=None
+            if not self.n_clusters:
+                model = self.agglomerativeClustering(n_clusters=None, compute_full_tree=True, distance_threshold=0.5,
+                                                     linkage='complete')
+            else:
+                model = self.agglomerativeClustering(n_clusters=self.n_clusters, compute_full_tree=False,
+                                                     distance_threshold=None, linkage='complete')
+            model.fit_predict(self.features)
+        return model
 
     def getClusterCenter(self, cluster, fs, f1, f2, feature, duration, n_mels=24, denoise=False):
         """

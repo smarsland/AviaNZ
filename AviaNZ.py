@@ -51,6 +51,7 @@ import Segment
 import WaveletSegment
 import WaveletFunctions
 import AviaNZ_batch
+import Clustering
 import librosa
 
 import click, webbrowser, colourMaps, copy, math
@@ -378,7 +379,7 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
 
         if not self.DOC and not self.Hartley:
-            actionMenu.addAction("Classify segments",self.classifySegments,"Ctrl+C")
+            actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
             actionMenu.addSeparator()
 
         if not self.Hartley:
@@ -4211,30 +4212,13 @@ class AviaNZ(QMainWindow):
         return segments
 
     def classifySegments(self):
-        # TODO: Finish this
-        # Note that this still works on 1 second -- species-specific parameter eventually (here twice: as 1 and in sec loop)
-        print("Not implemented yet!")
-        return
-
-        if self.segments is None or len(self.segments) == 0:
-            msg = SupportClasses.MessagePopup("w", "No segments", "No segments to recognise")
-            msg.exec_()
-            return
-        else:
-            with pg.BusyCursor():
-                # TODO: Ask for species; brown kiwi for now
-                # TODO: ***** TIDY UP WAVELET SEG, USE THIS!
-                for i in range(len(self.segments)):
-                    seglength = np.abs(self.segments[i][1] - self.segments[i][0])
-                    if seglength <= 1:
-                        # Recognise as is
-                        label = WaveletSegment.computeWaveletEnergy(self.audiodata[self.segments[i][0]:self.segments[i][1]], self.sampleRate)
-                        self.updateText(label,i)
-                    else:
-                        for sec in range(math.ceil(seglength)):
-                            label = WaveletSegment.computeWaveletEnergy(self.audiodata[sec*self.sampleRate+self.segments[i][0]:(sec+1)*self.sampleRate+self.segments[i][0]], self.sampleRate)
-                            # TODO: Check if the labels match, decide what to do if not
-                        self.updateText(label,i)
+        """Listner for Action->Cluster segments menu item, cluster segments marked in the current file. Only to display
+            the auto generated clusters
+        """
+        cl = Clustering.Clustering([], [])
+        segments, fs, nclasses, duration = cl.cluster(self.filename, None, feature='we', n_clusters=5)
+        self.clusterD = Dialogs.Cluster(segments, fs, nclasses, self.config)
+        self.clusterD.show()
 
     def recognise(self):
         # This will eventually call methods to do automatic recognition

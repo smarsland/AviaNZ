@@ -981,7 +981,7 @@ class WaveletSegment:
         totalcalls = sum([sum(a) for a in self.annotation])
         totalblocks = sum([len(a) for a in self.annotation])
         print("Directory loaded. %d/%d presence blocks found.\n" % (totalcalls, totalblocks))
-        print(np.shape(self.annotation))
+        # print(np.shape(self.annotation))
 
 
     def loadData(self, fName, window, inc, resol):
