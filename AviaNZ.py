@@ -837,21 +837,35 @@ class AviaNZ(QMainWindow):
         self.menuBird2.clear()
 
         if self.viewCallType:
-            # populate with call types from known filters
-            possibleCTs = set()
-            for filt in self.FilterDicts.values():
-                possibleCTs.update([subf["calltype"] for subf in filt["Filters"]])
-            # add some standard call type suggestions?
-            possibleCTs.update(["male", "female", "juvenile"])
-            for item in possibleCTs:
-                menuitem = self.menuBirdList.addAction(item)
-                menuitem.setCheckable(True)
-                # update check marks based on this segment
-                if hasattr(self, 'segments'):
-                    for lab in self.segments[self.box1id][4]:
-                        if "calltype" in lab and lab["calltype"]==item:
-                            menuitem.setChecked(True)
-                            break
+            if not hasattr(self, 'segments') or self.box1id<0:
+                return
+
+            thisSeg = self.segments[self.box1id]
+            for lab in thisSeg[4]:
+                if lab["species"]=="Don't Know":
+                    continue
+                # add the species menu
+                spMenu = self.menuBirdList.addMenu(lab["species"])
+
+                # get possible call types from all filters for this species
+                possibleCTs = set()
+                for filt in self.FilterDicts.values():
+                    if filt["species"]==lab["species"]:
+                        possibleCTs.update([subf["calltype"] for subf in filt["Filters"]])
+                # add standard extras and self
+                possibleCTs.add("(Other)")
+                if "calltype" in lab:
+                    possibleCTs.add(lab["calltype"])
+
+                # put them as actions in the species menu
+                for ct in possibleCTs:
+                    ctitem = spMenu.addAction(ct)
+                    ctitem.setCheckable(True)
+
+                    # update check marks based on this segment
+                    if "calltype" in lab and lab["calltype"]==ct:
+                        ctitem.setChecked(True)
+
         else:
             # otherwise, fill the species list
             for item in self.shortBirdList[:20]:
@@ -2784,16 +2798,20 @@ class AviaNZ(QMainWindow):
     def callSelectedMenu(self, ctitem):
         """ Simplified version of the above for dealing with calltype selection
         from the popup context menu. """
-        if type(ctitem) is not str:
-            ctitem = ctitem.text()
         if ctitem is None or ctitem=="":
             return
 
+        spmenu = ctitem.parentWidget().title()
+        if type(ctitem) is not str:
+            ctitem = ctitem.text()
+        print(ctitem, spmenu)
+
         workingSeg = self.segments[self.box1id]
         for lab in workingSeg[4]:
-            if lab["species"] != "Don't Know":
+            if lab["species"] == spmenu:
                 lab["calltype"] = ctitem
         self.updateText()
+        self.menuBirdList.hide()
 
     def updateText(self, segID=None):
         """ When the user sets or changes the name in a segment, update the text label.
@@ -2823,7 +2841,7 @@ class AviaNZ(QMainWindow):
                 if "calltype" in lab:
                     text.append(lab["calltype"])
                 else:
-                    text.append("(?)")
+                    text.append("(Other)")
             text = ','.join(text)
 
         # update the label
