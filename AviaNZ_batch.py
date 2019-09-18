@@ -357,9 +357,9 @@ class AviaNZ_batchProcess(QMainWindow):
                 if self.species != 'All species':
                     # wipe same species:
                     self.ws = WaveletSegment.WaveletSegment(self.speciesData, 'dmey2')
-                    oldsegs = self.segments.getSpecies(self.species)
+                    oldsegs = self.segments.getSpecies(self.speciesData["species"])
                     for i in reversed(oldsegs):
-                        wipeAll = self.segments[i].wipeSpecies(self.species)
+                        wipeAll = self.segments[i].wipeSpecies(self.speciesData["species"])
                         if wipeAll:
                             del self.segments[i]
                 else:
@@ -372,6 +372,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 # (ceil division for large integers)
                 numPages = (len(self.audiodata) - 1) // samplesInPage + 1
 
+                print(self.segments)
                 # Actual segmentation happens here:
                 for page in range(numPages):
                     print("Segmenting page %d / %d" % (page+1, numPages))
@@ -466,7 +467,7 @@ class AviaNZ_batchProcess(QMainWindow):
             # Determine all species detected in at least one file
             # (two loops ensure that all files will have pres/abs xlsx for all species.
             # Ugly, but more readable this way)
-            spList = set([self.species])
+            spList = set([self.speciesData["species"]])
             for filename in allwavs:
                 if not os.path.isfile(filename + '.data'):
                     continue
@@ -619,15 +620,6 @@ class AviaNZ_batchProcess(QMainWindow):
             self.segments.metadata["Duration"] = float(self.datalength)/self.sampleRate
         else:
             self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
-
-            # wipe segments if running species-specific analysis:
-            oldsegs = self.segments.getSpecies(self.species)
-            # deleting from the end, to avoid shifting IDs:
-            for si in reversed(oldsegs):
-                # remove labels or drop the segment if it's the only species
-                wipedAll = self.segments[si].wipeSpecies(self.species)
-                if wipedAll:
-                    del self.segments[si]
 
             print("%d segments loaded from .data file" % len(self.segments))
 
