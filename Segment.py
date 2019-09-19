@@ -619,10 +619,9 @@ class Segmenter:
     See also the species-specific segmentation in WaveletSegment
     """
 
-    def __init__(self, sp, fs=0, mingap=0.3, minlength=0.2):
+    def __init__(self, sp=None, fs=0, mingap=0.3, minlength=0.2):
         # This is the reference to SignalProc
         self.sp = sp
-        self.data = sp.data
         self.fs = fs
         # Spectrogram
         if hasattr(sp, 'sg'):
@@ -630,8 +629,10 @@ class Segmenter:
         else:
             self.sg = None
         # These are the spectrogram params. Needed to compute times.
-        self.window_width = sp.window_width
-        self.incr = sp.incr
+        if sp:
+            self.data = sp.data
+            self.window_width = sp.window_width
+            self.incr = sp.incr
         self.mingap = mingap
         self.minlength = minlength
 
@@ -644,17 +645,15 @@ class Segmenter:
         self.window_width = sp.window_width
         self.incr = sp.incr
 
-    def bestSegments(self,FIRthr=0.7,medianClipthr=3.0,yinthr=0.9,mingap=0, minlength=0, maxlength=5.0):
-        # Have a go at performing generally reasonably segmentation
-        # TODO: Decide on this!
-        segs1 = self.deleteShort(self.segmentByFIR(FIRthr),mingap,minlength)
-        segs2 = self.deleteShort(self.medianClip(medianClipthr),mingap,minlength)
+    def bestSegments(self,FIRthr=0.7,medianClipthr=3.0,yinthr=0.9,maxgap=1, minlength=0.5):
+        """ A reasonably good segmentaion - a merged version of FIR, median clipping, and fundamental frequency using yin
+        """
+        segs1 = self.segmentByFIR(FIRthr)
+        segs2 = self.medianClip(medianClipthr)
         segs3, p, t = self.yin(100, thr=yinthr, returnSegs=True)
-        segs3 = self.checkSegmentOverlap(segs3,mingap)
-        segs3 = self.deleteShort(segs3,mingap,minlength)
         segs1 = self.mergeSegments(segs1, segs2)
-        segs = self.mergeSegments(segs1,segs3)
-        segs = segs[::-1]
+        segs = self.mergeSegments(segs1, segs3)
+        segs = sorted(segs, key=lambda x: x[0])
         return segs
 
     def mergeSegments(self,segs1,segs2,ignoreInsideEnvelope=True):
@@ -726,7 +725,7 @@ class Segmenter:
             t += 1
         return out
 
-    def deleteShort(self, segs, minlength=0):
+    def deleteShort(self, segs, minlength=0.25):
         """ Checks whether segments are long enough.
             Operates on start-end list [[1,3], [4,5]] -> [[1,3]].
         """
@@ -751,6 +750,28 @@ class Segmenter:
             out.append([start, segs[i][1]])
             i += 1
         return out
+
+    def checkSegmentOverlap(self,segs,minSegment=50):
+        # Needs to be python array, not np array
+        # Sort by increasing start times
+        if isinstance(segs, np.ndarray):
+            segs = segs.tolist()
+        segs = sorted(segs)
+        segs = np.array(segs)
+
+        newsegs = []
+        # Loop over segs until the start value of 1 is not inside the end value of the previous
+        s=0
+        while s<len(segs):
+            i = s
+            end = segs[i,1]
+            while i < len(segs)-1 and segs[i+1,0] < end:
+                i += 1
+                end = max(end, segs[i,1])
+            newsegs.append([segs[s,0],end])
+            s = i+1
+
+        return newsegs
 
     def segmentByFIR(self, threshold):
         """ Segmentation using FIR envelope.
@@ -786,10 +807,8 @@ class Segmenter:
         padded = np.concatenate((np.zeros(int(fftrate / 10.)), np.mean(self.sg, axis=1), np.zeros(int(fftrate / 10.))))
         envelope = spi.filters.convolve(padded, samples, mode='constant')[:-int(fftrate / 10.)]
         ind = envelope > np.median(envelope) + threshold * np.std(envelope)
-        ind = self.convert01(ind, self.incr / self.fs)
-        ind = self.deleteShort(ind, 0.2)
-        ind = self.joinGaps(ind, 1)
-        return ind
+        segs = self.convert01(ind, self.incr / self.fs)
+        return segs
 
     def segmentByAmplitude(self, threshold, usePercent=True):
         """ Bog standard amplitude segmentation.
@@ -799,8 +818,6 @@ class Segmenter:
             threshold = threshold*np.max(self.data)
         seg = np.abs(self.data)>threshold
         seg = self.convert01(seg, self.fs)
-        seg = self.deleteShort(seg, 0.2)
-        seg = self.joinGaps(seg, 1)
         return seg
 
     def segmentByEnergy(self, thr, width, min_width=450):
@@ -900,10 +917,8 @@ class Segmenter:
         maxFreqs = 10. * np.log10(np.max(self.sg, axis=1))
         maxFreqs = medfilt(maxFreqs, 21)
         ind = maxFreqs > (np.mean(maxFreqs)+thr*np.std(maxFreqs))
-        ind = self.convert01(ind, self.incr / self.fs)
-        ind = self.deleteShort(ind, 0.2)
-        ind = self.joinGaps(ind, 1)
-        return ind
+        segs = self.convert01(ind, self.incr / self.fs)
+        return segs
 
     def medianClip(self, thr=3.0, medfiltersize=5, minaxislength=5, minSegment=70):
         """ Median clipping for segmentation
@@ -959,48 +974,6 @@ class Segmenter:
             list.append([float(l.bbox[0] * self.incr / self.fs),
                     float(l.bbox[2] * self.incr / self.fs)])
         return list
-
-    def checkSegmentOverlap(self,segs,minSegment=50):
-        # Needs to be python array, not np array
-        # Sort by increasing start times
-        if isinstance(segs, np.ndarray):
-            segs = segs.tolist()
-        segs = sorted(segs)
-        segs = np.array(segs)
-
-        newsegs = []
-        # Loop over segs until the start value of 1 is not inside the end value of the previous
-        s=0
-        while s<len(segs):
-            i = s
-            end = segs[i,1]
-            while i < len(segs)-1 and segs[i+1,0] < end:
-                i += 1
-                end = max(end, segs[i,1])
-            newsegs.append([segs[s,0],end])
-            s = i+1
-
-        return newsegs
-
-    def mergeshort(self, segs, minlen):
-        newsegs = []
-        # loop over and check for short segs, merge
-        i = 0
-        while i < len(segs):
-            if segs[i][1]-segs[i][0] < minlen and i+1 < len(segs):
-                newsegs.append([segs[i][0], segs[i+1][1]])
-                i += 2
-            else:
-                newsegs.append(segs[i])
-                i += 1
-
-        l = len(newsegs)
-        if newsegs[l-1][1]-newsegs[l-1][0] < minlen and l > 1:
-            temp = [newsegs[l-2][0], newsegs[l-1][1]]
-            del newsegs[-1]
-            newsegs.append(temp)
-
-        return newsegs
 
     def checkSegmentOverlapCentroids(self, blobs, minSegment=50):
         # Delete overlapping boxes by computing the centroids and picking out overlaps
@@ -1097,8 +1070,6 @@ class Segmenter:
             # * self.incr/self.fs maps it to actual seconds
             units = self.incr/self.fs * np.shape(self.sg)[0] / len(pitch)
             segs = self.convert01(ind, units)
-            segs = self.deleteShort(segs, 0.2)
-            segs = self.joinGaps(segs, 1)
             return segs, pitch, np.array(starts)
         else:
             return pitch, np.array(starts), minfreq, W
@@ -1179,6 +1150,7 @@ class PostProcess:
         self.audioData = audioData
         self.sampleRate = sampleRate
         self.segments = segments
+        self.subfilter = subfilter
 
         if subfilter != {}:
             self.minLen = subfilter['TimeRange'][0]
@@ -1186,26 +1158,11 @@ class PostProcess:
                 self.F0 = subfilter['F0Range']
             self.fLow = subfilter['FreqRange'][0]
             self.fHigh = subfilter['FreqRange'][1]
+            self.minLen = subfilter['TimeRange'][0]
         else:
-            self.minLen = 0
+            self.minLen = 0.25
             self.fLow = 0
             self.fHigh = 0
-
-    def short(self, minLen=0):
-        """
-        Delete segments < minLen secs
-        """
-        if minLen == 0:
-            minLen = self.minLen
-        newSegments = []
-        for seg in self.segments:
-            if seg[0] == -1:
-                newSegments.append(seg)
-            elif seg[1] - seg[0] > minLen:
-                newSegments.append(seg)
-            else:
-                continue
-        self.segments = newSegments
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):
         """ Calculate wind
@@ -1350,37 +1307,12 @@ class PostProcess:
             t += 1
         return res
 
-    def mergeneighbours(self, maxGap=3):
-        if len(self.segments) <= 1 or len(self.segments) == 2 and self.segments[0][0] == -1:
-            pass
-        else:
-            newSegments = copy.deepcopy(self.segments)
-
-            meta = None
-            indx = []
-            chg = False
-            if newSegments[0][0] == -1:
-                meta = newSegments[0]
-                del (newSegments[0])
-
-            for i in range(len(newSegments) - 1):
-                if newSegments[i + 1][0] - newSegments[i][1] < maxGap:
-                    indx.append(i)
-                    chg = True
-            indx.reverse()
-            for i in indx:
-                newSegments[i][1] = newSegments[i + 1][1]
-                del (newSegments[i + 1])
-
-            if chg:
-                if meta:
-                    newSegments.insert(0, meta)
-                self.segments = newSegments
-
     def rainClick(self):
         """
         delete random clicks e.g. rain.
         """
+        # TODO
+        return
         newSegments = copy.deepcopy(self.segments)
         if newSegments.__len__() > 1:
             # Get avg energy
@@ -1408,7 +1340,7 @@ class PostProcess:
                         newSegments.remove(seg)
         self.segments = newSegments
 
-    def fundamentalFrq(self, fileName):
+    def fundamentalFrq(self, fileName=None):
         '''
         Check for fundamental frequency of the segments, discard the segments that do not indicate the species.
         '''
@@ -1419,9 +1351,13 @@ class PostProcess:
             secs = int(seg[1] - seg[0])
             # Got to read from the source instead of using self.audioData - ff is wrong if you use self.audioData somehow
             sp = SignalProc.SignalProc(256, 128)
-            sp.readWav(fileName, secs, seg[0])
-            self.sampleRate = sp.sampleRate
-            self.audioData = sp.data
+            if fileName:
+                sp.readWav(fileName, secs, seg[0])
+                self.sampleRate = sp.sampleRate
+                self.audioData = sp.data
+            else:
+                sp.data = self.audioData
+                sp.sampleRate = self.sampleRate
 
             # denoise before fundamental frq. extraction
             # data = self.denoise_filter(level=8, d=True, f=False, f1=self.fLow, f2=self.fHigh)

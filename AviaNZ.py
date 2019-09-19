@@ -342,7 +342,7 @@ class AviaNZ(QMainWindow):
 
         specMenu.addSeparator()
         extraMenu = specMenu.addMenu("Mar&k on spectrogram")
-        self.showFundamental = extraMenu.addAction("Show fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
+        self.showFundamental = extraMenu.addAction("Fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
         self.showFundamental.setCheckable(True)
         self.showFundamental.setChecked(False)
         if not self.DOC:
@@ -1719,8 +1719,9 @@ class AviaNZ(QMainWindow):
         # If there are segments, show them
         if not self.cheatsheet and not self.zooniverse:
             for count in range(len(self.segments)):
+                print('**', self.segments[count])
                 if self.segments[count][2] == 0 and self.segments[count][3] == 0:
-                    self.addSegment(self.segments[count][0], self.segments[count][1], 0,0, self.segments[count][4], False, count, remaking)
+                    self.addSegment(self.segments[count][0], self.segments[count][1], 0, 0, self.segments[count][4], False, count, remaking)
                 else:
                     self.addSegment(self.segments[count][0], self.segments[count][1], self.convertFreqtoY(self.segments[count][2]),self.convertFreqtoY(self.segments[count][3]), self.segments[count][4], False, count, remaking)
 
@@ -3989,8 +3990,8 @@ class AviaNZ(QMainWindow):
                 newSegments = self.seg.medianClip(float(str(medThr)), minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
                 # will also remove too short segments (medSize is set in ms because sliders limited to int)
-                print("before length", newSegments)
-                newSegments = self.seg.deleteShort(newSegments, minlength=medSize/1000)
+                # print("before length", newSegments)
+                # newSegments = self.seg.deleteShort(newSegments, minlength=medSize/1000)
             elif str(alg) == 'Harma':
                 newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
@@ -4001,7 +4002,8 @@ class AviaNZ(QMainWindow):
                 newSegments = self.seg.onsets()
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
             elif str(alg) == 'Fundamental Frequency':
-                newSegments, pitch, times = self.seg.yin(int(str(minfreq)),int(str(minperiods)),float(str(Yinthr)),int(str(window)),returnSegs=True)
+                newSegments, pitch, times = self.seg.yin(int(str(minfreq)), int(str(minperiods)), float(str(Yinthr)),
+                                                         int(str(window)), returnSegs=True)
                 newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
             elif str(alg) == 'FIR':
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
@@ -4011,9 +4013,8 @@ class AviaNZ(QMainWindow):
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate,
-                                                d=False, wpmode="new")
-            # TODO
+                newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, d=False, wpmode="new")
+
             # TODO: make sure cross corr outputs lists of lists
             elif str(alg) == 'Cross-Correlation':
                 if species_cc != 'Choose species...':
@@ -4022,33 +4023,55 @@ class AviaNZ(QMainWindow):
                 else:
                     newSegments = self.findMatches(float(str(CCThr1)))
 
-            print('Segments: ', newSegments)
-
-            # post process to remove short segments, wind, rain, and use F0 check.
-            if filtname == 'All species' and species_cc == 'Choose species...' or str(alg) == 'Default' or str(alg) == 'Median Clipping' or str(alg) == 'Harma' or str(alg) == 'Power' or str(alg) == 'Onsets' or str(alg) == 'Fundamental Frequency' or str(alg) == 'FIR':
-                post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=newSegments, subfilter={})
-                post.wind()
-                print('After wind: ', post.segments)
-                # post.rainClick()
-                # print('After rain: ', post.segments)
-                newSegments = post.segments
+            # Post-process
+            # 1. Delete windy segments
+            # 2. Delete rainy segments
+            # 3. Check fundamental frq
+            # 4. Merge neighbours
+            # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
+            maxgap = 3
+            minlength = 0.25
+            if str(alg) != 'Wavelets':
+                print('Segments detected: ', len(newSegments))
+                print('Post-processing...')
+                post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                                           segments=newSegments, subfilter={})
+                # TODO: add wind and rain checkboxes
+                # if self.w_wind.isChecked():
+                #     post.wind()
+                #     print('After wind: segments: ', len(post.segments))
+                # if self.w_rain.isChecked():
+                #     post.rainClick()
+                #     print('After rain segments: ', len(post.segments))
+                newSegments = self.seg.joinGaps(newSegments, maxgap=maxgap)
+                newSegments = self.seg.deleteShort(newSegments, minlength=minlength)
+                print('Segments after merge (<=%d secs) and delete short (<%.4f): ', (maxgap, minlength, len(newSegments)))
             else:
+                print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
+                print('Post-processing...')
                 # postProcess currently operates on single-level list of segments,
                 # so we run it over subfilters for wavelets:
                 for filtix in range(len(speciesData['Filters'])):
                     post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                       segments=newSegments[filtix],
                                                       subfilter=speciesData['Filters'][filtix])
-                    post.short()
-                    # if speciesData['Wind']:
+                    # if self.w_wind.isChecked():
                     #     post.wind()
-                    #     print('After wind: ', post.segments)
-                    # if speciesData['Rain']:
-                    #     pass
-                    #     # post.rainClick() - omitted in sppSpecific=T cases
-                    #     # print('After rain: ', post.segments)
+                    #     print('After wind: segments: ', len(post.segments))
+                    # if self.w_rain.isChecked():
+                    #     post.rainClick()
+                    #     print('After rain segments: ', len(post.segments))
+                    if 'F0' in speciesData['Filters'][filtix] and 'F0Range' in speciesData['Filters'][filtix]:
+                        print("Checking for fundamental frequency...")
+                        post.fundamentalFrq()
+                        print("After FF segments:", len(post.segments))
+                    segmenter = Segment.Segmenter()
+                    post.segments = segmenter.joinGaps(post.segments, maxgap=maxgap)
+                    post.segments = segmenter.deleteShort(post.segments, minlength=speciesData['Filters'][filtix]['TimeRange'][0])
+                    print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' %(maxgap, minlength, len(post.segments)))
                     newSegments[filtix] = post.segments
-
+                # newSegments = [seg for seg_subf in newSegments for seg in seg_subf]
+                # TODO: Merge subfilter results
             print("After post processing: ", newSegments)
 
             # Generate Segment-type output.

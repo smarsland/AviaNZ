@@ -46,13 +46,14 @@ class WaveletSegment:
 
     def waveletSegment(self, data, sampleRate, d, wpmode="new"):
         """ Main analysis wrapper (segmentation in batch mode).
+            Also do species-specific post-processing
             Args:
             1. data to be segmented, ndarray
             2. sampleRate of the data, int
             3. d - turn on denoising before calling?
             4. wpmode: old/new/aa to indicate no/partial/full antialias
 
-            Returns: list of lists of segments found (over each subfilter)
+            Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
         """
         if data is None or data == [] or len(data) == 0:
             print("ERROR: data must be provided for WS")
@@ -80,24 +81,18 @@ class WaveletSegment:
         detected_allsubf = []
         for subfilter in spInfo["Filters"]:
             print("Identifying calls using subfilter", subfilter["calltype"])
-
-            # Segment detection and neighbour merging
             goodnodes = subfilter['WaveletParams']["nodes"]
             detected = self.detectCalls(self.WF, nodelist=goodnodes, subfilter=subfilter, rf=True, aa=wpmode!="old")
 
             # merge neighbours in order to convert the detections into segments
             # note: detected np[0 1 1 1] becomes [[1,3]]
-            detected = np.where(detected > 0)
-            if np.shape(detected)[1] > 1:
-                detected = self.identifySegments(np.squeeze(detected))
-            elif np.shape(detected)[1] == 1:
-                detected = np.array(detected).flatten().tolist()
-                detected = self.identifySegments(detected)
-            else:
-                detected = []
-            detected = self.mergeSeg(detected)
+            segmenter = Segment.Segmenter()
+            detected = segmenter.convert01(detected)
+            detected = segmenter.joinGaps(detected, maxgap=0)
+
             detected_allsubf.append(detected)
         print("Wavelet segmenting completed in", time.time() - opst)
+        detected_allsubf = sorted(detected_allsubf, key=lambda x: x[0])
         return detected_allsubf
 
     def waveletSegment_train(self, dirName, thrList, MList, d=False, rf=True, learnMode='recaa', window=1,
@@ -255,16 +250,10 @@ class WaveletSegment:
 
             # store segments for return output
             # detected np [0 1 1 1] becomes [[1,3]]
-            detected_c_segs = np.where(detected_c > 0)
-            if np.shape(detected_c_segs)[1] > 1:
-                detected_c_segs = np.squeeze(detected_c_segs)
-                detected_c_segs = self.identifySegments(detected_c_segs)
-            elif np.shape(detected_c_segs)[1] == 1:
-                detected_c_segs = np.array(detected_c_segs).flatten().tolist()
-                detected_c_segs = self.identifySegments(detected_c_segs)
-            else:
-                detected_c_segs = []
-            detected_c_segs = self.mergeSeg(detected_c_segs)
+            segmenter = Segment.Segmenter()
+            detected_c_segs = segmenter.convert01(detected)
+            detected_c_segs = segmenter.joinGaps(detected_c_segs, maxgap=0)
+
             self.detected_out.append((detected_c_segs, self.filenames[fileId], len(detected_c)))
 
             # Generate .data for this file
@@ -1059,28 +1048,3 @@ class WaveletSegment:
         totalblocks = sum([len(a) for a in self.annotation])
         print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, presblocks, totalblocks))
         return
-
-    def identifySegments(self, detection):  # , maxgap=1, minlength=1):
-        """ Turn binary detection to segments """
-        # TODO: *** Replace with segmenter.checkSegmentLength(self,segs, mingap=0, minlength=0, maxlength=5.0)
-        segments = []
-        # print seg, type(seg)
-        if len(detection) > 0:
-            for s in detection:
-                segments.append([s, s + 1])
-        return segments
-
-    def mergeSeg(self, segments):
-        """ Merge the neighbouring segments """
-        # **** Replace with segmenter.identifySegments(self, seg, maxgap=1, minlength=1,notSpec=False):
-        # but note the order of deleting short segments and merging matters
-        indx = []
-        for i in range(len(segments) - 1):
-            if segments[i][1] == segments[i + 1][0]:
-                indx.append(i)
-        indx.reverse()
-        for i in indx:
-            segments[i][1] = segments[i + 1][1]
-            del (segments[i + 1])
-        return segments
-

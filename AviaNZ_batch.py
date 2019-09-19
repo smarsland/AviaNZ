@@ -23,7 +23,7 @@
 import os, re, fnmatch, sys
 
 from PyQt5.QtGui import QIcon, QPixmap, QApplication
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox
 from PyQt5.QtMultimedia import QAudioFormat
 from PyQt5.QtCore import Qt, QDir
 
@@ -78,28 +78,27 @@ class AviaNZ_batchProcess(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setFixedSize(870,550)
+        self.setFixedSize(900, 750)
 
         # Make the docks
-        self.d_detection = Dock("Automatic Detection",size=(600,550))
-        self.d_files = Dock("File list", size=(270, 550))
+        self.d_detection = Dock("Automatic Detection",size=(630, 700))
+        self.d_files = Dock("File list", size=(270, 700))
 
-        self.area.addDock(self.d_detection,'right')
+        self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
 
-        self.w_browse = QPushButton("  &Browse Folder")
+        self.w_browse = QPushButton("&Browse Folder")
         self.w_browse.setToolTip("Can select a folder with sub folders to process")
         self.w_browse.setFixedHeight(50)
-        self.w_browse.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.w_browse.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
+        self.w_dir.setReadOnly(True)
         self.w_dir.setPlainText('')
         self.w_dir.setToolTip("The folder being processed")
-        self.d_detection.addWidget(self.w_dir,row=0,col=1,colspan=2)
-        self.d_detection.addWidget(self.w_browse,row=0,col=0)
+        self.w_dir.setStyleSheet("color : #808080;")
 
-        self.w_speLabel1 = QLabel("  Select Species")
-        self.d_detection.addWidget(self.w_speLabel1,row=1,col=0)
+        w_speLabel1 = QLabel("Select Species to find")
         self.w_spe1 = QComboBox()
         # read filter list, replace subsp marks with brackets
         spp = list(self.FilterDicts.keys())
@@ -109,43 +108,67 @@ class AviaNZ_batchProcess(QMainWindow):
                 sp = sp[:ind] + ' (' + sp[ind+1:] + ')'
         spp.insert(0, "All species")
         self.w_spe1.addItems(spp)
-        self.d_detection.addWidget(self.w_spe1,row=1,col=1,colspan=2)
 
-        self.w_resLabel = QLabel("  Time Resolution in Excel Output (secs)")
-        self.d_detection.addWidget(self.w_resLabel, row=2, col=0)
+        w_resLabel = QLabel("Set time resolution in Excel Output\n(Sheet3)")
         self.w_res = QSpinBox()
-        self.w_res.setRange(1,600)
+        self.w_res.setRange(1, 600)
         self.w_res.setSingleStep(5)
         self.w_res.setValue(60)
-        self.d_detection.addWidget(self.w_res, row=2, col=1, colspan=2)
-
-        self.w_timeWindow = QLabel("  Choose Time Window (from-to)")
-        self.d_detection.addWidget(self.w_timeWindow, row=4, col=0)
+        w_timeLabel = QLabel("Want to process a subset of recordings only e.g. dawn or dusk?\nThen select the time window, otherwise skip")
+        w_start = QLabel("Start time (hh:mm:ss)")
+        w_end = QLabel("End time (hh:mm:ss)")
         self.w_timeStart = QTimeEdit()
         self.w_timeStart.setDisplayFormat('hh:mm:ss')
-        self.d_detection.addWidget(self.w_timeStart, row=4, col=1)
         self.w_timeEnd = QTimeEdit()
         self.w_timeEnd.setDisplayFormat('hh:mm:ss')
-        self.d_detection.addWidget(self.w_timeEnd, row=4, col=2)
+
+        self.w_wind = QCheckBox("")
+        self.w_rain = QCheckBox("")
 
         self.w_processButton = QPushButton("&Process Folder")
         self.w_processButton.clicked.connect(self.detect)
-        self.d_detection.addWidget(self.w_processButton,row=11,col=2)
-        self.w_processButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
-
+        self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
+        self.w_processButton.setFixedHeight(50)
         self.w_browse.clicked.connect(self.browse)
+
+        self.d_detection.addWidget(self.w_dir, row=0, col=0, colspan=2)
+        self.d_detection.addWidget(self.w_browse, row=0, col=2)
+        self.d_detection.addWidget(w_speLabel1, row=1, col=0)
+        self.d_detection.addWidget(self.w_spe1, row=1, col=1, colspan=2)
+
+        self.d_detection.addWidget(w_timeLabel, row=2, col=0, colspan=3)
+        self.d_detection.addWidget(w_start, row=3, col=1)
+        self.d_detection.addWidget(self.w_timeStart, row=3, col=2)
+        self.d_detection.addWidget(w_end, row=4, col=1)
+        self.d_detection.addWidget(self.w_timeEnd, row=4, col=2)
+
+        self.d_detection.addWidget(QLabel(" "), row=5, col=0)
+        self.d_detection.addWidget(QLabel("Add wind filter"), row=7, col=0)
+        self.d_detection.addWidget(self.w_wind, row=7, col=1)
+        self.d_detection.addWidget(QLabel("Add rain filter"), row=8, col=0)
+        self.d_detection.addWidget(self.w_rain, row=8, col=1)
+        self.d_detection.addWidget(QLabel(" "), row=9)
+
+        self.d_detection.addWidget(w_resLabel, row=10, col=0)
+        self.d_detection.addWidget(self.w_res, row=10, col=1)
+        self.d_detection.addWidget(QLabel("(seconds)"), row=10, col=2)
+        self.d_detection.addWidget(self.w_processButton, row=11, col=2)
 
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
-        self.w_files.addWidget(QLabel('View Only'), row=0, col=0)
-        self.w_files.addWidget(QLabel('use Browse Folder to choose data for processing'), row=1, col=0)
-        # self.w_files.addWidget(QLabel(''), row=2, col=0)
         # List to hold the list of files
         self.listFiles = QListWidget()
         self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
+
+        self.w_files.addWidget(QLabel('View Only'), row=0, col=0)
+        self.w_files.addWidget(QLabel('use Browse Folder to choose data for processing'), row=1, col=0)
         self.w_files.addWidget(self.listFiles, row=2, col=0)
 
+        self.d_detection.layout.setContentsMargins(30, 40, 40, 40)
+        self.d_detection.layout.setSpacing(30)
+        self.d_files.layout.setContentsMargins(10, 10, 10, 10)
+        self.d_files.layout.setSpacing(10)
         self.show()
 
     def createMenu(self):
@@ -384,6 +407,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         print("Warning: can't process short file ends (%.2f s)" % thisPageLen)
                         continue
 
+                    # Process
                     if self.species != 'All species':
                         # note: using 'recaa' mode = partial antialias
                         thisPageSegs = self.ws.waveletSegment(data=self.audiodata[start:end], sampleRate=self.sampleRate, d=False, wpmode="new")
@@ -394,12 +418,29 @@ class AviaNZ_batchProcess(QMainWindow):
                         self.seg = Segment.Segmenter(self.sp, self.sampleRate)
                         thisPageSegs = self.seg.bestSegments()
 
-                    # post process to remove short segments, wind, rain, and use F0 check.
-                    print("Post processing...")
+                    # Post-process
+                    # 1. Delete windy segments
+                    # 2. Delete rainy segments
+                    # 3. Check fundamental frq
+                    # 4. Merge neighbours
+                    # 5. Delete short segments
+                    print("Segments detected: ", len(thisPageSegs))
+                    print("Post-processing...")
+                    maxgap = 3  # Note arbitrary maxgap and 0.25 second min length
+                    minlength = 0.25
                     if self.species == 'All species':
-                        post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={})
-                        post.wind()
-                        print('After wind: ', post.segments)
+                        post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                                                   segments=thisPageSegs, subfilter={})
+                        if self.w_wind.isChecked():
+                            post.wind()
+                            print('After wind segments: ', len(post.segments))
+                        if self.w_rain.isChecked():
+                            post.rainClick()
+                            print('After rain segments: ', len(post.segments))
+                        post.segments = self.seg.joinGaps(post.segments, maxgap=maxgap)
+                        post.segments = self.seg.deleteShort(post.segments, minlength=minlength)
+                        print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' % (maxgap, minlength, len(post.segments)))
+
                         # adjust segment starts for 15min "pages"
                         if start != 0:
                             for seg in post.segments:
@@ -411,24 +452,21 @@ class AviaNZ_batchProcess(QMainWindow):
                         # postProcess currently operates on single-level list of segments,
                         # so we run it over subfilters for wavelets:
                         for filtix in range(len(self.speciesData['Filters'])):
-                            post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs[filtix], subfilter={})
-                            if 'Wind' in self.speciesData:
-                                if self.speciesData['Wind']:
-                                    print('Deleting wind...')
-                                    post.wind(windT=2.5, fn_peak=0.35)
-                                    print('After wind: ', post.segments)
-                            if 'FF' in self.speciesData:
-                                if self.speciesData['FF']:
-                                    pass
-                                # post.fundamentalFrq(self.filename, self.speciesData)
-                                # print('After ff: ', post.segments)
-                            if 'Kiwi' in self.speciesData['species']:  # Not sure if it is appropriate for other species
-                                print('Merging neighbours...')
-                                post.mergeneighbours()
-                                print('After merge neighbours: ', post.segments)
-                                print('Deleting short...')
-                                post.short(minLen=2)  # TODO: keep 'deleteShort' in filter file?
-                                print('After del short: ', post.segments)
+                            post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs[filtix], subfilter=self.speciesData['Filters'][filtix])
+                            if self.w_wind.isChecked():
+                                post.wind()
+                                print('After wind: segments: ', len(post.segments))
+                            if self.w_rain.isChecked():
+                                post.rainClick()
+                                print('After rain segments: ', len(post.segments))
+                            if 'F0' in self.speciesData['Filters'][filtix] and 'F0Range' in self.speciesData['Filters'][filtix]:
+                                print("Checking for fundamental frequency...")
+                                post.fundamentalFrq()
+                                print("After FF segments:", len(post.segments))
+                            segmenter = Segment.Segmenter()
+                            post.segments = segmenter.joinGaps(post.segments, maxgap=maxgap)
+                            post.segments = segmenter.deleteShort(post.segments, minlength=self.speciesData['Filters'][filtix]['TimeRange'][0])
+                            print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(maxgap, minlength, len(post.segments)))
 
                             # adjust segment starts for 15min "pages"
                             if start != 0:
