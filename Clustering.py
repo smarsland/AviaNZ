@@ -361,28 +361,31 @@ class Clustering:
                             seg = segments[segix]
                             audiodata = self.loadFile(filename=os.path.join(root, file), duration=seg[1] - seg[0],
                                                      offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
-                            minlen = minlen * fs
-                            start = int(seg[0] * fs)
+                            # minlen = minlen * fs
+                            start = seg[0]
+                            # start = int(seg[0] * fs)
                             sp = SignalProc.SignalProc(256, 128)
                             sp.data = audiodata
                             sp.sampleRate = fs
-                            sgRaw = sp.spectrogram(256, 128)
+                            _ = sp.spectrogram(256, 128)
                             segment = Segment.Segmenter(sp, fs)
                             syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
                             if len(syls) == 0:  # Sanity check
                                 segment = Segment.Segmenter(sp, fs)
                                 syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
                             syls = segment.checkSegmentOverlap(syls)  # merge overlapped segments
-                            syls = [[int(s[0] * fs) + start, int(s[1] * fs + start)] for s in syls]
+                            syls = segment.joinGaps(syls, minlen)
+                            # syls = [[int(s[0] * fs) + start, int(s[1] * fs + start)] for s in syls]
+                            syls = [[s[0] + start, s[1] + start] for s in syls]
 
                             # Sanity check, e.g. when user annotates syllables tight, median clipping may not detect it.
                             if len(syls) == 0:
-                                syls = [[start, int(seg[1] * fs)]]
-                            if len(syls) > 1:
-                                syls = segment.mergeshort(syls, minlen)  # Merge short segments
+                                syls = [[start, seg[1]]]
+                            # if len(syls) > 1:
+                            #     syls = segment.joinGaps(syls, minlen)  # Merge short segments
                             if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen:  # Sanity check
-                                syls = [[start, int(seg[1] * fs)]]
-                            syls = [[x[0] / fs, x[1] / fs] for x in syls]
+                                syls = [[start, seg[1]]]
+                            # syls = [[x[0] / fs, x[1] / fs] for x in syls]
                             # print('\nCurrent:', seg, '--> Median clipping ', syls)
                             for syl in syls:
                                 dataset.append([os.path.join(root, file), seg, syl])
@@ -400,28 +403,31 @@ class Clustering:
                     seg = segments[segix]
                     audiodata = self.loadFile(filename=dir, duration=seg[1] - seg[0],
                                               offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
-                    minlen = minlen * fs
-                    start = int(seg[0] * fs)
+                    # minlen = minlen * fs
+                    start = seg[0]
+                    # start = int(seg[0] * fs)
                     sp = SignalProc.SignalProc(256, 128)
                     sp.data = audiodata
                     sp.sampleRate = fs
-                    sgRaw = sp.spectrogram(256, 128)
+                    _ = sp.spectrogram(256, 128)
                     segment = Segment.Segmenter(sp, fs)
                     syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
                     if len(syls) == 0:  # Sanity check
                         segment = Segment.Segmenter(sp, fs)
                         syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
                     syls = segment.checkSegmentOverlap(syls)  # merge overlapped segments
-                    syls = [[int(s[0] * fs) + start, int(s[1] * fs + start)] for s in syls]
+                    syls = segment.joinGaps(syls, minlen)
+                    # syls = [[int(s[0] * fs) + start, int(s[1] * fs + start)] for s in syls]
+                    syls = [[s[0] + start, s[1] + start] for s in syls]
 
                     # Sanity check, e.g. when user annotates syllables tight, median clipping may not detect it.
                     if len(syls) == 0:
-                        syls = [[start, int(seg[1] * fs)]]
-                    if len(syls) > 1:
-                        syls = segment.mergeshort(syls, minlen)  # Merge short segments
+                        syls = [[start, seg[1]]]
+                    # if len(syls) > 1:
+                    #     syls = segment.joinGaps(syls, minlen)  # Merge short segments
                     if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen:  # Sanity check
-                        syls = [[start, int(seg[1] * fs)]]
-                    syls = [[x[0] / fs, x[1] / fs] for x in syls]
+                        syls = [[start, seg[1]]]
+                    # syls = [[x[0] / fs, x[1] / fs] for x in syls]
                     # print('\nCurrent:', seg, '--> Median clipping ', syls)
                     for syl in syls:
                         dataset.append([dir, seg, syl])
