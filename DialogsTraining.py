@@ -33,8 +33,7 @@ import copy
 
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap
 from PyQt5.QtCore import QDir, Qt
-from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox
-from PyQt5.QtMultimedia import QAudioFormat
+from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QInputDialog
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -264,7 +263,10 @@ class BuildRecAdvWizard(QWizard):
             self.cmbUpdateSeg = QComboBox()
             self.btnUpdateSeg = QPushButton('Apply')
             self.btnUpdateSeg.clicked.connect(self.moveSelectedSegs)
-            self.btnDeleteSeg = QPushButton("Remove selected segment/s")
+            self.btnCreateNewCluster = QPushButton('Create cluster')
+            self.btnCreateNewCluster.setFixedWidth(150)
+            self.btnCreateNewCluster.clicked.connect(self.createNewcluster)
+            self.btnDeleteSeg = QPushButton('Remove selected segment/s')
             self.btnDeleteSeg.setFixedWidth(200)
             self.btnDeleteSeg.clicked.connect(self.deleteSelectedSegs)
 
@@ -278,6 +280,7 @@ class BuildRecAdvWizard(QWizard):
             hboxSpecContr.addWidget(self.contrastSlider)
             hboxSpecContr.addWidget(volIcon)
             hboxSpecContr.addWidget(self.volSlider)
+            hboxSpecContr.setContentsMargins(20, 0, 20, 10)
 
             hboxBtns = QHBoxLayout()
             hboxBtns.addWidget(self.btnMerge)
@@ -289,6 +292,12 @@ class BuildRecAdvWizard(QWizard):
             vboxTop = QVBoxLayout()
             vboxTop.addLayout(hboxSpecContr)
             vboxTop.addLayout(hboxBtns)
+
+            hboxBottom = QHBoxLayout()
+            hboxBottom.addWidget(self.btnCreateNewCluster)
+            hboxBottom.addWidget(self.btnDeleteSeg)
+            hboxBottom.setSpacing(20)
+            hboxBottom.setAlignment(Qt.AlignLeft)
 
             # set up the images
             self.flowLayout = pg.LayoutWidget()
@@ -303,7 +312,7 @@ class BuildRecAdvWizard(QWizard):
             self.vboxFull.addLayout(layout1)
             self.vboxFull.addLayout(vboxTop)
             self.vboxFull.addWidget(self.scrollArea)
-            self.vboxFull.addWidget(self.btnDeleteSeg, alignment=Qt.AlignRight)
+            self.vboxFull.addLayout(hboxBottom)
             self.setLayout(self.vboxFull)
 
         def initializePage(self):
@@ -348,11 +357,6 @@ class BuildRecAdvWizard(QWizard):
             # if all good, then check if we need to redo the pages.
             # segsChanged should be updated by any user changes!
             if self.segsChanged:
-                # update the cluster centres
-                # TODO: safely update cluster centres after all wavelet trainings are done, required frq range etc. are editable by the user
-                # clustercentres = {}
-                # for c in range(self.nclasses):
-                #     clustercentres[c] = self.getClusterCenter(self.segments, c, self.field("fs"), f1, f2, self.feature, self.duration)
                 self.segsChanged = False
                 self.wizard().redoTrainPages()
             return True
@@ -416,7 +420,6 @@ class BuildRecAdvWizard(QWizard):
             self.clearButtons()
             self.updateButtons()
             self.completeChanged.emit()
-            # print('updated')
 
         def moveSelectedSegs(self):
             """ Listner for Apply button to move the selected segments to another cluster.
@@ -486,6 +489,97 @@ class BuildRecAdvWizard(QWizard):
             # redraw the buttons
             self.updateButtons()
             self.completeChanged.emit()
+
+        def createNewcluster(self):
+            """ Listner for Create cluster button to move the selected segments to a new cluster.
+                Change the cluster ID of those selected buttons and redraw all the clusters.
+            """
+            self.segsChanged = True
+
+            # There should be at least one segment selected to proceed
+            proceed = False
+            for ix in range(len(self.picbuttons)):
+                if self.picbuttons[ix].mark == 'yellow':
+                    proceed = True
+                    break
+
+            if proceed:
+                # User to enter new cluster name
+                newLabel, ok = QInputDialog.getText(self, 'Cluster name', 'Enter unique Cluster Name\t\t\t')
+                if not ok:
+                    self.completeChanged.emit()
+                    return
+                names = [self.tboxes[ID].text() for ID in range(self.nclasses)]
+                names.append(newLabel)
+                if len(names) != len(set(names)):
+                    msg = SupportClasses.MessagePopup("w", "Name error", "Duplicate cluster names! \nTry again")
+                    msg.exec_()
+                    self.completeChanged.emit()
+                    return
+                newLabel = str(newLabel)
+
+                # create new cluster ID, label
+                newID = len(self.clusters)
+                self.clusters[newID] = newLabel
+                self.nclasses += 1
+                print('after adding new cluster: ', self.clusters)
+
+                for ix in range(len(self.picbuttons)):
+                    if self.picbuttons[ix].mark == 'yellow':
+                        self.segments[ix][-1] = newID
+                        self.picbuttons[ix].mark = 'green'
+
+                # Delete clusters with no members left and update self.clusters before adding the new cluster
+                todelete = []
+                for ID, label in self.clusters.items():
+                    empty = True
+                    for seg in self.segments:
+                        if seg[-1] == ID:
+                            empty = False
+                            break
+                    if empty:
+                        todelete.append(ID)
+
+                # Generate new class labels
+                if len(todelete) > 0:
+                    keys = [i for i in range(self.nclasses) if i not in todelete]        # the old keys those didn't delete
+                    # print('old keys left: ', keys)
+                    nclasses = self.nclasses - len(todelete)
+                    max_label = nclasses - 1
+                    labels = []
+                    c = self.nclasses - 1
+                    while c > -1:
+                        if c in keys:
+                            labels.append((c, max_label))
+                            max_label -= 1
+                        c -= 1
+
+                    # print('[old, new] labels')
+                    labels = dict(labels)
+                    print(labels)
+
+                    # update clusters dictionary {ID: cluster_name}
+                    clusters = {}
+                    for i in keys:
+                        clusters.update({labels[i]: self.clusters[i]})
+
+                    print('before: ', self.clusters)
+                    self.clusters = clusters
+                    self.nclasses = nclasses
+                    print('after: ', self.clusters)
+
+                    # update the segments
+                    for seg in self.segments:
+                        seg[-1] = labels[seg[-1]]
+                # redraw the buttons
+                self.clearButtons()
+                self.updateButtons()
+                self.completeChanged.emit()
+            else:
+                msg = SupportClasses.MessagePopup("t", "Select", "Select calls to make the new cluster")
+                msg.exec_()
+                self.completeChanged.emit()
+                return
 
         def deleteSelectedSegs(self):
             """ Listner for Delete button to delete the selected segments completely.
