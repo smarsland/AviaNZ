@@ -1497,6 +1497,7 @@ class AviaNZ(QMainWindow):
         # TODO: Make this useful?!
         # TODO: Save the inverted sgram? Will then need undo? 
         with pg.BusyCursor():
+            self.statusLeft.setText("Inverting...")
             if self.showInvSpec.isChecked():
                 print("Inverting spectrogam with window ", self.config['window_width'], " and increment ",self.config['window_width']//4)
                 sgRaw = self.sp.spectrogram(self.config['window_width'], self.config['window_width']//4, mean_normalise=self.sgMeanNormalise, equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided, multitaper=self.sgMultitaper)
@@ -1512,6 +1513,7 @@ class AviaNZ(QMainWindow):
             self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
             self.overviewImage.setImage(self.sg)
             self.specPlot.setImage(self.sg)
+            self.statusLeft.setText("Ready")
 
     def medianFilterSpec(self):
         """ Median filter the spectrogram. To be used in conjunction with spectrogram inversion. """
