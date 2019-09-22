@@ -59,7 +59,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, parent=None):
             super(BuildRecAdvWizard.WPageData, self).__init__(parent)
             self.setTitle('Training data')
-            self.setSubTitle('To start training, you need labelled calls from your species as training data (use the manual interface to create this). Select the folder where this data is located. Then select the  species.')
+            self.setSubTitle('To start training, you need labelled calls from your species as training data (use the manual interface to create this). Select the folder where this data is located. Then select the species.')
 
             self.setMinimumSize(250, 150)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
@@ -208,7 +208,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, config, parent=None):
             super(BuildRecAdvWizard.WPageCluster, self).__init__(parent)
             self.setTitle('Cluster similar looking calls')
-            self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please merge clusters, and transfer any errors as appropriate. You might also want to name each type of call.')
+            self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate. You might also want to name each type of call.')
             self.setMinimumSize(800, 500)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
             self.adjustSize()
@@ -1259,7 +1259,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, filtdir, parent=None):
             super(BuildRecAdvWizard.WLastPage, self).__init__(parent)
             self.setTitle('Save recogniser')
-            self.setSubTitle('Check the overall call detection summary and save the recogniser.')
+            self.setSubTitle('If you are happy with the overall call detection summary, save the recogniser. \n You should now test it.')
             self.setMinimumSize(400, 500)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
