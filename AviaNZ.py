@@ -3958,7 +3958,7 @@ class AviaNZ(QMainWindow):
         self.prevSegments = copy.deepcopy(self.segments)
 
         self.segmentsToSave = True
-        [alg, medThr, medSize, HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1, filtname, resolution,species_cc] = self.segmentDialog.getValues()
+        [alg, medThr, medSize, HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1, filtname, resolution,species_cc, wind, rain] = self.segmentDialog.getValues()
         with pg.BusyCursor():
             filtname = str(filtname)
             self.statusLeft.setText('Segmenting...')
@@ -4038,13 +4038,12 @@ class AviaNZ(QMainWindow):
                 print('Post-processing...')
                 post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                            segments=newSegments, subfilter={})
-                # TODO: add wind and rain checkboxes
-                # if self.w_wind.isChecked():
-                #     post.wind()
-                #     print('After wind: segments: ', len(post.segments))
-                # if self.w_rain.isChecked():
-                #     post.rainClick()
-                #     print('After rain segments: ', len(post.segments))
+                if wind:
+                    post.wind()
+                    print('After wind segments: ', len(post.segments))
+                if rain:
+                    post.rainClick()
+                    print('After rain segments: ', len(post.segments))
                 newSegments = self.seg.joinGaps(newSegments, maxgap=maxgap)
                 newSegments = self.seg.deleteShort(newSegments, minlength=minlength)
                 print('Segments after merge (<=%d secs) and delete short (<%.4f): ', (maxgap, minlength, len(newSegments)))
@@ -4057,12 +4056,12 @@ class AviaNZ(QMainWindow):
                     post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                       segments=newSegments[filtix],
                                                       subfilter=speciesData['Filters'][filtix])
-                    # if self.w_wind.isChecked():
-                    #     post.wind()
-                    #     print('After wind: segments: ', len(post.segments))
-                    # if self.w_rain.isChecked():
-                    #     post.rainClick()
-                    #     print('After rain segments: ', len(post.segments))
+                    if wind:
+                        post.wind()
+                        print('After wind: segments: ', len(post.segments))
+                    if rain:
+                        post.rainClick()
+                        print('After rain segments: ', len(post.segments))
                     if 'F0' in speciesData['Filters'][filtix] and 'F0Range' in speciesData['Filters'][filtix]:
                         print("Checking for fundamental frequency...")
                         post.fundamentalFrq()
@@ -4072,7 +4071,7 @@ class AviaNZ(QMainWindow):
                     post.segments = segmenter.deleteShort(post.segments, minlength=speciesData['Filters'][filtix]['TimeRange'][0])
                     print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' %(maxgap, minlength, len(post.segments)))
                     newSegments[filtix] = post.segments
-                # newSegments = [seg for seg_subf in newSegments for seg in seg_subf]
+                # Merge sub-filter results
                 # TODO: Merge subfilter results
             print("After post processing: ", newSegments)
 

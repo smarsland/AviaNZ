@@ -597,7 +597,7 @@ class Segmentation(QDialog):
         self.species_cc.addItems(["Choose species...", "Bittern"])
 
         spp = list(species.keys())
-        spp.insert(0,"Choose species...")
+        spp.insert(0, "Choose species...")
         self.species.addItems(spp)
 
         Box.addWidget(self.specieslabel)
@@ -633,6 +633,14 @@ class Segmentation(QDialog):
 
         Box.addWidget(self.resLabel)
         Box.addWidget(self.res)
+        self.windlabel = QLabel("Add wind filter")
+        self.wind = QCheckBox("")
+        self.rainlabel = QLabel("Add rain filter")
+        self.rain = QCheckBox("")
+        Box.addWidget(self.windlabel)
+        Box.addWidget(self.wind, alignment=Qt.AlignCenter)
+        Box.addWidget(self.rainlabel)
+        Box.addWidget(self.rain, alignment=Qt.AlignCenter)
         Box.addWidget(self.undo)
         self.undo.setEnabled(False)
         Box.addWidget(self.activate)
@@ -659,6 +667,10 @@ class Segmentation(QDialog):
         for w in range(self.layout().count()):
             self.layout().itemAt(w).widget().hide()
         self.algs.show()
+        self.windlabel.show()
+        self.wind.show()
+        self.rainlabel.show()
+        self.rain.show()
         self.undo.show()
         self.res.show()
         self.resLabel.show()
@@ -711,7 +723,7 @@ class Segmentation(QDialog):
         self.medSizeText.setText("Minimum length: %s ms" % value)
 
     def getValues(self):
-        return [self.algs.currentText(), self.medThr.text(), self.medSize.value(), self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value(), self.species_cc.currentText()]
+        return [self.algs.currentText(), self.medThr.text(), self.medSize.value(), self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value(), self.species_cc.currentText(), self.wind.isChecked(), self.rain.isChecked()]
 
 #======
 class Denoise(QDialog):
