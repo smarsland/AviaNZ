@@ -430,7 +430,8 @@ def cluster_by_dist(dir, feature='we', n_mels=24, fs=0, minlen=0.2, f_1=0, f_2=0
                     if len(syls) == 0:                                  # Sanity check, when annotating syllables tight,
                         syls = [[0, int((seg[1]-seg[0])*fs)]]           # median clipping doesn't detect it.
                     if len(syls) > 1:
-                        syls = segment.mergeshort(syls, minlen_samples)             # Merge short segments
+                        # TODO: samples to seconds
+                        syls = segment.joinGaps(syls, minlen_samples)             # Merge short segments
                     if len(syls) == 1 and syls[0][1]-syls[0][0] < minlen_samples:   # Sanity check
                         syls = [[0, int((seg[1]-seg[0])*fs)]]
                     temp = [[np.round((x[0] + start) / fs, 2), np.round((x[1] + start) / fs, 2)] for x in syls]
