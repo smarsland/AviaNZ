@@ -4015,7 +4015,8 @@ class AviaNZ(QMainWindow):
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                newSegments = ws.waveletSegment(data=self.audiodata, sampleRate=self.sampleRate, d=False, wpmode="new")
+                newSegments = ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
+                newSegments = ws.waveletSegment(0, wpmode="new")
 
             # TODO: make sure cross corr outputs lists of lists
             elif str(alg) == 'Cross-Correlation':
@@ -4046,7 +4047,7 @@ class AviaNZ(QMainWindow):
                     print('After rain segments: ', len(post.segments))
                 newSegments = self.seg.joinGaps(newSegments, maxgap=maxgap)
                 newSegments = self.seg.deleteShort(newSegments, minlength=minlength)
-                print('Segments after merge (<=%d secs) and delete short (<%.4f): ', (maxgap, minlength, len(newSegments)))
+                print('Segments after merge (<=%d secs) and delete short (<%.4f): ' % (maxgap, minlength, len(newSegments)))
             else:
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print('Post-processing...')

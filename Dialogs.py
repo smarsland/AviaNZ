@@ -1044,9 +1044,9 @@ class HumanClassify1(QDialog):
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         if platform.system() == 'Linux' or platform.system() == 'Darwin':
-            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowStaysOnTopHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint & QtCore.Qt.WindowStaysOnTopHint)
 
         self.frame = QWidget()
 
@@ -1620,7 +1620,7 @@ class HumanClassify2a(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowStaysOnTopHint)
 
         self.birds = QListWidget(self)
         self.birds.setMaximumWidth(350)
@@ -1689,9 +1689,9 @@ class HumanClassify2(QDialog):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         if platform.system() == 'Linux' or platform.system() == 'Darwin':
-            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowStaysOnTopHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint & QtCore.Qt.WindowStaysOnTopHint)
         # let the user quit without bothering rest of it
 
         self.sampleRate = sampleRate
@@ -1923,6 +1923,9 @@ class HumanClassify2(QDialog):
                 # stop if we are out of segments
                 if self.butStart+butNum==len(self.buttons):
                     return
+        #self.update()
+        self.repaint()
+        pg.QtGui.QApplication.processEvents()
 
     def volSliderMoved(self, value):
         # try/pass to avoid race situations when smth is not initialized
@@ -2019,6 +2022,9 @@ class HumanClassify2(QDialog):
         buttonsPerPage = self.numPicsV * self.numPicsH
         for butNum in range(self.butStart,min(self.butStart+buttonsPerPage,len(self.buttons))):
             self.buttons[butNum].changePic(False)
+        #self.update()
+        self.repaint()
+        pg.QtGui.QApplication.processEvents()
 
     def setColourLevels(self):
         """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.

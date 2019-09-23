@@ -19,7 +19,6 @@ setuptools==41.0.1
 spectrum==0.7.5
 
 xgboost==0.72.1
-intervaltree==2.1.0
 
 PeakUtils==1.1.1
 scikits.talkbox==0.2.5
