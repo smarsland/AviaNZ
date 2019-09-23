@@ -23,7 +23,7 @@
 import os, re, fnmatch, sys
 
 from PyQt5.QtGui import QIcon, QPixmap, QApplication
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout
 from PyQt5.QtMultimedia import QAudioFormat
 from PyQt5.QtCore import Qt, QDir
 
@@ -78,11 +78,11 @@ class AviaNZ_batchProcess(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setFixedSize(900, 750)
+        self.setMinimumSize(850, 680)
 
         # Make the docks
-        self.d_detection = Dock("Automatic Detection",size=(630, 700))
-        self.d_files = Dock("File list", size=(270, 700))
+        self.d_detection = Dock("Automatic Detection",size=(550, 640))
+        self.d_files = Dock("File list", size=(300, 640))
 
         self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
@@ -91,23 +91,24 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_browse.setToolTip("Can select a folder with sub folders to process")
         self.w_browse.setFixedHeight(50)
         self.w_browse.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
-        self.w_dir = QPlainTextEdit()
+        self.w_dir = QLineEdit()
         self.w_dir.setFixedHeight(50)
         self.w_dir.setReadOnly(True)
-        self.w_dir.setPlainText('')
+        self.w_dir.setText('')
         self.w_dir.setToolTip("The folder being processed")
         self.w_dir.setStyleSheet("color : #808080;")
 
-        w_speLabel1 = QLabel("Select Species to find")
+        w_speLabel1 = QLabel("Select one or more filters to use:")
         self.w_spe1 = QComboBox()
-        # read filter list, replace subsp marks with brackets
+        self.speCombos = [self.w_spe1]
+
+        # populate this box (always show all filters here)
         spp = list(self.FilterDicts.keys())
-        for sp in spp:
-            ind = sp.find('>')
-            if ind > -1:
-                sp = sp[:ind] + ' (' + sp[ind+1:] + ')'
-        spp.insert(0, "All species")
+        self.w_spe1.addItem("All species")
         self.w_spe1.addItems(spp)
+        self.w_spe1.currentTextChanged.connect(self.fillSpeciesBoxes)
+        self.addSp = QPushButton("Add another filter")
+        self.addSp.clicked.connect(self.addSpeciesBox)
 
         w_resLabel = QLabel("Set time resolution in Excel Output\n(Sheet3)")
         self.w_res = QSpinBox()
@@ -115,8 +116,6 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_res.setSingleStep(5)
         self.w_res.setValue(60)
         w_timeLabel = QLabel("Want to process a subset of recordings only e.g. dawn or dusk?\nThen select the time window, otherwise skip")
-        w_start = QLabel("Start time (hh:mm:ss)")
-        w_end = QLabel("End time (hh:mm:ss)")
         self.w_timeStart = QTimeEdit()
         self.w_timeStart.setDisplayFormat('hh:mm:ss')
         self.w_timeEnd = QTimeEdit()
@@ -124,6 +123,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
         self.w_wind = QCheckBox("")
         self.w_rain = QCheckBox("")
+        self.w_mergect = QCheckBox("")
 
         self.w_processButton = QPushButton("&Process Folder")
         self.w_processButton.clicked.connect(self.detect)
@@ -134,25 +134,43 @@ class AviaNZ_batchProcess(QMainWindow):
         self.d_detection.addWidget(self.w_dir, row=0, col=0, colspan=2)
         self.d_detection.addWidget(self.w_browse, row=0, col=2)
         self.d_detection.addWidget(w_speLabel1, row=1, col=0)
-        self.d_detection.addWidget(self.w_spe1, row=1, col=1, colspan=2)
 
-        self.d_detection.addWidget(w_timeLabel, row=2, col=0, colspan=3)
-        self.d_detection.addWidget(w_start, row=3, col=1)
-        self.d_detection.addWidget(self.w_timeStart, row=3, col=2)
-        self.d_detection.addWidget(w_end, row=4, col=1)
-        self.d_detection.addWidget(self.w_timeEnd, row=4, col=2)
+        # Filter selection group
+        self.boxSp = QGroupBox("Species")
+        self.formSp = QVBoxLayout()
+        self.formSp.addWidget(w_speLabel1)
+        self.formSp.addWidget(self.w_spe1)
+        self.formSp.addWidget(self.addSp)
+        self.boxSp.setLayout(self.formSp)
+        self.d_detection.addWidget(self.boxSp, row=1, col=0, colspan=3)
 
-        self.d_detection.addWidget(QLabel(" "), row=5, col=0)
-        self.d_detection.addWidget(QLabel("Add wind filter"), row=7, col=0)
-        self.d_detection.addWidget(self.w_wind, row=7, col=1)
-        self.d_detection.addWidget(QLabel("Add rain filter"), row=8, col=0)
-        self.d_detection.addWidget(self.w_rain, row=8, col=1)
-        self.d_detection.addWidget(QLabel(" "), row=9)
+        # Time Settings group
+        boxTime = QGroupBox()
+        formTime = QGridLayout()
+        formTime.addWidget(w_timeLabel, 0, 0, 1, 2)
+        formTime.addWidget(QLabel("Start time (hh:mm:ss)"), 1, 0)
+        formTime.addWidget(self.w_timeStart, 1, 1)
+        formTime.addWidget(QLabel("End time (hh:mm:ss)"), 2, 0)
+        formTime.addWidget(self.w_timeEnd, 2, 1)
+        boxTime.setLayout(formTime)
+        self.d_detection.addWidget(boxTime, row=2, col=0, colspan=3)
 
-        self.d_detection.addWidget(w_resLabel, row=10, col=0)
-        self.d_detection.addWidget(self.w_res, row=10, col=1)
-        self.d_detection.addWidget(QLabel("(seconds)"), row=10, col=2)
-        self.d_detection.addWidget(self.w_processButton, row=11, col=2)
+        # Post Proc checkbox group
+        boxPost = QGroupBox("Post processing")
+        formPost = QGridLayout()
+        formPost.addWidget(QLabel("Add wind filter"), 0, 0)
+        formPost.addWidget(self.w_wind, 0, 1)
+        formPost.addWidget(QLabel("Add rain filter"), 1, 0)
+        formPost.addWidget(self.w_rain, 1, 1)
+        formPost.addWidget(QLabel("Merge different call types"), 2, 0)
+        formPost.addWidget(self.w_mergect, 2, 1)
+        boxPost.setLayout(formPost)
+        self.d_detection.addWidget(boxPost, row=3, col=0, colspan=3)
+
+        self.d_detection.addWidget(w_resLabel, row=4, col=0)
+        self.d_detection.addWidget(self.w_res, row=4, col=1)
+        self.d_detection.addWidget(QLabel("(seconds)"), row=4, col=2)
+        self.d_detection.addWidget(self.w_processButton, row=5, col=2)
 
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
@@ -161,12 +179,12 @@ class AviaNZ_batchProcess(QMainWindow):
         self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
-        self.w_files.addWidget(QLabel('View Only'), row=0, col=0)
-        self.w_files.addWidget(QLabel('use Browse Folder to choose data for processing'), row=1, col=0)
+        self.w_files.addWidget(QLabel('Double click to select a folder'), row=0, col=0)
+        self.w_files.addWidget(QLabel('Red files have annotations'), row=1, col=0)
         self.w_files.addWidget(self.listFiles, row=2, col=0)
 
-        self.d_detection.layout.setContentsMargins(30, 40, 40, 40)
-        self.d_detection.layout.setSpacing(30)
+        self.d_detection.layout.setContentsMargins(20, 20, 20, 20)
+        self.d_detection.layout.setSpacing(20)
         self.d_files.layout.setContentsMargins(10, 10, 10, 10)
         self.d_files.layout.setSpacing(10)
         self.show()
@@ -217,10 +235,80 @@ class AviaNZ_batchProcess(QMainWindow):
         else:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         #print("Dir:", self.dirName)
-        self.w_dir.setPlainText(self.dirName)
+        self.w_dir.setText(self.dirName)
         self.w_dir.setReadOnly(True)
         self.fillFileList(self.dirName)
 
+    def addSpeciesBox(self):
+        """ Deals with adding and moving species comboboxes """
+        # create a new combobox
+        newSpBox = QComboBox()
+        self.speCombos.append(newSpBox)
+
+        # populate it with possible species (that have same Fs)
+        self.fillSpeciesBoxes()
+
+        # create a "delete" button for it
+        delSpBtn = QPushButton("X")
+        delSpBtn.speciesbox = newSpBox
+        delSpBtn.setFixedWidth(30)
+
+        # connect the listener for deleting
+        delSpBtn.clicked.connect(self.removeSpeciesBox)
+
+        # insert those just above Add button
+        btncombo = QHBoxLayout()
+        delSpBtn.layout = btncombo
+        btncombo.addWidget(newSpBox)
+        btncombo.addWidget(delSpBtn)
+        self.formSp.insertLayout(len(self.speCombos), btncombo)
+
+        self.boxSp.setMinimumHeight(30*len(self.speCombos)+90)
+        self.setMinimumHeight(610+30*len(self.speCombos))
+        self.boxSp.updateGeometry()
+
+    def removeSpeciesBox(self):
+        """ Deals with removing and moving species comboboxes """
+        # identify the clicked button
+        called = self.sender()
+        lay = called.layout
+
+        # delete the corresponding combobox and button from their HBox
+        self.speCombos.remove(called.speciesbox)
+        lay.removeWidget(called.speciesbox)
+        called.speciesbox.deleteLater()
+        lay.removeWidget(called)
+        called.deleteLater()
+
+        # remove the empty HBox
+        self.formSp.removeItem(lay)
+        lay.deleteLater()
+
+        self.boxSp.setMinimumHeight(30*len(self.speCombos)+90)
+        self.setMinimumHeight(610+30*len(self.speCombos))
+        self.boxSp.updateGeometry()
+
+    def fillSpeciesBoxes(self):
+        # select filters with Fs matching box 1 selection
+        spp = []
+        currname = self.w_spe1.currentText()
+        if currname != "All species":
+            currfilt = self.FilterDicts[currname]
+            # (can't use AllSp with any other filter)
+            # Also don't add the same name again
+            for name, filter in self.FilterDicts.items():
+                if filter["SampleRate"]==currfilt["SampleRate"] and name!=currname:
+                    spp.append(name)
+
+        # (skip first box which is fixed)
+        for box in self.speCombos[1:]:
+            # clear old items:
+            for i in reversed(range(box.count())):
+                box.removeItem(i)
+            box.setCurrentIndex(-1)
+            box.setCurrentText("")
+
+            box.addItems(spp)
 
     # from memory_profiler import profile
     # fp = open('memory_profiler_wp.log', 'w+')
@@ -232,14 +320,29 @@ class AviaNZ_batchProcess(QMainWindow):
             msg.exec_()
             return
 
-        self.species=self.w_spe1.currentText()
-        if self.species == "All species":
+        # retrieve selected filter(s)
+        self.species = set()
+        for box in self.speCombos:
+            if box.currentText() != "":
+                self.species.add(box.currentText())
+        self.species = list(self.species)
+        print("Species:", self.species)
+
+        if "All species" in self.species:
             self.method = "Default"
+            speciesStr = "All species"
         else:
-            self.speciesData = self.FilterDicts[self.species]
-            # Defaulting to first subfilter for now
-            self.speciesSubf = self.speciesData["Filters"][0]
             self.method = "Wavelets"
+
+            # double-check that all Fs are equal
+            filters = [self.FilterDicts[name] for name in self.species]
+            samplerate = set([filt["SampleRate"] for filt in filters])
+            if len(samplerate)>1:
+                print("ERROR: multiple sample rates found in selected filters, change selection")
+                return
+
+            # convert list to string
+            speciesStr = " & ".join(self.species)
 
         # Parse the user-set time window to process
         timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
@@ -255,8 +358,9 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # LOG FILE is read here
         # note: important to log all analysis settings here
-        self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'),
-                                self.species, [self.method, self.w_res.value(), timeWindow_s, timeWindow_e])
+        settings = [self.method, self.w_res.value(), timeWindow_s, timeWindow_e,
+                    self.w_wind.isChecked(), self.w_rain.isChecked(), self.w_mergect.isChecked()]
+        self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, settings)
 
         # Ask for RESUME CONFIRMATION here
         confirmedResume = QMessageBox.Cancel
@@ -288,7 +392,7 @@ class AviaNZ_batchProcess(QMainWindow):
         cnt = len(self.filesDone)
         confirmedLaunch = QMessageBox.Cancel
 
-        text = "Species: " + self.species + ", resolution: "+ str(self.w_res.value()) + ", method: " + self.method + ".\nNumber of files to analyze: " + str(total) + ", " + str(cnt) + " done so far.\n"
+        text = "Species: " + speciesStr + ", resolution: "+ str(self.w_res.value()) + ", method: " + self.method + ".\nNumber of files to analyze: " + str(total) + ", " + str(cnt) + " done so far.\n"
         text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
         text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
         text = "Analysis will be launched with these settings:\n" + text + "\nConfirm?"
@@ -306,7 +410,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # print current header (or old if resuming),
         # print old file list if resuming.
         self.log.file = open(self.log.file, 'w')
-        if self.species != "All species":
+        if speciesStr != "All species":
             self.log.reprintOld()
             # else single-sp runs should be deleted anyway
         if confirmedResume == QMessageBox.No:
@@ -373,29 +477,17 @@ class AviaNZ_batchProcess(QMainWindow):
 
                 # ALL SYSTEMS GO: process this file
                 print("Loading file...")
-                self.loadFile(wipe=(self.species == "All species"))
-
-                print("Segmenting...")
-                # clean up old segments:
-                if self.species != 'All species':
-                    # wipe same species:
-                    self.ws = WaveletSegment.WaveletSegment(self.speciesData, 'dmey2')
-                    oldsegs = self.segments.getSpecies(self.speciesData["species"])
-                    for i in reversed(oldsegs):
-                        wipeAll = self.segments[i].wipeSpecies(self.speciesData["species"])
-                        if wipeAll:
-                            del self.segments[i]
-                else:
-                    # wipe all segments:
-                    self.segments.clear()
-
+                # load audiodata and clean up old segments:
+                self.loadFile(species=self.species)
                 # Segment over pages separately, to allow dealing with large files smoothly:
                 # page size fixed for now
                 samplesInPage = 900*16000
                 # (ceil division for large integers)
                 numPages = (len(self.audiodata) - 1) // samplesInPage + 1
 
-                print(self.segments)
+                print("Segmenting...")
+                self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
+
                 # Actual segmentation happens here:
                 for page in range(numPages):
                     print("Segmenting page %d / %d" % (page+1, numPages))
@@ -408,27 +500,22 @@ class AviaNZ_batchProcess(QMainWindow):
                         continue
 
                     # Process
-                    if self.species != 'All species':
-                        # note: using 'recaa' mode = partial antialias
-                        thisPageSegs = self.ws.waveletSegment(data=self.audiodata[start:end], sampleRate=self.sampleRate, d=False, wpmode="new")
-                    else:
+                    if speciesStr == "All species":
                         # Create spectrogram for median clipping etc
                         self.sp.data = self.audiodata[start:end]
                         self.sgRaw = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
                         self.seg = Segment.Segmenter(self.sp, self.sampleRate)
                         thisPageSegs = self.seg.bestSegments()
-
-                    # Post-process
-                    # 1. Delete windy segments
-                    # 2. Delete rainy segments
-                    # 3. Check fundamental frq
-                    # 4. Merge neighbours
-                    # 5. Delete short segments
-                    print("Segments detected: ", len(thisPageSegs))
-                    print("Post-processing...")
-                    maxgap = 3  # Note arbitrary maxgap and 0.25 second min length
-                    minlength = 0.25
-                    if self.species == 'All species':
+                        # Post-process
+                        # 1. Delete windy segments
+                        # 2. Delete rainy segments
+                        # 3. Check fundamental frq
+                        # 4. Merge neighbours
+                        # 5. Delete short segments
+                        print("Segments detected: ", len(thisPageSegs))
+                        print("Post-processing...")
+                        maxgap = 3  # Note arbitrary maxgap and 0.25 second min length
+                        minlength = 0.25
                         post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                    segments=thisPageSegs, subfilter={})
                         if self.w_wind.isChecked():
@@ -449,33 +536,67 @@ class AviaNZ_batchProcess(QMainWindow):
                         # attach mandatory "Don't Know"s etc and put on self.segments
                         self.makeSegments(post.segments)
                     else:
-                        # postProcess currently operates on single-level list of segments,
-                        # so we run it over subfilters for wavelets:
-                        for filtix in range(len(self.speciesData['Filters'])):
-                            post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs[filtix], subfilter=self.speciesData['Filters'][filtix])
-                            if self.w_wind.isChecked():
-                                post.wind()
-                                print('After wind: segments: ', len(post.segments))
-                            if self.w_rain.isChecked():
-                                post.rainClick()
-                                print('After rain segments: ', len(post.segments))
-                            if 'F0' in self.speciesData['Filters'][filtix] and 'F0Range' in self.speciesData['Filters'][filtix]:
-                                print("Checking for fundamental frequency...")
-                                post.fundamentalFrq()
-                                print("After FF segments:", len(post.segments))
-                            segmenter = Segment.Segmenter()
-                            post.segments = segmenter.joinGaps(post.segments, maxgap=maxgap)
-                            post.segments = segmenter.deleteShort(post.segments, minlength=self.speciesData['Filters'][filtix]['TimeRange'][0])
-                            print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(maxgap, minlength, len(post.segments)))
+                        # read in the page and resample as needed
+                        self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new")
 
-                            # adjust segment starts for 15min "pages"
-                            if start != 0:
-                                for seg in post.segments:
-                                    seg[0] += start/self.sampleRate
-                                    seg[1] += start/self.sampleRate
+                        allCtSegs = []
+                        for speciesix in range(len(filters)):
+                            print("Working with filter:", filters[speciesix])
+                            # note: using 'recaa' mode = partial antialias
+                            thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
 
-                            # attach filter info and put on self.segments:
-                            self.makeSegments(post.segments, self.species, self.speciesData['Filters'][filtix])
+                            # Post-process
+                            # 1. Delete windy segments
+                            # 2. Delete rainy segments
+                            # 3. Check fundamental frq
+                            # 4. Merge neighbours
+                            # 5. Delete short segments
+                            print("Segments detected: ", len(thisPageSegs))
+                            print("Post-processing...")
+                            maxgap = 3  # Note arbitrary maxgap and 0.25 second min length
+                            minlength = 0.25
+                            # postProcess currently operates on single-level list of segments,
+                            # so we run it over subfilters for wavelets:
+                            spInfo = filters[speciesix]
+                            for filtix in range(len(spInfo['Filters'])):
+                                post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix])
+                                if self.w_wind.isChecked():
+                                    post.wind()
+                                    print('After wind: segments: ', len(post.segments))
+                                if self.w_rain.isChecked():
+                                    post.rainClick()
+                                    print('After rain segments: ', len(post.segments))
+                                if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
+                                    print("Checking for fundamental frequency...")
+                                    post.fundamentalFrq()
+                                    print("After FF segments:", len(post.segments))
+                                segmenter = Segment.Segmenter()
+                                post.segments = segmenter.joinGaps(post.segments, maxgap=maxgap)
+                                post.segments = segmenter.deleteShort(post.segments, minlength=spInfo['Filters'][filtix]['TimeRange'][0])
+                                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(maxgap, minlength, len(post.segments)))
+
+                                # adjust segment starts for 15min "pages"
+                                if start != 0:
+                                    for seg in post.segments:
+                                        seg[0] += start/self.sampleRate
+                                        seg[1] += start/self.sampleRate
+
+                                if self.w_mergect.isChecked():
+                                    # collect segments from all call types
+                                    allCtSegs.extend(post.segments)
+                                else:
+                                    # attach filter info and put on self.segments:
+                                    self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
+
+                            if self.w_mergect.isChecked():
+                                # merge different call type segments
+                                segmenter = Segment.Segmenter()
+                                segs = segmenter.mergeSegments(allCtSegs)
+                                # construct "Any call" info to place on the segments
+                                flow = min([subf["FreqRange"][0] for subf in spInfo["Filters"]])
+                                fhigh = max([subf["FreqRange"][1] for subf in spInfo["Filters"]])
+                                ctinfo = {"calltype": "(Other)", "FreqRange": [flow, fhigh]}
+                                self.makeSegments(segs, self.species[speciesix], spInfo["species"], ctinfo)
 
                 print('Segments in this file: ', self.segments)
                 print("Segmentation complete. %d new segments marked" % len(self.segments))
@@ -505,7 +626,7 @@ class AviaNZ_batchProcess(QMainWindow):
             # Determine all species detected in at least one file
             # (two loops ensure that all files will have pres/abs xlsx for all species.
             # Ugly, but more readable this way)
-            spList = set([self.speciesData["species"]])
+            spList = set([filter["species"] for filter in filters])
             for filename in allwavs:
                 if not os.path.isfile(filename + '.data'):
                     continue
@@ -542,13 +663,13 @@ class AviaNZ_batchProcess(QMainWindow):
         if reply == QMessageBox.Yes:
             QApplication.exit(1)
 
-    def makeSegments(self, segmentsNew, filtName=None, subfilter=None):
+    def makeSegments(self, segmentsNew, filtName=None, species=None, subfilter=None):
         """ Adds segments to self.segments """
         # for wavelet segments: (same as self.species!="All species")
         if subfilter is not None:
             y1 = subfilter["FreqRange"][0]
             y2 = min(subfilter["FreqRange"][1], self.sampleRate//2)
-            species = [{"species": self.speciesData["species"], "certainty": 50, "filter": filtName, "calltype": subfilter["calltype"]}]
+            species = [{"species": species, "certainty": 50, "filter": filtName, "calltype": subfilter["calltype"]}]
             for s in segmentsNew:
                 segment = Segment.Segment([s[0], s[1], y1, y2, species])
                 self.segments.addSegment(segment)
@@ -578,8 +699,8 @@ class AviaNZ_batchProcess(QMainWindow):
         """ Generates the list of files for the file listbox.
         fileName - currently opened file (marks it in the list).
         Most of the work is to deal with directories in that list.
-        It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
-        red in the list, and the second to know if the files are long."""
+        It only sees *.wav files. Picks up *.data files, to make the filenames
+        red in the list."""
 
         if not os.path.isdir(self.dirName):
             print("ERROR: directory %s doesn't exist" % self.soundFileDir)
@@ -610,6 +731,9 @@ class AviaNZ_batchProcess(QMainWindow):
             else:
                 self.listFiles.setCurrentRow(0)
 
+        # update the "Browse" field text
+        self.w_dir.setText(self.dirName)
+
     def listLoadFile(self,current):
         """ Listener for when the user clicks on an item in filelist
         """
@@ -631,12 +755,10 @@ class AviaNZ_batchProcess(QMainWindow):
             # Now repopulate the listbox
             self.dirName=str(dir.absolutePath())
             self.previousFile = None
-            if (i == len(self.listOfFiles)-1) and (self.listOfFiles[i].fileName() != current):
-                self.loadFile(current)
             self.fillFileList(current)
         return(0)
 
-    def loadFile(self, wipe=True):
+    def loadFile(self, species):
         print(self.filename)
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
@@ -650,14 +772,26 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # Read in stored segments (useful when doing multi-species)
         self.segments = Segment.SegmentList()
-        if wipe or not os.path.isfile(self.filename + '.data'):
+        if species==["All species"] or not os.path.isfile(self.filename + '.data'):
             # Initialize default metadata values
             self.segments.metadata = dict()
             self.segments.metadata["Operator"] = "Auto"
             self.segments.metadata["Reviewer"] = ""
             self.segments.metadata["Duration"] = float(self.datalength)/self.sampleRate
+            # wipe all segments:
+            print("Wiping all previous segments")
+            self.segments.clear()
         else:
             self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
+            # wipe same species:
+            for filt in self.FilterDicts.values():
+                if filt["species"] in species:
+                    print("Wiping species", filt["species"])
+                    oldsegs = self.segments.getSpecies(filt["species"])
+                    for i in reversed(oldsegs):
+                        wipeAll = self.segments[i].wipeSpecies(filt["species"])
+                        if wipeAll:
+                            del self.segments[i]
 
             print("%d segments loaded from .data file" % len(self.segments))
 
@@ -895,6 +1029,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def review(self):
         self.species = self.w_spe1.currentText()
+
         self.reviewer = self.w_reviewer.text()
         print("Reviewer: ", self.reviewer)
         if self.reviewer == '':
@@ -1062,6 +1197,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.humanClassifyDialog2.resize(self.dialogSize)
             self.humanClassifyDialog2.move(self.dialogPos)
         self.humanClassifyDialog2.finish.clicked.connect(self.humanClassifyClose2)
+        self.humanClassifyDialog2.setModal(True)
         success = self.humanClassifyDialog2.exec_()
 
         # capture Esc press or other "dirty" exit:
@@ -1162,6 +1298,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
         self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
+        self.humanClassifyDialog1.setModal(True)
         success = self.humanClassifyDialog1.exec_() # 1 on clean exit
 
         if success == 0:

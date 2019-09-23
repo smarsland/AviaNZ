@@ -36,7 +36,6 @@ import re
 import math
 import copy
 import wavio
-from intervaltree import IntervalTree
 from itertools import chain, repeat
 from scipy.interpolate import interp1d
 from scipy.signal import medfilt
@@ -653,60 +652,27 @@ class Segmenter:
         segs3, p, t = self.yin(100, thr=yinthr, returnSegs=True)
         segs1 = self.mergeSegments(segs1, segs2)
         segs = self.mergeSegments(segs1, segs3)
-        segs = sorted(segs, key=lambda x: x[0])
+        # mergeSegments also sorts, so not needed:
+        # segs = sorted(segs, key=lambda x: x[0])
         return segs
 
-    def mergeSegments(self,segs1,segs2,ignoreInsideEnvelope=True):
-        """ Given two segmentations of the same file, return the merged set of them
-        Two similar segments should be replaced by their union
-        Those that are inside another should be removed (?) or the too-large one deleted?
-        If ignoreInsideEnvelope is true this is the first of those, otherwise the second
-        """
-
-        t = IntervalTree()
-
-        # Put the first set into the tree
-        for s in segs1:
-            t[s[0]:s[1]] = s
-
-        # Decide whether or not to put each segment in the second set in
-        for s in segs2:
-            overlaps = t.search(s[0],s[1])
-            # If there are no overlaps, add it
-            if len(overlaps)==0:
-                t[s[0]:s[1]] = s
+    def mergeSegments(self, segs1, segs2=None):
+        """ Given two segmentations of the same file, return the merged set of them:
+        [[1,3] [2,4] [5,7] [7,8]] -> [[1,4] [5,7] [7,8]]
+        Can take in one or two lists. """
+        if segs2 is not None:
+            segs1.extend(segs2)
+        segs1.sort(key=lambda seg: seg[0])
+        out = [segs1[0]]
+        for curr in segs1:
+            lastout = out[-1]
+            if curr[0] < lastout[1]:
+                lastout[1] = max(lastout[1], curr[1])
             else:
-                # Search for any enveloped, if there are remove and add the new one
-                envelops = t.search(s[0],s[1],strict=True)
-                if len(envelops) > 0:
-                    if ignoreInsideEnvelope:
-                        # Remove any inside the envelope of the test point
-                        t.remove_envelop(s[0],s[1])
-                        overlaps = t.search(s[0], s[1])
-                        #print s[0], s[1], overlaps
-                        # Open out the region, delete the other
-                        for o in overlaps:
-                            if o.begin < s[0]:
-                                s[0] = o.begin
-                                t.remove(o)
-                            if o.end > s[1]:
-                                s[1] = o.end
-                                t.remove(o)
-                        t[s[0]:s[1]] = s
-                else:
-                    # Check for those that intersect the ends, widen them out a bit
-                    for o in overlaps:
-                        if o.begin > s[0]:
-                            t[s[0]:o[1]] = (s[0],o[1])
-                            t.remove(o)
-                        if o.end < s[1]:
-                            t[o[0]:s[1]] = (o[0],s[1])
-                            t.remove(o)
-
-        segs = []
-        for a in t:
-            segs.append([a[0],a[1]])
-        return segs
+                # note that segments that only touch ([1,2][2,3])
+                # will not be merged
+                out.append(curr)
+        return out
 
     def convert01(self, presabs, window=1):
         """ Turns a list of presence/absence [0 1 1 1]

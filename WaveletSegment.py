@@ -29,11 +29,11 @@ import SignalProc
 import Segment
 from ext import ce_denoise as ce
 
+
 class WaveletSegment:
     # This class implements wavelet segmentation for the AviaNZ interface
 
-    def __init__(self, spInfo, wavelet='dmey2', annotation=[], mingap=0.3, minlength=0.2):
-        self.annotation = annotation
+    def __init__(self, spInfo={}, wavelet='dmey2'):
         self.wavelet = wavelet
         self.spInfo = spInfo
         self.currentSR = 0
@@ -42,18 +42,15 @@ class WaveletSegment:
             print("Detected %d subfilters in this filter" % len(spInfo["Filters"]))
 
         self.sp = SignalProc.SignalProc(256, 128)
-        self.segmenter = Segment.Segmenter(self.sp, mingap=mingap, minlength=minlength)
 
-    def waveletSegment(self, data, sampleRate, d, wpmode="new"):
-        """ Main analysis wrapper (segmentation in batch mode).
-            Also do species-specific post-processing
+    def readBatch(self, data, sampleRate, d, spInfo, wpmode="new"):
+        """ File (or page) loading for batch mode. Must be followed by self.waveletSegment.
             Args:
             1. data to be segmented, ndarray
             2. sampleRate of the data, int
             3. d - turn on denoising before calling?
-            4. wpmode: old/new/aa to indicate no/partial/full antialias
-
-            Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
+            4. spInfo - List of filters to determine which nodes are needed & target sample rate
+            5. wpmode: old/new/aa to indicate no/partial/full antialias
         """
         if data is None or data == [] or len(data) == 0:
             print("ERROR: data must be provided for WS")
@@ -62,13 +59,56 @@ class WaveletSegment:
         opst = time.time()
 
         # resample or adjust nodes if needed
-        denoisedData, fs, spInfo = self.preprocess(data, sampleRate, d=d, fastRes=True)
+        self.spInfo = spInfo
+
+        # target sample rates should be equal over all requested species
+        fsOut = set([filt["SampleRate"] for filt in spInfo])
+        if len(fsOut)>1:
+            print("ERROR: sample rates must match in all selected filters")
+            return
+        fsOut = fsOut.pop()
+
+        # copy the filters so that the originals wouldn't be affected between files
+        self.spInfo = copy.deepcopy(spInfo)
+
+        # in batch mode, it's worth trying some tricks to avoid resampling
+        if fsOut == 2*sampleRate:
+            print("Adjusting nodes for upsampling to", fsOut)
+            WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
+            for filter in self.spInfo:
+                for subfilter in filter["Filters"]:
+                    subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+            # Don't want to resample again, so fsTarget = fsIn
+            fsOut = sampleRate
+        elif fsOut == 4*sampleRate:
+            print("Adjusting nodes for upsampling to", fsOut)
+            # same. Wouldn't recommend repeating for larger ratios than 4x
+            WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
+            for filter in self.spInfo:
+                for subfilter in filter["Filters"]:
+                    downsampled2x = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
+                    subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(downsampled2x, "down2")
+            # Don't want to resample again, so fsTarget = fsIn
+            fsOut = sampleRate
+        # Could also similarly "downsample" by adding an extra convolution, but it's way slower
+        # elif sampleRate == 2*fsOut:
+        #     # don't actually downsample audio, just "upsample" the nodes needed
+        #     WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
+        #     for subfilter in self.spInfo["Filters"]:
+        #         subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
+        #     print("upsampled nodes")
+        #     self.spInfo["SampleRate"] = sampleRate
+
+        denoisedData = self.preprocess(data, sampleRate, fsOut, d=d, fastRes=True)
 
         # Find out which nodes will be needed:
-        allnodes = [node for subfilter in spInfo["Filters"] for node in subfilter["WaveletParams"]["nodes"]]
+        allnodes = []
+        for filt in self.spInfo:
+            for subfilter in filt["Filters"]:
+                allnodes.extend(subfilter["WaveletParams"]["nodes"])
 
         # Generate a full 5 level wavelet packet decomposition (stored in WF.tree)
-        self.WF = WaveletFunctions.WaveletFunctions(data=denoisedData, wavelet=self.wavelet, maxLevel=20, samplerate=fs)
+        self.WF = WaveletFunctions.WaveletFunctions(data=denoisedData, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
         if wpmode == "pywt":
             print("ERROR: pywt wpmode is deprecated, use new or aa")
             return
@@ -76,12 +116,29 @@ class WaveletSegment:
             self.WF.WaveletPacket(allnodes, mode='symmetric', antialias=False)
         if wpmode == "aa":
             self.WF.WaveletPacket(allnodes, mode='symmetric', antialias=True, antialiasFilter=True)
+        print("File loaded in", time.time() - opst)
 
-        ### Now, find segments with each subfilter separately
+        # no return, just preloaded self.WF
+
+    def waveletSegment(self, filtnum, wpmode="new"):
+        """ Main analysis wrapper (segmentation in batch mode).
+            Also do species-specific post-processing.
+            Reads data pre-loaded onto self.WF.tree by self.readBatch.
+            Args:
+            1. filtnum: index of the current filter in self.spInfo (which is a list of filters...)
+            2. wpmode: old/new/aa to indicate no/partial/full antialias
+            Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
+        """
+        opst = time.time()
+
+        # No resampling here. Will read nodes from self.spInfo, which may already be adjusted
+
+        ### find segments with each subfilter separately
         detected_allsubf = []
-        for subfilter in spInfo["Filters"]:
+        for subfilter in self.spInfo[filtnum]["Filters"]:
             print("Identifying calls using subfilter", subfilter["calltype"])
             goodnodes = subfilter['WaveletParams']["nodes"]
+
             detected = self.detectCalls(self.WF, nodelist=goodnodes, subfilter=subfilter, rf=True, aa=wpmode!="old")
 
             # merge neighbours in order to convert the detections into segments
@@ -874,65 +931,32 @@ class WaveletSegment:
 
         return (bestnodes, worstnodes)
 
-    def preprocess(self, data, sampleRate, d=False, fastRes=False):
+    def preprocess(self, data, sampleRate, fsOut, d=False, fastRes=False):
         """ Downsamples, denoises, and filters the data.
             sampleRate - actual sample rate of the input. Will be resampled based on spInfo.
+            fsOut - target sample rate
             d - boolean, perform denoising?
             fastRes - use node-adjusting, or kaiser_fast instead of best. Twice faster but pretty similar output. To use only in batch mode! Otherwise need to deal with returned nodes properly.
         """
-        # set target sample rate:
-        fsOut = self.spInfo['SampleRate']
-        # copy the filter so that the original wouldn't be affected between files
-        adjSpInfo = copy.deepcopy(self.spInfo)
-
-        currentSR = sampleRate
+        # resample (implies this hasn't been done by node adjustment before)
         if sampleRate != fsOut:
+            print("Resampling from", sampleRate, "to", fsOut)
             if not fastRes:
-                print("Resampling from", sampleRate, "to", fsOut)
                 # actually up/down-sample
                 data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_best')
-                currentSR = fsOut
             else:
-                # in batch mode, it's worth trying some tricks to do it faster
-                if fsOut == 2*sampleRate:
-                    print("Adjusting nodes for upsampling to", fsOut)
-                    # don't actually upsample audio, just "downsample" the nodes needed
-                    WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
-                    for subfilter in adjSpInfo["Filters"]:
-                        subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                    currentSR = sampleRate
-                elif fsOut == 4*sampleRate:
-                    print("Adjusting nodes for upsampling to", fsOut)
-                    # same. Wouldn't recommend repeating for larger ratios than 4x
-                    WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
-                    for subfilter in adjSpInfo["Filters"]:
-                        downsampled2x = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "down2")
-                        subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(downsampled2x, "down2")
-                    currentSR = sampleRate
-                # Could also similarly "downsample" by adding an extra convolution, but it's way slower
-                # elif sampleRate == 2*fsOut:
-                #     # don't actually downsample audio, just "upsample" the nodes needed
-                #     WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=1)
-                #     for subfilter in self.spInfo["Filters"]:
-                #         subfilter["WaveletParams"]['nodes'] = WF.adjustNodes(subfilter["WaveletParams"]['nodes'], "up2")
-                #     print("upsampled nodes")
-                #     self.spInfo["SampleRate"] = sampleRate
-                else:
-                    print("Resampling from", sampleRate, "to", fsOut)
-                    # actually up/down-sample
-                    data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
-                    currentSR = fsOut
+                data = librosa.core.audio.resample(data, sampleRate, fsOut, res_type='kaiser_fast')
 
         # Get the five level wavelet decomposition
         if d:
-            WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=currentSR)
+            WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20, samplerate=fsOut)
             denoisedData = WF.waveletDenoise(thresholdType='soft', maxLevel=5)
         else:
             denoisedData = data  # this is to avoid washing out very fade calls during the denoising
 
         WF = []
         del WF
-        return denoisedData, currentSR, adjSpInfo
+        return denoisedData
 
     def loadDirectory(self, dirName, denoise, window=1, inc=None):
         """
@@ -964,8 +988,8 @@ class WaveletSegment:
 
                     # denoise and store actual audio data:
                     # note: preprocessing is a side effect on data
-                    # (preprocess only reads target SampleRate from spInfo)
-                    denoisedData, _, _ = self.preprocess(self.sp.data, self.sp.sampleRate, d=denoise)
+                    # (preprocess only reads target nodes from spInfo)
+                    denoisedData = self.preprocess(self.sp.data, self.sp.sampleRate, self.spInfo['SampleRate'], d=denoise)
                     self.audioList.append(denoisedData)
 
                     print("file loaded in", time.time() - opstartingtime)
