@@ -1721,13 +1721,10 @@ class AviaNZ(QMainWindow):
         # If there are segments, show them
         if not self.cheatsheet and not self.zooniverse:
             for count in range(len(self.segments)):
-                print('**', self.segments[count])
                 if self.segments[count][2] == 0 and self.segments[count][3] == 0:
                     self.addSegment(self.segments[count][0], self.segments[count][1], 0, 0, self.segments[count][4], False, count, remaking)
                 else:
                     self.addSegment(self.segments[count][0], self.segments[count][1], self.convertFreqtoY(self.segments[count][2]),self.convertFreqtoY(self.segments[count][3]), self.segments[count][4], False, count, remaking)
-
-            # TODO: Also need to check for spectral derivatives and fundamental frequency and update locations
 
             # This is the moving bar for the playback
             if not hasattr(self,'bar'):
@@ -2072,6 +2069,10 @@ class AviaNZ(QMainWindow):
                     self.overviewSegments[inds:inde + 1, 2] -= 1
                 else:
                     self.overviewSegments[inds:inde + 1, 2] += 1
+
+        if np.any(self.overviewSegments<0):
+            print("Warning: something went wrong with overview colors!")
+            print(self.overviewSegments)
 
         # set the colour of these boxes in the overview
         for box in range(inds, inde + 1):

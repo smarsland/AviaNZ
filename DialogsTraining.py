@@ -1243,15 +1243,16 @@ class BuildRecAdvWizard(QWizard):
             # spectrogram is not necessary if we're not returning segments
             segment = Segment.Segmenter(sp, sampleRate)
             pitch, y, minfreq, W = segment.yin(minfreq=100, returnSegs=False)
-            ind = np.squeeze(np.where(pitch > minfreq))
-            pitch = pitch[ind]
             # we use NaNs to represent "no F0 found"
             if pitch.size == 0:
                 return float("nan"), float("nan")
-            if ind.size < 2:
-                f0 = pitch
-                return f0, f0
+
+            segs = segment.convert01(pitch > minfreq)
+            segs = segment.deleteShort(segs, 5)
+            if len(segs) == 0:
+                return float("nan"), float("nan")
             else:
+                pitch = pitch[np.where(pitch>minfreq)]
                 return round(np.min(pitch)), round(np.max(pitch))
 
     # page 7 - save the filter

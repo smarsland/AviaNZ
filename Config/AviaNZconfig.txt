@@ -17,9 +17,9 @@
 "ColourNamed": [0, 255, 0, 100],
 "ColourNone": [255, 0, 0, 100],
 "ColourPossible": [255, 255, 0, 100],
-"cmap": "Grey", "showAmplitudePlot": true, "showAnnotationOverview": true, "showPointerDetails": false,
+"cmap": "Grey", "showAmplitudePlot": false, "showAnnotationOverview": true, "showPointerDetails": false,
 "readOnly": false, "transparentBoxes": false, "showListofFiles": true,
-"invertColourMap": false, "showAllPages": true, "saveCorrections": true,
+"invertColourMap": false, "saveCorrections": true,
 "operator": "Stephen", "reviewer": "Nirosha",
 "protocolOn": false, "protocolSize": 10, "protocolInterval": 60,
-"fs_start": 0, "fs_end": 0, "window": "Hann", "FiltersDir":"Filters"}
+"fs_start": 0, "fs_end": 0, "window": "Hann", "FiltersDir": "Filters"}
