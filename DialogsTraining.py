@@ -61,7 +61,7 @@ class BuildRecAdvWizard(QWizard):
             self.setTitle('Training data')
             self.setSubTitle('To start training, you need labelled calls from your species as training data (see the manual). Select the folder where this data is located. Then select the species.')
 
-            self.setMinimumSize(250, 150)
+            self.setMinimumSize(600, 150)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
