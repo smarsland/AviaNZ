@@ -608,6 +608,8 @@ class SignalProc:
         segs = seg.convert01(ind)
         segs = seg.deleteShort(segs, 2)
         segs = seg.joinGaps(segs, 2)
+        # extra round to delete those which didn't merge with any longer segments
+        segs = seg.deleteShort(segs, 4)
 
         yadjfact = 2/self.sampleRate*np.shape(self.sg)[1]
 
@@ -623,7 +625,18 @@ class SignalProc:
             # Adjust pitch marks to the visible freq range on the spec
             y = ((pitchSeg-self.minFreqShow)*yadjfact).astype('int')
             # smooth the pitch lines
-            y = medfilt(y, 15)
+            medfiltsize = min((len(y)-1)//2*2+1, 15)
+            y = medfilt(y, medfiltsize)
+            # joinGaps can introduce no-pitch pixels, which cause
+            # smoothed segments to have 0 ends. Trim those:
+            trimst = 0
+            while y[trimst]==0 and trimst<medfiltsize//2:
+                trimst += 1
+            trime = len(y)-1
+            while y[trime]==0 and trime>len(y)-medfiltsize//2:
+                trime -= 1
+            y = y[trimst:trime]
+            i = i[trimst:trime]
 
             out.append((starts[i], y))
         return out

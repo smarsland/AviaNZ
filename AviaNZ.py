@@ -4033,7 +4033,7 @@ class AviaNZ(QMainWindow):
             # 3. Check fundamental frq
             # 4. Merge neighbours
             # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
-            maxgap = 3
+            maxgap = 1
             minlength = 0.25
             if str(alg) != 'Wavelets':
                 print('Segments detected: ', len(newSegments))
@@ -4048,7 +4048,7 @@ class AviaNZ(QMainWindow):
                     print('After rain segments: ', len(post.segments))
                 newSegments = self.seg.joinGaps(newSegments, maxgap=maxgap)
                 newSegments = self.seg.deleteShort(newSegments, minlength=minlength)
-                print('Segments after merge (<=%d secs) and delete short (<%.4f): ' % (maxgap, minlength, len(newSegments)))
+                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' % (maxgap, minlength, len(newSegments)))
             else:
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print('Post-processing...')
@@ -4056,8 +4056,8 @@ class AviaNZ(QMainWindow):
                 # so we run it over subfilters for wavelets:
                 for filtix in range(len(speciesData['Filters'])):
                     post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                                      segments=newSegments[filtix],
-                                                      subfilter=speciesData['Filters'][filtix])
+                                               segments=newSegments[filtix],
+                                               subfilter=speciesData['Filters'][filtix])
                     if wind:
                         post.wind()
                         print('After wind: segments: ', len(post.segments))
