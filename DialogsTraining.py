@@ -59,7 +59,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, parent=None):
             super(BuildRecAdvWizard.WPageData, self).__init__(parent)
             self.setTitle('Training data')
-            self.setSubTitle('To start training, you need labelled calls from your species as training data (use the manual interface to create this). Select the folder where this data is located. Then select the species.')
+            self.setSubTitle('To start training, you need labelled calls from your species as training data (see the manual). Select the folder where this data is located. Then select the species.')
 
             self.setMinimumSize(250, 150)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
