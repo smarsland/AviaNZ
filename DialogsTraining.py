@@ -900,10 +900,6 @@ class BuildRecAdvWizard(QWizard):
         def initializePage(self):
             self.wizard().saveTestBtn.setVisible(False)
             # populates values based on training files
-            f_low = []
-            f_high = []
-            len_min = []
-            len_max = []
             fs = int(self.field("fs")) // 4000 * 4000
 
             # self.segments is already selected to be this cluster only
