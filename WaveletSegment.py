@@ -154,7 +154,7 @@ class WaveletSegment:
 
     def waveletSegment_train(self, dirName, thrList, MList, d=False, rf=True, learnMode='recaa', window=1,
                              inc=None):
-        """ Entry point to use during training, called from AviaNZ.py.
+        """ Entry point to use during training, called from DialogsTraining.py.
             Switches between various training methods, orders data loading etc.,
             then just passes the arguments to the right training method and returns the results.
 
@@ -546,8 +546,7 @@ class WaveletSegment:
 
         duration = len(wf.tree[0])
 
-        # Window, inrement, and resolution are converted to
-        # true seconds based on the tree samplerate
+        # Window, inrement, and resolution are converted to true seconds based on the tree samplerate
         samplerate = wf.treefs
         win_sr = math.ceil(window * samplerate)
         inc_sr = math.ceil(inc * samplerate)
@@ -740,7 +739,7 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    def gridSearch(self, E, thrList, MList, rf=True, learnMode=None, window=1, inc=None, wind=False):
+    def gridSearch(self, E, thrList, MList, rf=True, learnMode=None, window=1, inc=None):
         """ Take list of energy peaks of dimensions:
             [files] [MListxTxN ndarrays],
             perform grid search over thr and M parameters,
@@ -763,7 +762,6 @@ class WaveletSegment:
         tna = np.zeros(shape)
         fna = np.zeros(shape)
         finalnodes = []
-        negative_nodes = []
         top_nodes = []
 
         # Grid search over M x thr x Files
@@ -813,10 +811,6 @@ class WaveletSegment:
                                     detect_ann[int(math.floor(start)):end] = 1
                                 start += inc2
                             detect_onenode = detect_ann
-
-                        # exclude detections in noisy sections
-                        if wind:
-                            detect_onenode = np.minimum.reduce([detect_onenode, self.noiseList[indexF]])
 
                         # What do we detect if we add this node to currently best detections?
                         detect_allnodes = np.maximum.reduce([detect_best, detect_onenode])
