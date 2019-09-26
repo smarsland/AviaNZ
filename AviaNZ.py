@@ -1127,12 +1127,15 @@ class AviaNZ(QMainWindow):
             dlg.setCancelButton(None)
             dlg.setWindowIcon(QIcon('img/Avianz.ico'))
             dlg.setWindowTitle('AviaNZ')
+            dlg.show()
+            dlg.update()
             if name is not None:
                 if not self.cheatsheet:
                     self.filename = self.SoundFileDir+'/'+name
                 else:
                     self.filename = name
                 dlg += 1
+                dlg.update()
 
                 # Create an instance of the Signal Processing class
                 if not hasattr(self, 'sp'):
@@ -1173,8 +1176,10 @@ class AviaNZ(QMainWindow):
                 #self.changeWidth(self.widthWindow.value())
 
                 dlg += 1
+                dlg.update()
             else:
                 dlg += 2
+                dlg.update()
 
             # Read in the file and make the spectrogram
             # Determine where to start and how much to read for this page (in seconds):
@@ -1200,6 +1205,7 @@ class AviaNZ(QMainWindow):
                 # self.sp.*Show will be set based on SignalProc settings
 
                 dlg += 1
+                dlg.update()
 
                 self.datalength = np.shape(self.audiodata)[0]
                 self.datalengthSec = self.datalength / self.sampleRate
@@ -1315,9 +1321,11 @@ class AviaNZ(QMainWindow):
                 self.minampl = np.min(self.audiodata)+0.1*(np.max(self.audiodata)+np.abs(np.min(self.audiodata)))
                 self.drawOverview()
                 dlg += 1
+                dlg.update()
                 self.drawfigMain()
                 self.setWindowTitle('AviaNZ - ' + self.filename)
                 dlg += 1
+                dlg.update()
                 self.statusLeft.setText("Ready")
 
     def openNextFile(self):
