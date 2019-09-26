@@ -637,7 +637,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
                 segments = Segment.SegmentList()
                 segments.parseJSON(filename + '.data')
-                print(filename,len(segments))
+                print(filename)
 
                 for seg in segments:
                     spList.update([lab["species"] for lab in seg[4]])
@@ -658,7 +658,8 @@ class AviaNZ_batchProcess(QMainWindow):
                 datalen = np.ceil(segments.metadata["Duration"])
 
                 success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
-                print(success)
+                if success!=1:
+                    print("Warning: failed to export Excel output!")
 
         # END of processing and exporting. Final cleanup
         self.log.file.close()
@@ -1156,7 +1157,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
                 segments = Segment.SegmentList()
                 segments.parseJSON(filename + '.data')
-                print(filename,len(segments))
+                print(filename)
 
                 for seg in segments:
                     spList.update([lab["species"] for lab in seg[4]])
@@ -1177,7 +1178,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 datalen = np.ceil(segments.metadata["Duration"])
 
                 success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
-                print(success)
+                if success!=1:
+                    print("Warning: failed to save Excel output")
 
         # END of review and exporting. Final cleanup
         self.statusBar().showMessage("Reviewed files " + str(cnt) + "/" + str(total))
@@ -1327,6 +1329,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 dlg.setCancelButton(None)
                 dlg.setWindowIcon(QIcon('img/Avianz.ico'))
                 dlg.setWindowTitle('AviaNZ')
+                dlg.setFixedSize(350, 100)
+                dlg.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
                 dlg.update()
                 dlg.repaint()
                 dlg.show()
@@ -1340,8 +1344,6 @@ class AviaNZ_reviewAll(QMainWindow):
 
                 self.sampleRate = self.sp.sampleRate
                 self.audiodata = self.sp.data
-
-                print("Detected format: %d channels, %d Hz, %d bit samples" % (self.sp.audioFormat.channelCount(), self.sp.audioFormat.sampleRate(), self.sp.audioFormat.sampleSize()))
 
                 self.datalength = np.shape(self.audiodata)[0]
                 print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate,self.sampleRate)
@@ -1415,9 +1417,6 @@ class AviaNZ_reviewAll(QMainWindow):
                                            specnames, self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1,
                                            seg[0], seg[1], minFreq, maxFreq)
         else:
-            msg = SupportClasses.MessagePopup("d", "Finished", "All segments in this file checked")
-            msg.exec_()
-
             # store position to popup the next one in there
             self.dialogSize = self.humanClassifyDialog1.size()
             self.dialogPos = self.humanClassifyDialog1.pos()
