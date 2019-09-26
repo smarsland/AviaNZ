@@ -151,10 +151,7 @@ class Spectrogram(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        if platform.system() == 'Linux' or platform.system() == 'Darwin':
-            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
-        else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowStaysOnTopHint)
         self.setMinimumWidth(300)
         self.DOC = DOC
 
@@ -257,7 +254,7 @@ class OperatorReviewer(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Set Operator/Reviewer')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowStaysOnTopHint)
         self.setMinimumWidth(320)
 
         self.operatorlabel = QLabel("Operator")
@@ -290,10 +287,7 @@ class addNoiseData(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Noise Information')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        if platform.system() == 'Linux' or platform.system() == 'Darwin':
-            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
-        else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(320)
 
         HBox1 = QVBoxLayout()
@@ -399,10 +393,7 @@ class Diagnostic(QDialog):
         self.setWindowTitle('Diagnostic Plot Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(300)
-        if platform.system() == 'Linux' or platform.system() == 'Darwin':
-            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
-        else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
 
         # species / filter
         self.filterLabel = QLabel("Select filter to use")
@@ -468,11 +459,7 @@ class Segmentation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Segmentation Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        # for some reason CloseButtonHint disables window floating for me
-        if platform.system() == 'Linux' or platform.system() == 'Darwin':
-            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
-        else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(350)
 
         self.algs = QComboBox()
@@ -732,10 +719,7 @@ class Denoise(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Denoising Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        if platform.system() == 'Linux' or platform.system() == 'Darwin':
-            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
-        else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
 
         self.setMinimumWidth(300)
         self.setMinimumHeight(250)
@@ -1043,11 +1027,9 @@ class HumanClassify1(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        if platform.system() == 'Linux' or platform.system() == 'Darwin':
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowStaysOnTopHint)
-        else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint & QtCore.Qt.WindowStaysOnTopHint)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowStaysOnTopHint)
 
+        self.setModal(True)
         self.frame = QWidget()
 
         self.lut = lut
@@ -1060,8 +1042,6 @@ class HumanClassify1(QDialog):
         self.multipleBirds = multipleBirds
         self.saveConfig = False
         # exec_ forces the cursor into waiting
-        self.activateWindow()
-        pg.QtGui.QApplication.setOverrideCursor(Qt.ArrowCursor)
 
         # Set up the plot window, then the right and wrong buttons, and a close button
         self.wPlot = pg.GraphicsLayoutWidget()
@@ -1620,7 +1600,7 @@ class HumanClassify2a(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowStaysOnTopHint)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowStaysOnTopHint)
 
         self.birds = QListWidget(self)
         self.birds.setMaximumWidth(350)
@@ -1687,11 +1667,7 @@ class HumanClassify2(QDialog):
             self.setWindowTitle('Human review')
 
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-
-        if platform.system() == 'Linux' or platform.system() == 'Darwin':
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowStaysOnTopHint)
-        else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint & QtCore.Qt.WindowStaysOnTopHint)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowStaysOnTopHint)
         # let the user quit without bothering rest of it
 
         self.sampleRate = sampleRate
@@ -2201,10 +2177,7 @@ class FilterManager(QDialog):
         self.setWindowTitle("Manage filters")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
-        if platform.system() == 'Linux' or platform.system() == 'Darwin':
-            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
-        else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.WindowCloseButtonHint)
         self.filtdir = filtdir
 
         # filter dir name
@@ -2392,6 +2365,7 @@ class Cluster(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Clustered segments')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.WindowCloseButtonHint)
 
         if len(segments) == 0:
             print("No segments provided")

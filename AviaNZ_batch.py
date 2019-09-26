@@ -1060,7 +1060,7 @@ class AviaNZ_reviewAll(QMainWindow):
         filesuccess = 1
         self.update()
         self.repaint()
-        QtGui.QApplication.processEvents()
+
         for filename in allwavs:
             self.filename = filename
 
@@ -1313,7 +1313,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
         self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
-        self.humanClassifyDialog1.setModal(True)
         success = self.humanClassifyDialog1.exec_() # 1 on clean exit
 
         if success == 0:
@@ -1415,7 +1414,6 @@ class AviaNZ_reviewAll(QMainWindow):
             self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
                                            specnames, self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1,
                                            seg[0], seg[1], minFreq, maxFreq)
-
         else:
             msg = SupportClasses.MessagePopup("d", "Finished", "All segments in this file checked")
             msg.exec_()
