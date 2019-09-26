@@ -22,7 +22,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os, re, fnmatch, sys
 
-from PyQt5.QtGui import QIcon, QPixmap, QApplication
+from PyQt5.QtGui import QIcon, QPixmap, QApplication, QFont
 from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout
 from PyQt5.QtMultimedia import QAudioFormat
 from PyQt5.QtCore import Qt, QDir
@@ -65,8 +65,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
-
-        self.statusBar().showMessage("Processing file Current/Total")
+        self.statusBar().showMessage("Ready for processing")
 
         self.setWindowTitle('AviaNZ - Batch Processing')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -225,9 +224,6 @@ class AviaNZ_batchProcess(QMainWindow):
         qr.moveCenter(cp)
         # top left of rectangle becomes top left of window centering it
         self.move(qr.topLeft())
-
-    def cleanStatus(self):
-        self.statusBar().showMessage("Processing file Current/Total")
 
     def browse(self):
         if self.dirName:
@@ -424,6 +420,10 @@ class AviaNZ_batchProcess(QMainWindow):
         processingTime = 0
         cleanexit = 0
         cnt = 0
+        # clean up the UI before entering the long loop
+        self.update()
+        self.repaint()
+        QtGui.QApplication.processEvents()
         with pg.BusyCursor():
             for filename in allwavs:
                 processingTimeStart = time.time()
@@ -434,7 +434,8 @@ class AviaNZ_batchProcess(QMainWindow):
                 cnt = cnt+1
                 print("*** Processing file %d / %d : %s ***" % (cnt, total, filename))
                 self.statusBar().showMessage("Processing file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm))
-                QtGui.QApplication.processEvents()
+                self.update()
+                self.repaint()
 
                 # if it was processed previously (stored in log)
                 if filename in self.filesDone:
@@ -616,6 +617,9 @@ class AviaNZ_batchProcess(QMainWindow):
             # delete old results (xlsx)
             # ! WARNING: any Detection...xlsx files will be DELETED,
             # ! ANYWHERE INSIDE the specified dir, recursively
+            self.statusBar().showMessage("Preparing Excel output, almost done...")
+            self.update()
+            self.repaint()
             for root, dirs, files in os.walk(str(self.dirName)):
                 for filename in files:
                     filenamef = os.path.join(root, filename)
@@ -641,6 +645,8 @@ class AviaNZ_batchProcess(QMainWindow):
             # Save the new excels
             print("Exporting to Excel ...")
             self.statusBar().showMessage("Exporting to Excel ...")
+            self.update()
+            self.repaint()
             for filename in allwavs:
                 if not os.path.isfile(filename + '.data'):
                     continue
@@ -848,7 +854,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
 
-        self.statusBar().showMessage("Reviewing file Current/Total")
+        self.statusBar().showMessage("Ready to review")
 
         self.setWindowTitle('AviaNZ - Review Batch Results')
         self.createFrame()
@@ -996,9 +1002,6 @@ class AviaNZ_reviewAll(QMainWindow):
         # top left of rectangle becomes top left of window centering it
         self.move(qr.topLeft())
 
-    def cleanStatus(self):
-        self.statusBar().showMessage("Processing file Current/Total")
-
     def browse(self):
         # self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',"Wav files (*.wav)")
         if self.dirName:
@@ -1055,13 +1058,17 @@ class AviaNZ_reviewAll(QMainWindow):
         # main file review loop
         cnt = 0
         filesuccess = 1
+        self.update()
+        self.repaint()
+        QtGui.QApplication.processEvents()
         for filename in allwavs:
             self.filename = filename
 
             cnt=cnt+1
             print("*** Reviewing file %d / %d : %s ***" % (cnt, total, filename))
             self.statusBar().showMessage("Reviewing file " + str(cnt) + "/" + str(total) + "...")
-            QtGui.QApplication.processEvents()
+            self.update()
+            self.repaint()
 
             if not os.path.isfile(filename + '.data'):
                 print("Warning: .data file lost for file", filename)
@@ -1079,18 +1086,19 @@ class AviaNZ_reviewAll(QMainWindow):
                 sTime = 0
 
             # load segments
-            self.segments = Segment.SegmentList()
-            self.segments.parseJSON(filename+'.data')
-            # separate out segments which do not need review
-            self.goodsegments = []
-            for seg in reversed(self.segments):
-                goodenough = True
-                for lab in seg[4]:
-                    if lab["certainty"] <= self.certBox.value():
-                        goodenough = False
-                if goodenough:
-                    self.goodsegments.append(seg)
-                    self.segments.remove(seg)
+            with pg.BusyCursor():
+                self.segments = Segment.SegmentList()
+                self.segments.parseJSON(filename+'.data')
+                # separate out segments which do not need review
+                self.goodsegments = []
+                for seg in reversed(self.segments):
+                    goodenough = True
+                    for lab in seg[4]:
+                        if lab["certainty"] <= self.certBox.value():
+                            goodenough = False
+                    if goodenough:
+                        self.goodsegments.append(seg)
+                        self.segments.remove(seg)
 
             if len(self.segments)==0:
                 # skip review dialog, but save the name into excel
@@ -1128,6 +1136,9 @@ class AviaNZ_reviewAll(QMainWindow):
             # delete old results (xlsx)
             # ! WARNING: any Detection...xlsx files will be DELETED,
             # ! ANYWHERE INSIDE the specified dir, recursively
+            self.statusBar().showMessage("Preparing Excel output, almost done...")
+            self.update()
+            self.repaint()
             for root, dirs, files in os.walk(str(self.dirName)):
                 for filename in files:
                     filenamef = os.path.join(root, filename)
@@ -1153,6 +1164,8 @@ class AviaNZ_reviewAll(QMainWindow):
             # Collect all .data contents to an Excel file (no matter if review dialog exit was clean)
             print("Exporting to Excel ...")
             self.statusBar().showMessage("Exporting to Excel ...")
+            self.update()
+            self.repaint()
             for filename in allwavs:
                 if not os.path.isfile(filename + '.data'):
                     continue
@@ -1168,6 +1181,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # END of review and exporting. Final cleanup
         self.statusBar().showMessage("Reviewed files " + str(cnt) + "/" + str(total))
+        self.update()
+        self.repaint()
         if filesuccess == 1:
             msg = SupportClasses.MessagePopup("d", "Finished", "All files checked. Would you like to return to the start screen?")
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
@@ -1309,39 +1324,59 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def loadFile(self, filename):
         with pg.BusyCursor():
-            # Create an instance of the Signal Processing class
-            if not hasattr(self,'sp'):
-                self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
-            self.sp.readWav(filename)
-            self.sampleRate = self.sp.sampleRate
-            self.audiodata = self.sp.data
+            with pg.ProgressDialog("Loading file...", 0, 4) as dlg:
+                dlg.setCancelButton(None)
+                dlg.setWindowIcon(QIcon('img/Avianz.ico'))
+                dlg.setWindowTitle('AviaNZ')
+                dlg.update()
+                dlg.repaint()
+                dlg.show()
+                # Create an instance of the Signal Processing class
+                if not hasattr(self,'sp'):
+                    self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+                self.sp.readWav(filename)
+                dlg += 1
+                dlg.update()
+                dlg.repaint()
 
-            print("Detected format: %d channels, %d Hz, %d bit samples" % (self.sp.audioFormat.channelCount(), self.sp.audioFormat.sampleRate(), self.sp.audioFormat.sampleSize()))
+                self.sampleRate = self.sp.sampleRate
+                self.audiodata = self.sp.data
 
-            self.datalength = np.shape(self.audiodata)[0]
-            print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate,self.sampleRate)
+                print("Detected format: %d channels, %d Hz, %d bit samples" % (self.sp.audioFormat.channelCount(), self.sp.audioFormat.sampleRate(), self.sp.audioFormat.sampleSize()))
 
-            # Filter the audiodata based on initial sliders
-            minFreq = max(self.fLow.value(), 0)
-            maxFreq = min(self.fHigh.value(), self.sampleRate//2)
-            if maxFreq - minFreq < 100:
-                print("ERROR: less than 100 Hz band set for spectrogram")
-                return
-            print("Filtering samples to %d - %d Hz" % (minFreq, maxFreq))
-            self.sp.data = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, minFreq, maxFreq)
-            self.audiodata = self.sp.data
+                self.datalength = np.shape(self.audiodata)[0]
+                print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate,self.sampleRate)
 
-            # Get the data for the spectrogram
-            self.sgRaw = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
-            maxsg = np.min(self.sgRaw)
-            self.sg = np.abs(np.where(self.sgRaw==0, 0.0, 10.0 * np.log10(self.sgRaw/maxsg)))
-            self.setColourMap()
+                # Filter the audiodata based on initial sliders
+                minFreq = max(self.fLow.value(), 0)
+                maxFreq = min(self.fHigh.value(), self.sampleRate//2)
+                if maxFreq - minFreq < 100:
+                    print("ERROR: less than 100 Hz band set for spectrogram")
+                    return
+                print("Filtering samples to %d - %d Hz" % (minFreq, maxFreq))
+                self.sp.data = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, minFreq, maxFreq)
+                self.audiodata = self.sp.data
+                dlg += 1
+                dlg.update()
+                dlg.repaint()
 
-            # trim the spectrogram
-            height = self.sampleRate//2 / np.shape(self.sg)[1]
-            pixelstart = int(minFreq/height)
-            pixelend = int(maxFreq/height)
-            self.sg = self.sg[:,pixelstart:pixelend]
+                # Get the data for the spectrogram
+                self.sgRaw = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
+                dlg += 1
+                dlg.update()
+                dlg.repaint()
+                maxsg = np.min(self.sgRaw)
+                self.sg = np.abs(np.where(self.sgRaw==0, 0.0, 10.0 * np.log10(self.sgRaw/maxsg)))
+                self.setColourMap()
+
+                # trim the spectrogram
+                height = self.sampleRate//2 / np.shape(self.sg)[1]
+                pixelstart = int(minFreq/height)
+                pixelend = int(maxFreq/height)
+                self.sg = self.sg[:,pixelstart:pixelend]
+                dlg += 1
+                dlg.update()
+                dlg.repaint()
 
     def humanClassifyNextImage1(self):
         # Get the next image
