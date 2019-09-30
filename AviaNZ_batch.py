@@ -525,9 +525,9 @@ class AviaNZ_batchProcess(QMainWindow):
                         if self.w_rain.isChecked():
                             post.rainClick()
                             print('After rain segments: ', len(post.segments))
-                        post.segments = self.seg.joinGaps(post.segments, maxgap=maxgap)
-                        post.segments = self.seg.deleteShort(post.segments, minlength=minlength)
-                        print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' % (maxgap, minlength, len(post.segments)))
+                        # post.segments = self.seg.joinGaps(post.segments, maxgap=maxgap)
+                        # post.segments = self.seg.deleteShort(post.segments, minlength=minlength)
+                        # print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' % (maxgap, minlength, len(post.segments)))
 
                         # adjust segment starts for 15min "pages"
                         if start != 0:
@@ -568,13 +568,14 @@ class AviaNZ_batchProcess(QMainWindow):
                                     post.rainClick()
                                     print('After rain segments: ', len(post.segments))
                                 if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
-                                    print("Checking for fundamental frequency...")
-                                    post.fundamentalFrq()
-                                    print("After FF segments:", len(post.segments))
-                                segmenter = Segment.Segmenter()
-                                post.segments = segmenter.joinGaps(post.segments, maxgap=maxgap)
-                                post.segments = segmenter.deleteShort(post.segments, minlength=spInfo['Filters'][filtix]['TimeRange'][0])
-                                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(maxgap, minlength, len(post.segments)))
+                                    if spInfo['Filters'][filtix]["F0"]:
+                                        print("Checking for fundamental frequency...")
+                                        post.fundamentalFrq()
+                                        print("After FF segments:", len(post.segments))
+                                # segmenter = Segment.Segmenter()
+                                # post.segments = segmenter.joinGaps(post.segments, maxgap=maxgap)
+                                # post.segments = segmenter.deleteShort(post.segments, minlength=spInfo['Filters'][filtix]['TimeRange'][0])
+                                # print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(maxgap, minlength, len(post.segments)))
 
                                 # adjust segment starts for 15min "pages"
                                 if start != 0:
@@ -592,11 +593,15 @@ class AviaNZ_batchProcess(QMainWindow):
                             if self.w_mergect.isChecked():
                                 # merge different call type segments
                                 segmenter = Segment.Segmenter()
-                                segs = segmenter.mergeSegments(allCtSegs)
+                                segs = segmenter.checkSegmentOverlap(allCtSegs)
+                                print('allCtSegs:', allCtSegs)
+                                print('segs:', segs)
                                 # construct "Any call" info to place on the segments
                                 flow = min([subf["FreqRange"][0] for subf in spInfo["Filters"]])
                                 fhigh = max([subf["FreqRange"][1] for subf in spInfo["Filters"]])
                                 ctinfo = {"calltype": "(Other)", "FreqRange": [flow, fhigh]}
+                                print('self.species[speciesix]:', self.species[speciesix])
+                                print('spInfo["species"]:', spInfo["species"])
                                 self.makeSegments(segs, self.species[speciesix], spInfo["species"], ctinfo)
 
                 print('Segments in this file: ', self.segments)

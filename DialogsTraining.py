@@ -332,7 +332,11 @@ class BuildRecAdvWizard(QWizard):
                                                                                        self.field("species"),
                                                                                         feature=self.feature,
                                                                                         n_clusters=5)
-                # self.segments, fs, self.nclasses = Clustering.cluster_by_dist(self.dName, feature='we', max_clusters=5, single=True)
+                # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
+                #                                                                              self.field("species"),
+                #                                                                              feature=self.feature,
+                #                                                                              max_clusters=5,
+                #                                                                              single=True)
 
                 # Create and show the buttons
                 self.clearButtons()
@@ -574,6 +578,7 @@ class BuildRecAdvWizard(QWizard):
                 # redraw the buttons
                 self.clearButtons()
                 self.updateButtons()
+                self.cmbUpdateSeg.addItem(newLabel)
                 self.completeChanged.emit()
             else:
                 msg = SupportClasses.MessagePopup("t", "Select", "Select calls to make the new cluster")
@@ -948,13 +953,16 @@ class BuildRecAdvWizard(QWizard):
             self.bestM = QLineEdit()
             self.bestThr = QLineEdit()
             self.bestNodes = QLineEdit()
+            self.compNode = QLineEdit()
             self.bestM.setReadOnly(True)
             self.bestThr.setReadOnly(True)
             self.bestNodes.setReadOnly(True)
+            self.compNode.setReadOnly(True)
             self.filtSummary = QFormLayout()
             self.filtSummary.addRow("Current M:", self.bestM)
             self.filtSummary.addRow("Current thr:", self.bestThr)
             self.filtSummary.addRow("Current nodes:", self.bestNodes)
+            self.filtSummary.addRow("Current compulsory:", self.compNode)
 
             # this is the Canvas Widget that displays the plot
             self.figCanvas = ROCCanvas(self)
@@ -991,7 +999,13 @@ class BuildRecAdvWizard(QWizard):
                 self.bestM.setText("%.4f" % self.MList[M_min_ind])
                 self.bestThr.setText("%.4f" % self.thrList[thr_min_ind])
                 # Get nodes for closest point
-                self.bestNodes.setText(str(self.nodes[M_min_ind][thr_min_ind]))
+                optimumNodesSel = self.nodes[M_min_ind][thr_min_ind]
+                bestnodeSel = self.bestnode[M_min_ind][thr_min_ind]
+                print('optimumNodesSel:', optimumNodesSel)
+                print('compnodeSel:', bestnodeSel)
+
+                self.bestNodes.setText(str(optimumNodesSel))
+                self.compNode.setText(str(bestnodeSel))
                 for itemnum in range(self.filtSummary.count()):
                     self.filtSummary.itemAt(itemnum).widget().show()
 
@@ -1084,7 +1098,7 @@ class BuildRecAdvWizard(QWizard):
                 #  Window and inc - in seconds
                 window = 1
                 inc = None
-                self.nodes, TP, FP, TN, FN = ws.waveletSegment_train(self.field("trainDir"),
+                self.nodes, self.bestnode, TP, FP, TN, FN = ws.waveletSegment_train(self.field("trainDir"),
                                                                 self.thrList, self.MList,
                                                                 d=False, rf=True,
                                                                 learnMode="recaa", window=window, inc=inc)
@@ -1336,6 +1350,9 @@ class BuildRecAdvWizard(QWizard):
                 thr = float(self.field("bestThr"+str(pageId)))
                 M = float(self.field("bestM"+str(pageId)))
                 nodes = eval(self.field("bestNodes"+str(pageId)))
+                compnode = eval(self.field("compNode"+str(pageId)))
+                if len(compnode) == 1 and len(nodes) > 1:
+                    nodes.append(compnode)
 
                 # post parameters
                 F0 = self.field("F0"+str(pageId))
@@ -1474,6 +1491,7 @@ class BuildRecAdvWizard(QWizard):
             page5.registerField("bestThr"+str(pageid)+"*", page5.bestThr)
             page5.registerField("bestM"+str(pageid)+"*", page5.bestM)
             page5.registerField("bestNodes"+str(pageid)+"*", page5.bestNodes)
+            page5.registerField("compNode"+str(pageid)+"*", page5.compNode)
 
             # page 6: post process
             page6 = BuildRecAdvWizard.WFFPage(value, newbtns)
