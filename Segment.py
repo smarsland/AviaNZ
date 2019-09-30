@@ -660,6 +660,13 @@ class Segmenter:
         """ Given two segmentations of the same file, return the merged set of them:
         [[1,3] [2,4] [5,7] [7,8]] -> [[1,4] [5,7] [7,8]]
         Can take in one or two lists. """
+        if segs1 == [] and segs2 == []:
+            return []
+        elif segs1 == []:
+            return segs2
+        elif segs2 == []:
+            return segs1
+
         if segs2 is not None:
             segs1.extend(segs2)
         segs1.sort(key=lambda seg: seg[0])
@@ -717,7 +724,7 @@ class Segmenter:
             i += 1
         return out
 
-    def checkSegmentOverlap(self,segs,minSegment=50):
+    def checkSegmentOverlap(self, segs):
         # Needs to be python array, not np array
         # Sort by increasing start times
         if isinstance(segs, np.ndarray):

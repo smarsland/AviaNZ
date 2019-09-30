@@ -4274,10 +4274,14 @@ class AviaNZ(QMainWindow):
         """Listner for Action->Cluster segments menu item, cluster segments marked in the current file. Only to display
             the auto generated clusters
         """
-        cl = Clustering.Clustering([], [])
-        segments, fs, nclasses, duration = cl.cluster(self.filename, None, feature='we', n_clusters=5)
-        self.clusterD = Dialogs.Cluster(segments, fs, nclasses, self.config)
-        self.clusterD.show()
+        if len(self.segments) > 1:
+            cl = Clustering.Clustering([], [])
+            segments, fs, nclasses, duration = cl.cluster(self.filename, None, feature='we', n_clusters=5)
+            self.clusterD = Dialogs.Cluster(segments, fs, nclasses, self.config)
+            self.clusterD.show()
+        else:
+            print('need segments to cluster!')
+            return
 
     def recognise(self):
         # This will eventually call methods to do automatic recognition
