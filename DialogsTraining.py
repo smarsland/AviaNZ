@@ -1351,9 +1351,11 @@ class BuildRecAdvWizard(QWizard):
                 M = float(self.field("bestM"+str(pageId)))
                 nodes = eval(self.field("bestNodes"+str(pageId)))
                 compnode = eval(self.field("compNode"+str(pageId)))
-                if len(compnode) == 1 and len(nodes) > 1:
+                if len(compnode) > 0:
+                    if not set(compnode) <= set(nodes):
+                        print('Warning: compulsory nodes %s not a subset of optimum nodes %s' % (str(compnode), str(nodes)))
+                    nodes = [node for node in nodes if node not in compnode]
                     nodes.append(compnode)
-
                 # post parameters
                 F0 = self.field("F0"+str(pageId))
                 F0low = int(self.field("F0low"+str(pageId)))
@@ -1364,6 +1366,9 @@ class BuildRecAdvWizard(QWizard):
                 if F0:
                     newSubfilt["F0"] = True
                     newSubfilt["F0Range"] = [F0low, F0high]
+                else:
+                    newSubfilt["F0"] = False
+
                 print(newSubfilt)
                 self.wizard().speciesData["Filters"].append(newSubfilt)
 
@@ -1719,31 +1724,35 @@ class TestRecWizard(QWizard):
                 self.sensTime.setText("%d %%" % (TP/(TP+FN)*100))
 
                 # Post process:
-                print("Post-processing...")
-                detectedSpost = []
-                self.detected01post = []
-                for detfile in detectedS:
-                    post = Segment.PostProcess(segments=detfile[0], subfilter=subfilter)
-                    print("got segments", len(post.segments))
-                    post.fundamentalFrq(fileName=detfile[1])
-                    detectedSpost.extend(post.segments)
-                    print("kept segments", len(post.segments))
+                if subfilter["F0"]:
+                    print("Post-processing...")
+                    detectedSpost = []
+                    self.detected01post = []
+                    for detfile in detectedS:
+                        post = Segment.PostProcess(segments=detfile[0], subfilter=subfilter)
+                        print("got segments", len(post.segments))
+                        post.fundamentalFrq(fileName=detfile[1])
+                        detectedSpost.extend(post.segments)
+                        print("kept segments", len(post.segments))
 
-                    # back-convert to 0/1:
-                    det01post = np.zeros(detfile[2])
-                    for seg in post.segments:
-                        det01post[int(seg[0]):int(seg[1])] = 1
-                    self.detected01post.extend(det01post)
+                        # back-convert to 0/1:
+                        det01post = np.zeros(detfile[2])
+                        for seg in post.segments:
+                            det01post[int(seg[0]):int(seg[1])] = 1
+                        self.detected01post.extend(det01post)
 
-                # now, detectedS and detectedSpost contain lists of segments before/after post
-                # and detected01 and self.detected01post - corresponding pres/abs marks
+                    # now, detectedS and detectedSpost contain lists of segments before/after post
+                    # and detected01 and self.detected01post - corresponding pres/abs marks
 
-                # update fields
-                _, _, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, self.detected01post)
-                print('--Post-processing summary--\n%d %d %d %d' %(TP, FP, TN, FN))
-                self.autoSegsP.setText(str(len(detectedSpost)))
-                self.autoTimeP.setText("%.1f" % (TP+FP))
-                self.sensTimeP.setText("%d %%" % (TP/(TP+FN)*100))
+                    # update fields
+                    _, _, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, self.detected01post)
+                    print('--Post-processing summary--\n%d %d %d %d' %(TP, FP, TN, FN))
+                    self.autoSegsP.setText(str(len(detectedSpost)))
+                    self.autoTimeP.setText("%.1f" % (TP+FP))
+                    self.sensTimeP.setText("%d %%" % (TP/(TP+FN)*100))
+                else:
+                    print('No post-processing required')
+                    self.detected01post = detected01
 
     class WPageLast(QWizardPage):
         def __init__(self, parent=None):

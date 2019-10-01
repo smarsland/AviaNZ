@@ -148,8 +148,6 @@ class WaveletSegment:
             detected = segmenter.joinGaps(detected, maxgap=0)
             detected_allsubf.append(detected)
         print("Wavelet segmenting completed in", time.time() - opst)
-        print(detected_allsubf)
-        # detected_allsubf = sorted(detected_allsubf, key=lambda x: x[0])
         return detected_allsubf
 
     def waveletSegment_train(self, dirName, thrList, MList, d=False, rf=True, learnMode='recaa', window=1,
@@ -261,6 +259,18 @@ class WaveletSegment:
         """
         # Load the relevant subfilter
         self.nodes = subfilter["WaveletParams"]["nodes"]
+
+        # Check for any compulsory nodes
+        self.compNodes = []
+        # Compulsory nodes are in a sublist in self.nodes
+        # TODO: use compulsory nodes and additional nodes to set confidence/call quality, maybe not here but in batch mode
+        for node in self.nodes:
+            if isinstance(node, list):
+                # self.compNodes = node
+                # self.nodes.remove(node)   # extra nodes to set confidence/call quality
+                self.nodes = node   # Use compulsory nodes and ignore others for now
+                print('Using compulsory nodes: ', node)
+                break
 
         # clear storage for multifile processing
         self.annotation = []
@@ -763,7 +773,7 @@ class WaveletSegment:
         fna = np.zeros(shape)
         finalnodes = []
         top_nodes = []
-        bestnode = []
+        bestnodes = []
 
         # Grid search over M x thr x Files
         for indexM in range(len(MList)):
@@ -783,8 +793,9 @@ class WaveletSegment:
                     bestRecall = 0
 
                     # What is the best node for this file?
-                    thisfile_bestnode = self.bestNodes[indexF][0]
+                    thisfile_bestnodes = []
                     thisfile_bestfB = 0.0
+                    thisfile_fBs = []
 
                     EfileM = E[indexF][indexM,:,:]
                     nodesToTest = self.bestNodes[indexF]
@@ -794,11 +805,43 @@ class WaveletSegment:
                     else:
                         annot = self.annotation[indexF]
 
+                    # In addition to the correlation, re-order nodes according to fB. The order of nodes seems really
+                    # important.
+                    for nodenum in range(len(nodesToTest)):
+                        detect_onenode = EfileM[:,nodenum] > thrList[indext]
+                        if window != 1 or inc is not None:
+                            if inc is None:
+                                inc2 = window
+                            else:
+                                inc2 = inc
+                            # detected length is equal to the number of windows.
+                            N = len(annot)
+                            detect_ann = np.zeros(N)
+                            start = 0
+                            # map detect_onenode to non-standard annotation windows
+                            for i in range(len(detect_onenode)):
+                                if detect_onenode[i] == 1:
+                                    end = int(min(math.ceil(start + 1), N))
+                                    detect_ann[int(math.floor(start)):end] = 1
+                                start += inc2
+                            detect_onenode = detect_ann
+
+                        thisnode_fB, _, _, _, _, _ = self.fBetaScore(annot, detect_onenode)
+                        if thisnode_fB:
+                            thisfile_fBs.append(thisnode_fB)
+                        else:
+                            thisfile_fBs.append(0.0)
+                    thisfile_node_ix = np.argsort(np.array(thisfile_fBs)).tolist()[::-1]
+                    # Possible to have more than one node with max fB, so keep them all
+                    for i in range(len(thisfile_fBs)):
+                        if thisfile_fBs[i] == thisfile_fBs[thisfile_node_ix[0]]:
+                            thisfile_bestnodes.append(nodesToTest[i])
+
                     ### STEPWISE SEARCH for best node combination:
                     # (try to detect using thr, add node if it improves F2)
                     print("Starting stepwise search. Possible nodes:", nodesToTest)
                     detect_best = np.zeros(len(EfileM[:,0]))
-                    for nodenum in range(len(nodesToTest)):
+                    for nodenum in thisfile_node_ix:
                         print("Testing node ", nodesToTest[nodenum])
                         detect_onenode = EfileM[:,nodenum] > thrList[indext]
 
@@ -819,12 +862,6 @@ class WaveletSegment:
                                 start += inc2
                             detect_onenode = detect_ann
 
-                        thisnode_fB, _, _, _, _, _ = self.fBetaScore(annot, detect_onenode)
-                        print('thisfile_fB:', thisnode_fB)
-                        if thisnode_fB and thisnode_fB > thisfile_bestfB:
-                            thisfile_bestfB = thisnode_fB
-                            thisfile_bestnode = nodesToTest[nodenum]
-
                         # What do we detect if we add this node to currently best detections?
                         detect_allnodes = np.maximum.reduce([detect_best, detect_onenode])
                         fB, recall, tp, fp, tn, fn = self.fBetaScore(annot, detect_allnodes)
@@ -841,7 +878,7 @@ class WaveletSegment:
                         if bestBetaScore == 0.95 or bestRecall == 0.95:
                             break
                     # Store the best node for this file
-                    bestnodeMT.append(thisfile_bestnode)
+                    bestnodeMT.append(thisfile_bestnodes)
 
                     # Store the best nodes for this file
                     finalnodesMT.append(finalnodesF)
@@ -862,12 +899,9 @@ class WaveletSegment:
                 finalnodesMT = [y for x in finalnodesMT for y in x]
                 finalnodesMT = list(set(finalnodesMT))
                 finalnodesT.append(finalnodesMT)
-                # Is there a common node that recognised by all the files?
-                bestnodeMT = list(set(bestnodeMT))
-                if len(bestnodeMT) != 1:
-                    bestnodeMT = []
-                elif bestnodeMT[0] not in finalnodesMT:
-                    bestnodeMT = []
+                # Is there a common node set that recognised by all the files?
+                bestnodeMT_sets = map(set, bestnodeMT)
+                bestnodeMT = list(set.intersection(*bestnodeMT_sets))
                 bestnodeT.append(bestnodeMT)
                 # Get the measures with the selected node set for this threshold and M over the set of files
                 # TODO check if this needs fixing for non-standard window and inc (used to use self.annotation2?)
@@ -879,7 +913,7 @@ class WaveletSegment:
                 print("Iteration t %d/%d complete\t thr=%f\n---------------- " % (indext + 1, len(thrList), thrList[indext]))
             # One row done, store nodes
             finalnodes.append(finalnodesT)
-            bestnode.append(bestnodeT)
+            bestnodes.append(bestnodeT)
             print("Iteration M %d/%d complete\t M=%f\n-----------------------------------------------------------------"
                   "\n-----------------------------------------------------------------" % (indexM + 1, len(MList), MList[indexM]))
         # remove duplicates
@@ -893,8 +927,8 @@ class WaveletSegment:
         print("Negative nodes:", negative_nodes)
         finalnodes = [[[item for item in sublst if item not in negative_nodes] for sublst in lst] for lst in finalnodes]
         print('\n\n', finalnodes)
-        print(bestnode)
-        return finalnodes, bestnode, tpa, fpa, tna, fna
+        print(bestnodes)
+        return finalnodes, bestnodes, tpa, fpa, tna, fna
 
 
     def listTopNodes(self, filenum):
