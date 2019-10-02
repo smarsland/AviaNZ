@@ -469,11 +469,6 @@ class Segmentation(QDialog):
             self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.undo = QPushButton("Undo")
-        self.resLabel = QLabel("Time Resolution in Excel Output (secs)")
-        self.res = QSpinBox()
-        self.res.setRange(1, 600)
-        self.res.setSingleStep(5)
-        self.res.setValue(60)
         self.activate = QPushButton("Segment")
         #self.save = QPushButton("Save segments")
 
@@ -618,16 +613,10 @@ class Segmentation(QDialog):
 
         Box.addWidget(self.CCThr1)
 
-        Box.addWidget(self.resLabel)
-        Box.addWidget(self.res)
-        self.windlabel = QLabel("Add wind filter")
-        self.wind = QCheckBox("")
-        self.rainlabel = QLabel("Add rain filter")
-        self.rain = QCheckBox("")
-        Box.addWidget(self.windlabel)
-        Box.addWidget(self.wind, alignment=Qt.AlignCenter)
-        Box.addWidget(self.rainlabel)
-        Box.addWidget(self.rain, alignment=Qt.AlignCenter)
+        self.wind = QCheckBox("Remove wind")
+        self.rain = QCheckBox("Remove rain")
+        Box.addWidget(self.wind)
+        Box.addWidget(self.rain)
         Box.addWidget(self.undo)
         self.undo.setEnabled(False)
         Box.addWidget(self.activate)
@@ -640,8 +629,6 @@ class Segmentation(QDialog):
         self.setLayout(Box)
         self.algs.show()
         self.undo.show()
-        self.res.show()
-        self.resLabel.show()
         self.activate.show()
         if DOC:
             self.changeBoxes("Wavelets")
@@ -654,13 +641,9 @@ class Segmentation(QDialog):
         for w in range(self.layout().count()):
             self.layout().itemAt(w).widget().hide()
         self.algs.show()
-        self.windlabel.show()
         self.wind.show()
-        self.rainlabel.show()
         self.rain.show()
         self.undo.show()
-        self.res.show()
-        self.resLabel.show()
         self.activate.show()
 
         if alg == "Default":
@@ -710,7 +693,7 @@ class Segmentation(QDialog):
         self.medSizeText.setText("Minimum length: %s ms" % value)
 
     def getValues(self):
-        return [self.algs.currentText(), self.medThr.text(), self.medSize.value(), self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value(), self.species_cc.currentText(), self.wind.isChecked(), self.rain.isChecked()]
+        return [self.algs.currentText(), self.medThr.text(), self.medSize.value(), self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.species_cc.currentText(), self.wind.isChecked(), self.rain.isChecked()]
 
 #======
 class Denoise(QDialog):

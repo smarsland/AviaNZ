@@ -3967,7 +3967,7 @@ class AviaNZ(QMainWindow):
         self.prevSegments = copy.deepcopy(self.segments)
 
         self.segmentsToSave = True
-        [alg, medThr, medSize, HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1, filtname, resolution,species_cc, wind, rain] = self.segmentDialog.getValues()
+        [alg, medThr, medSize, HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1, filtname, species_cc, wind, rain] = self.segmentDialog.getValues()
         with pg.BusyCursor():
             filtname = str(filtname)
             self.statusLeft.setText('Segmenting...')
