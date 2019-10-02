@@ -3999,26 +3999,26 @@ class AviaNZ(QMainWindow):
                 newSegments = self.seg.bestSegments()
             elif str(alg) == 'Median Clipping':
                 newSegments = self.seg.medianClip(float(str(medThr)), minSegment=self.config['minSegment'])
-                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
+                newSegments = self.seg.checkSegmentOverlap(newSegments)
                 # will also remove too short segments (medSize is set in ms because sliders limited to int)
                 # print("before length", newSegments)
                 # newSegments = self.seg.deleteShort(newSegments, minlength=medSize/1000)
             elif str(alg) == 'Harma':
                 newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),minSegment=self.config['minSegment'])
-                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
+                newSegments = self.seg.checkSegmentOverlap(newSegments)
             elif str(alg) == 'Power':
                 newSegments = self.seg.segmentByPower(float(str(PowerThr)))
-                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
+                newSegments = self.seg.checkSegmentOverlap(newSegments)
             elif str(alg) == 'Onsets':
                 newSegments = self.seg.onsets()
-                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
+                newSegments = self.seg.checkSegmentOverlap(newSegments)
             elif str(alg) == 'Fundamental Frequency':
                 newSegments, pitch, times = self.seg.yin(int(str(minfreq)), int(str(minperiods)), float(str(Yinthr)),
                                                          int(str(window)), returnSegs=True)
-                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
+                newSegments = self.seg.checkSegmentOverlap(newSegments)
             elif str(alg) == 'FIR':
                 newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
-                newSegments = self.seg.checkSegmentOverlap(newSegments, minSegment=self.config['minSegment'])
+                newSegments = self.seg.checkSegmentOverlap(newSegments)
             # SPECIES-SPECIFIC methods from here:
             elif str(alg) == 'Wavelets':
                 speciesData = self.FilterDicts[filtname]
