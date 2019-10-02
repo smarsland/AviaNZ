@@ -1447,6 +1447,13 @@ class AviaNZ(QMainWindow):
         # basically say that left panel and controls should be as small as possible:
         self.d_controls.setSizePolicy(1,1)
         containers[1].setSizePolicy(1,1)
+        self.useAmplitudeTick.setChecked(True)
+        self.useAmplitude = True
+        self.config['showAmplitudePlot'] = True
+        self.useFilesTick.setChecked(True)
+        self.config['showListofFiles'] = True
+        self.showOverviewSegsTick.setChecked(True)
+        self.config['showAnnotationOverview'] = True
         # for cont in range(len(containers)):
         #     containers[cont].setSizes(self.state_cont[cont])
 

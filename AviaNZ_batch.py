@@ -871,15 +871,13 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setFixedSize(800, 500)
+        self.setFixedSize(1000, 600)
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
-        self.d_detection = Dock("Review",size=(500,500))
-        self.d_detection.layout.setContentsMargins(10,10,10,10)
-        self.d_detection.layout.setSpacing(5)
+        self.d_detection = Dock("Review",size=(700, 600))
         # self.d_detection.hideTitleBar()
-        self.d_files = Dock("File list", size=(270, 500))
+        self.d_files = Dock("File list", size=(300, 600))
 
         self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
@@ -896,8 +894,8 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_dir.setFixedHeight(50)
         self.w_dir.setPlainText('')
         self.w_dir.setToolTip("The folder being processed")
-        self.d_detection.addWidget(self.w_dir,row=1,col=1,colspan=2)
-        self.d_detection.addWidget(self.w_browse,row=1,col=0)
+        self.d_detection.addWidget(self.w_dir, row=1,col=1,colspan=2)
+        self.d_detection.addWidget(self.w_browse, row=1,col=0)
 
         self.w_speLabel1 = QLabel("Select Species")
         self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
@@ -951,6 +949,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.fHighvalue, row=6, col=2)
 
         self.w_processButton = QPushButton("&Review Folder")
+        self.w_processButton.setFixedHeight(50)
         self.w_processButton.clicked.connect(self.review)
         self.d_detection.addWidget(self.w_processButton,row=11,col=2)
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
@@ -969,6 +968,10 @@ class AviaNZ_reviewAll(QMainWindow):
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
         self.w_files.addWidget(self.listFiles, row=2, col=0)
 
+        self.d_detection.layout.setContentsMargins(20, 20, 20, 20)
+        self.d_detection.layout.setSpacing(20)
+        self.d_files.layout.setContentsMargins(10, 10, 10, 10)
+        self.d_files.layout.setSpacing(10)
         self.show()
 
     def createMenu(self):
