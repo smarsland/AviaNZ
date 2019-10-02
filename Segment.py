@@ -438,7 +438,7 @@ class SegmentList(list):
         speciesList = set(speciesList)
         for seg in self:
             speciesList.update([lab["species"] for lab in seg[4]])
-        speciesList.add("All species")
+        speciesList.add("Any sound")
         print("The following species were detected for export:", speciesList)
 
         # ideally, we store relative paths, but that's not possible across drives:
@@ -463,7 +463,7 @@ class SegmentList(list):
                 if seg[3]!=0:
                     ws.cell(row=r, column=4, value=int(seg[2]))
                     ws.cell(row=r, column=5, value=int(seg[3]))
-                if currsp=="All species":
+                if currsp=="Any sound":
                     text = [lab["species"] for lab in seg[4]]
                     ws.cell(row=r, column=6, value=", ".join(text))
                 r += 1
@@ -528,7 +528,7 @@ class SegmentList(list):
                 ws.cell(row=1, column=3, value="end (hh:mm:ss)")
                 ws.cell(row=1, column=4, value="min freq. (Hz)")
                 ws.cell(row=1, column=5, value="max freq. (Hz)")
-                if species=="All_species":
+                if species=="Any_sound":
                     ws.cell(row=1, column=6, value="species")
 
                 # Second sheet
@@ -557,7 +557,7 @@ class SegmentList(list):
 
             # extract segments for the current species
             # if species=="All", take ALL segments.
-            if species=="All species":
+            if species=="Any sound":
                 speciesSegs = range(len(self))
             else:
                 speciesSegs = self.getSpecies(species)
