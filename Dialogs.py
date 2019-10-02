@@ -65,7 +65,7 @@ class StartScreen(QDialog):
 
         btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
         # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
-        b1 = QPushButton(" Manual Segmentation ")
+        b1 = QPushButton(" Manual Processing ")
         b2 = QPushButton("      Batch Processing      ")
         b3 = QPushButton(" Review Batch Results ")
         l1 = QLabel("-------")
