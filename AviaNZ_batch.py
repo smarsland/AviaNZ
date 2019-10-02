@@ -109,7 +109,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.addSp = QPushButton("Add another filter")
         self.addSp.clicked.connect(self.addSpeciesBox)
 
-        w_resLabel = QLabel("Set time resolution in Excel Output\n(Sheet3)")
+        w_resLabel = QLabel("Set size of presence/absence blocks in Excel output\n(Sheet 3)")
         self.w_res = QSpinBox()
         self.w_res.setRange(1, 600)
         self.w_res.setSingleStep(5)
@@ -135,7 +135,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.d_detection.addWidget(w_speLabel1, row=1, col=0)
 
         # Filter selection group
-        self.boxSp = QGroupBox("Species")
+        self.boxSp = QGroupBox("")
         self.formSp = QVBoxLayout()
         self.formSp.addWidget(w_speLabel1)
         self.formSp.addWidget(self.w_spe1)
@@ -178,7 +178,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
-        self.w_files.addWidget(QLabel('Double click to select a folder'), row=0, col=0)
+        #self.w_files.addWidget(QLabel('Double click to select a folder'), row=0, col=0)
         self.w_files.addWidget(QLabel('Red files have annotations'), row=1, col=0)
         self.w_files.addWidget(self.listFiles, row=2, col=0)
 
@@ -891,7 +891,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_browse = QPushButton("&Browse Folder")
         self.w_browse.setToolTip("Can select a folder with sub folders to process")
         self.w_browse.setFixedHeight(50)
-        self.w_browse.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.w_browse.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
         self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
         self.w_dir.setPlainText('')
@@ -914,7 +914,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.certBox.setValue(100)
         self.d_detection.addWidget(self.certBox, row=3, col=1)
 
-        self.w_resLabel = QLabel("Time Resolution in\nExcel Output (s)")
+        self.w_resLabel = QLabel("Set size of presence/absence blocks in Excel output\n(Sheet 3)")
         self.d_detection.addWidget(self.w_resLabel, row=4, col=0)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
@@ -953,7 +953,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_processButton = QPushButton("&Review Folder")
         self.w_processButton.clicked.connect(self.review)
         self.d_detection.addWidget(self.w_processButton,row=11,col=2)
-        self.w_processButton.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
 
         self.w_browse.clicked.connect(self.browse)
         # print("spList after browse: ", self.spList)
@@ -961,7 +961,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
         self.w_files.addWidget(QLabel('View Only'), row=0, col=0)
-        self.w_files.addWidget(QLabel('use Browse Folder to choose data for processing'), row=1, col=0)
+        self.w_files.addWidget(QLabel('Use Browse Folder button to choose data for processing'), row=1, col=0)
         # self.w_files.addWidget(QLabel(''), row=2, col=0)
         # List to hold the list of files
         self.listFiles = QListWidget()
