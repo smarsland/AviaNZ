@@ -32,7 +32,7 @@ import json
 import copy
 
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap
-from PyQt5.QtCore import QDir, Qt
+from PyQt5.QtCore import QDir, Qt, QEvent
 from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QInputDialog
 
 import matplotlib.markers as mks
@@ -194,6 +194,7 @@ class BuildRecAdvWizard(QWizard):
             self.setButtonText(QWizard.NextButton, 'Cluster >')
 
         def initializePage(self):
+            self.wizard().button(QWizard.NextButton).setDefault(False)
             self.wizard().saveTestBtn.setVisible(False)
             # parse some params
             fs = int(self.field("fs"))//4000*4000
@@ -1316,9 +1317,9 @@ class BuildRecAdvWizard(QWizard):
             layout = QVBoxLayout()
             layout.addLayout(vboxHead)
             layout.addWidget(space)
-            layout.addWidget(QLabel("The following filter was produced:"))
+            layout.addWidget(QLabel("The following recogniser was produced:"))
             layout.addWidget(self.lblFilter)
-            layout.addWidget(QLabel("Currently available filters"))
+            layout.addWidget(QLabel("Currently available recognisers"))
             layout.addWidget(self.listFiles)
             layout.addWidget(space)
             layout.addWidget(QLabel("Enter file name (must be unique)"))
@@ -1378,23 +1379,6 @@ class BuildRecAdvWizard(QWizard):
             else:
                 self.wizard().saveTestBtn.setEnabled(False)
 
-        def validatePage(self):
-            # actually write out the filter
-            try:
-                filename = os.path.join(self.wizard().filtersDir, self.field("filtfile"))
-                f = open(filename, 'w')
-                f.write(json.dumps(self.wizard().speciesData))
-                f.close()
-                # prompt the user
-                print("Saving new filter to ", filename)
-                # Add it to the Filter list
-                msg = SupportClasses.MessagePopup("d", "Training completed!", 'Training completed!\nWe recommend to test it on a separate dataset before actual use.')
-                msg.exec_()
-                return True
-            except Exception as e:
-                print("ERROR: could not save filter because:", e)
-                return False
-
     # Main init of the training wizard
     def __init__(self, filtdir, config, parent=None):
         super(BuildRecAdvWizard, self).__init__()
@@ -1437,6 +1421,10 @@ class BuildRecAdvWizard(QWizard):
         # Size adjustment between pages:
         self.saveTestBtn.setVisible(False)
         self.currentIdChanged.connect(self.pageChangeResize)
+        # try to deal with buttons catching Enter presses
+        self.buttons = [self.button(t) for t in (1, 3, 6)]
+        for btn in self.buttons:
+            btn.installEventFilter(self)
 
     def redoTrainPages(self):
         self.speciesData["Filters"] = []
@@ -1511,6 +1499,12 @@ class BuildRecAdvWizard(QWizard):
         except Exception as e:
             print(e)
 
+    def eventFilter(self, obj, event):
+        # disable accidentally pressing Enter
+        if obj in self.buttons and event.type() == QEvent.Show:
+            obj.setDefault(False)
+        return super(BuildRecAdvWizard, self).eventFilter(obj, event)
+
 
 class TestRecWizard(QWizard):
     class WPageData(QWizardPage):
@@ -1533,9 +1527,9 @@ class TestRecWizard(QWizard):
             self.listFiles.setMinimumHeight(275)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
 
-            selectSpLabel = QLabel("Choose the filter that you want to test")
+            selectSpLabel = QLabel("Choose the recogniser that you want to test")
             self.species = QComboBox()  # fill during browse
-            self.species.addItems(['Choose filter...'])
+            self.species.addItems(['Choose recogniser...'])
 
             space = QLabel()
             space.setFixedHeight(20)
@@ -1623,7 +1617,7 @@ class TestRecWizard(QWizard):
             # testing results page layout
             vboxHead = QFormLayout()
             vboxHead.addRow("Testing data:", self.lblTestDir)
-            vboxHead.addRow("Filter name:", self.lblSpecies)
+            vboxHead.addRow("Recogniser name:", self.lblSpecies)
             vboxHead.addRow("Target calltype:", self.lblCluster)
             vboxHead.addWidget(space)
 
@@ -1770,7 +1764,7 @@ class TestRecWizard(QWizard):
             # overall results page layout
             vboxHead = QFormLayout()
             vboxHead.addRow("Testing data:", self.lblTestDir)
-            vboxHead.addRow("Filter name:", self.lblSpecies)
+            vboxHead.addRow("Recogniser name:", self.lblSpecies)
             vboxHead.addWidget(space)
 
             form2 = QFormLayout()
@@ -1864,11 +1858,11 @@ class TestRecWizard(QWizard):
         self.testpages = []
 
     def redoTestPages(self):
-        if self.field("species")=="Choose filter...":
+        if self.field("species")=="Choose recogniser...":
             return
 
         speciesData = self.filterlist[self.field("species")[:-4]]
-        print("using filter", speciesData)
+        print("using recogniser", speciesData)
         # remove old test pages
         for page in self.testpages:
             self.removePage(page)

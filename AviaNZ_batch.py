@@ -97,16 +97,16 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_dir.setToolTip("The folder being processed")
         self.w_dir.setStyleSheet("color : #808080;")
 
-        w_speLabel1 = QLabel("Select one or more filters to use:")
+        w_speLabel1 = QLabel("Select one or more recognisers to use:")
         self.w_spe1 = QComboBox()
         self.speCombos = [self.w_spe1]
 
         # populate this box (always show all filters here)
         spp = list(self.FilterDicts.keys())
-        self.w_spe1.addItem("All species")
+        self.w_spe1.addItem("Any sound")
         self.w_spe1.addItems(spp)
         self.w_spe1.currentTextChanged.connect(self.fillSpeciesBoxes)
-        self.addSp = QPushButton("Add another filter")
+        self.addSp = QPushButton("Add another recogniser")
         self.addSp.clicked.connect(self.addSpeciesBox)
 
         w_resLabel = QLabel("Set size of presence/absence blocks in Excel output\n(Sheet 3)")
@@ -288,7 +288,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # select filters with Fs matching box 1 selection
         spp = []
         currname = self.w_spe1.currentText()
-        if currname != "All species":
+        if currname != "Any sound":
             currfilt = self.FilterDicts[currname]
             # (can't use AllSp with any other filter)
             # Also don't add the same name again
@@ -324,9 +324,9 @@ class AviaNZ_batchProcess(QMainWindow):
         self.species = list(self.species)
         print("Species:", self.species)
 
-        if "All species" in self.species:
+        if "Any sound" in self.species:
             self.method = "Default"
-            speciesStr = "All species"
+            speciesStr = "Any sound"
         else:
             self.method = "Wavelets"
 
@@ -334,7 +334,7 @@ class AviaNZ_batchProcess(QMainWindow):
             filters = [self.FilterDicts[name] for name in self.species]
             samplerate = set([filt["SampleRate"] for filt in filters])
             if len(samplerate)>1:
-                print("ERROR: multiple sample rates found in selected filters, change selection")
+                print("ERROR: multiple sample rates found in selected recognisers, change selection")
                 return
 
             # convert list to string
@@ -406,7 +406,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # print current header (or old if resuming),
         # print old file list if resuming.
         self.log.file = open(self.log.file, 'w')
-        if speciesStr != "All species":
+        if speciesStr != "Any sound":
             self.log.reprintOld()
             # else single-sp runs should be deleted anyway
         if confirmedResume == QMessageBox.No:
@@ -501,7 +501,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         continue
 
                     # Process
-                    if speciesStr == "All species":
+                    if speciesStr == "Any sound":
                         # Create spectrogram for median clipping etc
                         self.sp.data = self.audiodata[start:end]
                         self.sgRaw = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
@@ -542,7 +542,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
                         allCtSegs = []
                         for speciesix in range(len(filters)):
-                            print("Working with filter:", filters[speciesix])
+                            print("Working with recogniser:", filters[speciesix])
                             # note: using 'recaa' mode = partial antialias
                             thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
 
@@ -677,7 +677,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
     def makeSegments(self, segmentsNew, filtName=None, species=None, subfilter=None):
         """ Adds segments to self.segments """
-        # for wavelet segments: (same as self.species!="All species")
+        # for wavelet segments: (same as self.species!="Any sound")
         if subfilter is not None:
             y1 = subfilter["FreqRange"][0]
             y2 = min(subfilter["FreqRange"][1], self.sampleRate//2)
@@ -784,7 +784,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # Read in stored segments (useful when doing multi-species)
         self.segments = Segment.SegmentList()
-        if species==["All species"] or not os.path.isfile(self.filename + '.data'):
+        if species==["Any sound"] or not os.path.isfile(self.filename + '.data'):
             # Initialize default metadata values
             self.segments.metadata = dict()
             self.segments.metadata["Operator"] = "Auto"
@@ -902,7 +902,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_speLabel1 = QLabel("Select Species")
         self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
         self.w_spe1 = QComboBox()
-        self.spList = ['All species']
+        self.spList = ['Any sound']
         self.w_spe1.addItems(self.spList)
         self.d_detection.addWidget(self.w_spe1,row=2,col=1,colspan=2)
 
@@ -1031,7 +1031,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.spList.remove("Don't Know")
         except Exception:
             pass
-        self.spList.insert(0, 'All species')
+        self.spList.insert(0, 'Any sound')
         self.w_spe1.clear()
         self.w_spe1.addItems(self.spList)
         self.fillFileList(self.dirName)
@@ -1112,7 +1112,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 filesuccess = 1
             # file has segments, so call the right review dialog:
             # (they will update self.segments and store corrections)
-            elif self.species == 'All species':
+            elif self.species == 'Any sound':
                 self.loadFile(filename)
                 filesuccess = self.review_all(sTime)
             else:
@@ -1306,7 +1306,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # Get the list of birds from the files, and make sure they are in the shortlist
         for bird in self.spList:
-            if bird not in self.shortBirdList and bird != "All species":
+            if bird not in self.shortBirdList and bird != "Any sound":
                 dialogBirdList.insert(0,str(bird))
 
         self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], dialogBirdList, self.longBirdList, self.config['MultipleSpecies'], self)

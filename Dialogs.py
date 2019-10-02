@@ -396,7 +396,7 @@ class Diagnostic(QDialog):
         self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
 
         # species / filter
-        self.filterLabel = QLabel("Select filter to use")
+        self.filterLabel = QLabel("Select recogniser to use")
         self.filter = QComboBox()
         # add filter file names to combobox
         self.filter.addItems(list(filters.keys()))
@@ -2157,7 +2157,7 @@ class PicButton(QAbstractButton):
 class FilterManager(QDialog):
     def __init__(self, filtdir, parent=None):
         super(FilterManager, self).__init__(parent)
-        self.setWindowTitle("Manage filters")
+        self.setWindowTitle("Manage recognisers")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.WindowCloseButtonHint)
@@ -2223,11 +2223,11 @@ class FilterManager(QDialog):
         box_rename.addWidget(self.renameBtn)
 
         layout = QVBoxLayout()
-        layout.addWidget(QLabel("Filters are stored in:"))
+        layout.addWidget(QLabel("Recognisers are stored in:"))
         layout.addWidget(labDirName)
-        layout.addWidget(QLabel("The following filters are present:"))
+        layout.addWidget(QLabel("The following recognisers are present:"))
         layout.addWidget(self.listFiles)
-        layout.addWidget(QLabel("To rename a filter, select one and enter a new (unique) name below:"))
+        layout.addWidget(QLabel("To rename a recogniser, select one and enter a new (unique) name below:"))
         layout.addLayout(box_rename)
 
         layout.addWidget(self.deleteBtn)
@@ -2285,7 +2285,7 @@ class FilterManager(QDialog):
         if not os.path.isfile(source):
             print("ERROR: unable to delete, bad source", source)
             return
-        msg = SupportClasses.MessagePopup("w", "Confirm delete", "Warning: you are about to permanently delete filter %s.\nAre you sure?" % source)
+        msg = SupportClasses.MessagePopup("w", "Confirm delete", "Warning: you are about to permanently delete recogniser %s.\nAre you sure?" % source)
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
         reply = msg.exec_()
         if reply != QMessageBox.Yes:
@@ -2298,7 +2298,7 @@ class FilterManager(QDialog):
             print("ERROR: could not delete:", e)
 
     def download(self):
-        source, _ = QtGui.QFileDialog.getOpenFileName(self, 'Select the downloaded filter file', os.path.expanduser("~"), "Text files (*.txt)")
+        source, _ = QtGui.QFileDialog.getOpenFileName(self, 'Select the downloaded recogniser file', os.path.expanduser("~"), "Text files (*.txt)")
         target = os.path.join(self.filtdir, os.path.basename(source))
 
         print("Importing from %s to %s" % (source, target))
@@ -2306,14 +2306,14 @@ class FilterManager(QDialog):
             print("ERROR: unable to import, bad source %s" % source)
             return
         if os.path.isfile(target):
-            msg = SupportClasses.MessagePopup("t", "Confirm overwrite", "Warning: a filter named %s already exists in this software.\nDo you want to overwrite it?" % target)
+            msg = SupportClasses.MessagePopup("t", "Confirm overwrite", "Warning: a recogniser named %s already exists in this software.\nDo you want to overwrite it?" % target)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             reply = msg.exec_()
             if reply == QMessageBox.No or reply == QMessageBox.Cancel:
                 return
         try:
             shutil.copy2(source, target)
-            msg = SupportClasses.MessagePopup("d", "Successfully imported", "Import successful. Now you can use the filter %s" % os.path.basename(target))
+            msg = SupportClasses.MessagePopup("d", "Successfully imported", "Import successful. Now you can use the recogniser %s" % os.path.basename(target))
             msg.exec_()
             self.readContents()
         except Exception as e:
@@ -2324,7 +2324,7 @@ class FilterManager(QDialog):
     def upload(self):
         fn = self.listFiles.currentItem().text()
         source = os.path.join(self.filtdir, fn)
-        target = QtGui.QFileDialog.getExistingDirectory(self, 'Choose where to save the filter')
+        target = QtGui.QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
         target = os.path.join(target, fn)
 
         print("Exporting from %s to %s" % (source, target))

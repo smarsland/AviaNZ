@@ -34,9 +34,6 @@ import numpy as np
 from scipy.ndimage.filters import median_filter
 
 import pyqtgraph as pg
-pg.setConfigOption('background','w')
-pg.setConfigOption('foreground','k')
-pg.setConfigOption('antialias',True)
 from pyqtgraph.Qt import QtCore, QtGui
 from pyqtgraph.dockarea import DockArea, Dock
 import pyqtgraph.functions as fn
@@ -57,15 +54,20 @@ import librosa
 import click, webbrowser, colourMaps, copy, math
 import time
 
+pg.setConfigOption('background','w')
+pg.setConfigOption('foreground','k')
+pg.setConfigOption('antialias',True)
 print("Package import complete.")
 
 # import pdb
 # from PyQt5.QtCore import pyqtRemoveInputHook
 # from pdb import set_trace
-# 
+#
 # def debug_trace():
 #     pyqtRemoveInputHook()
 #     set_trace()
+
+
 class AviaNZ(QMainWindow):
     """Main class for the user interface.
     Contains most of the user interface and plotting code"""
@@ -250,13 +252,11 @@ class AviaNZ(QMainWindow):
                 self.showMaximized()
             keyPressed = QtCore.Signal(int)
 
-
             # Save the segments every minute
             self.timer = QTimer()
-            #QObject.connect(self.timer, SIGNAL("timeout()"), self.saveSegments)
             self.timer.timeout.connect(self.saveSegments)
             self.timer.start(self.config['secsSave']*1000)
-            
+
             self.fillFileList(firstFile)
             self.listLoadFile(firstFile)
             #self.previousFile = firstFile
@@ -273,7 +273,6 @@ class AviaNZ(QMainWindow):
         fileMenu.addAction("&Open sound file", self.openFile, "Ctrl+O")
         # fileMenu.addAction("&Change Directory", self.chDir)
         fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
-        fileMenu.addAction("&Manage filters", self.manageFilters)
         fileMenu.addSeparator()
         fileMenu.addAction("Restart Program",self.restart,"Ctrl+R")
         fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
@@ -358,7 +357,7 @@ class AviaNZ(QMainWindow):
         self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
         self.readonly.setCheckable(True)
         self.readonly.setChecked(self.config['readOnly'])
-        
+
         specMenu.addSeparator()
         specMenu.addAction("Interface settings", self.changeSettings)
 
@@ -389,17 +388,18 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Export segments to Excel",self.exportSeg)
             actionMenu.addSeparator()
 
-        actionMenu.addAction("Train an automated recogniser", self.buildRecogniser)
-        actionMenu.addAction("Test recogniser", self.testRecogniser)
-        actionMenu.addSeparator()
-
         actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
         actionMenu.addSeparator()
         actionMenu.addAction("Put docks back",self.dockReplace)
 
+        # "Recognizers" menu
+        recMenu = self.menuBar().addMenu("&Recognizers")
+        recMenu.addAction("Train an automated recogniser", self.buildRecogniser)
+        recMenu.addAction("Test recogniser", self.testRecogniser)
+        recMenu.addAction("Manage recognisers", self.manageFilters)
+
         helpMenu = self.menuBar().addMenu("&Help")
-        #aboutAction = QAction("About")
         helpMenu.addAction("Help",self.showHelp,"Ctrl+H")
         helpMenu.addAction("Cheat Sheet", self.showCheatSheet)
         helpMenu.addSeparator()
@@ -747,6 +747,29 @@ class AviaNZ(QMainWindow):
         self.p_ampl.keyPressed.connect(self.handleKey)
         self.p_spec.keyPressed.connect(self.handleKey)
 
+        # add statusbar
+        self.statusLeft = QLabel("Left")
+        # Not sure what's the difference between Sunken and Panel?
+        self.statusLeft.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        self.statusRO = QLabel("")
+        self.statusRO.setAlignment(Qt.AlignCenter)
+        self.statusRO.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        self.statusRight = QLabel("")
+        self.statusRight.setAlignment(Qt.AlignRight)
+        self.statusRight.setFrameStyle(QFrame.Panel | QFrame.Sunken)
+        # Style
+        # statusStyle='QLabel {border:transparent}'
+        # self.statusLeft.setStyleSheet(statusStyle)
+        # self.statusRO.setStyleSheet(statusStyle)
+        # self.statusRight.setStyleSheet(statusStyle)
+        self.statusBar().addPermanentWidget(self.statusLeft,1)
+        self.statusBar().addPermanentWidget(self.statusRO,1)
+        self.statusBar().addPermanentWidget(self.statusRight,1)
+
+        # Set the message in the status bar
+        self.statusLeft.setText("Ready")
+        self.statusRO.setText("Read-only mode" if self.config['readOnly'] else "")
+
         # Function calls to check if should show various parts of the interface, whether dragging boxes or not
         self.makeReadOnly()
         self.useAmplitudeCheck()
@@ -754,26 +777,6 @@ class AviaNZ(QMainWindow):
         self.showOverviewSegsCheck()
         self.dragRectsTransparent()
         self.showPointerDetailsCheck()
-
-        # add statusbar
-        self.statusLeft = QLabel("Left")
-        self.statusLeft.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
-        self.statusMid = QLabel("????")
-        self.statusMid.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
-        self.statusRight = QLabel("")
-        self.statusRight.setAlignment(Qt.AlignRight)
-        self.statusRight.setFrameStyle(QFrame.Panel) #,QFrame.Sunken)
-        # Style
-        statusStyle='QLabel {border:transparent}'
-        self.statusLeft.setStyleSheet(statusStyle)
-        # self.statusMid.setStyleSheet(statusStyle)
-        self.statusRight.setStyleSheet(statusStyle)
-        self.statusBar().addPermanentWidget(self.statusLeft,1)
-        # self.statusBar().addPermanentWidget(self.statusMid,1)
-        self.statusBar().addPermanentWidget(self.statusRight,1)
-
-        # Set the message in the status bar
-        self.statusLeft.setText("Ready")
 
         # Plot everything
         if not self.CLI:
@@ -1260,6 +1263,7 @@ class AviaNZ(QMainWindow):
 
                 if self.Hartley and not os.path.isfile(self.filename + '.data'):
                     self.addRegularSegments()
+                self.drawProtocolMarks()
 
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
@@ -1411,6 +1415,7 @@ class AviaNZ(QMainWindow):
         Also has to go through all of the segments, turn off the listeners, and make them unmovable.
         """
         self.config['readOnly'] = self.readonly.isChecked()
+        self.statusRO.setText("Read-only mode" if self.config['readOnly'] else "")
         if self.readonly.isChecked():
             # this is for accepting drag boxes or not
             self.p_spec.enableDrag = False
@@ -1423,13 +1428,11 @@ class AviaNZ(QMainWindow):
             if hasattr(self, 'audiodata'):
                 self.removeSegments(delete=False)
                 self.drawfigMain(remaking=True)
-                self.statusLeft.setText("Ready. Read-only mode!")
         else:
             self.p_spec.enableDrag = self.config['specMouseAction']==3
             if hasattr(self, 'audiodata'):
                 self.removeSegments(delete=False)
                 self.drawfigMain(remaking=True)
-                self.statusLeft.setText("Ready")
 
     def dockReplace(self):
         """ Listener for if the docks should be replaced menu item.
@@ -2021,7 +2024,7 @@ class AviaNZ(QMainWindow):
             i += self.config['protocolInterval']
         self.segmentsToSave = True
 
-    """def drawProtocolMarks(self):
+    def drawProtocolMarks(self):
         # if check-ignore protocol is used, mark check-ignore limits.
         # Also called when the relevant parameters are changed in interface settings.
 
@@ -2033,20 +2036,19 @@ class AviaNZ(QMainWindow):
 
         if self.config['protocolOn']:
             linePen = pg.mkPen((148, 0, 211), width=5)
-            lnum = 0
             linestart = 0
+
             # pages >1 start with an overlap zone, so need to offset marks:
             if self.currentFileSection > 0:
                 linestart += self.config['fileOverlap']
             while linestart < self.datalength/self.sampleRate:
                 lineend = min(self.datalength/self.sampleRate, linestart + self.config['protocolSize'])
-                line = SupportClasses.FixedLineROI(((self.convertAmpltoSpec(linestart),0),
-                                      (self.convertAmpltoSpec(lineend),0)), movable=False, pen=linePen)
+                print("Adding to", linestart, lineend)
+                line = pg.ROI(pos=(self.convertAmpltoSpec(linestart),0),
+                              size=(self.convertAmpltoSpec(lineend-linestart),0), movable=False, pen=linePen)
                 self.protocolMarks.append(line)
                 self.p_spec.addItem(line)
-                line.clearHandles()
                 linestart += self.config['protocolInterval']
-    """
 
     def refreshOverviewWith(self, segment, delete=False):
         """Recalculates the overview box colours and refreshes their display.
@@ -3925,6 +3927,7 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildRecAdvWizard = DialogsTraining.BuildRecAdvWizard(self.filtersDir, self.config)
+        self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
         self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
         self.buildRecAdvWizard.activateWindow()
         self.buildRecAdvWizard.show()
@@ -3936,14 +3939,36 @@ class AviaNZ(QMainWindow):
         self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir)
         self.testRecWizard.show()
 
-    def saveTestRecogniser(self):
-        # done() actually calls validatePage on the wizard's last page, which takes care of the
-        # popup message and such.
+    def saveNotestRecogniser(self):
         try:
+            # actually write out the filter
+            filename = os.path.join(self.filtersDir, self.buildRecAdvWizard.field("filtfile"))
+            print("Saving new recogniser to ", filename)
+            f = open(filename, 'w')
+            f.write(json.dumps(self.buildRecAdvWizard.speciesData))
+            f.close()
+            # prompt the user
+            msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nWe recommend to test the recogniser on a separate dataset before actual use.")
+            msg.exec_()
+            self.buildRecAdvWizard.done(1)
+        except Exception as e:
+            print("ERROR: could not save recogniser because:", e)
+            self.buildRecAdvWizard.done(0)
+
+    def saveTestRecogniser(self):
+        try:
+            filename = os.path.join(self.filtersDir, self.buildRecAdvWizard.field("filtfile"))
+            print("Saving new recogniser to ", filename)
+            f = open(filename, 'w')
+            f.write(json.dumps(self.buildRecAdvWizard.speciesData))
+            f.close()
+            # prompt the user
+            msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
+            msg.exec_()
             self.buildRecAdvWizard.done(1)
             self.testRecogniser()
         except Exception as e:
-            print("ERROR: could not save filter because:", e)
+            print("ERROR: could not save recogniser because:", e)
             self.buildRecAdvWizard.done(0)
 
     def segmentationDialog(self):
@@ -4687,13 +4712,13 @@ class AviaNZ(QMainWindow):
                                                    self.config['ColourSelected'][2], 255)
             elif childName=='Annotation.Check-ignore protocol.Show check-ignore marks':
                 self.config['protocolOn'] = data
-                self.addRegularSegments()
+                self.drawProtocolMarks()
             elif childName=='Annotation.Check-ignore protocol.Length of checking zone':
                 self.config['protocolSize'] = data
-                self.addRegularSegments()
+                self.drawProtocolMarks()
             elif childName=='Annotation.Check-ignore protocol.Repeat zones every':
                 self.config['protocolInterval'] = data
-                self.addRegularSegments()
+                self.drawProtocolMarks()
             elif childName=='User.Operator':
                 self.config['operator'] = data
                 self.operator = data
@@ -5022,11 +5047,11 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
     for f in os.listdir("Filters"):
         ff = os.path.join("Filters", f) # Kiwi.txt
         if not os.path.isfile(os.path.join(filterdir, f)): # ~/.avianz/Filters/Kiwi.txt
-            print("Filter %s not found, providing default" % f)
+            print("Recogniser %s not found, providing default" % f)
             try:
                 shutil.copy2(ff, filterdir) # cp Filters/Kiwi.txt ~/.avianz/Filters/
             except Exception as e:
-                print("Warning: failed to copy filter %s to %s" % (ff, filterdir))
+                print("Warning: failed to copy recogniser %s to %s" % (ff, filterdir))
                 print(e)
 
     # run splash screen:
