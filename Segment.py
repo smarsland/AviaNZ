@@ -552,7 +552,7 @@ class SegmentList(list):
                     print(e)
                     return 0
             else:
-                print("ERROR: unrecognized action", action)
+                print("ERROR: unrecognised action", action)
                 return 0
 
             # extract segments for the current species

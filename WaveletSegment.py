@@ -226,7 +226,7 @@ class WaveletSegment:
             elif learnMode == "recaafull":
                 self.WF.WaveletPacket(self.bestNodes[filenum], mode='symmetric', antialias=True, antialiasFilter=True)
             else:
-                print("ERROR: learnMode unrecognized")
+                print("ERROR: learnMode unrecognised")
                 return
 
             # find E peaks over possible M (returns [MxTxN])
