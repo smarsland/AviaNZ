@@ -105,16 +105,18 @@ class AviaNZ(QMainWindow):
             sys.exit()
         # Will be None if fails to load or filename was "None"
         self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], configdir)
+        if self.shortBirdList is None:
+            sys.exit()
 
-        if self.longBirdList is None:
+        #if self.longBirdList is None:
             # If don't have a long bird list,
             # check that the length of the short bird list is OK, and otherwise split it
             # 40 is a bit random, but 20 in a list is long enough!
-            if len(self.shortBirdList) > 40:
-                self.longBirdList = self.shortBirdList.copy()
-                self.shortBirdList = self.shortBirdList[:40]
-            else:
-                self.longBirdList = None
+            #if len(self.shortBirdList) > 40:
+                #self.longBirdList = self.shortBirdList.copy()
+                #self.shortBirdList = self.shortBirdList[:40]
+            #else:
+                #self.longBirdList = None
 
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
@@ -136,7 +138,6 @@ class AviaNZ(QMainWindow):
 
         self.lastSpecies = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
         self.DOC = self.config['DOC']
-        self.Hartley = self.config['Hartley']
         self.extra = "none"
 
         # Whether or not the context menu allows multiple birds.
@@ -284,7 +285,6 @@ class AviaNZ(QMainWindow):
 
         specMenu = self.menuBar().addMenu("&Appearance")
 
-        specMenu.addAction("Put docks back",self.dockReplace)
 
         self.useAmplitudeTick = specMenu.addAction("Show amplitude plot", self.useAmplitudeCheck)
         self.useAmplitudeTick.setCheckable(True)
@@ -323,7 +323,7 @@ class AviaNZ(QMainWindow):
         # specMenu.addSeparator()
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
 
-        if not self.DOC and not self.Hartley:
+        if not self.DOC:
             self.showInvSpec = specMenu.addAction("Show inverted spectrogram", self.showInvertedSpectrogram)
             self.showInvSpec.setCheckable(True)
             self.showInvSpec.setChecked(False)
@@ -361,35 +361,32 @@ class AviaNZ(QMainWindow):
 
         specMenu.addSeparator()
         specMenu.addAction("Interface settings", self.changeSettings)
+        specMenu.addAction("Put docks back",self.dockReplace)
 
         actionMenu = self.menuBar().addMenu("&Actions")
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
-        if not self.Hartley:
-            actionMenu.addSeparator()
-            actionMenu.addAction("Denoise",self.showDenoiseDialog)
-            actionMenu.addAction("Add metadata about noise", self.addNoiseData, "Ctrl+N")
-            #actionMenu.addAction("Find matches",self.findMatches)
+        actionMenu.addSeparator()
+        actionMenu.addAction("Denoise",self.showDenoiseDialog)
+        actionMenu.addAction("Add metadata about noise", self.addNoiseData, "Ctrl+N")
+        #actionMenu.addAction("Find matches",self.findMatches)
 
-        if not self.DOC and not self.Hartley:
+        if not self.DOC:
             actionMenu.addAction("Filter spectrogram",self.medianFilterSpec)
             actionMenu.addAction("Denoise spectrogram",self.denoiseImage)
 
-        if not self.Hartley:
-            actionMenu.addSeparator()
-            actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
+        actionMenu.addSeparator()
+        actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
+        actionMenu.addAction("Export segments to Excel",self.exportSeg)
 
-        if not self.DOC and not self.Hartley:
+        if not self.DOC:
             actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
-            actionMenu.addSeparator()
+        actionMenu.addSeparator()
 
-        if not self.Hartley:
-            extraMenu = actionMenu.addMenu("H&uman review")
-            extraMenu.addAction("All segments",self.humanClassifyDialog1,"Ctrl+1")
-            extraMenu.addAction("Choose species",self.humanRevDialog2,"Ctrl+2")
+        extraMenu = actionMenu.addMenu("H&uman review")
+        extraMenu.addAction("All segments",self.humanClassifyDialog1,"Ctrl+1")
+        extraMenu.addAction("Choose species",self.humanRevDialog2,"Ctrl+2")
 
-            actionMenu.addSeparator()
-            actionMenu.addAction("Export segments to Excel",self.exportSeg)
-            actionMenu.addSeparator()
+        actionMenu.addSeparator()
 
         actionMenu.addAction("Export current view as image",self.saveImage,"Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
@@ -916,12 +913,11 @@ class AviaNZ(QMainWindow):
                     bird.setChecked(True)
                 self.menuBird2.addAction(bird)
 
-            if not self.Hartley:
-                self.fullbirdlist = self.makeFullBirdList()  # a QComboBox
-                self.showFullbirdlist = QWidgetAction(self.menuBirdList)
-                self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
-                self.menuBird2.addAction(self.showFullbirdlist)
-                self.fullbirdlist.activated.connect(self.birdSelectedList)
+            self.fullbirdlist = self.makeFullBirdList()  # a QComboBox
+            self.showFullbirdlist = QWidgetAction(self.menuBirdList)
+            self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
+            self.menuBird2.addAction(self.showFullbirdlist)
+            self.fullbirdlist.activated.connect(self.birdSelectedList)
 
     def fillFileList(self,fileName):
         """ Generates the list of files for the file listbox.
@@ -1262,8 +1258,6 @@ class AviaNZ(QMainWindow):
                 else:
                     self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.datalengthSec}
 
-                if self.Hartley and not os.path.isfile(self.filename + '.data'):
-                    self.addRegularSegments()
                 self.drawProtocolMarks()
 
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
@@ -1283,9 +1277,8 @@ class AviaNZ(QMainWindow):
                 # Delete any denoising backups from the previous file
                 if hasattr(self,'audiodata_backup'):
                     self.audiodata_backup = None
-                if not self.Hartley:
-                    self.showFundamental.setChecked(False)
-                if not self.DOC and not self.Hartley:
+                self.showFundamental.setChecked(False)
+                if not self.DOC:
                     self.showEnergies.setChecked(False)
                     self.showSpectral.setChecked(False)
                     self.showInvSpec.setChecked(False)
@@ -1448,13 +1441,14 @@ class AviaNZ(QMainWindow):
         # basically say that left panel and controls should be as small as possible:
         self.d_controls.setSizePolicy(1,1)
         containers[1].setSizePolicy(1,1)
-        self.useAmplitudeTick.setChecked(True)
-        self.useAmplitude = True
-        self.config['showAmplitudePlot'] = True
+        #self.useAmplitudeTick.setChecked(True)
+        #self.useAmplitude = True
+        #self.config['showAmplitudePlot'] = True
         self.useFilesTick.setChecked(True)
         self.config['showListofFiles'] = True
         self.showOverviewSegsTick.setChecked(True)
         self.config['showAnnotationOverview'] = True
+        self.useAmplitudeCheck()
         # for cont in range(len(containers)):
         #     containers[cont].setSizes(self.state_cont[cont])
 
@@ -2189,7 +2183,7 @@ class AviaNZ(QMainWindow):
 
         self.refreshOverviewWith(newSegment)
 
-        segsMovable = not (self.Hartley or self.config['readOnly'])
+        segsMovable = not (self.config['readOnly'])
 
         # Add the segment in both plots and connect up the listeners
         p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable)
@@ -2405,7 +2399,7 @@ class AviaNZ(QMainWindow):
                 # if this is right click (drawing mode):
                 # (or whatever you want)
                 if evt.button() == self.MouseDrawingButton:
-                    if self.Hartley or self.config['readOnly']:
+                    if self.config['readOnly']:
                         return
                     # this would prevent starting boxes in ampl plot
                     # if self.config['specMouseAction']>1:
@@ -2561,7 +2555,7 @@ class AviaNZ(QMainWindow):
             else:
                 # if this is right click (drawing mode):
                 if evt.button() == self.MouseDrawingButton:
-                    if self.Hartley or self.config['readOnly']:
+                    if self.config['readOnly']:
                         return
                     nonebrush = self.ColourNone
                     self.start_ampl_loc = self.convertSpectoAmpl(mousePoint.x())
@@ -2847,18 +2841,14 @@ class AviaNZ(QMainWindow):
         seg = self.segments[segID]
 
         if not self.viewCallType:
-            # why not have a special labelling for this mode:
-            if seg.keys == [("Don't Know", 0)] and self.Hartley:
-                text = ""
-            else:
-                # produce text from list of dicts
-                text = []
-                for lab in seg[4]:
-                    if lab["certainty"] == 50:
-                        text.append(lab["species"] + '?')
-                    else:
-                        text.append(lab["species"])
-                text = ','.join(text)
+            # produce text from list of dicts
+            text = []
+            for lab in seg[4]:
+                if lab["certainty"] == 50:
+                    text.append(lab["species"] + '?')
+                else:
+                    text.append(lab["species"])
+            text = ','.join(text)
         else:
             text = []
             for lab in seg[4]:
@@ -4589,9 +4579,9 @@ class AviaNZ(QMainWindow):
                 {'name': 'Full Bird List', 'type': 'group', 'children': [
                     # {'name': 'Filename', 'type': 'str', 'value': fn2,'readonly':True, 'tip': "Can be None"},
                     {'name': 'Filename', 'type': 'str', 'value': fn2, 'readonly': True},
-                    {'name': 'No long list', 'type': 'bool',
-                     'value': self.config['BirdListLong'] is None or self.config['BirdListLong'] == 'None',
-                     'tip': "If you don't have a long list of birds"},
+                    #{'name': 'No long list', 'type': 'bool',
+                     #'value': self.config['BirdListLong'] is None or self.config['BirdListLong'] == 'None',
+                     #'tip': "If you don't have a long list of birds"},
                     {'name': 'Choose File', 'type': 'action'}
                 ]},
                 {'name': 'Dynamically reorder bird list', 'type': 'bool', 'value': self.config['ReorderList']},
@@ -4757,24 +4747,27 @@ class AviaNZ(QMainWindow):
                     return
                 else:
                     self.longBirdList = self.ConfigLoader.longbl(filename, self.configdir)
-                    self.config['BirdListLong'] = filename
-                    self.p['Bird List','Full Bird List','Filename'] = filename
-                    self.p['Bird List','Full Bird List','No long list'] = False
-            elif childName=='Bird List.Full Bird List.No long list':
-                if param.value():
-                    self.config['BirdListLong'] = 'None'
-                    self.p['Bird List','Full Bird List','Filename'] = 'None'
-                    self.longBirdList = None
-                else:
-                    if self.p['Bird List','Full Bird List','Filename'] is None or self.p['Bird List','Full Bird List','Filename'] == '' or self.p['Bird List','Full Bird List','Filename'] == 'None':
-                        filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
-                        if filename == '':
-                            print("no list file selected")
-                            return
-                        else:
-                            self.p['Bird List','Full Bird List','Filename'] = filename
-                            self.config['BirdListLong'] = filename
-                            self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
+                    if self.longBirdList is not None:
+                        self.config['BirdListLong'] = filename
+                        self.p['Bird List','Full Bird List','Filename'] = filename
+                    else:
+                        self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
+                    #self.p['Bird List','Full Bird List','No long list'] = False
+            #elif childName=='Bird List.Full Bird List.No long list':
+                #if param.value():
+                    #self.config['BirdListLong'] = 'None'
+                    #self.p['Bird List','Full Bird List','Filename'] = 'None'
+                    #self.longBirdList = None
+                #else:
+                    #if self.p['Bird List','Full Bird List','Filename'] is None or self.p['Bird List','Full Bird List','Filename'] == '' or self.p['Bird List','Full Bird List','Filename'] == 'None':
+                        #filename, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "Text files (*.txt)")
+                        #if filename == '':
+                            #print("no list file selected")
+                            #return
+                        #else:
+                            #self.p['Bird List','Full Bird List','Filename'] = filename
+                            #self.config['BirdListLong'] = filename
+                            #self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], self.configdir)
 
         self.saveConfig = True
 
@@ -4839,13 +4832,6 @@ class AviaNZ(QMainWindow):
             if reply == QMessageBox.Yes:
                 self.removeSegments()
                 self.segmentsToSave = True
-                if self.Hartley:
-                    self.segmentsToSave = False
-                    if os.path.isfile(self.filename + '.data'):
-                        os.remove(self.filename + '.data')
-                    if os.path.isfile(self.filename[:-4] + '_output.xlsx'):
-                        os.remove(self.filename[:-4] + '_output.xlsx')
-                    self.listFiles.currentItem().setForeground(Qt.black)
 
             # reset segment playback buttons
             self.playSegButton.setEnabled(False)
