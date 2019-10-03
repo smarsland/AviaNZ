@@ -20,43 +20,43 @@ void PyInit_SplitWav() {}
 // this is handwritten strptime(s, "%Y%m%d_%H%M%S", &timestruc)
 
 int strptime2(char *s, char *format, struct tm *temp){
-		char *ptr;
-		
-		// TODO : figure out if this treats DST correctly (now off)
-		temp->tm_isdst = 0;
-		// hopefully these don't matter
-		// temp->tm_wday = 0;
-		// temp->tm_yday = 0;
-		
-		char substr2[3];
-		// s[strlen(s)-1] is \0
-		strncpy(substr2, &s[strlen(s)-2], 2);
-		substr2[2] = '\0';
-		temp->tm_sec = strtol(substr2, &ptr, 10);
-		strncpy(substr2, &s[strlen(s)-4], 2);
-		substr2[2] = '\0';
-		temp->tm_min = strtol(substr2, &ptr, 10);
-		strncpy(substr2, &s[strlen(s)-6], 2);
-		substr2[2] = '\0';
-		temp->tm_hour = strtol(substr2, &ptr, 10);
-		
-		// then skip _
-		
-		strncpy(substr2, &s[strlen(s)-9], 2);
-		substr2[2] = '\0';
-		temp->tm_mday = strtol(substr2, &ptr, 10);
-		strncpy(substr2, &s[strlen(s)-11], 2);
-		substr2[2] = '\0';
-		temp->tm_mon = strtol(substr2, &ptr, 10)-1;
+	char *ptr;
+	
+	// TODO : figure out if this treats DST correctly (now off)
+	temp->tm_isdst = 0;
+	// hopefully these don't matter
+	// temp->tm_wday = 0;
+	// temp->tm_yday = 0;
+	
+	char substr2[3];
+	// s[strlen(s)-1] is \0
+	strncpy(substr2, &s[strlen(s)-2], 2);
+	substr2[2] = '\0';
+	temp->tm_sec = strtol(substr2, &ptr, 10);
+	strncpy(substr2, &s[strlen(s)-4], 2);
+	substr2[2] = '\0';
+	temp->tm_min = strtol(substr2, &ptr, 10);
+	strncpy(substr2, &s[strlen(s)-6], 2);
+	substr2[2] = '\0';
+	temp->tm_hour = strtol(substr2, &ptr, 10);
+	
+	// then skip _
+	
+	strncpy(substr2, &s[strlen(s)-9], 2);
+	substr2[2] = '\0';
+	temp->tm_mday = strtol(substr2, &ptr, 10);
+	strncpy(substr2, &s[strlen(s)-11], 2);
+	substr2[2] = '\0';
+	temp->tm_mon = strtol(substr2, &ptr, 10)-1;
 
-		
-		// YEAR needs 4 symbols
-		char substr4[5];
-		strncpy(substr4, &s[strlen(s)-15], 4);
-		substr4[4] = '\0';
-		temp->tm_year = strtol(substr4, &ptr, 10)-1900;
-		
-		return(0);
+	
+	// YEAR needs 4 symbols
+	char substr4[5];
+	strncpy(substr4, &s[strlen(s)-15], 4);
+	substr4[4] = '\0';
+	temp->tm_year = strtol(substr4, &ptr, 10)-1900;
+	
+	return(0);
 }
 
 
@@ -103,6 +103,7 @@ int split(char *infilearg, char *outfilearg, int t, int hasDt){
         if(header.Subchunk1Size>16){
                 printf("%d extra format bytes found, skipping\n", header.Subchunk1Size-16);
                 fseek(infile, header.Subchunk1Size-16, SEEK_CUR);
+                header.Subchunk1Size = 16;
         }
 
         WavHeader2 header2;
@@ -143,17 +144,17 @@ int split(char *infilearg, char *outfilearg, int t, int hasDt){
         int BUFSIZE = header.ByteRate; // 1 second
         printf("-- reading chunks of %d bytes --\n", BUFSIZE);
 		
-		// for Win compatibility:
+        // for Win compatibility:
         // char linebuf[BUFSIZE];
-		char *linebuf = malloc(sizeof(char) * BUFSIZE);
-		if(linebuf==NULL){
-			fprintf(stderr, "ERROR: could not allocate memory for reading\n");
-			exit(1);
-		}
+	char *linebuf = malloc(sizeof(char) * BUFSIZE);
+	if(linebuf==NULL){
+		fprintf(stderr, "ERROR: could not allocate memory for reading\n");
+		exit(1);
+	}
 		
         // parse file name		
         strncpy(outfilestem, outfilearg, strlen(outfilearg)-4);
-		outfilestem[strlen(outfilearg)-4] = '\0';
+	outfilestem[strlen(outfilearg)-4] = '\0';
 
         // parse time stamp
 
@@ -161,12 +162,12 @@ int split(char *infilearg, char *outfilearg, int t, int hasDt){
         struct tm timestruc;
         char timestr[17];
 
-		setlocale(LC_ALL,"/QSYS.LIB/EN_NZ.LOCALE");
+	setlocale(LC_ALL,"/QSYS.LIB/EN_NZ.LOCALE");
         printf("%s\n", infilearg);
 		
         // wish I had unix
-		// if (strptime(outfilestem+strlen(outfilestem)-15, "%Y%m%d_%H%M%S", &timestruc) == NULL) {
-		if (hasDt==0){
+	// if (strptime(outfilestem+strlen(outfilestem)-15, "%Y%m%d_%H%M%S", &timestruc) == NULL) {
+	if (hasDt==0){
                 printf("no timestamp detected\n");
                 timestamp = 0;
         } else {
