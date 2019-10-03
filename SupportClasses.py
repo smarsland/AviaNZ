@@ -781,7 +781,7 @@ class ConfigLoader(object):
 
     def shortbl(self, file, configdir):
         # A fallback shortlist will be confirmed to exist in configdir.
-        # This list is necessary, long list can be None
+        # This list is necessary
         print("Loading short species list from file %s" % file)
         try:
             if os.path.isabs(file):
@@ -801,22 +801,18 @@ class ConfigLoader(object):
             except ValueError as e:
                 # if JSON looks corrupt, quit and suggest deleting:
                 print(e)
-                msg = MessagePopup("w", "Bad species list", "ERROR: file " + shortblfile + " corrupt, delete it to restore default")
+                msg = MessagePopup("w", "Bad species list", "ERROR: file " + shortblfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec_()
                 return None
 
         except Exception as e:
             # if file is not found at all, quit, user must recreate the file or change path
             print(e)
-            msg = MessagePopup("w", "Bad species list", "ERROR: Failed to load short species list from " + file)
+            msg = MessagePopup("w", "Bad species list", "ERROR: Failed to load short species list from " + file + ". Reverting to default.")
             msg.exec_()
             return None
 
-
     def longbl(self, file, configdir):
-        if file == "None":
-            # long bird list can be set to "None" intentionally
-            return None
 
         print("Loading long species list from file %s" % file)
         try:
@@ -836,13 +832,13 @@ class ConfigLoader(object):
                 return readlist
             except ValueError as e:
                 print(e)
-                msg = MessagePopup("w", "Bad species list", "Warning: file " + longblfile + " corrupt, delete it to restore default")
+                msg = MessagePopup("w", "Bad species list", "Warning: file " + longblfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec_()
                 return None
 
         except Exception as e:
             print(e)
-            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file)
+            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
             msg.exec_()
             return None
 

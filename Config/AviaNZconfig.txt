@@ -4,7 +4,6 @@
 "MultipleSpecies": true,
 "RequireNoiseData": false,
 "DOC": true,
-"Hartley": false,
 "ReorderList": true,
 "SoundFileDir": "./Sound Files", "secsSave": 60, "windowWidth": 6.57,
 "widthOverviewSegment": 10.0, "maxFileShow": 300, "fileOverlap": 10,
