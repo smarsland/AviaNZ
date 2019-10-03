@@ -346,10 +346,10 @@ class AviaNZ(QMainWindow):
         self.showFundamental = extraMenu.addAction("Fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
         self.showFundamental.setCheckable(True)
         self.showFundamental.setChecked(False)
-        self.showSpectral = extraMenu.addAction("Show spectral derivative", self.showSpectralDeriv)
+        self.showSpectral = extraMenu.addAction("Spectral derivative", self.showSpectralDeriv)
         self.showSpectral.setCheckable(True)
         self.showSpectral.setChecked(False)
-        self.showEnergies = extraMenu.addAction("Show maximum energies", self.showMaxEnergy)
+        self.showEnergies = extraMenu.addAction("Maximum energies", self.showMaxEnergy)
         self.showEnergies.setCheckable(True)
         self.showEnergies.setChecked(False)
 
