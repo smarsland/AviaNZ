@@ -284,6 +284,8 @@ class AviaNZ(QMainWindow):
 
         specMenu = self.menuBar().addMenu("&Appearance")
 
+        specMenu.addAction("Put docks back",self.dockReplace)
+
         self.useAmplitudeTick = specMenu.addAction("Show amplitude plot", self.useAmplitudeCheck)
         self.useAmplitudeTick.setCheckable(True)
         self.useAmplitudeTick.setChecked(self.config['showAmplitudePlot'])
@@ -387,10 +389,8 @@ class AviaNZ(QMainWindow):
             actionMenu.addAction("Export segments to Excel",self.exportSeg)
             actionMenu.addSeparator()
 
-        actionMenu.addAction("Save as image",self.saveImage,"Ctrl+I")
+        actionMenu.addAction("Export current view as image",self.saveImage,"Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
-        actionMenu.addSeparator()
-        actionMenu.addAction("Put docks back",self.dockReplace)
 
         # "Recognisers" menu
         recMenu = self.menuBar().addMenu("&Recognisers")
@@ -4014,8 +4014,11 @@ class AviaNZ(QMainWindow):
                 oldsegs = self.segments.getSpecies(filtspecies)
                 # deleting from the end, because deleteSegments shifts IDs:
                 for si in reversed(oldsegs):
+                    # clear these species from overview colors
+                    self.refreshOverviewWith(self.segments[si], delete=True)
                     # remove all labels for the current species
                     wipedAll = self.segments[si].wipeSpecies(filtspecies)
+                    self.refreshOverviewWith(self.segments[si])
                     # drop the segment if it's the only species, or just update the graphics
                     if wipedAll:
                         self.deleteSegment(si)

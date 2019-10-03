@@ -94,17 +94,24 @@ int split(char *infilearg, char *outfilearg, int t, int hasDt){
         WavHeader header;
         fread(&header, sizeof(WavHeader), 1, infile);
 
-        WavHeader2 header2;
-        fread(&header2, sizeof(WavHeader2), 1, infile);
-
         printf("Read %u MB of data, %u channels sampled at %u Hz, %d bit depth\n", header.ChunkSize/1024/1024, header.NumChannels, header.SampleRate, header.BitsPerSample);
+        // RIFF chunk
         if(header.ChunkSize<1000 || header.ChunkID!=1179011410){
                 fprintf(stderr, "ERROR: file empty or header malformed\n");
                 exit(1);
         }
+        if(header.Subchunk1Size>16){
+                printf("%d extra format bytes found, skipping\n", header.Subchunk1Size-16);
+                fseek(infile, header.Subchunk1Size-16, SEEK_CUR);
+        }
 
+        WavHeader2 header2;
+        fread(&header2, sizeof(WavHeader2), 1, infile);
+
+        int csafecount = 0;
         while (header2.Subchunk2ID!=1635017060){
                 // SM2 recorders produce a wamd metadata chunk:
+                printf("subchunk id: %x\n", header2.Subchunk2ID);
                 if(header2.Subchunk2ID==1684889975){ // wamd as uint32
                        printf("-- metadata found, skipping %d bytes --\n", header2.Subchunk2Size);
                 // _junk_ chunks for gibbon and other recordings:
@@ -113,6 +120,11 @@ int split(char *infilearg, char *outfilearg, int t, int hasDt){
                 }
                 fseek(infile, header2.Subchunk2Size, SEEK_CUR);
                 fread(&header2, sizeof(WavHeader2), 1, infile);
+                csafecount++;
+                if (csafecount>20){
+                        fprintf(stderr, "ERROR: unexpectedly many chunks found, probably misaligned WAV\n");
+                        exit(1);
+                }
         }
         printf("Subchunk2ID %u\n", header2.Subchunk2ID); // should be 1635017060 for data
         printf("Data size: %u bytes\n", header2.Subchunk2Size);
