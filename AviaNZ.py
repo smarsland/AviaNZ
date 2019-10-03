@@ -285,7 +285,6 @@ class AviaNZ(QMainWindow):
 
         specMenu = self.menuBar().addMenu("&Appearance")
 
-
         self.useAmplitudeTick = specMenu.addAction("Show amplitude plot", self.useAmplitudeCheck)
         self.useAmplitudeTick.setCheckable(True)
         self.useAmplitudeTick.setChecked(self.config['showAmplitudePlot'])
@@ -4301,8 +4300,8 @@ class AviaNZ(QMainWindow):
             the auto generated clusters
         """
         if len(self.segments) > 1:
-            cl = Clustering.Clustering([], [])
-            segments, fs, nclasses, duration = cl.cluster(self.filename, None, feature='we', n_clusters=5)
+            cl = Clustering.Clustering([], [], 5)
+            segments, fs, nclasses, duration = cl.cluster(self.filename, None, feature='we')
             self.clusterD = Dialogs.Cluster(segments, fs, nclasses, self.config)
             self.clusterD.show()
         else:
