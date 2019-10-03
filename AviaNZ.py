@@ -383,8 +383,10 @@ class AviaNZ(QMainWindow):
             actionMenu.addSeparator()
 
         if not self.Hartley:
-            actionMenu.addAction("Human review [All segments]",self.humanClassifyDialog1,"Ctrl+1")
-            actionMenu.addAction("Human review [Choose species]",self.humanRevDialog2,"Ctrl+2")
+            extraMenu = actionMenu.addMenu("H&uman review")
+            extraMenu.addAction("All segments",self.humanClassifyDialog1,"Ctrl+1")
+            extraMenu.addAction("Choose species",self.humanRevDialog2,"Ctrl+2")
+
             actionMenu.addSeparator()
             actionMenu.addAction("Export segments to Excel",self.exportSeg)
             actionMenu.addSeparator()
