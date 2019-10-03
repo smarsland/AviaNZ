@@ -256,13 +256,11 @@ class BuildRecAdvWizard(QWizard):
             self.contrastSlider.setTickInterval(1)
             self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
-            self.btnMerge = QPushButton('Merge Clusters')
-            self.btnMerge.clicked.connect(self.merge)
-            self.btnMerge.setEnabled(False)
             lb = QLabel('Move Selected Segment/s to Cluster')
-            lb.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
             self.cmbUpdateSeg = QComboBox()
+            self.cmbUpdateSeg.setFixedWidth(200)
             self.btnUpdateSeg = QPushButton('Apply')
+            self.btnUpdateSeg.setFixedWidth(130)
             self.btnUpdateSeg.clicked.connect(self.moveSelectedSegs)
             self.btnCreateNewCluster = QPushButton('Create cluster')
             self.btnCreateNewCluster.setFixedWidth(150)
@@ -283,22 +281,25 @@ class BuildRecAdvWizard(QWizard):
             hboxSpecContr.addWidget(self.volSlider)
             hboxSpecContr.setContentsMargins(20, 0, 20, 10)
 
+            hboxBtns1 = QHBoxLayout()
+            hboxBtns1.addWidget(lb)
+            hboxBtns1.addWidget(self.cmbUpdateSeg)
+            hboxBtns1.addWidget(self.btnUpdateSeg)
+            hboxBtns1.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+
+            hboxBtns2 = QHBoxLayout()
+            hboxBtns2.addWidget(self.btnCreateNewCluster)
+            hboxBtns2.addWidget(self.btnDeleteSeg)
+            hboxBtns2.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+
             hboxBtns = QHBoxLayout()
-            hboxBtns.addWidget(self.btnMerge)
-            hboxBtns.addWidget(lb)
-            hboxBtns.addWidget(self.cmbUpdateSeg)
-            hboxBtns.addWidget(self.btnUpdateSeg)
+            hboxBtns.addLayout(hboxBtns1)
+            hboxBtns.addLayout(hboxBtns2)
 
             # top part
             vboxTop = QVBoxLayout()
             vboxTop.addLayout(hboxSpecContr)
             vboxTop.addLayout(hboxBtns)
-
-            hboxBottom = QHBoxLayout()
-            hboxBottom.addWidget(self.btnCreateNewCluster)
-            hboxBottom.addWidget(self.btnDeleteSeg)
-            hboxBottom.setSpacing(20)
-            hboxBottom.setAlignment(Qt.AlignLeft)
 
             # set up the images
             self.flowLayout = pg.LayoutWidget()
@@ -313,7 +314,6 @@ class BuildRecAdvWizard(QWizard):
             self.vboxFull.addLayout(layout1)
             self.vboxFull.addLayout(vboxTop)
             self.vboxFull.addWidget(self.scrollArea)
-            self.vboxFull.addLayout(hboxBottom)
             self.setLayout(self.vboxFull)
 
         def initializePage(self):
@@ -328,11 +328,10 @@ class BuildRecAdvWizard(QWizard):
                 # self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
                 # fs: sampling freq
                 # self.nclasses: number of class_labels
-                self.cluster = Clustering.Clustering([], [])
+                self.cluster = Clustering.Clustering([], [], 5)
                 self.segments, fs, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"),
                                                                                        self.field("species"),
-                                                                                        feature=self.feature,
-                                                                                        n_clusters=5)
+                                                                                       feature=self.feature)
                 # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
                 #                                                                              self.field("species"),
                 #                                                                              feature=self.feature,
@@ -365,66 +364,6 @@ class BuildRecAdvWizard(QWizard):
                 self.segsChanged = False
                 self.wizard().redoTrainPages()
             return True
-
-        def merge(self):
-            """ Listner for the merge button. Merge the rows (clusters) checked into one cluster.
-            """
-            # Find which clusters/rows to merge
-            self.segsChanged = True
-            tomerge = []
-            i = 0
-            for cbox in self.cboxes:
-                if cbox.checkState() != 0:
-                    tomerge.append(i)
-                i += 1
-            print('rows/clusters to merge are:', tomerge)
-            if len(tomerge) < 2:
-                return
-
-            # Generate new class labels
-            nclasses = self.nclasses - len(tomerge) + 1
-            max_label = nclasses - 1
-            labels = []
-            c = self.nclasses - 1
-            while c > -1:
-                if c in tomerge:
-                    labels.append((c, 0))
-                else:
-                    labels.append((c, max_label))
-                    max_label -= 1
-                c -= 1
-
-            # print('[old, new] labels')
-            labels = dict(labels)
-            # print(labels)
-
-            keys = [i for i in range(self.nclasses) if i not in tomerge]        # the old keys those didn't merge
-            # print('old keys left: ', keys)
-
-            # update clusters dictionary {ID: cluster_name}
-            clusters = {0: self.clusters[tomerge[0]]}
-            for i in keys:
-                clusters.update({labels[i]: self.clusters[i]})
-
-            print('before update: ', self.clusters)
-            self.clusters = clusters
-            print('after update: ', self.clusters)
-
-            self.nclasses = nclasses
-
-            # update the segments
-            for seg in self.segments:
-                seg[-1] = labels[seg[-1]]
-
-            # update the cluster combobox
-            self.cmbUpdateSeg.clear()
-            for x in self.clusters:
-                self.cmbUpdateSeg.addItem(self.clusters[x])
-
-            # Clean and redraw
-            self.clearButtons()
-            self.updateButtons()
-            self.completeChanged.emit()
 
         def moveSelectedSegs(self):
             """ Listner for Apply button to move the selected segments to another cluster.
@@ -493,6 +432,7 @@ class BuildRecAdvWizard(QWizard):
 
             # redraw the buttons
             self.updateButtons()
+            self.updateClusterNames()
             self.completeChanged.emit()
 
         def createNewcluster(self):
@@ -699,13 +639,23 @@ class BuildRecAdvWizard(QWizard):
                 self.picbuttons.append(newButton)
             # (updateButtons will place them in layouts and show them)
 
-        def checkMerge(self):
-            """ Updates merge buttons state when two clusters are selected """
-            sumCh = sum([box.isChecked() for box in self.cboxes])
-            if sumCh>=2:
-                self.btnMerge.setEnabled(True)
-            else:
-                self.btnMerge.setEnabled(False)
+        def selectAll(self):
+            """ Tick all buttons in the row and vise versa"""
+            for ID in range(len(self.cboxes)):
+                if self.cboxes[ID].isChecked():
+                    for ix in range(len(self.segments)):
+                        if self.segments[ix][-1] == ID:
+                            self.picbuttons[ix].mark = 'yellow'
+                            self.picbuttons[ix].buttonClicked = True
+                            self.picbuttons[ix].setChecked(True)
+                            self.picbuttons[ix].repaint()
+                else:
+                    for ix in range(len(self.segments)):
+                        if self.segments[ix][-1] == ID:
+                            self.picbuttons[ix].mark = 'green'
+                            self.picbuttons[ix].buttonClicked = False
+                            self.picbuttons[ix].setChecked(False)
+                            self.picbuttons[ix].repaint()
 
         def updateButtons(self):
             """ Draw the existing buttons, and create check- and text-boxes.
@@ -718,7 +668,6 @@ class BuildRecAdvWizard(QWizard):
                 tbox = QLineEdit(self.clusters[r])
                 tbox.setMinimumWidth(80)
                 tbox.setMaximumHeight(150)
-                # tbox.setStyleSheet("border: none; background: rgba(0,0,0,0%); text-align: center; vertical-align: middle;")
                 tbox.setStyleSheet("border: none;")
                 tbox.setAlignment(QtCore.Qt.AlignCenter)
                 tbox.textChanged.connect(self.updateClusterNames)
@@ -726,7 +675,7 @@ class BuildRecAdvWizard(QWizard):
                 self.flowLayout.addWidget(self.tboxes[-1], r, c)
                 c += 1
                 cbox = QCheckBox("")
-                cbox.clicked.connect(self.checkMerge)
+                cbox.clicked.connect(self.selectAll)
                 self.cboxes.append(cbox)
                 self.flowLayout.addWidget(self.cboxes[-1], r, c)
                 c += 1
@@ -1075,7 +1024,7 @@ class BuildRecAdvWizard(QWizard):
             # calculate cluster centres
             # (self.segments is already selected to be this cluster only)
             with pg.BusyCursor():
-                cl = Clustering.Clustering([], [])
+                cl = Clustering.Clustering([], [], 5)
                 self.clustercentre = cl.getClusterCenter(self.segments, self.field("fs"), fLow, fHigh, self.wizard().clusterPage.feature, self.wizard().clusterPage.duration)
 
             # Get detection measures over all M,thr combinations
