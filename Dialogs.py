@@ -198,9 +198,8 @@ class Spectrogram(QDialog):
         Box.addWidget(self.mean_normalise)
         Box.addWidget(QLabel('Equal loudness'))
         Box.addWidget(self.equal_loudness)
-        if not self.DOC:
-            Box.addWidget(QLabel('Multitapering'))
-            Box.addWidget(self.multitaper)
+        Box.addWidget(QLabel('Multitapering'))
+        Box.addWidget(self.multitaper)
         Box.addWidget(QLabel('Window Width'))
         Box.addWidget(self.window_width)
         Box.addWidget(QLabel('Hop'))
@@ -537,6 +536,7 @@ class Segmentation(QDialog):
         self.ecThr.setDecimals(3)
         self.ecThr.setValue(1)
 
+        self.FIRThr1text = QLabel("Set threshold")
         self.FIRThr1 = QDoubleSpinBox()
         self.FIRThr1.setRange(0.0,2.0) #setRange(0.0,1.0)
         self.FIRThr1.setSingleStep(0.05)
@@ -600,6 +600,7 @@ class Segmentation(QDialog):
             Box.addWidget(self.ecthrtype[i])
         Box.addWidget(self.ecThr)
 
+        Box.addWidget(self.FIRThr1text)
         Box.addWidget(self.FIRThr1)
 
         Box.addWidget(self.Fundminfreqlabel)
@@ -677,6 +678,7 @@ class Segmentation(QDialog):
         #elif alg == "Onsets":
         #    self.Onsetslabel.show()
         elif alg == "FIR":
+            self.FIRThr1text.show()
             self.FIRThr1.show()
         #elif alg == "Best":
         #    pass
@@ -1454,7 +1456,7 @@ class HumanClassify1(QDialog):
                         # this was just ticked OFF
                         checkedButton = button
         if checkedButton is None:
-            print("Warning: unrecognized check event")
+            print("Warning: unrecognised check event")
             return
         if checkedButton.isChecked():
             # if label was empty, just change from DontKnow:
@@ -2098,7 +2100,7 @@ class PicButton(QAbstractButton):
                 painter.setFont(QFont("Helvetica", fontsize))
                 painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "X")
             else:
-                print("ERROR: unrecognized segment mark")
+                print("ERROR: unrecognised segment mark")
                 return
 
     def enterEvent(self, QEvent):
@@ -2325,23 +2327,24 @@ class FilterManager(QDialog):
         fn = self.listFiles.currentItem().text()
         source = os.path.join(self.filtdir, fn)
         target = QtGui.QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
-        target = os.path.join(target, fn)
+        if target != "":
+            target = os.path.join(target, fn)
 
-        print("Exporting from %s to %s" % (source, target))
-        if not os.path.isfile(source):
-            print("ERROR: unable to export, bad source %s" % source)
-            return
-        if os.path.isfile(target):
-            print("ERROR: target file %s exists" % target)
-            return
-        try:
-            shutil.copy2(source, target)
-            msg = SupportClasses.MessagePopup("d", "Successfully exported", "Export successful. Now you can share the file %s" % target)
-            msg.exec_()
-        except Exception as e:
-            print("ERROR: failed to export")
-            print(e)
-            return
+            print("Exporting from %s to %s" % (source, target))
+            if not os.path.isfile(source):
+                print("ERROR: unable to export, bad source %s" % source)
+                return
+            if os.path.isfile(target):
+                print("ERROR: target file %s exists" % target)
+                return
+            try:
+                shutil.copy2(source, target)
+                msg = SupportClasses.MessagePopup("d", "Successfully exported", "Export successful. Now you can share the file %s" % target)
+                msg.exec_()
+            except Exception as e:
+                print("ERROR: failed to export")
+                print(e)
+                return
 
 class Cluster(QDialog):
     def __init__(self, segments, sampleRate, classes, config, parent=None):

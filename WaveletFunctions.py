@@ -361,7 +361,7 @@ class WaveletFunctions:
                 node = 2**(lvl+1) - 1 + nodepos
                 adjnodes.append(node)
             else:
-                print("ERROR: unrecognized change", change)
+                print("ERROR: unrecognised change", change)
         return adjnodes
 
 

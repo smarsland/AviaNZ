@@ -344,13 +344,12 @@ class AviaNZ(QMainWindow):
         self.showFundamental = extraMenu.addAction("Fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
         self.showFundamental.setCheckable(True)
         self.showFundamental.setChecked(False)
-        if not self.DOC:
-            self.showSpectral = extraMenu.addAction("Show spectral derivative", self.showSpectralDeriv)
-            self.showSpectral.setCheckable(True)
-            self.showSpectral.setChecked(False)
-            self.showEnergies = extraMenu.addAction("Show maximum energies", self.showMaxEnergy)
-            self.showEnergies.setCheckable(True)
-            self.showEnergies.setChecked(False)
+        self.showSpectral = extraMenu.addAction("Show spectral derivative", self.showSpectralDeriv)
+        self.showSpectral.setCheckable(True)
+        self.showSpectral.setChecked(False)
+        self.showEnergies = extraMenu.addAction("Show maximum energies", self.showMaxEnergy)
+        self.showEnergies.setCheckable(True)
+        self.showEnergies.setChecked(False)
 
         specMenu.addSeparator()
 
@@ -393,10 +392,10 @@ class AviaNZ(QMainWindow):
         actionMenu.addSeparator()
         actionMenu.addAction("Put docks back",self.dockReplace)
 
-        # "Recognizers" menu
-        recMenu = self.menuBar().addMenu("&Recognizers")
+        # "Recognisers" menu
+        recMenu = self.menuBar().addMenu("&Recognisers")
         recMenu.addAction("Train an automated recogniser", self.buildRecogniser)
-        recMenu.addAction("Test recogniser", self.testRecogniser)
+        recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
 
         helpMenu = self.menuBar().addMenu("&Help")
@@ -4188,7 +4187,7 @@ class AviaNZ(QMainWindow):
             elif reply == 0:
                 action = "overwrite"
             else:
-                print("ERROR: Unrecognized reply", reply)
+                print("ERROR: Unrecognised reply", reply)
                 return
 
             # remove all the old excels:
