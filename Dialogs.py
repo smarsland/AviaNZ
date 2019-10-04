@@ -1828,7 +1828,7 @@ class HumanClassify2(QDialog):
             unbufStop = self.convertAmpltoSpec(seg[1]-self.startRead) - x1
 
             # create the button:
-            newButton = PicButton(i, self.sg[x1:x2, :], self.audiodata[x1a:x2a], self.audioFormat, tend-tstart, unbufStart, unbufStop, self.lut, self.colourStart, self.colourEnd, self.cmapInverted)
+            newButton = SupportClasses.PicButton(i, self.sg[x1:x2, :], self.audiodata[x1a:x2a], self.audioFormat, tend-tstart, unbufStart, unbufStop, self.lut, self.colourStart, self.colourEnd, self.cmapInverted)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:
@@ -2003,157 +2003,6 @@ class HumanClassify2(QDialog):
             btn.setImage(self.lut, colourStart, colourEnd, self.cmapInverted)
             btn.update()
 
-
-class PicButton(QAbstractButton):
-    # Class for HumanClassify dialogs to put spectrograms on buttons
-    # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, parent=None, cluster=False):
-        super(PicButton, self).__init__(parent)
-        self.index = index
-        self.mark = "green"
-        self.spec = spec
-        self.unbufStart = unbufStart
-        self.unbufStop = unbufStop
-        self.cluster = cluster
-        self.setMouseTracking(True)
-        # setImage reads some properties from self, to allow easy update
-        # when color map changes
-        self.setImage(lut, colStart, colEnd, cmapInv)
-
-        self.buttonClicked = False
-        # if not self.cluster:
-        self.clicked.connect(self.changePic)
-        # fixed size
-        self.setSizePolicy(0,0)
-        self.setMinimumSize(self.im1.size())
-
-        # playback things
-        self.media_obj = SupportClasses.ControllableAudio(format)
-        self.media_obj.notify.connect(self.endListener)
-        self.audiodata = audiodata
-        self.duration = duration * 1000 # in ms
-
-        self.playButton = QtGui.QToolButton(self)
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.playButton.clicked.connect(self.playImage)
-        self.playButton.hide()
-
-    def setImage(self, lut, colStart, colEnd, cmapInv):
-        # takes in a piece of spectrogram and produces a pair of images
-        if cmapInv:
-            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colEnd, colStart])
-        else:
-            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colStart, colEnd])
-        im1 = fn.makeQImage(im, alpha)
-        if im1.size().width() == 0:
-            print("ERROR: button not shown, likely bad spectrogram coordinates")
-            return
-
-        # hardcode all image sizes
-        if self.cluster:
-            self.im1 = im1.scaled(200, 150)
-        else:
-            self.specReductionFact = im1.size().width()/500
-            self.im1 = im1.scaled(500, im1.size().height())
-
-        # draw lines
-        if not self.cluster:
-            unbufStartAdj = self.unbufStart / self.specReductionFact
-            unbufStopAdj = self.unbufStop / self.specReductionFact
-            self.line1 = QLineF(unbufStartAdj, 0, unbufStartAdj, im1.size().height())
-            self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, im1.size().height())
-
-    def paintEvent(self, event):
-        if type(event) is not bool:
-            painter = QPainter(self)
-            painter.setPen(QPen(QColor(80,255,80), 2))
-            if self.cluster:
-                if self.mark == "yellow":
-                    painter.setOpacity(0.5)
-            else:
-                if self.mark == "yellow":
-                    painter.setOpacity(0.8)
-                elif self.mark == "red":
-                    painter.setOpacity(0.5)
-            painter.drawImage(event.rect(), self.im1)
-            if not self.cluster:
-                painter.drawLine(self.line1)
-                painter.drawLine(self.line2)
-
-            # draw decision mark
-            fontsize = int(self.im1.size().height() * 0.65)
-            if self.mark == "green":
-                pass
-            elif self.mark == "yellow" and not self.cluster:
-                painter.setOpacity(0.9)
-                painter.setPen(QPen(QColor(220,220,0)))
-                painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "?")
-            elif self.mark == "yellow" and self.cluster:
-                painter.setOpacity(0.9)
-                painter.setPen(QPen(QColor(220, 220, 0)))
-                painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "√")
-            elif self.mark == "red":
-                painter.setOpacity(0.8)
-                painter.setPen(QPen(QColor(220,0,0)))
-                painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "X")
-            else:
-                print("ERROR: unrecognised segment mark")
-                return
-
-    def enterEvent(self, QEvent):
-        # to reset the icon if it didn't stop cleanly
-        if not self.media_obj.isPlaying():
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.playButton.show()
-
-    def leaveEvent(self, QEvent):
-        if not self.media_obj.isPlaying():
-            self.playButton.hide()
-
-    def playImage(self):
-        if self.media_obj.isPlaying():
-            self.stopPlayback()
-        else:
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-            self.media_obj.loadArray(self.audiodata)
-
-    def endListener(self):
-        timeel = self.media_obj.elapsedUSecs() // 1000
-        if timeel > self.duration:
-            self.stopPlayback()
-
-    def stopPlayback(self):
-        self.media_obj.pressedStop()
-        self.playButton.hide()
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-
-    def sizeHint(self):
-        return self.im1.size()
-
-    def minimumSizeHint(self):
-        return self.im1.size()
-
-    def changePic(self,event):
-        # cycle through CONFIRM / DELETE / RECHECK marks
-        if self.cluster:
-            if self.mark == "green":
-                self.mark = "yellow"
-            elif self.mark == "yellow":
-                self.mark = "green"
-        else:
-            if self.mark == "green":
-                self.mark = "red"
-            elif self.mark == "red":
-                self.mark = "yellow"
-            elif self.mark == "yellow":
-                self.mark = "green"
-        self.paintEvent(event)
-        #self.update()
-        self.repaint()
-        pg.QtGui.QApplication.processEvents()
 
 
 class FilterManager(QDialog):
@@ -2426,7 +2275,7 @@ class Cluster(QDialog):
         # Create the buttons for each segment
         for seg in self.segments:
             sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1] - seg[1][0], seg[1][0])
-            newButton = PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1],
+            newButton = SupportClasses.PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1],
                                           self.lut, self.colourStart, self.colourEnd, False, cluster=True)
             self.picbuttons.append(newButton)
         # (updateButtons will place them in layouts and show them)
@@ -2504,3 +2353,4 @@ class Cluster(QDialog):
         maxsg = np.max(self.sg)
         self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
         self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
+
