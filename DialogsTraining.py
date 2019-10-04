@@ -152,6 +152,9 @@ class BuildRecAdvWizard(QWizard):
             spList.insert(0, 'Choose species...')
             self.species.clear()
             self.species.addItems(spList)
+            print(spList,len(spList))
+            if len(spList)==2:
+                self.species.setCurrentIndex(1)
 
             listOfFiles = QDir(dirName).entryInfoList(['*.wav'], filters=QDir.AllDirs | QDir.NoDotAndDotDot | QDir.Files,sort=QDir.DirsFirst)
             listOfDataFiles = QDir(dirName).entryList(['*.wav.data'])
@@ -301,8 +304,12 @@ class BuildRecAdvWizard(QWizard):
             hboxBottom.setAlignment(Qt.AlignLeft)
 
             # set up the images
-            self.flowLayout = pg.LayoutWidget()
+            #self.flowLayout = pg.LayoutWidget()
+            # SRM
+            self.flowLayout = SupportClasses.Layout()
             self.flowLayout.setGeometry(QtCore.QRect(0, 0, 380, 247))
+            # SRM
+            self.flowLayout.buttonDragged.connect(self.moveSelectedSegs)
 
             self.scrollArea = QtGui.QScrollArea(self)
             self.scrollArea.setWidgetResizable(True)
@@ -367,7 +374,7 @@ class BuildRecAdvWizard(QWizard):
             return True
 
         def merge(self):
-            """ Listner for the merge button. Merge the rows (clusters) checked into one cluster.
+            """ Listener for the merge button. Merge the rows (clusters) checked into one cluster.
             """
             # Find which clusters/rows to merge
             self.segsChanged = True
@@ -426,22 +433,36 @@ class BuildRecAdvWizard(QWizard):
             self.updateButtons()
             self.completeChanged.emit()
 
-        def moveSelectedSegs(self):
-            """ Listner for Apply button to move the selected segments to another cluster.
+        def moveSelectedSegs(self,dragposy=None,source=None):
+            """ Listener for Apply button to move the selected segments to another cluster.
                 Change the cluster ID of those selected buttons and redraw all the clusters.
             """
+            # SRM: Currently 2 entries to this: with drag or via button
+            # TODO: check: I think the dict is in descending order always?
             self.segsChanged = True
-            moveto = self.cmbUpdateSeg.currentText()
-            # find the clusterID from name
-            for key in self.clusters.keys():
-                if moveto == self.clusters[key]:
-                    movetoID = key
-                    break
-            # print(moveto, movetoID)
+            print(dragposy,source)
+            if dragposy is not None:
+                #print("in move",dragposy//(self.picbuttons[0].size().height()+self.flowLayout.layout.verticalSpacing()),dragposy,self.picbuttons[0].size().height(),self.flowLayout.layout.verticalSpacing())
+                print("in move",dragposy,self.flowLayout.layout.geometry().height(),self.nclasses,dragposy//(self.flowLayout.layout.geometry().height()//self.nclasses))
+                # The first line seemed neater, but the verticalSpacing() doesn't update when you rescale the window
+                #movetoID = dragposy//(self.picbuttons[0].size().height()+self.flowLayout.layout.verticalSpacing())
+                movetoID = dragposy//(self.flowLayout.layout.geometry().height()//self.nclasses)
+                # Even if the button that was dragged isn't highlighted, make it so
+                source.mark = 'yellow'
+            else:
+                moveto = self.cmbUpdateSeg.currentText()
+                # find the clusterID from name
+                for key in self.clusters.keys():
+                    if moveto == self.clusters[key]:
+                        movetoID = key
+                        break
+                # print(moveto, movetoID)
 
             for ix in range(len(self.picbuttons)):
                 if self.picbuttons[ix].mark == 'yellow':
                     self.segments[ix][-1] = movetoID
+                    #SRM
+                    print(self.segments[ix][-1])
                     self.picbuttons[ix].mark = 'green'
 
             # update self.clusters, delete clusters with no members
@@ -496,7 +517,7 @@ class BuildRecAdvWizard(QWizard):
             self.completeChanged.emit()
 
         def createNewcluster(self):
-            """ Listner for Create cluster button to move the selected segments to a new cluster.
+            """ Listener for Create cluster button to move the selected segments to a new cluster.
                 Change the cluster ID of those selected buttons and redraw all the clusters.
             """
             self.segsChanged = True
@@ -588,7 +609,7 @@ class BuildRecAdvWizard(QWizard):
                 return
 
         def deleteSelectedSegs(self):
-            """ Listner for Delete button to delete the selected segments completely.
+            """ Listener for Delete button to delete the selected segments completely.
             """
             inds = []
             for ix in range(len(self.picbuttons)):
@@ -695,7 +716,7 @@ class BuildRecAdvWizard(QWizard):
             # Create the buttons for each segment
             for seg in self.segments:
                 sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1]-seg[1][0], seg[1][0])
-                newButton = Dialogs.PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart, self.colourEnd, False, cluster=True)
+                newButton = SupportClasses.PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart, self.colourEnd, False, cluster=True)
                 self.picbuttons.append(newButton)
             # (updateButtons will place them in layouts and show them)
 
