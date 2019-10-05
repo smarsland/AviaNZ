@@ -167,7 +167,8 @@ class AviaNZ(QMainWindow):
         # Make life easier for now: preload a birdsong
         print("Loaded")
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
-            firstFile = self.SoundFileDir + '/' + 'kiwi_1min.wav' 
+            firstFile = self.SoundFileDir + '/' 
+            #firstFile = self.SoundFileDir + '/' + 'kiwi_1min.wav' 
             #firstFile = "/home/julius/Documents/kiwis/test/kiwi_1min.wav"
 
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
@@ -659,7 +660,7 @@ class AviaNZ(QMainWindow):
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
         # Delete segment button. We have to get rid of the extra event args
-        deleteButton = QPushButton("&Delete Current Segment")
+        deleteButton = QPushButton("&Delete current segment")
         deleteButton.clicked.connect(lambda _ : self.deleteSegment())
 
         # The spinbox for changing the width shown in the controls dock
@@ -674,19 +675,19 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.stopButton,row=0,col=1)
         self.w_controls.addWidget(self.playSegButton,row=0,col=2)
         self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
-        self.w_controls.addWidget(self.quickDenButton,row=2,col=0)
-        # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
-        self.w_controls.addWidget(self.viewSpButton,row=2,col=1)
         self.w_controls.addWidget(self.timePlayed,row=1,col=0, colspan=4)
-        self.w_controls.addWidget(self.volIcon, row=3, col=0)
-        self.w_controls.addWidget(self.volSlider, row=3, col=1, colspan=3)
+        self.w_controls.addWidget(self.volIcon, row=2, col=0)
+        self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=3)
+        self.w_controls.addWidget(self.quickDenButton,row=3,col=0)
+        # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
+        self.w_controls.addWidget(self.viewSpButton,row=3,col=1)
         self.w_controls.addWidget(QLabel("Brightness"),row=4,col=0,colspan=4)
         self.w_controls.addWidget(self.brightnessSlider,row=5,col=0,colspan=4)
         self.w_controls.addWidget(QLabel("Contrast"),row=6,col=0,colspan=4)
         self.w_controls.addWidget(self.contrastSlider,row=7,col=0,colspan=4)
-        self.w_controls.addWidget(deleteButton,row=8,col=0,colspan=4)
-        self.w_controls.addWidget(QLabel('Visible window (seconds)'),row=9,col=0,colspan=4)
-        self.w_controls.addWidget(self.widthWindow,row=10,col=0,colspan=4)
+        self.w_controls.addWidget(QLabel('Visible window (seconds)'),row=8,col=0,colspan=4)
+        self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=4)
+        self.w_controls.addWidget(deleteButton,row=10,col=0,colspan=4)
 
         # The slider to show playback position
         # This is hidden, but controls the moving bar
@@ -784,6 +785,7 @@ class AviaNZ(QMainWindow):
         These are:
             backspace to delete a segment
             escape to pause playback """
+        print("here",ev)
         if ev == Qt.Key_Backspace or ev == Qt.Key_Delete:
             self.deleteSegment()
         elif ev == Qt.Key_Escape and self.media_obj.isPlaying():
