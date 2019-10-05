@@ -982,7 +982,6 @@ class PicButton(QAbstractButton):
         if not self.media_obj.isPlaying():
             self.playButton.hide()
 
-    # SRM
     def mouseMoveEvent(self, ev):
         if ev.buttons() != Qt.LeftButton:
             return
@@ -992,7 +991,6 @@ class PicButton(QAbstractButton):
         drag = QDrag(self)
         drag.setMimeData(mimeData)
         dropAction = drag.exec_(Qt.MoveAction)
-    # END
 
     def playImage(self):
         if self.media_obj.isPlaying():
@@ -1037,7 +1035,6 @@ class PicButton(QAbstractButton):
         self.repaint()
         pg.QtGui.QApplication.processEvents()
 
-#SRM
 class Layout(pg.LayoutWidget):
     # Layout for the clustering that allows drag and drop
     buttonDragged = QtCore.Signal(int,object)

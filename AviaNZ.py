@@ -285,7 +285,6 @@ class AviaNZ(QMainWindow):
 
         specMenu = self.menuBar().addMenu("&Appearance")
 
-
         self.useAmplitudeTick = specMenu.addAction("Show amplitude plot", self.useAmplitudeCheck)
         self.useAmplitudeTick.setCheckable(True)
         self.useAmplitudeTick.setChecked(self.config['showAmplitudePlot'])
@@ -675,10 +674,10 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.stopButton,row=0,col=1)
         self.w_controls.addWidget(self.playSegButton,row=0,col=2)
         self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
-        self.w_controls.addWidget(self.quickDenButton,row=1,col=0)
+        self.w_controls.addWidget(self.quickDenButton,row=2,col=0)
         # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
-        self.w_controls.addWidget(self.viewSpButton,row=1,col=1)
-        self.w_controls.addWidget(self.timePlayed,row=2,col=0, colspan=4)
+        self.w_controls.addWidget(self.viewSpButton,row=2,col=1)
+        self.w_controls.addWidget(self.timePlayed,row=1,col=0, colspan=4)
         self.w_controls.addWidget(self.volIcon, row=3, col=0)
         self.w_controls.addWidget(self.volSlider, row=3, col=1, colspan=3)
         self.w_controls.addWidget(QLabel("Brightness"),row=4,col=0,colspan=4)
@@ -4297,12 +4296,12 @@ class AviaNZ(QMainWindow):
         return segments
 
     def classifySegments(self):
-        """Listner for Action->Cluster segments menu item, cluster segments marked in the current file. Only to display
+        """Listener for Action->Cluster segments menu item, cluster segments marked in the current file. Only to display
             the auto generated clusters
         """
         if len(self.segments) > 1:
-            cl = Clustering.Clustering([], [])
-            segments, fs, nclasses, duration = cl.cluster(self.filename, None, feature='we', n_clusters=5)
+            cl = Clustering.Clustering([], [], 5)
+            segments, fs, nclasses, duration = cl.cluster(self.filename, None, feature='we')
             self.clusterD = Dialogs.Cluster(segments, fs, nclasses, self.config)
             self.clusterD.show()
         else:
@@ -4551,6 +4550,10 @@ class AviaNZ(QMainWindow):
                  'suffix': ' sec'},
                 {'name': 'Make boxes transparent', 'type': 'bool',
                  'value': self.config['transparentBoxes']},
+                {'name': 'Auto save segments every', 'type': 'float', 'value': self.config['secsSave'],
+                 'step': 5,
+                 'limits': (5, 900),
+                 'suffix': ' sec'},
                 {'name': 'Segment colours', 'type': 'group', 'children': [
                     {'name': 'Confirmed segments', 'type': 'color', 'value': self.config['ColourNamed'],
                      'tip': "Correctly labeled segments"},
@@ -4591,13 +4594,6 @@ class AviaNZ(QMainWindow):
             {'name': 'Human classify', 'type': 'group', 'children': [
                 {'name': 'Save corrections', 'type': 'bool', 'value': self.config['saveCorrections'],
                  'tip': "This helps the developers"},
-            ]},
-
-            {'name': 'Output parameters', 'type': 'group', 'children': [
-                {'name': 'Auto save segments every', 'type': 'float', 'value': self.config['secsSave'],
-                 'step': 5,
-                 'limits': (5, 900),
-                 'suffix': ' sec'},
             ]},
 
             {'name': 'User', 'type': 'group', 'children': [
