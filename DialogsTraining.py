@@ -33,7 +33,7 @@ import copy
 
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap
 from PyQt5.QtCore import QDir, Qt, QEvent
-from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QInputDialog
+from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QTextEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QInputDialog
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -1574,10 +1574,6 @@ class TestRecWizard(QWizard):
         def initializePage(self):
             filternames = [key + ".txt" for key in self.wizard().filterlist.keys()]
             self.species.addItems(filternames)
-            try:
-                self.species.currentTextChanged.connect(self.wizard().redoTestPages)
-            except Exception:
-                pass
 
         def browseTestData(self):
             dirName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose folder for testing')
@@ -1601,165 +1597,10 @@ class TestRecWizard(QWizard):
                 if file.fileName()+'.data' in listOfDataFiles:
                     item.setForeground(Qt.red)
 
-    class WPageTest(QWizardPage):
-        def __init__(self, clustnum, parent=None):
-            super(TestRecWizard.WPageTest, self).__init__(parent)
-            self.setTitle('Testing results')
-            #self.setSubTitle('Testing results are shown here')
-
-            self.setMinimumSize(250, 200)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
-            self.adjustSize()
-
-            self.lblTestDir = QLabel()
-            self.lblTestDir.setStyleSheet("QLabel { color : #808080; }")
-            self.lblSpecies = QLabel()
-            self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
-            self.lblCluster = QLabel()
-            self.lblCluster.setStyleSheet("QLabel { color : #808080; }")
-            space = QLabel()
-            space.setFixedHeight(25)
-
-            self.manSegs = QLabel()
-            self.manTime = QLabel()
-            self.autoSegs = QLabel()
-            self.autoTime = QLabel()
-            self.sensTime = QLabel()
-
-            # same, after post-processing
-            self.manSegsP = QLabel()
-            self.manTimeP = QLabel()
-            self.autoSegsP = QLabel()
-            self.autoTimeP = QLabel()
-            self.sensTimeP = QLabel()
-
-            # NOTE: this is not the subfilter name, but the number!
-            self.clustnum = clustnum
-
-            # testing results page layout
-            vboxHead = QFormLayout()
-            vboxHead.addRow("Testing data:", self.lblTestDir)
-            vboxHead.addRow("Recogniser name:", self.lblSpecies)
-            vboxHead.addRow("Target calltype:", self.lblCluster)
-            vboxHead.addWidget(space)
-
-            form2 = QFormLayout()
-            form2.addRow("Manually labelled segments:", self.manSegs)
-            form2.addRow("\ttotal seconds:", self.manTime)
-            form2.addRow("Segments detected:", self.autoSegs)
-            form2.addRow("\ttotal seconds:", self.autoTime)
-            form2.addRow("Recall (sensitivity) in 1 s resolution:", self.sensTime)
-
-            form_post = QFormLayout()
-            form_post.addRow("Segments detected:", self.autoSegsP)
-            form_post.addRow("\ttotal seconds:", self.autoTimeP)
-            form_post.addRow("Recall (sensitivity) in 1 s resolution:", self.sensTimeP)
-
-            vbox = QVBoxLayout()
-            vbox.addLayout(vboxHead)
-            vbox.addWidget(QLabel("<b>Detection summary</b>"))
-            vbox.addLayout(form2)
-            vbox.addWidget(QLabel("<b>After post-processing</b>"))
-            vbox.addLayout(form_post)
-
-            self.setLayout(vbox)
-
-        # Actual testing is done here
-        def initializePage(self):
-            speciesData = self.wizard().filterlist[self.field("species")[:-4]]
-            subfilter = speciesData["Filters"][self.clustnum]
-
-            self.lblTestDir.setText(self.field("testDir"))
-            self.lblSpecies.setText(speciesData["species"])
-            self.lblCluster.setText(subfilter["calltype"])
-
-            with pg.BusyCursor():
-                species = speciesData["species"]
-                # not sure if this is needed?
-                ind = species.find('>')
-                if ind != -1:
-                    species = species.replace('>', '(')
-                    species = species + ')'
-
-                ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
-                manSegNum = 0
-                window = 1
-                inc = None
-                # Generate GT files from annotations in test folder
-                print('Generating GT...')
-                for root, dirs, files in os.walk(self.field("testDir")):
-                    for file in files:
-                        wavFile = os.path.join(root, file)
-                        if file.endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
-                            segments = Segment.SegmentList()
-                            segments.parseJSON(wavFile + '.data')
-                            manSegNum += len(segments)
-
-                            # Currently, we ignore call types here and just
-                            # look for all calls for the target species.
-                            # export 0/1 annotations for this calltype
-                            # (next page will overwrite the same files)
-                            segments.exportGT(wavFile, species, window=window, inc=inc)
-
-                # first return value: single array of 0/1 detections over all files
-                # second return value: list of tuples ([segments], filename, filelen) for each file
-                detected01, detectedS = ws.waveletSegment_test(self.field("testDir"),
-                                               subfilter, d=False, rf=True, learnMode='recaa',
-                                               savedetections=False, window=window, inc=inc)
-                # save the 0/1 annotations as well
-                self.wizard().annotations = copy.deepcopy(ws.annotation)
-
-                fB, recall, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, detected01)
-                print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
-                total = TP+FP+TN+FN
-                if total == 0:
-                    print("ERROR: failed to find any testing data")
-                    return
-
-                totallen = sum([len(detfile[0]) for detfile in detectedS])
-
-                # update fields
-                self.manSegs.setText(str(manSegNum))
-                self.manTime.setText("%.1f" % (TP+FN))
-                self.autoSegs.setText(str(totallen))
-                self.autoTime.setText("%.1f" % (TP+FP))
-                self.sensTime.setText("%d %%" % (TP/(TP+FN)*100))
-
-                # Post process:
-                if subfilter["F0"]:
-                    print("Post-processing...")
-                    detectedSpost = []
-                    self.detected01post = []
-                    for detfile in detectedS:
-                        post = Segment.PostProcess(segments=detfile[0], subfilter=subfilter)
-                        print("got segments", len(post.segments))
-                        post.fundamentalFrq(fileName=detfile[1])
-                        detectedSpost.extend(post.segments)
-                        print("kept segments", len(post.segments))
-
-                        # back-convert to 0/1:
-                        det01post = np.zeros(detfile[2])
-                        for seg in post.segments:
-                            det01post[int(seg[0]):int(seg[1])] = 1
-                        self.detected01post.extend(det01post)
-
-                    # now, detectedS and detectedSpost contain lists of segments before/after post
-                    # and detected01 and self.detected01post - corresponding pres/abs marks
-
-                    # update fields
-                    _, _, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, self.detected01post)
-                    print('--Post-processing summary--\n%d %d %d %d' %(TP, FP, TN, FN))
-                    self.autoSegsP.setText(str(len(detectedSpost)))
-                    self.autoTimeP.setText("%.1f" % (TP+FP))
-                    self.sensTimeP.setText("%d %%" % (TP/(TP+FN)*100))
-                else:
-                    print('No post-processing required')
-                    self.detected01post = detected01
-
-    class WPageLast(QWizardPage):
+    class WPageMain(QWizardPage):
         def __init__(self, parent=None):
-            super(TestRecWizard.WPageLast, self).__init__(parent)
-            self.setTitle('Overall testing results')
+            super(TestRecWizard.WPageMain, self).__init__(parent)
+            self.setTitle('Summary of testing results')
 
             self.setMinimumSize(250, 200)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
@@ -1809,25 +1650,25 @@ class TestRecWizard(QWizard):
             self.setLayout(vbox)
 
         def initializePage(self):
-            speciesData = self.wizard().filterlist[self.field("species")[:-4]]
+            # testing results will be stored there
+            testresfile = os.path.join(self.field("testDir"), "test-results.txt")
+            # run the actual testing here:
+            with pg.BusyCursor():
+                self.wizard().rerunCalltypes(testresfile)
 
-            self.lblTestDir.setText(self.field("testDir"))
-            self.lblSpecies.setText(speciesData["species"])
+                speciesData = self.wizard().filterlist[self.field("species")[:-4]]
 
-            ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
+                self.lblTestDir.setText(self.field("testDir"))
+                self.lblSpecies.setText(speciesData["species"])
 
-            # "OR"-combine detection results from each calltype
-            first = True
-            for pageId in self.wizard().testpages[:-1]:
-                page = self.wizard().page(pageId)
-                if first:
-                    self.detections = page.detected01post
-                    first = False
-                else:
-                    self.detections = np.maximum.reduce([page.detected01post, self.detections])
+                ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
 
-            # get and parse the agreement metrics
-            fB, recall, TP, FP, TN, FN = ws.fBetaScore(self.wizard().annotations, self.detections)
+                # "OR"-combine detection results from each calltype
+                detections = np.maximum.reduce(self.wizard().detected01post_allcts)
+
+                # get and parse the agreement metrics
+                fB, recall, TP, FP, TN, FN = ws.fBetaScore(self.wizard().annotations, detections)
+
             total = TP+FP+TN+FN
             if total == 0:
                 print("ERROR: failed to find any testing data")
@@ -1859,6 +1700,33 @@ class TestRecWizard(QWizard):
             self.prec.setText("%.1f %%" % (precision*100))
             self.acc.setText("%.1f %%" % (accuracy*100))
 
+    class WPageCTs(QWizardPage):
+        def __init__(self, parent=None):
+            super(TestRecWizard.WPageCTs, self).__init__(parent)
+            self.setTitle('Detailed testing results')
+
+            self.setMinimumSize(250, 200)
+            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.adjustSize()
+
+            self.resloc = QLabel()
+            self.resloc.setWordWrap(True)
+
+            self.results = QTextEdit()
+            self.results.setReadOnly(True)
+
+            vbox = QVBoxLayout()
+            vbox.addWidget(self.resloc)
+            vbox.addWidget(self.results)
+            self.setLayout(vbox)
+
+        def initializePage(self):
+            resfile = os.path.join(self.field("testDir"), "test-results.txt")
+            resstream = open(resfile, 'r')
+            self.resloc.setText("The detailed results (shown below) have been saved in file %s" % resfile)
+            self.results.setPlainText(resstream.read())
+            resstream.close()
+
     # Main init of the testing wizard
     def __init__(self, filtdir, parent=None):
         super(TestRecWizard, self).__init__()
@@ -1877,29 +1745,124 @@ class TestRecWizard(QWizard):
         browsedataPage.registerField("testDir", browsedataPage.testDirName)
         browsedataPage.registerField("species*", browsedataPage.species, "currentText", browsedataPage.species.currentTextChanged)
         self.addPage(browsedataPage)
-        self.testpages = []
 
-    def redoTestPages(self):
+        pageMain = TestRecWizard.WPageMain()
+        self.addPage(pageMain)
+
+        # extra page to show results by CT
+        self.addPage(TestRecWizard.WPageCTs())
+
+    # does the actual testing
+    def rerunCalltypes(self, outfile):
         if self.field("species")=="Choose recogniser...":
             return
 
         speciesData = self.filterlist[self.field("species")[:-4]]
         print("using recogniser", speciesData)
-        # remove old test pages
-        for page in self.testpages:
-            self.removePage(page)
-        self.testpages = []
 
-        # add new
-        for subf in range(len(speciesData["Filters"])):
-            testRes = TestRecWizard.WPageTest(subf)
-            pageid = self.addPage(testRes)
-            self.testpages.append(pageid)
+        species = speciesData["species"]
+        # not sure if this is needed?
+        ind = species.find('>')
+        if ind != -1:
+            species = species.replace('>', '(')
+            species = species + ')'
 
-        pageLast = TestRecWizard.WPageLast()
-        pageid = self.addPage(pageLast)
-        self.testpages.append(pageid)
-        self.currentPage().setFinalPage(False)
+        ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
+        manSegNum = 0
+        window = 1
+        inc = None
+        # Generate GT files from annotations in test folder
+        print('Generating GT...')
+        for root, dirs, files in os.walk(self.field("testDir")):
+            for file in files:
+                wavFile = os.path.join(root, file)
+                if file.endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(wavFile + '.data')
+                    manSegNum += len(segments.getSpecies(species))
+
+                    # Currently, we ignore call types here and just
+                    # look for all calls for the target species.
+                    # export 0/1 annotations for this calltype
+                    # (next page will overwrite the same files)
+                    segments.exportGT(wavFile, species, window=window, inc=inc)
+        if manSegNum==0:
+            print("ERROR: no segments for species %s found" % species)
+            return
+
+        # open output txt for testing
+        file = open(outfile, 'w')
+        file.write("Recogniser name:\t" + speciesData["species"]+"\n")
+        file.write("-------------------------\n\n")
+
+        # run the test for each calltype:
+        self.detected01post_allcts = []
+        for subfilter in speciesData["Filters"]:
+            file.write("Target calltype:\t" + subfilter["calltype"] +"\n")
+            # first return value: single array of 0/1 detections over all files
+            # second return value: list of tuples ([segments], filename, filelen) for each file
+            detected01, detectedS = ws.waveletSegment_test(self.field("testDir"),
+                                           subfilter, d=False, rf=True, learnMode='recaa',
+                                           savedetections=False, window=window, inc=inc)
+            # save the 0/1 annotations as well
+            self.annotations = copy.deepcopy(ws.annotation)
+
+            fB, recall, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, detected01)
+            print('--Test summary--\n%d %d %d %d' %(TP, FP, TN, FN))
+            total = TP+FP+TN+FN
+            if total == 0:
+                print("ERROR: failed to find any testing data")
+                return
+
+            totallen = sum([len(detfile[0]) for detfile in detectedS])
+
+            # store results in the txt file
+            file.write("--Detection summary--\n")
+            file.write("Manually labelled segments:\t"+ str(manSegNum) +"\n")
+            file.write("\ttotal seconds:\t%.1f\n" % (TP+FN))
+            file.write("Segments detected:\t\t%s\n" % str(totallen))
+            file.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
+            file.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (TP/(TP+FN)*100))
+
+            # Post process:
+            if "F0" in subfilter and subfilter["F0"]:
+                print("Post-processing...")
+                detectedSpost = []
+                detected01post = []
+                for detfile in detectedS:
+                    post = Segment.PostProcess(segments=detfile[0], subfilter=subfilter)
+                    print("got segments", len(post.segments))
+                    post.fundamentalFrq(fileName=detfile[1])
+                    detectedSpost.extend(post.segments)
+                    print("kept segments", len(post.segments))
+
+                    # back-convert to 0/1:
+                    det01post = np.zeros(detfile[2])
+                    for seg in post.segments:
+                        det01post[int(seg[0]):int(seg[1])] = 1
+                    detected01post.extend(det01post)
+
+                # now, detectedS and detectedSpost contain lists of segments before/after post
+                # and detected01 and self.detected01post - corresponding pres/abs marks
+
+                # update agreement measures
+                _, _, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, detected01post)
+                print('--Post-processing summary--\n%d %d %d %d' %(TP, FP, TN, FN))
+                totallenP = len(detectedSpost)
+            else:
+                print('No post-processing required')
+                totallenP = totallen
+                detected01post = detected01
+            # store the final detections of this calltype
+            self.detected01post_allcts.append(detected01post)
+
+            file.write("--After post-processing--\n")
+            file.write("Segments detected:\t\t%s\n" % str(totallenP))
+            file.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
+            file.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (TP/(TP+FN)*100))
+            file.write("-------------------------\n\n")
+
+        file.close()
 
 
 class ROCCanvas(FigureCanvas):
