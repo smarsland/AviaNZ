@@ -458,6 +458,9 @@ class ControllableAudio(QAudioOutput):
             scale = (audiodata.min()/2, audiodata.max()*2)
         else:
             scale = None
+        # SRM -- Save a file at half speed. How to play it back, though?
+        #self.format.setSampleRate(self.format.sampleRate()//2)
+        #wavio.write('test.wav', audiodata, self.format.sampleRate(), scale=scale, sampwidth=self.format.sampleSize() // 8)
         wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale=scale, sampwidth=self.format.sampleSize() // 8)
 
         # copy BytesIO@write to QBuffer@read for playing
