@@ -2,6 +2,7 @@
 \usepackage[draft]{SRM2}
 \usepackage{graphicx}
 \usepackage{url}
+\usepackage{color}
 
 \title{The AviaNZ Birdsong Analysis Software (v 2.0)}
 \author{The AviaNZ Team \\(\url{stephen.marsland@vuw.ac.nz})}
@@ -15,8 +16,10 @@
 \usepackage{soulutf8}
 \usepackage{todonotes}
 \usepackage[normalem]{ulem}
+\usepackage{multirow}
+\usepackage{booktabs}
 %\newcommand\redout{\bgroup\markoverwith{\textcolor{red}{\rule[.5ex]{2pt}{0.4pt}}}\ULon}
-\usepackage{xcolor}
+%\usepackage{xcolor}
 
 \begin{document}
 \maketitle
@@ -351,10 +354,15 @@ Before we start considering the process of training, it is useful to understand 
 
 The way that AviaNZ decides whether or not it has recognised a call correctly is by comparing it with human annotation. The training sound files that you provide, together with their annotations, are used to recognise the characteristics of the calls of a particular species. Comparing the human and machine outputs, there are four possible outcomes for each second of the recording:
 
-\begin{figure}[h!]
-\centering
-\includegraphics[width=.75\textwidth]{Figs/confusionMatrix.png}
-\end{figure}
+\begin{center}
+\begin{tabular}{lllll}
+&          &  & \multicolumn{2}{c}{\textbf{Human}}   \\
+\cmidrule(lr){4-5}
+             &          &  & \multicolumn{1}{c}{Call}                                               & No Call                                                               \\
+ \textbf{Machine}                  &\vline \hspace{0.25cm}Call     &  & \textit{True Positive (TP)}  & \textit{False Positive (FP)} \\
+                  &\vline \hspace{0.25cm}No Call &  & \textit{False Negative (FN)} & \textit{True Negative (TN)}  \\
+\end{tabular}
+\end{center}
 
 \begin{description}
 \item[True Positive (TP)] AviaNZ and human agree that there was a call 
@@ -444,6 +452,8 @@ A spectrogram is actually a histogram plot of a short-time Fourier transform. A 
 \subsection{Denoising}\label{sec:denoising}
 
 \subsection{Automatic Segmentation}\label{sec:segmentation}
+
+\subsection{The Filter Storage Format}
 
 %\subsection{Training}\label{sec:training}
 
