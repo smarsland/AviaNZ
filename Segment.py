@@ -377,7 +377,7 @@ class SegmentList(list):
         duration = int(np.ceil(self.metadata["Duration"] / resolution))
         eFile = filename[:-4] + '-res' + str(float(resolution)) + 'sec.txt'
 
-        # TODO: empty files (no annotations or no sound) will lead to problems
+        # deal with empty files
         thisSpSegs = self.getSpecies(species)
         if len(thisSpSegs)==0:
             print("Warning: no annotations for this species found in file", filename)
@@ -386,8 +386,7 @@ class SegmentList(list):
                 os.remove(eFile)
             except Exception:
                 pass
-            # return some default constants
-            return((100, 0, 32000, 0, 32000))
+            return
 
         GT = np.tile([0, 0, None], (duration,1))
         # fill first column with "time"
