@@ -12,8 +12,26 @@ Sound Files/*
 
 # auto-generated cython sources have to be listed manually here:
 ext/ce_denoise.c
+ext/ce_wvd.c
+ext/ce_wvd_functions.c
+ext/ce_wvd_functions.h
+ext/SplitLauncher.c
 ext/SplitLauncher.c
 ext/build/
 
+# Latex
+Docs/AviaNZManual.aux
+Docs/AviaNZManual.log
+Docs/AviaNZManual.out
+Docs/AviaNZManual.soc
+Docs/AviaNZManual.synctex.gz
+Docs/AviaNZManual.toc
+Docs/AviaNZManualv1.5.tex
+Docs/AviaNZManualv1.tex
+Docs/FilterTraining.aux
+Docs/FilterTraining.log
+Docs/FilterTraining.out
+Docs/FilterTraining.pdf
+Docs/FilterTraining.soc
 # default configs - if this is not distributed
 # AviaNZconfig.txt

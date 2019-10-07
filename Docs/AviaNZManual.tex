@@ -70,7 +70,7 @@ There are four separate areas of the screen within the `Manual Processing' part 
 	\item[Overview] This shows you a picture of a 5 minute segment of the file (labelled 2 in the figure). The part you are looking at in the main plots is shown in blue (it's actually the whole file in the example figure). Below it there is a coloured bar (in yellow and labelled 3 in the figure). There are left and right arrow buttons (labelled 4) and double arrow buttons (labelled 5) on the left of this area. The single arrow buttons move the view in the main area along, while the double arrow buttons move to the previous 5 minutes or to the next 5 minutes of the file (if they exist). 
 	\item [Files (11)] This is a list of files in your current directory. You can double-click on one to select it and open it. Files in red have been annotated in the program, while files in black have not. The double arrow button on the top right of this area (labelled 10) moves on to the next file.
 	\item[Spectrogram (6)] This is the main representation of the sound file. It is possible to display information about where the mouse is pointing on the spectrogram (time, frequency, energy value; (7 in the figure)) by choosing `Show pointer details in spectrogram' from the Appearance menu, and to switch it off the same way. There is also a scroll bar to move through the current page (8).
-	\item[Controls] These play the sound file (12--13, see Section~\ref{sec:play}), modify the appearance of the plots (14--17 in the figure, see Section~\ref{sec:spectrogram}) and enable you to delete the current segment.
+	\item[Controls] These play the sound file (12, see Section~\ref{sec:play}), modify the appearance of the plots (13 in the figure, see Section~\ref{sec:spectrogram}) and enable you to change the size of the visible part of the file (14), and delete the current segment (15).
 	\end{description}
 
 There is an optional fifth area, which is the Amplitude plot. If you want to see the amplitude plot as well, select `Show amplitude plot' in the Appearance menu. Select the option again to hide it. You can also hide the list of files (11) and the annotation overview (2--5) in the same way. AviaNZ will remember your choice in future uses.
@@ -97,7 +97,7 @@ The main spectrogram plot (6) shows a section of a sound file. The part you are 
 
 The axes of the spectrogram are time on the horizontal axis and frequencies on the vertical axis. The times will be true times if this information is available (such as when using DOC recorders), or time from start of file otherwise. 
 
-Sometimes spectrograms don't look good initially, for example because of high noise. You can modify the brightness and contrast of the spectrogram using the two sliders (15). You can also use a different colour scheme, and invert the colour map (swap black and white), by choosing the relevant options in the Appearance menu.
+Sometimes spectrograms don't look good initially, for example because of high noise. You can modify the brightness and contrast of the spectrogram using the two sliders (13). You can also use a different colour scheme, and invert the colour map (swap black and white), by choosing the relevant options in the Appearance menu.
 
 \subsection{Zooming and Scrolling}
 
@@ -112,7 +112,7 @@ The part of the file you can see can be changed by:
 The amount of the file that you can see (the visible width) can be changed by either: 
 	\begin{itemize}
 	\item dragging the ends of the blue highlight in (2)
-	\item changing the `Visible window width (seconds)' in the Controls dock (16) by clicking on the up and down arrows, or typing in a new number.
+	\item changing the `Visible window width (seconds)' in the Controls dock (14) by clicking on the up and down arrows, or typing in a new number.
 	\end{itemize}
 
 You can also view a restricted amount of the spectrogram by reducing the visible frequency band. To do this non-destructively, use the `Change spectrogram parameters' dialog in the Appearance menu, and change the Lowest and Highest Frequency options. There are other options in that dialog too, which are concerned with the way that the spectrogram is made. Feel free to try them. %For more information about them, see Section~\ref{sec:spectrogram}.
@@ -125,11 +125,11 @@ Note that operations like denoising and segmentation (described in Section~\ref{
 
 \subsection{Playing the Sounds \label{sec:play}}
 \todo{Include play, playSegment, playBandlimited buttons? or the Controls area? Going back to see Figure 1 seems interrupting}
-You can play the sounds visible on the screen using the `Play' button at the top-left of the Controls section (labelled 12). The button turns into a `Pause' button while playing.  While the sound is playing, the light blue bar in the spectrogram plot (6) shows where the playback is up to. When the sound is paused, you can drag this bar if you want to hear a particular part of the file. Move the mouse over it, and the bar will go red. Then click and drag (using the mouse button that does not make segments, by default the right button) to move it. The time below the play button shows the length of the file and the current position of the blue bar in minutes and seconds. You can change the volume of playback using the slider in (15). You can also play a segment of sound, assuming that a segment is selected. We will cover this below.
+You can play the sounds visible on the screen using the `Play' button at the top-left of the Controls section (labelled 12). The button turns into a `Pause' button while playing.  While the sound is playing, the light blue bar in the spectrogram plot (6) shows where the playback is up to. When the sound is paused, you can drag this bar if you want to hear a particular part of the file. Move the mouse over it, and the bar will go red. Then click and drag (using the mouse button that does not make segments, by default the right button) to move it. The time below the play button shows the length of the file and the current position of the blue bar in minutes and seconds. You can change the volume of playback using the slider below the buttons (12). You can also play a segment of sound, assuming that a segment is selected. We will cover this below.
 
 To stop playback and have the slider return to the start of the visible section, press the Stop button instead.
 
-When a segment is selected (so that it is blue -- segments are covered next) you can use the two play buttons (labelled 13 in the picture) to play just that small segment. The difference is that the one on the left plays all the frequencies in the sound file, while the one on the right will play only the frequencies highlighted, so that you can isolate particular frequencies of a call. This is particularly helpful when there is high level of background noise in a particular frequency range, such as cicadas, or where there are overlapping calls in different frequency bands.
+When a segment is selected (so that it is blue -- segments are covered next) you can use the two play buttons to the right of label (12) to play just that small segment. The difference is that the one on the left plays all the frequencies in the sound file, while the one on the right will play only the frequencies highlighted, so that you can isolate particular frequencies of a call. This is particularly helpful when there is high level of background noise in a particular frequency range, such as cicadas, or where there are overlapping calls in different frequency bands.
 
 \subsection{Manual Labelling}
 
@@ -160,13 +160,13 @@ By default, the software only allows one bird type to be specified for each segm
 
 If you find that the colours make it hard to see the data underneath the boxes you can make them transparent using the `Make dragged boxes transparent' option under `Annotation' in the `Interface settings'. You can also choose different colours if you have particular preferences.
 
-You can denoise a single segment by selecting it, and then pressing the button with a paint brush on in the `Controls' section (14).
+%You can denoise a single segment by selecting it, and then pressing the button with a paint brush on in the `Controls' section (14).
 
 %\item The button with a small `i' on in the `Controls' section (14) changes the information that is shown about each segment; rather than the species label, the syllable name from the recogniser is given. The drop-down list then changes to enable you to correct this instead if there are any options to do so. 
 
 The segments that are drawn on the screen have different colours. These colours are changeable in the `Interface settings', but by default are:
 	\begin{description} 
-	\item[Blue] This segment is currently selected. You can play it by pressing the buttons in 12, or give it a new label, or delete it using 16. 
+	\item[Blue] This segment is currently selected. You can play it by pressing the buttons in (12), or give it a new label, or delete it using (15). 
 	\item[Green] This segment has been labelled with a bird name.
 	\item[Yellow] This segment has been labelled with a bird name with a question mark.
 	\item[Red] This segment has been labelled as `Don't Know'.
@@ -184,7 +184,7 @@ You can click on the rectangles in (3), and they will update the main spectrogra
 
 A segment that has been selected can be moved by dragging it, or resized by dragging the handle on the top right corner of the box. (All these interactions use the non-drawing mouse button.)
 
-Segments can be deleted by selecting them (so that they turn blue) and then clicking on the `Delete Current Segment' in the Controls (16). You can also just press the delete or backspace key on the keyboard. 
+Segments can be deleted by selecting them (so that they turn blue) and then clicking on the `Delete Current Segment' in the Controls (15). You can also just press the delete or backspace key on the keyboard. 
 
 Segments are saved automatically, so that you can't lose your work.
 
@@ -235,7 +235,8 @@ These options will mostly provide dialog boxes that ask you to make choices.
 
 \begin{description}
 \item [Delete all segments] Does what it says. 
-\item [Denoise] Runs some programs that try to get rid of the noise in the sound file so that the birdcalls are easier to see. You can also denoise a single segment by selecting it, and then pressing the button with a paint brush on in the `Controls' section (14). See Section~\ref{sec:denoising} for more information.
+\item [Denoise] Runs some programs that try to get rid of the noise in the sound file so that the birdcalls are easier to see. %You can also denoise a single segment by selecting it, and then pressing the button with a paint brush on in the `Controls' section (14). 
+See Section~\ref{sec:denoising} for more information.
 \item [Add metadata about noise] Allows the user to specify if the sound file is particularly corrupted by noise, and also to identify the type(s) if known. This can be an optional data field, or made compulsory for each file by choosing the appropriate option in the `Interface settings'.
 \item [Segment] You can ask the computer to segment the calls automatically. We currently provide 3 options. The first (`Wavelets') applies a pre-trained recogniser for a particular species, in the same way that the Batch Processing mode (Section~\ref{sec:auto}) does, but just to the current page. The other two (`FIR' and `Median Clipping') will create a segment for any significant noise in the file. 
 \item [Export segments to Excel] This enables the user to save a summary of the annotation of the currently opened file into an Excel workbook (in the same location as the current sound file), as is described in Section~\ref{sec:outputs}. 
@@ -401,7 +402,20 @@ To begin training a recogniser, select `Train an automated recogniser' from the 
     \label{fig:clusters}
     \end{figure}
     
-Once the initial choices have been made, AviaNZ will try to cluster your labelled training segments into groups of similar sounds, which it will show in an interface like the one in Figure~\ref{fig:clusters}. We will improve this clustering over time, but at the moment it does make errors. It can be helpful to give names to each cluster (such as the type of call, or sex of the caller) by clicking on the name and typing a new one. Also, correct any errors by clicking on the calls so that they get a tick on them and selecting the correct cluster from the drop-down box next to `Move Selected Segment/s to Cluster' and clicking `Apply'. You can play the calls by clicking on the top-left corner of them.
+Once the initial choices have been made, AviaNZ will try to cluster your labelled training segments into groups of similar sounds. It will show the outputs of this in the interface shown in Figure~\ref{fig:clusters}. We will improve this clustering over time, but at the moment it does make errors. There are two ways that you can improve the recogniser that is made:
+
+\begin{description}
+\item[Give names to the clusters] It is intended that the clusters each represent different call types or sex of caller for some species. The default names are meaningless, since AviaNZ doesn't know about the species in advance, so it is normally useful to give a meaningful name by clicking on the name and typing a new one. 
+
+\item[Correct any errors] by moving the spectrograms between different clusters as appropriate. 
+\begin{itemize}
+\item To move a single spectrogram, just drag it to the correct cluster
+\item To move a whole group, click on each one (so it is marked with a tick) and then drag any of them to the correct cluster
+\item To move some to a new cluster, click on them, and then click on the `Create cluster' button. 
+\item To select all of the calls in a cluster, use the small tick box next to the name of the cluster
+\item You can play the calls by clicking on the top-left corner of them.
+\end{itemize}
+\end{description}
 
        \begin{figure}[h]
     \centering

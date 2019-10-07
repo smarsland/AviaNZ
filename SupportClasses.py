@@ -359,9 +359,9 @@ class ControllableAudio(QAudioOutput):
         self.startpos = 0
         self.timeoffset = 0
         self.keepSlider = False
-        self.format = format
+        #self.format = format
         # set small buffer (10 ms) and use processed time
-        self.setBufferSize(int(self.format.sampleSize() * self.format.sampleRate()/100 * self.format.channelCount()))
+        self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
 
     def isPlaying(self):
         return(self.state() == QAudio.ActiveState)
@@ -394,7 +394,7 @@ class ControllableAudio(QAudioOutput):
             sleep(0.2)
             # in case bar was moved under pause, we need this:
             pos = self.tempin.pos() # bytes
-            pos = self.format.durationForBytes(pos) / 1000 # convert to ms
+            pos = self.format().durationForBytes(pos) / 1000 # convert to ms
             pos = pos + start
             print("Pos: %d start: %d stop %d" %(pos, start, stop))
             self.filterSeg(pos, stop, audiodata)
@@ -402,7 +402,7 @@ class ControllableAudio(QAudioOutput):
     def pressedPause(self):
         self.keepSlider=True # a flag to avoid jumping the slider back to 0
         pos = self.tempin.pos() # bytes
-        pos = self.format.durationForBytes(pos) / 1000 # convert to ms
+        pos = self.format().durationForBytes(pos) / 1000 # convert to ms
         # store offset, relative to the start of played segment
         self.pauseoffset = pos + self.timeoffset
         self.suspend()
@@ -417,8 +417,8 @@ class ControllableAudio(QAudioOutput):
     def filterBand(self, start, stop, low, high, audiodata, sp):
         # takes start-end in ms, relative to file start
         self.timeoffset = max(0, start)
-        start = max(0, start * self.format.sampleRate() // 1000)
-        stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
+        start = max(0, start * self.format().sampleRate() // 1000)
+        stop = min(stop * self.format().sampleRate() // 1000, len(audiodata))
         segment = audiodata[int(start):int(stop)]
         segment = sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
@@ -426,42 +426,40 @@ class ControllableAudio(QAudioOutput):
 
     def filterSeg(self, start, stop, audiodata):
         # takes start-end in ms
+        print(self.format().sampleRate())
         self.timeoffset = max(0, start)
-        start = max(0, int(start * self.format.sampleRate() // 1000))
-        stop = min(int(stop * self.format.sampleRate() // 1000), len(audiodata))
+        start = max(0, int(start * self.format().sampleRate() // 1000))
+        stop = min(int(stop * self.format().sampleRate() // 1000), len(audiodata))
         segment = audiodata[start:stop]
         self.loadArray(segment)
 
     def loadArray(self, audiodata):
         # loads an array from memory into an audio buffer
-        if self.format.sampleSize() == 16:
+        if self.format().sampleSize() == 16:
             audiodata = audiodata.astype('int16')  # 16 corresponds to sampwidth=2
-        elif self.format.sampleSize() == 32:
+        elif self.format().sampleSize() == 32:
             audiodata = audiodata.astype('int32')
-        elif self.format.sampleSize() == 24:
+        elif self.format().sampleSize() == 24:
             audiodata = audiodata.astype('int32')
             print("Warning: 24-bit sample playback currently not supported")
-        elif self.format.sampleSize() == 8:
+        elif self.format().sampleSize() == 8:
             audiodata = audiodata.astype('uint8')
         else:
-            print("ERROR: sampleSize %d not supported" % self.format.sampleSize())
+            print("ERROR: sampleSize %d not supported" % self.format().sampleSize())
             return
         # double mono sound to get two channels - simplifies reading
-        if self.format.channelCount()==2:
+        if self.format().channelCount()==2:
             audiodata = np.column_stack((audiodata, audiodata))
 
         # write filtered output to a BytesIO buffer
         self.tempout = io.BytesIO()
         # NOTE: scale=None rescales using data minimum/max. This can cause clipping. Use scale="none" if this causes weird playback sound issues.
         # in particular for 8bit samples, we need more scaling:
-        if self.format.sampleSize() == 8:
+        if self.format().sampleSize() == 8:
             scale = (audiodata.min()/2, audiodata.max()*2)
         else:
             scale = None
-        # SRM -- Save a file at half speed. How to play it back, though?
-        #self.format.setSampleRate(self.format.sampleRate()//2)
-        #wavio.write('test.wav', audiodata, self.format.sampleRate(), scale=scale, sampwidth=self.format.sampleSize() // 8)
-        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale=scale, sampwidth=self.format.sampleSize() // 8)
+        wavio.write(self.tempout, audiodata, self.format().sampleRate(), scale=scale, sampwidth=self.format().sampleSize() // 8)
 
         # copy BytesIO@write to QBuffer@read for playing
         self.temparr = QByteArray(self.tempout.getvalue()[44:])
@@ -480,7 +478,7 @@ class ControllableAudio(QAudioOutput):
         print("Seeking to %d ms" % ms)
         # start is an offset for the current view start, as it is position 0 in extracted file
         self.reset()
-        self.tempin.seek(self.format.bytesForDuration((ms-start)*1000))
+        self.tempin.seek(self.format().bytesForDuration((ms-start)*1000))
         self.timeoffset = ms
 
     def applyVolSlider(self, value):
