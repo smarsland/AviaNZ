@@ -515,7 +515,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         # 5. Delete short segments
                         print("Segments detected: ", len(thisPageSegs))
                         print("Post-processing...")
-                        maxgap = 3  # Note arbitrary maxgap and 0.25 second min length
+                        maxgap = 3  # Note arbitrary maxgap and 0.25 second min length TODO: read from user
                         minlength = 0.25
                         post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                    segments=thisPageSegs, subfilter={})
@@ -525,9 +525,9 @@ class AviaNZ_batchProcess(QMainWindow):
                         if self.w_rain.isChecked():
                             post.rainClick()
                             print('After rain segments: ', len(post.segments))
-                        # post.segments = self.seg.joinGaps(post.segments, maxgap=maxgap)
-                        # post.segments = self.seg.deleteShort(post.segments, minlength=minlength)
-                        # print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' % (maxgap, minlength, len(post.segments)))
+                        post.segments = self.seg.joinGaps(post.segments, maxgap=maxgap)
+                        post.segments = self.seg.deleteShort(post.segments, minlength=minlength)
+                        print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' % (maxgap, minlength, len(post.segments)))
 
                         # adjust segment starts for 15min "pages"
                         if start != 0:
@@ -572,10 +572,10 @@ class AviaNZ_batchProcess(QMainWindow):
                                         print("Checking for fundamental frequency...")
                                         post.fundamentalFrq()
                                         print("After FF segments:", len(post.segments))
-                                # segmenter = Segment.Segmenter()
-                                # post.segments = segmenter.joinGaps(post.segments, maxgap=maxgap)
-                                # post.segments = segmenter.deleteShort(post.segments, minlength=spInfo['Filters'][filtix]['TimeRange'][0])
-                                # print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(maxgap, minlength, len(post.segments)))
+                                segmenter = Segment.Segmenter()
+                                post.segments = segmenter.joinGaps(post.segments, maxgap=spInfo['Filters'][filtix]['TimeRange'][2])
+                                post.segments = segmenter.deleteShort(post.segments, minlength=spInfo['Filters'][filtix]['TimeRange'][0])
+                                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(spInfo['Filters'][filtix]['TimeRange'][2], spInfo['Filters'][filtix]['TimeRange'][0], len(post.segments)))
 
                                 # adjust segment starts for 15min "pages"
                                 if start != 0:

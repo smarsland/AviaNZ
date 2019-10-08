@@ -264,7 +264,7 @@ class Clustering:
         :param minlen: min syllable length in secs
         :param denoise: True/False
         :param alg: algorithm to use, default to agglomerative
-        :return: clustered segments
+        :return: clustered segments, fs, nclasses, duration
         """
 
         self.alg = alg
@@ -468,6 +468,7 @@ class Clustering:
 
     def findSyllables(self, dirname, species, minlen, fs, f1, f2, denoise):
         dataset = []
+        maxgap = 0
         if os.path.isdir(dirname):
             for root, dirs, files in os.walk(str(dirname)):
                 for file in files:
@@ -497,7 +498,6 @@ class Clustering:
                                 syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
                             # Merge overlapped segments
                             syls = segment.checkSegmentOverlap(syls)
-                            # syls = segment.joinGaps(syls, minlen)   # TODO: check
                             syls = segment.deleteShort(syls, minlen)
                             syls = [[s[0] + start, s[1] + start] for s in syls]
 
