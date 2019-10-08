@@ -77,18 +77,18 @@ class AviaNZ_batchProcess(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setMinimumSize(850, 680)
+        self.setMinimumSize(850, 720)
 
         # Make the docks
-        self.d_detection = Dock("Automatic Detection",size=(550, 640))
-        self.d_files = Dock("File list", size=(300, 640))
+        self.d_detection = Dock("Automatic Detection",size=(550, 700))
+        self.d_files = Dock("File list", size=(300, 700))
 
         self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
 
         self.w_browse = QPushButton("&Browse Folder")
         self.w_browse.setToolTip("Can select a folder with sub folders to process")
-        self.w_browse.setFixedHeight(50)
+        self.w_browse.setFixedSize(150, 50)
         self.w_browse.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
         self.w_dir = QLineEdit()
         self.w_dir.setFixedHeight(50)
@@ -103,8 +103,8 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # populate this box (always show all filters here)
         spp = list(self.FilterDicts.keys())
-        self.w_spe1.addItem("Any sound")
         self.w_spe1.addItems(spp)
+        self.w_spe1.addItem("Any sound")
         self.w_spe1.currentTextChanged.connect(self.fillSpeciesBoxes)
         self.addSp = QPushButton("Add another recogniser")
         self.addSp.clicked.connect(self.addSpeciesBox)
@@ -124,10 +124,29 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_rain = QCheckBox("")
         self.w_mergect = QCheckBox("")
 
+        # Sliders for minlen and maxgap are in ms scale
+        self.minlen = QSlider(Qt.Horizontal)
+        self.minlen.setTickPosition(QSlider.TicksBelow)
+        self.minlen.setTickInterval(0.25*1000)
+        self.minlen.setRange(0.25*1000, 10*1000)
+        self.minlen.setSingleStep(0.25*1000)
+        self.minlen.setValue(0.5*1000)
+        self.minlen.valueChanged.connect(self.minLenChange)
+        self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
+
+        self.maxgap = QSlider(Qt.Horizontal)
+        self.maxgap.setTickPosition(QSlider.TicksBelow)
+        self.maxgap.setTickInterval(0.25*1000)
+        self.maxgap.setRange(0.25*1000, 10*1000)
+        self.maxgap.setSingleStep(0.5*1000)
+        self.maxgap.setValue(1*1000)
+        self.maxgap.valueChanged.connect(self.maxGapChange)
+        self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
+
         self.w_processButton = QPushButton("&Process Folder")
         self.w_processButton.clicked.connect(self.detect)
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
-        self.w_processButton.setFixedHeight(50)
+        self.w_processButton.setFixedSize(150, 50)
         self.w_browse.clicked.connect(self.browse)
 
         self.d_detection.addWidget(self.w_dir, row=0, col=0, colspan=2)
@@ -163,8 +182,17 @@ class AviaNZ_batchProcess(QMainWindow):
         formPost.addWidget(self.w_rain, 1, 1)
         formPost.addWidget(QLabel("Merge different call types"), 2, 0)
         formPost.addWidget(self.w_mergect, 2, 1)
+        formPost.addWidget(self.maxgaplbl, 3, 0)
+        formPost.addWidget(self.maxgap, 3, 1)
+        formPost.addWidget(self.minlenlbl, 4, 0)
+        formPost.addWidget(self.minlen, 4, 1)
         boxPost.setLayout(formPost)
         self.d_detection.addWidget(boxPost, row=3, col=0, colspan=3)
+        if len(spp) > 0:
+            self.maxgaplbl.hide()
+            self.maxgap.hide()
+            self.minlenlbl.hide()
+            self.minlen.hide()
 
         self.d_detection.addWidget(w_resLabel, row=4, col=0)
         self.d_detection.addWidget(self.w_res, row=4, col=1)
@@ -187,6 +215,12 @@ class AviaNZ_batchProcess(QMainWindow):
         self.d_files.layout.setContentsMargins(10, 10, 10, 10)
         self.d_files.layout.setSpacing(10)
         self.show()
+
+    def minLenChange(self,value):
+        self.minlenlbl.setText("Minimum segment length: %s sec" % str(round(int(value)/1000, 2)))
+
+    def maxGapChange(self,value):
+        self.maxgaplbl.setText("Maximum gap between syllables: %s sec" % str(round(int(value)/1000, 2)))
 
     def createMenu(self):
         """ Create the basic menu.
@@ -286,6 +320,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
     def fillSpeciesBoxes(self):
         # select filters with Fs matching box 1 selection
+        # and show/hide minlen maxgap sliders
         spp = []
         currname = self.w_spe1.currentText()
         if currname != "Any sound":
@@ -295,6 +330,15 @@ class AviaNZ_batchProcess(QMainWindow):
             for name, filter in self.FilterDicts.items():
                 if filter["SampleRate"]==currfilt["SampleRate"] and name!=currname:
                     spp.append(name)
+            self.minlen.hide()
+            self.minlenlbl.hide()
+            self.maxgap.hide()
+            self.maxgaplbl.hide()
+        else:
+            self.minlen.show()
+            self.minlenlbl.show()
+            self.maxgap.show()
+            self.maxgaplbl.show()
 
         # (skip first box which is fixed)
         for box in self.speCombos[1:]:
@@ -515,8 +559,8 @@ class AviaNZ_batchProcess(QMainWindow):
                         # 5. Delete short segments
                         print("Segments detected: ", len(thisPageSegs))
                         print("Post-processing...")
-                        maxgap = 3  # Note arbitrary maxgap and 0.25 second min length TODO: read from user
-                        minlength = 0.25
+                        maxgap = int(self.maxgap.value())/1000
+                        minlen = int(self.minlen.value())/1000
                         post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                    segments=thisPageSegs, subfilter={})
                         if self.w_wind.isChecked():
@@ -526,8 +570,8 @@ class AviaNZ_batchProcess(QMainWindow):
                             post.rainClick()
                             print('After rain segments: ', len(post.segments))
                         post.segments = self.seg.joinGaps(post.segments, maxgap=maxgap)
-                        post.segments = self.seg.deleteShort(post.segments, minlength=minlength)
-                        print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' % (maxgap, minlength, len(post.segments)))
+                        post.segments = self.seg.deleteShort(post.segments, minlength=minlen)
+                        print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' % (maxgap, minlen, len(post.segments)))
 
                         # adjust segment starts for 15min "pages"
                         if start != 0:

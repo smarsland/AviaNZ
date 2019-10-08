@@ -4041,7 +4041,7 @@ class AviaNZ(QMainWindow):
         self.prevSegments = copy.deepcopy(self.segments)
 
         self.segmentsToSave = True
-        [alg, medThr, medSize, HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1, filtname, species_cc, wind, rain] = self.segmentDialog.getValues()
+        [alg, medThr, medSize, HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1, filtname, species_cc, wind, rain, maxgap, minlen] = self.segmentDialog.getValues()
         with pg.BusyCursor():
             filtname = str(filtname)
             self.statusLeft.setText('Segmenting...')
@@ -4119,8 +4119,6 @@ class AviaNZ(QMainWindow):
             # 4. Merge neighbours
             # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
             if str(alg) != 'Wavelets':
-                maxgap = 1  # TODO: read from user
-                minlength = 0.25
                 print('Segments detected: ', len(newSegments))
                 print('Post-processing...')
                 post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
@@ -4132,8 +4130,8 @@ class AviaNZ(QMainWindow):
                     post.rainClick()
                     print('After rain segments: ', len(post.segments))
                 newSegments = self.seg.joinGaps(newSegments, maxgap=maxgap)
-                newSegments = self.seg.deleteShort(newSegments, minlength=minlength)
-                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' % (maxgap, minlength, len(newSegments)))
+                newSegments = self.seg.deleteShort(newSegments, minlength=minlen)
+                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' % (maxgap, minlen, len(newSegments)))
             else:
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print('Post-processing...')

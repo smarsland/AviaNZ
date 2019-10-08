@@ -614,10 +614,41 @@ class Segmentation(QDialog):
 
         Box.addWidget(self.CCThr1)
 
+        self.medSize = QSlider(Qt.Horizontal)
+        self.medSize.setTickPosition(QSlider.TicksBelow)
+        self.medSize.setTickInterval(100)
+        self.medSize.setRange(100,2000)
+        self.medSize.setSingleStep(100)
+        self.medSize.setValue(1000)
+        self.medSize.valueChanged.connect(self.medSizeChange)
+
+        # Sliders for minlen and maxgap are in ms scale
+        self.minlen = QSlider(Qt.Horizontal)
+        self.minlen.setTickPosition(QSlider.TicksBelow)
+        self.minlen.setTickInterval(0.25*1000)
+        self.minlen.setRange(0.25*1000, 10*1000)
+        self.minlen.setSingleStep(0.25*1000)
+        self.minlen.setValue(0.5*1000)
+        self.minlen.valueChanged.connect(self.minLenChange)
+        self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
+
+        self.maxgap = QSlider(Qt.Horizontal)
+        self.maxgap.setTickPosition(QSlider.TicksBelow)
+        self.maxgap.setTickInterval(0.25*1000)
+        self.maxgap.setRange(0.25*1000, 10*1000)
+        self.maxgap.setSingleStep(0.5*1000)
+        self.maxgap.setValue(1*1000)
+        self.maxgap.valueChanged.connect(self.maxGapChange)
+        self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
+
         self.wind = QCheckBox("Remove wind")
         self.rain = QCheckBox("Remove rain")
         Box.addWidget(self.wind)
         Box.addWidget(self.rain)
+        Box.addWidget(self.maxgaplbl)
+        Box.addWidget(self.maxgap)
+        Box.addWidget(self.minlenlbl)
+        Box.addWidget(self.minlen)
         Box.addWidget(self.undo)
         self.undo.setEnabled(False)
         Box.addWidget(self.activate)
@@ -644,6 +675,10 @@ class Segmentation(QDialog):
         self.algs.show()
         self.wind.show()
         self.rain.show()
+        self.minlenlbl.show()
+        self.minlen.show()
+        self.maxgaplbl.show()
+        self.maxgap.show()
         self.undo.show()
         self.activate.show()
 
@@ -664,8 +699,8 @@ class Segmentation(QDialog):
         elif alg == "Median Clipping":
             self.medlabel.show()
             self.medThr.show()
-            self.medSize.show()
-            self.medSizeText.show()
+            # self.medSize.show()
+            # self.medSizeText.show()
         elif alg == "Fundamental Frequency":
             self.Fundminfreq.show()
             self.Fundminperiods.show()
@@ -690,12 +725,21 @@ class Segmentation(QDialog):
             #"Wavelets"
             self.specieslabel.show()
             self.species.show()
+            self.maxgaplbl.hide()
+            self.maxgap.hide()
 
     def medSizeChange(self,value):
         self.medSizeText.setText("Minimum length: %s ms" % value)
 
+    def minLenChange(self,value):
+        self.minlenlbl.setText("Minimum segment length: %s sec" % str(round(int(value)/1000, 2)))
+
+    def maxGapChange(self,value):
+        self.maxgaplbl.setText("Maximum gap between syllables: %s sec" % str(round(int(value)/1000, 2)))
+
     def getValues(self):
-        return [self.algs.currentText(), self.medThr.text(), self.medSize.value(), self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.species_cc.currentText(), self.wind.isChecked(), self.rain.isChecked()]
+        # TODO: check: self.medSize.value() is not used, should we keep it?
+        return [self.algs.currentText(), self.medThr.text(), self.medSize.value(), self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.species_cc.currentText(), self.wind.isChecked(), self.rain.isChecked(), int(self.maxgap.value())/1000, int(self.minlen.value())/1000]
 
 #======
 class Denoise(QDialog):
