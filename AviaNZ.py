@@ -4118,9 +4118,9 @@ class AviaNZ(QMainWindow):
             # 3. Check fundamental frq
             # 4. Merge neighbours
             # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
-            maxgap = 1
-            minlength = 0.25
             if str(alg) != 'Wavelets':
+                maxgap = 1  # TODO: read from user
+                minlength = 0.25
                 print('Segments detected: ', len(newSegments))
                 print('Post-processing...')
                 post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
@@ -4154,9 +4154,9 @@ class AviaNZ(QMainWindow):
                         post.fundamentalFrq()
                         print("After FF segments:", len(post.segments))
                     segmenter = Segment.Segmenter()
-                    post.segments = segmenter.joinGaps(post.segments, maxgap=maxgap)
+                    post.segments = segmenter.joinGaps(post.segments, maxgap=speciesData['Filters'][filtix]['TimeRange'][2])
                     post.segments = segmenter.deleteShort(post.segments, minlength=speciesData['Filters'][filtix]['TimeRange'][0])
-                    print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' %(maxgap, minlength, len(post.segments)))
+                    print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' %(speciesData['Filters'][filtix]['TimeRange'][0], speciesData['Filters'][filtix]['TimeRange'][0], len(post.segments)))
                     newSegments[filtix] = post.segments
                 # Merge sub-filter results
                 # TODO: Merge subfilter results

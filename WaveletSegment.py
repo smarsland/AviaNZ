@@ -896,8 +896,13 @@ class WaveletSegment:
         # Remove any negatively correlated nodes
         print("Final nodes before neg. node removal:", finalnodes)
         print("Negative nodes:", negative_nodes)
-        finalnodes = [[[item for item in sublst if item not in negative_nodes] for sublst in lst] for lst in finalnodes]
-        return finalnodes, tpa, fpa, tna, fna
+        finalnodes2 = [[[item for item in sublst if item not in negative_nodes] for sublst in lst] for lst in finalnodes]
+        # Sanity check
+        for i in range(len(finalnodes2)):
+            for j in range(len(finalnodes2[i])):
+                if len(finalnodes2[i][j]) == 0:
+                    finalnodes2[i][j] = finalnodes[i][j]
+        return finalnodes2, tpa, fpa, tna, fna
 
 
     def listTopNodes(self, filenum):

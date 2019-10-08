@@ -864,6 +864,9 @@ class BuildRecAdvWizard(QWizard):
             self.maxlen = QLineEdit(self)
             self.maxlen.setText('')
             form1_step4.addRow('Max call length (secs)', self.maxlen)
+            self.maxgap = QLineEdit(self)
+            self.maxgap.setText('')
+            form1_step4.addRow('Max gap between syllables (secs)', self.maxgap)
 
             # FreqRange parameters
             self.fLow = QSlider(Qt.Horizontal)
@@ -889,7 +892,7 @@ class BuildRecAdvWizard(QWizard):
             thrLabel = QLabel('ROC curve points per line (thr)')
             MLabel = QLabel('ROC curve lines (M)')
             self.cbxThr = QComboBox()
-            self.cbxThr.addItems(['4', '5', '6', '7', '8', '9', '10'])
+            self.cbxThr.addItems(['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'])
             self.cbxM = QComboBox()
             self.cbxM.addItems(['2', '3', '4', '5'])
             form2_step4 = QFormLayout()
@@ -936,9 +939,19 @@ class BuildRecAdvWizard(QWizard):
                 # long seg has format: [file [segment] clusternum]
                 pageSegs.addSegment(longseg[1])
             len_min, len_max, f_low, f_high = pageSegs.getSummaries()
+            # Get max inter syllable gap
+            gaps = []
+            maxgap = 0
+            for longseg in self.segments:
+                if len(longseg[2]) > 1:
+                    for i in range(len(longseg[2]) - 1):
+                        gaps.append(longseg[2][i + 1][0] - longseg[2][i][1])
+            if len(gaps) > 0:
+                maxgap = max(gaps)
 
             self.minlen.setText(str(round(np.min(len_min),2)))
             self.maxlen.setText(str(round(np.max(len_max),2)))
+            self.maxgap.setText(str(round(maxgap,2)))
             self.fLow.setRange(0, fs/2)
             self.fLow.setValue(max(0,int(np.min(f_low))))
             self.fHigh.setRange(0, fs/2)
@@ -1026,7 +1039,6 @@ class BuildRecAdvWizard(QWizard):
 
             self.figCanvas.figure.canvas.mpl_connect('button_press_event', onclick)
 
-
             vboxHead = QFormLayout()
             vboxHead.addRow("Training data:", self.lblTrainDir)
             vboxHead.addRow("Target species:", self.lblSpecies)
@@ -1061,12 +1073,13 @@ class BuildRecAdvWizard(QWizard):
             # parse fields specific to this subfilter
             minlen = float(self.field("minlen"+str(self.pageId)))
             maxlen = float(self.field("maxlen"+str(self.pageId)))
+            maxgap = float(self.field("maxgap" + str(self.pageId)))
             fLow = int(self.field("fLow"+str(self.pageId)))
             fHigh = int(self.field("fHigh"+str(self.pageId)))
             numthr = int(self.field("thr"+str(self.pageId)))
             numM = int(self.field("M"+str(self.pageId)))
             # note: for each page we reset the filter to contain 1 calltype
-            self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen], 'FreqRange': [fLow, fHigh]}]
+            self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, maxgap], 'FreqRange': [fLow, fHigh]}]
 
             # export 1/0 ground truth
             window = 1
@@ -1235,7 +1248,7 @@ class BuildRecAdvWizard(QWizard):
                 f0_high = []
                 # for each segment:
                 for picbtn in self.picbuttons:
-                    f0_l, f0_h = self.getFundFreq(picbtn.audiodata, picbtn.media_obj.format.sampleRate())
+                    f0_l, f0_h = self.getFundFreq(picbtn.audiodata, picbtn.media_obj.format().sampleRate())
                     # we use NaNs to represent "no F0 found"
                     f0_low.append(f0_l)
                     f0_high.append(f0_h)
@@ -1360,6 +1373,7 @@ class BuildRecAdvWizard(QWizard):
             for pageId in self.wizard().trainpages[:-1]:
                 minlen = float(self.field("minlen"+str(pageId)))
                 maxlen = float(self.field("maxlen"+str(pageId)))
+                maxgap = float(self.field("maxgap" + str(pageId)))
                 fLow = int(self.field("fLow"+str(pageId)))
                 fHigh = int(self.field("fHigh"+str(pageId)))
                 thr = float(self.field("bestThr"+str(pageId)))
@@ -1371,7 +1385,7 @@ class BuildRecAdvWizard(QWizard):
                 F0low = int(self.field("F0low"+str(pageId)))
                 F0high = int(self.field("F0high"+str(pageId)))
 
-                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
+                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
 
                 if F0:
                     newSubfilt["F0"] = True
@@ -1480,6 +1494,7 @@ class BuildRecAdvWizard(QWizard):
             # Note: these need to be unique
             page4.registerField("minlen"+str(pageid), page4.minlen)
             page4.registerField("maxlen"+str(pageid), page4.maxlen)
+            page4.registerField("maxgap" + str(pageid), page4.maxgap)
             page4.registerField("fLow"+str(pageid), page4.fLow)
             page4.registerField("fHigh"+str(pageid), page4.fHigh)
             page4.registerField("thr"+str(pageid), page4.cbxThr, "currentText", page4.cbxThr.currentTextChanged)
