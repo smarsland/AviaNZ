@@ -439,16 +439,16 @@ class BuildRecAdvWizard(QWizard):
             # The first line seemed neater, but the verticalSpacing() doesn't update when you rescale the window
             #movetoID = dragPosy//(self.picbuttons[0].size().height()+self.flowLayout.layout.verticalSpacing())
             movetoID = dragPosy//(self.flowLayout.layout.geometry().height()//self.nclasses)
+
+            # drags which start and end in the same cluster most likely were just long clicks:
+            for ix in range(len(self.picbuttons)):
+                if self.picbuttons[ix] == source:
+                    if self.segments[ix][-1] == movetoID:
+                        source.clicked.emit()
+                        return
+
             # Even if the button that was dragged isn't highlighted, make it so
             source.mark = 'yellow'
-
-            #moveto = self.cmbUpdateSeg.currentText()
-            ## find the clusterID from name
-            #for key in self.clusters.keys():
-                #if moveto == self.clusters[key]:
-                    #movetoID = key
-                    #break
-            ## print(moveto, movetoID)
 
             for ix in range(len(self.picbuttons)):
                 if self.picbuttons[ix].mark == 'yellow':
