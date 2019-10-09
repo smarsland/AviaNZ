@@ -647,7 +647,6 @@ class BuildRecAdvWizard(QWizard):
                             max_label -= 1
                         c -= 1
 
-                    # print('[old, new] labels')
                     labels = dict(labels)
                     # print(labels)
 
@@ -665,13 +664,9 @@ class BuildRecAdvWizard(QWizard):
                         seg[-1] = labels[seg[-1]]
 
                     self.nclasses = nclasses
-                    #self.cmbUpdateSeg.clear()
-                    #for x in self.clusters:
-                        #self.cmbUpdateSeg.addItem(self.clusters[x])
 
                 # redraw the buttons
                 self.updateButtons()
-                self.completeChanged.emit()
 
         def updateClusterNames(self):
             # Check duplicate names
@@ -683,12 +678,15 @@ class BuildRecAdvWizard(QWizard):
                 self.completeChanged.emit()
                 return
 
+            if "(Other)" in names:
+                msg = SupportClasses.MessagePopup("w", "Name error", "Name \"(Other)\" is reserved! \nTry again")
+                msg.exec_()
+                self.completeChanged.emit()
+                return
+
             for ID in range(self.nclasses):
                 self.clusters[ID] = self.tboxes[ID].text()
 
-            #self.cmbUpdateSeg.clear()
-            #for x in self.clusters:
-                #self.cmbUpdateSeg.addItem(self.clusters[x])
             self.completeChanged.emit()
             print('updated clusters: ', self.clusters)
 
@@ -1333,6 +1331,9 @@ class BuildRecAdvWizard(QWizard):
                 def validate(self, input, pos):
                     if not input.endswith('.txt'):
                         input = input+'.txt'
+                    if input=="M.txt":
+                        print("filter name M reserved for manual annotations")
+                        return(QValidator.Intermediate, input, pos)
                     if self.listFiles.findItems(input, Qt.MatchExactly):
                         print("duplicated input", input)
                         return(QValidator.Intermediate, input, pos)
