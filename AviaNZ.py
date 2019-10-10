@@ -1,4 +1,4 @@
-# AviaNZ.py
+
 #
 # This is the main class for the AviaNZ interface
 # Version 1.5 05/08/19
@@ -343,16 +343,19 @@ class AviaNZ(QMainWindow):
                 extraGroup.addAction(em)
 
         specMenu.addSeparator()
-        extraMenu = specMenu.addMenu("Mar&k on spectrogram")
+        extraMenu = specMenu.addMenu("Mark on spectrogram")
         self.showFundamental = extraMenu.addAction("Fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
         self.showFundamental.setCheckable(True)
-        self.showFundamental.setChecked(False)
+        self.showFundamental.setChecked(True)
         self.showSpectral = extraMenu.addAction("Spectral derivative", self.showSpectralDeriv)
         self.showSpectral.setCheckable(True)
         self.showSpectral.setChecked(False)
         self.showEnergies = extraMenu.addAction("Maximum energies", self.showMaxEnergy)
         self.showEnergies.setCheckable(True)
         self.showEnergies.setChecked(False)
+
+        if not self.DOC:
+            cqt = specMenu.addAction("Show CQT", self.showCQT)
 
         specMenu.addSeparator()
 
@@ -404,12 +407,6 @@ class AviaNZ(QMainWindow):
                 receiver = lambda checked, ename=ename: self.setSpeed(ename)
                 em.triggered.connect(receiver)
                 extraGroup.addAction(em)
-
-        extraMenu = specMenu.addMenu("Mar&k on spectrogram")
-        self.showFundamental = extraMenu.addAction("Fundamental frequency", self.showFundamentalFreq,"Ctrl+F")
-        self.showFundamental.setCheckable(True)
-        self.showFundamental.setChecked(False)
-        self.showSpectral = extraMenu.addAction("Spectral derivative", self.showSpectralDeriv)
 
         # "Recognisers" menu
         recMenu = self.menuBar().addMenu("&Recognisers")
@@ -1308,11 +1305,10 @@ class AviaNZ(QMainWindow):
                 if hasattr(self,'audiodata_backup'):
                     self.audiodata_backup = None
                 self.showFundamental.setChecked(False)
+                self.showEnergies.setChecked(False)
+                self.showSpectral.setChecked(False)
                 if not self.DOC:
-                    self.showEnergies.setChecked(False)
-                    self.showSpectral.setChecked(False)
                     self.showInvSpec.setChecked(False)
-                    self.showEnergies.setChecked(False)
 
                 self.timeaxis.setOffset(self.startRead+self.startTime)
 
@@ -1542,6 +1538,12 @@ class AviaNZ(QMainWindow):
                 self.statusLeft.setText("Removing spectral derivative...")
                 self.p_spec.removeItem(self.derivPlot)
             self.statusLeft.setText("Ready")
+
+    def showCQT(self):
+        cqt = self.sp.comp_cqt()
+        print(np.shape(cqt),np.shape(self.sg))
+        self.specPlot.setImage(10*np.log10(np.real(cqt*np.conj(cqt))).T)
+        self.p_spec.setXRange(0, np.shape(cqt)[1], update=True, padding=0)
 
     def showInvertedSpectrogram(self):
         """ Listener for the menu item that draws the spectrogram of the waveform of the inverted spectrogram."""
