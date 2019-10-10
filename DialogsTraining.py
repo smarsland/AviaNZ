@@ -216,6 +216,8 @@ class BuildRecAdvWizard(QWizard):
             self.setMinimumSize(800, 500)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
             self.adjustSize()
+            instr = QLabel("Drag an image to a new class to move a single example. Click on a set of images (so that they are marked with a tick) and drag one of them to move several at once. Click the check box to the right of the name to select a whole cluster, for example to merge two. Click on the name and type a new one to change it. Select one or more images and click `Create cluster' to make another call type.")
+            instr.setWordWrap(True)
 
             self.sampleRate = 0
             self.segments = []
@@ -274,6 +276,7 @@ class BuildRecAdvWizard(QWizard):
 
             # page 2 layout
             layout1 = QVBoxLayout()
+            layout1.addWidget(instr)
             layout1.addWidget(self.lblSpecies)
             hboxSpecContr = QHBoxLayout()
             hboxSpecContr.addWidget(labelBr)
@@ -960,6 +963,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, id, clustID, clustname, segments, parent=None):
             super(BuildRecAdvWizard.WPageTrain, self).__init__(parent)
             self.setTitle('Training results')
+            self.setSubTitle('Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.')
             self.setMinimumSize(600, 500)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
