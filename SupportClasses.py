@@ -180,7 +180,7 @@ def mouseDragEventFlexibleLine(self, ev):
 
 class ShadedRectROI(ShadedROI):
     # A rectangular ROI that it shaded, for marking segments
-    def __init__(self, pos, size, centered=False, movable=True, sideScalers=False, parent=None, **args):
+    def __init__(self, pos, size, centered=False, movable=True, sideScalers=True, parent=None, **args):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
         pg.ROI.__init__(self, pos, size, movable=movable, **args)
         self.parent = parent
@@ -188,17 +188,13 @@ class ShadedRectROI(ShadedROI):
         self.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 50)))
         self.setHoverBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 100)))
         self.transparent = True
-        if centered:
-            center = [0.5, 0.5]
-        else:
-            center = [0, 0]
 
         #self.addTranslateHandle(center)
         if self.translatable:
-            self.addScaleHandle([1, 1], center)
-            if sideScalers:
-                self.addScaleHandle([1, 0.5], [center[0], 0.5])
-                self.addScaleHandle([0.5, 1], [0.5, center[1]])
+            self.addScaleHandle([1, 1], [0, 0]) # top right
+            self.addScaleHandle([1, 0], [0, 1]) # bottom right
+            self.addScaleHandle([0, 1], [1, 0]) # top left
+            self.addScaleHandle([0, 0], [1, 1]) # bottom left
 
     def setMovable(self,value):
         self.resizable = value
