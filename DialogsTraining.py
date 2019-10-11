@@ -702,10 +702,6 @@ class BuildRecAdvWizard(QWizard):
                 self.clusters.append((i, 'Cluster_' + str(i)))
             self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
 
-            #self.cmbUpdateSeg.clear()
-            #for x in self.clusters:
-            #    self.cmbUpdateSeg.addItem(self.clusters[x])
-
             # Create the buttons for each segment
             for seg in self.segments:
                 sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1]-seg[1][0], seg[1][0])
@@ -1336,9 +1332,9 @@ class BuildRecAdvWizard(QWizard):
                     if not input.endswith('.txt'):
                         input = input+'.txt'
                     if input=="M.txt":
-                        print("filter name M reserved for manual annotations")
+                        print("filter name \"M\" reserved for manual annotations")
                         return(QValidator.Intermediate, input, pos)
-                    if self.listFiles.findItems(input, Qt.MatchExactly):
+                    elif self.listFiles.findItems(input, Qt.MatchExactly):
                         print("duplicated input", input)
                         return(QValidator.Intermediate, input, pos)
                     else:
