@@ -248,23 +248,12 @@ class AviaNZ(QMainWindow):
             self.timer.timeout.connect(self.saveSegments)
             self.timer.start(self.config['secsSave']*1000)
 
-            # TEMP!!! TODO
-            # self.timer2 = QTimer()
-            # self.timer2.timeout.connect(self.printUpdates)
-            # self.timer2.start(1000)
-
             self.fillFileList(firstFile)
             self.listLoadFile(firstFile)
             #self.previousFile = firstFile
 
         if self.DOC and not cheatsheet and not zooniverse:
             self.setOperatorReviewerDialog()
-
-    def printUpdates(self):
-        if not hasattr(self, "p_spec"):
-            return
-        print("focus item", self.p_spec.scene().focusItem())
-        print("has focus", self.p_spec.scene().hasFocus())
 
     def createMenu(self):
         """ Create the menu entries at the top of the screen and link them as appropriate.
@@ -2445,6 +2434,7 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                self.p_ampl.setFocus()
 
                 # the new segment is now selected and can be played
                 self.selectSegment(self.box1id)
@@ -2604,6 +2594,7 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                self.p_spec.setFocus()
 
                 # select the new segment/box
                 self.selectSegment(self.box1id)
