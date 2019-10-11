@@ -248,6 +248,11 @@ class AviaNZ(QMainWindow):
             self.timer.timeout.connect(self.saveSegments)
             self.timer.start(self.config['secsSave']*1000)
 
+            # TEMP!!! TODO
+            # self.timer2 = QTimer()
+            # self.timer2.timeout.connect(self.printUpdates)
+            # self.timer2.start(1000)
+
             self.fillFileList(firstFile)
             self.listLoadFile(firstFile)
             #self.previousFile = firstFile
@@ -255,6 +260,11 @@ class AviaNZ(QMainWindow):
         if self.DOC and not cheatsheet and not zooniverse:
             self.setOperatorReviewerDialog()
 
+    def printUpdates(self):
+        if not hasattr(self, "p_spec"):
+            return
+        print("focus item", self.p_spec.scene().focusItem())
+        print("has focus", self.p_spec.scene().hasFocus())
 
     def createMenu(self):
         """ Create the menu entries at the top of the screen and link them as appropriate.
@@ -3506,7 +3516,8 @@ class AviaNZ(QMainWindow):
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
             numNodes = len(spSubf['WaveletParams']['nodes'])
-            Esep = np.zeros(( numNodes, int(self.datalengthSec) ))
+            xs = np.arange(0, int(self.datalengthSec)+0.5, 0.25)
+            Esep = np.zeros(( numNodes, len(xs) ))
 
             ### DENOISING reference: relative |amp| on rec signals from each WP node, when wind is present
             ### just handmade from some wind examples
@@ -3534,7 +3545,8 @@ class AviaNZ(QMainWindow):
                         low=spSubf['FreqRange'][0], high=spSubf['FreqRange'][1])
 
                 C = np.abs(C)
-                E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
+                #E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
+                E = C
                 C = np.log(C)
 
                 # some prep that doesn't need to be looped over t:
@@ -3548,9 +3560,11 @@ class AviaNZ(QMainWindow):
                 freqmax = self.convertFreqtoY(freqmax)
 
                 # get max (or mean) E for each second
-                # and normalize, so that we don't need to hardcode thr 
-                for w in range(int(self.datalengthSec)):
-                    maxE = np.mean(E[w*spInfo['SampleRate'] : (w+1)*spInfo['SampleRate']])
+                # and normalize, so that we don't need to hardcode thr
+                for w in range(len(xs)):
+                    start = int(w*0.25*spInfo['SampleRate'])
+                    end = int((w+1)*0.25*spInfo['SampleRate'])
+                    maxE = np.mean(E[start:end])
                     ### DENOISE:
                     # based on wind strength in this second, calculate estimated |wind| in this node
                     # and subtract from maxE
@@ -3559,15 +3573,14 @@ class AviaNZ(QMainWindow):
 
                     # mark detected calls on spectrogram
                     if markSpec and Esep[r,w] > spSubf['WaveletParams']['thr']:
-                        diagCall = pg.ROI((specs*w, (freqmin+freqmax)/2),
-                                (specs, freqmax-freqmin),
+                        diagCall = pg.ROI((specs*xs[w], (freqmin+freqmax)/2),
+                                (specs*0.25, freqmax-freqmin),
                                 pen=(255*r//numNodes,0,0), movable=False)
                         self.diagnosticCalls.append(diagCall)
                         self.p_spec.addItem(diagCall)
 
                 # plot
-                self.plotDiag = pg.PlotDataItem(np.arange(int(self.datalengthSec))+0.5, Esep[r,:],
-                        pen=fn.mkPen((255*r//numNodes,0,0), width=2))
+                self.plotDiag = pg.PlotDataItem(xs, Esep[r,:], pen=fn.mkPen((255*r//numNodes,0,0), width=2))
                 self.p_plot.addItem(self.plotDiag)
                 self.p_legend.addItem(self.plotDiag, str(node))
                 r = r + 1 

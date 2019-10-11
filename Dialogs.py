@@ -1724,7 +1724,7 @@ class HumanClassify2(QDialog):
             # show segments which have midpoint in this page (ensures all are shown only once)
             mid = (segments[i][0] + segments[i][1]) / 2
             if mid < startRead or mid > startRead + len(audiodata)//sampleRate:
-                del self.indices2show[i]
+                self.indices2show.remove(i)
 
         self.errors = []
 
