@@ -794,6 +794,9 @@ class ConfigLoader(object):
 
             try:
                 readlist = json.load(open(shortblfile))
+                if len(readlist)>29:
+                    print("Warning: short species list has %s entries, truncating to 30" % len(readlist))
+                    readlist = readlist[:29]
                 return readlist
             except ValueError as e:
                 # if JSON looks corrupt, quit and suggest deleting:
