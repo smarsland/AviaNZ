@@ -1065,7 +1065,6 @@ class AviaNZ(QMainWindow):
             print("Opening file %s" % fileName)
             self.SoundFileDir = os.path.dirname(fileName)
             success = self.listLoadFile(os.path.basename(fileName))
-            self.fillFileList(fileName)
         if success==1:
             print("Error loading file, reloading current file")
             self.SoundFileDir = SoundFileDirOld
