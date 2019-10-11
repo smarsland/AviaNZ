@@ -1346,17 +1346,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.shortBirdList = self.shortBirdList[:40]
             else:
                 self.longBirdList = None
-        if not self.config['ReorderList']:
-            dialogBirdList = list(self.shortBirdList)
-        else:
-            dialogBirdList = self.shortBirdList
 
-        # Get the list of birds from the files, and make sure they are in the shortlist
-        for bird in self.spList:
-            if bird not in self.shortBirdList and bird != "Any sound":
-                dialogBirdList.insert(0,str(bird))
-
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], dialogBirdList, self.longBirdList, self.config['MultipleSpecies'], self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.config['MultipleSpecies'], self)
         self.box1id = -1
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)

@@ -1424,21 +1424,18 @@ class HumanClassify1(QDialog):
         # currently, we ignore the certainty and only display species:
         self.species.setText(','.join(label))
 
-        # temporarily, update the short bird list to have the current species at the top
-        # TODO: Probably remove this. It's not the correct functionality.
-        #if not self.parent.config['ReorderList']:
-            #tempShortList = list(self.shortBirdList)
-
         # question marks are displayed on the first pass,
         # but any clicking sets certainty to 100 in effect.
         for lsp_ix in range(len(label)):
             if label[lsp_ix].endswith('?'):
                 label[lsp_ix] = label[lsp_ix][:-1]
             # move the label to the top of the list
-            # TODO: remove, or at least debug
-            #if label[lsp_ix] in self.shortBirdList:
-                #self.shortBirdList.remove(label[lsp_ix])
-            #self.shortBirdList.insert(0, label[lsp_ix])
+            if self.parent.config['ReorderList']:
+                if label[lsp_ix] in self.shortBirdList:
+                    self.shortBirdList.remove(label[lsp_ix])
+                else:
+                    del self.shortBirdList[-1]
+                self.shortBirdList.insert(0, label[lsp_ix])
 
         # clear selection
         self.birds3.clearSelection()
@@ -1470,9 +1467,6 @@ class HumanClassify1(QDialog):
                 self.birds3.item(ind).setSelected(True)
 
         self.label = label
-        # reset bird list for next image, if needed
-        # if not self.parent.config['ReorderList']:
-        #     self.shortBirdList = tempShortList
 
     def tickBirdsClicked(self):
         # Listener for when the user selects a bird tick box
@@ -1584,7 +1578,18 @@ class HumanClassify1(QDialog):
         # Check text isn't already in the listbox, and add if not
         # Then calls the usual handler for listbox selections
         textitem = self.tbox.text()
+        if textitem.lower()=="don't know" or textitem.lower()=="other":
+            print("ERROR: provided name %s is reserved, cannot create" % textitem)
+            return
+        if "?" in textitem:
+            print("ERROR: provided name %s contains reserved symbol '?'" % textitem)
+            return
+        if len(textitem)==0 or len(textitem)>150:
+            print("ERROR: provided name appears to be too short or too long")
+            return
+
         item = self.birds3.findItems(textitem, Qt.MatchExactly)
+
         if not item:
             self.birds3.addItem(textitem)
             item = self.birds3.findItems(textitem, Qt.MatchExactly)

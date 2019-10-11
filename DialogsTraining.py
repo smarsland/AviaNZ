@@ -216,6 +216,8 @@ class BuildRecAdvWizard(QWizard):
             self.setMinimumSize(800, 500)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
             self.adjustSize()
+            instr = QLabel("Drag an image to a new class to move a single example. Click on a set of images (so that they are marked with a tick) and drag one of them to move several at once. Click the check box to the right of the name to select a whole cluster, for example to merge two. Click on the name and type a new one to change it. Select one or more images and click `Create cluster' to make another call type.")
+            instr.setWordWrap(True)
 
             self.sampleRate = 0
             self.segments = []
@@ -274,6 +276,7 @@ class BuildRecAdvWizard(QWizard):
 
             # page 2 layout
             layout1 = QVBoxLayout()
+            layout1.addWidget(instr)
             layout1.addWidget(self.lblSpecies)
             hboxSpecContr = QHBoxLayout()
             hboxSpecContr.addWidget(labelBr)
@@ -699,10 +702,6 @@ class BuildRecAdvWizard(QWizard):
                 self.clusters.append((i, 'Cluster_' + str(i)))
             self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
 
-            #self.cmbUpdateSeg.clear()
-            #for x in self.clusters:
-            #    self.cmbUpdateSeg.addItem(self.clusters[x])
-
             # Create the buttons for each segment
             for seg in self.segments:
                 sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1]-seg[1][0], seg[1][0])
@@ -960,6 +959,7 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, id, clustID, clustname, segments, parent=None):
             super(BuildRecAdvWizard.WPageTrain, self).__init__(parent)
             self.setTitle('Training results')
+            self.setSubTitle('Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.')
             self.setMinimumSize(600, 500)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
@@ -1332,9 +1332,9 @@ class BuildRecAdvWizard(QWizard):
                     if not input.endswith('.txt'):
                         input = input+'.txt'
                     if input=="M.txt":
-                        print("filter name M reserved for manual annotations")
+                        print("filter name \"M\" reserved for manual annotations")
                         return(QValidator.Intermediate, input, pos)
-                    if self.listFiles.findItems(input, Qt.MatchExactly):
+                    elif self.listFiles.findItems(input, Qt.MatchExactly):
                         print("duplicated input", input)
                         return(QValidator.Intermediate, input, pos)
                     else:
