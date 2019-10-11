@@ -987,6 +987,7 @@ class PicButton(QAbstractButton):
 
         drag = QDrag(self)
         drag.setMimeData(mimeData)
+        drag.setPixmap(QPixmap("./img/Owl_thinking.png"))
         dropAction = drag.exec_(Qt.MoveAction)
 
     def playImage(self):
