@@ -98,25 +98,13 @@ class AviaNZ(QMainWindow):
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
-        # Load the birdlists:
-        # short list is necessary, long list can be None
+        # Load the birdlists - both are now necessary:
         self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], configdir)
         if self.shortBirdList is None:
             sys.exit()
-        # Will be None if fails to load or filename was "None"
         self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], configdir)
-        if self.shortBirdList is None:
+        if self.longBirdList is None:
             sys.exit()
-
-        #if self.longBirdList is None:
-            # If don't have a long bird list,
-            # check that the length of the short bird list is OK, and otherwise split it
-            # 40 is a bit random, but 20 in a list is long enough!
-            #if len(self.shortBirdList) > 40:
-                #self.longBirdList = self.shortBirdList.copy()
-                #self.shortBirdList = self.shortBirdList[:40]
-            #else:
-                #self.longBirdList = None
 
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
@@ -655,8 +643,6 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.clicked.connect(self.playBandLimitedSegment)
         self.playBandLimitedSegButton.setEnabled(False)
 
-        self.timePlayed = QLabel()
-
         # Volume control
         self.volSlider = QSlider(Qt.Horizontal)
         self.volSlider.sliderMoved.connect(self.volSliderMoved)
@@ -701,12 +687,11 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
         if not self.DOC:
             self.w_controls.addWidget(self.playSlowButton,row=0,col=4)
-            self.w_controls.addWidget(self.quickDenButton,row=3,col=0)
+            self.w_controls.addWidget(self.quickDenButton,row=1,col=0)
             # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
-            self.w_controls.addWidget(self.viewSpButton,row=3,col=1)
-        self.w_controls.addWidget(self.timePlayed,row=1,col=0, colspan=5)
-        self.w_controls.addWidget(self.volIcon, row=2, col=0)
-        self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=4)
+            self.w_controls.addWidget(self.viewSpButton,row=1,col=1)
+        self.w_controls.addWidget(self.volIcon, row=3, col=0)
+        self.w_controls.addWidget(self.volSlider, row=3, col=1, colspan=4)
         self.w_controls.addWidget(QLabel("Brightness"),row=4,col=0,colspan=5)
         self.w_controls.addWidget(self.brightnessSlider,row=5,col=0,colspan=5)
         self.w_controls.addWidget(QLabel("Contrast"),row=6,col=0,colspan=5)
@@ -811,7 +796,6 @@ class AviaNZ(QMainWindow):
         These are:
             backspace to delete a segment
             escape to pause playback """
-        print("here",ev,ev==Qt.Key_Backspace,ev==Qt.Key_Escape)
         if ev == Qt.Key_Backspace or ev == Qt.Key_Delete:
             self.deleteSegment()
         elif ev == Qt.Key_Escape and (self.media_obj.isPlaying() or self.media_slow.isPlaying()):
@@ -896,7 +880,18 @@ class AviaNZ(QMainWindow):
 
         else:
             # otherwise, fill the species list
-            for item in self.shortBirdList[:20]:
+            # Put the selected bird name at the top of the list:
+            if self.config['ReorderList'] and hasattr(self,'segments') and self.box1id!=-1:
+                for key in self.segments[self.box1id].keys:
+                    # Either move the label to the top of the list, or delete the last
+                    if key[0] in self.shortBirdList:
+                        self.shortBirdList.remove(key[0])
+                    else:
+                        del self.shortBirdList[-1]
+                    self.shortBirdList.insert(0,key[0])
+
+            # create menu items and mark them
+            for item in self.shortBirdList[:15]:
                 # Add ? marks if Ctrl menu is called
                 itemorig = item
                 if unsure and item != "Don't Know":
@@ -918,7 +913,7 @@ class AviaNZ(QMainWindow):
                     bird.setChecked(True)
                 self.menuBirdList.addAction(bird)
             self.menuBirdList.addMenu(self.menuBird2)
-            for item in self.shortBirdList[20:]:
+            for item in self.shortBirdList[15:]:
                 itemorig = item
                 # Add ? marks if Ctrl menu is called
                 if unsure and item != "Don't Know" and item != "Other":
@@ -1065,7 +1060,6 @@ class AviaNZ(QMainWindow):
             print("Opening file %s" % fileName)
             self.SoundFileDir = os.path.dirname(fileName)
             success = self.listLoadFile(os.path.basename(fileName))
-            self.fillFileList(fileName)
         if success==1:
             print("Error loading file, reloading current file")
             self.SoundFileDir = SoundFileDirOld
@@ -1323,7 +1317,6 @@ class AviaNZ(QMainWindow):
                 self.widthWindow.setValue(self.windowSize)
 
                 self.totalTime = self.convertMillisecs(1000*self.datalengthSec)
-                self.timePlayed.setText(self.convertMillisecs(0) + "/" + self.totalTime)
 
                 # Load the file for playback
                 self.media_obj = SupportClasses.ControllableAudio(self.sp.audioFormat)
@@ -2065,7 +2058,8 @@ class AviaNZ(QMainWindow):
             self.refreshOverviewWith(self.segments[i])
 
     def addRegularSegments(self):
-        """ Perform the Hartley bodge: make a file with 10s segments every minute """
+        """ Perform the Hartley bodge: make a file with 10s segments every minute.
+            Currently not connected to anything, but would be good to add this to Actions."""
         if len(self.segments) > 0 and self.segments[0][0] == 0 and self.segments[0][1] == 10:
             # looks like these segments already present
             print("Not adding segments")
@@ -2771,6 +2765,18 @@ class AviaNZ(QMainWindow):
                 print("ERROR: provided name %s does not match format requirements" % birdname)
                 return
 
+            if birdname.lower()=="don't know" or birdname.lower()=="other":
+                print("ERROR: provided name %s is reserved, cannot create" % birdname)
+                return
+
+            if "?" in birdname:
+                print("ERROR: provided name %s contains reserved symbol '?'" % birdname)
+                return
+
+            if len(birdname)==0 or len(birdname)>150:
+                print("ERROR: provided name appears to be too short or too long")
+                return
+
             twolevelname = '>'.join(match.groups(default=''))
             if birdname in self.longBirdList or twolevelname in self.longBirdList:
                 # bird is already listed
@@ -3127,25 +3133,21 @@ class AviaNZ(QMainWindow):
             # self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
             # self.listLabels = [self.listLabels[i] for i in sortOrder]
 
-            # work on a copy if list shouldn't be reordered
             if self.config['ReorderList']:
-                dialogBirdList = list(self.shortBirdList)
-            else:
-                dialogBirdList = self.shortBirdList
+                # Get the list of birds from the file, and make sure they are in the shortlist
+                labels = []
+                for segi in range(len(self.segments)):
+                    label = self.segments[segi][4]
+                    for lab in label:
+                        labels.append(lab['species'])
 
-            # Get the list of birds from the file, and make sure they are in the shortlist
-            labels = []
-            for segi in range(len(self.segments)):
-                label = self.segments[segi][4]
-                for lab in label:
-                    labels.append(lab['species'])
+                birdspresent = set(labels)
+                for bird in birdspresent:
+                    if bird not in self.shortBirdList:
+                        self.shortBirdList.insert(0,str(bird))
+                        del self.shortBirdList[-1]
 
-            birdspresent = set(labels)
-            for bird in birdspresent:
-                if bird not in self.shortBirdList:
-                    dialogBirdList.insert(0,str(bird))
-
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.brightnessSlider.value(), self.contrastSlider.value(), dialogBirdList, self.longBirdList, self.multipleBirds, self)
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.brightnessSlider.value(), self.contrastSlider.value(), self.shortBirdList, self.longBirdList, self.multipleBirds, self)
 
             # load the first image:
             self.box1id = -1
@@ -4472,6 +4474,7 @@ class AviaNZ(QMainWindow):
     def pausePlayback(self):
         """ Restores the PLAY buttons, calls media_obj to pause playing."""
         self.media_obj.pressedPause()
+        self.media_slow.pressedStop()
         self.bar.setMovable(True)
 
         # Reset all button icons:
@@ -4489,7 +4492,6 @@ class AviaNZ(QMainWindow):
             self.segmentStart = 0
         self.playSlider.setValue(-1000)
         self.bar.setValue(-1000)
-        self.timePlayed.setText(self.convertMillisecs(self.segmentStart) + "/" + self.totalTime)
 
         # Reset all button icons:
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
@@ -4510,7 +4512,6 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
         else:
             self.playSlider.setValue(eltime)
-            self.timePlayed.setText(self.convertMillisecs(eltime) + "/" + self.totalTime)
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
             self.bar.setValue(self.convertAmpltoSpec(eltime / 1000.0 - bufsize))
 
@@ -4528,7 +4529,6 @@ class AviaNZ(QMainWindow):
             self.stopPlayback()
         else:
             self.playSlider.setValue(eltime)
-            self.timePlayed.setText(self.convertMillisecs(eltime//self.slowSpeed) + "/" + self.totalTime)
             # playSlider.value() is in ms, need to convert this into spectrogram pixels
             self.bar.setValue(self.convertAmpltoSpec(eltime / 1000.0 - bufsize))
 
