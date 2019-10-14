@@ -1216,6 +1216,7 @@ class AviaNZ(QMainWindow):
                 # resample to 16K if needed (SignalProc will determine)
                 if cs:
                     self.sp.resample(16000)
+                    self.sp.maxFreqShow = 8000
 
                 # Parse wav format details based on file header:
                 self.sampleRate = self.sp.sampleRate

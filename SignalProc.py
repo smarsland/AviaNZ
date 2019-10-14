@@ -103,6 +103,8 @@ class SignalProc:
         self.minFreq = 0
         self.maxFreq = self.sampleRate // 2
 
+        self.fileLength = len(self.data)
+
     def setWidth(self,window_width,incr):
         # Does what it says. Called when the user modifies the spectrogram parameters
         self.window_width = window_width
