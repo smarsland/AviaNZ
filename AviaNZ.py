@@ -3114,9 +3114,15 @@ class AviaNZ(QMainWindow):
 
     def humanClassifyDialog1(self):
         """ Create the dialog that shows calls to the user for verification.
-        There are two versions in here depending on whether you wish to show them from all the pages (5 min sections), the default, or not.
-        The only difference is that that version requires sorting the segments and loading of new file sections and making the spectrogram intermittently.
+        Shows segments only from the page you are currently working in.
         """
+
+        # Start by sorting the segments into increasing time order,
+        # to make life easier
+        sortOrder = self.segments.orderTime()
+        self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
+        self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
+        self.listLabels = [self.listLabels[i] for i in sortOrder]
 
         self.saveSegments()
         # Store the current page to return to
@@ -3129,20 +3135,11 @@ class AviaNZ(QMainWindow):
             while self.box1id<len(self.segments) and self.listRectanglesa2[self.box1id] is None:
                 self.box1id += 1
 
-        if self.box1id == len(self.segments or len(self.listRectanglesa2)==0):
+        if self.box1id == len(self.segments) or len(self.listRectanglesa2)==0:
             msg = SupportClasses.MessagePopup("w", "No segments", "No segments to check")
             msg.exec_()
             return
         else:
-            # Note: currently showing segments in marking order, because resorting a SegmentList is tricky.
-
-            # Sort the segments into increasing time order, apply same order to listRects and labels
-            # sortOrder = sorted(range(len(self.segments)), key=self.segments.__getitem__)
-            # self.segments = [self.segments[i] for i in sortOrder]
-            # self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
-            # self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
-            # self.listLabels = [self.listLabels[i] for i in sortOrder]
-
             if self.config['ReorderList']:
                 # Get the list of birds from the file, and make sure they are in the shortlist
                 labels = []
@@ -3337,7 +3334,15 @@ class AviaNZ(QMainWindow):
     def humanRevDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
         """
+        # Start by sorting the segments into increasing time order,
+        # to make life easier
+        sortOrder = self.segments.orderTime()
+        self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
+        self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
+        self.listLabels = [self.listLabels[i] for i in sortOrder]
+
         self.saveSegments()
+
         # First, determine which segments will be shown (i.e. visible in current page):
         segsInPage = []
         for s in self.segments:
@@ -4262,6 +4267,12 @@ class AviaNZ(QMainWindow):
         else:
             # create new workbook, in effect
             action = "overwrite"
+
+        # sort the segments into increasing time order (to make neater output)
+        sortOrder = self.segments.orderTime()
+        self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
+        self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
+        self.listLabels = [self.listLabels[i] for i in sortOrder]
 
         # excel should be split by page size, but for short files just give the file size
         datalen = self.config['maxFileShow'] if self.nFileSections>1 else self.datalengthSec

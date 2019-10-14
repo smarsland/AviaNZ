@@ -706,6 +706,8 @@ class AviaNZ_batchProcess(QMainWindow):
                 # This will be incompatible with old .data files that didn't store file size!
                 datalen = np.ceil(segments.metadata["Duration"])
 
+                # sort by time and save
+                segments.orderTime()
                 success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
                 if success!=1:
                     print("Warning: failed to export Excel output!")
@@ -1229,6 +1231,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 # This will be incompatible with old .data files that didn't store file size!
                 datalen = np.ceil(segments.metadata["Duration"])
 
+                # sort by time and save
+                segments.orderTime()
                 success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
                 if success!=1:
                     print("Warning: failed to save Excel output")
