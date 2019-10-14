@@ -343,6 +343,16 @@ class SegmentList(list):
         file.close()
         return 1
 
+    def orderTime(self):
+        """ Returns the order of segments in this list sorted by start time.
+            Sorts itself using the order. Can then be used to sort any additional lists
+            in matching order (graphics etc). """
+        sttimes = [s[0] for s in self]
+        sttimes = np.argsort(sttimes)
+        self.sort(key=lambda s: s[0])
+
+        return(sttimes)
+
     def getSummaries(self):
         """ Calculates some summary parameters relevant for populating training dialogs.
             and returns other parameters for populating the training dialogs.
