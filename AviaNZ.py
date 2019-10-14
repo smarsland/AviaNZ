@@ -800,7 +800,7 @@ class AviaNZ(QMainWindow):
         elif ev == Qt.Key_Escape and (self.media_obj.isPlaying() or self.media_slow.isPlaying()):
             self.stopPlayback()
 
-    def makeFullBirdList(self):
+    def makeFullBirdList(self, unsure=False):
         """ Makes a combo box holding the complete list of birds.
         Some work is needed to keep track of the indices since it's a two column
         list: species and subspecies in most cases.
@@ -817,6 +817,10 @@ class AviaNZ(QMainWindow):
         headlist = []
         if self.longBirdList is not None:
             for bird in self.longBirdList:
+                # Add ? marks if Ctrl menu is called
+                if unsure and bird != "Don't Know" and bird != "Other":
+                    bird = bird+'?'
+
                 ind = bird.find('>')
                 if ind == -1:
                     ind = len(bird)
@@ -934,7 +938,7 @@ class AviaNZ(QMainWindow):
                     bird.setChecked(True)
                 self.menuBird2.addAction(bird)
 
-            self.fullbirdlist = self.makeFullBirdList()  # a QComboBox
+            self.fullbirdlist = self.makeFullBirdList(unsure=unsure)  # a QComboBox
             self.showFullbirdlist = QWidgetAction(self.menuBirdList)
             self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
             self.menuBird2.addAction(self.showFullbirdlist)
@@ -2736,7 +2740,11 @@ class AviaNZ(QMainWindow):
         if birdname is None:
             birdname = self.fullbirdlist.currentText()
         else:
-            birdname = birdname + ' (' + self.fullbirdlist.currentText() + ')'
+            # two-level name
+            if self.fullbirdlist.currentText().endswith('?'):
+                birdname = birdname + ' (' + self.fullbirdlist.currentText()[:-1] + ')?'
+            else:
+                birdname = birdname + ' (' + self.fullbirdlist.currentText() + ')'
         self.birdSelectedMenu(birdname)
         if not self.multipleBirds:
             self.menuBirdList.hide()
