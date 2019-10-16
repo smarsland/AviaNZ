@@ -229,9 +229,10 @@ pg.graphicsItems.InfiniteLine.InfiniteLine.mouseDragEvent = mouseDragEventFlexib
 
 
 class LinearRegionItem2(pg.LinearRegionItem):
-    def __init__(self, parent, *args, **kwds):
-        pg.LinearRegionItem.__init__(self, *args, **kwds)
+    def __init__(self, parent, bounds=None, *args, **kwds):
+        pg.LinearRegionItem.__init__(self, bounds, *args, **kwds)
         self.parent = parent
+        self.bounds = bounds
         self.lines[0].btn = self.parent.MouseDrawingButton
         self.lines[1].btn = self.parent.MouseDrawingButton
 
@@ -251,7 +252,13 @@ class LinearRegionItem2(pg.LinearRegionItem):
 
         self.lines[0].blockSignals(True)  # only want to update once
         for i, l in enumerate(self.lines):
-            l.setPos(self.cursorOffsets[i] + ev.pos())
+            # added this to bound its dragging, as in ROI:
+            tomove = self.cursorOffsets[i] + ev.pos()
+            if self.bounds is not None:
+                tomove.setX(max(self.bounds[0], tomove.x()))
+                tomove.setX(min(self.bounds[1], tomove.x()))
+            l.setPos(tomove)
+
         self.lines[0].blockSignals(False)
         self.prepareGeometryChange()
 
