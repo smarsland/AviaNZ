@@ -26,7 +26,7 @@ from shutil import copyfile
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence
 from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut
-from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex
+from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt5.QtMultimedia import QAudio
 
 import wavio
@@ -1991,36 +1991,37 @@ class AviaNZ(QMainWindow):
         while self.listRectanglesa2[i] != sender and i<len(self.listRectanglesa2):
             i = i+1
         if i==len(self.listRectanglesa2):
-            print("Segment not found!")
+            print("ERROR: segment not found!")
+            return
+
+        # update the overview boxes, step 1
+        self.refreshOverviewWith(self.segments[i], delete=True)
+
+        # fix the position of the text label
+        if type(sender) == self.ROItype:
+            # using box coordinates
+            x1 = self.convertSpectoAmpl(sender.pos()[0])
+            x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
+            self.segments[i][2] = self.convertYtoFreq(sender.pos()[1])
+            self.segments[i][3] = self.convertYtoFreq(sender.pos()[1]+sender.size()[1])
+            self.listLabels[i].setPos(sender.pos()[0], self.textpos)
         else:
-            # update the overview boxes, step 1
-            self.refreshOverviewWith(self.segments[i], delete=True)
+            # using segment coordinates
+            x1 = self.convertSpectoAmpl(sender.getRegion()[0])
+            x2 = self.convertSpectoAmpl(sender.getRegion()[1])
+            self.listLabels[i].setPos(sender.getRegion()[0], self.textpos)
 
-            # fix the position of the text label
-            if type(sender) == self.ROItype:
-                # using box coordinates
-                x1 = self.convertSpectoAmpl(sender.pos()[0])
-                x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
-                self.segments[i][2] = self.convertYtoFreq(sender.pos()[1])
-                self.segments[i][3] = self.convertYtoFreq(sender.pos()[1]+sender.size()[1])
-                self.listLabels[i].setPos(sender.pos()[0], self.textpos)
-            else:
-                # using segment coordinates
-                x1 = self.convertSpectoAmpl(sender.getRegion()[0])
-                x2 = self.convertSpectoAmpl(sender.getRegion()[1])
-                self.listLabels[i].setPos(sender.getRegion()[0], self.textpos)
+        # update the amplitude segment
+        self.listRectanglesa1[i].blockSignals(True)
+        self.listRectanglesa1[i].setRegion([x1,x2])
+        self.listRectanglesa1[i].blockSignals(False)
+        self.segmentsToSave = True
 
-            # update the amplitude segment
-            self.listRectanglesa1[i].blockSignals(True)
-            self.listRectanglesa1[i].setRegion([x1,x2])
-            self.listRectanglesa1[i].blockSignals(False)
-            self.segmentsToSave = True
+        self.segments[i][0] = x1 + self.startRead
+        self.segments[i][1] = x2 + self.startRead
 
-            self.segments[i][0] = x1 + self.startRead
-            self.segments[i][1] = x2 + self.startRead
-
-            # update the overview boxes, step 2
-            self.refreshOverviewWith(self.segments[i])
+        # update the overview boxes, step 2
+        self.refreshOverviewWith(self.segments[i])
 
     def updateRegion_ampl(self):
         """ This is the listener for when a segment box is changed in the waveform plot.
@@ -2233,22 +2234,23 @@ class AviaNZ(QMainWindow):
         self.refreshOverviewWith(newSegment)
 
         segsMovable = not (self.config['readOnly'])
+        scenerect = QRectF(0, 0, np.shape(self.sg)[0], np.shape(self.sg)[1])
 
         # Add the segment in both plots and connect up the listeners
-        p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable)
+        p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable, bounds=[0, self.datalengthSec])
         self.p_ampl.addItem(p_ampl_r, ignoreBounds=True)
         p_ampl_r.setRegion([startpoint, endpoint])
         p_ampl_r.sigRegionChangeFinished.connect(self.updateRegion_ampl)
 
         # full-height segments:
         if y1==0 and y2==0:
-            p_spec_r = SupportClasses.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable)
+            p_spec_r = SupportClasses.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable, bounds=[0, np.shape(self.sg)[0]])
             p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
         # rectangle boxes:
         else:
             startpointS = QPointF(self.convertAmpltoSpec(startpoint),max(y1,miny))
             endpointS = QPointF(self.convertAmpltoSpec(endpoint),min(y2,maxy))
-            p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, movable=segsMovable, parent=self)
+            p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, movable=segsMovable, maxBounds=scenerect, parent=self)
             if self.config['transparentBoxes']:
                 col = self.prevBoxCol.rgb()
                 col = QtGui.QColor(col)

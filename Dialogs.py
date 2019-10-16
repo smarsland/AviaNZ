@@ -24,33 +24,20 @@
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
 import os
-import time
-import platform
-import wavio
-import json
 import shutil
 
-from PyQt5.QtGui import QIcon, QPixmap, QValidator, QAbstractItemView
+from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import QDir, QPointF, QTime, Qt, QLineF
+from PyQt5.QtCore import QDir, QPointF, QTime, Qt
 
-import matplotlib.markers as mks
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mtick
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
-import pyqtgraph.functions as fn
 
 import numpy as np
 import colourMaps
 import SupportClasses as SupportClasses
 import SignalProc
-import WaveletSegment
-import Segment
-import Clustering
 
 
 class StartScreen(QDialog):
