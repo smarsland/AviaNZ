@@ -406,8 +406,8 @@ class SegmentList(list):
         for segix in thisSpSegs:
             seg = self[segix]
             # start and end in resolution base
-            s = int(math.floor(seg[0] / resolution))
-            e = int(math.ceil(seg[1] / resolution))
+            s = int(max(0, math.floor(seg[0] / resolution)))
+            e = int(min(duration, math.ceil(seg[1] / resolution)))
             for i in range(s, e):
                 GT[i,1] = 1
                 GT[i,2] = species
