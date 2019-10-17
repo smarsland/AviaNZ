@@ -251,12 +251,22 @@ class LinearRegionItem2(pg.LinearRegionItem):
             return
 
         self.lines[0].blockSignals(True)  # only want to update once
+        newcenter = ev.pos()
+        # added this to bound its dragging, as in ROI.
+        # first, adjust center position to avoid dragging too far:
         for i, l in enumerate(self.lines):
-            # added this to bound its dragging, as in ROI:
-            tomove = self.cursorOffsets[i] + ev.pos()
+            tomove = self.cursorOffsets[i] + newcenter
             if self.bounds is not None:
-                tomove.setX(max(self.bounds[0], tomove.x()))
-                tomove.setX(min(self.bounds[1], tomove.x()))
+                # stop center from moving too far left
+                if tomove.x() < self.bounds[0]:
+                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[0])
+                # stop center from moving too far right
+                if tomove.x() > self.bounds[1]:
+                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[1])
+
+        # update lines based on adjusted center
+        for i, l in enumerate(self.lines):
+            tomove = self.cursorOffsets[i] + newcenter
             l.setPos(tomove)
 
         self.lines[0].blockSignals(False)
