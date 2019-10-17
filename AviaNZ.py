@@ -3636,8 +3636,7 @@ class AviaNZ(QMainWindow):
                 if hasattr(self, 'seg'):
                     self.seg.setNewData(self.sp)
 
-                name = self.filename.split(self.SoundFileDir)[-1]
-                self.loadFile(name)
+                self.loadFile(os.path.basename(self.filename))
                 # self.specPlot.setImage(self.sg)   # TODO: interface changes to adapt if window_len and incr changed! overview, main spec ect.
 
             self.redoFreqAxis(minFreq,maxFreq)
@@ -4900,8 +4899,8 @@ class AviaNZ(QMainWindow):
         self.saveConfig = True
 
         self.resetStorageArrays()
-        name = self.filename.split(self.SoundFileDir)[-1]       # pass the file name to reset interface properly
-        self.loadFile(name)
+        # pass the file name to reset interface properly
+        self.loadFile(os.path.basename(self.filename))
 
 # ============
 # Various actions: deleting segments, saving, quitting

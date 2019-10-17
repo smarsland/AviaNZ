@@ -1670,7 +1670,10 @@ class TestRecWizard(QWizard):
             testresfile = os.path.join(self.field("testDir"), "test-results.txt")
             # run the actual testing here:
             with pg.BusyCursor():
-                self.wizard().rerunCalltypes(testresfile)
+                outfile = open(testresfile, 'w')
+                # this will create self.detected01post_allcts list,
+                # and also write output to the output txt file
+                self.wizard().rerunCalltypes(outfile)
 
                 speciesData = self.wizard().filterlist[self.field("species")[:-4]]
 
@@ -1685,25 +1688,34 @@ class TestRecWizard(QWizard):
                 # get and parse the agreement metrics
                 fB, recall, TP, FP, TN, FN = ws.fBetaScore(self.wizard().annotations, detections)
 
-            total = TP+FP+TN+FN
-            if total == 0:
-                print("ERROR: failed to find any testing data")
-                return
+                total = TP+FP+TN+FN
+                if total == 0:
+                    print("ERROR: failed to find any testing data")
+                    return
 
-            if TP+FN != 0:
-                recall = TP/(TP+FN)
-            else:
-                recall = 0
-            if TP+FP != 0:
-                precision = TP/(TP+FP)
-            else:
-                precision = 0
-            if TN+FP != 0:
-                specificity = TN/(TN+FP)
-            else:
-                specificity = 0
+                if TP+FN != 0:
+                    recall = TP/(TP+FN)
+                else:
+                    recall = 0
+                if TP+FP != 0:
+                    precision = TP/(TP+FP)
+                else:
+                    precision = 0
+                if TN+FP != 0:
+                    specificity = TN/(TN+FP)
+                else:
+                    specificity = 0
 
-            accuracy = (TP+TN)/(TP+FP+TN+FN)
+                accuracy = (TP+TN)/(TP+FP+TN+FN)
+                outfile.write("-- Final species-level results --\n")
+                outfile.write("TP | FP | TN | FN:\t %.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
+                outfile.write("Specificity:\t%d %%\n" % (specificity*100))
+                outfile.write("Recall (sensitivity):\t%d %%\n" % (recall*100))
+                outfile.write("FPR:\t%d %%\n" % (100-specificity*100))
+                outfile.write("Precision (PPV):\t%d %%\n" % (precision*100))
+                outfile.write("Accuracy:\t%d %%\n" % (accuracy*100))
+                outfile.write("-- End of testing --\n")
+                outfile.close()
 
             self.labTP.setText("%.1f %%" % (TP*100/total))
             self.labFP.setText("%.1f %%" % (FP*100/total))
@@ -1806,15 +1818,15 @@ class TestRecWizard(QWizard):
             print("ERROR: no segments for species %s found" % species)
             return
 
-        # open output txt for testing
-        file = open(outfile, 'w')
-        file.write("Recogniser name:\t" + speciesData["species"]+"\n")
-        file.write("-------------------------\n\n")
+        # start writing the results to an output txt file
+        outfile.write("Recogniser name:\t" + speciesData["species"]+"\n")
+        outfile.write("Using data:\t" + self.field("testDir") +"\n")
+        outfile.write("-------------------------\n\n")
 
         # run the test for each calltype:
         self.detected01post_allcts = []
         for subfilter in speciesData["Filters"]:
-            file.write("Target calltype:\t" + subfilter["calltype"] +"\n")
+            outfile.write("Target calltype:\t" + subfilter["calltype"] +"\n")
             # first return value: single array of 0/1 detections over all files
             # second return value: list of tuples ([segments], filename, filelen) for each file
             detected01, detectedS = ws.waveletSegment_test(self.field("testDir"),
@@ -1833,12 +1845,14 @@ class TestRecWizard(QWizard):
             totallen = sum([len(detfile[0]) for detfile in detectedS])
 
             # store results in the txt file
-            file.write("--Detection summary--\n")
-            file.write("Manually labelled segments:\t"+ str(manSegNum) +"\n")
-            file.write("\ttotal seconds:\t%.1f\n" % (TP+FN))
-            file.write("Segments detected:\t\t%s\n" % str(totallen))
-            file.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
-            file.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (TP/(TP+FN)*100))
+            outfile.write("--Detection summary--\n")
+            outfile.write("Manually labelled segments:\t"+ str(manSegNum) +"\n")
+            outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FN))
+            outfile.write("Segments detected:\t\t%s\n" % str(totallen))
+            outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
+            outfile.write("TP | FP | TN | FN:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
+            outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (TP/(TP+FN)*100))
+            outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (TP/(TP+FP)*100))
 
             # Post process:
             if "F0" in subfilter and subfilter["F0"]:
@@ -1872,13 +1886,13 @@ class TestRecWizard(QWizard):
             # store the final detections of this calltype
             self.detected01post_allcts.append(detected01post)
 
-            file.write("--After post-processing--\n")
-            file.write("Segments detected:\t\t%s\n" % str(totallenP))
-            file.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
-            file.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (TP/(TP+FN)*100))
-            file.write("-------------------------\n\n")
-
-        file.close()
+            outfile.write("--After post-processing--\n")
+            outfile.write("Segments detected:\t\t%s\n" % str(totallenP))
+            outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
+            outfile.write("TP | FP | TN | FN:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
+            outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (TP/(TP+FN)*100))
+            outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (TP/(TP+FP)*100))
+            outfile.write("-------------------------\n\n")
 
 
 class ROCCanvas(FigureCanvas):
