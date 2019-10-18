@@ -611,65 +611,64 @@ class BuildRecAdvWizard(QWizard):
                 if self.picbuttons[ix].mark == 'yellow':
                     inds.append(ix)
 
-            if len(inds) > 0:
-                self.segsChanged = True
-                segments = []
-                picbuttons = []
-                for ix in range(len(self.picbuttons)):
-                    if ix not in inds:
-                        segments.append(self.segments[ix])
-                        picbuttons.append(self.picbuttons[ix])
-                self.segments = segments
-                self.picbuttons = picbuttons
+            if len(inds)==0:
+                print("No segments selected")
+                return
 
-                # update self.clusters, delete clusters with no members
-                todelete = []
-                for ID, label in self.clusters.items():
-                    empty = True
-                    for seg in self.segments:
-                        if seg[-1] == ID:
-                            empty = False
-                            break
-                    if empty:
-                        todelete.append(ID)
+            self.segsChanged = True
+            for ix in reversed(inds):
+                del self.segments[ix]
+                del self.picbuttons[ix]
 
-                self.clearButtons()
+            # update self.clusters, delete clusters with no members
+            todelete = []
+            for ID, label in self.clusters.items():
+                empty = True
+                for seg in self.segments:
+                    if seg[-1] == ID:
+                        empty = False
+                        break
+                if empty:
+                    todelete.append(ID)
 
-                # Generate new class labels
-                if len(todelete) > 0:
-                    keys = [i for i in range(self.nclasses) if i not in todelete]        # the old keys those didn't delete
-                    # print('old keys left: ', keys)
+            self.clearButtons()
 
-                    nclasses = self.nclasses - len(todelete)
-                    max_label = nclasses - 1
-                    labels = []
-                    c = self.nclasses - 1
-                    while c > -1:
-                        if c in keys:
-                            labels.append((c, max_label))
-                            max_label -= 1
-                        c -= 1
+            # Generate new class labels
+            if len(todelete) > 0:
+                keys = [i for i in range(self.nclasses) if i not in todelete]        # the old keys those didn't delete
+                # print('old keys left: ', keys)
 
-                    labels = dict(labels)
-                    # print(labels)
+                nclasses = self.nclasses - len(todelete)
+                max_label = nclasses - 1
+                labels = []
+                c = self.nclasses - 1
+                while c > -1:
+                    if c in keys:
+                        labels.append((c, max_label))
+                        max_label -= 1
+                    c -= 1
 
-                    # update clusters dictionary {ID: cluster_name}
-                    clusters = {}
-                    for i in keys:
-                        clusters.update({labels[i]: self.clusters[i]})
+                labels = dict(labels)
+                # print(labels)
 
-                    print('before delete: ', self.clusters)
-                    self.clusters = clusters
-                    print('after delete: ', self.clusters)
+                # update clusters dictionary {ID: cluster_name}
+                clusters = {}
+                for i in keys:
+                    clusters.update({labels[i]: self.clusters[i]})
 
-                    # update the segments
-                    for seg in self.segments:
-                        seg[-1] = labels[seg[-1]]
+                print('before delete: ', self.clusters)
+                self.clusters = clusters
+                print('after delete: ', self.clusters)
 
-                    self.nclasses = nclasses
+                # update the segments
+                for seg in self.segments:
+                    seg[-1] = labels[seg[-1]]
 
-                # redraw the buttons
-                self.updateButtons()
+                self.nclasses = nclasses
+
+            # redraw the buttons
+            self.updateButtons()
+            self.completeChanged.emit()
 
         def updateClusterNames(self):
             # Check duplicate names
@@ -1654,7 +1653,6 @@ class TestRecWizard(QWizard):
             form2.addWidget(space)
             form2.addRow("Specificity:", self.spec)
             form2.addRow("Recall (sensitivity):", self.sens)
-            form2.addRow("FPR:", self.FPR)
             form2.addRow("Precision (PPV):", self.prec)
             form2.addRow("Accuracy:", self.acc)
 
@@ -1711,7 +1709,6 @@ class TestRecWizard(QWizard):
                 outfile.write("TP | FP | TN | FN:\t %.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
                 outfile.write("Specificity:\t%d %%\n" % (specificity*100))
                 outfile.write("Recall (sensitivity):\t%d %%\n" % (recall*100))
-                outfile.write("FPR:\t%d %%\n" % (100-specificity*100))
                 outfile.write("Precision (PPV):\t%d %%\n" % (precision*100))
                 outfile.write("Accuracy:\t%d %%\n" % (accuracy*100))
                 outfile.write("-- End of testing --\n")
@@ -1724,7 +1721,6 @@ class TestRecWizard(QWizard):
 
             self.spec.setText("%.1f %%" % (specificity*100))
             self.sens.setText("%.1f %%" % (recall*100))
-            self.FPR.setText("%.1f %%" % (100-specificity*100))
             self.prec.setText("%.1f %%" % (precision*100))
             self.acc.setText("%.1f %%" % (accuracy*100))
 
@@ -1841,6 +1837,19 @@ class TestRecWizard(QWizard):
             if total == 0:
                 print("ERROR: failed to find any testing data")
                 return
+            if TP+FN != 0:
+                recall = TP/(TP+FN)
+            else:
+                recall = 0
+            if TP+FP != 0:
+                precision = TP/(TP+FP)
+            else:
+                precision = 0
+            if TN+FP != 0:
+                specificity = TN/(TN+FP)
+            else:
+                specificity = 0
+            accuracy = (TP+TN)/(TP+FP+TN+FN)
 
             totallen = sum([len(detfile[0]) for detfile in detectedS])
 
@@ -1850,9 +1859,11 @@ class TestRecWizard(QWizard):
             outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FN))
             outfile.write("Segments detected:\t\t%s\n" % str(totallen))
             outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
-            outfile.write("TP | FP | TN | FN:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
-            outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (TP/(TP+FN)*100))
-            outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (TP/(TP+FP)*100))
+            outfile.write("TP | FP | TN | FN seconds:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
+            outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (recall*100))
+            outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (precision*100))
+            outfile.write("Specificity in 1 s resolution:\t%d %%\n" % (specificity*100))
+            outfile.write("Accuracy in 1 s resolution:\t%d %%\n" % (accuracy*100))
 
             # Post process:
             if "F0" in subfilter and subfilter["F0"]:
@@ -1876,13 +1887,28 @@ class TestRecWizard(QWizard):
                 # and detected01 and self.detected01post - corresponding pres/abs marks
 
                 # update agreement measures
+                totallenP = len(detectedSpost)
                 _, _, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, detected01post)
                 print('--Post-processing summary--\n%d %d %d %d' %(TP, FP, TN, FN))
-                totallenP = len(detectedSpost)
+                if TP+FN != 0:
+                    recall = TP/(TP+FN)
+                else:
+                    recall = 0
+                if TP+FP != 0:
+                    precision = TP/(TP+FP)
+                else:
+                    precision = 0
+                if TN+FP != 0:
+                    specificity = TN/(TN+FP)
+                else:
+                    specificity = 0
+                accuracy = (TP+TN)/(TP+FP+TN+FN)
             else:
                 print('No post-processing required')
                 totallenP = totallen
                 detected01post = detected01
+                # (all agreement metrics will remain the same)
+
             # store the final detections of this calltype
             self.detected01post_allcts.append(detected01post)
 
@@ -1890,8 +1916,10 @@ class TestRecWizard(QWizard):
             outfile.write("Segments detected:\t\t%s\n" % str(totallenP))
             outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
             outfile.write("TP | FP | TN | FN:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
-            outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (TP/(TP+FN)*100))
-            outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (TP/(TP+FP)*100))
+            outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (recall*100))
+            outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (precision*100))
+            outfile.write("Specificity in 1 s resolution:\t%d %%\n" % (specificity*100))
+            outfile.write("Accuracy in 1 s resolution:\t%d %%\n" % (accuracy*100))
             outfile.write("-------------------------\n\n")
 
 

@@ -4002,7 +4002,7 @@ class AviaNZ(QMainWindow):
         self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
         self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
         self.buildRecAdvWizard.activateWindow()
-        self.buildRecAdvWizard.show()
+        self.buildRecAdvWizard.exec_()
         # reread filters list with the new one
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
