@@ -4171,9 +4171,10 @@ class AviaNZ(QMainWindow):
                         post.rainClick()
                         print('After rain segments: ', len(post.segments))
                     if 'F0' in speciesData['Filters'][filtix] and 'F0Range' in speciesData['Filters'][filtix]:
-                        print("Checking for fundamental frequency...")
-                        post.fundamentalFrq()
-                        print("After FF segments:", len(post.segments))
+                        if speciesData['Filters'][filtix]['F0']:
+                            print("Checking for fundamental frequency...")
+                            post.fundamentalFrq()
+                            print("After FF segments:", len(post.segments))
                     segmenter = Segment.Segmenter()
                     post.segments = segmenter.joinGaps(post.segments, maxgap=speciesData['Filters'][filtix]['TimeRange'][2])
                     post.segments = segmenter.deleteShort(post.segments, minlength=speciesData['Filters'][filtix]['TimeRange'][0])

@@ -1706,18 +1706,18 @@ class TestRecWizard(QWizard):
 
                 accuracy = (TP+TN)/(TP+FP+TN+FN)
                 outfile.write("-- Final species-level results --\n")
-                outfile.write("TP | FP | TN | FN:\t %.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
-                outfile.write("Specificity:\t%d %%\n" % (specificity*100))
+                outfile.write("TP | FP | TN | FN seconds:\t %.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
+                outfile.write("Specificity:\t\t%d %%\n" % (specificity*100))
                 outfile.write("Recall (sensitivity):\t%d %%\n" % (recall*100))
                 outfile.write("Precision (PPV):\t%d %%\n" % (precision*100))
-                outfile.write("Accuracy:\t%d %%\n" % (accuracy*100))
+                outfile.write("Accuracy:\t\t%d %%\n" % (accuracy*100))
                 outfile.write("-- End of testing --\n")
                 outfile.close()
 
-            self.labTP.setText("%.1f %%" % (TP*100/total))
-            self.labFP.setText("%.1f %%" % (FP*100/total))
-            self.labTN.setText("%.1f %%" % (TN*100/total))
-            self.labFN.setText("%.1f %%" % (FN*100/total))
+            self.labTP.setText("%d seconds\t(%.1f %%)" % (TP, TP*100/total))
+            self.labFP.setText("%d seconds\t(%.1f %%)" % (FP, FP*100/total))
+            self.labTN.setText("%d seconds\t(%.1f %%)" % (TN, TN*100/total))
+            self.labFN.setText("%d seconds\t(%.1f %%)" % (FN, FN*100/total))
 
             self.spec.setText("%.1f %%" % (specificity*100))
             self.sens.setText("%.1f %%" % (recall*100))
@@ -1857,13 +1857,13 @@ class TestRecWizard(QWizard):
             outfile.write("--Detection summary--\n")
             outfile.write("Manually labelled segments:\t"+ str(manSegNum) +"\n")
             outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FN))
-            outfile.write("Segments detected:\t\t%s\n" % str(totallen))
+            outfile.write("Total segments detected:\t\t%s\n" % str(totallen))
             outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
             outfile.write("TP | FP | TN | FN seconds:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
             outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (recall*100))
             outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (precision*100))
-            outfile.write("Specificity in 1 s resolution:\t%d %%\n" % (specificity*100))
-            outfile.write("Accuracy in 1 s resolution:\t%d %%\n" % (accuracy*100))
+            outfile.write("Specificity in 1 s resolution:\t\t%d %%\n" % (specificity*100))
+            outfile.write("Accuracy in 1 s resolution:\t\t%d %%\n" % (accuracy*100))
 
             # Post process:
             if "F0" in subfilter and subfilter["F0"]:
@@ -1913,13 +1913,13 @@ class TestRecWizard(QWizard):
             self.detected01post_allcts.append(detected01post)
 
             outfile.write("--After post-processing--\n")
-            outfile.write("Segments detected:\t\t%s\n" % str(totallenP))
+            outfile.write("Total segments detected:\t\t%s\n" % str(totallenP))
             outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
-            outfile.write("TP | FP | TN | FN:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
+            outfile.write("TP | FP | TN | FN seconds:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
             outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (recall*100))
             outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (precision*100))
-            outfile.write("Specificity in 1 s resolution:\t%d %%\n" % (specificity*100))
-            outfile.write("Accuracy in 1 s resolution:\t%d %%\n" % (accuracy*100))
+            outfile.write("Specificity in 1 s resolution:\t\t%d %%\n" % (specificity*100))
+            outfile.write("Accuracy in 1 s resolution:\t\t%d %%\n" % (accuracy*100))
             outfile.write("-------------------------\n\n")
 
 
