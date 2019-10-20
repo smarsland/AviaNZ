@@ -561,7 +561,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         print("Post-processing...")
                         maxgap = int(self.maxgap.value())/1000
                         minlen = int(self.minlen.value())/1000
-                        post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                        post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate,
                                                    segments=thisPageSegs, subfilter={})
                         if self.w_wind.isChecked():
                             post.wind()
@@ -598,13 +598,11 @@ class AviaNZ_batchProcess(QMainWindow):
                             # 5. Delete short segments
                             print("Segments detected: ", len(thisPageSegs))
                             print("Post-processing...")
-                            maxgap = 3  # Note arbitrary maxgap and 0.25 second min length
-                            minlength = 0.25
                             # postProcess currently operates on single-level list of segments,
                             # so we run it over subfilters for wavelets:
                             spInfo = filters[speciesix]
                             for filtix in range(len(spInfo['Filters'])):
-                                post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix])
+                                post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix])
                                 if self.w_wind.isChecked():
                                     post.wind()
                                     print('After wind: segments: ', len(post.segments))

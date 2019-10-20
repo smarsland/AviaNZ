@@ -856,7 +856,7 @@ class BuildRecAdvWizard(QWizard):
             form1_step4 = QFormLayout()
             self.minlen = QLineEdit(self)
             self.minlen.setText('')
-            form1_step4.addRow('Min call length (secs)', self.minlen)
+            form1_step4.addRow('Min syllable length (secs)', self.minlen)
             self.maxlen = QLineEdit(self)
             self.maxlen.setText('')
             form1_step4.addRow('Max call length (secs)', self.maxlen)

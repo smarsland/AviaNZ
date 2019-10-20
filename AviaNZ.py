@@ -4124,7 +4124,7 @@ class AviaNZ(QMainWindow):
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                newSegments = ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
+                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
                 newSegments = ws.waveletSegment(0, wpmode="new")
 
             # TODO: make sure cross corr outputs lists of lists

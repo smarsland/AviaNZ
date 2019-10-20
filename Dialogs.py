@@ -714,6 +714,8 @@ class Segmentation(QDialog):
             self.species.show()
             self.maxgaplbl.hide()
             self.maxgap.hide()
+            self.minlenlbl.hide()
+            self.minlen.hide()
 
     def medSizeChange(self,value):
         self.medSizeText.setText("Minimum length: %s ms" % value)
