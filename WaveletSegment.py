@@ -478,8 +478,7 @@ class WaveletSegment:
         newlist = []
         currentIndex = 0
         # Need to keep track of where each level of the tree starts
-        # Note that there is no root to the tree, hence the 0 then 2
-        starts = [0, 2, 6, 14, 30, 62]
+        starts = [1, 3, 7, 15, 31, 63]
         while len(order) > 0:
             if order[0] < 30:
                 # It could have children lower down the list
@@ -941,20 +940,7 @@ class WaveletSegment:
         bestnodes = self.sortListByChild(bestnodes)
 
         # These nodes refer to the un-rooted tree, so add 1 to get the real WP indices
-        bestnodes = [n + 1 for n in bestnodes]
-
-        # TODO disabled until we review node ranges
-        # # Lastly remove any node beyond the target frq range, last two levels, a sanity check
-        # r1 = np.linspace(0, self.spInfo['SampleRate'] / 2, 16)
-        # node_low = (np.abs(r1 - self.spInfo['FreqRange'][0])).argmin() + 15
-        # node_high = (np.abs(r1 - self.spInfo['FreqRange'][1])).argmin() + 15
-        # nr1 = np.arange(node_low, node_high).tolist()
-        # r2 = np.linspace(0, self.spInfo['SampleRate']/2, 32)
-        # node_low = (np.abs(r2 - self.spInfo['FreqRange'][0])).argmin() + 31
-        # node_high = (np.abs(r2 - self.spInfo['FreqRange'][1])).argmin() + 31
-        # nr2 = np.arange(node_low, node_high).tolist()
-        # node_range = nr1 + nr2
-        # bestnodes = [x for x in bestnodes if x in node_range]
+        # bestnodes = [n + 1 for n in bestnodes]
 
         return (bestnodes, worstnodes)
 
