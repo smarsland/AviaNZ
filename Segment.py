@@ -459,33 +459,48 @@ class SegmentList(list):
             relfname = str(os.path.abspath(filename))
 
         # functions for filling out the excel sheets:
-        def writeToExcelp1(wb, segix, currsp):
+        def writeToExcelp1(wb, segs, currsp):
             ws = wb['Time Stamps']
             r = ws.max_row + 1
             # Print the filename
             ws.cell(row=r, column=1, value=relfname)
             # Loop over the segments
-            for segi in segix:
-                seg = self[segi]
+            for seg in segs:
                 ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTime).toString('hh:mm:ss')))
                 ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTime).toString('hh:mm:ss')))
                 if seg[3]!=0:
                     ws.cell(row=r, column=4, value=int(seg[2]))
                     ws.cell(row=r, column=5, value=int(seg[3]))
                 if currsp=="Any sound":
+                    # print species and certainty
                     text = [lab["species"] for lab in seg[4]]
+                    ws.cell(row=r, column=6, value=", ".join(text))
+                    text = [str(lab["certainty"]) for lab in seg[4]]
+                    ws.cell(row=r, column=7, value=", ".join(text))
+                else:
+                    # only print certainty
+                    text = []
+                    for lab in seg[4]:
+                        if lab["species"]==currsp:
+                            text.append(str(lab["certainty"]))
                     ws.cell(row=r, column=6, value=", ".join(text))
                 r += 1
 
-        def writeToExcelp2(wb, segix):
+        def writeToExcelp2(wb, segs):
+            # segs: a 2D list of [start, end, certainty] for each seg
             ws = wb['Presence Absence']
             r = ws.max_row + 1
             ws.cell(row=r, column=1, value=relfname)
             ws.cell(row=r, column=2, value='_')
-            if len(segix)>0:
-                ws.cell(row=r, column=2, value='Yes')
+            if len(segs)>0:
+                pres = "Yes"
+                certainty = [lab[2] for lab in segs]
+                certainty = max(certainty)
             else:
-                ws.cell(row=r, column=2, value='No')
+                pres = "No"
+                certainty = 0
+            ws.cell(row=r, column=2, value=pres)
+            ws.cell(row=r, column=3, value=certainty)
 
         def writeToExcelp3(wb, detected, pagenum):
             # writes binary output DETECTED (per s) from page PAGENUM of length PAGELEN
@@ -502,13 +517,15 @@ class SegmentList(list):
             # fill the header and detection columns
             c = 3
             for t in range(0, len(detected), resolution):
-                # absolue (within-file) times:
+                # absolute (within-file) times:
                 win_start = starttime + t
                 win_end = min(win_start+resolution, int(pagelen * numpages))
                 ws.cell(row=r, column=c, value=str(win_start) + '-' + str(win_end))
                 ws.cell(row=r, column=c).font = ft
                 # within-page times:
-                det = 1 if np.sum(detected[t:win_end-starttime])>0 else 0
+                det = detected[t:win_end - starttime]
+                # max certainty on 0-100 scale:
+                det = max(det)
                 ws.cell(row=r+1, column=c, value=det)
                 c += 1
 
@@ -526,30 +543,34 @@ class SegmentList(list):
             if action == "overwrite" or not os.path.isfile(eFile):
                 # make a new workbook:
                 wb = Workbook()
-                wb.create_sheet(title='Time Stamps', index=1)
-                wb.create_sheet(title='Presence Absence', index=2)
-                wb.create_sheet(title='Per Time Period', index=3)
 
                 # First sheet
+                wb.create_sheet(title='Time Stamps', index=1)
                 ws = wb['Time Stamps']
                 ws.cell(row=1, column=1, value="File Name")
                 ws.cell(row=1, column=2, value="start (hh:mm:ss)")
                 ws.cell(row=1, column=3, value="end (hh:mm:ss)")
                 ws.cell(row=1, column=4, value="min freq. (Hz)")
                 ws.cell(row=1, column=5, value="max freq. (Hz)")
-                if species=="Any_sound":
+                if species=="Any sound":
                     ws.cell(row=1, column=6, value="species")
+                    ws.cell(row=1, column=7, value="certainty")
+                else:
+                    ws.cell(row=1, column=6, value="certainty")
 
-                # Second sheet
-                ws = wb['Presence Absence']
-                ws.cell(row=1, column=1, value="File Name")
-                ws.cell(row=1, column=2, value="Presence/Absence")
+                    # Second sheet
+                    wb.create_sheet(title='Presence Absence', index=2)
+                    ws = wb['Presence Absence']
+                    ws.cell(row=1, column=1, value="File Name")
+                    ws.cell(row=1, column=2, value="Present?")
+                    ws.cell(row=1, column=3, value="Certainty, %")
 
-                # Third sheet
-                ws = wb['Per Time Period']
-                ws.cell(row=1, column=1, value="File Name")
-                ws.cell(row=1, column=2, value="Page")
-                ws.cell(row=1, column=3, value="Presence=1, Absence=0")
+                    # Third sheet
+                    wb.create_sheet(title='Per Time Period', index=3)
+                    ws = wb['Per Time Period']
+                    ws.cell(row=1, column=1, value="File Name")
+                    ws.cell(row=1, column=2, value="Page")
+                    ws.cell(row=1, column=3, value="Maximum certainty of species presence (0 = absent)")
 
                 # Hack to delete original sheet
                 del wb['Sheet']
@@ -567,28 +588,39 @@ class SegmentList(list):
             # extract segments for the current species
             # if species=="All", take ALL segments.
             if species=="Any sound":
-                speciesSegs = range(len(self))
+                speciesSegs = self
             else:
-                speciesSegs = self.getSpecies(species)
+                speciesSegs = [self[ix] for ix in self.getSpecies(species)]
 
             # export segments
             writeToExcelp1(wb, speciesSegs, species)
-            # export presence/absence
-            writeToExcelp2(wb, speciesSegs)
 
-            # Generate per second binary output
-            # (assuming all pages are of same length as current data)
-            for p in range(0, numpages):
-                detected = np.zeros(pagelen)
-                for segi in speciesSegs:
-                    seg = self[segi]
-                    for t in range(pagelen):
-                        # convert within-page time to segment (within-file) time
-                        truet = t + p*pagelen
-                        if math.floor(seg[0]) <= truet and truet < math.ceil(seg[1]):
-                            detected[t] = 1
-                # write page p to xlsx
-                writeToExcelp3(wb, detected, p)
+            if species!="Any sound":
+                # extract the certainty from each label for current species
+                # to a 2D list of segs x [start, end, certainty]
+                speciesCerts = []
+                for seg in speciesSegs:
+                    for lab in seg[4]:
+                        if lab["species"]==species:
+                            speciesCerts.append([seg[0], seg[1], lab["certainty"]])
+
+                # export presence/absence and max certainty
+                writeToExcelp2(wb, speciesCerts)
+
+                # Generate per second binary output
+                # (assuming all pages are of same length as current data)
+                for p in range(0, numpages):
+                    detected = np.zeros(pagelen)
+                    # convert segs to max certainty at each second
+                    for seg in speciesCerts:
+                        for t in range(pagelen):
+                            # convert within-page time to segment (within-file) time
+                            truet = t + p*pagelen
+                            if math.floor(seg[0]) <= truet and truet < math.ceil(seg[1]):
+                                # store certainty if it's larger
+                                detected[t] = max(detected[t], seg[2])
+                    # write page p to xlsx
+                    writeToExcelp3(wb, detected, p)
 
             # Save the file
             try:
