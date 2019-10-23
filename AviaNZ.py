@@ -1697,6 +1697,8 @@ class AviaNZ(QMainWindow):
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         if "Filtered spectrogram" in self.extra:
             self.p_plot.setXRange(minX, maxX, padding=0)
+        elif self.extra=="Wavelet scalogram":
+            self.p_plot.setXRange(self.convertSpectoAmpl(minX)*4, self.convertSpectoAmpl(maxX)*4)
         # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
         self.pointData.setPos(minX,0)
@@ -1814,12 +1816,17 @@ class AviaNZ(QMainWindow):
 
             # passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
-            e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
+            e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate, window=0.25, inc=0.25)
             # e is 2^nlevels x nseconds
+
+            # show only leaf nodes:
+            print(np.shape(e))
+            e = np.log(e[30:62,:])
 
             pos, colour, mode = colourMaps.colourMaps("Inferno")
             cmap = pg.ColorMap(pos, colour, mode)
             lut = cmap.getLookupTable(0.0, 1.0, 256)
+
             self.plotExtra.setLookupTable(lut)
             self.plotExtra.setImage(e.T)
             self.plotaxis.setLabel('Wavelet node')
