@@ -337,53 +337,39 @@ class WaveletSegment:
         return detected, self.detected_out
 
 
-    def computeWaveletEnergy(self, data, sampleRate, nlevels=5, wpmode="new", window=1, inc=1, resol=1):
+    def computeWaveletEnergy(self, data, sampleRate, nlevels=5, wpmode="new", window=1, inc=1):
         """ Computes the energy of the nodes in the wavelet packet decomposition
         Args:
         1. data (waveform)
         2. sample rate
         3. max levels for WP decomposition
         4. WP style ("new"-our non-downsampled, "aa"-our fully AA'd)
+        5-6. window and inc in seconds, as in other functions. NOTE: this does NOT take into account annotation length
         There are 62 coefficients up to level 5 of the wavelet tree (without root!!), and 300 seconds [N sliding window] in 5 mins
         Hence returned coefs would then be a 62*300 matrix [62*N matrix]
+        For smaller windows (controlled by window and inc args), returns the energy within each window, so the return has len/inc columns.
         The energy is the sum of the squares of the data in each node divided by the total in that level of the tree as a percentage.
         """
-
-        # Virginia changes:
-        # Added window and inc input
-        # Window is window length in sec.
-        # Inc is increment length in sec.
-        # Energy is calculated on sliding windows
-        # the window is a "centered" window
 
         if data is None or sampleRate is None:
             print("ERROR: data and Fs need to be specified")
             return
 
-        #Virginia: number of samples in window
+        # number of samples in window
         win_sr = int(math.ceil(window*sampleRate))
-        # half-window length in samples
-        #win_sr2=int(math.ceil(win_sr/2))
-        #Virginia: number of sample in increment
+        # number of sample in increment
         inc_sr = math.ceil(inc*sampleRate)
-        #Virginia: number of samples in resolution
-        resol_sr = math.ceil(resol * sampleRate)
-        #Virginia: needed to generate coef of the same size of annotations
-        step = int(inc/resol)
 
-        #Virginia:number of windows = number of sliding window at resol distance
-        N = int(math.ceil(len(data)/resol_sr))
-
-        #Virginia: changed columns dimension -> must be equal to number of sliding window
+        # output columns dimension equal to number of sliding window
+        N = int(math.ceil(len(data)/inc_sr))
         coefs = np.zeros((2 ** (nlevels + 1) - 2, N))
 
-        #Virginia-> for each sliding window:
+        # for each sliding window:
         # start is the sample start of a window
-        #end is the sample end of a window
-        #We are working with sliding windows starting from the file start
-        start = 0 #inizialization
-        #Virginia: the loop works on the resolution scale to adjust with annotations
-        for t in range(0, N, step):
+        # end is the sample end of a window
+        # We are working with sliding windows starting from the file start
+        start = 0
+        for t in range(N):
             E = []
             end = min(len(data), start+win_sr)
             # generate a WP
@@ -406,11 +392,8 @@ class WaveletSegment:
                     e = 100.0 * e / np.sum(e)
                 E = np.concatenate((E, e), axis=0)
 
-
-            #Virginia:update start
-            start += inc_sr     # Virginia: corrected
-            for T in range(t, t+step):
-                coefs[:, T] = E
+            start += inc_sr
+            coefs[:,t] = E
         return coefs
 
 
