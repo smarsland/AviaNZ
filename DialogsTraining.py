@@ -856,10 +856,13 @@ class BuildRecAdvWizard(QWizard):
             form1_step4 = QFormLayout()
             self.minlen = QLineEdit(self)
             self.minlen.setText('')
-            form1_step4.addRow('Min syllable length (secs)', self.minlen)
+            form1_step4.addRow('Min call length (secs)', self.minlen)
             self.maxlen = QLineEdit(self)
             self.maxlen.setText('')
             form1_step4.addRow('Max call length (secs)', self.maxlen)
+            self.avgslen = QLineEdit(self)
+            self.avgslen.setText('')
+            form1_step4.addRow('Avg syllable length (secs)', self.avgslen)
             self.maxgap = QLineEdit(self)
             self.maxgap.setText('')
             form1_step4.addRow('Max gap between syllables (secs)', self.maxgap)
@@ -886,14 +889,14 @@ class BuildRecAdvWizard(QWizard):
 
             # thr, M parameters
             thrLabel = QLabel('ROC curve points per line (thr)')
-            MLabel = QLabel('ROC curve lines (M)')
+            # MLabel = QLabel('ROC curve lines (M)')
             self.cbxThr = QComboBox()
             self.cbxThr.addItems(['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'])
-            self.cbxM = QComboBox()
-            self.cbxM.addItems(['2', '3', '4', '5'])
+            # self.cbxM = QComboBox()
+            # self.cbxM.addItems(['2', '3', '4', '5'])
             form2_step4 = QFormLayout()
             form2_step4.addRow(thrLabel, self.cbxThr)
-            form2_step4.addRow(MLabel, self.cbxM)
+            # form2_step4.addRow(MLabel, self.cbxM)
 
             ### Step4 layout
             hboxTop = QHBoxLayout()
@@ -938,6 +941,7 @@ class BuildRecAdvWizard(QWizard):
             # Get max inter syllable gap
             gaps = []
             maxgap = 0
+            syllen = []
             for longseg in self.segments:
                 if len(longseg[2]) > 1:
                     for i in range(len(longseg[2]) - 1):
@@ -945,9 +949,17 @@ class BuildRecAdvWizard(QWizard):
             if len(gaps) > 0:
                 maxgap = max(gaps)
 
+            for longseg in self.segments:
+                for i in range(len(longseg[2])):
+                    syllen.append(longseg[2][i][1] - longseg[2][i][0])
+
+            if len(gaps) > 0:
+                avgslen = np.mean(syllen)
+
             self.minlen.setText(str(round(np.min(len_min),2)))
             self.maxlen.setText(str(round(np.max(len_max),2)))
             self.maxgap.setText(str(round(maxgap,2)))
+            self.avgslen.setText(str(round(avgslen,2)))
             self.fLow.setRange(0, fs/2)
             self.fLow.setValue(max(0,int(np.min(f_low))))
             self.fHigh.setRange(0, fs/2)
@@ -1071,12 +1083,13 @@ class BuildRecAdvWizard(QWizard):
             minlen = float(self.field("minlen"+str(self.pageId)))
             maxlen = float(self.field("maxlen"+str(self.pageId)))
             maxgap = float(self.field("maxgap" + str(self.pageId)))
+            avgslen = float(self.field("avgslen" + str(self.pageId)))
             fLow = int(self.field("fLow"+str(self.pageId)))
             fHigh = int(self.field("fHigh"+str(self.pageId)))
             numthr = int(self.field("thr"+str(self.pageId)))
-            numM = int(self.field("M"+str(self.pageId)))
+            # numM = int(self.field("M"+str(self.pageId)))
             # note: for each page we reset the filter to contain 1 calltype
-            self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, maxgap], 'FreqRange': [fLow, fHigh]}]
+            self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh]}]
 
             # export 1/0 ground truth
             window = 1
@@ -1117,7 +1130,8 @@ class BuildRecAdvWizard(QWizard):
                 ws = WaveletSegment.WaveletSegment(self.wizard().speciesData)
                 # returns 2d lists of nodes over M x thr, or stats over M x thr
                 self.thrList = np.linspace(0.2, 1, num=numthr)
-                self.MList = np.linspace(0.25, 1.5, num=numM)  # TODO determine from syllable length
+                # self.MList = np.linspace(0.25, 1.5, num=numM)
+                self.MList = np.linspace(avgslen, avgslen, num=1)
                 # options for training are:
                 #  recold - no antialias, recaa - partial AA, recaafull - full AA
                 #  Window and inc - in seconds
@@ -1374,6 +1388,7 @@ class BuildRecAdvWizard(QWizard):
                 minlen = float(self.field("minlen"+str(pageId)))
                 maxlen = float(self.field("maxlen"+str(pageId)))
                 maxgap = float(self.field("maxgap" + str(pageId)))
+                avgslen = float(self.field("avgslen" + str(pageId)))
                 fLow = int(self.field("fLow"+str(pageId)))
                 fHigh = int(self.field("fHigh"+str(pageId)))
                 thr = float(self.field("bestThr"+str(pageId)))
@@ -1385,7 +1400,7 @@ class BuildRecAdvWizard(QWizard):
                 F0low = int(self.field("F0low"+str(pageId)))
                 F0high = int(self.field("F0high"+str(pageId)))
 
-                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
+                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
 
                 if F0:
                     newSubfilt["F0"] = True
@@ -1495,10 +1510,11 @@ class BuildRecAdvWizard(QWizard):
             page4.registerField("minlen"+str(pageid), page4.minlen)
             page4.registerField("maxlen"+str(pageid), page4.maxlen)
             page4.registerField("maxgap" + str(pageid), page4.maxgap)
+            page4.registerField("avgslen" + str(pageid), page4.avgslen)
             page4.registerField("fLow"+str(pageid), page4.fLow)
             page4.registerField("fHigh"+str(pageid), page4.fHigh)
             page4.registerField("thr"+str(pageid), page4.cbxThr, "currentText", page4.cbxThr.currentTextChanged)
-            page4.registerField("M"+str(pageid), page4.cbxM, "currentText", page4.cbxM.currentTextChanged)
+            # page4.registerField("M"+str(pageid), page4.cbxM, "currentText", page4.cbxM.currentTextChanged)
 
             # page 5: get training results
             page5 = BuildRecAdvWizard.WPageTrain(pageid, key, value, newsegs)
