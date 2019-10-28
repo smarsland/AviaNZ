@@ -611,65 +611,64 @@ class BuildRecAdvWizard(QWizard):
                 if self.picbuttons[ix].mark == 'yellow':
                     inds.append(ix)
 
-            if len(inds) > 0:
-                self.segsChanged = True
-                segments = []
-                picbuttons = []
-                for ix in range(len(self.picbuttons)):
-                    if ix not in inds:
-                        segments.append(self.segments[ix])
-                        picbuttons.append(self.picbuttons[ix])
-                self.segments = segments
-                self.picbuttons = picbuttons
+            if len(inds)==0:
+                print("No segments selected")
+                return
 
-                # update self.clusters, delete clusters with no members
-                todelete = []
-                for ID, label in self.clusters.items():
-                    empty = True
-                    for seg in self.segments:
-                        if seg[-1] == ID:
-                            empty = False
-                            break
-                    if empty:
-                        todelete.append(ID)
+            self.segsChanged = True
+            for ix in reversed(inds):
+                del self.segments[ix]
+                del self.picbuttons[ix]
 
-                self.clearButtons()
+            # update self.clusters, delete clusters with no members
+            todelete = []
+            for ID, label in self.clusters.items():
+                empty = True
+                for seg in self.segments:
+                    if seg[-1] == ID:
+                        empty = False
+                        break
+                if empty:
+                    todelete.append(ID)
 
-                # Generate new class labels
-                if len(todelete) > 0:
-                    keys = [i for i in range(self.nclasses) if i not in todelete]        # the old keys those didn't delete
-                    # print('old keys left: ', keys)
+            self.clearButtons()
 
-                    nclasses = self.nclasses - len(todelete)
-                    max_label = nclasses - 1
-                    labels = []
-                    c = self.nclasses - 1
-                    while c > -1:
-                        if c in keys:
-                            labels.append((c, max_label))
-                            max_label -= 1
-                        c -= 1
+            # Generate new class labels
+            if len(todelete) > 0:
+                keys = [i for i in range(self.nclasses) if i not in todelete]        # the old keys those didn't delete
+                # print('old keys left: ', keys)
 
-                    labels = dict(labels)
-                    # print(labels)
+                nclasses = self.nclasses - len(todelete)
+                max_label = nclasses - 1
+                labels = []
+                c = self.nclasses - 1
+                while c > -1:
+                    if c in keys:
+                        labels.append((c, max_label))
+                        max_label -= 1
+                    c -= 1
 
-                    # update clusters dictionary {ID: cluster_name}
-                    clusters = {}
-                    for i in keys:
-                        clusters.update({labels[i]: self.clusters[i]})
+                labels = dict(labels)
+                # print(labels)
 
-                    print('before delete: ', self.clusters)
-                    self.clusters = clusters
-                    print('after delete: ', self.clusters)
+                # update clusters dictionary {ID: cluster_name}
+                clusters = {}
+                for i in keys:
+                    clusters.update({labels[i]: self.clusters[i]})
 
-                    # update the segments
-                    for seg in self.segments:
-                        seg[-1] = labels[seg[-1]]
+                print('before delete: ', self.clusters)
+                self.clusters = clusters
+                print('after delete: ', self.clusters)
 
-                    self.nclasses = nclasses
+                # update the segments
+                for seg in self.segments:
+                    seg[-1] = labels[seg[-1]]
 
-                # redraw the buttons
-                self.updateButtons()
+                self.nclasses = nclasses
+
+            # redraw the buttons
+            self.updateButtons()
+            self.completeChanged.emit()
 
         def updateClusterNames(self):
             # Check duplicate names
@@ -861,6 +860,9 @@ class BuildRecAdvWizard(QWizard):
             self.maxlen = QLineEdit(self)
             self.maxlen.setText('')
             form1_step4.addRow('Max call length (secs)', self.maxlen)
+            self.avgslen = QLineEdit(self)
+            self.avgslen.setText('')
+            form1_step4.addRow('Avg syllable length (secs)', self.avgslen)
             self.maxgap = QLineEdit(self)
             self.maxgap.setText('')
             form1_step4.addRow('Max gap between syllables (secs)', self.maxgap)
@@ -887,14 +889,14 @@ class BuildRecAdvWizard(QWizard):
 
             # thr, M parameters
             thrLabel = QLabel('ROC curve points per line (thr)')
-            MLabel = QLabel('ROC curve lines (M)')
+            # MLabel = QLabel('ROC curve lines (M)')
             self.cbxThr = QComboBox()
             self.cbxThr.addItems(['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'])
-            self.cbxM = QComboBox()
-            self.cbxM.addItems(['2', '3', '4', '5'])
+            # self.cbxM = QComboBox()
+            # self.cbxM.addItems(['2', '3', '4', '5'])
             form2_step4 = QFormLayout()
             form2_step4.addRow(thrLabel, self.cbxThr)
-            form2_step4.addRow(MLabel, self.cbxM)
+            # form2_step4.addRow(MLabel, self.cbxM)
 
             ### Step4 layout
             hboxTop = QHBoxLayout()
@@ -939,6 +941,7 @@ class BuildRecAdvWizard(QWizard):
             # Get max inter syllable gap
             gaps = []
             maxgap = 0
+            syllen = []
             for longseg in self.segments:
                 if len(longseg[2]) > 1:
                     for i in range(len(longseg[2]) - 1):
@@ -946,9 +949,17 @@ class BuildRecAdvWizard(QWizard):
             if len(gaps) > 0:
                 maxgap = max(gaps)
 
+            for longseg in self.segments:
+                for i in range(len(longseg[2])):
+                    syllen.append(longseg[2][i][1] - longseg[2][i][0])
+
+            if len(gaps) > 0:
+                avgslen = np.mean(syllen)
+
             self.minlen.setText(str(round(np.min(len_min),2)))
             self.maxlen.setText(str(round(np.max(len_max),2)))
             self.maxgap.setText(str(round(maxgap,2)))
+            self.avgslen.setText(str(round(avgslen,2)))
             self.fLow.setRange(0, fs/2)
             self.fLow.setValue(max(0,int(np.min(f_low))))
             self.fHigh.setRange(0, fs/2)
@@ -1072,12 +1083,13 @@ class BuildRecAdvWizard(QWizard):
             minlen = float(self.field("minlen"+str(self.pageId)))
             maxlen = float(self.field("maxlen"+str(self.pageId)))
             maxgap = float(self.field("maxgap" + str(self.pageId)))
+            avgslen = float(self.field("avgslen" + str(self.pageId)))
             fLow = int(self.field("fLow"+str(self.pageId)))
             fHigh = int(self.field("fHigh"+str(self.pageId)))
             numthr = int(self.field("thr"+str(self.pageId)))
-            numM = int(self.field("M"+str(self.pageId)))
+            # numM = int(self.field("M"+str(self.pageId)))
             # note: for each page we reset the filter to contain 1 calltype
-            self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, maxgap], 'FreqRange': [fLow, fHigh]}]
+            self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh]}]
 
             # export 1/0 ground truth
             window = 1
@@ -1118,7 +1130,8 @@ class BuildRecAdvWizard(QWizard):
                 ws = WaveletSegment.WaveletSegment(self.wizard().speciesData)
                 # returns 2d lists of nodes over M x thr, or stats over M x thr
                 self.thrList = np.linspace(0.2, 1, num=numthr)
-                self.MList = np.linspace(0.25, 1.5, num=numM)  # TODO determine from syllable length
+                # self.MList = np.linspace(0.25, 1.5, num=numM)
+                self.MList = np.linspace(avgslen, avgslen, num=1)
                 # options for training are:
                 #  recold - no antialias, recaa - partial AA, recaafull - full AA
                 #  Window and inc - in seconds
@@ -1375,6 +1388,7 @@ class BuildRecAdvWizard(QWizard):
                 minlen = float(self.field("minlen"+str(pageId)))
                 maxlen = float(self.field("maxlen"+str(pageId)))
                 maxgap = float(self.field("maxgap" + str(pageId)))
+                avgslen = float(self.field("avgslen" + str(pageId)))
                 fLow = int(self.field("fLow"+str(pageId)))
                 fHigh = int(self.field("fHigh"+str(pageId)))
                 thr = float(self.field("bestThr"+str(pageId)))
@@ -1386,7 +1400,7 @@ class BuildRecAdvWizard(QWizard):
                 F0low = int(self.field("F0low"+str(pageId)))
                 F0high = int(self.field("F0high"+str(pageId)))
 
-                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
+                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
 
                 if F0:
                     newSubfilt["F0"] = True
@@ -1496,10 +1510,11 @@ class BuildRecAdvWizard(QWizard):
             page4.registerField("minlen"+str(pageid), page4.minlen)
             page4.registerField("maxlen"+str(pageid), page4.maxlen)
             page4.registerField("maxgap" + str(pageid), page4.maxgap)
+            page4.registerField("avgslen" + str(pageid), page4.avgslen)
             page4.registerField("fLow"+str(pageid), page4.fLow)
             page4.registerField("fHigh"+str(pageid), page4.fHigh)
             page4.registerField("thr"+str(pageid), page4.cbxThr, "currentText", page4.cbxThr.currentTextChanged)
-            page4.registerField("M"+str(pageid), page4.cbxM, "currentText", page4.cbxM.currentTextChanged)
+            # page4.registerField("M"+str(pageid), page4.cbxM, "currentText", page4.cbxM.currentTextChanged)
 
             # page 5: get training results
             page5 = BuildRecAdvWizard.WPageTrain(pageid, key, value, newsegs)
@@ -1654,7 +1669,6 @@ class TestRecWizard(QWizard):
             form2.addWidget(space)
             form2.addRow("Specificity:", self.spec)
             form2.addRow("Recall (sensitivity):", self.sens)
-            form2.addRow("FPR:", self.FPR)
             form2.addRow("Precision (PPV):", self.prec)
             form2.addRow("Accuracy:", self.acc)
 
@@ -1670,7 +1684,10 @@ class TestRecWizard(QWizard):
             testresfile = os.path.join(self.field("testDir"), "test-results.txt")
             # run the actual testing here:
             with pg.BusyCursor():
-                self.wizard().rerunCalltypes(testresfile)
+                outfile = open(testresfile, 'w')
+                # this will create self.detected01post_allcts list,
+                # and also write output to the output txt file
+                self.wizard().rerunCalltypes(outfile)
 
                 speciesData = self.wizard().filterlist[self.field("species")[:-4]]
 
@@ -1685,34 +1702,41 @@ class TestRecWizard(QWizard):
                 # get and parse the agreement metrics
                 fB, recall, TP, FP, TN, FN = ws.fBetaScore(self.wizard().annotations, detections)
 
-            total = TP+FP+TN+FN
-            if total == 0:
-                print("ERROR: failed to find any testing data")
-                return
+                total = TP+FP+TN+FN
+                if total == 0:
+                    print("ERROR: failed to find any testing data")
+                    return
 
-            if TP+FN != 0:
-                recall = TP/(TP+FN)
-            else:
-                recall = 0
-            if TP+FP != 0:
-                precision = TP/(TP+FP)
-            else:
-                precision = 0
-            if TN+FP != 0:
-                specificity = TN/(TN+FP)
-            else:
-                specificity = 0
+                if TP+FN != 0:
+                    recall = TP/(TP+FN)
+                else:
+                    recall = 0
+                if TP+FP != 0:
+                    precision = TP/(TP+FP)
+                else:
+                    precision = 0
+                if TN+FP != 0:
+                    specificity = TN/(TN+FP)
+                else:
+                    specificity = 0
 
-            accuracy = (TP+TN)/(TP+FP+TN+FN)
+                accuracy = (TP+TN)/(TP+FP+TN+FN)
+                outfile.write("-- Final species-level results --\n")
+                outfile.write("TP | FP | TN | FN seconds:\t %.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
+                outfile.write("Specificity:\t\t%d %%\n" % (specificity*100))
+                outfile.write("Recall (sensitivity):\t%d %%\n" % (recall*100))
+                outfile.write("Precision (PPV):\t%d %%\n" % (precision*100))
+                outfile.write("Accuracy:\t\t%d %%\n" % (accuracy*100))
+                outfile.write("-- End of testing --\n")
+                outfile.close()
 
-            self.labTP.setText("%.1f %%" % (TP*100/total))
-            self.labFP.setText("%.1f %%" % (FP*100/total))
-            self.labTN.setText("%.1f %%" % (TN*100/total))
-            self.labFN.setText("%.1f %%" % (FN*100/total))
+            self.labTP.setText("%d seconds\t(%.1f %%)" % (TP, TP*100/total))
+            self.labFP.setText("%d seconds\t(%.1f %%)" % (FP, FP*100/total))
+            self.labTN.setText("%d seconds\t(%.1f %%)" % (TN, TN*100/total))
+            self.labFN.setText("%d seconds\t(%.1f %%)" % (FN, FN*100/total))
 
             self.spec.setText("%.1f %%" % (specificity*100))
             self.sens.setText("%.1f %%" % (recall*100))
-            self.FPR.setText("%.1f %%" % (100-specificity*100))
             self.prec.setText("%.1f %%" % (precision*100))
             self.acc.setText("%.1f %%" % (accuracy*100))
 
@@ -1806,15 +1830,15 @@ class TestRecWizard(QWizard):
             print("ERROR: no segments for species %s found" % species)
             return
 
-        # open output txt for testing
-        file = open(outfile, 'w')
-        file.write("Recogniser name:\t" + speciesData["species"]+"\n")
-        file.write("-------------------------\n\n")
+        # start writing the results to an output txt file
+        outfile.write("Recogniser name:\t" + speciesData["species"]+"\n")
+        outfile.write("Using data:\t" + self.field("testDir") +"\n")
+        outfile.write("-------------------------\n\n")
 
         # run the test for each calltype:
         self.detected01post_allcts = []
         for subfilter in speciesData["Filters"]:
-            file.write("Target calltype:\t" + subfilter["calltype"] +"\n")
+            outfile.write("Target calltype:\t" + subfilter["calltype"] +"\n")
             # first return value: single array of 0/1 detections over all files
             # second return value: list of tuples ([segments], filename, filelen) for each file
             detected01, detectedS = ws.waveletSegment_test(self.field("testDir"),
@@ -1829,16 +1853,33 @@ class TestRecWizard(QWizard):
             if total == 0:
                 print("ERROR: failed to find any testing data")
                 return
+            if TP+FN != 0:
+                recall = TP/(TP+FN)
+            else:
+                recall = 0
+            if TP+FP != 0:
+                precision = TP/(TP+FP)
+            else:
+                precision = 0
+            if TN+FP != 0:
+                specificity = TN/(TN+FP)
+            else:
+                specificity = 0
+            accuracy = (TP+TN)/(TP+FP+TN+FN)
 
             totallen = sum([len(detfile[0]) for detfile in detectedS])
 
             # store results in the txt file
-            file.write("--Detection summary--\n")
-            file.write("Manually labelled segments:\t"+ str(manSegNum) +"\n")
-            file.write("\ttotal seconds:\t%.1f\n" % (TP+FN))
-            file.write("Segments detected:\t\t%s\n" % str(totallen))
-            file.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
-            file.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (TP/(TP+FN)*100))
+            outfile.write("--Detection summary--\n")
+            outfile.write("Manually labelled segments:\t"+ str(manSegNum) +"\n")
+            outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FN))
+            outfile.write("Total segments detected:\t\t%s\n" % str(totallen))
+            outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
+            outfile.write("TP | FP | TN | FN seconds:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
+            outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (recall*100))
+            outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (precision*100))
+            outfile.write("Specificity in 1 s resolution:\t\t%d %%\n" % (specificity*100))
+            outfile.write("Accuracy in 1 s resolution:\t\t%d %%\n" % (accuracy*100))
 
             # Post process:
             if "F0" in subfilter and subfilter["F0"]:
@@ -1862,23 +1903,40 @@ class TestRecWizard(QWizard):
                 # and detected01 and self.detected01post - corresponding pres/abs marks
 
                 # update agreement measures
+                totallenP = len(detectedSpost)
                 _, _, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, detected01post)
                 print('--Post-processing summary--\n%d %d %d %d' %(TP, FP, TN, FN))
-                totallenP = len(detectedSpost)
+                if TP+FN != 0:
+                    recall = TP/(TP+FN)
+                else:
+                    recall = 0
+                if TP+FP != 0:
+                    precision = TP/(TP+FP)
+                else:
+                    precision = 0
+                if TN+FP != 0:
+                    specificity = TN/(TN+FP)
+                else:
+                    specificity = 0
+                accuracy = (TP+TN)/(TP+FP+TN+FN)
             else:
                 print('No post-processing required')
                 totallenP = totallen
                 detected01post = detected01
+                # (all agreement metrics will remain the same)
+
             # store the final detections of this calltype
             self.detected01post_allcts.append(detected01post)
 
-            file.write("--After post-processing--\n")
-            file.write("Segments detected:\t\t%s\n" % str(totallenP))
-            file.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
-            file.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (TP/(TP+FN)*100))
-            file.write("-------------------------\n\n")
-
-        file.close()
+            outfile.write("--After post-processing--\n")
+            outfile.write("Total segments detected:\t\t%s\n" % str(totallenP))
+            outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
+            outfile.write("TP | FP | TN | FN seconds:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
+            outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (recall*100))
+            outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (precision*100))
+            outfile.write("Specificity in 1 s resolution:\t\t%d %%\n" % (specificity*100))
+            outfile.write("Accuracy in 1 s resolution:\t\t%d %%\n" % (accuracy*100))
+            outfile.write("-------------------------\n\n")
 
 
 class ROCCanvas(FigureCanvas):

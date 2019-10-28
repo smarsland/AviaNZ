@@ -229,9 +229,10 @@ pg.graphicsItems.InfiniteLine.InfiniteLine.mouseDragEvent = mouseDragEventFlexib
 
 
 class LinearRegionItem2(pg.LinearRegionItem):
-    def __init__(self, parent, *args, **kwds):
-        pg.LinearRegionItem.__init__(self, *args, **kwds)
+    def __init__(self, parent, bounds=None, *args, **kwds):
+        pg.LinearRegionItem.__init__(self, bounds, *args, **kwds)
         self.parent = parent
+        self.bounds = bounds
         self.lines[0].btn = self.parent.MouseDrawingButton
         self.lines[1].btn = self.parent.MouseDrawingButton
 
@@ -250,8 +251,24 @@ class LinearRegionItem2(pg.LinearRegionItem):
             return
 
         self.lines[0].blockSignals(True)  # only want to update once
+        newcenter = ev.pos()
+        # added this to bound its dragging, as in ROI.
+        # first, adjust center position to avoid dragging too far:
         for i, l in enumerate(self.lines):
-            l.setPos(self.cursorOffsets[i] + ev.pos())
+            tomove = self.cursorOffsets[i] + newcenter
+            if self.bounds is not None:
+                # stop center from moving too far left
+                if tomove.x() < self.bounds[0]:
+                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[0])
+                # stop center from moving too far right
+                if tomove.x() > self.bounds[1]:
+                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[1])
+
+        # update lines based on adjusted center
+        for i, l in enumerate(self.lines):
+            tomove = self.cursorOffsets[i] + newcenter
+            l.setPos(tomove)
+
         self.lines[0].blockSignals(False)
         self.prepareGeometryChange()
 

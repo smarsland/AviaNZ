@@ -24,33 +24,20 @@
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
 import os
-import time
-import platform
-import wavio
-import json
 import shutil
 
-from PyQt5.QtGui import QIcon, QPixmap, QValidator, QAbstractItemView
+from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import QDir, QPointF, QTime, Qt, QLineF
+from PyQt5.QtCore import QDir, QPointF, QTime, Qt
 
-import matplotlib.markers as mks
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mtick
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
-import pyqtgraph.functions as fn
 
 import numpy as np
 import colourMaps
 import SupportClasses as SupportClasses
 import SignalProc
-import WaveletSegment
-import Segment
-import Clustering
 
 
 class StartScreen(QDialog):
@@ -727,6 +714,8 @@ class Segmentation(QDialog):
             self.species.show()
             self.maxgaplbl.hide()
             self.maxgap.hide()
+            self.minlenlbl.hide()
+            self.minlen.hide()
 
     def medSizeChange(self,value):
         self.medSizeText.setText("Minimum length: %s ms" % value)
@@ -1724,7 +1713,7 @@ class HumanClassify2(QDialog):
             # show segments which have midpoint in this page (ensures all are shown only once)
             mid = (segments[i][0] + segments[i][1]) / 2
             if mid < startRead or mid > startRead + len(audiodata)//sampleRate:
-                del self.indices2show[i]
+                self.indices2show.remove(i)
 
         self.errors = []
 

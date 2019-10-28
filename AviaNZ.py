@@ -26,7 +26,7 @@ from shutil import copyfile
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence
 from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut
-from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex
+from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt5.QtMultimedia import QAudio
 
 import wavio
@@ -254,7 +254,6 @@ class AviaNZ(QMainWindow):
 
         if self.DOC and not cheatsheet and not zooniverse:
             self.setOperatorReviewerDialog()
-
 
     def createMenu(self):
         """ Create the menu entries at the top of the screen and link them as appropriate.
@@ -801,7 +800,7 @@ class AviaNZ(QMainWindow):
         elif ev == Qt.Key_Escape and (self.media_obj.isPlaying() or self.media_slow.isPlaying()):
             self.stopPlayback()
 
-    def makeFullBirdList(self):
+    def makeFullBirdList(self, unsure=False):
         """ Makes a combo box holding the complete list of birds.
         Some work is needed to keep track of the indices since it's a two column
         list: species and subspecies in most cases.
@@ -818,6 +817,10 @@ class AviaNZ(QMainWindow):
         headlist = []
         if self.longBirdList is not None:
             for bird in self.longBirdList:
+                # Add ? marks if Ctrl menu is called
+                if unsure and bird != "Don't Know" and bird != "Other":
+                    bird = bird+'?'
+
                 ind = bird.find('>')
                 if ind == -1:
                     ind = len(bird)
@@ -935,7 +938,7 @@ class AviaNZ(QMainWindow):
                     bird.setChecked(True)
                 self.menuBird2.addAction(bird)
 
-            self.fullbirdlist = self.makeFullBirdList()  # a QComboBox
+            self.fullbirdlist = self.makeFullBirdList(unsure=unsure)  # a QComboBox
             self.showFullbirdlist = QWidgetAction(self.menuBirdList)
             self.showFullbirdlist.setDefaultWidget(self.fullbirdlist)
             self.menuBird2.addAction(self.showFullbirdlist)
@@ -1217,6 +1220,7 @@ class AviaNZ(QMainWindow):
                 # resample to 16K if needed (SignalProc will determine)
                 if cs:
                     self.sp.resample(16000)
+                    self.sp.maxFreqShow = 8000
 
                 # Parse wav format details based on file header:
                 self.sampleRate = self.sp.sampleRate
@@ -1693,6 +1697,8 @@ class AviaNZ(QMainWindow):
             self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         if "Filtered spectrogram" in self.extra:
             self.p_plot.setXRange(minX, maxX, padding=0)
+        elif self.extra=="Wavelet scalogram":
+            self.p_plot.setXRange(self.convertSpectoAmpl(minX)*4, self.convertSpectoAmpl(maxX)*4)
         # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
         self.pointData.setPos(minX,0)
@@ -1810,12 +1816,17 @@ class AviaNZ(QMainWindow):
 
             # passing dummy spInfo because we only use this for a function
             ws = WaveletSegment.WaveletSegment(spInfo={}, wavelet='dmey2')
-            e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate)
+            e = ws.computeWaveletEnergy(self.audiodata, self.sampleRate, window=0.25, inc=0.25)
             # e is 2^nlevels x nseconds
+
+            # show only leaf nodes:
+            print(np.shape(e))
+            e = np.log(e[30:62,:])
 
             pos, colour, mode = colourMaps.colourMaps("Inferno")
             cmap = pg.ColorMap(pos, colour, mode)
             lut = cmap.getLookupTable(0.0, 1.0, 256)
+
             self.plotExtra.setLookupTable(lut)
             self.plotExtra.setImage(e.T)
             self.plotaxis.setLabel('Wavelet node')
@@ -1987,36 +1998,37 @@ class AviaNZ(QMainWindow):
         while self.listRectanglesa2[i] != sender and i<len(self.listRectanglesa2):
             i = i+1
         if i==len(self.listRectanglesa2):
-            print("Segment not found!")
+            print("ERROR: segment not found!")
+            return
+
+        # update the overview boxes, step 1
+        self.refreshOverviewWith(self.segments[i], delete=True)
+
+        # fix the position of the text label
+        if type(sender) == self.ROItype:
+            # using box coordinates
+            x1 = self.convertSpectoAmpl(sender.pos()[0])
+            x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
+            self.segments[i][2] = self.convertYtoFreq(sender.pos()[1])
+            self.segments[i][3] = self.convertYtoFreq(sender.pos()[1]+sender.size()[1])
+            self.listLabels[i].setPos(sender.pos()[0], self.textpos)
         else:
-            # update the overview boxes, step 1
-            self.refreshOverviewWith(self.segments[i], delete=True)
+            # using segment coordinates
+            x1 = self.convertSpectoAmpl(sender.getRegion()[0])
+            x2 = self.convertSpectoAmpl(sender.getRegion()[1])
+            self.listLabels[i].setPos(sender.getRegion()[0], self.textpos)
 
-            # fix the position of the text label
-            if type(sender) == self.ROItype:
-                # using box coordinates
-                x1 = self.convertSpectoAmpl(sender.pos()[0])
-                x2 = self.convertSpectoAmpl(sender.pos()[0]+sender.size()[0])
-                self.segments[i][2] = self.convertYtoFreq(sender.pos()[1])
-                self.segments[i][3] = self.convertYtoFreq(sender.pos()[1]+sender.size()[1])
-                self.listLabels[i].setPos(sender.pos()[0], self.textpos)
-            else:
-                # using segment coordinates
-                x1 = self.convertSpectoAmpl(sender.getRegion()[0])
-                x2 = self.convertSpectoAmpl(sender.getRegion()[1])
-                self.listLabels[i].setPos(sender.getRegion()[0], self.textpos)
+        # update the amplitude segment
+        self.listRectanglesa1[i].blockSignals(True)
+        self.listRectanglesa1[i].setRegion([x1,x2])
+        self.listRectanglesa1[i].blockSignals(False)
+        self.segmentsToSave = True
 
-            # update the amplitude segment
-            self.listRectanglesa1[i].blockSignals(True)
-            self.listRectanglesa1[i].setRegion([x1,x2])
-            self.listRectanglesa1[i].blockSignals(False)
-            self.segmentsToSave = True
+        self.segments[i][0] = x1 + self.startRead
+        self.segments[i][1] = x2 + self.startRead
 
-            self.segments[i][0] = x1 + self.startRead
-            self.segments[i][1] = x2 + self.startRead
-
-            # update the overview boxes, step 2
-            self.refreshOverviewWith(self.segments[i])
+        # update the overview boxes, step 2
+        self.refreshOverviewWith(self.segments[i])
 
     def updateRegion_ampl(self):
         """ This is the listener for when a segment box is changed in the waveform plot.
@@ -2229,22 +2241,23 @@ class AviaNZ(QMainWindow):
         self.refreshOverviewWith(newSegment)
 
         segsMovable = not (self.config['readOnly'])
+        scenerect = QRectF(0, 0, np.shape(self.sg)[0], np.shape(self.sg)[1])
 
         # Add the segment in both plots and connect up the listeners
-        p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable)
+        p_ampl_r = SupportClasses.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable, bounds=[0, self.datalengthSec])
         self.p_ampl.addItem(p_ampl_r, ignoreBounds=True)
         p_ampl_r.setRegion([startpoint, endpoint])
         p_ampl_r.sigRegionChangeFinished.connect(self.updateRegion_ampl)
 
         # full-height segments:
         if y1==0 and y2==0:
-            p_spec_r = SupportClasses.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable)
+            p_spec_r = SupportClasses.LinearRegionItem2(self, brush=self.prevBoxCol, movable=segsMovable, bounds=[0, np.shape(self.sg)[0]])
             p_spec_r.setRegion([self.convertAmpltoSpec(startpoint), self.convertAmpltoSpec(endpoint)])
         # rectangle boxes:
         else:
             startpointS = QPointF(self.convertAmpltoSpec(startpoint),max(y1,miny))
             endpointS = QPointF(self.convertAmpltoSpec(endpoint),min(y2,maxy))
-            p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, movable=segsMovable, parent=self)
+            p_spec_r = SupportClasses.ShadedRectROI(startpointS, endpointS - startpointS, movable=segsMovable, maxBounds=scenerect, parent=self)
             if self.config['transparentBoxes']:
                 col = self.prevBoxCol.rgb()
                 col = QtGui.QColor(col)
@@ -2435,6 +2448,7 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                self.p_ampl.setFocus()
 
                 # the new segment is now selected and can be played
                 self.selectSegment(self.box1id)
@@ -2594,6 +2608,7 @@ class AviaNZ(QMainWindow):
                     # Context menu
                     self.fillBirdList()
                     self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
+                self.p_spec.setFocus()
 
                 # select the new segment/box
                 self.selectSegment(self.box1id)
@@ -2734,7 +2749,11 @@ class AviaNZ(QMainWindow):
         if birdname is None:
             birdname = self.fullbirdlist.currentText()
         else:
-            birdname = birdname + ' (' + self.fullbirdlist.currentText() + ')'
+            # two-level name
+            if self.fullbirdlist.currentText().endswith('?'):
+                birdname = birdname + ' (' + self.fullbirdlist.currentText()[:-1] + ')?'
+            else:
+                birdname = birdname + ' (' + self.fullbirdlist.currentText() + ')'
         self.birdSelectedMenu(birdname)
         if not self.multipleBirds:
             self.menuBirdList.hide()
@@ -3104,9 +3123,15 @@ class AviaNZ(QMainWindow):
 
     def humanClassifyDialog1(self):
         """ Create the dialog that shows calls to the user for verification.
-        There are two versions in here depending on whether you wish to show them from all the pages (5 min sections), the default, or not.
-        The only difference is that that version requires sorting the segments and loading of new file sections and making the spectrogram intermittently.
+        Shows segments only from the page you are currently working in.
         """
+
+        # Start by sorting the segments into increasing time order,
+        # to make life easier
+        sortOrder = self.segments.orderTime()
+        self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
+        self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
+        self.listLabels = [self.listLabels[i] for i in sortOrder]
 
         self.saveSegments()
         # Store the current page to return to
@@ -3119,20 +3144,11 @@ class AviaNZ(QMainWindow):
             while self.box1id<len(self.segments) and self.listRectanglesa2[self.box1id] is None:
                 self.box1id += 1
 
-        if self.box1id == len(self.segments or len(self.listRectanglesa2)==0):
+        if self.box1id == len(self.segments) or len(self.listRectanglesa2)==0:
             msg = SupportClasses.MessagePopup("w", "No segments", "No segments to check")
             msg.exec_()
             return
         else:
-            # Note: currently showing segments in marking order, because resorting a SegmentList is tricky.
-
-            # Sort the segments into increasing time order, apply same order to listRects and labels
-            # sortOrder = sorted(range(len(self.segments)), key=self.segments.__getitem__)
-            # self.segments = [self.segments[i] for i in sortOrder]
-            # self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
-            # self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
-            # self.listLabels = [self.listLabels[i] for i in sortOrder]
-
             if self.config['ReorderList']:
                 # Get the list of birds from the file, and make sure they are in the shortlist
                 labels = []
@@ -3327,7 +3343,15 @@ class AviaNZ(QMainWindow):
     def humanRevDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
         """
+        # Start by sorting the segments into increasing time order,
+        # to make life easier
+        sortOrder = self.segments.orderTime()
+        self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
+        self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
+        self.listLabels = [self.listLabels[i] for i in sortOrder]
+
         self.saveSegments()
+
         # First, determine which segments will be shown (i.e. visible in current page):
         segsInPage = []
         for s in self.segments:
@@ -3506,7 +3530,8 @@ class AviaNZ(QMainWindow):
             WF = WaveletFunctions.WaveletFunctions(data=datatoplot, wavelet='dmey2', maxLevel=5, samplerate=spInfo['SampleRate'])
             WF.WaveletPacket(spSubf['WaveletParams']['nodes'], 'symmetric', aaType==-4, antialiasFilter=True)
             numNodes = len(spSubf['WaveletParams']['nodes'])
-            Esep = np.zeros(( numNodes, int(self.datalengthSec) ))
+            xs = np.arange(0, int(self.datalengthSec)+0.5, 0.25)
+            Esep = np.zeros(( numNodes, len(xs) ))
 
             ### DENOISING reference: relative |amp| on rec signals from each WP node, when wind is present
             ### just handmade from some wind examples
@@ -3534,7 +3559,8 @@ class AviaNZ(QMainWindow):
                         low=spSubf['FreqRange'][0], high=spSubf['FreqRange'][1])
 
                 C = np.abs(C)
-                E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
+                #E = ce_denoise.EnergyCurve(C, int( M*spInfo['SampleRate']/2 ))
+                E = C
                 C = np.log(C)
 
                 # some prep that doesn't need to be looped over t:
@@ -3548,9 +3574,11 @@ class AviaNZ(QMainWindow):
                 freqmax = self.convertFreqtoY(freqmax)
 
                 # get max (or mean) E for each second
-                # and normalize, so that we don't need to hardcode thr 
-                for w in range(int(self.datalengthSec)):
-                    maxE = np.mean(E[w*spInfo['SampleRate'] : (w+1)*spInfo['SampleRate']])
+                # and normalize, so that we don't need to hardcode thr
+                for w in range(len(xs)):
+                    start = int(w*0.25*spInfo['SampleRate'])
+                    end = int((w+1)*0.25*spInfo['SampleRate'])
+                    maxE = np.mean(E[start:end])
                     ### DENOISE:
                     # based on wind strength in this second, calculate estimated |wind| in this node
                     # and subtract from maxE
@@ -3559,15 +3587,14 @@ class AviaNZ(QMainWindow):
 
                     # mark detected calls on spectrogram
                     if markSpec and Esep[r,w] > spSubf['WaveletParams']['thr']:
-                        diagCall = pg.ROI((specs*w, (freqmin+freqmax)/2),
-                                (specs, freqmax-freqmin),
+                        diagCall = pg.ROI((specs*xs[w], (freqmin+freqmax)/2),
+                                (specs*0.25, freqmax-freqmin),
                                 pen=(255*r//numNodes,0,0), movable=False)
                         self.diagnosticCalls.append(diagCall)
                         self.p_spec.addItem(diagCall)
 
                 # plot
-                self.plotDiag = pg.PlotDataItem(np.arange(int(self.datalengthSec))+0.5, Esep[r,:],
-                        pen=fn.mkPen((255*r//numNodes,0,0), width=2))
+                self.plotDiag = pg.PlotDataItem(xs, Esep[r,:], pen=fn.mkPen((255*r//numNodes,0,0), width=2))
                 self.p_plot.addItem(self.plotDiag)
                 self.p_legend.addItem(self.plotDiag, str(node))
                 r = r + 1 
@@ -3616,8 +3643,7 @@ class AviaNZ(QMainWindow):
                 if hasattr(self, 'seg'):
                     self.seg.setNewData(self.sp)
 
-                name = self.filename.split(self.SoundFileDir)[-1]
-                self.loadFile(name)
+                self.loadFile(os.path.basename(self.filename))
                 # self.specPlot.setImage(self.sg)   # TODO: interface changes to adapt if window_len and incr changed! overview, main spec ect.
 
             self.redoFreqAxis(minFreq,maxFreq)
@@ -3983,7 +4009,7 @@ class AviaNZ(QMainWindow):
         self.buildRecAdvWizard.button(3).clicked.connect(self.saveNotestRecogniser)
         self.buildRecAdvWizard.saveTestBtn.clicked.connect(self.saveTestRecogniser)
         self.buildRecAdvWizard.activateWindow()
-        self.buildRecAdvWizard.show()
+        self.buildRecAdvWizard.exec_()
         # reread filters list with the new one
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
@@ -4105,7 +4131,7 @@ class AviaNZ(QMainWindow):
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
-                newSegments = ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
+                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
                 newSegments = ws.waveletSegment(0, wpmode="new")
 
             # TODO: make sure cross corr outputs lists of lists
@@ -4152,9 +4178,10 @@ class AviaNZ(QMainWindow):
                         post.rainClick()
                         print('After rain segments: ', len(post.segments))
                     if 'F0' in speciesData['Filters'][filtix] and 'F0Range' in speciesData['Filters'][filtix]:
-                        print("Checking for fundamental frequency...")
-                        post.fundamentalFrq()
-                        print("After FF segments:", len(post.segments))
+                        if speciesData['Filters'][filtix]['F0']:
+                            print("Checking for fundamental frequency...")
+                            post.fundamentalFrq()
+                            print("After FF segments:", len(post.segments))
                     segmenter = Segment.Segmenter()
                     post.segments = segmenter.joinGaps(post.segments, maxgap=speciesData['Filters'][filtix]['TimeRange'][2])
                     post.segments = segmenter.deleteShort(post.segments, minlength=speciesData['Filters'][filtix]['TimeRange'][0])
@@ -4249,6 +4276,12 @@ class AviaNZ(QMainWindow):
         else:
             # create new workbook, in effect
             action = "overwrite"
+
+        # sort the segments into increasing time order (to make neater output)
+        sortOrder = self.segments.orderTime()
+        self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
+        self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
+        self.listLabels = [self.listLabels[i] for i in sortOrder]
 
         # excel should be split by page size, but for short files just give the file size
         datalen = self.config['maxFileShow'] if self.nFileSections>1 else self.datalengthSec
@@ -4874,8 +4907,8 @@ class AviaNZ(QMainWindow):
         self.saveConfig = True
 
         self.resetStorageArrays()
-        name = self.filename.split(self.SoundFileDir)[-1]       # pass the file name to reset interface properly
-        self.loadFile(name)
+        # pass the file name to reset interface properly
+        self.loadFile(os.path.basename(self.filename))
 
 # ============
 # Various actions: deleting segments, saving, quitting
