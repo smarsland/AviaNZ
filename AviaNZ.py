@@ -4013,9 +4013,9 @@ class AviaNZ(QMainWindow):
         # reread filters list with the new one
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
-    def testRecogniser(self):
+    def testRecogniser(self, filter=None):
         """ Listener for the Test Recogniser action """
-        self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir)
+        self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir, filter)
         self.testRecWizard.show()
 
     def saveNotestRecogniser(self):
@@ -4045,7 +4045,7 @@ class AviaNZ(QMainWindow):
             msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
             msg.exec_()
             self.buildRecAdvWizard.done(1)
-            self.testRecogniser()
+            self.testRecogniser(filter=os.path.basename(filename))
         except Exception as e:
             print("ERROR: could not save recogniser because:", e)
             self.buildRecAdvWizard.done(0)
