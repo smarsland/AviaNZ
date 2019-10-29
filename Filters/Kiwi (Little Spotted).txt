@@ -4,9 +4,11 @@
   {"calltype": "high",
   "TimeRange": [3.0, 44.56, 1.5, 2],
   "FreqRange": [1294, 6488],
+  "F0": false,
   "WaveletParams": {"thr": 0.4666666666666667, "M": 1.5, "nodes": [34, 41, 44, 45, 46]}},
   {"calltype": "low",
   "TimeRange": [3.0, 34.04, 0.25, 2],
   "FreqRange": [983, 2635],
+  "F0": false,
   "WaveletParams": {"thr": 0.66666666, "M": 0.25, "nodes": [36, 31]}}
 ]}
