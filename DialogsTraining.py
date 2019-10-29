@@ -948,13 +948,14 @@ class BuildRecAdvWizard(QWizard):
                         gaps.append(longseg[2][i + 1][0] - longseg[2][i][1])
             if len(gaps) > 0:
                 maxgap = max(gaps)
+            else:
+                maxgap = 0
 
             for longseg in self.segments:
                 for i in range(len(longseg[2])):
                     syllen.append(longseg[2][i][1] - longseg[2][i][0])
 
-            if len(gaps) > 0:
-                avgslen = np.mean(syllen)
+            avgslen = np.mean(syllen)
 
             self.minlen.setText(str(round(np.min(len_min),2)))
             self.maxlen.setText(str(round(np.max(len_max),2)))
@@ -1236,6 +1237,7 @@ class BuildRecAdvWizard(QWizard):
             self.F0hightext.setText(str(value))
 
         def toggleF0(self, checked):
+            print("Toggling to", checked)
             if checked:
                 self.F0low.setEnabled(True)
                 self.F0lowtext.setEnabled(True)
@@ -1273,15 +1275,19 @@ class BuildRecAdvWizard(QWizard):
                 print("Warning: no F0 found in the training segments")
                 self.ckbF0.setChecked(False)
             else:
+                # this is to ensure that the checkbox toggled signal gets called
+                self.ckbF0.setChecked(True)
                 f0_low = round(np.nanmin(f0_low))
                 f0_high = round(np.nanmax(f0_high))
 
                 # update the actual fields
-                self.ckbF0.setChecked(True)
                 self.F0low.setValue(f0_low)
                 self.F0high.setValue(f0_high)
                 self.F0lowtext.setText(str(f0_low))
                 self.F0hightext.setText(str(f0_high))
+                # NOTE: currently, F0 is disabled by default, to save faint calls -
+                # enable this when the F0 detection is improved
+                self.ckbF0.setChecked(False)
                 print("Determined ff bounds:", f0_low, f0_high)
 
         def getFundFreq(self, data, sampleRate):
@@ -1361,7 +1367,6 @@ class BuildRecAdvWizard(QWizard):
             vboxHead = QFormLayout()
             vboxHead.addRow("Training data:", self.lblTrainDir)
             vboxHead.addRow("Target species:", self.lblSpecies)
-            vboxHead.addWidget(space)
 
             layout = QVBoxLayout()
             layout.addLayout(vboxHead)
@@ -1429,6 +1434,10 @@ class BuildRecAdvWizard(QWizard):
                 self.wizard().saveTestBtn.setEnabled(True)
             else:
                 self.wizard().saveTestBtn.setEnabled(False)
+
+        def cleanupPage(self):
+            self.wizard().saveTestBtn.setVisible(False)
+            super(BuildRecAdvWizard.WLastPage, self).cleanupPage()
 
     # Main init of the training wizard
     def __init__(self, filtdir, config, parent=None):
@@ -1561,7 +1570,7 @@ class BuildRecAdvWizard(QWizard):
 
 class TestRecWizard(QWizard):
     class WPageData(QWizardPage):
-        def __init__(self, parent=None):
+        def __init__(self, filter=None, parent=None):
             super(TestRecWizard.WPageData, self).__init__(parent)
             self.setTitle('Testing data')
             self.setSubTitle('Select the folder with testing data, then choose species')
@@ -1569,6 +1578,9 @@ class TestRecWizard(QWizard):
             self.setMinimumSize(250, 150)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
+
+            # the combobox will default to this filter initially if provided
+            self.initialFilter = filter
 
             self.testDirName = QLineEdit()
             self.testDirName.setReadOnly(True)
@@ -1605,6 +1617,8 @@ class TestRecWizard(QWizard):
         def initializePage(self):
             filternames = [key + ".txt" for key in self.wizard().filterlist.keys()]
             self.species.addItems(filternames)
+            if self.initialFilter is not None:
+                self.species.setCurrentText(self.initialFilter)
 
         def browseTestData(self):
             dirName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose folder for testing')
@@ -1768,7 +1782,7 @@ class TestRecWizard(QWizard):
             resstream.close()
 
     # Main init of the testing wizard
-    def __init__(self, filtdir, parent=None):
+    def __init__(self, filtdir, filter=None, parent=None):
         super(TestRecWizard, self).__init__()
         self.setWindowTitle("Test Recogniser")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -1781,8 +1795,8 @@ class TestRecWizard(QWizard):
 
         cl = SupportClasses.ConfigLoader()
         self.filterlist = cl.filters(filtdir)
-        browsedataPage = TestRecWizard.WPageData()
-        browsedataPage.registerField("testDir", browsedataPage.testDirName)
+        browsedataPage = TestRecWizard.WPageData(filter=filter)
+        browsedataPage.registerField("testDir*", browsedataPage.testDirName)
         browsedataPage.registerField("species*", browsedataPage.species, "currentText", browsedataPage.species.currentTextChanged)
         self.addPage(browsedataPage)
 
