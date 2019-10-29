@@ -615,9 +615,9 @@ class AviaNZ_batchProcess(QMainWindow):
                                         post.fundamentalFrq()
                                         print("After FF segments:", len(post.segments))
                                 segmenter = Segment.Segmenter()
-                                post.segments = segmenter.joinGaps(post.segments, maxgap=spInfo['Filters'][filtix]['TimeRange'][2])
+                                post.segments = segmenter.joinGaps(post.segments, maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
                                 post.segments = segmenter.deleteShort(post.segments, minlength=spInfo['Filters'][filtix]['TimeRange'][0])
-                                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(spInfo['Filters'][filtix]['TimeRange'][2], spInfo['Filters'][filtix]['TimeRange'][0], len(post.segments)))
+                                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(spInfo['Filters'][filtix]['TimeRange'][3], spInfo['Filters'][filtix]['TimeRange'][0], len(post.segments)))
 
                                 # adjust segment starts for 15min "pages"
                                 if start != 0:

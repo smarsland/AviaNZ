@@ -916,15 +916,17 @@ class BuildRecAdvWizard(QWizard):
             self.setButtonText(QWizard.NextButton, 'Train >')
 
         def fLowChange(self, value):
-            value = value - (value % 10)
+            value = value//10*10
             if value < 50:
                 value = 50
+            self.fLow.setValue(value)
             self.fLowtext.setText(str(value))
 
         def fHighChange(self, value):
-            value = value - (value % 10)
+            value = value//10*10
             if value < 100:
                 value = 100
+            self.fHigh.setValue(value)
             self.fHightext.setText(str(value))
 
         def initializePage(self):

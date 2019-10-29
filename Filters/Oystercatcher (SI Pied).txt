@@ -3,9 +3,9 @@
   "SampleRate": 8000,
   "Filters": [
     {"calltype": "all",
-     "TimeRange": [1, 5],
-     "FreqRange": [1200, 10000], 
-     "F0": true,
+     "TimeRange": [1, 5, 0.2, 2.0],
+     "FreqRange": [1200, 3800], 
+     "F0": false,
      "F0Range": [1200, 3800], 
      "WaveletParams": {"thr": 0.25, "M": 0.2, "nodes": [61, 59, 54, 51, 60, 58, 49, 47]}}
 ]}
