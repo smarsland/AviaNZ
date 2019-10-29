@@ -346,7 +346,7 @@ class AviaNZ(QMainWindow):
 
         specMenu.addSeparator()
 
-        self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
+        self.readonly = specMenu.addAction("Make read only",self.makeReadOnly)
         self.readonly.setCheckable(True)
         self.readonly.setChecked(self.config['readOnly'])
 
@@ -3573,6 +3573,9 @@ class AviaNZ(QMainWindow):
                 freqmin = self.convertFreqtoY(freqmin)
                 freqmax = self.convertFreqtoY(freqmax)
 
+                # basic divergent color palette
+                plotcol = (255*r//numNodes, 127*(r % 2), 0)
+
                 # get max (or mean) E for each second
                 # and normalize, so that we don't need to hardcode thr
                 for w in range(len(xs)):
@@ -3588,13 +3591,13 @@ class AviaNZ(QMainWindow):
                     # mark detected calls on spectrogram
                     if markSpec and Esep[r,w] > spSubf['WaveletParams']['thr']:
                         diagCall = pg.ROI((specs*xs[w], (freqmin+freqmax)/2),
-                                (specs*0.25, freqmax-freqmin),
-                                pen=(255*r//numNodes,0,0), movable=False)
+                                          (specs*0.25, freqmax-freqmin),
+                                          pen=plotcol, movable=False)
                         self.diagnosticCalls.append(diagCall)
                         self.p_spec.addItem(diagCall)
 
                 # plot
-                self.plotDiag = pg.PlotDataItem(xs, Esep[r,:], pen=fn.mkPen((255*r//numNodes,0,0), width=2))
+                self.plotDiag = pg.PlotDataItem(xs, Esep[r,:], pen=fn.mkPen(plotcol, width=2))
                 self.p_plot.addItem(self.plotDiag)
                 self.p_legend.addItem(self.plotDiag, str(node))
                 r = r + 1 
