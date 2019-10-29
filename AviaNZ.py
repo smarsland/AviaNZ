@@ -346,7 +346,7 @@ class AviaNZ(QMainWindow):
 
         specMenu.addSeparator()
 
-        self.readonly = specMenu.addAction("Make read only",self.makeReadOnly,"Ctrl+R")
+        self.readonly = specMenu.addAction("Make read only",self.makeReadOnly)
         self.readonly.setCheckable(True)
         self.readonly.setChecked(self.config['readOnly'])
 
@@ -3573,6 +3573,9 @@ class AviaNZ(QMainWindow):
                 freqmin = self.convertFreqtoY(freqmin)
                 freqmax = self.convertFreqtoY(freqmax)
 
+                # basic divergent color palette
+                plotcol = (255*r//numNodes, 127*(r % 2), 0)
+
                 # get max (or mean) E for each second
                 # and normalize, so that we don't need to hardcode thr
                 for w in range(len(xs)):
@@ -3588,13 +3591,13 @@ class AviaNZ(QMainWindow):
                     # mark detected calls on spectrogram
                     if markSpec and Esep[r,w] > spSubf['WaveletParams']['thr']:
                         diagCall = pg.ROI((specs*xs[w], (freqmin+freqmax)/2),
-                                (specs*0.25, freqmax-freqmin),
-                                pen=(255*r//numNodes,0,0), movable=False)
+                                          (specs*0.25, freqmax-freqmin),
+                                          pen=plotcol, movable=False)
                         self.diagnosticCalls.append(diagCall)
                         self.p_spec.addItem(diagCall)
 
                 # plot
-                self.plotDiag = pg.PlotDataItem(xs, Esep[r,:], pen=fn.mkPen((255*r//numNodes,0,0), width=2))
+                self.plotDiag = pg.PlotDataItem(xs, Esep[r,:], pen=fn.mkPen(plotcol, width=2))
                 self.p_plot.addItem(self.plotDiag)
                 self.p_legend.addItem(self.plotDiag, str(node))
                 r = r + 1 
@@ -4013,9 +4016,9 @@ class AviaNZ(QMainWindow):
         # reread filters list with the new one
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
-    def testRecogniser(self):
+    def testRecogniser(self, filter=None):
         """ Listener for the Test Recogniser action """
-        self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir)
+        self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir, filter)
         self.testRecWizard.show()
 
     def saveNotestRecogniser(self):
@@ -4045,7 +4048,7 @@ class AviaNZ(QMainWindow):
             msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
             msg.exec_()
             self.buildRecAdvWizard.done(1)
-            self.testRecogniser()
+            self.testRecogniser(filter=os.path.basename(filename))
         except Exception as e:
             print("ERROR: could not save recogniser because:", e)
             self.buildRecAdvWizard.done(0)
@@ -4183,9 +4186,9 @@ class AviaNZ(QMainWindow):
                             post.fundamentalFrq()
                             print("After FF segments:", len(post.segments))
                     segmenter = Segment.Segmenter()
-                    post.segments = segmenter.joinGaps(post.segments, maxgap=speciesData['Filters'][filtix]['TimeRange'][2])
+                    post.segments = segmenter.joinGaps(post.segments, maxgap=speciesData['Filters'][filtix]['TimeRange'][3])
                     post.segments = segmenter.deleteShort(post.segments, minlength=speciesData['Filters'][filtix]['TimeRange'][0])
-                    print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' %(speciesData['Filters'][filtix]['TimeRange'][0], speciesData['Filters'][filtix]['TimeRange'][0], len(post.segments)))
+                    print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' %(speciesData['Filters'][filtix]['TimeRange'][3], speciesData['Filters'][filtix]['TimeRange'][0], len(post.segments)))
                     newSegments[filtix] = post.segments
                 # Merge sub-filter results
                 # TODO: Merge subfilter results
