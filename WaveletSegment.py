@@ -461,7 +461,10 @@ class WaveletSegment:
         newlist = []
         currentIndex = 0
         # Need to keep track of where each level of the tree starts
-        starts = [1, 3, 7, 15, 31, 63]
+        # unrooted:
+        starts = [0, 2, 6, 14, 30, 62]
+        # rooted:
+        # starts = [1, 3, 7, 15, 31, 63]
         while len(order) > 0:
             if order[0] < 30:
                 # It could have children lower down the list
@@ -893,7 +896,6 @@ class WaveletSegment:
 
             Return: tuple of lists (bestnodes, worstnodes)
         """
-
         # Retrieve stored node correlations
         nodeCorrs = self.nodeCorrs[filenum]
         nodes1 = np.flip(np.argsort(nodeCorrs)[:], 0).tolist()
@@ -923,7 +925,8 @@ class WaveletSegment:
         bestnodes = self.sortListByChild(bestnodes)
 
         # These nodes refer to the un-rooted tree, so add 1 to get the real WP indices
-        # bestnodes = [n + 1 for n in bestnodes]
+        bestnodes = [n + 1 for n in bestnodes]
+        worstnodes = [n + 1 for n in worstnodes]
 
         return (bestnodes, worstnodes)
 
