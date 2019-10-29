@@ -4186,9 +4186,9 @@ class AviaNZ(QMainWindow):
                             post.fundamentalFrq()
                             print("After FF segments:", len(post.segments))
                     segmenter = Segment.Segmenter()
-                    post.segments = segmenter.joinGaps(post.segments, maxgap=speciesData['Filters'][filtix]['TimeRange'][2])
+                    post.segments = segmenter.joinGaps(post.segments, maxgap=speciesData['Filters'][filtix]['TimeRange'][3])
                     post.segments = segmenter.deleteShort(post.segments, minlength=speciesData['Filters'][filtix]['TimeRange'][0])
-                    print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' %(speciesData['Filters'][filtix]['TimeRange'][0], speciesData['Filters'][filtix]['TimeRange'][0], len(post.segments)))
+                    print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' %(speciesData['Filters'][filtix]['TimeRange'][3], speciesData['Filters'][filtix]['TimeRange'][0], len(post.segments)))
                     newSegments[filtix] = post.segments
                 # Merge sub-filter results
                 # TODO: Merge subfilter results
