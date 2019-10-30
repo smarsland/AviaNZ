@@ -71,9 +71,10 @@ Any extra parameters to be applied for all subfilters may be provided (such as `
 
 `Filters` - JSON array of filters corresponding to each type of call (at least one element). Each is a JSON object:
 
-    { "calltype": "clust1", "WaveletParams": {"thr": 0.5, "M": 1.5, "nodes": [35, 37, 40]}, "FreqRange": [1000, 3000], ... }
+    { "calltype": "clust1", "TimeRange": [1.0, 10.0, 0.3, 2], "WaveletParams": {"thr": 0.5, "M": 1.5, "nodes": [35, 37, 40]}, "FreqRange": [1000, 3000], ... }
     
 `calltype` - either user-defined call type, or automatically generated cluster ID. String. Required.  
+`TimeRange` - JSON array of length 4: `[minlen, maxlen, avgsyl, maxgap]`, respectively min and max lengths of a call, average syllable length, and maximum gap between parts of same call. Required.
 `WaveletParams` - JSON object of parameters needed for wavelet filtering. Required. Currently needs:
 `thr` - numeric, threshold for detecting calls. Required.  
 `M` - numeric, energy curve window in seconds. Required.  
@@ -85,8 +86,8 @@ Thus, a full filter file may look like this:
 
     { "species": "Kiwi (Little spotted)", "SampleRate": 16000, "Rain": false, "Wind": true,
       "Filters": [
-        { "calltype": "M", "WaveletParams": {"nodes": [44, 45, 46], "thr": 0.5, "M": 1.5}, "F0": true, "FreqRange": [1500, 5000] },
-        { "calltype": "F", "WaveletParams": {"nodes": [41, 44], "thr": 0.8, "M": 2}, "FreqRange": [1000, 2500] }
+        { "calltype": "M", "TimeRange": [5, 60, 1, 3], "WaveletParams": {"nodes": [44, 45, 46], "thr": 0.5, "M": 1.5}, "F0": true, "FreqRange": [1500, 5000] },
+        { "calltype": "F", "TimeRange": [10.0, 30.0, 0.8, 1.0], "WaveletParams": {"nodes": [41, 44], "thr": 0.8, "M": 2}, "FreqRange": [1000, 2500] }
       ]
     }
 
