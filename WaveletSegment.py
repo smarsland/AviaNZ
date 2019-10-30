@@ -1008,8 +1008,6 @@ class WaveletSegment:
         totalcalls = sum([sum(a) for a in self.annotation])
         totalblocks = sum([len(a) for a in self.annotation])
         print("Directory loaded. %d/%d presence blocks found.\n" % (totalcalls, totalblocks))
-        # print(np.shape(self.annotation))
-
 
     def loadData(self, filename):
         """ Loads a single WAV file and corresponding 0/1 annotations.
@@ -1024,17 +1022,11 @@ class WaveletSegment:
 
         self.sp.readWav(filename)
 
-        #Virginia-> number of entries in annotation file: built on resol scale
         n = math.ceil((len(self.sp.data) / self.sp.sampleRate)/resol)
 
-        # # Impulse masking
-        # postp = SupportClasses.postProcess(audioData=data, sampleRate=sampleRate, segments=[], spInfo={})
-        # imps = postp.impulse_cal(fs=sampleRate)    # 0 - presence of impulse noise, 1 - otherwise
-        #
-        # # Mask only the affected samples
-        # if n - np.sum(imps) > 0:
-        #     print('impulse detected: ', n - np.sum(imps), ' samples')
-        # data = np.multiply(data, imps)
+        # Do impulse masking by default
+        sg = Segment.Segmenter(sp=self.sp, fs=self.sp.sampleRate)
+        self.sp.data = sg.impMask()
 
         fileAnnotations = []
         # Get the segmentation from the txt file
@@ -1057,5 +1049,5 @@ class WaveletSegment:
         self.annotation.append(np.array(fileAnnotations))
 
         totalblocks = sum([len(a) for a in self.annotation])
-        print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, presblocks, totalblocks))
+        print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, presblocks, totalblocks))
         return

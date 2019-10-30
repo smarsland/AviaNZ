@@ -1655,6 +1655,8 @@ class TestRecWizard(QWizard):
 
             self.lblTestDir = QLabel()
             self.lblTestDir.setStyleSheet("QLabel { color : #808080; }")
+            self.lblTestFilter = QLabel()
+            self.lblTestFilter.setStyleSheet("QLabel { color : #808080; }")
             self.lblSpecies = QLabel()
             self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
             space = QLabel()
@@ -1674,7 +1676,8 @@ class TestRecWizard(QWizard):
             # overall results page layout
             vboxHead = QFormLayout()
             vboxHead.addRow("Testing data:", self.lblTestDir)
-            vboxHead.addRow("Recogniser name:", self.lblSpecies)
+            vboxHead.addRow("Filter name:", self.lblTestFilter)
+            vboxHead.addRow("Species name:", self.lblSpecies)
             vboxHead.addWidget(space)
 
             form2 = QFormLayout()
@@ -1708,6 +1711,7 @@ class TestRecWizard(QWizard):
                 speciesData = self.wizard().filterlist[self.field("species")[:-4]]
 
                 self.lblTestDir.setText(self.field("testDir"))
+                self.lblTestFilter.setText(self.field("species"))
                 self.lblSpecies.setText(speciesData["species"])
 
                 ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
@@ -1847,7 +1851,8 @@ class TestRecWizard(QWizard):
             return
 
         # start writing the results to an output txt file
-        outfile.write("Recogniser name:\t" + speciesData["species"]+"\n")
+        outfile.write("Recogniser name:\t" + self.field("species")+"\n")
+        outfile.write("Species name:\t" + speciesData["species"]+"\n")
         outfile.write("Using data:\t" + self.field("testDir") +"\n")
         outfile.write("-------------------------\n\n")
 
