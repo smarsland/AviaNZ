@@ -671,6 +671,7 @@ class Segmenter:
         # These are the spectrogram params. Needed to compute times.
         if sp:
             self.data = sp.data
+            self.fs = sp.sampleRate
             self.window_width = sp.window_width
             self.incr = sp.incr
         self.mingap = mingap
@@ -685,7 +686,7 @@ class Segmenter:
         self.window_width = sp.window_width
         self.incr = sp.incr
 
-    def bestSegments(self,FIRthr=0.7,medianClipthr=3.0,yinthr=0.9,maxgap=1, minlength=0.5):
+    def bestSegments(self,FIRthr=0.7, medianClipthr=3.0, yinthr=0.9):
         """ A reasonably good segmentaion - a merged version of FIR, median clipping, and fundamental frequency using yin
         """
         segs1 = self.segmentByFIR(FIRthr)
@@ -892,7 +893,7 @@ class Segmenter:
             segs.append([float(starts[i])/self.fs,float(ends[i])/self.fs])
         return segs
 
-    def Harma(self,thr=10.,stop_thr=0.8,minSegment=50):
+    def Harma(self, thr=10., stop_thr=0.8, minSegment=50):
         """ Harma's method, but with a different stopping criterion
         # Assumes that spectrogram is not normalised
         maxFreqs = 10. * np.log10(np.max(self.sg, axis = 1))
@@ -1007,7 +1008,6 @@ class Segmenter:
         list = []
         list.append(blobs[0])
         for i in centroids:
-            #print(i)
             # TODO: replace this with simple overlap?
             if (i - centroid)*1000 < minSegment / 2. * 10:
                 if blobs[ind[count]][0] < list[current][0]:
@@ -1026,7 +1026,7 @@ class Segmenter:
                 segments.append([i[0], i[1]])
         return segments
 
-    def onsets(self,thr=3.0):
+    def onsets(self, thr=3.0):
         """ Segmentation using the onset times from librosa.
         There are no offset times -- compute an energy drop?
         A straw man really.
@@ -1088,7 +1088,7 @@ class Segmenter:
         else:
             return pitch, np.array(starts), minfreq, W
 
-    def findCCMatches(self,seg,sg,thr):
+    def findCCMatches(self, seg, sg, thr):
         """ Cross-correlation. Takes a segment and looks for others that match it to within thr.
         match_template computes fast normalised cross-correlation
         """
@@ -1104,28 +1104,28 @@ class Segmenter:
         indices = peakutils.indexes(matches, thres=threshold, min_dist=md)
         return indices
 
-    def findDTWMatches(self,seg,data,thr):
+    def findDTWMatches(self, seg, data):
         # TODO: This is slow and crap. Note all the same length, for a start, and the fact that it takes forever!
         # Use MFCC first?
         d = np.zeros(len(data))
         for i in range(len(data)):
-            d[i] = self.dtw(seg,data[i:i+len(seg)])
+            d[i] = self.dtw(seg, data[i:i+len(seg)])
         return d
 
-    def dtw(self,x,y,wantDistMatrix=False):
+    def dtw(self, x, y, wantDistMatrix=False):
         # Compute the dynamic time warp between two 1D arrays
         dist = np.zeros((len(x)+1,len(y)+1))
-        dist[1:,:] = np.inf
-        dist[:,1:] = np.inf
+        dist[1:, :] = np.inf
+        dist[:, 1:] = np.inf
         for i in range(len(x)):
             for j in range(len(y)):
-                dist[i+1,j+1] = np.abs(x[i]-y[j]) + min(dist[i,j+1],dist[i+1,j],dist[i,j])
+                dist[i+1, j+1] = np.abs(x[i]-y[j]) + min(dist[i, j+1], dist[i+1, j], dist[i, j])
         if wantDistMatrix:
             return dist
         else:
-            return dist[-1,-1]
+            return dist[-1, -1]
 
-    def dtw_path(self,d):
+    def dtw_path(self, d):
         # Shortest path through DTW matrix
         i = np.shape(d)[0]-2
         j = np.shape(d)[1]-2
@@ -1151,6 +1151,19 @@ class Segmenter:
     #     d = self.dtw(x,y,wantDistMatrix=True)
     #     print self.dtw_path(d)
 
+    def impMask(self, engp=90, fp=0.75):
+        """
+        Impulse mask
+        :param engp: energy percentile (for rows of the spectrogram)
+        :param fp: frequency proportion to consider it as an impulse (cols of the spectrogram)
+        :return: audiodata
+        """
+        print('Impulse masking...')
+        postp = PostProcess(audioData=self.data, sampleRate=self.fs, segments=[], subfilter={})
+        imps = postp.impulse_cal(fs=self.fs, engp=engp, fp=fp)    # 0 - presence of impulse noise
+        print('Samples to mask: ', len(self.data) - np.sum(imps))
+        # Mask only the affected samples
+        return np.multiply(self.data, imps)
 
 class PostProcess:
     """ This class implements few post processing methods basically to avoid false positives.

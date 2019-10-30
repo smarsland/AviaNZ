@@ -848,40 +848,12 @@ class AviaNZ_batchProcess(QMainWindow):
                         wipeAll = self.segments[i].wipeSpecies(filt["species"])
                         if wipeAll:
                             del self.segments[i]
-
             print("%d segments loaded from .data file" % len(self.segments))
 
         # Do impulse masking by default
-        self.impMask()
-
-    def impMask(self, engp=90, fp=0.75):
-        """
-        Impulse mask
-        :param engp: energy percentile (for rows of the spectrogram)
-        :param fp: frequency proportion to consider it as an impulse (cols of the spectrogram)
-        :return: None, but reset audiodata
-        """
-        print('Impulse masking...')
-        postp = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=[], subfilter={})
-        imps = postp.impulse_cal(fs=self.sampleRate, engp=engp, fp=fp)    # 0 - presence of impulse noise
-        print('Samples to mask: ', len(self.audiodata) - np.sum(imps))
-        # Mask only the affected samples
-        self.sp.data = np.multiply(self.audiodata, imps)
+        sg = Segment.Segmenter(sp=self.sp, fs=self.sampleRate)
+        self.sp.data = sg.impMask()
         self.audiodata = self.sp.data
-
-    def countConsecutive(self, nums, length):
-        gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s + 1 < e]
-        edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
-        edges = list(zip(edges, edges))
-        edges_reps = [item[1] - item[0] + 1 for item in edges]
-        res = np.zeros((length)).tolist()
-        t = 0
-        for item in edges:
-            for i in range(item[0], item[1]+1):
-                res[i] = edges_reps[t]
-            t += 1
-        return res
-
 
 class AviaNZ_reviewAll(QMainWindow):
     # Main class for reviewing batch processing results
