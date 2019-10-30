@@ -4,7 +4,8 @@
   "Filters": [
     {"calltype": "all",
      "TimeRange": [1, 30, 0.0625, 1],
-     "FreqRange": [500, 7000], 
+     "FreqRange": [500, 7000],
+     "F0": false,
      "WaveletParams": {"thr": 0.5, "M": 0.0625, "nodes": [33, 34, 37,38]}}
   ] 
 }
