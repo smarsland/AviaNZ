@@ -1853,13 +1853,14 @@ class TestRecWizard(QWizard):
 
         # run the test for each calltype:
         self.detected01post_allcts = []
+        # this will store a copy of all filter-level settings + a single calltype
+        onectfilter = copy.deepcopy(speciesData)
         for subfilter in speciesData["Filters"]:
-            outfile.write("Target calltype:\t" + subfilter["calltype"] +"\n")
+            outfile.write("Target calltype:\t\t" + subfilter["calltype"] +"\n")
+            onectfilter["Filters"] = [subfilter]
             # first return value: single array of 0/1 detections over all files
             # second return value: list of tuples ([segments], filename, filelen) for each file
-            detected01, detectedS = ws.waveletSegment_test(self.field("testDir"),
-                                           subfilter, d=False, rf=True, learnMode='recaa',
-                                           savedetections=False, window=window, inc=inc)
+            detected01, detectedS = ws.waveletSegment_test(self.field("testDir"), onectfilter)
             # save the 0/1 annotations as well
             self.annotations = copy.deepcopy(ws.annotation)
 
@@ -1886,71 +1887,77 @@ class TestRecWizard(QWizard):
             totallen = sum([len(detfile[0]) for detfile in detectedS])
 
             # store results in the txt file
-            outfile.write("--Detection summary--\n")
+            outfile.write("-----Detection summary-----\n")
             outfile.write("Manually labelled segments:\t"+ str(manSegNum) +"\n")
             outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FN))
             outfile.write("Total segments detected:\t\t%s\n" % str(totallen))
             outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
-            outfile.write("TP | FP | TN | FN seconds:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
+            outfile.write("TP | FP | TN | FN seconds:\t\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
             outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (recall*100))
             outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (precision*100))
-            outfile.write("Specificity in 1 s resolution:\t\t%d %%\n" % (specificity*100))
+            outfile.write("Specificity in 1 s resolution:\t%d %%\n" % (specificity*100))
             outfile.write("Accuracy in 1 s resolution:\t\t%d %%\n" % (accuracy*100))
 
             # Post process:
-            if "F0" in subfilter and subfilter["F0"]:
-                print("Post-processing...")
-                detectedSpost = []
-                detected01post = []
-                for detfile in detectedS:
-                    post = Segment.PostProcess(segments=detfile[0], subfilter=subfilter)
-                    print("got segments", len(post.segments))
+            print("Post-processing...")
+            detectedSpost = []
+            detected01post = []
+            for detfile in detectedS:
+                post = Segment.PostProcess(segments=detfile[0], subfilter=subfilter)
+                print("got segments", len(post.segments))
+
+                if "F0" in subfilter and "F0Range" in subfilter and subfilter["F0"]:
+                    print("Checking for fundamental frequency...")
                     post.fundamentalFrq(fileName=detfile[1])
-                    detectedSpost.extend(post.segments)
-                    print("kept segments", len(post.segments))
-
-                    # back-convert to 0/1:
-                    det01post = np.zeros(detfile[2])
-                    for seg in post.segments:
-                        det01post[int(seg[0]):int(seg[1])] = 1
-                    detected01post.extend(det01post)
-
-                # now, detectedS and detectedSpost contain lists of segments before/after post
-                # and detected01 and self.detected01post - corresponding pres/abs marks
-
-                # update agreement measures
-                totallenP = len(detectedSpost)
-                _, _, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, detected01post)
-                print('--Post-processing summary--\n%d %d %d %d' %(TP, FP, TN, FN))
-                if TP+FN != 0:
-                    recall = TP/(TP+FN)
+                    print("After FF segments:", len(post.segments))
                 else:
-                    recall = 0
-                if TP+FP != 0:
-                    precision = TP/(TP+FP)
-                else:
-                    precision = 0
-                if TN+FP != 0:
-                    specificity = TN/(TN+FP)
-                else:
-                    specificity = 0
-                accuracy = (TP+TN)/(TP+FP+TN+FN)
+                    print('Fund. freq. not requested')
+
+                segmenter = Segment.Segmenter()
+                post.segments = segmenter.joinGaps(post.segments, maxgap=subfilter['TimeRange'][3])
+                post.segments = segmenter.deleteShort(post.segments, minlength=subfilter['TimeRange'][0])
+                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(subfilter['TimeRange'][3], subfilter['TimeRange'][0], len(post.segments)))
+
+                detectedSpost.extend(post.segments)
+                print("kept segments", len(post.segments))
+
+                # back-convert to 0/1:
+                det01post = np.zeros(detfile[2])
+                for seg in post.segments:
+                    det01post[int(seg[0]):int(seg[1])] = 1
+                detected01post.extend(det01post)
+
+            # now, detectedS and detectedSpost contain lists of segments before/after post
+            # and detected01 and detected01post - corresponding pres/abs marks
+
+            # update agreement measures
+            totallenP = len(detectedSpost)
+            _, _, TP, FP, TN, FN = ws.fBetaScore(ws.annotation, detected01post)
+            print('--Post-processing summary--\n%d %d %d %d' %(TP, FP, TN, FN))
+            if TP+FN != 0:
+                recall = TP/(TP+FN)
             else:
-                print('No post-processing required')
-                totallenP = totallen
-                detected01post = detected01
-                # (all agreement metrics will remain the same)
+                recall = 0
+            if TP+FP != 0:
+                precision = TP/(TP+FP)
+            else:
+                precision = 0
+            if TN+FP != 0:
+                specificity = TN/(TN+FP)
+            else:
+                specificity = 0
+            accuracy = (TP+TN)/(TP+FP+TN+FN)
 
             # store the final detections of this calltype
             self.detected01post_allcts.append(detected01post)
 
-            outfile.write("--After post-processing--\n")
+            outfile.write("-----After post-processing-----\n")
             outfile.write("Total segments detected:\t\t%s\n" % str(totallenP))
             outfile.write("\ttotal seconds:\t%.1f\n" % (TP+FP))
-            outfile.write("TP | FP | TN | FN seconds:\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
+            outfile.write("TP | FP | TN | FN seconds:\t\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
             outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (recall*100))
             outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (precision*100))
-            outfile.write("Specificity in 1 s resolution:\t\t%d %%\n" % (specificity*100))
+            outfile.write("Specificity in 1 s resolution:\t%d %%\n" % (specificity*100))
             outfile.write("Accuracy in 1 s resolution:\t\t%d %%\n" % (accuracy*100))
             outfile.write("-------------------------\n\n")
 
