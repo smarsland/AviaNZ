@@ -784,7 +784,7 @@ class ConfigLoader(object):
                 for subfilt in filt["Filters"]:
                     if not isinstance(subfilt, dict) or "calltype" not in subfilt or "WaveletParams" not in subfilt or "TimeRange" not in subfilt:
                         raise ValueError("Subfilter JSON format wrong, skipping")
-                    if "thr" not in subfilt["WaveletParams"] or "nodes" not in subfilt["WaveletParams"] or len(subfilt["TimeRange"]<4):
+                    if "thr" not in subfilt["WaveletParams"] or "nodes" not in subfilt["WaveletParams"] or len(subfilt["TimeRange"])<4:
                         raise ValueError("Subfilter JSON format wrong (details), skipping")
 
                 # if filter passed checks, store it,

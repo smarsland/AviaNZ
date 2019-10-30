@@ -69,6 +69,8 @@ class WaveletSegment:
         fsOut = fsOut.pop()
 
         # copy the filters so that the originals wouldn't be affected between files
+        # WARNING: this set self.spInfo to be a list [Filters],
+        # while usually it is just a single filter. I'm sorry.
         self.spInfo = copy.deepcopy(spInfo)
 
         # in batch mode, it's worth trying some tricks to avoid resampling
@@ -239,102 +241,101 @@ class WaveletSegment:
 
         return res
 
-    def waveletSegment_test(self, dirName, subfilter, d=False, rf=True, learnMode='recaa',
-                            savedetections=False, window=1, inc=None):
-        """ Wrapper for segmentation to be used when testing a new filter
-            (called at the end of training from DialogsTraining.py).
-            Basically a simplified gridSearch.
+    def waveletSegment_test(self, dirName, filter):
+        """ Wrapper for segmentation to be used when testing a new filter.
+            Should be identical to processing the files in batch mode,
+            + returns annotations and prints performance measures.
+            Does not do any processing besides basic conversion 0/1 -> [s,e].
+            Uses 15 min pages, if files are larger than that.
+
             Args:
-            dirName - training dir
-            subfilter - a dict subfilter
-            d - denoise before detecting calls?
-            rf - filter before detecting calls?
-            learnMode - recold (no AA) or recaa (partial AA) or recaafull (full AA)
-            saveDetections - output .data of the testing results?
-            window, inc - window and increment length in seconds
+            1. directory to process (recursively)
+            2. a filter with a single subfilter.
 
             Return values:
             1. 0/1 annotations concatenated over all files
-            2. list of ([segments], filename, filelength) over all files
+            2. list of ([segments], filename, filelength) over all files and pages
         """
-        # Load the relevant subfilter
-        self.nodes = subfilter["WaveletParams"]["nodes"]
+        if "Filters" not in filter or len(filter["Filters"])>1:
+            print("ERROR: only 1 subfilter should be included when testing a filter")
+            return
+
+        # constant - files longer than this will be processed in pages
+        samplesInPage = 900*16000
 
         # clear storage for multifile processing
+        detected_bin_all = np.array([])
+        detected_out = []
+        filenames = []
         self.annotation = []
-        self.audioList = []
-        self.filenames = []
-        detected = np.array([])
 
-        # Loads all audio data to memory
-        # and downsamples to self.spInfo['SampleRate']
-        self.loadDirectory(dirName=dirName, denoise=d, window=window, inc=inc)
+        # find audio files with 0/1 annotations:
+        resol = 1.0
+        for root, dirs, files in os.walk(dirName):
+            for file in files:
+                if file.endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
+                    filenames.append(os.path.join(root, file))
+        if len(filenames)<1:
+            print("ERROR: no suitable files found for testing")
+            return
 
-        # remember to convert main structures to np arrays
-        self.annotation = np.array(self.annotation)
-        print("Testing with %s positive and %s negative annotations" % (np.sum(self.annotation == 1),
-                                                                        np.sum(self.annotation == 0)))
+        for filename in filenames:
+            # similar to _batch: loadFile(self.species)
+            # sets self.sp.data, self.sp.sampleRate, appends self.annotation
+            self.loadData(filename)
 
-        # wavelet decomposition and call detection
-        self.detected_out = []
-        for fileId in range(len(self.audioList)):
-            print('Processing file # ', fileId + 1)
+            # (ceil division for large integers)
+            numPages = (len(self.sp.data) - 1) // samplesInPage + 1
 
-            if learnMode == "recsep" or learnMode == "recmulti":
-                print("Warning: recsep and recmulti modes deprecated, defaulting to recaa")
-                learnMode = "recaa"
+            for page in range(numPages):
+                print("Testing page %d / %d" % (page+1, numPages))
+                start = page*samplesInPage
+                end = min(start+samplesInPage, len(self.sp.data))
+                filelen = math.ceil((end-start)/self.sp.sampleRate)
+                if filelen < 2:
+                    print("Warning: can't process short file ends (%.2f s)" % filelen)
+                    continue
 
-            # prefilter audio to species freq range
-            data = self.audioList[fileId]
+                # read in page and resample as needed
+                # will also set self.spInfo with ADJUSTED nodes if resampling!
+                self.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=[filter], wpmode="new")
 
-            # Generate a full 5 level wavelet packet decomposition and detect calls
-            self.WF = WaveletFunctions.WaveletFunctions(data=data, wavelet=self.wavelet, maxLevel=20,
-                                                        samplerate=self.spInfo['SampleRate'])
-            if learnMode == "recaa" or learnMode =="recold":
-                self.WF.WaveletPacket(self.nodes, mode='symmetric', antialias=False)
-                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, subfilter=subfilter, rf=rf, window=1, inc=None)
-            elif learnMode == "recaafull":
-                self.WF.WaveletPacket(self.nodes, mode='symmetric', antialias=True, antialiasFilter=True)
-                detected_c = self.detectCalls(self.WF, nodelist=self.nodes, subfilter=subfilter, rf=rf, window=1, inc=None)
-            else:
-                print("ERROR: the specified learning mode is not implemented in this function yet")
-                return
+                # segmentation, same as in batch mode. returns [[sub-filter1 segments]]
+                detected_segs = self.waveletSegment(0, wpmode="new")[0]
 
-            # store presence/absence for fBetaScore
-            detected = np.concatenate((detected, detected_c))
+                # for pres/abs, need to convert the segments back to 0/1.
+                # Resolution fixed at 1 s.
+                # (awkward, but ensures that batch and test modes use the same detection)
+                detected_bin = np.zeros(filelen)
+                for seg in detected_segs:
+                    detected_bin[int(seg[0]):int(seg[1])] = 1
 
-            # store segments for return output
-            # detected np [0 1 1 1] becomes [[1,3]]
-            segmenter = Segment.Segmenter()
-            detected_c_segs = segmenter.convert01(detected)
-            detected_c_segs = segmenter.joinGaps(detected_c_segs, maxgap=0)
+                # store presence/absence for fBetaScore
+                detected_bin_all = np.concatenate((detected_bin_all, detected_bin))
 
-            self.detected_out.append((detected_c_segs, self.filenames[fileId], len(detected_c)))
-
-            # Generate .data for this file
-            # Merge neighbours in order to convert the detections into segments
-            # Note: detected np[0 1 1 1] becomes [[1,3]]
-            # TODO currently disabled to avoid conflicts with new format
-            # if savedetections:
-            #     for item in detected_c:
-            #         item[0] = int(item[0])
-            #         item[1] = int(item[1])
-            #         item = item.append(self.spInfo['FreqRange'][0])
-            #     for item in detected_c:
-            #         item = item.append(self.spInfo['FreqRange'][1])
-            #     for item in detected_c:
-            #         item = item.append(self.spInfo['Name'])
-            #     file = open(str(self.filenames[fileId]) + '.wav.data', 'w')
-            #     json.dump(detected_c, file)
-
-            # memory cleanup:
-            del self.WF
-            gc.collect()
+                detected_out.append((detected_segs, filename, filelen))
 
         self.annotation = np.concatenate(self.annotation, axis=0)
-        print("final output of testing", self.detected_out)
+        print("Tested with %s positive and %s negative annotations" % (np.sum(self.annotation == 1),
+                                                                       np.sum(self.annotation == 0)))
 
-        return detected, self.detected_out
+        print("final output of testing", detected_out)
+
+        # Generate .data for this file
+        # TODO currently disabled to avoid conflicts with new format
+        # if savedetections:
+        #     for item in detected_c:
+        #         item[0] = int(item[0])
+        #         item[1] = int(item[1])
+        #         item = item.append(self.spInfo['FreqRange'][0])
+        #     for item in detected_c:
+        #         item = item.append(self.spInfo['FreqRange'][1])
+        #     for item in detected_c:
+        #         item = item.append(self.spInfo['Name'])
+        #     file = open(str(self.filenames[fileId]) + '.wav.data', 'w')
+        #     json.dump(detected_c, file)
+
+        return detected_bin_all, detected_out
 
 
     def computeWaveletEnergy(self, data, sampleRate, nlevels=5, wpmode="new", window=1, inc=1):
@@ -962,6 +963,7 @@ class WaveletSegment:
             Finds and reads wavs from directory dirName.
             Denoise arg is passed to preprocessing.
             wpmode selects WP decomposition function ("new"-our but not AA'd, "aa"-our AA'd)
+            Used in training to load an entire dir of wavs into memory.
 
             Results: self.annotation, self.audioList, self.noiseList arrays.
         """
@@ -982,8 +984,8 @@ class WaveletSegment:
                     wavFile = os.path.join(root, file)
                     self.filenames.append(wavFile)
 
-                    # adds to self.annotation array, also sets self.sp data
-                    self.loadData(wavFile, window, inc, resol)
+                    # adds to self.annotation array, also sets self.sp data and sampleRate
+                    self.loadData(wavFile)
 
                     # denoise and store actual audio data:
                     # note: preprocessing is a side effect on data
@@ -1009,15 +1011,15 @@ class WaveletSegment:
         # print(np.shape(self.annotation))
 
 
-    def loadData(self, filename, window, inc, resol):
-        """ Loads a single file.
+    def loadData(self, filename):
+        """ Loads a single WAV file and corresponding 0/1 annotations.
             Input: filename - wav file name
-            Output: fills self.annotation, returns data, samplerate
+            Output: fills self.annotation, sets self.sp data, samplerate
         """
-        # Virginia chamges
+        # In case we want flexible-size windows again:
         # Added resol input as basic unit for read annotation file
-        print('\n\n', filename)
-        # Virginia: added resol for identify annotation txt
+        resol = 1.0
+        print('\nLoading:', filename)
         filenameAnnotation = filename[:-4] + '-res' + str(float(resol)) + 'sec.txt'
 
         self.sp.readWav(filename)
@@ -1053,20 +1055,6 @@ class WaveletSegment:
             presblocks += int(row[1])
 
         self.annotation.append(np.array(fileAnnotations))
-
-        # #Virginia: if overlapping window or window!=1sec I save in annotation2 segments o length 1 sec to make useful comparison
-        # if window != 1 or inc != window:
-        #     N = int(math.ceil(len(data)/sampleRate)) # of seconds
-        #     annotation_sec = np.zeros(N)
-        #     sec_step = int(math.ceil(1/resol)) # window length in resolution scale
-        #     #inc_step = int(math.ceil(inc / resol)) #increment length in resolution scale
-        #     start = 0
-        #     for i in range(N):
-        #         end=int(min(start+sec_step,n))
-        #         if np.count_nonzero(fileAnnotations[start:end])!=0:
-        #             annotation_sec[i]=1
-        #         start += sec_step
-        #     self.annotation2.append(np.array(annotation_sec))
 
         totalblocks = sum([len(a) for a in self.annotation])
         print( "%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, presblocks, totalblocks))
