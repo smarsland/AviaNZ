@@ -180,7 +180,8 @@ class AviaNZ_batchProcess(QMainWindow):
         formPost.addWidget(self.w_wind, 0, 1)
         formPost.addWidget(QLabel("Add rain filter"), 1, 0)
         formPost.addWidget(self.w_rain, 1, 1)
-        formPost.addWidget(QLabel("Merge different call types"), 2, 0)
+        self.mergectlbl = QLabel("Merge different call types")
+        formPost.addWidget(self.mergectlbl, 2, 0)
         formPost.addWidget(self.w_mergect, 2, 1)
         formPost.addWidget(self.maxgaplbl, 3, 0)
         formPost.addWidget(self.maxgap, 3, 1)
@@ -334,11 +335,15 @@ class AviaNZ_batchProcess(QMainWindow):
             self.minlenlbl.hide()
             self.maxgap.hide()
             self.maxgaplbl.hide()
+            self.w_mergect.show()
+            self.mergectlbl.show()
         else:
             self.minlen.show()
             self.minlenlbl.show()
             self.maxgap.show()
             self.maxgaplbl.show()
+            self.w_mergect.hide()
+            self.mergectlbl.hide()
 
         # (skip first box which is fixed)
         for box in self.speCombos[1:]:
@@ -523,7 +528,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 # ALL SYSTEMS GO: process this file
                 print("Loading file...")
                 # load audiodata and clean up old segments:
-                self.loadFile(species=self.species)
+                self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"))
                 # Segment over pages separately, to allow dealing with large files smoothly:
                 # page size fixed for now
                 samplesInPage = 900*16000
@@ -550,7 +555,8 @@ class AviaNZ_batchProcess(QMainWindow):
                         self.sp.data = self.audiodata[start:end]
                         self.sgRaw = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
                         self.seg = Segment.Segmenter(self.sp, self.sampleRate)
-                        thisPageSegs = self.seg.bestSegments()
+                        # thisPageSegs = self.seg.bestSegments()
+                        thisPageSegs = self.seg.medianClip(thr=3.5)
                         # Post-process
                         # 1. Delete windy segments
                         # 2. Delete rainy segments
@@ -677,7 +683,10 @@ class AviaNZ_batchProcess(QMainWindow):
             # Determine all species detected in at least one file
             # (two loops ensure that all files will have pres/abs xlsx for all species.
             # Ugly, but more readable this way)
-            spList = set([filter["species"] for filter in filters])
+            if speciesStr != "Any sound":
+                spList = set([filter["species"] for filter in filters])
+            else:
+                spList = set()
             for filename in allwavs:
                 if not os.path.isfile(filename + '.data'):
                     continue
@@ -814,7 +823,7 @@ class AviaNZ_batchProcess(QMainWindow):
             self.fillFileList(current)
         return(0)
 
-    def loadFile(self, species):
+    def loadFile(self, species, anysound=False):
         print(self.filename)
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
@@ -852,7 +861,10 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # Do impulse masking by default
         sg = Segment.Segmenter(sp=self.sp, fs=self.sampleRate)
-        self.sp.data = sg.impMask()
+        if anysound:
+            self.sp.data = sg.impMask(engp=70, fp=0.50)
+        else:
+            self.sp.data = sg.impMask()
         self.audiodata = self.sp.data
 
 class AviaNZ_reviewAll(QMainWindow):
@@ -1152,7 +1164,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # otherwise re-add the segments that were good enough to skip review,
             # and save the corrected segment JSON
             self.segments.extend(self.goodsegments)
-            cleanexit = self.segments.saveJSON(filename+'.data')
+            cleanexit = self.segments.saveJSON(filename+'.data', self.reviewer)
             if cleanexit != 1:
                 print("Warning: could not save segments!")
         # END of main review loop
