@@ -727,7 +727,7 @@ class Segmenter:
 
     def convert01(self, presabs, window=1):
         """ Turns a list of presence/absence [0 1 1 1]
-            into a list of start-end segments [[1,3]].
+            into a list of start-end segments [[1,4]].
             Can use non-1 s units of pres/abs.
         """
         presabs = np.squeeze(presabs)
@@ -1076,6 +1076,12 @@ class Segmenter:
         starts = range(0, len(data) - 2 * W, W // 2)
 
         # Will return pitch as self.fs/besttau for each window
+        if len(data2) <= 2*W:
+            print("ERROR: data too short for F0: must be %d, is %d" % (2*W, len(data2)))
+            if returnSegs:
+                return np.array([]), np.array([]), np.array([])
+            else:
+                return np.array([]), np.array([]), minfreq, W
         pitch = ce.FundFreqYin(data2, W, thr, self.fs)
 
         if returnSegs:

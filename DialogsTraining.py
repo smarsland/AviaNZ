@@ -141,6 +141,9 @@ class BuildRecAdvWizard(QWizard):
                         # also retrieve its sample rate
                         samplerate = wavio.read(os.path.join(root, filename), 1).rate
                         fs.append(samplerate)
+            if len(fs)==0:
+                print("Warning: no suitable files found")
+                return
 
             # might need better limits on selectable sample rate here
             self.fs.setValue(int(np.min(fs)))
@@ -1239,7 +1242,6 @@ class BuildRecAdvWizard(QWizard):
             self.F0hightext.setText(str(value))
 
         def toggleF0(self, checked):
-            print("Toggling to", checked)
             if checked:
                 self.F0low.setEnabled(True)
                 self.F0lowtext.setEnabled(True)
