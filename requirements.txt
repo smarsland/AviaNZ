@@ -1,8 +1,10 @@
 click==7.0
 Cython==0.29.10
 joblib==0.13.2
+jsonschema==3.1.1
 kiwisolver==1.1.0
 librosa==0.6.3
+llvmlite==0.29.0
 matplotlib==3.1.0
 numpy==1.16.2
 openpyxl==2.5.5
@@ -18,12 +20,6 @@ scipy==1.3.0
 setuptools==41.0.1
 spectrum==0.7.5
 
-xgboost==0.72.1
-
-PeakUtils==1.1.1
-scikits.talkbox==0.2.5
-mpldatacursor==0.6.2
-
 ## INSTALLATION:
 # pip install -r requirements.txt --user
 # cd ext; python3 setup.py build_ext -i
@@ -37,6 +33,3 @@ mpldatacursor==0.6.2
 # pip install git+https://github.com/pyqtgraph/pyqtgraph --user
 ## to install pyInstaller 3.5.dev0+d74052489 development:
 # pip install https://github.com/pyinstaller/pyinstaller/tarball/develop --user
-## Win compilation might need:
-# pywin32==224
-
