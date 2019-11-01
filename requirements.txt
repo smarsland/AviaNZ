@@ -11,7 +11,7 @@ openpyxl==2.5.5
 psutil==5.6.2
 pyFFTW==0.11.1
 PyInstaller==3.5
-PyQt5==5.12
+PyQt5==5.13.1
 pyqtgraph==0.11.0
 PyWavelets==1.0.3
 scikit-image==0.15.0

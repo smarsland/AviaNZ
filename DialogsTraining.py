@@ -1275,12 +1275,13 @@ class BuildRecAdvWizard(QWizard):
             hadF0 = sum(np.invert(np.isnan(f0_high)))
             self.hadF0label.setText("%d (%d %%)" % (hadF0, hadF0/len(f0_low)*100))
             self.hadNoF0label.setText("%d (%d %%)" % (hadNoF0, hadNoF0/len(f0_low)*100))
+            # this is to ensure that the checkbox toggled signal gets called
+            self.ckbF0.setChecked(True)
             if hadF0 == 0:
                 print("Warning: no F0 found in the training segments")
                 self.ckbF0.setChecked(False)
             else:
-                # this is to ensure that the checkbox toggled signal gets called
-                self.ckbF0.setChecked(True)
+
                 f0_low = round(np.nanmin(f0_low))
                 f0_high = round(np.nanmax(f0_high))
 

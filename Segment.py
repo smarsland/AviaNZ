@@ -1057,14 +1057,12 @@ class Segmenter:
         # Window width W should be at least 3*period.
         # A sample rate of 16000 and a min fundamental frequency of 100Hz would then therefore suggest reasonably short windows
         minwin = float(self.fs) / minfreq * minperiods
-        print('1-minwin, W: ', minwin, W)
         if minwin > W:
             print("Extending window width to ", minwin)
             W = minwin
 
         # Make life easier, and make W be a function of the spectrogram window width
         W = int(round(W/self.window_width)*self.window_width)
-        print('2-minwin, W: ', minwin, W)
         # work on a copy of the main data, just to be safer
         data2 = np.zeros(len(data))
         data2[:] = data[:]

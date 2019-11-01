@@ -43,8 +43,8 @@
 # m2w64-libwinpthread-git   5.0.0.4634.697f757               2
 # more-itertools            7.2.0                    pypi_0    pypi
 # msys2-conda-epoch         20160418                      1
-# numpy                     1.16.2          py37_blas_openblash442142e_0  [blas_openblas]  conda-forge
-# openblas                  0.3.3             h535eed3_1001    conda-forge
+# numpy                   	1.17.3			py37hc71023c_0     conda-forge
+# openblas                  0.3.7             h535eed3_1001    conda-forge
 # openmp                    5.0.0                    vc14_1    conda-forge
 # openssl                   1.1.1c               hfa6e2cd_0    conda-forge
 # pefile                    2019.4.18                pypi_0    pypi
