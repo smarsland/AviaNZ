@@ -920,8 +920,8 @@ class BuildRecAdvWizard(QWizard):
 
         def fLowChange(self, value):
             value = value//10*10
-            if value < 50:
-                value = 50
+            if value < 0:
+                value = 0
             self.fLow.setValue(value)
             self.fLowtext.setText(str(value))
 
@@ -969,6 +969,9 @@ class BuildRecAdvWizard(QWizard):
             self.fLow.setRange(0, fs/2)
             self.fLow.setValue(max(0,int(np.min(f_low))))
             self.fHigh.setRange(0, fs/2)
+            if np.max(f_high)==0:
+                # happens when no segments have y limits
+                f_high = fs/2
             self.fHigh.setValue(min(fs/2,int(np.max(f_high))))
 
     # page 5 - run training, show ROC
@@ -1275,21 +1278,24 @@ class BuildRecAdvWizard(QWizard):
             hadF0 = sum(np.invert(np.isnan(f0_high)))
             self.hadF0label.setText("%d (%d %%)" % (hadF0, hadF0/len(f0_low)*100))
             self.hadNoF0label.setText("%d (%d %%)" % (hadNoF0, hadNoF0/len(f0_low)*100))
+
+            self.F0low.setRange(0, int(self.field("fs"))/2)
+            self.F0high.setRange(0, int(self.field("fs"))/2)
             # this is to ensure that the checkbox toggled signal gets called
             self.ckbF0.setChecked(True)
             if hadF0 == 0:
                 print("Warning: no F0 found in the training segments")
                 self.ckbF0.setChecked(False)
+                self.F0low.setValue(0)
+                self.F0high.setValue(int(self.field("fs"))/2)
             else:
-
                 f0_low = round(np.nanmin(f0_low))
                 f0_high = round(np.nanmax(f0_high))
 
                 # update the actual fields
                 self.F0low.setValue(f0_low)
                 self.F0high.setValue(f0_high)
-                self.F0lowtext.setText(str(f0_low))
-                self.F0hightext.setText(str(f0_high))
+
                 # NOTE: currently, F0 is disabled by default, to save faint calls -
                 # enable this when the F0 detection is improved
                 self.ckbF0.setChecked(False)
