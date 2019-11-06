@@ -180,7 +180,8 @@ class AviaNZ_batchProcess(QMainWindow):
         formPost.addWidget(self.w_wind, 0, 1)
         formPost.addWidget(QLabel("Add rain filter"), 1, 0)
         formPost.addWidget(self.w_rain, 1, 1)
-        formPost.addWidget(QLabel("Merge different call types"), 2, 0)
+        self.mergectlbl = QLabel("Merge different call types")
+        formPost.addWidget(self.mergectlbl, 2, 0)
         formPost.addWidget(self.w_mergect, 2, 1)
         formPost.addWidget(self.maxgaplbl, 3, 0)
         formPost.addWidget(self.maxgap, 3, 1)
@@ -334,11 +335,15 @@ class AviaNZ_batchProcess(QMainWindow):
             self.minlenlbl.hide()
             self.maxgap.hide()
             self.maxgaplbl.hide()
+            self.w_mergect.show()
+            self.mergectlbl.show()
         else:
             self.minlen.show()
             self.minlenlbl.show()
             self.maxgap.show()
             self.maxgaplbl.show()
+            self.w_mergect.hide()
+            self.mergectlbl.hide()
 
         # (skip first box which is fixed)
         for box in self.speCombos[1:]:
@@ -523,7 +528,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 # ALL SYSTEMS GO: process this file
                 print("Loading file...")
                 # load audiodata and clean up old segments:
-                self.loadFile(species=self.species)
+                self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"))
                 # Segment over pages separately, to allow dealing with large files smoothly:
                 # page size fixed for now
                 samplesInPage = 900*16000
@@ -550,7 +555,8 @@ class AviaNZ_batchProcess(QMainWindow):
                         self.sp.data = self.audiodata[start:end]
                         self.sgRaw = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
                         self.seg = Segment.Segmenter(self.sp, self.sampleRate)
-                        thisPageSegs = self.seg.bestSegments()
+                        # thisPageSegs = self.seg.bestSegments()
+                        thisPageSegs = self.seg.medianClip(thr=3.5)
                         # Post-process
                         # 1. Delete windy segments
                         # 2. Delete rainy segments
@@ -677,7 +683,10 @@ class AviaNZ_batchProcess(QMainWindow):
             # Determine all species detected in at least one file
             # (two loops ensure that all files will have pres/abs xlsx for all species.
             # Ugly, but more readable this way)
-            spList = set([filter["species"] for filter in filters])
+            if speciesStr != "Any sound":
+                spList = set([filter["species"] for filter in filters])
+            else:
+                spList = set()
             for filename in allwavs:
                 if not os.path.isfile(filename + '.data'):
                     continue
@@ -814,7 +823,7 @@ class AviaNZ_batchProcess(QMainWindow):
             self.fillFileList(current)
         return(0)
 
-    def loadFile(self, species):
+    def loadFile(self, species, anysound=False):
         print(self.filename)
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
@@ -848,40 +857,15 @@ class AviaNZ_batchProcess(QMainWindow):
                         wipeAll = self.segments[i].wipeSpecies(filt["species"])
                         if wipeAll:
                             del self.segments[i]
-
             print("%d segments loaded from .data file" % len(self.segments))
 
         # Do impulse masking by default
-        self.impMask()
-
-    def impMask(self, engp=90, fp=0.75):
-        """
-        Impulse mask
-        :param engp: energy percentile (for rows of the spectrogram)
-        :param fp: frequency proportion to consider it as an impulse (cols of the spectrogram)
-        :return: None, but reset audiodata
-        """
-        print('Impulse masking...')
-        postp = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate, segments=[], subfilter={})
-        imps = postp.impulse_cal(fs=self.sampleRate, engp=engp, fp=fp)    # 0 - presence of impulse noise
-        print('Samples to mask: ', len(self.audiodata) - np.sum(imps))
-        # Mask only the affected samples
-        self.sp.data = np.multiply(self.audiodata, imps)
+        sg = Segment.Segmenter(sp=self.sp, fs=self.sampleRate)
+        if anysound:
+            self.sp.data = sg.impMask(engp=70, fp=0.50)
+        else:
+            self.sp.data = sg.impMask()
         self.audiodata = self.sp.data
-
-    def countConsecutive(self, nums, length):
-        gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s + 1 < e]
-        edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
-        edges = list(zip(edges, edges))
-        edges_reps = [item[1] - item[0] + 1 for item in edges]
-        res = np.zeros((length)).tolist()
-        t = 0
-        for item in edges:
-            for i in range(item[0], item[1]+1):
-                res[i] = edges_reps[t]
-            t += 1
-        return res
-
 
 class AviaNZ_reviewAll(QMainWindow):
     # Main class for reviewing batch processing results
@@ -1180,7 +1164,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # otherwise re-add the segments that were good enough to skip review,
             # and save the corrected segment JSON
             self.segments.extend(self.goodsegments)
-            cleanexit = self.segments.saveJSON(filename+'.data')
+            cleanexit = self.segments.saveJSON(filename+'.data', self.reviewer)
             if cleanexit != 1:
                 print("Warning: could not save segments!")
         # END of main review loop

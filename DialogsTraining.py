@@ -141,6 +141,9 @@ class BuildRecAdvWizard(QWizard):
                         # also retrieve its sample rate
                         samplerate = wavio.read(os.path.join(root, filename), 1).rate
                         fs.append(samplerate)
+            if len(fs)==0:
+                print("Warning: no suitable files found")
+                return
 
             # might need better limits on selectable sample rate here
             self.fs.setValue(int(np.min(fs)))
@@ -917,8 +920,8 @@ class BuildRecAdvWizard(QWizard):
 
         def fLowChange(self, value):
             value = value//10*10
-            if value < 50:
-                value = 50
+            if value < 0:
+                value = 0
             self.fLow.setValue(value)
             self.fLowtext.setText(str(value))
 
@@ -966,6 +969,9 @@ class BuildRecAdvWizard(QWizard):
             self.fLow.setRange(0, fs/2)
             self.fLow.setValue(max(0,int(np.min(f_low))))
             self.fHigh.setRange(0, fs/2)
+            if np.max(f_high)==0:
+                # happens when no segments have y limits
+                f_high = fs/2
             self.fHigh.setValue(min(fs/2,int(np.max(f_high))))
 
     # page 5 - run training, show ROC
@@ -1239,7 +1245,6 @@ class BuildRecAdvWizard(QWizard):
             self.F0hightext.setText(str(value))
 
         def toggleF0(self, checked):
-            print("Toggling to", checked)
             if checked:
                 self.F0low.setEnabled(True)
                 self.F0lowtext.setEnabled(True)
@@ -1273,20 +1278,24 @@ class BuildRecAdvWizard(QWizard):
             hadF0 = sum(np.invert(np.isnan(f0_high)))
             self.hadF0label.setText("%d (%d %%)" % (hadF0, hadF0/len(f0_low)*100))
             self.hadNoF0label.setText("%d (%d %%)" % (hadNoF0, hadNoF0/len(f0_low)*100))
+
+            self.F0low.setRange(0, int(self.field("fs"))/2)
+            self.F0high.setRange(0, int(self.field("fs"))/2)
+            # this is to ensure that the checkbox toggled signal gets called
+            self.ckbF0.setChecked(True)
             if hadF0 == 0:
                 print("Warning: no F0 found in the training segments")
                 self.ckbF0.setChecked(False)
+                self.F0low.setValue(0)
+                self.F0high.setValue(int(self.field("fs"))/2)
             else:
-                # this is to ensure that the checkbox toggled signal gets called
-                self.ckbF0.setChecked(True)
                 f0_low = round(np.nanmin(f0_low))
                 f0_high = round(np.nanmax(f0_high))
 
                 # update the actual fields
                 self.F0low.setValue(f0_low)
                 self.F0high.setValue(f0_high)
-                self.F0lowtext.setText(str(f0_low))
-                self.F0hightext.setText(str(f0_high))
+
                 # NOTE: currently, F0 is disabled by default, to save faint calls -
                 # enable this when the F0 detection is improved
                 self.ckbF0.setChecked(False)
@@ -1655,6 +1664,8 @@ class TestRecWizard(QWizard):
 
             self.lblTestDir = QLabel()
             self.lblTestDir.setStyleSheet("QLabel { color : #808080; }")
+            self.lblTestFilter = QLabel()
+            self.lblTestFilter.setStyleSheet("QLabel { color : #808080; }")
             self.lblSpecies = QLabel()
             self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
             space = QLabel()
@@ -1674,7 +1685,8 @@ class TestRecWizard(QWizard):
             # overall results page layout
             vboxHead = QFormLayout()
             vboxHead.addRow("Testing data:", self.lblTestDir)
-            vboxHead.addRow("Recogniser name:", self.lblSpecies)
+            vboxHead.addRow("Filter name:", self.lblTestFilter)
+            vboxHead.addRow("Species name:", self.lblSpecies)
             vboxHead.addWidget(space)
 
             form2 = QFormLayout()
@@ -1708,6 +1720,7 @@ class TestRecWizard(QWizard):
                 speciesData = self.wizard().filterlist[self.field("species")[:-4]]
 
                 self.lblTestDir.setText(self.field("testDir"))
+                self.lblTestFilter.setText(self.field("species"))
                 self.lblSpecies.setText(speciesData["species"])
 
                 ws = WaveletSegment.WaveletSegment(speciesData, 'dmey2')
@@ -1847,7 +1860,8 @@ class TestRecWizard(QWizard):
             return
 
         # start writing the results to an output txt file
-        outfile.write("Recogniser name:\t" + speciesData["species"]+"\n")
+        outfile.write("Recogniser name:\t" + self.field("species")+"\n")
+        outfile.write("Species name:\t" + speciesData["species"]+"\n")
         outfile.write("Using data:\t" + self.field("testDir") +"\n")
         outfile.write("-------------------------\n\n")
 
