@@ -159,14 +159,19 @@ class SignalProc:
             print("ERROR: attempted to calculate spectrogram without audiodata")
             return
 
-        self.sg = np.copy(self.data)
-        if self.sg.dtype != 'float':
-            self.sg = self.sg.astype('float')
-
         if window_width is None:
             window_width = self.window_width
         if incr is None:
             incr = self.incr
+
+        # clean handling of very short segments:
+        if len(self.data) <= window_width:
+            window_width = len(self.data) - 1
+
+        self.sg = np.copy(self.data)
+        if self.sg.dtype != 'float':
+            self.sg = self.sg.astype('float')
+
         # Set of window options
         if window=='Hann':
             # This is the Hann window
@@ -301,6 +306,11 @@ class SignalProc:
         highPass = high/nyquist
         lowStop = lowPass-band
         highStop = highPass+band
+        # safety checks for values near edges
+        if lowStop<0:
+            lowStop = lowPass/2
+        if highStop>1:
+            highStop = (1+highPass)/2
 
         if lowPass == 0 and highPass == 1:
             print("No filter needed!")

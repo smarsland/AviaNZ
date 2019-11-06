@@ -328,6 +328,7 @@ def FundFreqYin(np.ndarray data, int W, double thr, double fs):
         cdef int arrs = len(data)
 
         starts = range(0, len(data) - 2*W, W//2)
+        assert len(starts)>0
         pitch = np.zeros(len(starts) + 1)
         besttau = -1 * np.ones(len(starts))
 
