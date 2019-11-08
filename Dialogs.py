@@ -661,7 +661,7 @@ class Segmentation(QDialog):
             self.layout().itemAt(w).widget().hide()
         self.algs.show()
         self.wind.show()
-        self.rain.show()
+        # self.rain.show()
         self.minlenlbl.show()
         self.minlen.show()
         self.maxgaplbl.show()
