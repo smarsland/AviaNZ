@@ -940,7 +940,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.certBox.setValue(100)
         self.d_detection.addWidget(self.certBox, row=3, col=1)
 
-        self.w_resLabel = QLabel("Set size of presence/absence blocks in Excel output\n(Sheet 3)")
+        self.w_resLabel = QLabel("Set size of presence/absence blocks\nin Excel output (Sheet 3)")
         self.d_detection.addWidget(self.w_resLabel, row=4, col=0)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
