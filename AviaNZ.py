@@ -49,9 +49,10 @@ import WaveletSegment
 import WaveletFunctions
 import AviaNZ_batch
 import Clustering
-import librosa
+import colourMaps
 
-import click, webbrowser, colourMaps, copy, math
+import librosa
+import click, webbrowser, copy, math
 import time
 
 pg.setConfigOption('background','w')
@@ -154,11 +155,8 @@ class AviaNZ(QMainWindow):
         # INPUT FILE LOADING
         # search order: infile -> firstFile -> dialog
         # Make life easier for now: preload a birdsong
-        print("Loaded")
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
-            firstFile = self.SoundFileDir + '/' 
-            firstFile = self.SoundFileDir + '/' + 'kiwi_1min.wav' 
-            #firstFile = "/home/julius/Documents/kiwis/test/kiwi_1min.wav"
+            firstFile = self.SoundFileDir + '/' + 'kiwi_1min.wav'
 
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
             if self.CLI:
@@ -824,11 +822,15 @@ class AviaNZ(QMainWindow):
                 ind = bird.find('>')
                 if ind == -1:
                     ind = len(bird)
-                if bird[:ind] not in headlist:
+                # find or add "genus"
+                if bird[:ind] in headlist:
+                    item = self.model.findItems(bird[:ind])[0]
+                else:
                     headlist.append(bird[:ind])
                     item = QStandardItem(bird[:ind])
                     item.setSelectable(True)
                     self.model.appendRow(item)
+                # if there's "species", add that
                 if ind < len(bird):
                     subitem = QStandardItem(bird[ind+1:])
                     item.setSelectable(False)
@@ -1241,18 +1243,17 @@ class AviaNZ(QMainWindow):
                     if self.datalength != self.sp.fileLength:
                         #print("not all of file loaded")
                         self.nFileSections = int(np.ceil(self.sp.fileLength/self.datalength))
-                        print('self.nFileSections: ', self.nFileSections)
                         self.prev5mins.setEnabled(False)
                         self.next5mins.setEnabled(True)
                         self.movePrev5minsKey.setEnabled(False)
                         self.moveNext5minsKey.setEnabled(True)
                     else:
                         self.nFileSections = 1
-                        print('self.nFileSections: ', self.nFileSections)
                         self.prev5mins.setEnabled(False)
                         self.next5mins.setEnabled(False)
                         self.movePrev5minsKey.setEnabled(False)
                         self.moveNext5minsKey.setEnabled(False)
+                    print('number of pages: ', self.nFileSections)
 
                 if self.nFileSections == 1:
                     self.placeInFileLabel.setText('')
@@ -3852,14 +3853,14 @@ class AviaNZ(QMainWindow):
                 self.waveletDenoiser = WaveletFunctions.WaveletFunctions(data=self.audiodata, wavelet=wavelet, maxLevel=self.config['maxSearchDepth'], samplerate=self.sampleRate)
                 if not self.DOC:
                     # pass dialog settings
-                    self.audiodata = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP)
+                    self.sp.data = self.waveletDenoiser.waveletDenoise(thrType,float(str(thr)), depth, aaRec=aaRec, aaWP=aaWP)
                 else:
                     # go with defaults
-                    self.audiodata = self.waveletDenoiser.waveletDenoise(aaRec=True, aaWP=False)
+                    self.sp.data = self.waveletDenoiser.waveletDenoise(aaRec=True, aaWP=False)
             else:
                 # SignalProc will deal with denoising
                 self.sp.denoise(alg, start=start, end=end, width=width)
-                self.audiodata = self.sp.data
+            self.audiodata = self.sp.data
 
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
