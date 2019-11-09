@@ -2974,15 +2974,16 @@ class AviaNZ(QMainWindow):
             col.setAlpha(180)
             self.listRectanglesa1[segID].setHoverBrush(fn.mkBrush(col))
             self.listRectanglesa2[segID].setHoverBrush(fn.mkBrush(col))
-            self.listRectanglesa2[segID].transparent = False
-            self.listRectanglesa2[segID].setPen(None)
-            if self.config['transparentBoxes'] and type(self.listRectanglesa2[segID]) == self.ROItype:
-                col.setAlpha(255)
-                self.listRectanglesa2[segID].transparent = True
-                self.listRectanglesa2[segID].setPen(col, width=1)
-                self.listRectanglesa2[segID].setBrush(None)
-                self.listRectanglesa2[segID].setHoverBrush(None)
-                col.setAlpha(100)
+            if type(self.listRectanglesa2[segID]) == self.ROItype:
+                self.listRectanglesa2[segID].transparent = False
+                self.listRectanglesa2[segID].setPen(None)
+                if self.config['transparentBoxes']:
+                    col.setAlpha(255)
+                    self.listRectanglesa2[segID].transparent = True
+                    self.listRectanglesa2[segID].setPen(col, width=1)
+                    self.listRectanglesa2[segID].setBrush(None)
+                    self.listRectanglesa2[segID].setHoverBrush(None)
+                    col.setAlpha(100)
             self.listRectanglesa1[segID].update()
             self.listRectanglesa2[segID].update()
         QApplication.processEvents()
