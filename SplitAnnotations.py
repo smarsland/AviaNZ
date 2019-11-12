@@ -5,7 +5,7 @@
 
 #### CLEAN IMPORTS
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox
-from PyQt5.QtCore import QDir
+from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtGui import QIcon, QPixmap
 import sys
 import os
@@ -95,7 +95,7 @@ class SplitData(QMainWindow):
 
         self.splitBut = QPushButton(" &Split!")
         self.splitBut.setFixedHeight(40)
-        self.splitBut.setStyleSheet('QPushButton {background-color: #2F79B5; font-weight: bold; font-size:14px}')
+        self.splitBut.setStyleSheet('QPushButton {background-color: #2F79B5; font-weight: bold; font-size:14px} QPushButton:disabled {background-color :#B3BCC4}')
         self.splitBut.clicked.connect(self.split)
         self.splitBut.setEnabled(False)
 
@@ -268,12 +268,14 @@ class SplitData(QMainWindow):
         """ This function is connected to the main button press """
         # setup progress bar etc
         print("Starting to split...")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
         totalfiles = len(self.listOfDataFiles) + len(self.listOfWavs)
-        dlg = QProgressDialog("Splitting...", "", 0, totalfiles)
+        dlg = QProgressDialog("Splitting...", "", 0, totalfiles, self)
         donefiles = 0
         dlg.setCancelButton(None)
         dlg.setWindowIcon(QIcon('img/Avianz.ico'))
         dlg.setWindowTitle('AviaNZ')
+        dlg.setWindowModality(Qt.WindowModal)
         dlg.setMinimumDuration(1)
         dlg.forceShow()
 
@@ -297,10 +299,14 @@ class SplitData(QMainWindow):
                 print("Could not identify timestamp in", f)
                 wavHasDt = int(0)
 
-            succ = SplitLauncher.launchCython(infile_c, outfile_c, self.cutLen, wavHasDt)
-            if succ!=0:
-                print("ERROR: C splitter failed on file", f)
-                return
+            if os.path.isfile(infile_c) and os.stat(infile_c).st_size>100:
+                succ = SplitLauncher.launchCython(infile_c, outfile_c, self.cutLen, wavHasDt)
+                if succ!=0:
+                    print("ERROR: C splitter failed on file", f)
+                    return
+            else:
+                print("Warning: input file %s does not exist or is empty, skipping", infile_c)
+
             donefiles += 1
             QApplication.processEvents()
             dlg.repaint()
@@ -317,8 +323,9 @@ class SplitData(QMainWindow):
             dlg.setValue(donefiles)
 
         print("processed %d files" % donefiles)
+        QApplication.restoreOverrideCursor()
         if donefiles==totalfiles:
-            msg = MessagePopup("d", "Finished", "Folder processed successfully")
+            msg = MessagePopup("d", "Finished", "Folder processed successfully!")
             msg.exec_()
 
 

@@ -1227,11 +1227,14 @@ class HumanClassify1(QDialog):
         self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
 
-        # Brightness, and contrast sliders
+        # Brightness and contrast sliders. Need to pass true (config) values of these as args
         self.brightnessSlider = QSlider(Qt.Horizontal)
         self.brightnessSlider.setMinimum(0)
         self.brightnessSlider.setMaximum(100)
-        self.brightnessSlider.setValue(brightness)
+        if self.cmapInverted:
+            self.brightnessSlider.setValue(brightness)
+        else:
+            self.brightnessSlider.setValue(100-brightness)
         self.brightnessSlider.setTickInterval(1)
         self.brightnessSlider.valueChanged.connect(self.setColourLevels)
 
@@ -1336,6 +1339,8 @@ class HumanClassify1(QDialog):
         text2 = str(total - done) + " to go"
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
+        # based on these, update "previous" arrow status
+        self.buttonPrev.setEnabled(done>0)
 
     def setImage(self, sg, audiodata, sampleRate, incr, label, unbufStart, unbufStop, time1, time2, minFreq=0, maxFreq=0):
         """ label - list of species in the current segment.
@@ -1726,11 +1731,14 @@ class HumanClassify2(QDialog):
         self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
 
-        # Brightness, and contrast sliders
+        # Brightness and contrast sliders - need to pass true (config) values of these as args
         self.brightnessSlider = QSlider(Qt.Horizontal)
         self.brightnessSlider.setMinimum(0)
         self.brightnessSlider.setMaximum(100)
-        self.brightnessSlider.setValue(brightness)
+        if self.cmapInverted:
+            self.brightnessSlider.setValue(brightness)
+        else:
+            self.brightnessSlider.setValue(100-brightness)
         self.brightnessSlider.setTickInterval(1)
         self.brightnessSlider.valueChanged.connect(self.setColourLevels)
 
@@ -2032,7 +2040,10 @@ class HumanClassify2(QDialog):
         """
         minsg = np.min(self.sg)
         maxsg = np.max(self.sg)
-        brightness = self.brightnessSlider.value()
+        if self.cmapInverted:
+            brightness = self.brightnessSlider.value()
+        else:
+            brightness = 100-self.brightnessSlider.value()
         contrast = self.contrastSlider.value()
         colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
         colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + colourStart

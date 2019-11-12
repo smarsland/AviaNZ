@@ -683,19 +683,23 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.playSegButton,row=0,col=2)
         self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
         if not self.DOC:
-            self.w_controls.addWidget(self.playSlowButton,row=0,col=4)
-            self.w_controls.addWidget(self.quickDenButton,row=1,col=0)
+            self.w_controls.addWidget(self.playSlowButton,row=1,col=0)
+            self.w_controls.addWidget(self.quickDenButton,row=1,col=1)
             # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
-            self.w_controls.addWidget(self.viewSpButton,row=1,col=1)
+            self.w_controls.addWidget(self.viewSpButton,row=1,col=2)
+
+        # hack for having some spacing
+        self.w_controls.layout.setRowMinimumHeight(2, 15)
+
         self.w_controls.addWidget(self.volIcon, row=3, col=0)
-        self.w_controls.addWidget(self.volSlider, row=3, col=1, colspan=4)
-        self.w_controls.addWidget(QLabel("Brightness"),row=4,col=0,colspan=5)
-        self.w_controls.addWidget(self.brightnessSlider,row=5,col=0,colspan=5)
-        self.w_controls.addWidget(QLabel("Contrast"),row=6,col=0,colspan=5)
-        self.w_controls.addWidget(self.contrastSlider,row=7,col=0,colspan=5)
-        self.w_controls.addWidget(QLabel('Visible window (seconds)'),row=8,col=0,colspan=5)
-        self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=5)
-        self.w_controls.addWidget(deleteButton,row=10,col=0,colspan=5)
+        self.w_controls.addWidget(self.volSlider, row=3, col=1, colspan=3)
+        self.w_controls.addWidget(QLabel("Brightness"),row=4,col=0,colspan=4)
+        self.w_controls.addWidget(self.brightnessSlider,row=5,col=0,colspan=4)
+        self.w_controls.addWidget(QLabel("Contrast"),row=6,col=0,colspan=4)
+        self.w_controls.addWidget(self.contrastSlider,row=7,col=0,colspan=4)
+        self.w_controls.addWidget(QLabel('Visible window (seconds)'),row=8,col=0,colspan=4)
+        self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=4)
+        self.w_controls.addWidget(deleteButton,row=10,col=0,colspan=4)
 
         # The slider to show playback position
         # This is hidden, but controls the moving bar
@@ -1092,7 +1096,7 @@ class AviaNZ(QMainWindow):
             if os.stat(fullcurrent).st_size == 0:
                 print("Cannot open file %s of size 0!" % fullcurrent)
                 return(1)
-            elif os.stat(fullcurrent).st_size < 100:
+            elif os.stat(fullcurrent).st_size < 1000:
                 print("File %s appears to have only header" % fullcurrent)
                 return(1)
 
@@ -3165,7 +3169,7 @@ class AviaNZ(QMainWindow):
                         self.shortBirdList.insert(0,str(bird))
                         del self.shortBirdList[-1]
 
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.brightnessSlider.value(), self.contrastSlider.value(), self.shortBirdList, self.longBirdList, self.multipleBirds, self)
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.multipleBirds, self)
 
             # load the first image:
             self.box1id = -1
@@ -3231,8 +3235,8 @@ class AviaNZ(QMainWindow):
         # update "done/to go" numbers - None rectangles are from other pages
         segsDone = len(self.listRectanglesa2[:nextseg]) - self.listRectanglesa2[:nextseg].count(None)
         segsTotal = len(self.listRectanglesa2) - self.listRectanglesa2.count(None)
-        self.humanClassifyDialog1.buttonPrev.setEnabled(segsDone > 0)
         self.humanClassifyDialog1.setSegNumbers(segsDone, segsTotal)
+
         # Different calls for the two types of region
         if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
             x1nob = self.listRectanglesa2[self.box1id].pos()[0]
@@ -3399,7 +3403,7 @@ class AviaNZ(QMainWindow):
                                                                self.revLabel, self.sampleRate, self.sp.audioFormat,
                                                                self.config['incr'], self.lut, self.colourStart,
                                                                self.colourEnd, self.config['invertColourMap'],
-                                                               self.brightnessSlider.value(), self.contrastSlider.value(), startRead=self.startRead)
+                                                               self.config['brightness'], self.config['contrast'], startRead=self.startRead)
             if hasattr(self, 'humanClassifyDialogSize'):
                 self.humanClassifyDialog2.resize(self.humanClassifyDialogSize)
             self.humanClassifyDialog2.finish.clicked.connect(self.humanClassifyClose2)
@@ -5105,8 +5109,8 @@ class AviaNZ(QMainWindow):
     def eventFilter(self, obj, event):
         # This is an event filter for the context menu. It allows the user to select
         # multiple birds by stopping the menu being closed on first click
-        if self.multipleBirds and event.type() in [QtCore.QEvent.MouseButtonRelease]:
-            if isinstance(obj, QtGui.QMenu):
+        if isinstance(obj, QtGui.QMenu):
+            if self.multipleBirds and event.type() in [QtCore.QEvent.MouseButtonRelease]:
                 if obj.activeAction():
                     if not obj.activeAction().menu(): 
                         #if the selected action does not have a submenu
