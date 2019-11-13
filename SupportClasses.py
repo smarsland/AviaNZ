@@ -719,6 +719,7 @@ class MessagePopup(QMessageBox):
 
         self.setText(text)
         self.setWindowTitle(title)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         if (type=="w"):
             self.setIconPixmap(QPixmap("img/Owl_warning.png"))
         elif (type=="d"):
