@@ -380,18 +380,17 @@ class AviaNZ(QMainWindow):
         actionMenu.addAction("Export current view as image",self.saveImage,"Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
 
-        if not self.DOC:
-            actionMenu.addSeparator()
-            extraMenu = actionMenu.addMenu("Playback speed")
-            extraGroup = QActionGroup(self)
-            for ename in ["2","0.5","0.25"]:
-                em = extraMenu.addAction(ename)
-                em.setCheckable(True)
-                if ename == "0.5":
-                    em.setChecked(True)
-                receiver = lambda checked, ename=ename: self.setSpeed(ename)
-                em.triggered.connect(receiver)
-                extraGroup.addAction(em)
+        actionMenu.addSeparator()
+        extraMenu = actionMenu.addMenu("Playback speed")
+        extraGroup = QActionGroup(self)
+        for ename in ["2","0.5","0.25"]:
+            em = extraMenu.addAction(ename)
+            em.setCheckable(True)
+            if ename == "0.5":
+                em.setChecked(True)
+            receiver = lambda checked, ename=ename: self.setSpeed(ename)
+            em.triggered.connect(receiver)
+            extraGroup.addAction(em)
 
         # "Recognisers" menu
         recMenu = self.menuBar().addMenu("&Recognisers")
@@ -682,8 +681,8 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.stopButton,row=0,col=1)
         self.w_controls.addWidget(self.playSegButton,row=0,col=2)
         self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
+        self.w_controls.addWidget(self.playSlowButton,row=1,col=0)
         if not self.DOC:
-            self.w_controls.addWidget(self.playSlowButton,row=1,col=0)
             self.w_controls.addWidget(self.quickDenButton,row=1,col=1)
             # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
             self.w_controls.addWidget(self.viewSpButton,row=1,col=2)
@@ -1337,8 +1336,7 @@ class AviaNZ(QMainWindow):
                 self.sp.audioFormat.setSampleRate(self.sp.audioFormat.sampleRate()//self.slowSpeed)
                 self.media_slow = SupportClasses.ControllableAudio(self.sp.audioFormat)
                 self.sp.audioFormat.setSampleRate(oldSR)
-                if not self.DOC:
-                    self.media_slow.notify.connect(self.movePlaySlowSlider)
+                self.media_slow.notify.connect(self.movePlaySlowSlider)
 
                 # Reset the media player
                 self.stopPlayback()
@@ -1799,8 +1797,7 @@ class AviaNZ(QMainWindow):
         print(self.sp.audioFormat.sampleRate())
         self.sp.audioFormat.setSampleRate(oldSR)
         print(self.sp.audioFormat.sampleRate())
-        if not self.DOC:
-            self.media_slow.notify.connect(self.movePlaySlowSlider)
+        self.media_slow.notify.connect(self.movePlaySlowSlider)
 
     def setExtraPlot(self, plotname):
         """ Reacts to menu clicks and updates or hides diagnostic plot window."""
@@ -4036,7 +4033,7 @@ class AviaNZ(QMainWindow):
             f.write(json.dumps(self.buildRecAdvWizard.speciesData))
             f.close()
             # prompt the user
-            msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nWe recommend to test the recogniser on a separate dataset before actual use.")
+            msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
             msg.exec_()
             self.buildRecAdvWizard.done(1)
         except Exception as e:
@@ -5234,6 +5231,5 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
         if out == 1:
             mainlauncher()
 
-# Start the application
 app = QApplication(sys.argv)
 mainlauncher()
