@@ -956,6 +956,7 @@ class WaveletSegment:
 
         WF = []
         del WF
+        gc.collect()
         return denoisedData
 
     def loadDirectory(self, dirName, denoise, window=1, inc=None):
@@ -1005,6 +1006,7 @@ class WaveletSegment:
         # MLdata = np.append(WC, ann, axis=1)
         # np.savetxt(os.path.join(dirName, "energies.tsv"), MLdata, delimiter="\t")
         del denoisedData
+        gc.collect()
         totalcalls = sum([sum(a) for a in self.annotation])
         totalblocks = sum([len(a) for a in self.annotation])
         print("Directory loaded. %d/%d presence blocks found.\n" % (totalcalls, totalblocks))
