@@ -83,7 +83,27 @@ a = Analysis(['AviaNZ.py'],
              cipher=block_cipher,
              noarchive=False)
 
+	 
+a_s = Analysis(['SplitAnnotations.py'],
+             pathex=['c:\\Program Files (x86)\\Windows Kits\\10\\Redist\\ucrt\\DLLs', 'c:\\Users\\Julius\\Documents\\DARBO\\AviaNZ\\AviaNZ-master'],
+             binaries=[],
+             hiddenimports=['cython'],
+             hookspath=['.\\hooks'],
+             datas=[('img/*', 'img')],
+             runtime_hooks=[],
+             excludes=[],
+             win_no_prefer_redirects=False,
+             win_private_assemblies=False,
+             cipher=block_cipher,
+             noarchive=False)
+
+MERGE((a, 'AviaNZ', 'AviaNZ'),
+		(a_s, 'SplitAnnotations', 'AviaNZ-Splitter'))
+
 pyz = PYZ(a.pure, a.zipped_data,
+             cipher=block_cipher)
+			 
+pyz_s = PYZ(a_s.pure, a_s.zipped_data,
              cipher=block_cipher)
 
 # note: this may have a bug requiring absolute path to ICON
@@ -99,6 +119,18 @@ exe = EXE(pyz,
           console=True,
           icon='c:\\Users\\Julius\\Documents\\DARBO\\AviaNZ\\AviaNZ-master\\img\\Avianz.ico')
 
+exe_s = EXE(pyz_s,
+          a_s.scripts,
+          [],
+          exclude_binaries=True,
+          name='AviaNZ-Splitter',
+          debug=False,
+          bootloader_ignore_signals=False,
+          strip=False,
+          upx=False,
+          console=True,
+          icon='c:\\Users\\Julius\\Documents\\DARBO\\AviaNZ\\AviaNZ-master\\img\\Avianz.ico')
+
 # rename version below:
 coll = COLLECT(exe,
                a.binaries,
@@ -107,3 +139,11 @@ coll = COLLECT(exe,
                strip=False,
                upx=True,
                name='AviaNZv2.0')
+coll_s = COLLECT(exe_s,
+               a_s.binaries,
+               a_s.zipfiles,
+               a_s.datas,
+               strip=False,
+               upx=True,
+               name='AviaNZv2.0s')
+# Then need to move the other exe from v2.0s/ to the first dir
