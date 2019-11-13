@@ -20,7 +20,7 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import os, re, fnmatch, sys
+import os, re, fnmatch, sys, gc
 
 from PyQt5.QtGui import QIcon, QPixmap, QApplication, QFont
 from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout
@@ -553,8 +553,11 @@ class AviaNZ_batchProcess(QMainWindow):
                     # Process
                     if speciesStr == "Any sound":
                         # Create spectrogram for median clipping etc
+                        if not hasattr(self, 'sp'):
+                            self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
                         self.sp.data = self.audiodata[start:end]
-                        self.sgRaw = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
+                        self.sp.sampleRate = self.sampleRate
+                        _ = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
                         self.seg = Segment.Segmenter(self.sp, self.sampleRate)
                         # thisPageSegs = self.seg.bestSegments()
                         thisPageSegs = self.seg.medianClip(thr=3.5)
@@ -587,6 +590,8 @@ class AviaNZ_batchProcess(QMainWindow):
                                 seg[1] += start/self.sampleRate
                         # attach mandatory "Don't Know"s etc and put on self.segments
                         self.makeSegments(post.segments)
+                        del self.seg
+                        gc.collect()
                     else:
                         # read in the page and resample as needed
                         self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new")
@@ -867,6 +872,8 @@ class AviaNZ_batchProcess(QMainWindow):
         else:
             self.sp.data = sg.impMask()
         self.audiodata = self.sp.data
+        del self.sp
+        gc.collect()
 
 class AviaNZ_reviewAll(QMainWindow):
     # Main class for reviewing batch processing results
