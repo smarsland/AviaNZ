@@ -4,7 +4,7 @@
 # Version 1.5 05/08/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
-#    AviaNZ birdsong analysis program
+#    AviaNZ bioacoustic analysis program
 #    Copyright (C) 2017--2019
 
 #    This program is free software: you can redistribute it and/or modify
@@ -380,17 +380,17 @@ class AviaNZ(QMainWindow):
         actionMenu.addAction("Export current view as image",self.saveImage,"Ctrl+I")
         actionMenu.addAction("Save selected sound", self.save_selected_sound)
 
-        actionMenu.addSeparator()
-        extraMenu = actionMenu.addMenu("Playback speed")
-        extraGroup = QActionGroup(self)
-        for ename in ["2","0.5","0.25"]:
-            em = extraMenu.addAction(ename)
-            em.setCheckable(True)
-            if ename == "0.5":
-                em.setChecked(True)
-            receiver = lambda checked, ename=ename: self.setSpeed(ename)
-            em.triggered.connect(receiver)
-            extraGroup.addAction(em)
+        #actionMenu.addSeparator()
+        #extraMenu = actionMenu.addMenu("Playback speed")
+        #extraGroup = QActionGroup(self)
+        #for ename in ["2","0.5","0.25"]:
+            #em = extraMenu.addAction(ename)
+            #em.setCheckable(True)
+            #if ename == "0.5":
+                #em.setChecked(True)
+            #receiver = lambda checked, ename=ename: self.setSpeed(ename)
+            #em.triggered.connect(receiver)
+            #extraGroup.addAction(em)
 
         # "Recognisers" menu
         recMenu = self.menuBar().addMenu("&Recognisers")
@@ -608,9 +608,28 @@ class AviaNZ(QMainWindow):
         self.playSlowButton = QtGui.QToolButton()
         self.playSlowButton.setIcon(QtGui.QIcon('img/playSlow.png'))
         self.playSlowButton.setIconSize(QtCore.QSize(20, 20))
-        self.playSlowButton.setToolTip("Play halfspeed")
+        self.playSlowButton.setToolTip("Play slowly")
         self.playSlowButton.clicked.connect(self.playSlowSegment)
         self.playSlowButton.setEnabled(False)
+
+        #self.speedButton = QtGui.QToolButton()
+        #self.speedButton.setPopupMode(QtGui.QToolButton.InstantPopup)
+        #self.speedButton.setText(u'\u00BD')
+        #self.speedButton.setIconSize(QtCore.QSize(20, 20))
+        #self.speedButton.setToolTip("Playback speed")
+        #self.speedButton.clicked.connect(self.playSlowSegment)
+        speedMenu = QMenu()
+        extraGroup = QActionGroup(self)
+        for ename in ["2",u'\u00BD',u'\u00BC']:
+            em = speedMenu.addAction(ename)
+            em.setCheckable(True)
+            if ename == "0.5":
+                em.setChecked(True)
+            receiver = lambda checked, ename=ename: self.setSpeed(ename)
+            em.triggered.connect(receiver)
+            extraGroup.addAction(em)
+        #self.speedButton.setMenu(speedMenu)
+        self.playSlowButton.setMenu(speedMenu)
 
         self.quickDenButton = QtGui.QToolButton()
         self.quickDenButton.setIcon(QtGui.QIcon('img/denoisesegment.png'))
@@ -682,10 +701,11 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.playSegButton,row=0,col=2)
         self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
         self.w_controls.addWidget(self.playSlowButton,row=1,col=0)
+        #self.w_controls.addWidget(self.speedButton,row=1,col=1)
         if not self.DOC:
-            self.w_controls.addWidget(self.quickDenButton,row=1,col=1)
+            self.w_controls.addWidget(self.quickDenButton,row=1,col=2)
             # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
-            self.w_controls.addWidget(self.viewSpButton,row=1,col=2)
+            self.w_controls.addWidget(self.viewSpButton,row=1,col=3)
 
         # hack for having some spacing
         self.w_controls.layout.setRowMinimumHeight(2, 15)
@@ -1790,6 +1810,13 @@ class AviaNZ(QMainWindow):
         QApplication.processEvents()
 
     def setSpeed(self,speed):
+        #self.speedButton.setText(speed)
+        if type(speed) is str:
+            speed = ord(speed)
+            if speed == 188:
+                speed = 0.25
+            elif speed == 189:
+                speed = 0.5
         self.slowSpeed = 1/float(speed)
         oldSR = self.sp.audioFormat.sampleRate()
         self.sp.audioFormat.setSampleRate(self.sp.audioFormat.sampleRate()//self.slowSpeed)
@@ -4427,6 +4454,7 @@ class AviaNZ(QMainWindow):
             self.playSlowButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.media_obj.pressedPlay(start=self.segmentStart, stop=self.segmentStop, audiodata=self.audiodata)
+            pg.QtGui.QApplication.processEvents()
 
     def playSelectedSegment(self):
         """ Listener for PlaySegment button.
@@ -4449,6 +4477,7 @@ class AviaNZ(QMainWindow):
                 self.playSlowButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.media_obj.filterSeg(start, stop, self.audiodata)
+                pg.QtGui.QApplication.processEvents()
             else:
                 print("Can't play, no segment selected")
 
@@ -4479,6 +4508,7 @@ class AviaNZ(QMainWindow):
 
                 # filter the data into a temporary file or buffer
                 self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top, self.audiodata, self.sp)
+                pg.QtGui.QApplication.processEvents()
             else:
                 print("Can't play, no segment selected")
 
@@ -4507,6 +4537,7 @@ class AviaNZ(QMainWindow):
                 # Note the offset
                 #print(start,stop,self.slowSpeed,int(start*self.slowSpeed), int(stop*self.slowSpeed))
                 self.media_slow.filterSeg(int(start*self.slowSpeed), int(stop*self.slowSpeed), self.audiodata)
+                pg.QtGui.QApplication.processEvents()
             else:
                 print("Can't play, no segment selected")
 
@@ -4521,6 +4552,7 @@ class AviaNZ(QMainWindow):
         self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
         self.playSlowButton.setIcon(QtGui.QIcon('img/playSlow.png'))
         self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
+        pg.QtGui.QApplication.processEvents()
 
     def stopPlayback(self):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
@@ -4537,6 +4569,7 @@ class AviaNZ(QMainWindow):
         self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
         self.playSlowButton.setIcon(QtGui.QIcon('img/playSlow.png'))
         self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
+        pg.QtGui.QApplication.processEvents()
 
     def movePlaySlider(self):
         """ Listener called on sound notify (every 20 ms).

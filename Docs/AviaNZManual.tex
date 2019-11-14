@@ -1,25 +1,20 @@
 \documentclass{article}
-\usepackage[draft]{SRM2}
+\usepackage{SRM2}
 \usepackage{graphicx}
 \usepackage{url}
 \usepackage{color}
 
-\title{The AviaNZ Birdsong Analysis Software (v 2.0)}
+\title{The AviaNZ Bioacoustic Analysis Software (v 2.0)}
 \author{The AviaNZ Team \\(\url{stephen.marsland@vuw.ac.nz})}
 \date{November 2019}
 
 %\usepackage[usenames, dvipsnames]{color}
 
 %Revise with track changes
-%\usepackage[markup=default]{changes}
-%\usepackage[final]{changes}
 \usepackage{soulutf8}
-%\usepackage{todonotes}
 \usepackage[normalem]{ulem}
 \usepackage{multirow}
 \usepackage{booktabs}
-%\newcommand\redout{\bgroup\markoverwith{\textcolor{red}{\rule[.5ex]{2pt}{0.4pt}}}\ULon}
-%\usepackage{xcolor}
 
 \begin{document}
 \maketitle
@@ -241,7 +236,7 @@ There are two other parts to the interface:
 \item To stop playback and have the slider return to the start of the visible section, press the Stop button.
 \item When a segment is selected (so that it is blue) you can use the two play buttons to the right of the stop button to play just that small segment. 
 \item The difference is that the one on the left plays all the frequencies in the sound file, while the one on the right will play only the frequencies highlighted, so that you can isolate particular frequencies of a call. This is particularly helpful when there is high level of background noise in a particular frequency range, such as cicadas, or where there are overlapping calls in different frequency bands.
-\item The button below them (with a picture of a snail on it) lets you play back the selected segment at different speeds. The choice of speed is in the `Appearance' menu under `Playback speed'. Note that this changes the pitch of the sound.
+\item The button below them (with a picture of a snail on it) lets you play back the selected segment at different speeds. You can change the speed by clicking and holding on the button. Note that this changes the pitch of the sound.
 \item You can change the volume of playback using the slider below the buttons. 
 \end{itemize}
 
@@ -311,7 +306,6 @@ See Section~\ref{sec:denoising} for more information.
 \end{description}
 \item [Export current view as image] Saves the spectrogram currently visible on the screen as an image, including any segments marked. 
 \item [Save selected sound] Saves a selected segment as a short sound file.
-\item [Playback speed] Choose the speed at which the snail button in the Controls area plays back the sound file.
 \end{description}
 
 \subsubsection{{\em Recognisers Menu}}

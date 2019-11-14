@@ -5,7 +5,7 @@
 # Version 1.5.1 13/09/2019
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
-#    AviaNZ birdsong analysis program
+#    AviaNZ bioacoustic analysis program
 #    Copyright (C) 2017--2019
 
 #    This program is free software: you can redistribute it and/or modify
