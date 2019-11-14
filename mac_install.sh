@@ -3,6 +3,7 @@ xcode-select --install
 
 curl -O https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
 chmod +x Miniconda3-latest-MacOSX-x86_64.sh 
+./Miniconda3-latest-MacOSX-x86_64.sh
 
 curl -OL https://github.com/smarsland/AviaNZ/archive/v1.5.1.zip
 unzip v1.5.1.zip
