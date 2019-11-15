@@ -1812,18 +1812,18 @@ class AviaNZ(QMainWindow):
     def setSpeed(self,speed):
         #self.speedButton.setText(speed)
         if type(speed) is str:
-            speed = ord(speed)
-            if speed == 188:
+            # convert Unicode fractions to floats
+            speedchar = ord(speed)
+            if speedchar == 188:
                 speed = 0.25
-            elif speed == 189:
+            elif speedchar == 189:
                 speed = 0.5
         self.slowSpeed = 1/float(speed)
         oldSR = self.sp.audioFormat.sampleRate()
         self.sp.audioFormat.setSampleRate(self.sp.audioFormat.sampleRate()//self.slowSpeed)
         self.media_slow = SupportClasses.ControllableAudio(self.sp.audioFormat)
-        print(self.sp.audioFormat.sampleRate())
+        print("modified playback speed set to Fs =", self.sp.audioFormat.sampleRate())
         self.sp.audioFormat.setSampleRate(oldSR)
-        print(self.sp.audioFormat.sampleRate())
         self.media_slow.notify.connect(self.movePlaySlowSlider)
 
     def setExtraPlot(self, plotname):
@@ -4453,8 +4453,15 @@ class AviaNZ(QMainWindow):
             self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.playSlowButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
             self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+
+            # OS X doesn't repaint them by default smh
+            self.playButton.repaint()
+            self.playSegButton.repaint()
+            self.playBandLimitedSegButton.repaint()
+            self.playSlowButton.repaint()
+            QApplication.processEvents()
+
             self.media_obj.pressedPlay(start=self.segmentStart, stop=self.segmentStop, audiodata=self.audiodata)
-            pg.QtGui.QApplication.processEvents()
 
     def playSelectedSegment(self):
         """ Listener for PlaySegment button.
@@ -4476,8 +4483,15 @@ class AviaNZ(QMainWindow):
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playSlowButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+
+                # OS X doesn't repaint them by default smh
+                self.playButton.repaint()
+                self.playSegButton.repaint()
+                self.playBandLimitedSegButton.repaint()
+                self.playSlowButton.repaint()
+                QApplication.processEvents()
+
                 self.media_obj.filterSeg(start, stop, self.audiodata)
-                pg.QtGui.QApplication.processEvents()
             else:
                 print("Can't play, no segment selected")
 
@@ -4506,9 +4520,15 @@ class AviaNZ(QMainWindow):
                 self.playSlowButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
 
+                # OS X doesn't repaint them by default smh
+                self.playButton.repaint()
+                self.playSegButton.repaint()
+                self.playBandLimitedSegButton.repaint()
+                self.playSlowButton.repaint()
+                QApplication.processEvents()
+
                 # filter the data into a temporary file or buffer
                 self.media_obj.filterBand(self.segmentStart, self.segmentStop, bottom, top, self.audiodata, self.sp)
-                pg.QtGui.QApplication.processEvents()
             else:
                 print("Can't play, no segment selected")
 
@@ -4533,11 +4553,17 @@ class AviaNZ(QMainWindow):
                 self.playSlowButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
                 self.playBandLimitedSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
 
+                # OS X doesn't repaint them by default smh
+                self.playButton.repaint()
+                self.playSegButton.repaint()
+                self.playBandLimitedSegButton.repaint()
+                self.playSlowButton.repaint()
+                QApplication.processEvents()
+
                 # filter the data into a temporary file or buffer
                 # Note the offset
                 #print(start,stop,self.slowSpeed,int(start*self.slowSpeed), int(stop*self.slowSpeed))
                 self.media_slow.filterSeg(int(start*self.slowSpeed), int(stop*self.slowSpeed), self.audiodata)
-                pg.QtGui.QApplication.processEvents()
             else:
                 print("Can't play, no segment selected")
 
@@ -4552,7 +4578,13 @@ class AviaNZ(QMainWindow):
         self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
         self.playSlowButton.setIcon(QtGui.QIcon('img/playSlow.png'))
         self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
-        pg.QtGui.QApplication.processEvents()
+
+        # OS X doesn't repaint them by default smh
+        self.playButton.repaint()
+        self.playSegButton.repaint()
+        self.playBandLimitedSegButton.repaint()
+        self.playSlowButton.repaint()
+        QApplication.processEvents()
 
     def stopPlayback(self):
         """ Restores the PLAY buttons, slider, text, calls media_obj to stop playing."""
@@ -4569,7 +4601,13 @@ class AviaNZ(QMainWindow):
         self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
         self.playSlowButton.setIcon(QtGui.QIcon('img/playSlow.png'))
         self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
-        pg.QtGui.QApplication.processEvents()
+
+        # OS X doesn't repaint them by default smh
+        self.playButton.repaint()
+        self.playSegButton.repaint()
+        self.playBandLimitedSegButton.repaint()
+        self.playSlowButton.repaint()
+        QApplication.processEvents()
 
     def movePlaySlider(self):
         """ Listener called on sound notify (every 20 ms).

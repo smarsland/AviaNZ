@@ -1,35 +1,37 @@
+## INSTALLATION:
+# wget AviaNZ*.zip
+# unzip AviaNZ*.zip
+# sudo apt install python3-pip
+# sudo apt install git
+# pip install -r requirements.txt --user
+# cd ext; python3 setup.py build_ext -i
+
 click==7.0
 Cython==0.29.10
-joblib==0.13.2
 jsonschema==3.1.1
-kiwisolver==1.1.0
 librosa==0.6.3
-llvmlite==0.29.0
-matplotlib==3.1.0
 numpy==1.16.2
 openpyxl==2.5.5
-psutil==5.6.2
 pyFFTW==0.11.1
-PyInstaller==3.5
 PyQt5==5.13.1
+git+git://github.com/pyqtgraph/pyqtgraph@2203933#egg=pyqtgraph
 pyqtgraph==0.11.0
-PyWavelets==1.0.3
 scikit-image==0.15.0
-scikit-learn==0.21.2
 scipy==1.3.0
 setuptools==41.0.1
 spectrum==0.7.5
 
-## INSTALLATION:
-# pip install -r requirements.txt --user
-# cd ext; python3 setup.py build_ext -i
+## These dependencies are important, but should be installed by the main packages:
+# joblib==0.13.2
+# llvmlite==0.29.0
+# matplotlib==3.1.0
+# PyWavelets==1.0.3
+# scikit-learn==0.21.2
 
 ## MANUAL:
-# sudo apt install python3-pyqt5.qtmultimedia
-# sudo apt install libgstreamer1.0-dev - not sure??
-## in case of joblib/librosa conflict:
-# pip uninstall joblib; pip install -Iv joblib=0.11.0 --user
-## to install pytgraph 0.11.0.dev0+g9aaae8 development:
-# pip install git+https://github.com/pyqtgraph/pyqtgraph --user
+## NECESSARY to install pytgraph development, 0.11.0.dev0+g9aaae8 or another version
+## Hence git is required.
+## For compiling binaries:
+# PyInstaller==3.5
 ## to install pyInstaller 3.5.dev0+d74052489 development:
 # pip install https://github.com/pyinstaller/pyinstaller/tarball/develop --user

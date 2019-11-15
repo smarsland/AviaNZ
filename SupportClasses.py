@@ -439,7 +439,6 @@ class ControllableAudio(QAudioOutput):
 
     def filterSeg(self, start, stop, audiodata):
         # takes start-end in ms
-        print(self.format().sampleRate())
         self.timeoffset = max(0, start)
         start = max(0, int(start * self.format().sampleRate() // 1000))
         stop = min(int(stop * self.format().sampleRate() // 1000), len(audiodata))
