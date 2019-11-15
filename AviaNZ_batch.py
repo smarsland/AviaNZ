@@ -357,7 +357,7 @@ class AviaNZ_batchProcess(QMainWindow):
             box.addItems(spp)
 
     # from memory_profiler import profile
-    # fp = open('memory_profiler_wp.log', 'w+')
+    # fp = open('memory_profiler_batch.log', 'w+')
     # @profile(stream=fp)
     def detect(self):
         # check if folder was selected:
@@ -1521,6 +1521,8 @@ class AviaNZ_reviewAll(QMainWindow):
     def humanClassifyDelete1(self):
         # Delete a segment
         # (no need to update counter then)
+        self.humanClassifyDialog1.stopPlayback()
+
         id = self.box1id
         del self.segments[id]
 

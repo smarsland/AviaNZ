@@ -27,6 +27,7 @@ import scipy.fftpack as fft
 import wavio
 import librosa
 import copy
+import gc
 
 from PyQt5.QtMultimedia import QAudioFormat
 # for multitaper spec:
@@ -147,6 +148,9 @@ class SignalProc:
 
         return data
 
+    # from memory_profiler import profile
+    # fp = open('memory_profiler_sp.log', 'w+')
+    # @profile(stream=fp)
     def spectrogram(self, window_width=None,incr=None,window='Hann',equal_loudness=False,mean_normalise=True,onesided=True,multitaper=False,need_even=False):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
@@ -230,15 +234,38 @@ class SignalProc:
             if need_even:
                 starts = np.hstack((starts, np.zeros((window_width - len(self.sg) % window_width),dtype=int)))
 
-            ft = np.zeros((len(starts), window_width))
-            for i in starts:
-                ft[i // incr, :] = window * self.sg[i:i + window_width]
-            ft = fft.fft(ft)
-            #ft = np.fft.fft(ft)
-            if onesided:
-                self.sg = np.absolute(ft[:, :window_width // 2])
+
+            # this mode is optimized for speed, but reportedly sometimes
+            # results in crashes when lots of large files are batch processed.
+            # The FFTs here could be causing this, but I'm not sure.
+            # hi_mem = False should switch FFTs to go over smaller vectors
+            # and possibly use less caching, at the cost of 1.5x longer CPU time.
+            hi_mem = True
+            if hi_mem:
+                ft = np.zeros((len(starts), window_width))
+                for i in starts:
+                    ft[i // incr, :] = self.sg[i:i + window_width]
+                ft = np.multiply(window, ft)
+
+                if onesided:
+                    self.sg = np.absolute(fft.fft(ft)[:, :window_width //2])
+                else:
+                    self.sg = np.absolute(fft.fft(ft))
             else:
+                if onesided:
+                    ft = np.zeros((len(starts), window_width//2))
+                    for i in starts:
+                        winddata = window * self.sg[i:i + window_width]
+                        ft[i // incr, :] = fft.fft(winddata)[:window_width//2]
+                else:
+                    ft = np.zeros((len(starts), window_width))
+                    for i in starts:
+                        winddata = window * self.sg[i:i + window_width]
+                        ft[i // incr, :] = fft.fft(winddata)
                 self.sg = np.absolute(ft)
+
+            del ft
+            gc.collect()
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T
         return self.sg
 
