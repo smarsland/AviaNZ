@@ -50,7 +50,7 @@ class SplitData(QMainWindow):
         label = QLabel("Select input folder with files to split:")
         self.w_browse = QPushButton(" Browse Folder")
         self.w_browse.setToolTip("Warning: files inside subfolders will not be processed!")
-        self.w_browse.setFixedHeight(40)
+        self.w_browse.setMinimumSize(180, 40)
         self.w_browse.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
         self.w_browse.clicked.connect(self.browse)
         self.w_browse.setSizePolicy(QSizePolicy(1,1))
@@ -60,12 +60,13 @@ class SplitData(QMainWindow):
         self.w_dir.setFixedHeight(40)
         self.w_dir.setPlainText('')
         self.w_dir.setToolTip("The folder being processed")
+        self.w_dir.setSizePolicy(QSizePolicy(3,1))
 
 
         ## output
         labelO = QLabel("Select folder for storing split output:")
         self.w_browseO = QPushButton(" Browse Folder")
-        self.w_browseO.setFixedHeight(40)
+        self.w_browseO.setMinimumSize(180, 40)
         self.w_browseO.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
         self.w_browseO.clicked.connect(self.browseO)
         self.w_browseO.setSizePolicy(QSizePolicy(1,1))
@@ -75,10 +76,11 @@ class SplitData(QMainWindow):
         self.w_dirO.setFixedHeight(40)
         self.w_dirO.setPlainText('')
         self.w_dirO.setToolTip("Split files will be placed here")
+        self.w_dirO.setSizePolicy(QSizePolicy(3,1))
 
 
         ## split length
-        self.titleCutLen = QLabel("Set output file duration, in seconds:")
+        self.titleCutLen = QLabel("Set split file duration, in seconds:")
         self.labelCutLen = QLabel("")
         self.boxCutLen = QSpinBox()
         self.boxCutLen.setRange(1,3600*24)
@@ -86,8 +88,11 @@ class SplitData(QMainWindow):
 
         ## start
         self.labelWavs = QLabel("")
+        self.labelWavs.setWordWrap(True)
         self.labelDatas = QLabel("")
+        self.labelDatas.setWordWrap(True)
         self.labelDirs = QLabel("")
+        self.labelDirs.setWordWrap(True)
         self.labelOut = QLabel("")
         self.labelSum = QLabel("")
         self.boxCutLen.valueChanged.connect(self.setCutLen)
@@ -106,7 +111,7 @@ class SplitData(QMainWindow):
         inputGroup.setLayout(inputGrid)
         inputGrid.addWidget(label, 0, 0, 1, 4)
         inputGrid.addWidget(self.w_browse, 1, 0, 1, 1)
-        inputGrid.addWidget(self.w_dir,1, 1, 1, 3)
+        inputGrid.addWidget(self.w_dir, 1, 1, 1, 3)
         inputGrid.addWidget(self.labelWavs, 2, 0, 1, 4)
         inputGrid.addWidget(self.labelDatas, 3, 0, 1, 4)
         inputGrid.addWidget(self.labelDirs, 4, 0, 1, 4)
@@ -132,14 +137,14 @@ class SplitData(QMainWindow):
         #inputGrid.setSizeConstraint(QLayout.SetFixedSize)
         #outputGrid.setSizeConstraint(QLayout.SetFixedSize)
         inputGroup.setSizePolicy(QSizePolicy(1,5))
-        inputGroup.setMinimumSize(250, 180)
+        inputGroup.setMinimumSize(400, 220)
         outputGroup.setSizePolicy(QSizePolicy(1,5))
-        outputGroup.setMinimumSize(250, 150)
+        outputGroup.setMinimumSize(400, 180)
         grid.setSizeConstraint(QLayout.SetMinimumSize)
         area.setSizePolicy(QSizePolicy(1,5))
-        area.setMinimumSize(250, 300)
+        area.setMinimumSize(400, 400)
         self.setSizePolicy(QSizePolicy(1,1))
-        self.setMinimumSize(200, 300)
+        self.setMinimumSize(200, 400)
 
     def browse(self):
         if self.dirName:
@@ -212,7 +217,11 @@ class SplitData(QMainWindow):
             try:
                 datestamp = infilestem.split("_")[-2:] # get [date, time]
                 datestamp = '_'.join(datestamp) # make "date_time"
-                d = dt.datetime.strptime(datestamp, "%Y%m%d_%H%M%S")
+                # check both 4-digit and 2-digit codes (century that produces closest year to now is inferred)
+                try:
+                    d = dt.datetime.strptime(datestamp, "%Y%m%d_%H%M%S")
+                except ValueError:
+                    d = dt.datetime.strptime(datestamp, "%y%m%d_%H%M%S")
                 haveTime += 1
             except ValueError:
                 print("Could not identify timestamp in", f)
@@ -222,7 +231,11 @@ class SplitData(QMainWindow):
             try:
                 datestamp = infilestem.split("_")[-2:] # get [date, time]
                 datestamp = '_'.join(datestamp) # make "date_time"
-                d = dt.datetime.strptime(datestamp, "%Y%m%d_%H%M%S")
+                # check both 4-digit and 2-digit codes (century that produces closest year to now is inferred)
+                try:
+                    d = dt.datetime.strptime(datestamp, "%Y%m%d_%H%M%S")
+                except ValueError:
+                    d = dt.datetime.strptime(datestamp, "%y%m%d_%H%M%S")
                 haveTime += 1
             except ValueError:
                 print("Could not identify timestamp in", f)
@@ -284,19 +297,27 @@ class SplitData(QMainWindow):
             # output is passed as the same file name in different dir -
             # the splitter will figure out if numbers or times need to be attached
             infile_c = os.path.join(self.dirName, f).encode('ascii')
-            outfile_c = os.path.join(self.dirO, f).encode('ascii')
 
             # To avoid dealing with strptime too much which is missing on Win,
             # we check the format here - but we can't really pass the C-format struct entirely
             wavHasDt = int(0)
             try:
-                wavdt = f[:-4].split("_")[-2:]  # get [date, time]
-                wavdt = '_'.join(wavdt)  # make "date_time"
-                wavdt = dt.datetime.strptime(wavdt, "%Y%m%d_%H%M%S")
+                wavstring = f[:-4].split("_")  # get [recorder, date, time]
+                wavdt = '_'.join(wavstring[-2:])  # make "date_time"
+                # check both 4-digit and 2-digit codes (century that produces closest year to now is inferred)
+                try:
+                    wavdt = dt.datetime.strptime(wavdt, "%Y%m%d_%H%M%S")
+                except ValueError:
+                    wavdt = dt.datetime.strptime(wavdt, "%y%m%d_%H%M%S")
                 print(f, "identified as timestamp", wavdt)
                 wavHasDt = int(1)
+                # Here, we remake the out file name to always have 4 digit years, to make life easier in the C part
+                outfile_c = '_'.join(wavstring[:-2])
+                outfile_c =  outfile_c + '_' + dt.datetime.strftime(wavdt, "%Y%m%d_%H%M%S") + '.wav'
+                outfile_c = os.path.join(self.dirO, outfile_c).encode('ascii')
             except ValueError:
                 print("Could not identify timestamp in", f)
+                outfile_c = os.path.join(self.dirO, f).encode('ascii')
                 wavHasDt = int(0)
 
             if os.path.isfile(infile_c) and os.stat(infile_c).st_size>100:
@@ -347,7 +368,10 @@ class SplitData(QMainWindow):
             outprefix = '_'.join(infile.split("_")[:-2])
             datestamp = infile.split("_")[-2:]  # get [date, time]
             datestamp = '_'.join(datestamp)  # make "date_time"
-            time = dt.datetime.strptime(datestamp, "%Y%m%d_%H%M%S")
+            try:
+                time = dt.datetime.strptime(datestamp, "%Y%m%d_%H%M%S")
+            except ValueError:
+                time = dt.datetime.strptime(datestamp, "%y%m%d_%H%M%S")
             print(infile, "identified as timestamp", time)
         except ValueError:
             outprefix = infile
