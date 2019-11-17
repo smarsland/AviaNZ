@@ -859,16 +859,16 @@ class BuildRecAdvWizard(QWizard):
             form1_step4 = QFormLayout()
             self.minlen = QLineEdit(self)
             self.minlen.setText('')
-            form1_step4.addRow('Min call length (secs)', self.minlen)
+            form1_step4.addRow('Min call length (sec)', self.minlen)
             self.maxlen = QLineEdit(self)
             self.maxlen.setText('')
-            form1_step4.addRow('Max call length (secs)', self.maxlen)
+            form1_step4.addRow('Max call length (sec)', self.maxlen)
             self.avgslen = QLineEdit(self)
             self.avgslen.setText('')
-            form1_step4.addRow('Avg syllable length (secs)', self.avgslen)
+            form1_step4.addRow('Avg syllable length (sec)', self.avgslen)
             self.maxgap = QLineEdit(self)
             self.maxgap.setText('')
-            form1_step4.addRow('Max gap between syllables (secs)', self.maxgap)
+            form1_step4.addRow('Max gap between syllables (sec)', self.maxgap)
 
             # FreqRange parameters
             self.fLow = QSlider(Qt.Horizontal)
@@ -891,10 +891,13 @@ class BuildRecAdvWizard(QWizard):
             form1_step4.addRow('Upper frq. limit (Hz)', self.fHigh)
 
             # thr, M parameters
-            thrLabel = QLabel('ROC curve points per line (thr)')
+            thrLabel = QLabel('ROC curve points')
             # MLabel = QLabel('ROC curve lines (M)')
             self.cbxThr = QComboBox()
-            self.cbxThr.addItems(['4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'])
+            x = range(5, 51)
+            x = [str(i) for i in x]
+            self.cbxThr.addItems(x)
+            self.cbxThr.setCurrentIndex(5)
             # self.cbxM = QComboBox()
             # self.cbxM.addItems(['2', '3', '4', '5'])
             form2_step4 = QFormLayout()
