@@ -2,7 +2,7 @@
 # AviaNZ_batch.py
 #
 # This is the proceesing class for the batch AviaNZ interface
-# Version 1.5 05/08/19
+# Version 2.0 18/11/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
 #    AviaNZ bioacoustic analysis program

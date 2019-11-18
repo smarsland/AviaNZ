@@ -2,11 +2,11 @@
 #
 # Cluster segments
 
-# Version 1.5 09/09/19
+# Version 2.0 18/11/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2018
+#    Copyright (C) 2017--2019
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by

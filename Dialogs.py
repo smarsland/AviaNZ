@@ -2,11 +2,11 @@
 #
 # This is part of the AviaNZ interface
 # Holds most of the code for the various dialog boxes
-# Version 1.3 23/10/18
+# Version 2.0 18/11/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2018
+#    Copyright (C) 2017--2019
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
