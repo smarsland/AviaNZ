@@ -2,7 +2,7 @@
 #
 # This is part of the AviaNZ interface
 # Holds most of the code for the various dialog boxes
-# Version 1.5.1 13/09/2019
+# Version 2.0 18/11/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
 #    AviaNZ bioacoustic analysis program
