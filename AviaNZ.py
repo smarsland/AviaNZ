@@ -1306,7 +1306,7 @@ class AviaNZ(QMainWindow):
                         if len(s[4])>1:
                             self.multipleBirds = True
                 else:
-                    self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.datalengthSec}
+                    self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
 
                 self.drawProtocolMarks()
 
