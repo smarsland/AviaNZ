@@ -441,6 +441,10 @@ class AviaNZ_batchProcess(QMainWindow):
         text = "Species: " + speciesStr + ", resolution: "+ str(self.w_res.value()) + ", method: " + self.method + ".\nNumber of files to analyze: " + str(total) + ", " + str(cnt) + " done so far.\n"
         text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
         text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
+        if speciesStr=="Any sound":
+            text += "\nWarning: any previous annotations in these files will be deleted!\n"
+        else:
+            text += "\nWarning: any previous annotations for the selected species in these files will be deleted!\n"
         text = "Analysis will be launched with these settings:\n" + text + "\nConfirm?"
 
         msg = SupportClasses.MessagePopup("t", "Launch batch analysis", text)
