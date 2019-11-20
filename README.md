@@ -12,11 +12,30 @@ For more information about the project, see http://www.avianz.net
 
 # Installation
 
+## Windows
 Windows binaries are available at http://www.avianz.net
 
-To install using pip, use:
-pip install -r requirements.txt 
-at the command line
+## macOS
+Install using the installer script:
+1. Download the `mac_install.sh` installer. The software will be downloaded and installed into the same directory, so move this script to the desired location.  
+2. In Terminal, run `sh mac_install.sh`.  
+3. Type `yes` and Enter when prompted by the installer.  
+4. Done! Launch the software with `python AviaNZ.py`
+Or from source (see below).
+
+## Linux
+No binaries are available. Install from the source as follows:
+1. Download the source .zip.  
+2. Extract (`unzip v2.zip`) and navigate to the extracted directory.
+3. Ensure Python (3.6 or higher), pip and git are available on your system. On Ubuntu, these can be installed by running:  
+```
+sudo apt-get install python3.6
+sudo apt-get install python3-pip
+sudo apt-get install git
+```
+4. Install the required packages by running `pip3 install -r requirements.txt --user` at the command line. (On Ubuntu and some other systems, `python` and `pip` refer to the Python 2 versions. If you are sure these refer to version 3 of the language, use `python` and `pip` in steps 4-6.)  
+5. Build the Cython extensions by running `cd ext; python3 setup.py build_ext -i; cd..`  
+6. Done! Launch the software with `python3 AviaNZ.py`  
 
 # Acknowledgements
 
