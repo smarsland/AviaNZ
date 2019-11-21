@@ -41,6 +41,7 @@ class SignalProc:
             self.data = data
             self.sampleRate = sampleRate
 
+
     def setNewData(self,data,sampleRate):
         # Does what it says. To be called when a new sound file is loaded
         self.data = data
