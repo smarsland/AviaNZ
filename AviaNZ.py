@@ -156,7 +156,10 @@ class AviaNZ(QMainWindow):
         # search order: infile -> firstFile -> dialog
         # Make life easier for now: preload a birdsong
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
-            firstFile = self.SoundFileDir + '/' + 'kiwi_1min.wav'
+            # For distribution:
+            firstFile = self.SoundFileDir
+            # Can also use:
+            # firstFile = self.SoundFileDir + '/' + 'kiwi_1min.wav'
 
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
             if self.CLI:

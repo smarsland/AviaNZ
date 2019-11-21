@@ -74,7 +74,7 @@ a = Analysis(['AviaNZ.py'],
              pathex=['c:\\Program Files (x86)\\Windows Kits\\10\\Redist\\ucrt\\DLLs', 'c:\\Users\\Julius\\Documents\\DARBO\\AviaNZ\\AviaNZ-master'],
              binaries=[],
              datas=[('Config/*', 'Config'), ('Filters/*txt', 'Filters'), ('Wavelets/*txt', 'Wavelets'), ('img/*', 'img'), ('Sound Files/*', 'Sound Files')],
-             hiddenimports=['cython', 'sklearn', 'sklearn.ensemble', 'sklearn.neighbors.typedefs', 'sklearn.neighbors.quad_tree', 'sklearn.tree._utils', 'sklearn.utils._cython_blas', 'pywt._extensions._cwt'],
+             hiddenimports=['cython', 'sklearn', 'sklearn.ensemble', 'sklearn.neighbors.typedefs', 'sklearn.neighbors.quad_tree', 'sklearn.tree._utils', 'sklearn.utils._cython_blas', 'pywt._extensions._cwt', 'spectrum.mtm'],
              hookspath=['.\\hooks'],
              runtime_hooks=[],
              excludes=[],
@@ -146,4 +146,17 @@ coll_s = COLLECT(exe_s,
                strip=False,
                upx=True,
                name='AviaNZv2.0s')
-# Then need to move the other exe from v2.0s/ to the first dir
+
+# Need to copy mydpss from spectrum/ to main dist/project/ folder,
+# because spectrum uses absolute paths when frozen
+import shutil
+import os
+shutil.copy('dist/AviaNZv2.0/spectrum/mydpss.cp37-win_amd64.pyd', 'dist/AviaNZv2.0/')
+
+# Then need to move everything from v2.0s/ to the first dir
+for root, dirs, files in os.walk('dist/AviaNZv2.0s/'):
+	for src in files:
+		# get its position within the "Splitter" dir tree
+		relsrc = os.path.relpath(os.path.join(root, src), 'dist/AviaNZv2.0s/')
+		print(src, "to", relsrc)
+		shutil.move(os.path.join(root, src), os.path.join('dist/AviaNZv2.0/', relsrc))
