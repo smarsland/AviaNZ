@@ -12,6 +12,8 @@ cd AviaNZ-2.0
 pip install -r requirements.txt --user
 
 cd ext; python3 setup.py build_ext -i
-cd ..
+cp run_avianz.sh ~
+chmod +x ~/run_avianz.sh
+
 
 
