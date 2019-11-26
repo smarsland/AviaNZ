@@ -13,20 +13,17 @@ For more information about the project, see http://www.avianz.net
 # Installation
 
 ## Windows
-Windows binaries are available at http://www.avianz.net
+Windows binaries are available at http://www.avianz.net.
+To install from source, follow the Linux instructions.
 
 ## macOS
-Install using the installer script:
-1. Download the `mac_install.sh` installer. The software will be downloaded and installed into the same directory, so move this script to the desired location.  
-2. In Terminal, run `sh mac_install.sh`.  
-3. Type `yes` and Enter when prompted by the installer.  
-4. Done! Launch the software with `python AviaNZ.py`
-Or from source (see below).
+An installer script is availabe at http://www.avianz.net.
+To install from source, follow the Linux instructions.
 
 ## Linux
 No binaries are available. Install from the source as follows:
-1. Download the source .zip.  
-2. Extract (`unzip v2.zip`) and navigate to the extracted directory.
+1. Download the source .zip of the latest release.
+2. Extract (`unzip v2.0.zip`) and navigate to the extracted directory.
 3. Ensure Python (3.6 or higher), pip and git are available on your system. On Ubuntu, these can be installed by running:  
 ```
 sudo apt-get install python3.6
