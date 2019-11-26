@@ -398,7 +398,7 @@ class AviaNZ_batchProcess(QMainWindow):
         allwavs = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
-                if filename.endswith('.wav'):
+                if filename.lower().endswith('.wav'):
                     allwavs.append(os.path.join(root, filename))
         total = len(allwavs)
 
@@ -1062,7 +1062,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # find species names from the annotations
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
-                if filename.endswith('.wav') and filename+'.data' in files:
+                if filename.lower().endswith('.wav') and filename+'.data' in files:
                     f = os.path.join(root, filename+'.data')
                     segments = Segment.SegmentList()
                     segments.parseJSON(f)
@@ -1099,7 +1099,7 @@ class AviaNZ_reviewAll(QMainWindow):
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 filenamef = os.path.join(root, filename)
-                if filename.endswith('.wav') and os.path.isfile(filenamef + '.data'):
+                if filename.lower().endswith('.wav') and os.path.isfile(filenamef + '.data'):
                     allwavs.append(filenamef)
         total = len(allwavs)
         print(total, "files found")

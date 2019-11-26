@@ -210,7 +210,7 @@ class AviaNZ(QMainWindow):
                 # Read folders and sub-folders
                 for root, dirs, files in os.walk(firstFile):
                     for f in files:
-                        if f[-4:] == '.wav':
+                        if f[-4:].lower() == '.wav':
                             print(os.path.join(root, f))
                             self.loadFile(os.path.join(root, f), cs=True)
                             self.widthWindow.setValue(60)  # self.datalengthSec)
