@@ -519,7 +519,8 @@ with open(os.path.join(train_dir, 'sgramdata_train.json'), 'w') as outfile:
     
 test_dir = "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TEST" #changed directory
 annotation_file_test= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST\\Test_dataset.data"
-test_fold= "BAT SEARCH TESTS\Test_26" #Test folder where to save all the stats
+test_fold= "BAT SEARCH TESTS\Test_26_Bis" #Test folder where to save all the stats
+os.mkdir(test_dir+ '/' + test_fold)
 with open(annotation_file_test) as f:
     segments_filewise_test = json.load(f)
 file_number=np.shape(segments_filewise_test)[0]
