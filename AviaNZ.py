@@ -133,8 +133,11 @@ class AviaNZ(QMainWindow):
         # Whether or not the context menu allows multiple birds.
         self.multipleBirds = self.config['MultipleSpecies']
 
-        self.SoundFileDir = self.config['SoundFileDir']
-        self.previousFile = None
+        if len(self.config['RecentFiles'])>0:
+            self.SoundFileDir = os.path.dirname(self.config['RecentFiles'][-1])
+        else:
+            self.SoundFileDir = self.config['SoundFileDir']
+        self.filename = None
         self.focusRegion = None
         self.operator = self.config['operator']
         self.reviewer = self.config['reviewer']
@@ -251,7 +254,6 @@ class AviaNZ(QMainWindow):
 
             self.fillFileList(firstFile)
             self.listLoadFile(firstFile)
-            #self.previousFile = firstFile
 
         if self.DOC and not cheatsheet and not zooniverse:
             self.setOperatorReviewerDialog()
@@ -265,13 +267,16 @@ class AviaNZ(QMainWindow):
         # fileMenu.addAction("&Change Directory", self.chDir)
         fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
+        for recentfile in self.config['RecentFiles']:
+            fileMenu.addAction(recentfile, lambda: self.listLoadFile(recentfile))
+        fileMenu.addSeparator()
         fileMenu.addAction("Restart Program",self.restart,"Ctrl+R")
-        fileMenu.addAction("Quit",self.quit,"Ctrl+Q")
+        fileMenu.addAction("Quit",QApplication.quit,"Ctrl+Q")
 
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
         # Add it a second time, then it appears!
         if platform.system() == 'Darwin':
-            fileMenu.addAction("&Quit",self.quit,"Ctrl+Q")
+            fileMenu.addAction("&Quit",QApplication.quit,"Ctrl+Q")
 
         specMenu = self.menuBar().addMenu("&Appearance")
 
@@ -1101,8 +1106,11 @@ class AviaNZ(QMainWindow):
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
+        Does the safety checks for file existence etc.
         Prepares the program for a new file.
-        Saves the segments of the current file, resets flags and calls loadFile() """
+        Saves the segments of the current file, resets flags and calls loadFile().
+        Since the first load (on splash) calls loadFile directly, here we can assume smth is already open.
+        """
 
         # Need name of file
         if type(current) is self.listitemtype:
@@ -1122,27 +1130,12 @@ class AviaNZ(QMainWindow):
                 print("File %s appears to have only header" % fullcurrent)
                 return(1)
 
-        # If there was a previous file, make sure the type of its name is OK. This is because you can get these
-        # names from the file listwidget, or from the openFile dialog.
-        # - is this needed at all??
-        if self.previousFile is not None:
-            if type(self.previousFile) is not self.listitemtype:
-                self.previousFile = self.listFiles.findItems(os.path.basename(str(self.previousFile)), Qt.MatchExactly)
-                if len(self.previousFile)>0:
-                    self.previousFile = self.previousFile[0]
-
-            # Check if user requires noise data
-            if self.config['RequireNoiseData']:
-                if "noiseLevel" not in self.segments.metadata or self.segments.metadata["noiseLevel"] is None:
-                    self.addNoiseData()
-
-            # setting this to True forces initial save
+            # setting this to True forces initial segment save
             # self.segmentsToSave = True
-            self.saveSegments()
 
-        self.previousFile = current
-        #if type(current) is self.listitemtype:
-        #    current = current.text()
+            # calls the noise data checks, segment saving, recent file updaters
+            if self.filename is not None:
+                self.closeFile()
 
         # Update the file list to show the right one
         i=0
@@ -1153,7 +1146,6 @@ class AviaNZ(QMainWindow):
             dir.cd(self.listOfFiles[i].fileName())
             # Now repopulate the listbox
             self.SoundFileDir=str(dir.absolutePath())
-            self.previousFile = None
             if (i == len(self.listOfFiles)-1) and (self.listOfFiles[i].fileName() != current):
                 self.loadFile(current)
             self.fillFileList(current)
@@ -1184,7 +1176,7 @@ class AviaNZ(QMainWindow):
             dlg.update()
             if name is not None:
                 if not self.cheatsheet:
-                    self.filename = self.SoundFileDir+'/'+name
+                    self.filename = os.path.join(self.SoundFileDir, name)
                 else:
                     self.filename = name
                 dlg += 1
@@ -3583,7 +3575,7 @@ class AviaNZ(QMainWindow):
 
             # 2. reconstruct from bands
             r = 0
-            M = spSubf['WaveletParams']['M']
+            # M = spSubf['WaveletParams']['M']
             for node in spSubf['WaveletParams']['nodes']:
                 # reconstruction as in detectCalls:
                 print("working on node", node)
@@ -5117,51 +5109,42 @@ class AviaNZ(QMainWindow):
         else:
             print("Nothing to save")
 
-    def restart(self):
-        """ Listener for the restart option, which uses exit(1) to restart the program at the splash screen """
-        print("Restarting")
+    def closeFile(self):
+        """ Calls the appropriate functions when a file is gently closed (on quit or change of file). """
 
-        # Check if user requires noise data
+        # save noise data if the user requires it
         if self.config['RequireNoiseData']:
             if "noiseLevel" not in self.segments.metadata or self.segments.metadata["noiseLevel"] is None:
                 self.addNoiseData()
 
         self.saveSegments()
-        if self.saveConfig:
-            try:
-                print("Saving config file")
-                json.dump(self.config, open(self.configfile, 'w'),indent=1)
-            except Exception as e:
-                print("ERROR while saving config file:")
-                print(e)
+        print("Closing", self.filename)
 
-        # Save the shortBirdList
-        self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
-        QApplication.exit(1)
+        # update recent files list
+        if self.filename not in self.config['RecentFiles'] and self.filename is not None:
+            self.config['RecentFiles'].append(self.filename)
+            if len(self.config['RecentFiles'])>4:
+                del self.config['RecentFiles'][0]
+            # Note: we're making this flag useless as every new file open will update the config
+            self.saveConfig = True
 
-    def closeEvent(self, event):
-        """ Catch the user closing the window by clicking the Close button instead of quitting. """
-        self.quit()
-
-    def quit(self):
-        """ Listener for the quit button, also called by closeEvent().
-        Add in the operator and reviewer at the top, and then save the segments and the config file.
-        """
-
-        print("Quitting")
-
-        # Check if user requires noise data
-        if self.config['RequireNoiseData']:
-            if "noiseLevel" not in self.segments.metadata or self.segments.metadata["noiseLevel"] is None:
-                self.addNoiseData()
-
-        self.saveSegments()
+        # Add in the operator and reviewer at the top, and then save the segments and the config file.
         if self.saveConfig:
             self.ConfigLoader.configwrite(self.config, self.configfile)
 
         # Save the shortBirdList
         self.ConfigLoader.blwrite(self.shortBirdList, self.config['BirdListShort'], self.configdir)
-        QApplication.quit()
+
+    def restart(self):
+        """ Listener for the restart option, which uses exit(1) to restart the program at the splash screen """
+        print("Restarting")
+        QApplication.exit(1)
+
+    def closeEvent(self, event=None):
+        """ Catch the user closing the window by clicking the Close button or otherwise."""
+        print("Quitting")
+        self.closeFile()
+        QApplication.exit(0)
 
     def backupDatafiles(self):
         print("Backing up files in ", self.SoundFileDir)
@@ -5302,8 +5285,11 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
             return
         out = app.exec_()
         QApplication.closeAllWindows()
+
+        # restart requested:
         if out == 1:
             mainlauncher()
+
 
 app = QApplication(sys.argv)
 mainlauncher()
