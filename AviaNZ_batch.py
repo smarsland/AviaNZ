@@ -121,22 +121,30 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_timeEnd.setDisplayFormat('hh:mm:ss')
 
         self.w_wind = QCheckBox("")
-        self.w_rain = QCheckBox("")
         self.w_mergect = QCheckBox("")
 
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
         self.minlen.setTickPosition(QSlider.TicksBelow)
-        self.minlen.setTickInterval(0.25*1000)
+        self.minlen.setTickInterval(0.5*1000)
         self.minlen.setRange(0.25*1000, 10*1000)
-        self.minlen.setSingleStep(0.25*1000)
+        self.minlen.setSingleStep(1*1000)
         self.minlen.setValue(0.5*1000)
         self.minlen.valueChanged.connect(self.minLenChange)
         self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
 
+        self.maxlen = QSlider(Qt.Horizontal)
+        self.maxlen.setTickPosition(QSlider.TicksBelow)
+        self.maxlen.setTickInterval(5*1000)
+        self.maxlen.setRange(5*1000, 120*1000)
+        self.maxlen.setSingleStep(5*1000)
+        self.maxlen.setValue(10*1000)
+        self.maxlen.valueChanged.connect(self.maxLenChange)
+        self.maxlenlbl = QLabel("Maximum segment length: 10 sec")
+
         self.maxgap = QSlider(Qt.Horizontal)
         self.maxgap.setTickPosition(QSlider.TicksBelow)
-        self.maxgap.setTickInterval(0.25*1000)
+        self.maxgap.setTickInterval(0.5*1000)
         self.maxgap.setRange(0.25*1000, 10*1000)
         self.maxgap.setSingleStep(0.5*1000)
         self.maxgap.setValue(1*1000)
@@ -178,9 +186,6 @@ class AviaNZ_batchProcess(QMainWindow):
         formPost = QGridLayout()
         formPost.addWidget(QLabel("Add wind filter"), 0, 0)
         formPost.addWidget(self.w_wind, 0, 1)
-        # formPost.addWidget(QLabel("Add rain filter"), 1, 0)
-        formPost.addWidget(self.w_rain, 1, 1)
-        self.w_rain.hide()
         self.mergectlbl = QLabel("Merge different call types")
         formPost.addWidget(self.mergectlbl, 2, 0)
         formPost.addWidget(self.w_mergect, 2, 1)
@@ -188,6 +193,8 @@ class AviaNZ_batchProcess(QMainWindow):
         formPost.addWidget(self.maxgap, 3, 1)
         formPost.addWidget(self.minlenlbl, 4, 0)
         formPost.addWidget(self.minlen, 4, 1)
+        formPost.addWidget(self.maxlenlbl, 5, 0)
+        formPost.addWidget(self.maxlen, 5, 1)
         boxPost.setLayout(formPost)
         self.d_detection.addWidget(boxPost, row=3, col=0, colspan=3)
         if len(spp) > 0:
@@ -195,6 +202,8 @@ class AviaNZ_batchProcess(QMainWindow):
             self.maxgap.hide()
             self.minlenlbl.hide()
             self.minlen.hide()
+            self.maxlenlbl.hide()
+            self.maxlen.hide()
 
         self.d_detection.addWidget(w_resLabel, row=4, col=0)
         self.d_detection.addWidget(self.w_res, row=4, col=1)
@@ -218,10 +227,13 @@ class AviaNZ_batchProcess(QMainWindow):
         self.d_files.layout.setSpacing(10)
         self.show()
 
-    def minLenChange(self,value):
+    def minLenChange(self, value):
         self.minlenlbl.setText("Minimum segment length: %s sec" % str(round(int(value)/1000, 2)))
 
-    def maxGapChange(self,value):
+    def maxLenChange(self, value):
+        self.maxlenlbl.setText("Maximum segment length: %s sec" % str(round(int(value)/1000, 2)))
+
+    def maxGapChange(self, value):
         self.maxgaplbl.setText("Maximum gap between syllables: %s sec" % str(round(int(value)/1000, 2)))
 
     def createMenu(self):
@@ -334,6 +346,8 @@ class AviaNZ_batchProcess(QMainWindow):
                     spp.append(name)
             self.minlen.hide()
             self.minlenlbl.hide()
+            self.maxlen.hide()
+            self.maxlenlbl.hide()
             self.maxgap.hide()
             self.maxgaplbl.hide()
             self.w_mergect.show()
@@ -341,6 +355,8 @@ class AviaNZ_batchProcess(QMainWindow):
         else:
             self.minlen.show()
             self.minlenlbl.show()
+            self.maxlen.show()
+            self.maxlenlbl.show()
             self.maxgap.show()
             self.maxgaplbl.show()
             self.w_mergect.hide()
@@ -405,7 +421,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # LOG FILE is read here
         # note: important to log all analysis settings here
         settings = [self.method, self.w_res.value(), timeWindow_s, timeWindow_e,
-                    self.w_wind.isChecked(), self.w_rain.isChecked(), self.w_mergect.isChecked()]
+                    self.w_wind.isChecked(), self.w_mergect.isChecked()]
         self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, settings)
 
         # Ask for RESUME CONFIRMATION here
@@ -575,17 +591,18 @@ class AviaNZ_batchProcess(QMainWindow):
                         print("Post-processing...")
                         maxgap = int(self.maxgap.value())/1000
                         minlen = int(self.minlen.value())/1000
+                        maxlen = int(self.maxlen.value())/1000
                         post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate,
                                                    segments=thisPageSegs, subfilter={})
                         if self.w_wind.isChecked():
                             post.wind()
                             print('After wind segments: ', len(post.segments))
-                        if self.w_rain.isChecked():
-                            post.rainClick()
-                            print('After rain segments: ', len(post.segments))
                         post.segments = self.seg.joinGaps(post.segments, maxgap=maxgap)
                         post.segments = self.seg.deleteShort(post.segments, minlength=minlen)
                         print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' % (maxgap, minlen, len(post.segments)))
+                        # avoid extra long segments (for Isabel)
+                        post.segments = self.seg.splitLong(post.segments, maxlen = maxlen)
+                        print('Segments after splitting long segments (>%.2f secs): %d' % (maxlen, len(post.segments)))
 
                         # adjust segment starts for 15min "pages"
                         if start != 0:
@@ -622,9 +639,6 @@ class AviaNZ_batchProcess(QMainWindow):
                                 if self.w_wind.isChecked():
                                     post.wind()
                                     print('After wind: segments: ', len(post.segments))
-                                if self.w_rain.isChecked():
-                                    post.rainClick()
-                                    print('After rain segments: ', len(post.segments))
                                 if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
                                     if spInfo['Filters'][filtix]["F0"]:
                                         print("Checking for fundamental frequency...")
@@ -1143,7 +1157,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 for seg in reversed(self.segments):
                     goodenough = True
                     for lab in seg[4]:
-                        if lab["certainty"] <= self.certBox.value():
+                        if lab["certainty"] < self.certBox.value():
                             goodenough = False
                     if goodenough:
                         self.goodsegments.append(seg)
