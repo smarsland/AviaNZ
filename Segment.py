@@ -768,6 +768,23 @@ class Segmenter:
             i += 1
         return out
 
+    def splitLong(self, segs, maxlen=10):
+        """
+        Splits long segments (> maxlen) evenly
+        Operates on start-end list [[1,2], [3,4]] -> [[1,4]].
+        """
+        out = []
+        for seg in segs:
+            l = seg[1]-seg[0]
+            if l > maxlen:
+                n = int(np.ceil(l/maxlen))
+                d = l/n
+                for i in range(n):
+                    out.append([seg[0] + d*i, seg[0] + d * (i+1)])
+            else:
+                out.append(seg)
+        return out
+
     def checkSegmentOverlap(self, segs):
         # Needs to be python array, not np array
         # Sort by increasing start times
