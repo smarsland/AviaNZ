@@ -156,7 +156,10 @@ class AviaNZ(QMainWindow):
         # search order: infile -> firstFile -> dialog
         # Make life easier for now: preload a birdsong
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
-            firstFile = self.SoundFileDir + '/' + 'kiwi_1min.wav'
+            # For distribution:
+            firstFile = self.SoundFileDir
+            # Can also use:
+            # firstFile = self.SoundFileDir + '/' + 'kiwi_1min.wav'
 
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
             if self.CLI:
@@ -207,7 +210,7 @@ class AviaNZ(QMainWindow):
                 # Read folders and sub-folders
                 for root, dirs, files in os.walk(firstFile):
                     for f in files:
-                        if f[-4:] == '.wav':
+                        if f[-4:].lower() == '.wav':
                             print(os.path.join(root, f))
                             self.loadFile(os.path.join(root, f), cs=True)
                             self.widthWindow.setValue(60)  # self.datalengthSec)

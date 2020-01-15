@@ -132,7 +132,7 @@ class BuildRecAdvWizard(QWizard):
             # collect possible species from annotations:
             for root, dirs, files in os.walk(dirName):
                 for filename in files:
-                    if filename.endswith('.wav') and filename+'.data' in files:
+                    if filename.lower().endswith('.wav') and filename+'.data' in files:
                         # this wav has data, so see what species are in there
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, filename+'.data'))
@@ -168,7 +168,7 @@ class BuildRecAdvWizard(QWizard):
                 if file.isDir():
                     numwavs = 0
                     for root, dirs, files in os.walk(file.filePath()):
-                        numwavs += sum(f.endswith('.wav') for f in files)
+                        numwavs += sum(f.lower().endswith('.wav') for f in files)
                     item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
                 else:
                     item.setText(file.fileName())
@@ -1110,7 +1110,7 @@ class BuildRecAdvWizard(QWizard):
                 for root, dirs, files in os.walk(self.field("trainDir")):
                     for file in files:
                         wavFile = os.path.join(root, file)
-                        if file.endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                        if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
                             pageSegs = Segment.SegmentList()
                             pageSegs.parseJSON(wavFile + '.data')
 
@@ -1648,7 +1648,7 @@ class TestRecWizard(QWizard):
                 if file.isDir():
                     numwavs = 0
                     for root, dirs, files in os.walk(file.filePath()):
-                        numwavs += sum(f.endswith('.wav') for f in files)
+                        numwavs += sum(f.lower().endswith('.wav') for f in files)
                     item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
                 else:
                     item.setText(file.fileName())
@@ -1848,7 +1848,7 @@ class TestRecWizard(QWizard):
         for root, dirs, files in os.walk(self.field("testDir")):
             for file in files:
                 wavFile = os.path.join(root, file)
-                if file.endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
                     segments = Segment.SegmentList()
                     segments.parseJSON(wavFile + '.data')
                     manSegNum += len(segments.getSpecies(species))

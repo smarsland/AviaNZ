@@ -180,6 +180,9 @@ class WaveletSegment:
         # 1. read wavs and annotations into self.annotation, self.audioList
         self.filenames = []
         self.loadDirectory(dirName=dirName, denoise=d, window=window, inc=inc)
+        if len(self.annotation) == 0:
+            print("ERROR: no files loaded!")
+            return
 
         # 2. find top nodes for each file (self.nodeCorrs)
         nlevels = 5
@@ -273,7 +276,7 @@ class WaveletSegment:
         resol = 1.0
         for root, dirs, files in os.walk(dirName):
             for file in files:
-                if file.endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
                     filenames.append(os.path.join(root, file))
         if len(filenames)<1:
             print("ERROR: no suitable files found for testing")
@@ -282,7 +285,10 @@ class WaveletSegment:
         for filename in filenames:
             # similar to _batch: loadFile(self.species)
             # sets self.sp.data, self.sp.sampleRate, appends self.annotation
-            self.loadData(filename)
+            succ = self.loadData(filename)
+            if not succ:
+                print("ERROR: failed to load file", filename)
+                return
 
             # (ceil division for large integers)
             numPages = (len(self.sp.data) - 1) // samplesInPage + 1
@@ -980,13 +986,16 @@ class WaveletSegment:
 
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
                     opstartingtime = time.time()
                     wavFile = os.path.join(root, file)
                     self.filenames.append(wavFile)
 
                     # adds to self.annotation array, also sets self.sp data and sampleRate
-                    self.loadData(wavFile)
+                    succ = self.loadData(wavFile)
+                    if not succ:
+                        print("ERROR: failed to load file", wavFile)
+                        return
 
                     # denoise and store actual audio data:
                     # note: preprocessing is a side effect on data
@@ -1015,6 +1024,8 @@ class WaveletSegment:
         """ Loads a single WAV file and corresponding 0/1 annotations.
             Input: filename - wav file name
             Output: fills self.annotation, sets self.sp data, samplerate
+            Returns True if read without errors - important to
+            catch this and immediately stop the process otherwise
         """
         # In case we want flexible-size windows again:
         # Added resol input as basic unit for read annotation file
@@ -1039,8 +1050,8 @@ class WaveletSegment:
             d = d[:-1]
         if len(d) != n:
             print("ERROR: annotation length %d does not match file duration %d!" % (len(d), n))
-            self.annotation = None
-            return
+            self.annotation = []
+            return False
 
         # for each second, store 0/1 presence:
         presblocks = 0
@@ -1052,4 +1063,4 @@ class WaveletSegment:
 
         totalblocks = sum([len(a) for a in self.annotation])
         print("%d blocks read, %d presence blocks found. %d blocks stored so far.\n" % (n, presblocks, totalblocks))
-        return
+        return True
