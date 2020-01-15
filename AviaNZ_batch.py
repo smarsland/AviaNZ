@@ -963,7 +963,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.certBox = QSpinBox()
         self.certBox.setRange(0,100)
         self.certBox.setSingleStep(10)
-        self.certBox.setValue(100)
+        self.certBox.setValue(90)
         self.d_detection.addWidget(self.certBox, row=3, col=1)
 
         self.w_resLabel = QLabel("Set size of presence/absence blocks\nin Excel output (Sheet 3)")
@@ -1157,7 +1157,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 for seg in reversed(self.segments):
                     goodenough = True
                     for lab in seg[4]:
-                        if lab["certainty"] < self.certBox.value():
+                        if lab["certainty"] <= self.certBox.value():
                             goodenough = False
                     if goodenough:
                         self.goodsegments.append(seg)
