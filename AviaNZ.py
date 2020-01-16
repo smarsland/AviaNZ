@@ -252,7 +252,6 @@ class AviaNZ(QMainWindow):
             self.timer.timeout.connect(self.saveSegments)
             self.timer.start(self.config['secsSave']*1000)
 
-            self.fillFileList(firstFile)
             self.listLoadFile(firstFile)
 
         if self.DOC and not cheatsheet and not zooniverse:
@@ -268,7 +267,7 @@ class AviaNZ(QMainWindow):
         fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
         for recentfile in self.config['RecentFiles']:
-            fileMenu.addAction(recentfile, lambda: self.listLoadFile(recentfile))
+            fileMenu.addAction(recentfile, lambda arg=recentfile: self.openFile(arg))
         fileMenu.addSeparator()
         fileMenu.addAction("Restart Program",self.restart,"Ctrl+R")
         fileMenu.addAction("Quit",QApplication.quit,"Ctrl+Q")
@@ -998,7 +997,6 @@ class AviaNZ(QMainWindow):
         for file in self.listOfFiles:
             # If there is a .data version, colour the name red to show it has been labelled
             item = QListWidgetItem(self.listFiles)
-            self.listitemtype = type(item)
             if file.isDir():
                 item.setText(file.fileName() + "/")
             else:
@@ -1085,10 +1083,15 @@ class AviaNZ(QMainWindow):
             self.p_spec.removeItem(self.label4)
             self.p_spec.removeItem(self.label5)
 
-    def openFile(self):
-        """ This handles the menu item for opening a file.
+    def openFile(self, fileName=None):
+        """ This handles the menu items for opening a file.
+        Pops up a file selection dialog if no fileName provided.
         Splits the directory name and filename out, and then passes the filename to the loader."""
-        fileName, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir,"Wav files (*.wav)")
+
+        if fileName is None:
+            # File -> Open or splash screen:
+            fileName, drop = QtGui.QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir,"Wav files (*.wav)")
+        # (it is provided when this is called by File -> [recent file clicked])
         success = 1
         SoundFileDirOld = self.SoundFileDir
         fileNameOld = os.path.basename(self.filename)
@@ -1097,12 +1100,10 @@ class AviaNZ(QMainWindow):
             self.SoundFileDir = os.path.dirname(fileName)
             success = self.listLoadFile(os.path.basename(fileName))
         if success==1:
-            print("Error loading file, reloading current file")
+            print("Warning: could not load file, reloading current file")
             self.SoundFileDir = SoundFileDirOld
-            self.filename = fileNameOld
-            self.fillFileList(fileNameOld)
+            self.filename = os.path.join(self.SoundFileDir, fileNameOld)
             self.listLoadFile(fileNameOld)
-
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
@@ -1113,7 +1114,7 @@ class AviaNZ(QMainWindow):
         """
 
         # Need name of file
-        if type(current) is self.listitemtype:
+        if type(current) is QListWidgetItem:
             current = current.text()
             current = re.sub('\/.*', '', current)
 
@@ -1137,20 +1138,26 @@ class AviaNZ(QMainWindow):
             if self.filename is not None:
                 self.closeFile()
 
-        # Update the file list to show the right one
+        # on first load:
+        if not hasattr(self, 'listOfFiles'):
+            self.fillFileList(current)
+
+        # Update the file list to show the right location
         i=0
         while i<len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current:
             i+=1
         if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
             dir = QDir(self.SoundFileDir)
             dir.cd(self.listOfFiles[i].fileName())
-            # Now repopulate the listbox
             self.SoundFileDir=str(dir.absolutePath())
-            if (i == len(self.listOfFiles)-1) and (self.listOfFiles[i].fileName() != current):
-                self.loadFile(current)
-            self.fillFileList(current)
-        else:
+
+        # Now repopulate the listbox
+        self.fillFileList(current)
+
+        # if a file was clicked, open it
+        if not os.path.isdir(fullcurrent):
             self.loadFile(current)
+
         return(0)
 
     def loadFile(self, name=None, cs=False):
@@ -3964,8 +3971,12 @@ class AviaNZ(QMainWindow):
             x2 = math.floor(x2 * self.config['incr'])
             filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.SoundFileDir, '*.wav')
             if filename:
+                # filedialog doesn't attach extension
+                filename = str(filename)
+                if not filename.endswith('.wav'):
+                    filename = filename + '.wav'
                 tosave = self.sp.bandpassFilter(self.audiodata[int(x1):int(x2)], start=y1, end=y2)
-                wavio.write(str(filename), tosave.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
+                wavio.write(filename, tosave.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
             self.fillFileList(os.path.basename(self.filename))
 
@@ -5121,7 +5132,7 @@ class AviaNZ(QMainWindow):
         print("Closing", self.filename)
 
         # update recent files list
-        if self.filename not in self.config['RecentFiles'] and self.filename is not None:
+        if self.filename is not None and self.filename not in self.config['RecentFiles']:
             self.config['RecentFiles'].append(self.filename)
             if len(self.config['RecentFiles'])>4:
                 del self.config['RecentFiles'][0]
