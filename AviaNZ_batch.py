@@ -668,6 +668,8 @@ class AviaNZ_batchProcess(QMainWindow):
                                 segs = segmenter.checkSegmentOverlap(allCtSegs)
                                 print('allCtSegs:', allCtSegs)
                                 print('segs:', segs)
+                                # also merge neighbours (segments from different call types)
+                                segs = segmenter.joinGaps(segs, maxgap=max([subf['TimeRange'][3] for subf in spInfo["Filters"]]))
                                 # construct "Any call" info to place on the segments
                                 flow = min([subf["FreqRange"][0] for subf in spInfo["Filters"]])
                                 fhigh = max([subf["FreqRange"][1] for subf in spInfo["Filters"]])
