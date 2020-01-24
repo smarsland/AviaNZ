@@ -1,7 +1,3 @@
-#Script from Nirosha Pryadarshani
-#modified by Virginia Listanti
-# 5/11/2019
-#Used for Bat tests
 
 import numpy as np
 import os, json
@@ -22,10 +18,10 @@ def loadFile(filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0):
     if duration == 0:
         duration = None
 
-    sp = SignalProc.SignalProc(1024, 512) # changed fuorier parameters
+    sp = SignalProc.SignalProc(256, 128)
+    sp.readWav(filename, duration, offset)
     sp.resample(fs)
-    sampleRate=1600
-    # sampleRate = sp.sampleRate
+    sampleRate = sp.sampleRate
     audiodata = sp.data
 
     # # pre-process
@@ -39,7 +35,7 @@ def loadFile(filename, duration=0, offset=0, fs=0, denoise=False, f1=0, f2=0):
 
     return audiodata
 
-dir = "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment" #changed direcotìry
+dir = "E:\ClusterData\BrownKiwi\Train"
 species = None
 fs = 16000
 dataset = []
@@ -59,22 +55,53 @@ if os.path.isdir(dir):
                     seg = segments[segix]
 
                     # Find the GT label for the syllables from this segment
-                    # 0 -Bat (Long Tailed)
-                    # 1 - Bat (Short Tailed)
+                    # 0 - brown kiwi, male
+                    # 1 - brown kiwi, female
+                    # 2 - LSK, male
+                    # 3 - LSK, female
+                    # 4 - morepork, more-pork
+                    # 5 - morepork, trill
+                    # 6 - morepork, weow
+                    # 7 - rooster
+                    # 8 - squeeck
                     if isinstance(seg[4][0], dict):
                         # new format
-                        if 'Bat (Long Tailed)' == seg[4][0]["species"]:
+                        if 'Kiwi(M)' == seg[4][0]["species"] or 'Kiwi(M)1' == seg[4][0]["species"] or 'Kiwi(M)2' == seg[4][0]["species"] or 'Kiwi(M)3' == seg[4][0]["species"] or 'Kiwi(M)4' == seg[4][0]["species"]:
                             label = 0
-                        elif 'Bat (Short Tailed)' == seg[4][0]["species"]:
+                        elif 'Kiwi(F)' == seg[4][0]["species"] or 'Kiwi(F)1' == seg[4][0]["species"] or 'Kiwi(F)2' == seg[4][0]["species"] or 'Kiwi(F)3' == seg[4][0]["species"] or 'Kiwi(F)4' == seg[4][0]["species"]:
                             label = 1
+                        elif 'Lsk(M)' in seg[4][0]["species"]:
+                            label = 2
+                        elif 'Lsk(F)' in seg[4][0]["species"]:
+                            label = 3
+                        elif 'Morepork(Mp)' == seg[4][0]["species"] or 'Morepork(Mp)1' == seg[4][0]["species"] or 'Morepork(Mp)2' == seg[4][0]["species"] or 'Morepork(Mp)3' == seg[4][0]["species"] or 'Morepork(Mp)4' == seg[4][0]["species"]:
+                            label = 4
+                        elif 'Morepork(Tril)' == seg[4][0]["species"] or 'Morepork(Tril)1' == seg[4][0]["species"] or 'Morepork(Tril)2' == seg[4][0]["species"] or 'Morepork(Tril)3' == seg[4][0]["species"] or 'Morepork(Tril)4' == seg[4][0]["species"]:
+                            label = 5
+                        elif 'Morepork(Weow)' == seg[4][0]["species"] or 'Morepork(Weow)1' == seg[4][0]["species"] or 'Morepork(Weow)2' == seg[4][0]["species"] or 'Morepork(Weow)3' == seg[4][0]["species"] or 'Morepork(Weow)4' == seg[4][0]["species"]:
+                            label = 6
+                        elif 'Rooster' in seg[4][0]["species"]:
+                            label = 7
                         else:
                             continue
                     elif isinstance(seg[4][0], str):
                         # old format
-                        if 'Bat (Long Tailed)' == seg[4][0]["species"]:
+                        if 'Kiwi(M)' == seg[4][0] or 'Kiwi(M)1' == seg[4][0] or 'Kiwi(M)2' == seg[4][0] or 'Kiwi(M)3' == seg[4][0] or 'Kiwi(M)4' == seg[4][0]:
                             label = 0
-                        elif 'Bat (Short Tailed)' == seg[4][0]["species"]:
+                        elif 'Kiwi(F)' == seg[4][0] or 'Kiwi(F)1' == seg[4][0] or 'Kiwi(F)2' == seg[4][0] or 'Kiwi(F)3' == seg[4][0] or 'Kiwi(F)4' == seg[4][0]:
                             label = 1
+                        elif 'Lsk(M)' in seg[4][0]:
+                            label = 2
+                        elif 'Lsk(F)' in seg[4][0]:
+                            label = 3
+                        elif 'Morepork(Mp)' == seg[4][0] or 'Morepork(Mp)1' == seg[4][0] or 'Morepork(Mp)2' == seg[4][0] or 'Morepork(Mp)3' == seg[4][0] or 'Morepork(Mp)4' == seg[4][0]:
+                            label = 4
+                        elif 'Morepork(Tril)' == seg[4][0] or 'Morepork(Tril)1' == seg[4][0] or 'Morepork(Tril)2' == seg[4][0] or 'Morepork(Tril)3' == seg[4][0] or 'Morepork(Tril)4' == seg[4][0]:
+                            label = 5
+                        elif 'Morepork(Weow)' == seg[4][0] or 'Morepork(Weow)1' == seg[4][0] or 'Morepork(Weow)2' == seg[4][0] or 'Morepork(Weow)3' == seg[4][0] or 'Morepork(Weow)4' == seg[4][0]:
+                            label = 6
+                        elif 'Rooster' in seg[4][0]:
+                            label = 7
                         else:
                             continue
 
@@ -82,10 +109,10 @@ if os.path.isdir(dir):
                     # minlen = minlen * fs
                     start = seg[0]
                     # start = int(seg[0] * fs)
-                    sp = SignalProc.SignalProc(1024, 512) #changed Fourier Parameters
+                    sp = SignalProc.SignalProc(256, 128)
                     sp.data = audiodata
                     sp.sampleRate = fs
-                    _ = sp.spectrogram(1024, 512) #changed Fourier Parameters
+                    _ = sp.spectrogram(256, 128)
                     segment = Segment.Segmenter(sp, fs)
                     syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
                     if len(syls) == 0:  # Sanity check
@@ -180,30 +207,30 @@ for record in dataset:
     for i in range(int(n)):
         audiodata = loadFile(filename=record[0], duration=win, offset=record[2][0]+win*i, fs=fs, denoise=False, f1=0, f2=0)
         audiodata = audiodata.tolist()
-        # featuresa.append([audiodata, record[1][2], record[1][3], record[-1]])
-        #         #
-        #         # mfcc = librosa.feature.mfcc(y=np.asarray(audiodata), sr=fs, n_mfcc=40)
-        #         # mfcc_delta = librosa.feature.delta(mfcc, mode='nearest')
-        #         # mfcc = np.concatenate((mfcc, mfcc_delta), axis=0)
-        #         # mfcc = [i for sublist in mfcc for i in sublist]
-        #         # featuresm.append([mfcc, record[1][2], record[1][3], record[-1]])
-        #         #
-        #         # ws = WaveletSegment.WaveletSegment(spInfo={})
-        #         # we = ws.computeWaveletEnergy(data=audiodata, sampleRate=fs, nlevels=5, wpmode='new',
-        #         #                          window=record[2][1] - record[2][0], inc=record[2][1] - record[2][0],
-        #         #                          resol=record[2][1] - record[2][0])
-        #         # we = [i[0] for i in we]
-        #         # featuresw.append([we, record[1][2], record[1][3], record[-1]])
-        #         #
-        #         # chroma = librosa.feature.chroma_cqt(y=np.asarray(audiodata), sr=fs)
-        #         # # chroma = librosa.feature.chroma_stft(y=data, sr=fs)
-        #         # chroma = [i for sublist in chroma for i in sublist]
-        #         # featuresc.append([chroma, record[1][2], record[1][3], record[-1]])
+        featuresa.append([audiodata, record[1][2], record[1][3], record[-1]])
+
+        mfcc = librosa.feature.mfcc(y=np.asarray(audiodata), sr=fs, n_mfcc=40)
+        mfcc_delta = librosa.feature.delta(mfcc, mode='nearest')
+        mfcc = np.concatenate((mfcc, mfcc_delta), axis=0)
+        mfcc = [i for sublist in mfcc for i in sublist]
+        featuresm.append([mfcc, record[1][2], record[1][3], record[-1]])
+
+        ws = WaveletSegment.WaveletSegment(spInfo={})
+        we = ws.computeWaveletEnergy(data=audiodata, sampleRate=fs, nlevels=5, wpmode='new',
+                                 window=record[2][1] - record[2][0], inc=record[2][1] - record[2][0],
+                                 resol=record[2][1] - record[2][0])
+        we = [i[0] for i in we]
+        featuresw.append([we, record[1][2], record[1][3], record[-1]])
+
+        chroma = librosa.feature.chroma_cqt(y=np.asarray(audiodata), sr=fs)
+        # chroma = librosa.feature.chroma_stft(y=data, sr=fs)
+        chroma = [i for sublist in chroma for i in sublist]
+        featuresc.append([chroma, record[1][2], record[1][3], record[-1]])
 
         # Sgram images
         sp.data = audiodata
         sp.sampleRate = fs
-        sgRaw = sp.spectrogram(1024, 512) #changed fourier parameters
+        sgRaw = sp.spectrogram(256, 128)
         featuress.append([sgRaw.tolist(), record[1][2], record[1][3], record[-1]])
 
         maxsg = np.min(sgRaw)
@@ -216,14 +243,14 @@ for record in dataset:
         exporter.export(os.path.join(dir, 'img', str(record[-1]) + '_' + "%04d" % count + '.png'))
         count += 1
 
-# with open(os.path.join(dir, 'waveletdata.json'), 'w') as outfile:
-#     json.dump(featuresw, outfile)
-# with open(os.path.join(dir, 'mfccdata.json'), 'w') as outfile:
-#     json.dump(featuresm, outfile)
-# with open(os.path.join(dir, 'chromadata.json'), 'w') as outfile:
-#     json.dump(featuresc, outfile)
+with open(os.path.join(dir, 'waveletdata.json'), 'w') as outfile:
+    json.dump(featuresw, outfile)
+with open(os.path.join(dir, 'mfccdata.json'), 'w') as outfile:
+    json.dump(featuresm, outfile)
+with open(os.path.join(dir, 'chromadata.json'), 'w') as outfile:
+    json.dump(featuresc, outfile)
 with open(os.path.join(dir, 'sgramdata.json'), 'w') as outfile:
     json.dump(featuress, outfile)
-# with open(os.path.join(dir, 'audiodata.json'), 'w') as outfile:
-#     json.dump(featuresa, outfile)
+with open(os.path.join(dir, 'audiodata.json'), 'w') as outfile:
+    json.dump(featuresa, outfile)
 

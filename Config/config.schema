@@ -1,0 +1,64 @@
+{"type": "object",
+  "properties": {
+  
+    "window_width": {"type": "integer", "minimum": 0},
+    "incr": {"type": "integer", "minimum": 0},
+    "minFreq": {"type": "number", "minimum": 0},
+    "maxFreq": {"type": "number", "minimum": 0},
+    "maxSearchDepth": {"type": "integer", "minimum": 0},
+    "minSegment": {"type": "number", "minimum": 0},
+    "drawingRightBtn": {"type": "boolean"},
+    "specMouseAction": {"type": "integer"},
+  
+    "StartMaximized": {"type": "boolean"},
+    "MultipleSpecies": {"type": "boolean"},
+    "RequireNoiseData": {"type": "boolean"},
+    "DOC": {"type": "boolean"},
+    "ReorderList": {"type": "boolean"},
+  
+  
+    "SoundFileDir": {"type": "string"},
+    "RecentFiles": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
+    "secsSave": {"type": "number", "minimum": 0},
+    "windowWidth": {"type": "number", "minimum": 0},
+    "widthOverviewSegment": {"type": "number", "minimum": 0},
+  
+    "maxFileShow": {"type": "number", "minimum": 0},
+    "fileOverlap": {"type": "number", "minimum": 0},
+    "brightness": {"type": "integer", "minimum": 0},
+    "contrast": {"type": "integer", "minimum": 0},
+    "overlap_allowed": {"type": "number", "minimum": 0},
+    "reviewSpecBuffer": {"type": "number"},
+  
+    "BirdListShort": {"type": "string"},
+    "BirdListLong": {"type": "string"},
+    "ColourList": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "ColourSelected": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 4, "maxItems": 4},
+    "ColourNamed": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 4, "maxItems": 4},
+    "ColourNone": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 4, "maxItems": 4},
+    "ColourPossible": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 4, "maxItems": 4},
+    "cmap": {"type": "string"},
+  
+    "showAmplitudePlot": {"type": "boolean"},
+    "showAnnotationOverview": {"type": "boolean"},
+    "showPointerDetails": {"type": "boolean"},
+    "readOnly": {"type": "boolean"},
+    "transparentBoxes": {"type": "boolean"},
+    "showListofFiles": {"type": "boolean"},
+    "invertColourMap": {"type": "boolean"},
+    "saveCorrections": {"type": "boolean"},
+  
+    "operator": {"type": "string"},
+    "reviewer": {"type": "string"},
+    "protocolOn": {"type": "boolean"},
+    "protocolSize": {"type": "number", "minimum": 0},
+    "protocolInterval": {"type": "number", "minimum": 0},
+    "fs_start": {"type": "number", "minimum": 0},
+    "fs_end": {"type": "number", "minimum": 0},
+  
+    "window": {"type": "string"},
+    "FiltersDir": {"type": "string"}
+  },
+  "required": ["window_width", "incr", "minFreq", "maxFreq", "maxSearchDepth", "minSegment", "drawingRightBtn", "specMouseAction", "StartMaximized", "MultipleSpecies", "RequireNoiseData", "DOC", "ReorderList", "SoundFileDir", "RecentFiles", "secsSave", "windowWidth", "widthOverviewSegment", "maxFileShow", "fileOverlap", "brightness", "contrast", "overlap_allowed", "reviewSpecBuffer", "BirdListShort", "BirdListLong", "ColourList", "ColourSelected", "ColourNamed", "ColourNone", "ColourPossible", "cmap", "showAmplitudePlot", "showAnnotationOverview", "showPointerDetails", "readOnly", "transparentBoxes", "showListofFiles", "invertColourMap", "saveCorrections", "operator", "reviewer", "protocolOn", "protocolSize", "protocolInterval", "fs_start", "fs_end", "window", "FiltersDir"]
+}
+

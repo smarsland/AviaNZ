@@ -19,7 +19,7 @@ cdef extern from "ce_functions.h":
         void ce_energycurve(double *arrE, double *arrC, int N, int M)
 
 cdef extern from "ce_functions.h":
-        void ce_sumsquares(double *arr, int W, double *out)
+        void ce_sumsquares(double *arr, const size_t arrs, const int W, double *besttau, const double thr)
 
 cdef extern from "ce_functions.h":
         int upsampling_convolution_valid_sf(const double * const input, const size_t N,
@@ -313,6 +313,7 @@ def ThresholdNodes2(self, list oldtree, bestleaves, threshold, str thrtype, int 
 
 def EnergyCurve(np.ndarray C, M):
         assert C.dtype==np.float64
+        assert len(C)>2*M+1
         # Args: 1. wav data 2. M (int), expansion in samples
         N = len(C)
         E = np.zeros(N)
@@ -320,27 +321,28 @@ def EnergyCurve(np.ndarray C, M):
         ce_energycurve(<double*> np.PyArray_DATA(E), <double*> np.PyArray_DATA(C), N, M)
         return E
 
-def FundFreqYin(np.ndarray data, W, i, ints):
+def FundFreqYin(np.ndarray data, int W, double thr, double fs):
         assert data.dtype==np.float64
-        sd = np.zeros(W)
-        data = data[i:]
+        assert thr>0
+
+        cdef int arrs = len(data)
+
+        starts = range(0, len(data) - 2*W, W//2)
+        assert len(starts)>0
+        pitch = np.zeros(len(starts) + 1)
+        besttau = -1 * np.ones(len(starts))
+
         # Compute sum of squared diff (autocorrelation)
-        ce_sumsquares(<double*> np.PyArray_DATA(data), W, <double*> np.PyArray_DATA(sd))
+        # C code will return array of best tau for each window start
+        ce_sumsquares(<double*> np.PyArray_DATA(data), arrs, W, <double*> np.PyArray_DATA(besttau), thr)
 
-        # If not using window, instead:
-        # for tau in range(1, W): 
-            # if i>0:
-            # for tau in range(1,W):
-            # sd[tau] -= np.sum((data[i-1] - data[i-1+tau])**2)
-            # sd[tau] += np.sum((data[i+W] - data[i+W+tau])**2)
-
-        # Compute cumulative mean of normalised diff
-        d = np.zeros(W)
-        d[0] = 1 
-        # TODO: sometimes all np.cumsum(sd[1;]) == 0 ??
-        d[1:] = sd[1:] * ints / np.cumsum(sd[1:])
-
-        return d
+        for i in range(len(starts)):
+            # -1 is an error code for no ff found / correlation too weak / numeric error
+            if besttau[i] == -1:
+                pitch[i] = -1
+            else:
+                pitch[i] = float(fs)/besttau[i]
+        return pitch
 
 def reconstruct(np.ndarray data, int node, np.ndarray wv_rec_hi, np.ndarray wv_rec_lo, int lvl):
     assert data.dtype==np.float64

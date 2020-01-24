@@ -2,11 +2,11 @@
 #
 # This is part of the AviaNZ interface
 # Holds most of the code for the various dialog boxes
-# Version 1.3 23/10/18
+# Version 2.0 18/11/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
-#    AviaNZ birdsong analysis program
-#    Copyright (C) 2017--2018
+#    AviaNZ bioacoustic analysis program
+#    Copyright (C) 2017--2019
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -23,21 +23,23 @@
 
 # Dialogs used by the AviaNZ program
 # Since most of them just get user selections, they are mostly just a mess of UI things
-import sys,os
+import os
+import shutil
 
+from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QDir, QPointF, QTime, Qt
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
-import pyqtgraph.functions as fn
-import numpy as np
-import SupportClasses as SupportClasses
-import json
-from pyqtgraph.parametertree import Parameter, ParameterTree, ParameterItem, registerParameterType
 
-#======
+import numpy as np
+import colourMaps
+import SupportClasses as SupportClasses
+import SignalProc
+
+
 class StartScreen(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
@@ -50,7 +52,7 @@ class StartScreen(QDialog):
 
         btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
         # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
-        b1 = QPushButton(" Manual Segmentation ")
+        b1 = QPushButton(" Manual Processing ")
         b2 = QPushButton("      Batch Processing      ")
         b3 = QPushButton(" Review Batch Results ")
         l1 = QLabel("-------")
@@ -136,6 +138,7 @@ class Spectrogram(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowStaysOnTopHint)
         self.setMinimumWidth(300)
         self.DOC = DOC
 
@@ -182,9 +185,8 @@ class Spectrogram(QDialog):
         Box.addWidget(self.mean_normalise)
         Box.addWidget(QLabel('Equal loudness'))
         Box.addWidget(self.equal_loudness)
-        if not self.DOC:
-            Box.addWidget(QLabel('Multitapering'))
-            Box.addWidget(self.multitaper)
+        Box.addWidget(QLabel('Multitapering'))
+        Box.addWidget(self.multitaper)
         Box.addWidget(QLabel('Window Width'))
         Box.addWidget(self.window_width)
         Box.addWidget(QLabel('Hop'))
@@ -238,6 +240,7 @@ class OperatorReviewer(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Set Operator/Reviewer')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowStaysOnTopHint)
         self.setMinimumWidth(320)
 
         self.operatorlabel = QLabel("Operator")
@@ -270,9 +273,9 @@ class addNoiseData(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Noise Information')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(320)
 
-        print(noiseLevel,noiseTypes)
         HBox1 = QVBoxLayout()
         levelLabel = QLabel("Level of Noise")
         HBox1.addWidget(levelLabel)
@@ -359,7 +362,6 @@ class addNoiseData(QDialog):
         self.setLayout(Box)
 
     def getNoiseData(self):
-        #print(self.name1.text(),self.name2.text())
         if self.level.checkedButton() is None:
             self.btnLow.setChecked(True)
         types = []
@@ -377,12 +379,13 @@ class Diagnostic(QDialog):
         self.setWindowTitle('Diagnostic Plot Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(300)
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
 
         # species / filter
-        self.filterLabel = QLabel("Select filter to use")
+        self.filterLabel = QLabel("Select recogniser to use")
         self.filter = QComboBox()
         # add filter file names to combobox
-        self.filter.addItems(filters)
+        self.filter.addItems(list(filters.keys()))
 
         # antialiasing
         self.aaLabel = QLabel("Select antialiasing type:")
@@ -433,246 +436,6 @@ class Diagnostic(QDialog):
         return [self.filter.currentText(), self.aaGroup.checkedId(), self.mark.isChecked()]
 
 #======
-class WaveletTrain(QDialog):
-    # Class for the segmentation dialog box
-    # TODO: add the wavelet params
-    # TODO: work out how to return varying size of params, also process them
-    # TODO: test and play
-    def __init__(self, maxv, parent=None):
-        QDialog.__init__(self, parent)
-        self.setWindowTitle('Train a Species Detector')
-        self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setMinimumWidth(475)
-        self.setMinimumHeight(500)
-
-        # Step1 - prepare for training
-        self.layout_step1 = QVBoxLayout()
-        self.form1_step1 = QFormLayout()
-        self.form2_step1 = QFormLayout()
-        self.hBox_step1 = QHBoxLayout()
-        self.blank = QLabel('           ')
-        self.Step1Label1 = QLabel('Step 1: Prepare')
-        self.Step1Label1.setFont(QtGui.QFont('TimesNewRoman', 12))
-        self.browse = QPushButton('Browse')
-        self.form1_step1.addRow('Load data', self.browse)
-        self.listFiles = QListWidget()
-        self.listFiles.setMinimumWidth(150)
-        self.listFiles.setMinimumHeight(275)
-        self.form1_step1.addRow(' ', self.listFiles)
-        self.species = QComboBox()  # fill during browse
-        self.species.addItems(['Choose species...'])
-        self.form2_step1.addRow('Species   ', self.species)
-        self.genGT = QPushButton('Prepare for Training')
-        self.genGT.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
-        self.genGT.setEnabled(False)
-        self.hBox_step1.addStretch(1)
-        self.hBox_step1.addWidget(self.genGT)
-        # Step1 layout
-        self.layout_step1.addWidget( self.Step1Label1)
-        self.layout_step1.addWidget(self.blank)
-        self.layout_step1.addLayout(self.form1_step1)
-        self.layout_step1.addWidget(self.blank)
-        self.layout_step1.addLayout(self.form2_step1)
-        self.layout_step1.addStretch(1)
-        self.layout_step1.addLayout(self.hBox_step1)
-
-        # Step2 - actual training
-        self.layout_step2 = QVBoxLayout()
-        self.form1_step2 = QFormLayout()
-        self.hBox_step2 = QHBoxLayout()
-        self.Step1Label2 = QLabel('Step 2: Train')
-        self.Step1Label2.setFont(QtGui.QFont('TimesNewRoman', 12))
-        self.minlen = QLineEdit(self)
-        self.minlen.setText('')
-        self.form1_step2.addRow('Min call length (secs)', self.minlen)
-        self.maxlen = QLineEdit(self)
-        self.maxlen.setText('')
-        self.form1_step2.addRow('Max call length (secs)', self.maxlen)
-        self.fLow = QSlider(Qt.Horizontal)
-        self.fLow.setTickPosition(QSlider.TicksBelow)
-        self.fLow.setTickInterval(2000)
-        self.fLow.setRange(0, 32000)
-        self.fLow.setSingleStep(100)
-        self.fLow.valueChanged.connect(self.fLowChange)
-        self.fLowtext = QLabel('')
-        self.form1_step2.addRow('', self.fLowtext)
-        self.form1_step2.addRow('Lower frq. (Hz)', self.fLow)
-        self.fHigh = QSlider(Qt.Horizontal)
-        self.fHigh.setTickPosition(QSlider.TicksBelow)
-        self.fHigh.setTickInterval(2000)
-        self.fHigh.setRange(0, 32000)
-        self.fHigh.setSingleStep(100)
-        self.fHigh.valueChanged.connect(self.fHighChange)
-        self.fHightext = QLabel('')
-        self.form1_step2.addRow('', self.fHightext)
-        self.form1_step2.addRow('Higher frq. (Hz)', self.fHigh)
-        self.fs = QSlider(Qt.Horizontal)
-        self.fs.setTickPosition(QSlider.TicksBelow)
-        self.fs.setTickInterval(2000)
-        self.fs.setRange(0, 32000)
-        self.fs.setSingleStep(1000)
-        self.fs.valueChanged.connect(self.fsChange)
-        self.fstext = QLabel('')
-        self.form1_step2.addRow('', self.fstext)
-        self.form1_step2.addRow('Preferred sampling frq. (Hz)', self.fs)
-        self.hBox2_step2 = QHBoxLayout()
-        self.wind = QCheckBox()
-        self.wind_label = QLabel('Wind')
-        self.wind.setChecked(False)
-        self.rain = QCheckBox()
-        self.rain_label = QLabel('Rain')
-        self.rain.setChecked(False)
-        self.ff = QCheckBox()
-        self.ff_label = QLabel('Fundamental frq.')
-        self.ff.setChecked(False)
-        self.hBox2_step2.addWidget(self.wind_label)
-        self.hBox2_step2.addWidget(self.wind)
-        self.hBox2_step2.addWidget(self.rain_label)
-        self.hBox2_step2.addWidget(self.rain)
-        self.hBox2_step2.addWidget(self.ff_label)
-        self.hBox2_step2.addWidget(self.ff)
-
-        # thr and M spinboxes
-        self.hBox3_step2 = QHBoxLayout()
-        self.setthr = QSpinBox()
-        self.setthr_label = QLabel("thr iterations")
-        self.setM = QSpinBox()
-        self.setM_label = QLabel("M iterations")
-        self.setthr.setMinimum(1)
-        self.setM.setMinimum(1)
-        self.setthr.setMaximum(20)
-        self.setM.setMaximum(20)
-        self.hBox3_step2.addWidget(self.setthr_label)
-        self.hBox3_step2.addWidget(self.setthr)
-        self.hBox3_step2.addWidget(self.setM_label)
-        self.hBox3_step2.addWidget(self.setM)
-
-        self.train = QPushButton('Train')
-        self.train.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
-        self.train.setEnabled(False)
-        self.hBox_step2.addStretch(1)
-        self.hBox_step2.addWidget(self.train)
-        # Step2 layout
-        self.layout_step2.addWidget(self.Step1Label2)
-        self.layout_step2.addWidget(self.blank)
-        self.layout_step2.addLayout(self.form1_step2)
-        self.note_step2 = QLabel(' ')
-        self.note_step2.setFont(QtGui.QFont('TimesNewRoman', 9))
-        self.layout_step2.addWidget(self.blank)
-        self.layout_step2.addWidget(self.note_step2)
-        self.layout_step2.addWidget(self.blank)
-        self.layout_step2.addLayout(self.hBox2_step2)
-        self.layout_step2.addLayout(self.hBox3_step2)
-        self.layout_step2.addStretch(1)
-        self.layout_step2.addLayout(self.hBox_step2)
-
-        # Step3 - test
-        self.layout_step3 = QVBoxLayout()
-        self.form1_step3 = QFormLayout()
-        self.hBox_step3 = QHBoxLayout()
-        self.Step1Label3 = QLabel('Step 3: Test')
-        self.Step1Label3.setFont(QtGui.QFont('TimesNewRoman', 12))
-        self.browseTest = QPushButton('Browse')
-        self.form1_step3.addRow('Load data', self.browseTest)
-        self.listFilesTest = QListWidget()
-        self.listFilesTest.setMinimumWidth(150)
-        self.listFilesTest.setMinimumHeight(225)
-        self.form1_step3.addRow(' ', self.listFilesTest)
-        self.test = QPushButton('Test')
-        self.test.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
-        self.test.setEnabled(False)
-        self.hBox_step3.addStretch(1)
-        self.hBox_step3.addWidget(self.test)
-        # Step3 layout
-        self.layout_step3.addWidget(self.Step1Label3)
-        self.layout_step3.addWidget(self.blank)
-        self.layout_step3.addLayout(self.form1_step3)
-        self.layout_step3.addWidget(self.blank)
-        self.note_step3 = QLabel(' ')
-        self.note_step3.setFont(QtGui.QFont('TimesNewRoman', 9))
-        self.layout_step3.addWidget(self.note_step3)
-        self.layout_step3.addStretch(1)
-        self.layout_step3.addLayout(self.hBox_step3)
-
-        # Put together
-        self.layout = QHBoxLayout()
-        self.layout.addLayout(self.layout_step1)
-        self.layout.addWidget(self.blank)
-        self.layout.addLayout(self.layout_step2)
-        self.layout.addWidget(self.blank)
-        self.layout.addLayout(self.layout_step3)
-        self.setLayout(self.layout)
-
-    def fLowChange(self,value):
-        self.fLowtext.setText(str(value))
-
-    def fHighChange(self,value):
-        self.fHightext.setText(str(value))
-
-    def fsChange(self,value):
-        self.fstext.setText(str(value))
-
-    def fillFileList(self,dirName, train=True):
-        """ Generates the list of files for the file listbox.
-        fileName - currently opened file (marks it in the list).
-        Most of the work is to deal with directories in that list.
-        It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
-        red in the list, and the second to know if the files are long."""
-
-        if not os.path.isdir(dirName):
-            print("ERROR: Directory doesn't exist")
-            return
-
-        if train:
-            self.listFiles.clear()
-            spList = set()
-            # collect possible species from annotations:
-            for root, dirs, files in os.walk(dirName):
-                for filename in files:
-                    if filename.endswith('.wav') and filename+'.data' in files:
-                        # this wav has data, so see what species are in there
-                        with open(os.path.join(root, filename+'.data')) as f:
-                            segments = json.load(f)
-                            for seg in segments:
-                                # meta/empty segments
-                                if seg[0] == -1 or len(seg[4])==0:
-                                    continue
-
-                                for birdName in seg[4]:
-                                    if birdName == "Don't Know":
-                                        continue
-                                    elif len(birdName)>0 and birdName[-1] == '?':
-                                        spList.add(birdName[:-1])
-                                    else:
-                                        spList.add(birdName)
-            spList = list(spList)
-            spList.insert(0, 'Choose species...')
-            self.species.clear()
-            self.species.addItems(spList)
-        else:
-            self.listFilesTest.clear()
-
-        listOfFiles = QDir(dirName).entryInfoList(['*.wav'],filters=QDir.AllDirs|QDir.NoDotAndDotDot|QDir.Files,sort=QDir.DirsFirst)
-        listOfDataFiles = QDir(dirName).entryList(['*.wav.data'])
-        for file in listOfFiles:
-            # Add the filename to the right list
-            if train:
-                item = QListWidgetItem(self.listFiles)
-            else:
-                item = QListWidgetItem(self.listFilesTest)
-            # count wavs in directories:
-            if file.isDir():
-                numwavs = 0
-                for root, dirs, files in os.walk(file.filePath()):
-                    numwavs += sum(f.endswith('.wav') for f in files)
-                item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
-            else:
-                item.setText(file.fileName())
-            # If there is a .data version, colour the name red to show it has been labelled
-            if file.fileName()+'.data' in listOfDataFiles:
-                item.setForeground(Qt.red)
-
-#======
 class Segmentation(QDialog):
     # Class for the segmentation dialog box
     # TODO: add the wavelet params
@@ -682,20 +445,16 @@ class Segmentation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Segmentation Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
         self.setMinimumWidth(350)
 
         self.algs = QComboBox()
         if DOC:
-            self.algs.addItems(["Wavelets", "FIR"])
+            self.algs.addItems(["Wavelets", "FIR", "Median Clipping"])
         else:
             self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.undo = QPushButton("Undo")
-        self.resLabel = QLabel("Time Resolution in Excel Output (secs)")
-        self.res = QSpinBox()
-        self.res.setRange(1, 600)
-        self.res.setSingleStep(5)
-        self.res.setValue(60)
         self.activate = QPushButton("Segment")
         #self.save = QPushButton("Save segments")
 
@@ -748,12 +507,23 @@ class Segmentation(QDialog):
         self.medThr.setDecimals(1)
         self.medThr.setValue(3)
 
+        # set min seg size for median clipping
+        self.medSize = QSlider(Qt.Horizontal)
+        self.medSize.setTickPosition(QSlider.TicksBelow)
+        self.medSize.setTickInterval(100)
+        self.medSize.setRange(100,2000)
+        self.medSize.setSingleStep(100)
+        self.medSize.setValue(1000)
+        self.medSize.valueChanged.connect(self.medSizeChange)
+        self.medSizeText = QLabel("Minimum length: 1000 ms")
+
         self.ecThr = QDoubleSpinBox()
         self.ecThr.setRange(0.001,6)
         self.ecThr.setSingleStep(1)
         self.ecThr.setDecimals(3)
         self.ecThr.setValue(1)
 
+        self.FIRThr1text = QLabel("Set threshold")
         self.FIRThr1 = QDoubleSpinBox()
         self.FIRThr1.setRange(0.0,2.0) #setRange(0.0,1.0)
         self.FIRThr1.setSingleStep(0.05)
@@ -791,15 +561,13 @@ class Segmentation(QDialog):
         for w in range(Box.count()):
             Box.itemAt(w).widget().hide()
 
-        # TODO: Tidy this
         self.specieslabel_cc = QLabel("Species")
         self.species_cc = QComboBox()
         self.species_cc.addItems(["Choose species...", "Bittern"])
-        # self.species.addItems(["Kiwi (M)", "Kiwi (F)", "Ruru"])
-        spp = [*species]
-        spp.insert(0,"Choose species...")
+
+        spp = list(species.keys())
+        spp.insert(0, "Choose species...")
         self.species.addItems(spp)
-        # self.species.currentIndexChanged[QString].connect(self.changeBoxes)
 
         Box.addWidget(self.specieslabel)
         Box.addWidget(self.species)
@@ -812,10 +580,14 @@ class Segmentation(QDialog):
         Box.addWidget(self.PowerThr)
 
         Box.addWidget(self.medThr)
+        Box.addWidget(self.medSizeText)
+        Box.addWidget(self.medSize)
+
         for i in range(len(self.ecthrtype)):
             Box.addWidget(self.ecthrtype[i])
         Box.addWidget(self.ecThr)
 
+        Box.addWidget(self.FIRThr1text)
         Box.addWidget(self.FIRThr1)
 
         Box.addWidget(self.Fundminfreqlabel)
@@ -829,8 +601,41 @@ class Segmentation(QDialog):
 
         Box.addWidget(self.CCThr1)
 
-        Box.addWidget(self.resLabel)
-        Box.addWidget(self.res)
+        self.medSize = QSlider(Qt.Horizontal)
+        self.medSize.setTickPosition(QSlider.TicksBelow)
+        self.medSize.setTickInterval(100)
+        self.medSize.setRange(100,2000)
+        self.medSize.setSingleStep(100)
+        self.medSize.setValue(1000)
+        self.medSize.valueChanged.connect(self.medSizeChange)
+
+        # Sliders for minlen and maxgap are in ms scale
+        self.minlen = QSlider(Qt.Horizontal)
+        self.minlen.setTickPosition(QSlider.TicksBelow)
+        self.minlen.setTickInterval(0.25*1000)
+        self.minlen.setRange(0.25*1000, 10*1000)
+        self.minlen.setSingleStep(0.25*1000)
+        self.minlen.setValue(0.5*1000)
+        self.minlen.valueChanged.connect(self.minLenChange)
+        self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
+
+        self.maxgap = QSlider(Qt.Horizontal)
+        self.maxgap.setTickPosition(QSlider.TicksBelow)
+        self.maxgap.setTickInterval(0.25*1000)
+        self.maxgap.setRange(0.25*1000, 10*1000)
+        self.maxgap.setSingleStep(0.5*1000)
+        self.maxgap.setValue(1*1000)
+        self.maxgap.valueChanged.connect(self.maxGapChange)
+        self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
+
+        self.wind = QCheckBox("Remove wind")
+        self.rain = QCheckBox("Remove rain")
+        Box.addWidget(self.wind)
+        Box.addWidget(self.rain)
+        Box.addWidget(self.maxgaplbl)
+        Box.addWidget(self.maxgap)
+        Box.addWidget(self.minlenlbl)
+        Box.addWidget(self.minlen)
         Box.addWidget(self.undo)
         self.undo.setEnabled(False)
         Box.addWidget(self.activate)
@@ -843,8 +648,6 @@ class Segmentation(QDialog):
         self.setLayout(Box)
         self.algs.show()
         self.undo.show()
-        self.res.show()
-        self.resLabel.show()
         self.activate.show()
         if DOC:
             self.changeBoxes("Wavelets")
@@ -857,9 +660,13 @@ class Segmentation(QDialog):
         for w in range(self.layout().count()):
             self.layout().itemAt(w).widget().hide()
         self.algs.show()
+        self.wind.show()
+        # self.rain.show()
+        self.minlenlbl.show()
+        self.minlen.show()
+        self.maxgaplbl.show()
+        self.maxgap.show()
         self.undo.show()
-        self.res.show()
-        self.resLabel.show()
         self.activate.show()
 
         if alg == "Default":
@@ -879,6 +686,8 @@ class Segmentation(QDialog):
         elif alg == "Median Clipping":
             self.medlabel.show()
             self.medThr.show()
+            # self.medSize.show()
+            # self.medSizeText.show()
         elif alg == "Fundamental Frequency":
             self.Fundminfreq.show()
             self.Fundminperiods.show()
@@ -891,6 +700,7 @@ class Segmentation(QDialog):
         #elif alg == "Onsets":
         #    self.Onsetslabel.show()
         elif alg == "FIR":
+            self.FIRThr1text.show()
             self.FIRThr1.show()
         #elif alg == "Best":
         #    pass
@@ -902,15 +712,23 @@ class Segmentation(QDialog):
             #"Wavelets"
             self.specieslabel.show()
             self.species.show()
+            self.maxgaplbl.hide()
+            self.maxgap.hide()
+            self.minlenlbl.hide()
+            self.minlen.hide()
 
-    def bandclicked(self):
-        # TODO: Can they be grayed out?
-        self.start.setEnabled(not self.start.isEnabled())
-        self.end.setEnabled(not self.end.isEnabled())
+    def medSizeChange(self,value):
+        self.medSizeText.setText("Minimum length: %s ms" % value)
+
+    def minLenChange(self,value):
+        self.minlenlbl.setText("Minimum segment length: %s sec" % str(round(int(value)/1000, 2)))
+
+    def maxGapChange(self,value):
+        self.maxgaplbl.setText("Maximum gap between syllables: %s sec" % str(round(int(value)/1000, 2)))
 
     def getValues(self):
-        return [self.algs.currentText(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.res.value(), self.species_cc.currentText()]
-        #return [self.algs.currentText(),self.ampThr.text(),self.medThr.text(),self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.depth.text(),self.thrtype[0].isChecked(),self.thr.text(),self.wavelet.currentText(),self.bandchoice.isChecked(),self.start.text(),self.end.text(),self.species.currentText()]
+        # TODO: check: self.medSize.value() is not used, should we keep it?
+        return [self.algs.currentText(), self.medThr.text(), self.medSize.value(), self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.species_cc.currentText(), self.wind.isChecked(), self.rain.isChecked(), int(self.maxgap.value())/1000, int(self.minlen.value())/1000]
 
 #======
 class Denoise(QDialog):
@@ -919,6 +737,8 @@ class Denoise(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Denoising Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+
         self.setMinimumWidth(300)
         self.setMinimumHeight(250)
         self.DOC=DOC
@@ -1225,6 +1045,9 @@ class HumanClassify1(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowStaysOnTopHint)
+
+        self.setModal(True)
         self.frame = QWidget()
 
         self.lut = lut
@@ -1237,15 +1060,14 @@ class HumanClassify1(QDialog):
         self.multipleBirds = multipleBirds
         self.saveConfig = False
         # exec_ forces the cursor into waiting
-        self.activateWindow()
-        pg.QtGui.QApplication.setOverrideCursor(Qt.ArrowCursor)
 
         # Set up the plot window, then the right and wrong buttons, and a close button
         self.wPlot = pg.GraphicsLayoutWidget()
         self.pPlot = self.wPlot.addViewBox(enableMouse=False, row=0, col=1)
         self.plot = pg.ImageItem()
         self.pPlot.addItem(self.plot)
-        self.pPlot.setAspectLocked(ratio=0.2)
+        self.plotAspect = 0.2
+        self.pPlot.setAspectLocked(ratio=self.plotAspect)
         self.pPlot.disableAutoRange()
         self.pPlot.setLimits(xMin=0, yMin=-5)
         self.sg_axis = pg.AxisItem(orientation='left')
@@ -1302,10 +1124,6 @@ class HumanClassify1(QDialog):
         self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
         self.delete.setIconSize(iconSize)
 
-        self.buttonNext = QtGui.QToolButton()
-        self.buttonNext.setIcon(self.style().standardIcon(QtGui.QStyle.SP_ArrowForward))
-        self.buttonNext.setIconSize(iconSize)
-
         # The list of less common birds
         self.birds3 = QListWidget(self)
         if self.longBirdList is not None and self.longBirdList != 'None':
@@ -1320,7 +1138,7 @@ class HumanClassify1(QDialog):
         self.birds3.itemClicked.connect(self.listBirdsClicked)
 
         # An array of check boxes and a list and a text entry box
-        # Create an array of check bixes for the most common birds (2 columns of 10 choices)
+        # Create an array of check boxes for the most common birds 
         self.birds = QButtonGroup()
         self.birdbtns = []
         if self.multipleBirds:
@@ -1354,7 +1172,7 @@ class HumanClassify1(QDialog):
         self.tbox.setEnabled(False)
 
         # Audio playback object
-        self.media_obj2 = SupportClasses.ControllableAudio(self.parent.audioFormat)
+        self.media_obj2 = SupportClasses.ControllableAudio(self.parent.sp.audioFormat)
         self.media_obj2.notify.connect(self.endListener)
 
         # The layouts
@@ -1363,7 +1181,7 @@ class HumanClassify1(QDialog):
         birds3Layout = QVBoxLayout()
         count = 0
         for btn in self.birdbtns:
-            if count<10: 
+            if count<10:
                 birds1Layout.addWidget(btn)
             elif count<20:
                 birds2Layout.addWidget(btn)
@@ -1389,7 +1207,6 @@ class HumanClassify1(QDialog):
         hboxNextPrev.addWidget(self.buttonPrev)
         hboxNextPrev.addWidget(self.correct)
         hboxNextPrev.addWidget(self.delete)
-        hboxNextPrev.addWidget(self.buttonNext)
         hboxNextPrev.addWidget(self.numberLeft)
 
         self.playButton = QtGui.QToolButton()
@@ -1403,18 +1220,21 @@ class HumanClassify1(QDialog):
 
         # Volume control
         self.volSlider = QSlider(Qt.Horizontal)
-        self.volSlider.sliderMoved.connect(self.volSliderMoved)
+        self.volSlider.valueChanged.connect(self.volSliderMoved)
         self.volSlider.setRange(0,100)
         self.volSlider.setValue(50)
         self.volIcon = QLabel()
         self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
 
-        # Brightness, and contrast sliders
+        # Brightness and contrast sliders. Need to pass true (config) values of these as args
         self.brightnessSlider = QSlider(Qt.Horizontal)
         self.brightnessSlider.setMinimum(0)
         self.brightnessSlider.setMaximum(100)
-        self.brightnessSlider.setValue(brightness)
+        if self.cmapInverted:
+            self.brightnessSlider.setValue(brightness)
+        else:
+            self.brightnessSlider.setValue(100-brightness)
         self.brightnessSlider.setTickInterval(1)
         self.brightnessSlider.valueChanged.connect(self.setColourLevels)
 
@@ -1425,10 +1245,16 @@ class HumanClassify1(QDialog):
         self.contrastSlider.setTickInterval(1)
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
+        # zoom buttons
+        self.zoomInBtn = QPushButton("+")
+        self.zoomOutBtn = QPushButton("-")
+        self.zoomInBtn.clicked.connect(self.zoomIn)
+        self.zoomOutBtn.clicked.connect(self.zoomOut)
+
         vboxSpecContr = pg.LayoutWidget()
         vboxSpecContr.addWidget(self.speciesTop, row=0, col=0, colspan=2)
         vboxSpecContr.addWidget(self.species, row=0, col=2, colspan=8)
-        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=10)
+        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=12)
         vboxSpecContr.addWidget(self.playButton, row=2, col=0)
         vboxSpecContr.addWidget(self.volIcon, row=2, col=1)
         vboxSpecContr.addWidget(self.volSlider, row=2, col=2, colspan=2)
@@ -1440,6 +1266,9 @@ class HumanClassify1(QDialog):
         labelCo.setAlignment(QtCore.Qt.AlignRight)
         vboxSpecContr.addWidget(labelCo, row=2, col=7)
         vboxSpecContr.addWidget(self.contrastSlider, row=2, col=8, colspan=2)
+        vboxSpecContr.addWidget(self.zoomInBtn, row=2, col=10)
+        vboxSpecContr.addWidget(self.zoomOutBtn, row=2, col=11)
+
 
         vboxFull = QVBoxLayout()
         vboxFull.addWidget(vboxSpecContr)
@@ -1478,6 +1307,23 @@ class HumanClassify1(QDialog):
             self.bar.update()
             # QApplication.processEvents()
 
+    def zoomIn(self):
+        self.plotAspect = self.plotAspect * 1.5
+        self.pPlot.setAspectLocked(ratio=self.plotAspect)
+        xyratio = np.shape(self.sg)
+        xyratio = xyratio[0] / xyratio[1]
+        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+
+    def zoomOut(self):
+        self.plotAspect = self.plotAspect / 1.5
+        #self.plot.setImage(self.sg)
+        self.pPlot.setAspectLocked(ratio=self.plotAspect)
+        xyratio = np.shape(self.sg)
+        xyratio = xyratio[0] / xyratio[1]
+        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+
     def updateButtonList(self):
         # refreshes bird button names
         # to be used when bird list updates
@@ -1493,13 +1339,18 @@ class HumanClassify1(QDialog):
         text2 = str(total - done) + " to go"
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
+        # based on these, update "previous" arrow status
+        self.buttonPrev.setEnabled(done>0)
 
     def setImage(self, sg, audiodata, sampleRate, incr, label, unbufStart, unbufStop, time1, time2, minFreq=0, maxFreq=0):
+        """ label - list of species in the current segment.
+            Currently, we ignore the certainty and just display the species.
+            During review, this updates self.label.
+        """
         self.audiodata = audiodata
         self.sg = sg
         self.sampleRate = sampleRate
         self.incr = incr
-        self.label = label
         self.bar.setValue(0)
         if maxFreq==0:
             maxFreq = sampleRate / 2
@@ -1532,11 +1383,11 @@ class HumanClassify1(QDialog):
         self.pPlot.setRange(xRange=(0, np.shape(sg2)[0]), yRange=(0, SgSize))
         xyratio = np.shape(sg2)
         xyratio = xyratio[0] / xyratio[1]
-        # 0.2 for x/y pixel aspect ratio
+        # self.plotAspect = 0.2 for x/y pixel aspect ratio
         # 0.9 for padding
         # TODO: ***Issues here
-        self.wPlot.setMaximumSize(max(500, xyratio*250*0.2*0.9), 250)
-        self.wPlot.setMinimumSize(max(500, xyratio*250*0.2*0.9), 250)
+        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
 
         # add marks to separate actual segment from buffer zone
         # Note: need to use view coordinates to add items to pPlot
@@ -1562,31 +1413,57 @@ class HumanClassify1(QDialog):
         else:
             self.plot.setLevels([self.colourStart, self.colourEnd])
 
-        # Select the right options
-        if label == []:
-            label = ["Don't Know"]
+        # DEAL WITH SPECIES NAMES
+
+        # currently, we ignore the certainty and only display species:
         self.species.setText(','.join(label))
+
+        # question marks are displayed on the first pass,
+        # but any clicking sets certainty to 100 in effect.
+        for lsp_ix in range(len(label)):
+            if label[lsp_ix].endswith('?'):
+                label[lsp_ix] = label[lsp_ix][:-1]
+            # move the label to the top of the list
+            if self.parent.config['ReorderList']:
+                if label[lsp_ix] in self.shortBirdList:
+                    self.shortBirdList.remove(label[lsp_ix])
+                else:
+                    del self.shortBirdList[-1]
+                self.shortBirdList.insert(0, label[lsp_ix])
+
+        # clear selection
         self.birds3.clearSelection()
         self.updateButtonList()
-        for l in label:
-            if l[-1]=='?':
-                l= l[:-1]
-            if l in self.shortBirdList[:29]:
-                ind = self.shortBirdList.index(l)
+        # Select the right species tickboxes / buttons
+        for lsp in label:
+            # add ticks to the right checkboxes
+            if lsp in self.shortBirdList[:29]:
+                ind = self.shortBirdList.index(lsp)
                 self.birdbtns[ind].setChecked(True)
-                print(ind,l)
             else:
                 self.birdbtns[29].setChecked(True)
                 self.birds3.setEnabled(True)
-                if l not in self.longBirdList:
-                    if '(' in l:
-                        ind = l.index('(')
-                        l = l[:ind-1] + ">" + l[ind+1:-1]
-                if l not in self.longBirdList:
-                    self.longBirdList.append(l)
+
+            # mark this species in the long list box
+            if lsp not in self.longBirdList:
+                # try genus>species instead of genus (species)
+                if '(' in lsp:
+                    ind = lsp.index('(')
+                    lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
+                # add to long bird list then
+                if lsp not in self.longBirdList:
+                    print("Species", lsp, "not found in long bird list, adding")
+                    self.longBirdList.append(lsp)
+                    cc = self.birds3.count()
+                    self.birds3.insertItem(cc-1, lsp)
                     self.saveConfig = True
-                ind = self.longBirdList.index(l)
+
+            # all species by now are in the long bird list
+            if self.longBirdList is not None:
+                ind = self.longBirdList.index(lsp)
                 self.birds3.item(ind).setSelected(True)
+
+        self.label = label
 
     def tickBirdsClicked(self):
         # Listener for when the user selects a bird tick box
@@ -1606,15 +1483,15 @@ class HumanClassify1(QDialog):
                     dontknowButton = button
                 # figure out which one was changed now
                 if button.isChecked():
-                    if button.text() not in self.label and button.text()+'?' not in self.label:
+                    if button.text() not in self.label:
                         # this was just ticked ON
                         checkedButton = button
                 else:
-                    if button.text() in self.label or button.text()+'?' in self.label:
+                    if button.text() in self.label:
                         # this was just ticked OFF
                         checkedButton = button
         if checkedButton is None:
-            print("Warning: unrecognized check event")
+            print("Warning: unrecognised check event")
             return
         if checkedButton.isChecked():
             # if label was empty, just change from DontKnow:
@@ -1628,8 +1505,6 @@ class HumanClassify1(QDialog):
             # a button was unchecked:
             if checkedButton.text() in self.label:
                 self.label.remove(checkedButton.text())
-            elif checkedButton.text()+'?' in self.label:
-                self.label.remove(checkedButton.text()+'?')
             # if this erased everything, revert to don't know:
             if self.label == []:
                 self.label = ["Don't Know"]
@@ -1642,7 +1517,6 @@ class HumanClassify1(QDialog):
         # Update the text and store the data
         for button in self.birdbtns:
             if button.isChecked():
-                #print("clicked", button.text())
                 if button.text() == "Other":
                     self.birds3.setEnabled(True)
                 else:
@@ -1652,42 +1526,75 @@ class HumanClassify1(QDialog):
 
     def listBirdsClicked(self, item):
         # Listener for clicks in the listbox of birds
+        # check for a corresponding button in the short list
+        # - if the user is silly enough to click here when it's there as well
+        checkedButton = None
+        dontknowButton = None
+        for button in self.birds.buttons():
+            if button.text() == item.text() and button.text() != "Other":
+                checkedButton = button
+            if button.text() == "Don't Know":
+                dontknowButton = button
+
         if (item.text() == "Other"):
             self.tbox.setEnabled(True)
         else:
-            #TODO: Check if selected or not
             # Save the entry
             self.tbox.setEnabled(False)
             if self.multipleBirds:
-                if item.isSelected() and item.text() not in self.label and item.text()+'?' not in self.label:
-                    self.label.append(str(item.text()))
-                if not item.isSelected():
-                    if item.text() in self.label:
-                        self.label.remove(str(item.text()))
-                    elif item.text()+'?' in self.label:
-                        self.label.remove(str(item.text()))
-            else:           
+                # mark this
+                if item.isSelected() and item.text() not in self.label:
+                    # if label was empty, just change from DontKnow:
+                    if self.label == ["Don't Know"]:
+                        self.label = [str(item.text())]
+                        if dontknowButton is not None:
+                            dontknowButton.setChecked(False)
+                    else:
+                        self.label.append(str(item.text()))
+                        if checkedButton is not None:
+                            checkedButton.setChecked(True)
+
+                # unmark this
+                if not item.isSelected() and item.text() in self.label:
+                    self.label.remove(str(item.text()))
+                    if checkedButton is not None:
+                        checkedButton.setChecked(False)
+                # if this erased everything, revert to don't know:
+                if self.label == []:
+                    self.label = ["Don't Know"]
+                    if dontknowButton is not None:
+                        dontknowButton.setChecked(True)
+            else:
                 self.label = [str(item.text())]
+                # for radio buttons, only "Other" will be selected already
+
             self.species.setText(','.join(self.label))
 
     def birdTextEntered(self):
         # Listener for the text entry in the bird list
         # Check text isn't already in the listbox, and add if not
-        # Doesn't sort the list, but will when dialog is reopened
+        # Then calls the usual handler for listbox selections
         textitem = self.tbox.text()
+        if textitem.lower()=="don't know" or textitem.lower()=="other":
+            print("ERROR: provided name %s is reserved, cannot create" % textitem)
+            return
+        if "?" in textitem:
+            print("ERROR: provided name %s contains reserved symbol '?'" % textitem)
+            return
+        if len(textitem)==0 or len(textitem)>150:
+            print("ERROR: provided name appears to be too short or too long")
+            return
+
         item = self.birds3.findItems(textitem, Qt.MatchExactly)
-        if item:
-            pass
-        else:
+
+        if not item:
             self.birds3.addItem(textitem)
-        #self.label.append(str(textitem))
-        #print(self.multipleBirds)
-        if self.multipleBirds:
-            self.label.append(str(textitem))
-        else:           
-            self.label = [str(textitem)]
-        self.species.setText(','.join(self.label))
-        #print(self.label)
+            item = self.birds3.findItems(textitem, Qt.MatchExactly)
+
+        item[0].setSelected(True)
+        # this will deal with updating the label and buttons
+        self.listBirdsClicked(item[0])
+
         self.saveConfig = True
 
     def setColourLevels(self):
@@ -1714,360 +1621,17 @@ class HumanClassify1(QDialog):
         else:
             self.plot.setLevels([self.colourStart, self.colourEnd])
 
-
     def getValues(self):
-        #print('out',self.label)
         return [self.label, self.saveConfig, self.tbox.text()]
 
-#======
-class HumanClassify2(QDialog):
-    # This dialog is different to the others. The aim is to check (or ask for) classifications for segments.
-    # This version gets *12* at a time, and put them all out together on buttons, and their labels.
-    # It could be all the same species, or the ones that it is unsure about, or whatever.
 
-    # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
-    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, filename=None, parent=None):
-        QDialog.__init__(self, parent)
-
-        # from win32api import GetSystemMetrics
-        # width_px = GetSystemMetrics(0)
-        # print("width: ", width_px)
-
-        if filename:
-            self.setWindowTitle('Human review - ' + filename)
-        else:
-            self.setWindowTitle('Human review')
-        self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.frame = QWidget()
-
-        # let the user quit without bothering rest of it
-        self.setWindowFlags(self.windowFlags() & QtCore.Qt.WindowCloseButtonHint)
-
-        self.sampleRate = sampleRate
-        self.audiodata = audiodata
-        self.audioFormat = audioFormat
-        self.incr = incr
-        self.lut = lut
-        self.colourStart = colourStart
-        self.colourEnd = colourEnd
-        self.cmapInverted = cmapInverted
-
-        # Seems that image is backwards?
-        self.sg = np.fliplr(sg)
-        self.segments2show = segments
-        self.firstSegment = 0
-        self.errors = []
-
-        # Brightness, and contrast sliders
-        self.brightnessSlider = QSlider(Qt.Horizontal)
-        self.brightnessSlider.setMinimum(0)
-        self.brightnessSlider.setMaximum(100)
-        self.brightnessSlider.setValue(brightness)
-        self.brightnessSlider.setTickInterval(1)
-        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
-
-        self.contrastSlider = QSlider(Qt.Horizontal)
-        self.contrastSlider.setMinimum(0)
-        self.contrastSlider.setMaximum(100)
-        self.contrastSlider.setValue(contrast)
-        self.contrastSlider.setTickInterval(1)
-        self.contrastSlider.valueChanged.connect(self.setColourLevels)
-
-        hboxSpecContr = QHBoxLayout()
-        labelBr = QLabel("Bright.")
-        hboxSpecContr.addWidget(labelBr)
-        hboxSpecContr.addWidget(self.brightnessSlider)
-        labelCo = QLabel("Contr.")
-        hboxSpecContr.addWidget(labelCo)
-        hboxSpecContr.addWidget(self.contrastSlider)
-
-        label1 = QLabel('Click on the images that are incorrectly labelled.')
-        label1.setFont(QtGui.QFont('SansSerif', 12))
-        species = QLabel("Species: " + label)
-        species.setFont(QtGui.QFont('SansSerif', 12))
-        #self.vboxFull.addWidget(label1)
-        vboxTop = QVBoxLayout()
-        vboxTop.setSizeConstraint(QLayout.SetMinimumSize)
-        vboxTop.addWidget(label1)
-        vboxTop.addWidget(species)
-        vboxTop.addLayout(hboxSpecContr)
-
-        next = QPushButton("Next/Finish")
-        next.clicked.connect(self.nextPage)
-
-        if len(self.segments2show) > 0:
-            #species.setFont(QtGui.QFont('SansSerif', 12))
-            self.width = 0
-            for ind in range(len(self.segments2show)):
-                x1 = int(self.convertAmpltoSpec(self.segments2show[ind][0]))
-                x2 = int(self.convertAmpltoSpec(self.segments2show[ind][1]))
-                if x2 - x1 > self.width:
-                    self.width = x2-x1
-            self.setMinimumWidth(1000)
-            self.width = max(1000,self.width+10)
-            self.h = 5
-            self.flowLayout = SupportClasses.FlowLayout()
-            self.makeButtons(first=True)
-
-            self.vboxFull = QVBoxLayout()
-            self.vboxFull.setSpacing(0)
-            #self.vboxFull.addLayout(hboxSpecContr)
-            self.vboxFull.addLayout(vboxTop)
-            #self.vboxFull.addWidget(species)
-            self.vboxFull.addLayout(self.flowLayout)
-            self.vboxFull.addWidget(next)
-        else:
-            self.vboxFull = QVBoxLayout()
-            self.vboxFull.addWidget(QLabel('No images to show'))
-            self.vboxFull.addWidget(next)
-            self.vboxFull.heightForWidth(600)
-
-        self.setLayout(self.vboxFull)
-
-    def makeButtons(self, first=False,whichOff=None):
-        if first:
-            segRemain = len(self.segments2show)
-        # elif self.firstSegment == 0:
-        #     segRemain = len(self.segments2show) - 1
-        else:
-            segRemain = len(self.segments2show) - self.firstSegment
-
-        width = 0
-        col = 0
-        ind = self.firstSegment
-        self.buttons = []
-
-        #print("makeButtons",segRemain,self.firstSegment)
-
-        count = 0 
-        while segRemain > 0 and count<12:
-        #while segRemain > 0 and col < self.h:
-            x1a = self.segments2show[ind][0]
-            x2a = self.segments2show[ind][1]
-            x1 = int(self.convertAmpltoSpec(x1a))
-            x2 = int(self.convertAmpltoSpec(x2a))
-            x1a = int(x1a * self.sampleRate)
-            x2a = int(x2a * self.sampleRate)
-            im = self.setImage(self.sg[x1:x2, :])
-            segRemain -= 1
-            # self.firstSegment +=1
-            # if width + x2-x1 < self.width:
-            #     width = width + x2-x1
-            # else:
-            #     width = x2-x1
-            col += 1
-            self.buttons.append(SupportClasses.PicButton(0,im[0], im[1], self.audiodata[x1a:x2a], self.audioFormat, (x2a-x1a) / self.sampleRate))
-            if whichOff is None or whichOff==[] or whichOff[count] is False:
-                self.buttons[-1].buttonClicked=False
-            else:
-                self.buttons[-1].buttonClicked=True
-            self.flowLayout.addWidget(self.buttons[-1])
-            ind += 1
-            count += 1
-
-    def convertAmpltoSpec(self, x):
-        return x * self.sampleRate / self.incr
-
-    def setImage(self, seg):
-        if self.cmapInverted:
-            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourEnd, self.colourStart])
-        else:
-            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourStart, self.colourEnd])
-        im1 = fn.makeQImage(im, alpha)
-
-        if self.cmapInverted:
-            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourStart, self.colourEnd])
-        else:
-            im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourEnd, self.colourStart])
-
-        im2 = fn.makeQImage(im, alpha)
-
-        return [im1, im2]
-
-    def setColourLevels(self):
-        """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
-        Translates the brightness and contrast values into appropriate image levels.
-        Calculation is simple.
-        """
-        minsg = np.min(self.sg)
-        maxsg = np.max(self.sg)
-        # self.config['brightness'] = self.brightnessSlider.value()
-        # self.config['contrast'] = self.contrastSlider.value()
-        brightness = self.brightnessSlider.value() # self.config['brightness']
-        contrast = self.contrastSlider.value() # self.config['contrast']
-        self.colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
-        self.colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + self.colourStart
-        whichOff = []
-        for btn in reversed(self.buttons):
-            whichOff.insert(0,btn.buttonClicked)
-            self.flowLayout.removeWidget(btn)
-            # remove it from the gui
-            btn.setParent(None)
-        self.makeButtons(whichOff=whichOff)
-
-    def nextPage(self):
-        # Find out which buttons have been clicked (so are not correct)
-        if not hasattr(self,'buttons'):
-            self.done(0)
-
-        for i in range(len(self.buttons)):
-            self.buttons[i].stopPlayback()
-            if self.buttons[i].buttonClicked:
-                self.errors.append(i+self.firstSegment)
-        #print(self.errors)
-
-        # Now find out if there are more segments to check, and remake the buttons, otherwise close
-        if len(self.segments2show) > 0:
-            self.firstSegment += len(self.buttons)
-            if self.firstSegment != len(self.segments2show):
-                for btn in reversed(self.buttons):
-                    self.flowLayout.removeWidget(btn)
-                    # remove it from the gui
-                    btn.setParent(None)
-                self.makeButtons()
-            else:
-                self.done(1)
-        else:
-            self.done(1)
-
-    def getValues(self):
-        return self.errors
-
-# ======
-# class HumanClassify3(QDialog):
-#     # TODO: Delete when other version works!
-#     # This dialog is different to the others. The aim is to check (or ask for) classifications for segments.
-#     # This version gets *12* at a time, and put them all out together on buttons, and their labels.
-#     # It could be all the same species, or the ones that it is unsure about, or whatever.
-#
-#     # TODO: Work out how big the spect plots are, and make the right number of cols. Also have a min size?
-#
-#     def __init__(self, sg, segments, label, sampleRate, incr, lut, colourStart, colourEnd, cmapInverted,
-#                  parent=None):
-#         QDialog.__init__(self, parent)
-#         self.setWindowTitle('Check Classifications')
-#         self.setWindowIcon(QIcon('img/Avianz.ico'))
-#         self.frame = QWidget()
-#
-#         self.sampleRate = sampleRate
-#         self.incr = incr
-#         self.lut = lut
-#         self.colourStart = colourStart
-#         self.colourEnd = colourEnd
-#         self.cmapInverted = cmapInverted
-#
-#         # Seems that image is backwards?
-#         self.sg = np.fliplr(sg)
-#         self.segments = segments
-#         self.firstSegment = 0
-#         self.errors = []
-#
-#         self.segments = [item for item in self.segments if item[4] == label or item[4][:-1] == label]
-#         # print len(self.segments)
-#         next = QPushButton("Next/Finish")
-#         self.connect(next, SIGNAL("clicked()"), self.next)
-#
-#         if len(self.segments) > 0:
-#
-#             species = QLabel(label)
-#
-#             # TODO: Decide on these sizes
-#             self.w = 3
-#             self.h = 4
-#             self.grid = QGridLayout()
-#
-#             self.makeButtons()
-#
-#             vboxFull = QVBoxLayout()
-#             vboxFull.addWidget(QLabel('Click on the images that are incorrectly labelled'))
-#             vboxFull.addWidget(species)
-#             vboxFull.addLayout(self.grid)
-#             vboxFull.addWidget(next)
-#         else:
-#             vboxFull = QVBoxLayout()
-#             vboxFull.addWidget(QLabel('No images to show'))
-#             vboxFull.addWidget(next)
-#
-#         self.setLayout(vboxFull)
-#
-#     def makeButtons(self):
-#         positions = [(i, j) for i in range(self.h) for j in range(self.w)]
-#         images = []
-#         segRemain = len(self.segments) - self.firstSegment
-#         # print segRemain, self.firstSegment
-#
-#         if segRemain < self.w * self.h:
-#             for i in range(segRemain):
-#                 ind = i + self.firstSegment
-#                 x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
-#                 x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
-#                 images.append(self.setImage(self.sg[x1:x2, :]))
-#             for i in range(segRemain, self.w * self.h):
-#                 images.append([None, None])
-#         else:
-#             for i in range(self.w * self.h):
-#                 ind = i + self.firstSegment
-#                 x1 = int(self.convertAmpltoSpec(self.segments[ind][0]))
-#                 x2 = int(self.convertAmpltoSpec(self.segments[ind][1]))
-#                 images.append(self.setImage(self.sg[x1:x2, :]))
-#         self.buttons = []
-#         for position, im in zip(positions, images):
-#             if im[0] is not None:
-#                 self.buttons.append(SupportClasses.PicButton(position[0] * self.w + position[1], im[0], im[1]))
-#                 self.grid.addWidget(self.buttons[-1], *position)
-#
-#     def convertAmpltoSpec(self, x):
-#         return x * self.sampleRate / self.incr
-#
-#     def setImage(self, seg):
-#         if self.cmapInverted:
-#             im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourEnd, self.colourStart])
-#         else:
-#             im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourStart, self.colourEnd])
-#         im1 = fn.makeQImage(im, alpha)
-#
-#         if self.cmapInverted:
-#             im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourStart, self.colourEnd])
-#         else:
-#             im, alpha = fn.makeARGB(seg, lut=self.lut, levels=[self.colourEnd, self.colourStart])
-#
-#         im2 = fn.makeQImage(im, alpha)
-#
-#         return [im1, im2]
-#
-#     def next(self):
-#         # Find out which buttons have been clicked (so are not correct)
-#
-#         for i in range(len(self.buttons)):
-#             # print self.buttons[i].buttonClicked
-#             if self.buttons[i].buttonClicked:
-#                 self.errors.append(i + self.firstSegment)
-#         # print self.errors
-#
-#         # Now find out if there are more segments to check, and remake the buttons, otherwise close
-#         if len(self.segments) > 0:
-#             if (len(self.segments) - self.firstSegment) < self.w * self.h:
-#                 self.close()
-#             else:
-#                 self.firstSegment += self.w * self.h
-#                 if self.firstSegment != len(self.segments):
-#                     for i in range(self.w * self.h):
-#                         self.grid.removeWidget(self.buttons[i])
-#                     self.makeButtons()
-#                 else:
-#                     self.close()
-#         else:
-#             self.close()
-#
-#     def getValues(self):
-#         return self.errors
-
-# ======
 class HumanClassify2a(QDialog):
+    # This is a small popup dialog for selecting species to review in Classify2
     def __init__(self, birdlist,parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Human review')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowStaysOnTopHint)
 
         self.birds = QListWidget(self)
         self.birds.setMaximumWidth(350)
@@ -2076,13 +1640,10 @@ class HumanClassify2a(QDialog):
         for item in birdlist:
             self.birds.addItem(item)
         #self.birds.setCurrentRow(0)
-        #self.connect(self.birds, SIGNAL('itemDoubleClicked(QListWidgetItem*)'), self.dbl)
         self.birds.itemDoubleClicked.connect(self.dbl)
 
         ok = QPushButton('OK')
         cancel = QPushButton('Cancel')
-        #self.connect(ok, SIGNAL('clicked()'), self.ok)
-        #self.connect(cancel,SIGNAL('clicked()'), self.cancel)
         ok.clicked.connect(self.ok)
         cancel.clicked.connect(self.cancel)
 
@@ -2100,72 +1661,748 @@ class HumanClassify2a(QDialog):
         self.accept()
 
     def ok(self):
-        #self.chosen = self.birds.selectedItems()
         self.accept()
 
     def cancel(self):
-        #self.chosen = None
         self.reject()
 
     def getValues(self):
         return self.birds.currentItem().text()
 
-# ======
-class InterfaceSettings2(QDialog):
-    def __init__(self, parent = None):
-      super(InterfaceSettings2, self).__init__(parent)
+class HumanClassify2(QDialog):
+    """ Single Species review main dialog.
+        Puts all segments of a certain species together on buttons, and their labels.
+        Allows quick confirm/leave/delete check over many segments.
 
-      self.tabWidget = QTabWidget()
-      self.tabWidget.tab1 = QWidget()
-      self.tabWidget.tab2 = QWidget()
-      self.tabWidget.tab3 = QWidget()
+        Construction:
+        1-3. spectrogram, audiodata, segments. Just provide full versions of these,
+          and this dialog will select the needed parts/segments.
+        4. name of the species that we are reviewing
+        5-6. sampleRate, audioFormat for playback
+        7. increment which was used for the spectrogram
+        8-13. spec color parameters
+        14. page start, in seconds - to convert segment-time to spec-time
+        15. ???
+    """
 
-      self.tabWidget.addTab(self.tabWidget.tab1,"Tab 1")
-      self.tabWidget.addTab(self.tabWidget.tab2,"Tab 2")
-      self.tabWidget.addTab(self.tabWidget.tab3,"Tab 3")
-      self.tab1UI()
-      self.tab2UI()
-      self.tab3UI()
-      self.setWindowTitle("Interface Settings")
-      self.setWindowIcon(QIcon('img/Avianz.ico'))
-      self.setMinimumWidth(400)
+    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, filename=None, startRead=0):
+        QDialog.__init__(self)
 
-      mainLayout = QVBoxLayout()
-      mainLayout.addWidget(self.tabWidget)
-      self.setLayout(mainLayout)
+        if len(segments)==0:
+            print("No segments provided")
+            return
 
-    def tab1UI(self):
-      layout = QFormLayout()
-      colorNamed=pg.ColorButton()
-      colorNamed.setColor(color='FF0000')
-      colorPossible = pg.ColorButton()
-      colorPossible.setColor(color='FFFF00')
-      colorNone=pg.ColorButton()
-      colorNone.setColor(color='0000FF')
-      colorSelected = pg.ColorButton()
-      colorSelected.setColor(color='00FF00')
-      layout.addRow(QLabel("Confirmed"),colorNamed)
-      layout.addRow(QLabel("Possible"), colorPossible)
-      layout.addRow(QLabel("Don't Know"),colorNone)
-      layout.addRow(QLabel("Currently Selected"), colorSelected)
-      self.tabWidget.setTabText(0, "Segment Colours")
-      self.tabWidget.tab1.setLayout(layout)
+        if filename:
+            self.setWindowTitle('Human review - ' + filename)
+        else:
+            self.setWindowTitle('Human review')
 
-    def tab2UI(self):
-      layout = QFormLayout()
-      sex = QHBoxLayout()
-      sex.addWidget(QRadioButton("Male"))
-      sex.addWidget(QRadioButton("Female"))
-      layout.addRow(QLabel("Sex"), sex)
-      layout.addRow("Date of Birth", QLineEdit())
-      self.tabWidget.setTabText(1, "Bird Names")
-      self.tabWidget.tab2.setLayout(layout)
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowStaysOnTopHint)
+        # let the user quit without bothering rest of it
 
-    def tab3UI(self):
-      layout = QHBoxLayout()
-      layout.addWidget(QLabel("subjects"))
-      layout.addWidget(QCheckBox("Physics"))
-      layout.addWidget(QCheckBox("Maths"))
-      self.tabWidget.setTabText(2, "Spectrogram Settings")
-      self.tabWidget.tab3.setLayout(layout)
+        self.sampleRate = sampleRate
+        self.audiodata = audiodata
+        self.audioFormat = audioFormat
+        self.incr = incr
+        self.lut = lut
+        self.colourStart = colourStart
+        self.colourEnd = colourEnd
+        self.cmapInverted = cmapInverted
+        self.startRead = startRead
+
+        # Seems that image is backwards?
+        self.sg = np.fliplr(sg)
+
+        # filter segments for the requested species
+        self.segments = segments
+        self.indices2show = self.segments.getSpecies(label)
+        for i in reversed(self.indices2show):
+            # show segments which have midpoint in this page (ensures all are shown only once)
+            mid = (segments[i][0] + segments[i][1]) / 2
+            if mid < startRead or mid > startRead + len(audiodata)//sampleRate:
+                self.indices2show.remove(i)
+
+        self.errors = []
+
+        # Volume control
+        self.volSlider = QSlider(Qt.Horizontal)
+        self.volSlider.valueChanged.connect(self.volSliderMoved)
+        self.volSlider.setRange(0,100)
+        self.volSlider.setValue(50)
+        self.volIcon = QLabel()
+        self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+
+        # Brightness and contrast sliders - need to pass true (config) values of these as args
+        self.brightnessSlider = QSlider(Qt.Horizontal)
+        self.brightnessSlider.setMinimum(0)
+        self.brightnessSlider.setMaximum(100)
+        if self.cmapInverted:
+            self.brightnessSlider.setValue(brightness)
+        else:
+            self.brightnessSlider.setValue(100-brightness)
+        self.brightnessSlider.setTickInterval(1)
+        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
+
+        self.contrastSlider = QSlider(Qt.Horizontal)
+        self.contrastSlider.setMinimum(0)
+        self.contrastSlider.setMaximum(100)
+        self.contrastSlider.setValue(contrast)
+        self.contrastSlider.setTickInterval(1)
+        self.contrastSlider.valueChanged.connect(self.setColourLevels)
+
+        hboxSpecContr = QHBoxLayout()
+        hboxSpecContr.addWidget(self.volIcon)
+        hboxSpecContr.addWidget(self.volSlider)
+        labelBr = QLabel("Bright.")
+        hboxSpecContr.addWidget(labelBr)
+        hboxSpecContr.addWidget(self.brightnessSlider)
+        labelCo = QLabel("Contr.")
+        hboxSpecContr.addWidget(labelCo)
+        hboxSpecContr.addWidget(self.contrastSlider)
+
+        label1 = QLabel('Click on the images that are incorrectly labelled.')
+        label1.setFont(QtGui.QFont('SansSerif', 10))
+        species = QLabel(label)
+        font = QtGui.QFont('SansSerif', 12)
+        font.setBold(True)
+        species.setFont(font)
+
+        # species label and sliders
+        vboxTop = QVBoxLayout()
+        vboxTop.addWidget(label1)
+        vboxTop.addWidget(species)
+        vboxTop.addLayout(hboxSpecContr)
+
+        # Controls at the bottom
+        #self.buttonPrev = QtGui.QToolButton()
+        #self.buttonPrev.setArrowType(Qt.LeftArrow)
+        #self.buttonPrev.setIconSize(QtCore.QSize(30,30))
+        #self.buttonPrev.clicked.connect(self.prevPage)
+
+        # TODO: Is this useful?
+        self.pageLabel = QLabel()
+
+        self.none = QPushButton("Toggle all")
+        self.none.setSizePolicy(QSizePolicy(5,5))
+        self.none.setMaximumSize(250, 30)
+        self.none.clicked.connect(self.toggleAll)
+
+        # Either the next or finish button is visible. They have different internal
+        # functionality, but look the same to the user
+        self.next = QPushButton("Next")
+        self.next.setSizePolicy(QSizePolicy(5,5))
+        self.next.setMaximumSize(250, 30)
+        self.next.clicked.connect(self.nextPage)
+
+        self.finish = QPushButton("Next")
+        self.finish.setSizePolicy(QSizePolicy(5,5))
+        self.finish.setMaximumSize(250, 30)
+
+        # movement buttons and page numbers
+        self.vboxBot = QHBoxLayout()
+        #vboxBot.addWidget(self.buttonPrev)
+        #vboxBot.addSpacing(20)
+        self.vboxBot.addWidget(self.pageLabel)
+        self.vboxBot.addSpacing(20)
+        self.vboxBot.addWidget(self.none)
+        self.vboxBot.addWidget(self.next)
+
+        # set up the middle section of images
+        self.numPicsV = 0
+        self.numPicsH = 0
+        # create the button objects, and we'll show them as needed
+        # (fills self.buttons)
+        # self.flowLayout = QGridLayout()
+        self.flowLayout = pg.LayoutWidget()
+        # these sizes ensure at least one image fits:
+        self.specV = 0
+        self.specH = 0
+        self.createButtons()
+
+        # sets a lot of self properties needed before showing anything
+        self.butStart = 0
+        self.countPages()
+
+        self.flowLayout.setMinimumSize(self.specH+20, self.specV+20)
+
+        # set overall layout of the dialog
+        self.vboxFull = QVBoxLayout()
+        # self.vboxFull.setSpacing(0)
+        self.vboxFull.addLayout(vboxTop)
+        self.vboxSpacer = QSpacerItem(1,1, 5, 5)
+        self.vboxFull.addItem(self.vboxSpacer)
+        self.vboxFull.addWidget(self.flowLayout)
+        self.vboxFull.addLayout(self.vboxBot)
+        # must be fixed size!
+        vboxTop.setSizeConstraint(QLayout.SetFixedSize)
+        # must be fixed size!
+        self.vboxBot.setSizeConstraint(QLayout.SetFixedSize)
+
+        # we need to know the true size of space available for flowLayout.
+        # the idea is that spacer absorbs all height changes
+        self.setSizePolicy(1,1)
+        self.setMinimumSize(self.specH+100, self.specV+100)
+        self.setLayout(self.vboxFull)
+        self.vboxFull.setStretch(1, 100)
+        # plan B could be to measure the sizes of the top/bottom boxes and subtract them
+        # self.boxSpaceAdjustment = vboxTop.sizeHint().height() + vboxBot.sizeHint().height()
+
+    def createButtons(self):
+        """ Create the button objects, add audio, calculate spec, etc.
+            So that when users flips through pages, we only need to
+            retrieve the right ones from resizeEvent.
+            No return, fills out self.buttons.
+        """
+        self.buttons = []
+        self.marked = []
+        for i in self.indices2show:
+            seg = self.segments[i]
+
+            # select 10 s region around segment center
+            mid = (seg[0] + seg[1])/2 - self.startRead
+            tstart = min(len(self.audiodata)/self.sampleRate-1, max(0, mid-5))
+            tend = min(len(self.audiodata)/self.sampleRate, mid+5)
+
+            # find the right boundaries from the audiodata
+            x1a = int(tstart * self.sampleRate)
+            x2a = int(tend * self.sampleRate)
+            # get the right slice from the spectrogram:
+            x1 = int(self.convertAmpltoSpec(tstart))
+            x2 = int(self.convertAmpltoSpec(tend))
+
+            # boundaries of raw segment, in spec units, relative to start of seg:
+            unbufStart = self.convertAmpltoSpec(seg[0]-self.startRead) - x1
+            unbufStop = self.convertAmpltoSpec(seg[1]-self.startRead) - x1
+
+            # create the button:
+            newButton = SupportClasses.PicButton(i, self.sg[x1:x2, :], self.audiodata[x1a:x2a], self.audioFormat, tend-tstart, unbufStart, unbufStop, self.lut, self.colourStart, self.colourEnd, self.cmapInverted)
+            if newButton.im1.size().width() > self.specH:
+                self.specH = newButton.im1.size().width()
+            if newButton.im1.size().height() > self.specV:
+                self.specV = newButton.im1.size().height()
+
+            #newButton.setMinimumSize(self.specH, self.specV//2)
+
+            self.buttons.append(newButton)
+            self.buttons[-1].buttonClicked=False
+            self.marked.append(False)
+        # set volume and brightness on these new buttons
+        self.volSliderMoved(self.volSlider.value())
+        self.setColourLevels()
+
+    def resizeEvent(self, ev):
+        """ On this event, choose which (and how many) buttons to display
+            from self.buttons. It is also called on initialization.
+        """
+        QDialog.resizeEvent(self, ev)
+
+        # space for remaining widgets:
+        # width is just dialog width with small buffer for now
+        spaceV = self.flowLayout.size().height() + self.vboxSpacer.geometry().height()
+        spaceH = self.size().width() - 20
+
+        # this is the grid that fits in dialog, and self.* is the current grid
+        # Let's say we leave 10px for spacing
+        numPicsV = spaceV // (self.specV+10)
+        numPicsH = spaceH // (self.specH+10)
+        # only need to redraw pics if the grid has changed
+        if numPicsV!=self.numPicsV or numPicsH!=self.numPicsH:
+            # clear
+            self.clearButtons()
+            # draw new
+            self.numPicsV = numPicsV
+            self.numPicsH = numPicsH
+            self.redrawButtons()
+            self.countPages()
+        return
+
+    def redrawButtons(self):
+        butNum = 0
+        for row in range(self.numPicsV):
+            for col in range(self.numPicsH):
+                # resizing shouldn't change which segments are displayed,
+                # so we use a fixed start point for counting shown buttons.
+                self.flowLayout.addWidget(self.buttons[self.butStart+butNum], row, col)
+                # just in case, update the bounds of grid on every redraw
+                self.flowLayout.layout.setColumnMinimumWidth(col, self.specH+10)
+                self.flowLayout.layout.setRowMinimumHeight(row, self.specV+10)
+                self.buttons[self.butStart+butNum].show()
+                butNum += 1
+                # stop if we are out of segments
+                if self.butStart+butNum==len(self.buttons):
+                    return
+        #self.update()
+        self.repaint()
+        pg.QtGui.QApplication.processEvents()
+
+    def volSliderMoved(self, value):
+        # try/pass to avoid race situations when smth is not initialized
+        try:
+            for btn in self.buttons:
+                btn.media_obj.applyVolSlider(value)
+        except Exception:
+            pass
+
+    def convertAmpltoSpec(self, x):
+        return x * self.sampleRate / self.incr
+
+    def countPages(self):
+        """ Counts the total number of pages,
+            finds where we are, how many remain, etc.
+            Called on resize, so does not update current button position.
+            Updates next/prev arrow states.
+        """
+        buttonsPerPage = self.numPicsV * self.numPicsH
+        if buttonsPerPage == 0:
+            # dialog still initializing or too small to show segments
+            #self.buttonPrev.setEnabled(False)
+            return
+        # basically, count how many segments are "before" the current
+        # top-lef one, and see how many pages we need to fit them.
+        currpage = int(np.ceil(self.butStart / buttonsPerPage)+1)
+        self.totalPages = max(int(np.ceil(len(self.buttons) / buttonsPerPage)),currpage)
+        self.pageLabel.setText("Page %d out of %d" % (currpage, self.totalPages))
+
+        if currpage == self.totalPages:
+            try:
+                self.vboxBot.removeWidget(self.next)
+                self.next.setVisible(False)
+                self.vboxBot.addWidget(self.finish)
+                self.finish.setVisible(True)
+            except:
+                pass
+        else:
+            if self.finish.isVisible():
+                try:
+                    self.vboxBot.removeWidget(self.finish)
+                    self.finish.setVisible(False)
+                    self.vboxBot.addWidget(self.next)
+                    self.next.setVisible(True)
+                except:
+                    pass
+
+        self.repaint()
+
+        #if currpage==1:
+            #self.buttonPrev.setEnabled(False)
+        #else:
+            #self.buttonPrev.setEnabled(True)
+
+    def nextPage(self):
+        """ Called on arrow button clicks.
+            Updates current segment position, and calls other functions
+            to deal with actual page recount/redraw.
+        """
+        buttonsPerPage = self.numPicsV * self.numPicsH
+        # clear buttons while self.butStart is still old:
+        self.clearButtons()
+        self.butStart = min(len(self.buttons), self.butStart+buttonsPerPage)
+        self.countPages()
+        # redraw buttons:
+        self.redrawButtons()
+
+    def prevPage(self):
+        """ Called on arrow button clicks.
+            Updates current segment position, and calls other functions
+            to deal with actual page recount/redraw.
+        """
+        buttonsPerPage = self.numPicsV * self.numPicsH
+        # clear buttons while self.butStart is still old:
+        self.clearButtons()
+        self.butStart = max(0, self.butStart-buttonsPerPage)
+        self.countPages()
+        # redraw buttons:
+        self.redrawButtons()
+
+    def clearButtons(self):
+        for btnum in reversed(range(self.flowLayout.layout.count())):
+            item = self.flowLayout.layout.itemAt(btnum)
+            if item is not None:
+                self.flowLayout.layout.removeItem(item)
+                r,c = self.flowLayout.items[item.widget()]
+                self.flowLayout.layout.setColumnMinimumWidth(c, 1)
+                self.flowLayout.layout.setRowMinimumHeight(r, 1)
+                del self.flowLayout.rows[r][c]
+                item.widget().hide()
+        self.flowLayout.update()
+
+    def toggleAll(self):
+        buttonsPerPage = self.numPicsV * self.numPicsH
+        for butNum in range(self.butStart,min(self.butStart+buttonsPerPage,len(self.buttons))):
+            self.buttons[butNum].changePic(False)
+        #self.update()
+        self.repaint()
+        pg.QtGui.QApplication.processEvents()
+
+    def setColourLevels(self):
+        """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
+        Translates the brightness and contrast values into appropriate image levels.
+        Calculation is simple.
+        """
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        if self.cmapInverted:
+            brightness = self.brightnessSlider.value()
+        else:
+            brightness = 100-self.brightnessSlider.value()
+        contrast = self.contrastSlider.value()
+        colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
+        colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + colourStart
+        for btn in self.buttons:
+            btn.stopPlayback()
+            btn.setImage(self.lut, colourStart, colourEnd, self.cmapInverted)
+            btn.update()
+
+
+
+class FilterManager(QDialog):
+    def __init__(self, filtdir, parent=None):
+        super(FilterManager, self).__init__(parent)
+        self.setWindowTitle("Manage recognisers")
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.WindowCloseButtonHint)
+        self.filtdir = filtdir
+
+        # filter dir name
+        labDirName = QLineEdit()
+        labDirName.setText(filtdir)
+        labDirName.setReadOnly(True)
+        labDirName.setFocusPolicy(Qt.NoFocus)
+        labDirName.setStyleSheet("background-color: #e0e0e0")
+
+        # filter dir contents
+        self.listFiles = QListWidget()
+        self.listFiles.setMinimumWidth(150)
+        self.listFiles.setMinimumHeight(275)
+        self.listFiles.setSelectionMode(QAbstractItemView.SingleSelection)
+
+        self.readContents()
+
+        # rename a filter
+        self.enterFiltName = QLineEdit()
+
+        class FiltValidator(QValidator):
+            def validate(self, input, pos):
+                if not input.endswith('.txt'):
+                    input = input+'.txt'
+                if input==".txt" or input=="":
+                    return(QValidator.Intermediate, input, pos)
+                if self.listFiles.findItems(input, Qt.MatchExactly):
+                    print("duplicated input", input)
+                    return(QValidator.Intermediate, input, pos)
+                else:
+                    return(QValidator.Acceptable, input, pos)
+
+        renameFiltValid = FiltValidator()
+        renameFiltValid.listFiles = self.listFiles
+        self.enterFiltName.setValidator(renameFiltValid)
+
+        self.renameBtn = QPushButton("Rename")
+        self.renameBtn.clicked.connect(self.rename)
+
+        # delete a filter
+        self.deleteBtn = QPushButton("Delete")
+        self.deleteBtn.clicked.connect(self.delete)
+
+        # export a filter for upload
+        self.uploadBtn = QPushButton("Export")
+        self.uploadBtn.clicked.connect(self.upload)
+
+        # import downloaded filters
+        self.downloadBtn = QPushButton("Import")
+        self.downloadBtn.clicked.connect(self.download)
+
+        # make button state respond to selection + name entry
+        self.refreshButtons()
+        self.listFiles.itemSelectionChanged.connect(self.refreshButtons)
+        self.enterFiltName.textChanged.connect(self.refreshButtons)
+
+        # layouts
+        box_rename = QHBoxLayout()
+        box_rename.addWidget(self.enterFiltName)
+        box_rename.addWidget(self.renameBtn)
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Recognisers are stored in:"))
+        layout.addWidget(labDirName)
+        layout.addWidget(QLabel("The following recognisers are present:"))
+        layout.addWidget(self.listFiles)
+        layout.addWidget(QLabel("To rename a recogniser, select one and enter a new (unique) name below:"))
+        layout.addLayout(box_rename)
+
+        layout.addWidget(self.deleteBtn)
+        layout.addWidget(self.uploadBtn)
+        layout.addWidget(self.downloadBtn)
+        self.setLayout(layout)
+
+    def readContents(self):
+        self.listFiles.clear()
+        filelist = QDir(self.filtdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
+        for file in filelist:
+            item = QListWidgetItem(self.listFiles)
+            item.setText(file)
+
+    def refreshButtons(self):
+        if len(self.listFiles.selectedItems())==0:
+            self.deleteBtn.setEnabled(False)
+            self.uploadBtn.setEnabled(False)
+            self.enterFiltName.setEnabled(False)
+            self.renameBtn.setEnabled(False)
+        else:
+            self.deleteBtn.setEnabled(True)
+            self.uploadBtn.setEnabled(True)
+            self.enterFiltName.setEnabled(True)
+            if self.enterFiltName.hasAcceptableInput():
+                self.renameBtn.setEnabled(True)
+            else:
+                self.renameBtn.setEnabled(False)
+
+    def rename(self):
+        """ move the filter file. """
+        source = self.listFiles.currentItem().text()
+        source = os.path.join(self.filtdir, source)
+        target = self.enterFiltName.text()
+        target = os.path.join(self.filtdir, target)
+        # figured we should have our own gentle error handling
+        # before trying to force move with shutil
+        if os.path.isfile(target) or not target.endswith(".txt"):
+            print("ERROR: unable to rename, bad target", target)
+            return
+        if not os.path.isfile(source):
+            print("ERROR: unable to rename, bad source", source)
+            return
+        try:
+            os.rename(source, target)
+            self.readContents()
+            self.enterFiltName.setText("")
+        except Exception as e:
+            print("ERROR: could not rename:", e)
+
+    def delete(self):
+        """ confirm and delete the file. """
+        source = self.listFiles.currentItem().text()
+        source = os.path.join(self.filtdir, source)
+        if not os.path.isfile(source):
+            print("ERROR: unable to delete, bad source", source)
+            return
+        msg = SupportClasses.MessagePopup("w", "Confirm delete", "Warning: you are about to permanently delete recogniser %s.\nAre you sure?" % source)
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        reply = msg.exec_()
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            print("removing", source)
+            os.remove(source)
+            self.readContents()
+        except Exception as e:
+            print("ERROR: could not delete:", e)
+
+    def download(self):
+        source, _ = QtGui.QFileDialog.getOpenFileName(self, 'Select the downloaded recogniser file', os.path.expanduser("~"), "Text files (*.txt)")
+        target = os.path.join(self.filtdir, os.path.basename(source))
+
+        print("Importing from %s to %s" % (source, target))
+        if not os.path.isfile(source):
+            print("ERROR: unable to import, bad source %s" % source)
+            return
+        if os.path.isfile(target):
+            msg = SupportClasses.MessagePopup("t", "Confirm overwrite", "Warning: a recogniser named %s already exists in this software.\nDo you want to overwrite it?" % target)
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.No or reply == QMessageBox.Cancel:
+                return
+        try:
+            shutil.copy2(source, target)
+            msg = SupportClasses.MessagePopup("d", "Successfully imported", "Import successful. Now you can use the recogniser %s" % os.path.basename(target))
+            msg.exec_()
+            self.readContents()
+        except Exception as e:
+            print("ERROR: failed to import")
+            print(e)
+            return
+
+    def upload(self):
+        fn = self.listFiles.currentItem().text()
+        source = os.path.join(self.filtdir, fn)
+        target = QtGui.QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
+        if target != "":
+            target = os.path.join(target, fn)
+
+            print("Exporting from %s to %s" % (source, target))
+            if not os.path.isfile(source):
+                print("ERROR: unable to export, bad source %s" % source)
+                return
+            if os.path.isfile(target):
+                print("ERROR: target file %s exists" % target)
+                return
+            try:
+                shutil.copy2(source, target)
+                msg = SupportClasses.MessagePopup("d", "Successfully exported", "Export successful. Now you can share the file %s" % target)
+                msg.exec_()
+            except Exception as e:
+                print("ERROR: failed to export")
+                print(e)
+                return
+
+class Cluster(QDialog):
+    def __init__(self, segments, sampleRate, classes, config, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Clustered segments')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.WindowCloseButtonHint)
+
+        if len(segments) == 0:
+            print("No segments provided")
+            return
+
+        self.sampleRate = sampleRate
+        self.segments = segments
+        self.nclasses = classes
+        self.config = config
+
+        # Volume control
+        self.volSlider = QSlider(Qt.Horizontal)
+        self.volSlider.valueChanged.connect(self.volSliderMoved)
+        self.volSlider.setRange(0, 100)
+        self.volSlider.setValue(50)
+        volIcon = QLabel()
+        volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+
+        # Brightness, and contrast sliders
+        labelBr = QLabel(" Bright.")
+        self.brightnessSlider = QSlider(Qt.Horizontal)
+        self.brightnessSlider.setMinimum(0)
+        self.brightnessSlider.setMaximum(100)
+        self.brightnessSlider.setValue(20)
+        self.brightnessSlider.setTickInterval(1)
+        self.brightnessSlider.valueChanged.connect(self.setColourLevels)
+
+        labelCo = QLabel("Contr.")
+        self.contrastSlider = QSlider(Qt.Horizontal)
+        self.contrastSlider.setMinimum(0)
+        self.contrastSlider.setMaximum(100)
+        self.contrastSlider.setValue(20)
+        self.contrastSlider.setTickInterval(1)
+        self.contrastSlider.valueChanged.connect(self.setColourLevels)
+
+        hboxSpecContr = QHBoxLayout()
+        hboxSpecContr.addWidget(labelBr)
+        hboxSpecContr.addWidget(self.brightnessSlider)
+        hboxSpecContr.addWidget(labelCo)
+        hboxSpecContr.addWidget(self.contrastSlider)
+        hboxSpecContr.addWidget(volIcon)
+        hboxSpecContr.addWidget(self.volSlider)
+
+        # set up the images
+        self.flowLayout = pg.LayoutWidget()
+        self.flowLayout.setGeometry(QtCore.QRect(0, 0, 380, 247))
+
+        self.scrollArea = QtGui.QScrollArea(self)
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setWidget(self.flowLayout)
+
+        # set overall layout of the dialog
+        self.vboxFull = QVBoxLayout()
+        self.vboxFull.addLayout(hboxSpecContr)
+        self.vboxFull.addWidget(self.scrollArea)
+        self.setLayout(self.vboxFull)
+
+        # Add the clusters to rows
+        self.addButtons()
+        self.updateButtons()
+
+    def addButtons(self):
+        """ Only makes the PicButtons and self.clusters dict
+        """
+        self.clusters = []
+        self.picbuttons = []
+        for i in range(self.nclasses):
+            self.clusters.append((i, 'Type_' + str(i)))
+        self.clusters = dict(self.clusters)  # Dictionary of {ID: cluster_name}
+
+        # Create the buttons for each segment
+        for seg in self.segments:
+            sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1] - seg[1][0], seg[1][0])
+            newButton = SupportClasses.PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1],
+                                          self.lut, self.colourStart, self.colourEnd, False, cluster=True)
+            self.picbuttons.append(newButton)
+        # (updateButtons will place them in layouts and show them)
+
+    def updateButtons(self):
+        """ Draw the existing buttons, and create check- and text-boxes.
+        Called when merging clusters or initializing the page. """
+        self.tboxes = []    # Corresponding list of text boxes
+        for r in range(self.nclasses):
+            c = 0
+            tbox = QLineEdit(self.clusters[r])
+            tbox.setMinimumWidth(80)
+            tbox.setMaximumHeight(150)
+            tbox.setStyleSheet("border: none;")
+            tbox.setAlignment(QtCore.Qt.AlignCenter)
+            self.tboxes.append(tbox)
+            self.flowLayout.addWidget(self.tboxes[-1], r, c)
+            c += 1
+            # Find the segments under this class and show them
+            for segix in range(len(self.segments)):
+                if self.segments[segix][-1] == r:
+                    self.flowLayout.addWidget(self.picbuttons[segix], r, c)
+                    c += 1
+                    self.picbuttons[segix].show()
+        self.flowLayout.update()
+
+    def setColourLevels(self):
+        """ Listener for the brightness and contrast sliders being changed. Also called when spectrograms are loaded, etc.
+        Translates the brightness and contrast values into appropriate image levels.
+        """
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        brightness = self.brightnessSlider.value()
+        contrast = self.contrastSlider.value()
+        colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
+        colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + colourStart
+        for btn in self.picbuttons:
+            btn.stopPlayback()
+            btn.setImage(self.lut, colourStart, colourEnd, False)
+            btn.update()
+
+    def volSliderMoved(self, value):
+        # try/pass to avoid race situations when smth is not initialized
+        try:
+            for btn in self.picbuttons:
+                btn.media_obj.applyVolSlider(value)
+        except Exception:
+            pass
+
+    def loadFile(self, filename, duration=0, offset=0):
+        if duration == 0:
+            duration = None
+        sp = SignalProc.SignalProc(512, 256)
+        sp.readWav(filename, duration, offset)
+
+        sgRaw = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,
+                                      multitaper=False, need_even=False)
+        maxsg = np.min(sgRaw)
+        self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+        self.setColourMap()
+
+        return self.sg, sp.data, sp.audioFormat
+
+    def setColourMap(self):
+        """ Listener for the menu item that chooses a colour map.
+        Loads them from the file as appropriate and sets the lookup table.
+        """
+        cmap = self.config['cmap']
+
+        pos, colour, mode = colourMaps.colourMaps(cmap)
+
+        cmap = pg.ColorMap(pos, colour,mode)
+        self.lut = cmap.getLookupTable(0.0, 1.0, 256)
+        minsg = np.min(self.sg)
+        maxsg = np.max(self.sg)
+        self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
+        self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 

@@ -1,22 +1,20 @@
-from setuptools import setup, find_packages
+from setuptools import setup  # , find_packages
 from setuptools.extension import Extension
+from Cython.Build import cythonize
 import numpy
 
-from Cython.Build import cythonize
-
 extensions = [
-	Extension(
-		"ce_denoise",
-		["ce_denoise.pyx", "ce_functions.c"],
-		include_dirs=[numpy.get_include()]
-	)
+    Extension("ce_denoise",
+        sources=["ce_denoise.pyx", "ce_functions.c"],
+        include_dirs=[numpy.get_include()]),
+    Extension("SplitLauncher",
+        sources=["SplitLauncher.pyx", "SplitWav.c"])
 ]
 
 setup(
-	name = 'ce_denoise',
-
-	description = 'C extensions for denoising',
-
-	packages = find_packages(),
-	ext_modules = cythonize(extensions)
+    name='ce_denoise',
+    description='C extensions for denoising',
+    ext_modules=cythonize(extensions)
 )
+
+# installation: python setup.py build_ext -i

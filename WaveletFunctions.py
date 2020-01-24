@@ -3,11 +3,11 @@
 #
 # Class containing wavelet specific methods
 
-# Version 1.3 23/10/18
+# Version 2.0 18/11/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
-#    AviaNZ birdsong analysis program
-#    Copyright (C) 2017--2018
+#    AviaNZ bioacoustic analysis program
+#    Copyright (C) 2017--2019
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -82,9 +82,10 @@ class WaveletFunctions:
 
         if maxLevel is None:
             maxLevel = self.maxLevel
+        allnodes = range(2 ** (maxLevel + 1) - 1)
 
         previouslevelmaxE = self.ShannonEntropy(self.data)
-        self.WaveletPacket(maxLevel, 'symmetric', aaWP=False, antialiasFilter=True)
+        self.WaveletPacket(allnodes, 'symmetric', aaWP=False, antialiasFilter=True)
 
         level = 1
         currentlevelmaxE = np.max([self.ShannonEntropy(self.tree[n]) for n in range(1,3)])
@@ -93,20 +94,6 @@ class WaveletFunctions:
             level += 1
             currentlevelmaxE = np.max([self.ShannonEntropy(self.tree[n]) for n in range(2**level-1, 2**(level+1)-1)])
         return level
-
-    def ConvertWaveletNodeName(self,i):
-        """ Convert from an integer to the 'ad' representations of the wavelet packets
-        The root is 0 (''), the next level are 1 and 2 ('a' and 'd'), the next 3, 4, 5, 6 ('aa','ad','da','dd) and so on
-        """
-        level = int(np.floor(np.log2(i + 1)))
-        first = 2 ** level - 1
-        if i == 0:
-            b = ''
-        else:
-            b = np.binary_repr(int(i) - first, width=int(level))
-            b = b.replace('0', 'a')
-            b = b.replace('1', 'd')
-        return b
 
     def BestTree(self,wp,threshold,costfn='threshold'):
         """ Compute the best wavelet tree using one of three cost functions: threshold, entropy, or SURE.
@@ -210,7 +197,7 @@ class WaveletFunctions:
     # from memory_profiler import profile
     # fp = open('memory_profiler_wp.log', 'w+')
     # @profile(stream=fp)
-    def WaveletPacket(self, maxlevel, mode='symmetric', antialias=False, antialiasFilter=True):
+    def WaveletPacket(self, nodes, mode='symmetric', antialias=False, antialiasFilter=True):
         """ Reimplementation of pywt.WaveletPacket, but allowing for antialias
             following Strang & Nguyen (1996) or
             An anti-aliasing algorithm for discrete wavelet transform. Jianguo Yang & S.T. Park (2003) or
@@ -219,16 +206,33 @@ class WaveletFunctions:
             Data and wavelet are taken from current instance of WF. Therefore, ALWAYS use this together with WF, unless you're sure what you're doing.
 
             Args:
-            3. maxlevel - integer, mandatory!
-            4. mode - symmetric by default, as in pywt.WaveletPacket
-            5. antialias - on/off switch
-            6. antialiasFilter - switches between using filters or fft zeroing
+            1. nodes - list of integers, mandatory! will determine decomposition level from it
+            2. mode - symmetric by default, as in pywt.WaveletPacket
+            3. antialias - on/off switch
+            4. antialiasFilter - switches between using filters or fft zeroing
 
             Return: none - sets self.tree.
         """
         if len(self.data) > 910*16000 and antialias:
             print("ERROR: processing files larger than 15 min in slow antialiasing mode is disabled. Enable this only if you are ready to wait.")
             return
+        if len(nodes)==0 or not isinstance(nodes[0], int):
+            print("ERROR: must provide a list of integer node IDs")
+            return
+
+        # identify max decomposition level
+        maxlevel = math.floor(math.log2(max(nodes)+1))
+        if maxlevel>10:
+            print("ERROR: got level above 10, probably the nodes are specified badly")
+            return
+
+        # determine which nodes need to be produced (all parents of provided nodes)
+        nodes = list(nodes)
+        for child in nodes:
+            parent = (child - 1) // 2
+            if parent not in nodes and parent>=0:
+                nodes.append(parent)
+        nodes.sort()
 
         # object with dec_lo, dec_hi, rec_lo, rec_hi properties. Can be pywt.Wavelet or WF.wavelet
         wavelet = self.wavelet
@@ -249,8 +253,17 @@ class WaveletFunctions:
             hb,ha = signal.butter(20, low, btype='highpass')
             lb,la = signal.butter(20, low, btype='lowpass')
 
-        # loop over possible parent nodes
+        # loop over possible parent nodes (so down to leaf level-1)
         for node in range(2**maxlevel-1):
+            childa = node*2 + 1
+            childd = node*2 + 2
+            # if this node is irrelevant, just put empty children to
+            # keep tree order compatible with freq/filters
+            if childa not in nodes and childd not in nodes:
+                self.tree.append(np.array([]))
+                self.tree.append(np.array([]))
+                continue
+
             # retrieve parent node from J level
             data = self.tree[node]
             # downsample all non-root nodes because that wasn't done
@@ -264,38 +277,42 @@ class WaveletFunctions:
 
             ll = len(data)
             # make A_j+1 and D_j+1 (of length l)
-            # fftconvolve seems slower and the caching results in high RAM usage
-            # nexta = signal.fftconvolve(data, wavelet.dec_lo, 'same')[1:-1]
-            # nextd = signal.fftconvolve(data, wavelet.dec_hi, 'same')[1:-1]
-            nexta = np.convolve(data, wavelet.dec_lo, 'same')[1:-1]
-            nextd = np.convolve(data, wavelet.dec_hi, 'same')[1:-1]
+            if childa in nodes:
+                # fftconvolve seems slower and the caching results in high RAM usage
+                # nexta = signal.fftconvolve(data, wavelet.dec_lo, 'same')[1:-1]
+                nexta = np.convolve(data, wavelet.dec_lo, 'same')[1:-1]
+                # antialias A_j+1
+                if antialias:
+                    if antialiasFilter:
+                        nexta = signal.lfilter(lb, la, nexta)
+                    else:
+                        ft = pyfftw.interfaces.scipy_fftpack.fft(nexta)
+                        ft[ll//4 : 3*ll//4] = 0
+                        nexta = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
+                # store A before downsampling
+                self.tree.append(nexta)
+                # explicit garbage collection - it helps somehow:
+                del nexta
+            else:
+                self.tree.append(np.array([]))
 
-            # antialias A_j+1
-            if antialias:
-                if antialiasFilter:
-                    nexta = signal.lfilter(lb, la, nexta)
-                else:
-                    ft = pyfftw.interfaces.scipy_fftpack.fft(nexta)
-                    ft[ll//4 : 3*ll//4] = 0
-                    nexta = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
-            # store A before downsampling
-            self.tree.append(nexta)
-
-            # antialias D_j+1
-            if antialias:
-                if antialiasFilter:
-                    nextd = signal.lfilter(hb, ha, nextd)
-                else:
-                    ft = pyfftw.interfaces.scipy_fftpack.fft(nextd)
-                    ft[:ll//4] = 0
-                    ft[3*ll//4:] = 0
-                    nextd = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
-            # store D before downsampling
-            self.tree.append(nextd)
-
-            # explicit garbage collection - it helps somehow:
-            del nexta
-            del nextd
+            if childd in nodes:
+                nextd = np.convolve(data, wavelet.dec_hi, 'same')[1:-1]
+                # antialias D_j+1
+                if antialias:
+                    if antialiasFilter:
+                        nextd = signal.lfilter(hb, ha, nextd)
+                    else:
+                        ft = pyfftw.interfaces.scipy_fftpack.fft(nextd)
+                        ft[:ll//4] = 0
+                        ft[3*ll//4:] = 0
+                        nextd = np.real(pyfftw.interfaces.scipy_fftpack.ifft(ft))
+                # store D before downsampling
+                self.tree.append(nextd)
+                # explicit garbage collection - it helps somehow:
+                del nextd
+            else:
+                self.tree.append(np.array([]))
 
             if antialias:
                 print("Node ", node, " complete.")
@@ -317,6 +334,35 @@ class WaveletFunctions:
         freqmin = nodepos*sampleRate/2/numnodes
         freqmax = (nodepos+1)*sampleRate/2/numnodes
         return((freqmin, freqmax))
+
+    def adjustNodes(self, nodes, change):
+        adjnodes = []
+        for node in nodes:
+            lvl = math.floor(math.log2(node+1))
+            numnodes = 2**lvl
+            nodepos = node - (2**lvl - 1)
+
+            # if you want the lower half subtree ("downsampling")
+            if change=="down2":
+                # remove nodes that are on the right side of the tree
+                # (the only case when numnodes is odd is lvl=0 and that needs to go as well)
+                if nodepos >= numnodes // 2:
+                    continue
+
+                # else, renumber starting with a level lower
+                node = 2**(lvl-1) - 1 + nodepos
+                if node<0:
+                    print("Warning: weird node produced, skipping:", node)
+                else:
+                    adjnodes.append(node)
+            # if you want to change coords to one level higher ("upsampling")
+            elif change=="up2":
+                # renumber starting with a level higher
+                node = 2**(lvl+1) - 1 + nodepos
+                adjnodes.append(node)
+            else:
+                print("ERROR: unrecognised change", change)
+        return adjnodes
 
 
     def reconstructWP2(self, node, antialias=False, antialiasFilter=False):
@@ -402,7 +448,8 @@ class WaveletFunctions:
         self.thresholdMultiplier = threshold
 
         # Create wavelet decomposition. Note: using full AA here
-        self.WaveletPacket(self.maxLevel, 'symmetric', aaWP, antialiasFilter=True)
+        allnodes = range(2 ** (self.maxLevel + 1) - 1)
+        self.WaveletPacket(allnodes, 'symmetric', aaWP, antialiasFilter=True)
         print("Checkpoint 1, %.5f" % (time.time() - opstartingtime))
 
         # Get the threshold

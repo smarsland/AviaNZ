@@ -4,11 +4,11 @@
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
 
-# Version 1.3 23/10/18
+# Version 2.0 18/11/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
-#    AviaNZ birdsong analysis program
-#    Copyright (C) 2017--2018
+#    AviaNZ bioacoustic analysis program
+#    Copyright (C) 2017--2019
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -23,701 +23,23 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #     from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtWidgets import QAbstractButton, QMessageBox
-from PyQt5.QtCore import QTime, QIODevice, QBuffer, QByteArray
-from PyQt5.QtMultimedia import QAudio, QAudioOutput
-from PyQt5.QtGui import QPainter, QIcon, QPixmap
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QWidget
+from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QEvent, QLineF
+from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
+from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
 
-from openpyxl import load_workbook, Workbook
-from openpyxl.styles import colors
-from openpyxl.styles import Font
-
-from scipy import signal
-from scipy.signal import medfilt
-import SignalProc
-import WaveletFunctions
-import Segment
-
+import wavio
 from time import sleep
 import time
-
-import librosa
-
 import math
 import numpy as np
 import os, json
 import sys
-import re
-import copy
-
-import Wavelet
-import wavio
-
 import io
-
-# import WaveletSegment
-
-class preProcess:
-    """ This class implements few pre processing methods to avoid noise
-    """
-    # todo: remove duplicate preprocess in 'Wavelet Segments'
-
-    def __init__(self,audioData=None, spInfo={}, d=False, f=True, wavelet='dmey2'):
-        self.audioData = audioData
-        self.spInfo = spInfo
-        self.d = d  # denoise
-        self.f = f  # band-pass
-        self.wavelet = Wavelet.Wavelet(name=wavelet)
-        self.sp = SignalProc.SignalProc([], 0, 256, 128)
-        self.WaveletFunctions = WaveletFunctions.WaveletFunctions(data=self.audioData, wavelet=self.wavelet, maxLevel=20, samplerate=self.spInfo['SampleRate'])
-
-    def denoise_filter(self, level=5):
-        # set df=True to perform both denoise and filter
-        # df=False to skip denoise
-        if self.spInfo == {}:
-            fs = 8000
-            f1 = None
-            f2 = None
-        else:
-            f1 = self.spInfo['FreqRange'][0]
-            f2 = self.spInfo['FreqRange'][1]
-            fs = self.spInfo['SampleRate']
-
-        # Get the five level wavelet decomposition
-        if self.d:
-            denoisedData = self.WaveletFunctions.waveletDenoise(self.audioData, thresholdType='soft', wavelet=self.wavelet,maxLevel=level)
-        else:
-            denoisedData=self.audioData  # this is to avoid washing out very fade calls during the denoising
-
-        if self.f:
-            filteredDenoisedData = self.sp.ButterworthBandpass(denoisedData, fs, low=f1, high=f2)
-        else:
-            filteredDenoisedData = denoisedData
-
-        return filteredDenoisedData, fs
-
-class postProcess:
-    """ This class implements few post processing methods to avoid false positives
-
-    segments:   detected segments in form of [[s1,e1], [s2,e2],...]
-    species:    species to consider
-    """
-
-    def __init__(self,audioData=None, sampleRate=0, segments=[], spInfo={}):
-        self.audioData = audioData
-        self.sampleRate = sampleRate
-        self.segments = segments
-        if spInfo != {}:
-            self.minLen = spInfo['TimeRange'][0]
-            if spInfo['F0']:
-                self.F0 = spInfo['F0Range']
-        else:
-            self.minLen = 0
-        # self.confirmedSegments = []  # post processed detections with confidence TP
-        # self.segmentstoCheck = []  # need more testing to confirm
-
-    def short(self):
-        """
-        This will delete segments < minLen/2 secs
-        """
-        newSegments = []
-        for seg in self.segments:
-            if seg[0] == -1:
-                newSegments.append(seg)
-            elif seg[1] - seg[0] >= self.minLen/2:
-                newSegments.append(seg)
-            else:
-                continue
-        self.segments = newSegments
-
-    def wind(self, Tmean_wind = 1e-8):
-        """
-        delete wind corrupted segments (targeting moderate wind and above) if no sign of kiwi (check len)
-        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
-        """
-        newSegments = copy.deepcopy(self.segments)
-        wind_lower = 2.0 * 100 / self.sampleRate
-        wind_upper = 2.0 * 250 / self.sampleRate
-
-        for seg in self.segments:
-            if seg[0] == -1:
-                continue
-            # read the sound segment and check for wind
-            else:
-                secs = seg[1] - seg[0]
-                # keep if really long segment
-                if secs > self.minLen:
-                    continue
-
-                data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
-
-                f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
-
-                # check wind
-                limite_inf = int(round(p.__len__() * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
-                limite_sup = int(round(p.__len__() * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
-                a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
-
-                mean_a_wind = np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
-                # std_a_wind = np.std(a_wind)  # standar deviation of the PSD in the frequency band of the interest. Lower part of the step 3 in Algorithm 2.1
-                print(mean_a_wind)
-                if mean_a_wind > Tmean_wind:
-                    newSegments.remove(seg)
-
-        # if you want to check out the power spectrum:
-        # import matplotlib.pyplot as plt
-        # plt.semilogy(f, p)
-        # plt.ylim([0.5e-3, 1])
-        # plt.xlabel('frequency [Hz]')
-        # plt.ylabel('PSD [V**2/Hz]')
-        # plt.show()
-        self.segments = newSegments
-
-    def wind_plot(self, Tmean_wind = 1e-8):
-        """
-        delete wind corrupted segments (targeting moderate wind and above) if no sign of kiwi (check len)
-        Automatic Identification of Rainfall in Acoustic Recordings by Carol Bedoya, Claudia Isaza, Juan M.Daza, and Jose D.Lopez
-        """
-        wind_lower = 2.0 * 100 / self.sampleRate
-        wind_upper = 2.0 * 250 / self.sampleRate
-
-        data = self.audioData[int(0*self.sampleRate):int((10)*self.sampleRate)]
-
-        f, p = signal.welch(data, fs=self.sampleRate, window='hamming', nperseg=512, detrend=False)
-
-        # check wind
-        limite_inf = int(round(p.__len__() * wind_lower))  # minimum frequency of the rainfall frequency band 0.00625(in normalized frequency); in Hz = 0.00625 * (44100 / 2) = 100 Hz
-        limite_sup = int(round(p.__len__() * wind_upper))  # maximum frequency of the rainfall frequency band 0.03125(in normalized frequency); in Hz = 0.03125 * (44100 / 2) = 250 Hz
-        a_wind = p[limite_inf:limite_sup]  # section of interest of the power spectral density.Step 2 in Algorithm 2.1
-
-        mean_a_wind = np.mean(a_wind)  # mean of the PSD in the frequency band of interest.Upper part of the step 3 in Algorithm 2.1
-        print("mean_a_wind: ", mean_a_wind)
-        return mean_a_wind
-
-    def rainClick(self):
-        """
-        delete random clicks e.g. rain. Check for sign of kiwi (len)
-        """
-        newSegments = copy.deepcopy(self.segments)
-        if newSegments.__len__() > 1:
-            mfcc = librosa.feature.mfcc(self.audioData, self.sampleRate)
-            # Normalise
-            mfcc -= np.mean(mfcc, axis=0)
-            mfcc /= np.max(np.abs(mfcc), axis=0)
-            mean = np.mean(mfcc[1, :])
-            std = np.std(mfcc[1, :])
-            thr = mean - 2 * std  # mfcc1 thr for the recording
-
-            for seg in self.segments:
-                if seg[0] == -1:
-                    continue
-                else:
-                    secs = seg[1] - seg[0]
-                    if secs > self.minLen:  # just check duration>10 sec
-                        continue
-                    data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
-                mfcc = librosa.feature.mfcc(data, self.sampleRate)
-                # Normalise
-                mfcc -= np.mean(mfcc, axis=0)
-                mfcc /= np.max(np.abs(mfcc), axis=0)
-                mfcc1 = mfcc[1, :]  # mfcc1 of the segment
-                if np.min(mfcc1) < thr:
-                    newSegments.remove(seg)
-        self.segments = newSegments
-
-    def fundamentalFrq(self, fileName, speciesData):
-        '''
-        Check for fundamental frequency of the segments, discard the segments that do not indicate the species.
-        '''
-        newSegments = copy.deepcopy(self.segments)
-        for seg in self.segments:
-            if seg[0] == -1:
-                continue
-            else:
-                # read the sound segment and check fundamental frq.
-                secs = int(seg[1] - seg[0])
-                # Got to read from the source instead of using self.audioData - ff is wrong if you use self.audioData somehow
-                # data = self.audioData[int(seg[0]*speciesData['SampleRate']):int(seg[1]*speciesData['SampleRate'])]
-                wavobj = wavio.read(fileName, nseconds=secs, offset=seg[0])
-                data = wavobj.data
-                if np.shape(np.shape(data))[0] > 1:
-                    data = data[:, 0]
-                sampleRate = wavobj.rate
-                if data is not 'float':
-                    data = data.astype('float')
-                if speciesData['SampleRate'] != sampleRate:
-                    data = librosa.core.audio.resample(data, sampleRate, speciesData['SampleRate'])
-                # denoise before fundamental frq. extraction
-                sc = preProcess(audioData=data, spInfo=speciesData, d=True, f=False)  # avoid bandpass filter
-                data, sampleRate = sc.denoise_filter(level=10)
-                sp = SignalProc.SignalProc([], 0, 256, 128)
-                sgRaw = sp.spectrogram(data, 256, 128, mean_normalise=True, onesided=True, multitaper=False)
-                segment = Segment.Segment(data, sgRaw, sp, sampleRate, 256, 128)
-                pitch, y, minfreq, W = segment.yin(minfreq=100)
-                ind = np.squeeze(np.where(pitch > minfreq))
-                pitch = pitch[ind]
-                print(seg, pitch)
-                if pitch.size == 0:
-                    print('Segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
-                    # newSegments.remove(seg) # for now keep it
-                    continue    # continue to the next seg
-                if ind.size < 2:
-                    if (pitch > self.F0[0]) and (pitch < self.F0[1]):
-                        # print("Match with F0 of the bird, ", pitch)
-                        continue
-                    else:
-                        print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
-                        newSegments.remove(seg)
-                elif (np.mean(pitch) > self.F0[0]) and (np.mean(pitch) < self.F0[1]):
-                        continue
-                else:
-                    print('segment* ', seg, round(np.mean(pitch)), pitch, np.median(pitch), ' *-- fundamental freq is out of range, could be noise')
-                    newSegments.remove(seg)
-                    continue
-        self.segments = newSegments
-
-    # ***no use of the rest of the functions in this class for the moment.
-    def eRatioConfd(self, seg, AviaNZ_extra = False):
-        '''
-        This is a post processor to introduce some confidence level
-        high ratio --> classes 1-3 'good' calls
-        low ratio --> classes 4-5 'weak' calls
-        ratio = energy in band/energy above the band
-        The problem with this simple classifier is that the ratio is relatively low when the
-        calls are having most of the harmonics (close range)
-        Mostly works
-        '''
-        # TODO: Check range -- species specific of course!
-        # Also recording range specific -- 16KHz will be different -- resample?
-        # import WaveletSegment
-        # ws = WaveletSegment.WaveletSegment()
-        # detected = np.where(self.detections > 0)
-        # # print "det",detected
-        # if np.shape(detected)[1] > 1:
-        #     detected = ws.identifySegments(np.squeeze(detected))
-        # elif np.shape(detected)[1] == 1:
-        #     detected = ws.identifySegments(detected)
-        # else:
-        #     detected=[]
-        if seg: # going through segments
-            sp = SignalProc.SignalProc(self.audioData[int(seg[0])*self.sampleRate:int(seg[1])*self.sampleRate], self.sampleRate, 256, 128)
-            self.sg = sp.spectrogram(self.audioData[int(seg[0])*self.sampleRate:int(seg[1])*self.sampleRate])
-        else: # eRatio of the whole file e.g. the extracted segments
-            sp = SignalProc.SignalProc(self.audioData, self.sampleRate, 256, 128)
-            self.sg = sp.spectrogram(self.audioData)
-
-        f1 = 1500
-        f2 = 4000
-        F1 = f1 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
-        F2 = f2 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
-
-        e = np.sum(self.sg[:,int(F2):],axis=1)
-        eband = np.sum(self.sg[:,int(F1):int(F2)],axis=1)
-        if AviaNZ_extra:
-            return eband/e, 1
-        else:
-            return np.mean(eband/e)
-
-    def eRatioConfdV2(self, seg):
-            '''
-            This is a post processor to introduce some confidence level
-            testing a variation of eratio = energy in band within segment/energy in band 10sec before or after the segment
-            '''
-            # TODO: Check range -- species specific of course!
-            # Also recording range specific -- 16KHz will be different -- resample?
-            if seg:  # going through segments
-                sp = SignalProc.SignalProc(self.audioData[int(seg[0]) * self.sampleRate:int(seg[1]) * self.sampleRate],
-                                           self.sampleRate, 256, 128)
-                self.sg = sp.spectrogram(self.audioData[int(seg[0]) * self.sampleRate:int(seg[1]) * self.sampleRate])
-                # get neighbour
-                if seg[0] >= 0: #10 sec before
-                    sp_nbr = SignalProc.SignalProc(self.audioData[int(seg[0]-10) * self.sampleRate:int(seg[0]) * self.sampleRate],
-                                           self.sampleRate, 256, 128)
-                    sg_nbr = sp_nbr.spectrogram(self.audioData[int(seg[0]-10) * self.sampleRate:int(seg[0]) * self.sampleRate])
-                else: # 10 sec after
-                    sp_nbr = SignalProc.SignalProc(
-                        self.audioData[int(seg[1]) * self.sampleRate:int(seg[1]+10) * self.sampleRate],
-                        self.sampleRate, 256, 128)
-                    sg_nbr = sp_nbr.spectrogram(
-                        self.audioData[int(seg[1]) * self.sampleRate:int(seg[1]+10) * self.sampleRate])
-
-            f1 = 1500
-            f2 = 7000
-            F1 = f1 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
-            F2 = f2 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
-
-            # e = np.sum(self.sg[:, int(F2):], axis=1)
-            eband = np.sum(self.sg[:, int(F1):int(F2)], axis=1)
-            enbr = np.sum(sg_nbr[:, int(F1):int(F2)], axis=1)
-            return (np.mean(eband) / np.mean(enbr))
-
-    def eRatioConfd2(self, thr=2.5):
-        '''
-        Same as above but it checks all segments (delete after Tier1)
-        This is a post processor to introduce some confidence level
-        high ratio --> classes 1-3 'good' calls
-        low ratio --> classes 4-5 'weak' calls
-        ratio = energy in band/energy above the band
-        The problem with this simple classifier is that the ratio is relatively low when the
-        calls are having most of the harmonics (close range)
-        Mostly works
-        '''
-        # TODO: Check range -- species specific of course!
-        # Also recording range specific -- 16KHz will be different -- resample?
-        # import WaveletSegment
-        # ws = WaveletSegment.WaveletSegment()
-        # detected = np.where(self.detections > 0)
-        # # print "det",detected
-        # if np.shape(detected)[1] > 1:
-        #     detected = ws.identifySegments(np.squeeze(detected))
-        # elif np.shape(detected)[1] == 1:
-        #     detected = ws.identifySegments(detected)
-        # else:
-        #     detected=[]
-
-        sp = SignalProc.SignalProc(self.audioData, self.sampleRate, 256, 128)
-        self.sg = sp.spectrogram(self.audioData)
-
-        # f1 = 1500
-        # f2 = 4000
-        # F1 = f1 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
-        # F2 = f2 * np.shape(self.sg)[1] / (self.sampleRate / 2.)
-        #
-        # e = np.sum(self.sg[:,F2:],axis=1)
-        # eband = np.sum(self.sg[:,F1:F2],axis=1)
-        #
-        # return eband/e, 1
-        f1 = 1100
-        f2 = 4000
-        for seg in self.segments:
-            # e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, :]) /128     # whole frequency range
-            # nBand = 128  # number of frequency bands
-            e = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f2 * 128 / (self.sampleRate / 2):])  # f2:
-            nBand = 128 - f2 * 128 / (self.sampleRate / 2)    # number of frequency bands
-            e=e/nBand   # per band power
-
-            eBand = np.sum(self.sg[seg[0] * self.sampleRate / 128:seg[1] * self.sampleRate / 128, f1 * 128 / (self.sampleRate / 2):f2 * 128 / (self.sampleRate / 2)]) # f1:f2
-            nBand = f2 * 128 / (self.sampleRate / 2) - f1 * 128 / (self.sampleRate / 2)
-            eBand = eBand / nBand
-            r = eBand/e
-            # print seg, r
-            if r>thr:
-                self.confirmedSegments.append(seg)
-            else:
-                self.segmentstoCheck.append(seg)
-
-    def detectClicks(self,sg=None):
-        '''
-        This function finds 'click' sounds that normally pick up by any detector as false positives.
-        Remove those from the output.
-        '''
-        # TODO: this also tends to delete true positives! Try looking back and forth to see if its longer than 1 sec
-        #fs = self.sampleRate
-        #data = self.audioData
-
-        if sg is None:
-            sp = SignalProc.SignalProc(self.audioData, self.sampleRate, 256, 128)
-            self.sg = sp.spectrogram(self.audioData)
-        else:
-            self.sg = sg
-        # s = Segment(data, sg, sp, fs, 50)
-
-        energy = np.sum(self.sg, axis=1)
-        energy = medfilt(energy, 15)
-        e2 = np.percentile(energy, 90) * 2
-        # Step 1: clicks have high energy
-        clicks = np.squeeze(np.where(energy > e2))
-        # Step 2: clicks are short!
-
-        # clicks = s.identifySegments(clicks, minlength=1)
-        clicks = clicks * 128 / self.sampleRate  # convert frame numbers to seconds
-        #c = list(set(clicks))
-        #for i in c:
-        #    self.detections[i] = 0        # remove clicks
-        return energy, e2
-
-class exportSegments:
-    """ This class saves the batch detection results(Find Species) and also current annotations (AviaNZ interface)
-        in three different formats: time stamps, presence/absence, and per second presence/absence
-        in an excel workbook. It makes the workbook if necessary.
-
-        Inputs
-            segments:   detected segments in form of [[s1,e1], [s2,e2],...]
-                        OR in format [[s1, e1, fs1, fe1, sp1], [s2, e2, fs2, fe2, sp2], ...]
-                segmentstoCheck     : segments without confidence in form of [[s1,e1], [s2,e2],...]
-                confirmedSegments   : segments with confidence
-            species:    default species. e.g. 'Kiwi'. Default is 'all'
-            startTime:  start time of the recording (in DoC format). Default is 0
-            dirName:    directory name
-            filename:   file name e.g.
-            datalength: number of data points in the recording
-            sampleRate: sample rate
-            method:     e.g. 'Wavelets'. Default is 'Default'
-            resolution: output resolution on excel (sheet 3) in seconds. Default is 1
-            trainTest:  is it for training/testing (=True) or real use (=False)
-            withConf:   is it with some level of confidence? e.g. after post-processing (e ratio). Default is 'False'
-            seg_pos:    possible segments are needed apart from the segments when withConf is True. This is just to
-                        generate the annotation including the segments with conf (kiwi) and without confidence (kiwi?).
-            minLen: minimum length of a segment in secs
-
-    """
-
-    def __init__(self, segments, confirmedSegments=[], segmentstoCheck=[], species=["Don't Know"], startTime=0, dirName='', filename='', datalength=0, sampleRate=0, method="Default", resolution=1, trainTest=False, withConf=False, seg_pos=[], operator='', reviewer='', minLen=0, numpages=1, fRange=[0, 0], noiseLevel=None, noiseTypes=[], sampleRate_species=0, batch=False):
-
-        self.species=species
-        # convert 2-col lists to 5-col lists, if needed
-        self.segments = self.correctSegFormat(segments, [])
-        self.confirmedSegments = self.correctSegFormat(confirmedSegments, species)
-        if species==[]:
-            self.segmentstoCheck = self.correctSegFormat(segmentstoCheck, ["Don't Know"])
-        else:
-            self.segmentstoCheck = self.correctSegFormat(segmentstoCheck, [species[0] + "?"])
-
-        self.numpages=numpages
-        self.startTime=startTime
-        self.dirName=dirName
-        self.filename=filename
-        self.datalength=datalength
-        self.sampleRate=sampleRate
-        self.method=method
-        self.resolution = resolution
-        self.trainTest = trainTest
-        self.withConf=withConf  # todo: remove
-        self.seg_pos=seg_pos #segmentstoCheck
-        self.operator = operator
-        self.reviewer = reviewer
-        self.minLen = minLen
-        self.fRange = fRange
-        self.noiseLevel = noiseLevel
-        self.noiseTypes = noiseTypes
-        self.sampleRate_species = sampleRate_species
-        self.batch = batch
-
-    def correctSegFormat(self, seglist, species):
-        # Checks and if needed corrects 2-col segments to 5-col segments.
-        # segments can be provided as confirmed/toCheck lists,
-        # while everything from segments list is exported as-is.
-        if len(seglist)>0:
-            if len(seglist[0])==2:
-                print("Using old format segment list")
-                # convert to new format
-                for seg in seglist:
-                    seg.append(0)
-                    seg.append(0)
-                    seg.append(species)
-                return(seglist)
-            elif len(seglist[0])==5:
-                #print("using new format segment list")
-                return(seglist)
-            else:
-                print("ERROR: incorrect segment format")
-                return
-        else:
-            return([])
-
-    def makeNewWorkbook(self, species):
-        self.wb = Workbook()
-        self.wb.create_sheet(title='Time Stamps', index=1)
-        self.wb.create_sheet(title='Presence Absence', index=2)
-        self.wb.create_sheet(title='Per Time Period', index=3)
-
-        ws = self.wb['Time Stamps']
-        ws.cell(row=1, column=1, value="File Name")
-        ws.cell(row=1, column=2, value="start (hh:mm:ss)")
-        ws.cell(row=1, column=3, value="end (hh:mm:ss)")
-        ws.cell(row=1, column=4, value="min freq. (Hz)")
-        ws.cell(row=1, column=5, value="max freq. (Hz)")
-        if species=="All_species":
-            ws.cell(row=1, column=6, value="species")
-
-        # Second sheet
-        ws = self.wb['Presence Absence']
-        ws.cell(row=1, column=1, value="File Name")
-        ws.cell(row=1, column=2, value="Presence/Absence")
-
-        # Third sheet
-        ws = self.wb['Per Time Period']
-        ws.cell(row=1, column=1, value="File Name_Page")
-        ws.cell(row=1, column=2, value="Presence=1, Absence=0")
-
-        # Hack to delete original sheet
-        del self.wb['Sheet']
-        return self.wb
-
-    def excel(self):
-        """ This saves the detections in three different formats: time stamps, presence/absence, and per second presence/absence in an excel workbook. It makes the workbook if necessary.
-        Saves each species into a separate workbook,
-        + an extra workbook for all species (to function as a readable segment printout).
-        """
-        # identify all unique species
-        speciesList = set()
-        for sp in self.species:
-            speciesList.add(sp)
-        for seg in self.segments:
-            for birdName in seg[4]:
-                segmentSpecies = birdName
-                if birdName.endswith('?'):
-                    segmentSpecies = segmentSpecies[:-1]
-                speciesList.add(segmentSpecies)
-        speciesList.add("All species")
-        print("The following species were detected for export:")
-        print(speciesList)
-
-        def writeToExcelp1(segments):
-            ws = wb['Time Stamps']
-            r = ws.max_row + 1
-            # Print the filename
-            ws.cell(row=r, column=1, value=relfname)
-            # Loop over the segments
-            for seg in segments:
-                # if int(seg[1]-seg[0]) < self.minLen: # skip very short segments
-                #     continue
-                # deleting short segments already done during post processing
-                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+self.startTime).toString('hh:mm:ss')))
-                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+self.startTime).toString('hh:mm:ss')))
-                if seg[3]!=0:
-                    ws.cell(row=r, column=4, value=int(seg[2]))
-                    ws.cell(row=r, column=5, value=int(seg[3]))
-                if species=="All species":
-                    ws.cell(row=r, column=6, value=", ".join(seg[4]))
-                r += 1
-
-        def writeToExcelp2(segments):
-            ws = wb['Presence Absence']
-            r = ws.max_row + 1
-            ws.cell(row=r, column=1, value=relfname)
-            ws.cell(row=r, column=2, value='_')
-            if len(segments)>0:
-                # if seg[1]-seg[0] > self.minLen: # skip very short segments
-                ws.cell(row=r, column=2, value='Yes')
-                # break
-            else:
-                ws.cell(row=r, column=2, value='No')
-
-        def writeToExcelp3(detected, starttime=0):
-            # todo: use minLen
-            need_reset = False
-            if self.resolution > math.ceil(float(self.datalength) / self.sampleRate):
-                resolution_before = self.resolution
-                need_reset = True
-                self.resolution = int(math.ceil(float(self.datalength) / self.sampleRate))
-            ws = wb['Per Time Period']
-            r = ws.max_row + 1
-            ws.cell(row=r, column=1, value=str(self.resolution) + ' secs resolution')
-            ft = Font(color=colors.DARKYELLOW)
-            ws.cell(row=r, column=1).font=ft
-            c = 2
-            for i in range(starttime,starttime+len(detected), self.resolution):
-                endtime = min(i+self.resolution, int(math.ceil(self.datalength * self.numpages / self.sampleRate)))
-                ws.cell(row=r, column=c, value=str(i) + '-' + str(endtime))
-                ws.cell(row=r, column=c).font = ft
-                c += 1
-            r += 1
-            pagesize = int(starttime/self.datalength * self.sampleRate)
-            ws.cell(row=r, column=1, value=relfname + '_p' + str(pagesize))
-            c = 2
-            for i in range(0, len(detected), self.resolution):
-                j=1 if np.sum(detected[i:i+self.resolution])>0 else 0
-                ws.cell(row=r, column=c, value=j)
-                c += 1
-            # reset resolution
-            if need_reset:
-                self.resolution = resolution_before
-
-        # now, generate the actual files, SEPARATELY FOR EACH SPECIES:
-        for species in speciesList:
-            print("Exporting species %s" % species)
-            # clean version for filename
-            speciesClean = re.sub(r'\W', "_", species)
-
-            # setup output files:
-            # if an Excel exists, append (so multiple files go into one worksheet)
-            # if not, create new
-            if self.withConf:
-                if self.batch:
-                    self.eFile = self.dirName + '/DetectionSummary_withConf_' + speciesClean + '.xlsx'
-                else:
-                    self.eFile = self.filename + '_withConf_' + speciesClean + '.xlsx'
-            else:
-                if self.batch:
-                    self.eFile = self.dirName + '/DetectionSummary_' + speciesClean + '.xlsx'
-                else:
-                    self.eFile = self.filename + '_' + speciesClean + '.xlsx'
-            self.eFile = str(self.eFile)
-
-            if os.path.isfile(self.eFile):
-                try:
-                    wb = load_workbook(self.eFile)
-                except Exception as e:
-                    print("ERROR: cannot open file %s to append" % self.eFile)  # Does not exist OR no read permissions
-                    print(e)
-                    return
-            else:
-                wb = self.makeNewWorkbook(speciesClean)
-
-            relfname = str(os.path.relpath(str(self.filename), str(self.dirName)))
-            # extract SINGLE-SPECIES ONLY segments,
-            # incl. potential assignments ('Kiwi?').
-            # if species=="All", take ALL segments.
-            segmentsWPossible = []
-            for seg in self.segments + self.confirmedSegments + self.segmentstoCheck:
-                if len(seg) == 2:
-                    seg.append(0)
-                    seg.append(0)
-                    seg.append(species)
-                if species in seg[4] or species+'?' in seg[4] or species == "All species":
-                    segmentsWPossible.append(seg)
-            # if len(segmentsWPossible)==0:
-            #     print("Warning: no segments found for species %s" % species)
-            #     continue
-
-            # export segments
-            writeToExcelp1(segmentsWPossible)
-            # export presence/absence
-            writeToExcelp2(segmentsWPossible)
-
-            # Generate per second binary output
-            n = math.ceil(float(self.datalength) / self.sampleRate)
-            for p in range(0, self.numpages):
-                detected = np.zeros(n)
-                print("exporting page %d" % p)
-                for seg in segmentsWPossible:
-                    for t in range(n):
-                        truet = t + p*n
-                        if math.floor(seg[0]) <= truet and truet < math.ceil(seg[1]):
-                            detected[t] = 1
-                writeToExcelp3(detected, p*n)
-
-            # Save the file
-            wb.save(self.eFile)
-
-    def saveAnnotation(self):
-        # Save annotations - batch processing
-        annotation = []
-        # annotation.append([-1, str(QTime(0,0,0).addSecs(self.startTime).toString('hh:mm:ss')), self.operator, self.reviewer, -1])
-        annotation.append([-1, self.datalength, self.operator, self.reviewer, [self.noiseLevel, self.noiseTypes]])
-        y1 = self.fRange[0]/2
-        y2 = self.sampleRate_species/2
-        if y2 > self.sampleRate/2:
-            y2 = self.sampleRate/2-self.sampleRate*0.01
-        for seg in self.confirmedSegments:
-            annotation.append([float(seg[0]), float(seg[1]), y1, y2, seg[4]])
-        for seg in self.segmentstoCheck:
-            annotation.append([float(seg[0]), float(seg[1]), y1, y2, seg[4]])
-        for seg in self.segments:
-            annotation.append([float(seg[0]), float(seg[1]), y1, y2, seg[4]])
-
-        if isinstance(self.filename, str):
-            file = open(self.filename + '.data', 'w')
-        else:
-            file = open(str(self.filename) + '.data', 'w')
-
-        json.dump(annotation, file)
-        file.write("\n")
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
@@ -735,6 +57,7 @@ class TimeAxisHour(pg.AxisItem):
         self.offset = offset
         #self.update()
 
+
 class TimeAxisMin(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
     # Writes the time as mm:ss, and can add an offset
@@ -751,28 +74,6 @@ class TimeAxisMin(pg.AxisItem):
         self.offset = offset
         self.update()
 
-class TimeAxisSec(pg.AxisItem):
-    # Time axis (at bottom of spectrogram)
-    # Writes the time as mm:ss, and can add an offset
-    def __init__(self, *args, **kwargs):
-        super(TimeAxisSec, self).__init__(*args, **kwargs)
-        self.offset = 0
-        self.setLabel('Time', units='s')
-
-    def tickStrings(self, values, scale, spacing):
-        # Overwrite the axis tick code
-        return [QTime(0,0,0).addSecs(value+self.offset).toString('s') for value in values]
-
-    def setOffset(self,offset):
-        self.offset = offset
-        self.update()
-
-class FixedLineROI(pg.LineSegmentROI):
-    def clearHandles(self):
-        self.scene().removeItem(self.handles[0]['item'])
-        self.scene().removeItem(self.handles[1]['item'])
-        #while len(self.handles) > 0:
-        #    self.removeHandle(self.handles[0]['item'])
 
 class ShadedROI(pg.ROI):
     # A region of interest that is shaded, for marking segments
@@ -792,9 +93,6 @@ class ShadedROI(pg.ROI):
         p.scale(r.width(), r.height())
         p.drawRect(0, 0, 1, 1)
         p.restore()
-
-    def setMovable(self,value):
-        self.translatable = value
 
     def setBrush(self, *br, **kargs):
         """Set the brush that fills the region. Can have any arguments that are valid
@@ -820,6 +118,10 @@ class ShadedROI(pg.ROI):
             self.setMouseHover(False)
 
     def setMouseHover(self, hover):
+        # for ignoring when ReadOnly enabled:
+        if not self.translatable:
+            return
+        # don't waste time if state isn't changing:
         if self.mouseHovering == hover:
             return
         self.mouseHovering = hover
@@ -828,6 +130,7 @@ class ShadedROI(pg.ROI):
         else:
             self.currentBrush = self.brush
         self.update()
+
 
 def mouseDragEventFlexible(self, ev):
     if ev.button() == self.rois[0].parent.MouseDrawingButton:
@@ -856,6 +159,7 @@ def mouseDragEventFlexible(self, ev):
         pos = ev.scenePos() + self.cursorOffset
         self.movePoint(pos, ev.modifiers(), finish=False)
 
+
 def mouseDragEventFlexibleLine(self, ev):
     if self.movable and ev.button() != self.btn:
         if ev.isStart():
@@ -873,26 +177,28 @@ def mouseDragEventFlexibleLine(self, ev):
             self.moving = False
             self.sigPositionChangeFinished.emit(self)
 
+
 class ShadedRectROI(ShadedROI):
     # A rectangular ROI that it shaded, for marking segments
-    def __init__(self, pos, size, centered=False, sideScalers=False, parent=None, **args):
+    def __init__(self, pos, size, centered=False, movable=True, sideScalers=True, parent=None, **args):
         #QtGui.QGraphicsRectItem.__init__(self, 0, 0, size[0], size[1])
-        pg.ROI.__init__(self, pos, size, **args)
+        pg.ROI.__init__(self, pos, size, movable=movable, **args)
         self.parent = parent
         self.mouseHovering = False
         self.setBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 50)))
         self.setHoverBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 100)))
         self.transparent = True
-        if centered:
-            center = [0.5, 0.5]
-        else:
-            center = [0, 0]
 
         #self.addTranslateHandle(center)
-        self.addScaleHandle([1, 1], center)
-        if sideScalers:
-            self.addScaleHandle([1, 0.5], [center[0], 0.5])
-            self.addScaleHandle([0.5, 1], [0.5, center[1]])
+        if self.translatable:
+            self.addScaleHandle([1, 1], [0, 0]) # top right
+            self.addScaleHandle([1, 0], [0, 1]) # bottom right
+            self.addScaleHandle([0, 1], [1, 0]) # top left
+            self.addScaleHandle([0, 0], [1, 1]) # bottom left
+
+    def setMovable(self,value):
+        self.resizable = value
+        self.translatable = value
 
     def mouseDragEvent(self, ev):
         if ev.isStart():
@@ -906,7 +212,6 @@ class ShadedRectROI(ShadedROI):
                     ev.accept()
                 else:
                     ev.ignore()
-
         elif ev.isFinish():
             if self.translatable:
                 if self.isMoving:
@@ -922,10 +227,12 @@ class ShadedRectROI(ShadedROI):
 pg.graphicsItems.ROI.Handle.mouseDragEvent = mouseDragEventFlexible
 pg.graphicsItems.InfiniteLine.InfiniteLine.mouseDragEvent = mouseDragEventFlexibleLine
 
+
 class LinearRegionItem2(pg.LinearRegionItem):
-    def __init__(self, parent, *args, **kwds):
-        pg.LinearRegionItem.__init__(self, *args, **kwds)
+    def __init__(self, parent, bounds=None, *args, **kwds):
+        pg.LinearRegionItem.__init__(self, bounds, *args, **kwds)
         self.parent = parent
+        self.bounds = bounds
         self.lines[0].btn = self.parent.MouseDrawingButton
         self.lines[1].btn = self.parent.MouseDrawingButton
 
@@ -944,8 +251,24 @@ class LinearRegionItem2(pg.LinearRegionItem):
             return
 
         self.lines[0].blockSignals(True)  # only want to update once
+        newcenter = ev.pos()
+        # added this to bound its dragging, as in ROI.
+        # first, adjust center position to avoid dragging too far:
         for i, l in enumerate(self.lines):
-            l.setPos(self.cursorOffsets[i] + ev.pos())
+            tomove = self.cursorOffsets[i] + newcenter
+            if self.bounds is not None:
+                # stop center from moving too far left
+                if tomove.x() < self.bounds[0]:
+                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[0])
+                # stop center from moving too far right
+                if tomove.x() > self.bounds[1]:
+                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[1])
+
+        # update lines based on adjusted center
+        for i, l in enumerate(self.lines):
+            tomove = self.cursorOffsets[i] + newcenter
+            l.setPos(tomove)
+
         self.lines[0].blockSignals(False)
         self.prepareGeometryChange()
 
@@ -957,8 +280,10 @@ class LinearRegionItem2(pg.LinearRegionItem):
 
 
 class DragViewBox(pg.ViewBox):
-    # A normal ViewBox, but with ability to drag the segments
-    # and also processes keypress events
+    # A normal ViewBox, but with the ability to capture drag.
+    # Effectively, if "dragging" is enabled, it captures press & release signals.
+    # Otherwise it ignores the event, which then goes to the scene(),
+    # which only captures click events.
     sigMouseDragged = QtCore.Signal(object,object,object)
     keyPressed = QtCore.Signal(int)
 
@@ -1012,6 +337,7 @@ class DragViewBox(pg.ViewBox):
         super(DragViewBox, self).keyPressEvent(ev)
         self.keyPressed.emit(ev.key())
 
+
 class ChildInfoViewBox(pg.ViewBox):
     # Normal ViewBox, but with ability to pass a message back from a child
     sigChildMessage = QtCore.Signal(object)
@@ -1022,66 +348,6 @@ class ChildInfoViewBox(pg.ViewBox):
     def resend(self,x):
         self.sigChildMessage.emit(x)
 
-class PicButton(QAbstractButton):
-    # Class for HumanClassify dialogs to put spectrograms on buttons
-    # Also includes playback capability.
-    def __init__(self, index, im1, im2, audiodata, format, duration, parent=None):
-        super(PicButton, self).__init__(parent)
-        self.index = index
-        self.im1 = im1
-        self.im2 = im2
-        self.buttonClicked = False
-        self.clicked.connect(self.changePic)
-
-        # playback things
-        self.media_obj = ControllableAudio(format)
-        self.media_obj.notify.connect(self.endListener)
-        self.audiodata = audiodata
-        self.duration = duration * 1000 # in ms
-
-        self.playButton = QtGui.QToolButton(self)
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.playButton.clicked.connect(self.playImage)
-        self.playButton.hide()
-
-    def paintEvent(self, event):
-        im = self.im2 if self.buttonClicked else self.im1
-
-        if type(event) is not bool:
-            painter = QPainter(self)
-            painter.drawImage(event.rect(), im)
-
-    def enterEvent(self, QEvent):
-        self.playButton.show()
-
-    def leaveEvent(self, QEvent):
-        if not self.media_obj.isPlaying():
-            self.playButton.hide()
-
-    def playImage(self):
-        if self.media_obj.isPlaying():
-            self.stopPlayback()
-        else:
-            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-            self.media_obj.loadArray(self.audiodata)
-
-    def endListener(self):
-        time = self.media_obj.elapsedUSecs() // 1000
-        if time > self.duration:
-            self.stopPlayback()
-
-    def stopPlayback(self):
-        self.media_obj.pressedStop()
-        self.playButton.hide()
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-
-    def sizeHint(self):
-        return self.im1.size()
-
-    def changePic(self,event):
-        self.buttonClicked = not(self.buttonClicked)
-        self.paintEvent(event)
-        self.update()
 
 class ClickableRectItem(QtGui.QGraphicsRectItem):
     # QGraphicsItem doesn't include signals, hence this mess
@@ -1091,6 +357,7 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
     def mousePressEvent(self, ev):
         super(ClickableRectItem, self).mousePressEvent(ev)
         self.parentWidget().resend(self.mapRectToParent(self.boundingRect()).x())
+
 
 class ControllableAudio(QAudioOutput):
     # This links all the PyQt5 audio playback things -
@@ -1105,9 +372,9 @@ class ControllableAudio(QAudioOutput):
         self.startpos = 0
         self.timeoffset = 0
         self.keepSlider = False
-        self.format = format
+        #self.format = format
         # set small buffer (10 ms) and use processed time
-        self.setBufferSize(int(self.format.sampleSize() * self.format.sampleRate()/100 * self.format.channelCount()))
+        self.setBufferSize(int(self.format().sampleSize() * self.format().sampleRate()/100 * self.format().channelCount()))
 
     def isPlaying(self):
         return(self.state() == QAudio.ActiveState)
@@ -1116,11 +383,16 @@ class ControllableAudio(QAudioOutput):
         # this should only be called if there's some misalignment between GUI and Audio
         if self.state() == QAudio.IdleState:
             # give some time for GUI to catch up and stop
-            while(self.state() != QAudio.StoppedState):
+            sleepCycles = 0
+            while(self.state() != QAudio.StoppedState and sleepCycles < 30):
                 sleep(0.03)
+                sleepCycles += 1
+                # This loop stops when timeoffset+processedtime > designated stop position.
+                # By adding this offset, we ensure the loop stops even if
+                # processed audio timer breaks somehow.
+                self.timeoffset += 30
                 self.notify.emit()
-            self.keepSlider=False
-            self.stop()
+            self.pressedStop()
 
     def pressedPlay(self, resetPause=False, start=0, stop=0, audiodata=None):
         if not resetPause and self.state() == QAudio.SuspendedState:
@@ -1135,7 +407,7 @@ class ControllableAudio(QAudioOutput):
             sleep(0.2)
             # in case bar was moved under pause, we need this:
             pos = self.tempin.pos() # bytes
-            pos = self.format.durationForBytes(pos) / 1000 # convert to ms
+            pos = self.format().durationForBytes(pos) / 1000 # convert to ms
             pos = pos + start
             print("Pos: %d start: %d stop %d" %(pos, start, stop))
             self.filterSeg(pos, stop, audiodata)
@@ -1143,7 +415,7 @@ class ControllableAudio(QAudioOutput):
     def pressedPause(self):
         self.keepSlider=True # a flag to avoid jumping the slider back to 0
         pos = self.tempin.pos() # bytes
-        pos = self.format.durationForBytes(pos) / 1000 # convert to ms
+        pos = self.format().durationForBytes(pos) / 1000 # convert to ms
         # store offset, relative to the start of played segment
         self.pauseoffset = pos + self.timeoffset
         self.suspend()
@@ -1158,8 +430,8 @@ class ControllableAudio(QAudioOutput):
     def filterBand(self, start, stop, low, high, audiodata, sp):
         # takes start-end in ms, relative to file start
         self.timeoffset = max(0, start)
-        start = max(0, start * self.format.sampleRate() // 1000)
-        stop = min(stop * self.format.sampleRate() // 1000, len(audiodata))
+        start = max(0, start * self.format().sampleRate() // 1000)
+        stop = min(stop * self.format().sampleRate() // 1000, len(audiodata))
         segment = audiodata[int(start):int(stop)]
         segment = sp.bandpassFilter(segment,sampleRate=None, start=low, end=high)
         # segment = self.sp.ButterworthBandpass(segment, self.sampleRate, bottom, top,order=5)
@@ -1168,38 +440,38 @@ class ControllableAudio(QAudioOutput):
     def filterSeg(self, start, stop, audiodata):
         # takes start-end in ms
         self.timeoffset = max(0, start)
-        start = max(0, int(start * self.format.sampleRate() // 1000))
-        stop = min(int(stop * self.format.sampleRate() // 1000), len(audiodata))
+        start = max(0, int(start * self.format().sampleRate() // 1000))
+        stop = min(int(stop * self.format().sampleRate() // 1000), len(audiodata))
         segment = audiodata[start:stop]
         self.loadArray(segment)
 
     def loadArray(self, audiodata):
         # loads an array from memory into an audio buffer
-        if self.format.sampleSize() == 16:
+        if self.format().sampleSize() == 16:
             audiodata = audiodata.astype('int16')  # 16 corresponds to sampwidth=2
-        elif self.format.sampleSize() == 32:
+        elif self.format().sampleSize() == 32:
             audiodata = audiodata.astype('int32')
-        elif self.format.sampleSize() == 24:
+        elif self.format().sampleSize() == 24:
             audiodata = audiodata.astype('int32')
             print("Warning: 24-bit sample playback currently not supported")
-        elif self.format.sampleSize() == 8:
+        elif self.format().sampleSize() == 8:
             audiodata = audiodata.astype('uint8')
         else:
-            print("ERROR: sampleSize %d not supported" % self.format.sampleSize())
+            print("ERROR: sampleSize %d not supported" % self.format().sampleSize())
             return
         # double mono sound to get two channels - simplifies reading
-        if self.format.channelCount()==2:
+        if self.format().channelCount()==2:
             audiodata = np.column_stack((audiodata, audiodata))
 
         # write filtered output to a BytesIO buffer
         self.tempout = io.BytesIO()
         # NOTE: scale=None rescales using data minimum/max. This can cause clipping. Use scale="none" if this causes weird playback sound issues.
         # in particular for 8bit samples, we need more scaling:
-        if self.format.sampleSize() == 8:
+        if self.format().sampleSize() == 8:
             scale = (audiodata.min()/2, audiodata.max()*2)
         else:
             scale = None
-        wavio.write(self.tempout, audiodata, self.format.sampleRate(), scale=scale, sampwidth=self.format.sampleSize() // 8)
+        wavio.write(self.tempout, audiodata, self.format().sampleRate(), scale=scale, sampwidth=self.format().sampleSize() // 8)
 
         # copy BytesIO@write to QBuffer@read for playing
         self.temparr = QByteArray(self.tempout.getvalue()[44:])
@@ -1218,7 +490,7 @@ class ControllableAudio(QAudioOutput):
         print("Seeking to %d ms" % ms)
         # start is an offset for the current view start, as it is position 0 in extracted file
         self.reset()
-        self.tempin.seek(self.format.bytesForDuration((ms-start)*1000))
+        self.tempin.seek(self.format().bytesForDuration((ms-start)*1000))
         self.timeoffset = ms
 
     def applyVolSlider(self, value):
@@ -1226,6 +498,7 @@ class ControllableAudio(QAudioOutput):
         # value = QAudio.convertVolume(value / 100, QAudio.LogarithmicVolumeScale, QAudio.LinearVolumeScale)
         value = (math.exp(value/50)-1)/(math.exp(2)-1)
         self.setVolume(value)
+
 
 class FlowLayout(QtGui.QLayout):
     # This is the flow layout which lays out a set of spectrogram pictures on buttons (for HumanClassify2) as
@@ -1324,6 +597,7 @@ class FlowLayout(QtGui.QLayout):
             lineHeight = max(lineHeight, item.sizeHint().height())
 
         return y + lineHeight - rect.y()
+
 
 class Log(object):
     """ Used for logging info during batch processing.
@@ -1443,7 +717,8 @@ class MessagePopup(QMessageBox):
         super(QMessageBox, self).__init__()
 
         self.setText(text)
-        self.setWindowTitle("Select Sound File")
+        self.setWindowTitle(title)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         if (type=="w"):
             self.setIconPixmap(QPixmap("img/Owl_warning.png"))
         elif (type=="d"):
@@ -1455,7 +730,7 @@ class MessagePopup(QMessageBox):
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v1.4 (May 2019)")
+            self.setText("The AviaNZ Program, v2.0.2 (January 2020)")
             self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
@@ -1489,18 +764,40 @@ class ConfigLoader(object):
             sys.exit()
 
     def filters(self, dir):
-        # Returns a list of filter files.
+        """ Returns a dict of filter JSONs,
+            named after the corresponding file names. """
         print("Loading call filters from folder %s" % dir)
         try:
-            filters = [f[:-4] for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
-            return filters
+            filters = [f for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
         except Exception:
             print("Folder %s not found, no filters loaded" % dir)
             return None
 
+        goodfilters = dict()
+        for filtfile in filters:
+            try:
+                filt = json.load(open(os.path.join(dir, filtfile)))
+
+                # skip this filter if it looks fishy:
+                if not isinstance(filt, dict) or "species" not in filt or "SampleRate" not in filt or "Filters" not in filt or len(filt["Filters"])<1:
+                    raise ValueError("Filter JSON format wrong, skipping")
+                for subfilt in filt["Filters"]:
+                    if not isinstance(subfilt, dict) or "calltype" not in subfilt or "WaveletParams" not in subfilt or "TimeRange" not in subfilt:
+                        raise ValueError("Subfilter JSON format wrong, skipping")
+                    if "thr" not in subfilt["WaveletParams"] or "nodes" not in subfilt["WaveletParams"] or len(subfilt["TimeRange"])<4:
+                        raise ValueError("Subfilter JSON format wrong (details), skipping")
+
+                # if filter passed checks, store it,
+                # using filename (without extension) as the key
+                goodfilters[filtfile[:-4]] = filt
+            except Exception as e:
+                print("Could not load filter:", filtfile, e)
+        print("Loaded filters:", list(goodfilters.keys()))
+        return goodfilters
+
     def shortbl(self, file, configdir):
         # A fallback shortlist will be confirmed to exist in configdir.
-        # This list is necessary, long list can be None
+        # This list is necessary
         print("Loading short species list from file %s" % file)
         try:
             if os.path.isabs(file):
@@ -1516,26 +813,25 @@ class ConfigLoader(object):
 
             try:
                 readlist = json.load(open(shortblfile))
+                if len(readlist)>29:
+                    print("Warning: short species list has %s entries, truncating to 30" % len(readlist))
+                    readlist = readlist[:29]
                 return readlist
             except ValueError as e:
                 # if JSON looks corrupt, quit and suggest deleting:
                 print(e)
-                msg = MessagePopup("w", "Bad species list", "ERROR: file " + shortblfile + " corrupt, delete it to restore default")
+                msg = MessagePopup("w", "Bad species list", "ERROR: file " + shortblfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec_()
                 return None
 
         except Exception as e:
             # if file is not found at all, quit, user must recreate the file or change path
             print(e)
-            msg = MessagePopup("w", "Bad species list", "ERROR: Failed to load short species list from " + file)
+            msg = MessagePopup("w", "Bad species list", "ERROR: Failed to load short species list from " + file + ". Reverting to default.")
             msg.exec_()
             return None
 
-
     def longbl(self, file, configdir):
-        if file == "None":
-            # long bird list can be set to "None" intentionally
-            return None
 
         print("Loading long species list from file %s" % file)
         try:
@@ -1555,13 +851,13 @@ class ConfigLoader(object):
                 return readlist
             except ValueError as e:
                 print(e)
-                msg = MessagePopup("w", "Bad species list", "Warning: file " + longblfile + " corrupt, delete it to restore default")
+                msg = MessagePopup("w", "Bad species list", "Warning: file " + longblfile + " corrupt, delete it to restore default. Reverting to default.")
                 msg.exec_()
                 return None
 
         except Exception as e:
             print(e)
-            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file)
+            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
             msg.exec_()
             return None
 
@@ -1595,3 +891,182 @@ class ConfigLoader(object):
         except Exception as e:
             print("ERROR while saving config file:")
             print(e)
+
+class PicButton(QAbstractButton):
+    # Class for HumanClassify dialogs to put spectrograms on buttons
+    # Also includes playback capability.
+    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, parent=None, cluster=False):
+        super(PicButton, self).__init__(parent)
+        self.index = index
+        self.mark = "green"
+        self.spec = spec
+        self.unbufStart = unbufStart
+        self.unbufStop = unbufStop
+        self.cluster = cluster
+        self.setMouseTracking(True)
+        # setImage reads some properties from self, to allow easy update
+        # when color map changes
+        self.setImage(lut, colStart, colEnd, cmapInv)
+
+        self.buttonClicked = False
+        # if not self.cluster:
+        self.clicked.connect(self.changePic)
+        # fixed size
+        self.setSizePolicy(0,0)
+        self.setMinimumSize(self.im1.size())
+
+        # playback things
+        self.media_obj = ControllableAudio(format)
+        self.media_obj.notify.connect(self.endListener)
+        self.audiodata = audiodata
+        self.duration = duration * 1000 # in ms
+
+        self.playButton = QtGui.QToolButton(self)
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.clicked.connect(self.playImage)
+        self.playButton.hide()
+
+    def setImage(self, lut, colStart, colEnd, cmapInv):
+        # takes in a piece of spectrogram and produces a pair of images
+        if cmapInv:
+            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colEnd, colStart])
+        else:
+            im, alpha = fn.makeARGB(self.spec, lut=lut, levels=[colStart, colEnd])
+        im1 = fn.makeQImage(im, alpha)
+        if im1.size().width() == 0:
+            print("ERROR: button not shown, likely bad spectrogram coordinates")
+            return
+
+        # hardcode all image sizes
+        if self.cluster:
+            self.im1 = im1.scaled(200, 150)
+        else:
+            self.specReductionFact = im1.size().width()/500
+            self.im1 = im1.scaled(500, im1.size().height())
+
+        # draw lines
+        if not self.cluster:
+            unbufStartAdj = self.unbufStart / self.specReductionFact
+            unbufStopAdj = self.unbufStop / self.specReductionFact
+            self.line1 = QLineF(unbufStartAdj, 0, unbufStartAdj, im1.size().height())
+            self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, im1.size().height())
+
+    def paintEvent(self, event):
+        if type(event) is not bool:
+            painter = QPainter(self)
+            painter.setPen(QPen(QColor(80,255,80), 2))
+            if self.cluster:
+                if self.mark == "yellow":
+                    painter.setOpacity(0.5)
+            else:
+                if self.mark == "yellow":
+                    painter.setOpacity(0.8)
+                elif self.mark == "red":
+                    painter.setOpacity(0.5)
+            painter.drawImage(event.rect(), self.im1)
+            if not self.cluster:
+                painter.drawLine(self.line1)
+                painter.drawLine(self.line2)
+
+            # draw decision mark
+            fontsize = int(self.im1.size().height() * 0.65)
+            if self.mark == "green":
+                pass
+            elif self.mark == "yellow" and not self.cluster:
+                painter.setOpacity(0.9)
+                painter.setPen(QPen(QColor(220,220,0)))
+                painter.setFont(QFont("Helvetica", fontsize))
+                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "?")
+            elif self.mark == "yellow" and self.cluster:
+                painter.setOpacity(0.9)
+                painter.setPen(QPen(QColor(220, 220, 0)))
+                painter.setFont(QFont("Helvetica", fontsize))
+                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "√")
+            elif self.mark == "red":
+                painter.setOpacity(0.8)
+                painter.setPen(QPen(QColor(220,0,0)))
+                painter.setFont(QFont("Helvetica", fontsize))
+                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "X")
+            else:
+                print("ERROR: unrecognised segment mark")
+                return
+
+    def enterEvent(self, QEvent):
+        # to reset the icon if it didn't stop cleanly
+        if not self.media_obj.isPlaying():
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.show()
+
+    def leaveEvent(self, QEvent):
+        if not self.media_obj.isPlaying():
+            self.playButton.hide()
+
+    def mouseMoveEvent(self, ev):
+        if ev.buttons() != Qt.LeftButton:
+            return
+
+        mimeData = QMimeData()
+
+        drag = QDrag(self)
+        drag.setMimeData(mimeData)
+        drag.setPixmap(QPixmap("./img/Owl_thinking.png"))
+        dropAction = drag.exec_(Qt.MoveAction)
+
+    def playImage(self):
+        if self.media_obj.isPlaying():
+            self.stopPlayback()
+        else:
+            self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
+            self.media_obj.loadArray(self.audiodata)
+
+    def endListener(self):
+        timeel = self.media_obj.elapsedUSecs() // 1000
+        if timeel > self.duration:
+            self.stopPlayback()
+
+    def stopPlayback(self):
+        self.media_obj.pressedStop()
+        self.playButton.hide()
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+
+    def sizeHint(self):
+        return self.im1.size()
+
+    def minimumSizeHint(self):
+        return self.im1.size()
+
+    def changePic(self,ev):
+        # cycle through CONFIRM / DELETE / RECHECK marks
+
+        if self.cluster:
+            if self.mark == "green":
+                self.mark = "yellow"
+            elif self.mark == "yellow":
+                self.mark = "green"
+        else:
+            if self.mark == "green":
+                self.mark = "red"
+            elif self.mark == "red":
+                self.mark = "yellow"
+            elif self.mark == "yellow":
+                self.mark = "green"
+        self.paintEvent(ev)
+        #self.update()
+        self.repaint()
+        pg.QtGui.QApplication.processEvents()
+
+class Layout(pg.LayoutWidget):
+    # Layout for the clustering that allows drag and drop
+    buttonDragged = QtCore.Signal(int,object)
+
+    def __init__(self):
+        super().__init__()
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, ev):
+        ev.accept()
+
+    def dropEvent(self, ev):
+        self.buttonDragged.emit(ev.pos().y(),ev.source())
+        ev.setDropAction(Qt.MoveAction)
+        ev.accept()

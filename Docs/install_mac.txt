@@ -1,0 +1,30 @@
+
+(0) If you have a previous version of AviaNZ, find the folder called Anaconda2 on your computer, and delete it. Otherwise, start from (1)
+(1) Go to https://www.anaconda.com/download/ and download the Python 3.6 version
+(2) Run the downloaded program, accept all defaults
+(3) Open a terminal, paste in the following lines:
+
+conda install -c anaconda scikit-learn scikit-image openpyxl
+conda install -c conda-forge librosa spectrum peakutils intervaltree pyfftw
+conda install -c bjornfjohansson mpldatacursor
+pip install pyqt5 --user
+pip install git+https://github.com/pyqtgraph/pyqtgraph --user
+
+If there are any errors after any of the lines, copy the text and email it to me
+
+(4) Download the file AviaNZ.zip from http://avianz.net and unzip it into a known directory, use the Terminal to go to that directory
+
+(5) Copy and paste the following line:
+cd ext; python3 setup.py build_ext -i
+
+Ditto for errors
+
+(6) type 
+cd ..
+and then type
+
+python AviaNZ.py
+
+If the software doesn't start, let me know, with the error messages
+
+The way to start the software each time is to open a Terminal, change to the AviaNZ directory, and type the line at (6)

@@ -1,340 +1,662 @@
 \documentclass{article}
-\usepackage[draft]{SRM2}
+\usepackage{SRM2}
 \usepackage{graphicx}
 \usepackage{url}
+\usepackage{color}
 
-\title{The AviaNZ Birdsong Analysis Software (v 1.3)}
+\title{The AviaNZ Bioacoustic Analysis Software (v 2.0)}
 \author{The AviaNZ Team \\(\url{stephen.marsland@vuw.ac.nz})}
-\date{October 2018}
+\date{November 2019}
 
 %\usepackage[usenames, dvipsnames]{color}
 
 %Revise with track changes
-\usepackage[markup=default]{changes}
-%\usepackage[final]{changes}
 \usepackage{soulutf8}
+\usepackage[normalem]{ulem}
+\usepackage{multirow}
+\usepackage{booktabs}
 
 \begin{document}
 \maketitle
 
-%Shift-click, ctrl-click
-%scroll bar, menus not buttons
+This is the user manual for version 2.0 of the AviaNZ program. The two biggest changes in this version are that we use both mouse buttons: one to draw segments, and the other to select them (the choice as to which does what is an option, but defaults to left button for making segments and right for selecting them), and we have significantly improved the way that species recognisers are trained and stored. There are a few other improvements, but these are the biggest change.
+As well as this manual, there are some videos and an FAQ available at \url{http://www.avianz.net}.
 
-%Operater and reviewer
-% 5 areas bit
-% not a problem
+We provide some introductory material about sounds and spectrograms on our web page if you want to know more about them. We also give specifications of the filter storage format and the bird lists for those that wish to change them. 
+ 
+We really want feedback on AviaNZ, particularly what works and what doesn't, how you would like to see it improved, and what other functionality it needs. We are more than happy to talk about our plans as well. 
 
-This is a brief guide to version 1.3 of the AviaNZ program. 
-We really want feedback on it, particularly what works and what doesn't, how you would like to see it improved, and what other functionality it needs. We are more than happy to talk about our plans as well. 
+
+\tableofcontents
 
 %If you haven't done any birdsong processing before, make sure that you read Section~\ref{labelling}, which works through an example. 
-
+\newpage
 \section{Getting Started}
 
-{\em In contrast to previous versions, this version of AviaNZ does not require you to run it as administrator in Windows. It places some files in the home directory of your computer; in \url{C:/Users/username/AppData/Roaming/AviaNZ} for Windows and \url{~/.avianz} for Mac and Linux.}
+%{\em In contrast to previous versions, this version of AviaNZ does not require you to run it as administrator in Windows. It places some files in the home directory of your computer; in \url{C:/Users/username/AppData/Roaming/AviaNZ} for Windows and \url{~/.avianz} for Mac and Linux.}
 
-When the program loads, you are presented with three options in the following start-up screen:
+AviaNZ has three main modes of interaction, which are presented as options on the start-up screen:
 
-\begin{figure}[h!]
-\centering
+\begin{center}
 \includegraphics[width=.3\textwidth]{Figs/splashscreen}
-%\caption{\added{Starting window of the program.}}
-\label{welcome}
-\end{figure}
+\end{center}
 
-The first option (Manual Segmentation) is described more in Section~\ref{sec:manual}. It enables you to see and manually process audio files. The second option (Batch Processing) takes whole directories (and subdirectories) of audio files and automatically segments the bird calls of a particular species; see Section~\ref{sec:auto}. You can view the output of this automatic segmentation using the first option; the software also produces an Excel file showing the results, see Section~\ref{sec:outputs}, but in addition the third option (Review Batch Results) enables you to check the results of the batch processing easily. 
+\begin{itemize}
+\item The first option (`Manual Processing') is described more in Section~\ref{sec:manual}. It enables you to look at, listen to, and manually annotate individual audio files, as well as to train your own recognisers. 
+\item The second option (`Batch Processing') takes whole directories (and subdirectories) of audio files and automatically segments the bird calls of selected species you have recognisers for; see Section~\ref{sec:auto}. 
+\item You can view the output of the automatic segmentation using the the third option (`Review Batch Results', see Section~\ref{sec:review}), but if you want more context on them you could also use the first (`Manual Processing') option. 
+\item The software also produces an Excel file showing the results; these are described in more detail in Section~\ref{sec:outputs}. 
+\end{itemize}
 
-\section{Manual Segmentation}
+\section{Manual Processing}
 \label{sec:manual}
 
-If you select manual segmentation, you will see a dialog box asking you to select a file to view. Use this in the normal way to select a sound file from a directory. Once you have selected one, the program will ask you to give names for the operator and reviewer. These are useful to keep track of who has looked at different files. Following that, you should see a screen like the one below (Figure~\ref{main}). This is the main program for manually labelling birdcalls, or reviewing the processing of automatic processes.
+If you select `Manual Processing', you will see a dialog box asking you to select a file to view. Use this in the normal way to select a sound file from a directory. The program will ask you to give names for the operator and reviewer. These are useful to keep track of who has looked at different files. Following that, you should see a screen like the one on the next page. This is the main interface for manually labelling birdcalls, training recognisers, or testing things. It can also be used for reviewing the results of automatic processing; checking for misclassifications is usually easier in `Review Batch Results', but the manual processing mode also allows you to see if there are any calls that the recogniser missed.
 
-The program automatically loads the first 5 minutes of a file. 
-
-\begin{figure}[h!]
-\centering
-\includegraphics[width=.8\textwidth]{Figs/AviaNZInterface.pdf}
-\caption{The interface for manual birdsong annotation and analysis.}
-\label{main}
-\end{figure}
+The program automatically loads the first 5 minutes of a file (if it is in wav format; mp3 files lose a lot of information and should not be used, other formats should be converted to wav before use). AviaNZ assumes that sound files are recording in mono (single microphone) sound. If there are other channels, it only loads the first one.
+The name of the current file is shown in the title of the window (1).
 
 \newpage
+\begin{center}
+\includegraphics[width=.8\textwidth]{Figs/AviaNZInterface.pdf}
+%\caption{The interface for manual processing and analysis.}
+\end{center}
+
+There are four separate areas of the screen within the `Manual Processing' part of AviaNZ. Each has its name in a blue bar. They are:
+	\begin{description}
+	\item[Overview] This shows you a picture of a 5 minute segment of the file (labelled 2 in the figure). The part you are looking at in the main plots is shown in blue. Below it there is a coloured bar (in yellow and labelled 3 in the figure). There are left and right arrow buttons (labelled 4) and double arrow buttons (labelled 5) on the left of this area. The single arrow buttons move the view in the main area along, while the double arrow buttons move to the previous 5 minutes or to the next 5 minutes of the file (if they exist). 
+	\item [Files (11)] This is a list of files in your current directory. You can double-click on one to select it and open it. Files in red have been annotated in the program, while files in black have not. The double arrow button on the top right of this area (labelled 10) moves on to the next file.
+	\item[Spectrogram (6)] This is the main representation of the sound file, and the way that you add and modify annotations. It is possible to display information about where the mouse is pointing on the spectrogram (time, frequency, energy value; (7 in the figure)) by choosing `Show pointer details in spectrogram' from the Appearance menu, and to switch it off the same way. There is also a scroll bar to move through the current page (8).
+	\item[Controls] These play the sound file (12), modify the appearance of the plots (13 in the figure, see Section~\ref{sec:spectrogram2}) and enable you to change the size of the visible part of the file (14), and delete the current segment (15).  For more details, see  Section~\ref{sec:play}.
+	\end{description}
+
+There is an optional fifth area, which is the Amplitude plot. If you want to see the amplitude plot as well, select `Show amplitude plot' in the Appearance menu. Select the option again to hide it. You can also hide the list of files (11) and the annotation overview (2--5) in the same way. AviaNZ will remember your choice in future uses.
+
+There are two other parts to the interface:
+	\begin{description}
+	\item[Menu] The menu at the top of the screen. 
+	\item[Bar at the bottom] At the very bottom of the screen there is an area (16) that gives any status updates from the program, and on the right, information about the currently selected Reviewer and Operator (9).
+	\end{description}
+
 \begin{itemize}
-\item There are five separate areas of the screen within the AviaNZ program (each of which has its name in a blue bar). They are:
-	\begin{description}
-	\item[Overview] This shows you a picture of the 5 minutes of the file (labelled 2 in the figure). The part you are looking at in the main plots is shown in blue (it's actually the whole file in the example figure). Below it there is a coloured bar (labelled 3 in the figure, and in yellow). There are left and right arrow buttons (labelled 4) and double arrow buttons (labelled 5) on the left of this area. The single arrow buttons move the view in the main area along, while the double arrow buttons move to the previous 5 minutes or to the next 5 minutes of the file (if it exists). 
-	\item [Files (12)] This is a list of files in your current directory. You can double-click on one to select it and open it. Files in red have been annotated, files in black have not. The double arrow button on the top right of this area (labelled 11) moves on to the next file.
-	\item[Amplitude plot (6)] This shows a picture of the sound file. It's one of the two parts of the interface that you can use to label the birdcalls. If you don't want to see it, you can hide it using the Appearance menu by selecting `Show amplitude plot' so that it is not ticked.
-	\item[Spectrogram plot (7)] This is the second picture of the sound file, and the one that has more information and is most useful. It is possible to display information about where the mouse is pointing on the spectrogram (time, frequency, energy value; 8 in the figure) by choosing `Show pointer details in spectrogram' from the Appearance menu, and to switch it off the same way. There is also a scroll bar to move through the file (9). 
-	\item[Controls] These play the sound file, and modify the appearance of the plots (13--17 in the figure), see Section~ref{sec:controls}.
-	\end{description}
-
-In addition, there are two extra parts to the interface:
-	\begin{description}
-	\item[Menu] The menu at the top of the screen. The name of the current file is shown in the title of the window (1).
-	\item[Bar at the bottom] At the very bottom of the screen there is an area (marked 18) that gives any status updates from the program, and on the right, information about the currently selected Reviewer and Operator (marked 10).
-	\end{description}
-
 \item You can drag the five screen areas around and reorder them if you wish, by dragging the blue bar on the top or left of them. You can also make them into their own windows by double-clicking on the blue bar. If you decide that you made a mistake doing that, then there is an option in the Actions menu to `Put docks back' that returns them to the original configuration.
 
-\item To load a new file, either choose `Open sound file' in the File menu, or just double click one in the Files screen area (double clicking on a folder will open that folder), or click on the button labelled 11 to move to the next file. 
+\item To load a new file, either choose `Open sound file' in the File menu, or just double click one in the Files area (double clicking on a folder will open that folder), or click on the button labelled 10 to move to the next file.
 
 \item If you want to move to a new directory, either use the `..' option at the top of the list of files to navigate around your computer's file system, or use the  `Open sound file' in the File menu.
 
-\item To restart the program, for example so that you can start doing some batch processing, choose `Restart' from the File menu. To quit completely, choose `Quit'. 
+\item To restart the program, for example so that you can start doing some batch processing, choose `Restart Program' from the File menu. To quit completely, choose `Quit'. 
+\end{itemize}
 
-%\item The program will tell you if it is doing anything by putting text in the area labelled 18. \added{The selected operator is shown at the bottom of the window (10).}
+\subsection{Spectrogram}\label{sec:spectrogram}
 
-\subsection{Spectrogram and Amplitude}
+\begin{itemize}
+\item The main spectrogram plot (6) shows a section of a sound file. The part you are looking at is highlighted in blue in the top (Overview: 2) picture.
 
-\item The two main plots (Amplitude and Spectrogram; 6 and 7) show a section of a sound file. The part you are looking at is highlighted in blue in the top (Overview: 2) picture. Sometimes people only want to look at the spectrogram. If you are one of these people, in the Appearance menu there is an option `Show amplitude plot', which is initially ticked. Click on it to remove the tick and the amplitude plot will vanish. If you change your mind, choose the option again. You can also hide the list of files (12) and the annotation overview (3) in the same way. AviaNZ will remember your choice in future uses.
+\item The axes of the spectrogram are time on the horizontal axis and frequencies on the vertical axis. The times will be true times if this information is available (such as when using DOC recorders), or time from start of file otherwise. 
 
-\item Sometimes spectrograms don't look good initially, for example because of high noise. You can modify the brightness and contrast of the spectrogram using the two sliders marked 15 in the figure. You can also use a different colour scheme, and invert the colour map (swap black and white), by choosing the relevant options in the Appearance menu. 
+\item Sometimes spectrograms don't look good initially, for example because of high noise. You can modify the brightness and contrast of the spectrogram using the two sliders (13). 
+\item You can also use a different colour scheme, and invert the colour map (swap black and white), by choosing the relevant options in the Appearance menu.
+\end{itemize}
 
 \subsection{Zooming and Scrolling}
 
+\begin{itemize}
 \item The part of the file you can see can be changed by:
 	\begin{itemize}
-	\item dragging the scroll bar below the spectrogram (9)
-	\item clicking on the left or right arrows on the right of the Overview picture (labelled 4)
-	\item dragging the blue highlight in the Overview picture itself (labelled 2). 
-	\item clicking on any of the boxes in the bar below the Overview picture (labelled 3)
-	\item pressing the left or right arrow keys
+	\item dragging the scroll bar below the spectrogram (8).
+	\item clicking on the left or right arrows on the right of the Overview picture (4).
+	\item dragging the blue highlight in the Overview picture itself (2). 
+	\item clicking on any of the boxes in the bar below the Overview picture (3).
+	\item pressing the left or right arrow keys.
 	\end{itemize}
-	The amount of the file that you can see (the visible width) can be changed by either: 
+	
+\item The amount of the file that you can see (the visible width) can be changed by either: 
 	\begin{itemize}
-	\item dragging the ends of that blue highlight in (2)
-	\item changing the `Visible window width (seconds)' in the Controls dock (labelled 17) by clicking on the up and down arrows, or typing in a new number.
+	\item dragging the ends of the blue highlight in (2).
+	\item changing the `Visible window width (seconds)' in the Controls dock (14) by clicking on the up and down arrows, or typing in a new number.
 	\end{itemize}
 
-\item You can also view a restricted amount of the spectrogram by reducing the visible frequency band. To do this non-destructively, use the `Change spectrogram parameters' dialog in the Appearance menu, and change the Lowest and Highest Frequency options.
+\item You can also view a restricted amount of the spectrogram by reducing the visible frequency band, see Section~\ref{sec:spectrogram2}. 
+%To do this non-destructively, use the `Change spectrogram parameters' dialog in the Appearance menu, and change the Lowest and Highest Frequency options. There are other options in that dialog too, which are concerned with the way that the spectrogram is made.  For more information about them, see Section~\ref{sec:spectrogram}.
+\end{itemize}
 
 \subsection{Moving Through Long Files}
 
-\item If files are longer than 5 minutes, use the double arrows labelled (5) to move to the next or previous sections, or press shift + left or right arrow keys. Note that there is a 10 second overlap between the files. You can change the page size and the amount of page overlap by choosing the relevant options in the `Interface Settings' in the Interface menu, as will be described later. The times on the axis below the spectrogram show locations in the full file. Note that operations like denoising and segmentation apply to the visible 5 minute portion of the file, not the whole file. 
+\begin{itemize}
+\item If files are longer than 5 minutes, use the double arrows labelled (5) to move to the next or previous page, or press Shift + left or right arrow keys. 
+\item The program tell you which page you are currently on, and many there are in total. 
+\item There is (by default) a 10 second overlap between the pages. You can change the page size and the amount of page overlap by choosing the relevant options in the `Interface Settings' in the Interface menu, see Section~\ref{sec:interfacesettings}. 
+\item The times on the axis below the spectrogram show locations in the full file.
+\item Note that operations like denoising and segmentation (described in Section~\ref{sec:action}) apply to the visible 5 minute portion of the file, not the whole file.
+\end{itemize}
 
-\subsection{Playing the Sounds \label{sec:play}}
+\subsection{Manual Labelling}
 
-\item You can play the sounds visible on the screen using the `Play' button at the top-left of the Controls section (labelled 13). The button turns into a `Pause' button while playing (or you can press the `Escape' key). The light blue bar in the spectrogram plot (7)  shows where the playback is up to. When paused, you can drag this bar if you want to hear a particular part of the file. Move the mouse over it, and the bar will go red. Then click and drag to move it. The time below the play button shows the length of the file and the current position of the blue bar in minutes and seconds. You can change the volume of playback using the slider in (14). 
-You can also play a segment of sound, assuming that a segment is selected. We will cover this below.
-
-\item To stop playback and have the slider return to the start of the visible section, press the Stop button instead.
-
-\item When a segment is selected (so that it is blue -- segments are covered next) you can use the two play buttons in 14 in the picture to play just that small segment. The difference is that the one on the left plays all the frequencies in the sound file, while the one on the right will play only the frequencies highlighted, so that you can isolate particular frequencies of a call. This is particularly helpful when there is high level of background noise that is in a particular frequency range, such as cicadas, or where there are overlapping calls in different frequency bands.
-
-\subsection{Performing Segmentation}
-
-\item Segmentation has changed slightly in this version of the software. 
-
-\item You select and edit a segment by clicking on it with one of the mouse buttons (left or right), and create one by using the other mouse button. You can select which performs which action using the `Mouse settings' of the `Interface settings' in the Appearance menu.
-
-\item There are three options for how to create a segment. You select one of them in the `Mouse settings' of the `Interface settings' in the Appearance menu:
-	\begin{itemize}
-	\item Start and stop a full frequency band by clicking (i.e., click once at the correct time for the start of a segment, move the mouse to the end, click again, the box covers all frequencies)
-	\item Start and stop a limited frequency band by clicking (i.e., click once at the correct time and frequency (in the spectrogram) for the start of a segment, and then again at the time and frequency for the end)
-	\item Drag a limited frequency band box (i.e., click and hold the mouse button and drag the mouse to the correct end point in both time and frequency)
-	\end{itemize}
-
-\item While the segment is being made, it is red. At the end it will turn blue, and a drop-down menu will then appear asking you to label the segment. 
-
-\item To choose the type of bird, click on the name. If the type isn't in the list, move to `Other'. If it isn't in the second list, at the bottom of that list is a selectable box (it probably says `Albatross'). Clicking on it provides the complete list of birds. If there is something missing from there, choose 'Other' from it, which is at the very end. It will ask you to enter a name. From then on this name will appear in the list. If you click anywhere on the screen except on a bird name in the menu then the menu will disappear and the bird type will be labelled as `Don't Know'. 
-
-\item By default these lists update dynamically, so that bird types you have chosen appear at the top of the list. If you don't like that, then you can disable it in the `Interface settings'. 
-
+\begin{itemize}
+\item To create segments, click and drag with the left mouse button on the Spectrogram. 
+\item To select segments, click on them with the right mouse button (pressing control on the keyboard when clicking on a Mac). The segment will turn blue when it is selected.
+\item You can change which mouse button performs which action using the `Mouse settings' of the `Interface settings' in the Appearance menu.
 \item If you find that the colours make it hard to see the data underneath the boxes you can make them transparent using the `Make dragged boxes transparent' option under `Annotation' in the `Interface settings'. You can also choose different colours if you have particular preferences.
-
-\item If you select a segment that already exists then it will turn blue and the menu will reappear so that you can correct mistakes.
-
-\item You can avoid seeing the menu by pressing the shift key on the keyboard when you click to finish the segment. The program will then give the segment the same label as the previous box that you labelled. This is very useful when there is one bird calling repeatedly.
-
-\item You can also show that you are uncertain by pressing the control button when you click to segment (command button on a Mac computer). The names of the birds will then have a question mark after them. 
-
-\item By default, the software only allows one bird type to be specified for each segment. However, there may be times when you wish to label multiple species in one box (for example, for the dawn chorus). In that case, choose `Default to multiple species' in the `Interface settings'. Now, when you choose a bird from the list it will be ticked, and the menu will not close automatically, allowing you to make multiple selections. To unselect something, click on it again. When you make a new segment, `Don't Know' if selected by default. Choosing any other option deselects `Don't Know'. You can reselect it if you do want that it in the list. 
-
-\item The segments that are drawn on the screen have different colours. They are changeable in the `Interface settings', but by default are:
-	\begin{description} 
-	\item[Blue] This segment is currently selected. You can play it by pressing the buttons in 14, or give it a new label. 
-	\item[Green] This segment has been labelled with a bird name.
-	\item[Yellow] This segment has been labelled with a bird name with a question mark.
-	\item[Red] This segment has been labelled as `Don't Know'.
-	\end{description}
-
-\item These colours match the rectangles underneath the overview (labelled 3). For each 10 second segment of the file, these boxes are:
-
-	\begin{description} 
- 	\item[White] if there are no segments, 
-	\item[Red] if there are `Don't know' segments, 
-	\item[Yellow] if there are question marked segments, or 
-	\item[Green] if all the segments in that section are labelled with definite species. 
-	\end{description}
-	
-\item You can click on those rectangles in (3), and they will update the amplitude and spectrogram plots to show that section of the file. This is a good way to move through the file quickly.
-
-\item Segments can be moved by dragging them, or resized by dragging the left and right ends, just like the Overview highlight. For bounded-frequency boxes, drag the handle on the top right corner of the box to resize. (All these interactions use the non-drawing mouse button.)
-
-\item Segments can be deleted by selecting them (so that they turn blue) and then clicking on the `Delete Current Segment' in the Controls (16). You can also just press the delete or backspace key on the keyboard. 
-
-\item To delete all of the segments, use the `Delete all segments' option in the Actions menu. 
 
 \item Segments are saved automatically, so that you can't lose your work.
 
 \end{itemize}
 
+\subsubsection*{Creating and Labelling Segments}
+
+\begin{itemize}
+\item There are three options for how to create a segment. You select one of them in the `Mouse settings' of the `Interface settings' in the Appearance menu:
+	\begin{itemize}
+	\item {\em (default)} Drag a limited frequency band box (i.e., click and hold the mouse button and drag the mouse to the correct end point in both time and frequency).
+	\item Start and stop a limited frequency band by clicking (i.e., click once at the correct time and frequency for the start of a segment, and then again at the time and frequency for the end).
+	\item Start and stop a full frequency band by clicking (i.e., click once at the correct time for the start of a segment, move the mouse to the end, click again, the box covers all frequencies).
+	\end{itemize}
+	
+\item When you create a new segment, a drop-down menu will appear asking you to choose a label for that segment. 
+
+\begin{itemize}
+\item To choose the type of bird, click on the name. 
+\item If the species isn't in the list, move to `Other'. 
+\item If it isn't in the second list, at the bottom of that list is a selectable box (it probably says `Albatross'). Clicking on it provides the complete list of birds. 
+\item If there is something missing from there, choose Other' from it, which is at the very end. It will ask you to enter a name, as Genus (Species); e.g., `Kiwi (Little Spotted)'. 
+\item If there is only a single example of the genus, you can miss out the species, e.g., `Kakapo'. 
+\item New name you add will then appear in the list. 
+\item If you click anywhere on the screen except on a bird name in the menu then the menu will disappear and the bird type will be labelled as `Don't Know'. 
+\item The bird list that we are using is based on the one that DOC use, and is meant to cover all the bird species that we know about in New Zealand. 
+\item You can add new species individually using `Other' in the menus.
+\item It is possible to use other bird lists using the `Interface settings'.  
+\end{itemize}
+
+\item By default the lists of bird names update dynamically, so that bird types you have chosen appear at the top of the list. If you don't like that, then you can disable it in the `Interface settings'. 
+
+\item When creating a segment, you can give it the same label as the previous segment by pressing the Shift key on the keyboard when you click to finish the segment. The program will then give the segment the same label as the previous box that you labelled, without showing you the list. This is very useful when there is one bird calling repeatedly.
+
+\item You can also show that you are uncertain by pressing the Ctrl button when you click to segment (command button on a Mac computer). The names of the birds will then have a question mark after them.
+
+\item By default, the software only allows one bird type to be specified for each segment. However, there may be times when you wish to label multiple species in one box (for example, for the dawn chorus). In that case, choose `Default to multiple species' in the `Interface settings'. Now, when you choose a bird from the list it will be ticked, and the menu will not close automatically, allowing you to make multiple selections. To unselect something, click on it again. When you make a new segment, `Don't Know' is selected by default. Choosing any other option deselects `Don't Know'. You can reselect it if you do want that label as well. 
+\end{itemize}
+
+\subsubsection*{Updating Segments}
+
+\begin{itemize}
+\item If you select a segment that already exists by clicking on it then it will turn blue. Click on it again and the menu will reappear so that you can correct mistakes.
+\item Segments have blue diamonds at the corners, so that you can resize them, or you can move the whole segment by dragging it (even when it isn't selected). 
+\item Segments can be deleted by selecting them (so that they turn blue) and then clicking on the `Delete Current Segment' in the Controls. You can also just press the delete or backspace key on the keyboard. 
+\item To delete all of the segments from the current file, use the `Delete all segments' option in the Actions menu. 
+\item You can disable the making and updating of segments (to avoid making segments by mistake) by selecting `Make read only' from the `Appearance' menu.
+\end{itemize}
+
+%You can denoise a single segment by selecting it, and then pressing the button with a paint brush on in the `Controls' section (14).
+
+%\item The button with a small `i' on in the `Controls' section (14) changes the information that is shown about each segment; rather than the species label, the syllable name from the recogniser is given. The drop-down list then changes to enable you to correct this instead if there are any options to do so. 
+
+\subsubsection*{Colour Codes}
+
+\begin{itemize}
+
+\item The segments that are drawn on the screen have different colours. These colours are changeable in the `Interface settings', but by default are:
+	\begin{description} 
+	\item[Blue] This segment is currently selected. You can play it by pressing the buttons in the Controls area (see Section~\ref{sec:play}), or give it a new label by clicking on it again, or delete it. 
+	\item[Green] This segment has been labelled with a bird name.
+	\item[Yellow] This segment has been labelled with a bird name with a question mark.
+	\item[Red] This segment has been labelled as `Don't Know'.
+	\end{description}
+
+\item These colours match the rectangles underneath the Overview:
+
+\begin{center}
+\includegraphics[width=.6\textwidth]{Figs/overview}
+\end{center}
+
+\item For each 10 second segment of the file, these boxes are:
+	\begin{description} 
+ 	\item[White] if there are no segments, 
+	\item[Red] if there are `Don't know' segments, 
+	\item[Yellow] if there are question-marked segments, or 
+	\item[Green] if all the segments in that section are labelled with definite species. 
+	\end{description}
+	
+\item You can click on those rectangles, and they will update the main spectrogram plot to show that section of the file. This is a good way to move through the file quickly.
+\end{itemize}
+
+\subsection{Controls \label{sec:play}}
+
+\begin{center}
+\includegraphics[width=.3\textwidth]{Figs/controls.png}
+\end{center}
+
+\begin{itemize}
+\item The buttons at the top of the controls block allow you to play the sounds. 
+
+\begin{itemize}
+\item The top-left button is a normal play button. The button turns into a `Pause' button while playing.  
+\item While the sound is playing, the light blue bar in the spectrogram plot shows where the playback is up to. 
+\item When the sound is paused, you can drag this bar if you want to hear a particular part of the file. Move the mouse over it, and the bar will go red. Then click and drag (using the mouse button that does not make segments, by default the right button) to move it. 
+\item To stop playback and have the slider return to the start of the visible section, press the Stop button.
+\item When a segment is selected (so that it is blue) you can use the two play buttons to the right of the stop button to play just that small segment. 
+\item The difference is that the one on the left plays all the frequencies in the sound file, while the one on the right will play only the frequencies highlighted, so that you can isolate particular frequencies of a call. This is particularly helpful when there is high level of background noise in a particular frequency range, such as cicadas, or where there are overlapping calls in different frequency bands.
+\item The button below them (with a picture of a snail on it) lets you play back the selected segment at different speeds. You can change the speed by clicking and holding on the button. Note that this changes the pitch of the sound.
+\item You can change the volume of playback using the slider below the buttons. 
+\end{itemize}
+
+\item The brightness and contrast sliders change the appearance of the spectrogram, helping to see more sounds. 
+\item The size of the visible window controls how much of the full spectrogram appears in the main window.
+\item The `Delete current segment' button removes any segment that is selected (blue colour). 
+\end{itemize}
+
 \subsection{Menu Options}	
+
+Most of the options for AviaNZ are found through the menus. There are keyboard shortcuts for many of the menu items, which can be seen in the menus themselves. 
+
+\subsubsection{{\em File Menu}}
+
+\begin{center}
+\includegraphics[width=.3\textwidth]{Figs/filemenu}
+\end{center}
+
+\begin{description}
+\item[Open sound file] Produces a file dialog so that you can choose a new sound file to open.
+\item[Set operator/reviewer (Current File)] Enables you to change the operator or reviewer that were specified when you started AviaNZ. The change only applies to this file. 
+\item[Restart program] Takes you back to the start screen so that you can access the other functions.
+\item[Quit] Does what it says.
+\end{description}
 
 \subsubsection{{\em Appearance Menu}}
 
+\begin{center}
+\includegraphics[width=.3\textwidth]{Figs/appearancemenu}
+\end{center}
+
 \begin{description}
-\item [Changing appearance] The first four options in the menu hide or reveal the amplitude plot (6), list of files (12), annotation overview (3), and information about where the mouse is pointing in the spectrogram (8). 
-%\item [Drag boxes] This option enables the user to select if they wish to perform segmentation by clicking on the start and end of a segment, or dragging a box. The boxes can be made transparent, when only their edge shows the colour code of what kind of label they have been given.
-%\item[Invert Spectrogram] This is currently a play feature that shows that it is possibly to invert a spectrogram to get a new wave file. The spectrogram picture will update to be a bit blurred. 
-\item [Choose colour map] This enables the user to select a colour map they prefer to the standard grey one. There is also an option to swap black and white (inverting the colour map). 
+\item [Changing appearance] The first four options in the menu hide or reveal the amplitude plot, list of files, overview, and information about where the mouse is pointing in the spectrogram. The ones that are selected are marked with a tick. 
+\item [Choose colour map] This enables the user to select a colour map they prefer to the standard grey one. 
+\item [Invert colour map] By default, areas of high energy (frequencies where there is a call or other sound) are shown as the lightest colour, and low energy as dark. This can be swapped over with this option. Note that you will need to change the brightness and contrast using the controls area after inverting the colour map.. 
 %\item [Make frequency axis tight] After bandpass filtering, this updates the spectrogram plot to stop showing the empty bands.
-\item [Change spectrogram parameters] A set of options to modify the spectrogram. Enables changes of the windowing function, width and increment of the FFT, and the option to not subtract off the mean. The `Multitapering' option can make very noisy spectrograms look better, but it takes a lot of computer time. The two sliders at the bottom of the dialog enable the user to non-destructively show a limited frequency band in the spectrogram. The axis in the plot shows what is visible. 
-\item [Make read only] When reviewing a segmentation it is possible to click on the plots by mistake, adding further segments. This option avoids this problem. It can be turned off by selecting it again. 
-\item [Interface settings] This option enables the user to customise several things about AviaNZ, such as the annotation colour scheme, length of the annotation overview sections, and auto save frequency. The user can also choose how much of a file is loaded automatically. There is a tick box under `Human classify` labelled `Save corrections'. This option is used when reviewing the automated segmentation results  (see Section \ref{sec:action} and Sections \ref{sec:auto}--\ref{sec:outputs}). It is also possible to change the lists of birds you are using. 
-There is an option to set the operator and reviewer, this facility can also be found in the File menu.
+\item [Change spectrogram parameters] A set of options to modify the spectrogram.  See Section~\ref{sec:spectrogram2} for more details. %Enables changes of the windowing function, width and increment of the FFT, and the option to not subtract off the mean. The `Multitapering' option can make very noisy spectrograms look better, but it takes a lot of computer time. 
+The two sliders at the bottom of the dialog enable the user to non-destructively show a limited frequency band in the spectrogram. The axis in the plot shows the range that is visible. 
+\item [Mark on spectrogram] There are some features that will help you spot bird calls or recognise them. We currently offer three options here: the fundamental frequency, spectral derivatives, and points of high energy. To select one, choose it from the menu; select it again to remove it. They can help to find particular types of call. 
+\item [Make read only] When reviewing a segmentation it is possible to click on the plots by mistake, adding further segments. This option avoids this problem. It can be turned off by selecting it again. When read only mode is on, the message section at the bottom of the screen says so. 
+\item [Interface settings] This option produces a dialog that enables the user to customise several things about AviaNZ. See Section~\ref{sec:interfacesettings} for more details.
+\item [Put docks back] Returns the various screen components to their original layout if they have been moved around. 
 \end{description}
 
 \subsubsection{{\em Actions Menu}}
 \label{sec:action}
 
+\begin{center}
+\includegraphics[width=.3\textwidth]{Figs/actionsmenu}
+\end{center}
+
 These options will mostly provide dialog boxes that ask you to make choices. 
 
 \begin{description}
 \item [Delete all segments] Does what it says. 
-\item [Denoise] Runs some programs that try to get rid of the noise in the sound file so that the birdcalls are easier to see. 
-\item [Add metadata about noise] Allows the user to specify if the sound file is particularly corrupted by noise, and also to identify the type(s) if known. This can be an optional datafield, or made compulsory for each file by choosing the appropriate option in the `Interface settings'.
-\item [Show fundamental frequency] Plots an estimate of the fundamental frequency for each call as a red line on the spectrogram.
-\item [Segment] You can ask the computer to segment the calls automatically. 
-We currently provide 3 options, and you can try them to see how well they work.
+\item [Denoise] Runs some programs that try to get rid of the noise in the sound file so that the birdcalls are easier to see. %You can also denoise a single segment by selecting it, and then pressing the button with a paint brush on in the `Controls' section (14). 
+See Section~\ref{sec:denoising} for more information.
+\item [Add metadata about noise] Allows the user to specify if the sound file is particularly corrupted by noise, and also to identify the type(s) if known. This can be an optional data field, or made compulsory for each file by choosing the appropriate option in the `Interface settings'.
+\item [Segment] You can ask the computer to segment the calls automatically. We currently provide 3 options. The first (`Wavelets') applies a pre-trained recogniser for a particular species, in the same way that the Batch Processing mode (Section~\ref{sec:auto}) does, but just to the current page. The other two (`FIR' and `Median Clipping') will create a segment for any significant noise in the file. 
+\item [Export segments to Excel] This enables the user to save a summary of the annotation of the currently opened file into an Excel workbook (in the same location as the current sound file), as is described in Section~\ref{sec:outputs}. 
 %\item [Find Matches] If you select a segment (so that its box is green) and then press this button the program will look for others that are similar. It does not currently deal well with nosie. 
 %\item [Filter Spectrogram] This tries to clean the spectrogram for easier viewing.
-\item [Human Review] These two options provide two different ways to view the segments and their labels for easier checking. The option to Show all pages (in `Interface settings') decides on whether to view segments in an entire file, or just the current 5 minutes of it. 
-	\begin{description}
-	\item [Human Review [All segments]] This option shows the segments one-by-one in time order (Figure~\ref{check1}).
-	\begin{figure}
-	\centering
-	\includegraphics[width=.6\textwidth]{Figs/review1}
-	\caption{Example of outputs for Human Review [All segments].}
-	\label{check1}
-	\end{figure}
-	To play the segment, click on the play button. Green bars mark the limits of current segment, and a couple of seconds of context are provided around it. You can also change the spectrogram brightness to make it easier to review. If the label is correct, click on the green tick, which will make the next image load. If not, select the correct label before clicking the tick button. If you have allowed multiple species selection you can pick several options. To delete a segment, click on the red dustbin button. To move back to the previous one, click the back arrow; note that this will not save your current changes. 
-	\item [Human Review [Choose species]] This option asks you to choose a bird from those found in the current file. For each segment that is wrongly labelled, click on its picture (the colour map will change). These segments will be deleted (Figure~\ref{check2}). By default, the program will automatically save the corrections in a temporary folder so that they can be used to help us improve these classifications in the future. You can stop this behaviour in the `Interface settings' interface. You can change the brightness and contrast here as well, and also play the sounds by hovering on the image, and then clicking on the play button when it appears. 
-	\begin{figure}
-	\centering
-	\includegraphics[width=.4\textwidth]{Figs/Check2}
-	\caption{Example of the window for Human Review [Choose species].}
-	\label{check2}
-	\end{figure}
-	\end{description}
-
-\item [Export segments to Excel] This enables the user to save a summary of the annotation of the currently opened file into an Excel workbook (in the same location as the current sound file), as is described in Section~\ref{sec:outputs}. 
-\item [Save as image] Saves the spectrogram currently visible on the screen as an image.
+\item [Human Review] These two options provide two different ways to view the segments and their labels on the current page for easier checking. For more, see Section~\ref{sec:review}.
+\begin{description}
+\item[All segments] Show each segment regardless of label.
+\item[Choose species] Show all segments for one species.
+\end{description}
+\item [Export current view as image] Saves the spectrogram currently visible on the screen as an image, including any segments marked. 
 \item [Save selected sound] Saves a selected segment as a short sound file.
+\end{description}
+
+\subsubsection{{\em Recognisers Menu}}
+
+\begin{center}
+\includegraphics[width=.3\textwidth]{Figs/recognisersmenu}
+\end{center}
+
+\begin{description}
+\item [Train an automated recogniser] A significant new feature of this version of AviaNZ is that you can now train your own species recognisers. The process is relatively simple, and is described in Section~\ref{sec:trainfilter}.
+\item [Test a recogniser] Enables you to test a recogniser by choosing a folder to run it on. See Section~\ref{sec:testfilter}.
+\item[Manage recognisers] Lets you rename, export, or import new recogniser for different species. %See Section~\ref{sec:filters} for more details.
 \end{description}
 
 \subsubsection{{\em Help Menu}}
 
 \begin{description}
-\item [Help] Gives access to this file.
-\item [Cheat sheet] Provides a set of examples of common bird calls. 
+\item [Help] Gives access to this manual online.
+\item [Cheat sheet] Links to our webpage to see examples of New Zealand bird spectrograms and calls.
+\item[About] Shows you basic information about AviaNZ.
 \end{description}
 
 
-\section{Automatic Segmentation of a Folder}
-\label{sec:auto}
+\subsection{Changing the Spectrogram Computation}\label{sec:spectrogram2}
 
 \begin{itemize}
-\item If you select `Batch Processing' from the starting window, you will see a screen like the one below (Figure~\ref{batch}). Navigate to a folder containing recordings to process. If this folder contains subfolders, the program will work through all of the folders inside the original one. It ignores any files that already have annotations. Choose the species that you are interested in detecting from the drop down list, or select `All Species'. 
+\item Selecting `Change spectrogram parameters' from the Appearance menu will produce the following dialog box:
 
-\item Press the `Process Folder' button to start the program. Note that this is a very computationally intensive process, and will take a long time (hours) if there are lots of files to process, and make your computer hard to use for anything else. 
+\begin{center}
+    \includegraphics[width=.4\textwidth]{Figs/spectrogramoptions}
+\end{center}
 
-\item If you stop the processing partway through, AviaNZ will try and restart from the place it got up to last time if you restart it.
+\item You can change some of the parameters that are used to produce the spectrogram:
 
-\item Once it has finished, the window will close and the AviaNZ start screen will reopen so that you can review the outputs. You can either do this in the manual review interface, or use the `Review Batch Results' option in the starting screen. A similar menu to the `Batch Processing' option will prompt you to select a folder with previously processed files. If you choose `All species' then you will see a screen like Figure~\ref{check1}, while if you select a particular species, you will see a screen like Figure~\ref{check2}. 
-
-\item AviaNZ also produces an Excel spreadsheet, as is described in Section~\ref{sec:outputs}. Note that the `All species' option will delete the Excel files for individual species to ensure that everything is consistent. The information is then held in the one spreadsheet.  
+\begin{itemize}
+\item The window function (default: Hann) controls how the spectrogram combines sounds across the time range.
+\item Mean normalisation and equal loudness try to make the spectrogram energies more even.
+\item Multitapering uses multiple windows to make a better estimate of the spectrogram, but performs a lot of computation, and can therefore be slow.
+\item The window width and hop size control how much of the sound file makes up one spectrogram bin, and how they overlap. A big window size will improve frequency resolution, but reduce time resolution, and vice versa. The hop size controls how much the spectrogram time bins overlap. 
+\item The frequency range sliders let you change the visible frequency range in the main spectrogram window. This can be useful if you want to focus on only part of the range.
 \end{itemize}
-	
-\begin{figure}[h!]
-\centering
-\includegraphics[width=.5\textwidth]{Figs/review2}
-\caption{The interface for batch processing.}
-\label{batch}
-\end{figure}
 
-%\begin{figure}[h!]
-%\centering
-%\includegraphics[width=.5\textwidth]{Figs/review2}
-%\caption{The interface for batch processing.}
-%\label{batch2}
-%\end{figure}
+\item If you want to know more about these options, look on the AviaNZ webpage, in the `Technical Details' section. 
+\item You can also just try changing them and see if it makes your spectrograms clearer.
+\end{itemize}
+
+\subsection{Denoising}\label{sec:denoising}
+
+\begin{itemize}
+\item When sound files are particularly noisy, it can be helpful to remove some of that noise. AviaNZ currently provides three ways to do this (via the `Denoise' option in the Actions menu):
+\begin{description}
+\item[Wavelets] This is our main method, and tries to preserve the bird call perfectly. 
+\item[Bandpass] Suppresses all frequencies outside a restricted range (which you specify) so that you can concentrate on the frequency range where calls that you are interested in can be seen.
+\item[Butterworth bandpass] Another way to compute a restricted frequency range.
+\end{description}
+\item You can save the denoised sound files, and undo the denoising if it does not help.
+\end{itemize}
+
+\subsection{Interface Settings}\label{sec:interfacesettings}
+
+\begin{itemize}
+\item There are quite a few user-selectable options in AviaNZ, which you can choose using the `interface settings' menu option in the Appearance menu, which will produce the following dialog box:
+\begin{center}
+    \includegraphics[width=.4\textwidth]{Figs/interfacesettings}
+\end{center}
+
+\item These options include:
+\begin{description}
+\item[Mouse settings] Swap which mouse button selects segments and which creates them, and change the method of creating segments (clicking or dragging).
+\item[Paging] The page is the length of spectrogram loaded into AviaNZ at one time. By default it is 300 seconds (5 minutes). Note that longer times will require more memory and processing time. The amount of overlap between the pages can also be specified. The aim of the overlap is to make sure that calls aren't missed, and that segments are labelled accurately, at the page limits. 
+\item[Annotation] 
+\begin{itemize}
+\item The first option in this section changes the length of the boxes in the Overview. 
+\item The next enables you to make the labelling boxes transparent (so that only the outline of the box is shown) if you find it hard to see what is in a segment. 
+\item By default, AviaNZ save the segments you have made every 60 seconds. This can be changed, for example if you want to do it more often for safety. 
+\item You can also change the colours of segments.
+\item AviaNZ has a check-ignore protocol for people who only annotate subsets of recordings. This puts a mark on the spectrogram in places where the user should be annotating the spectrogram, which you can control with these options.
+\end{itemize}
+\item[Bird list] There are two bird lists in AviaNZ: the short list of common birds, and a longer list of all possibilities. You can change these files for others (for example, to include non-New Zealand species). %See Section~\ref{sec:birdlists} for more information. 
+
+You can also change the default behaviours of dynamically updating the list of common birds, and enable multiple species to be selected for a single segment. This can be useful for labelling things like the dawn chorus, but these segments will not provide good training data for new recognisers. 
+\item[Human classify] By default, AviaNZ saves corrections that are made using the review options (see Section~\ref{sec:review}). 
+\item[User] Enables you to set the operator and reviewer; this facility can also be found in the File menu. You can also change whether or not the AviaNZ window starts at full screen size, and whether or not the noise data must be completed for all files. 
+\end{description}
+\end{itemize}
+
+There are two other ways to interact with AviaNZ that are selectable via the start screen, and that are described next. 
+
+\newpage
+\section{Batch Processing}
+\label{sec:auto}
+
+Batch processing is for use when you have large numbers of recordings that need to be processed, for example when you collect recorders from the field. Download all of the data from the SD cards into a folder on your computer, and then start AviaNZ. 
+
+\begin{center}
+\includegraphics[width=.5\textwidth]{Figs/Batch1}
+\end{center}
+
+\begin{itemize}
+\item Select `Batch Processing' from the starting window. You will see a screen like the one above. 
+\item Navigate to a folder containing recordings to process. 
+\item If this folder contains subfolders, the program will work through all of the folders inside the original one. 
+\item Note that it deletes any previous annotations in your files. 
+\item There are two outputs from batch processing: the data files that AviaNZ uses to label segments, and Excel files annotating the presence or absence of different species (see Section~\ref{sec:outputs}).
+\item You can choose one or more species-specific recognisers from the drop-down list to apply to the sound files in order to automatically label them. 
+\item Alternatively, you can select `Any sounds'; in this case AviaNZ will show any sounds in the files, and label them as `Don't Know'. 
+\item For recordings from DOC recorders you can also choose to limit the times of the recordings. 
+\item You can choose whether or not to try and filter out the sound of wind, and to merge call types. The first can be useful if your data was collected in a windy place, but may miss some calls otherwise. 
+\item AviaNZ also produces an Excel spreadsheet, as is described in Section~\ref{sec:outputs}. One sheet of this spreadsheet shows Presence/Absence in time blocks. You can set the length of this time block here.
+\item Note that the `Any sounds' option will delete the Excel files for individual species to ensure that everything is consistent. The information is then held in one spreadsheet.  
+\item Press the `Process Folder' button to start the program. This is a very computationally intensive process, and will take a long time (hours) if there are lots of files to process, and make your computer hard to use for anything else. It is generally best to leave it overnight.
+\item If you stop the processing partway through, AviaNZ will try and restart from the place it got up to last time if you restart it.
+\item Once it has finished, the window will give you the option to see the AviaNZ start screen again so that you can review the outputs. You can either do this in the `Manual Processing' interface, or use the `Review Batch Results' option, which is described next. 
+\end{itemize}
+
+\section{Review Batch Results}\label{sec:review}
+
+After batch processing it is important to verify the results, since AviaNZ will have created false positives (labelled calls are being your species when they are not). We provide two interfaces for checking and correcting the results. 
+
+If you select `Review Batch Results' on the start screen then a similar menu to the `Batch Processing' option will prompt you to select a folder with previously processed files. There are two forms of review in AviaNZ:
+
+\begin{itemize}
+\item If you choose `All species' then you will see a screen like this:
+\begin{center}
+	\includegraphics[width=.6\textwidth]{Figs/review1}
+\end{center}
+
+\begin{itemize}
+\item The green bars on the spectrogram show the start and end of the call; the spectrogram includes a couple of seconds of context sound too. 
+\item Make the window larger if the spectrogram is too large for the window, or use the `+' and `-' buttons to zoom. 
+\item You can play the sound with the play button. 
+\item You can also change the spectrogram brightness and contrast to make it easier to review. 
+\item If the label is correct, click on the green tick, which will make the next image load. 
+\item If the label is wrong, select the correct label before clicking the tick button. 
+\item If you have allowed multiple species selection (in the `Interface setting' in the Manual Interface) you can pick several options. 
+\item To delete a segment, click on the red dustbin button. 
+\item To move back to the previous one, click the back arrow; note that this will not save your current changes. 
+\end{itemize}
+
+\item If you select a particular species, you will be asked to choose a species from those found in the current folder.
+\item You will then be shown a screen like this:
+\begin{center}
+	\includegraphics[width=.4\textwidth]{Figs/review2}
+\end{center}
+
+\begin{itemize}
+\item This is a set of spectrograms from each file that have been labelled as that species. 
+\item Make the window larger to see more of them, (any that do not fit will be shown on another page). 
+\item For each segment that is wrongly labelled, click on its picture (it will be marked with a cross). 
+\item If you click on it again, the cross will become a question mark to show that you are unsure, and if you click again, it will return to having no mark. 
+\item Segments marked with a cross will be deleted, those with a question mark will be identified as unsure by having a question mark added to those label, while those left plain will be confirmed as correct.  
+\item You can change the brightness and contrast here as well.
+\item You can also play the sounds by hovering on the image, and then clicking on the play button at the top-left of the image when it appears. 
+\item The `Toggle all' button cycles all of the spectrograms through the cross-question mark-OK stage, so that you don't have to click on every button if there are a lot of errors. 
+\item Click on `Next' to move on to the next screen, which will either be more spectrograms from this file, or move on to the next file. 
+\end{itemize}
+
+\item You can also see these two types of review from the `Manual Processing' interface by selecting `Human review' and then either `All segments' or `Choose species'. 
+\end{itemize}
 
 \section{Outputs}
 \label{sec:outputs}
 
-\begin{itemize}
-\item The AviaNZ program aims to provide detailed and easy-to-review outputs. An Excel file (with the name `DetectionSummary' followed by species selected) will be generated with three sheets of outputs in the same directory as the files. If this file already exists, the new results will be appended to the end of each sheet. 
+The AviaNZ program aims to provide detailed and easy-to-review outputs. An Excel file (with the name `DetectionSummary' followed by species selected) will be generated with three sheets of outputs in the same directory as the files. If this file already exists, the new results will be appended to the end of each sheet. 
 
-\item The three sheets of the Excel workbook are:
-
+The three sheets of the Excel workbook are:
 \begin{enumerate}
 \item start and end times of each birdcall detected
 \item presence/absence of the target species (or set of species) in each recording
 \item  presence/absence of the target species (or set of species) in each time interval that the user specifies (by default 60 seconds)
 \end{enumerate}
 
-\item In addition to the Excel file, for each sound file AviaNZ generates an annotation file of the automated detections that  the user can open and review in either the main interface or using the `Review Batch Results' option. 
+In addition to the Excel file, for each sound file AviaNZ generates an annotation file of the automated detections that  the user can open and review in either the main interface or using the `Review Batch Results' option. 
+
+\newpage
+\section{Training a species recogniser}\label{sec:trainfilter}
+
+\subsection{Overview}
+
+One of the main features of AviaNZ is that you can train your own species recognisers for use in batch processing. You can also swap them between people. At the moment these recognisers are fairly simple; they are intended to include {\em any} sound that might be a call from the species of interest. However, over time we will be working to improve them so that they are more accurate, while still being easy to train. 
+
+There are three parts to training a filter:
+
+\begin{enumerate}
+\item Creating training labels
+\item Running the training process
+\item Testing the recogniser
+\end{enumerate}
+
+Once these have been completed, the filter will be saved, and can then be used in the recognition process, for example in `Batch Processing'. 
+
+Before we start considering the process of training, it is useful to understand how to interpret the outputs that AviaNZ gives you. 
+
+\subsection{Some important concepts}\label{sec:metrics}
+
+The way that AviaNZ decides whether or not it has recognised a call correctly is by comparing it with human annotation. The training sound files that you provide, together with their annotations, are used to recognise the characteristics of the calls of a particular species. Comparing the human and machine outputs, there are four possible outcomes for each second of the recording:
+
+\begin{center}
+\begin{tabular}{lllll}
+&          &  & \multicolumn{2}{c}{\textbf{Human}}   \\
+\cmidrule(lr){4-5}
+             &          &  & \multicolumn{1}{c}{Call}                                               & No Call                                                               \\
+ \textbf{AviaNZ}                  &\vline \hspace{0.25cm}Call     &  & \textit{True Positive (TP)}  & \textit{False Positive (FP)} \\
+                  &\vline \hspace{0.25cm}No Call &  & \textit{False Negative (FN)} & \textit{True Negative (TN)}  \\
+\end{tabular}
+\end{center}
+
+\begin{description}
+\item[True Positive (TP)] AviaNZ and human agree that there was a call 
+\item[True Negative (TN)] AviaNZ and human agree that there was not a call
+\item[False Positive (FP)] AviaNZ says that there was a call, but the human did not
+\item[False Negative (FN)] AviaNZ did not detect a call that the human found
+\end{description}
+
+The counts of how many seconds of the recordings correspond to each of these four quantities can be combined to produce a variety of measures of accuracy. Two of them are particularly important for us:
+
+\begin{description}
+\item[Specificity (True Negative Rate)] $= \frac{TN}{(TN + FP)}$ (number correctly labelled as negative / actual number of negative examples)
+\item[Recall (Sensitivity or True Positive Rate)] $= \frac{TP}{(TP + FN)}$ (number correctly labelled as positive / actual number of positive examples) 
+\item[False Positive Rate] $= 1 - \mathrm{Specificity} = \frac{FP}{(TN + FP)}$ (number incorrectly labelled as positive / actual number of negative examples)
+\item[Precision] $= \frac{TP}{(TP + FP)}$ (number correctly labelled as positive / number labelled as positive)
+\end{description}
+
+Ideally both recall and precision would be close to 100\%, but it is hard to do both at once. For this first part of the recognition process we aim to detect as many of the calls as possible (high recall), which can lead to lower precision. 
+
+We also compare the True Positive Rate and False Positive Rates to assist in parameter setting, as we shall see shortly.
+
+\subsection{Labelling}
+
+In order to start the training process, you need to start by performing some manual labelling of calls of your target species in the Manual Interface.
+
+\begin{description}
+\item[Preparation] Select some sound files for training and testing. 
+\begin{itemize}
+\item The selection of sound files for training, and the careful labelling of the calls within those sound files, has the most potential for making a good recogniser. 
+\item Make new folders on your computer, for training and testing files, and copy the sound files into them.
+\item You should try to pick a set of sound files that display all of the call variations of that particular species. 
+\item If the species shows geographical variation you should also pick them from across that range (or name the recogniser so that the geographical specialisation is clear).  
+\item Ideally you will need a few (5--30) examples of each type of call that the species makes. 
+\item The sound files can have noise in them, although preferably not too much. 
+\item It is helpful if you have both loud and quiet calls. 
+\item Ideally you should avoid recordings where there are simultaneous calls from other species in the same frequency range. 
+\item It is also a very good idea to have a set of different files for testing. The amount of testing data should be similar to the training data. 
+\item Just like the training data, testing data should represent the real nature of field recordings that you are going to process with this filter, and also include all the call types.
+\end{itemize}
+\item[Labelling] Once you have a few sound files, open each file in the `Manual Processing' interface of AviaNZ and manually label every call from that species with the species name
+\begin{itemize}
+\item For each call that you want the recogniser to identify, drag a box around the call reasonably accurately, and label it with the name of the species.
+\item Label every call of that species, loud and quiet, except, for the training set, those that are nearly impossible to see.
+\item For birds with calls (i.e., sets of syllables in a sequence), mark the whole call of one bird with a single box. 
+\item Include any harmonics that are visible. 
+\item If you have more than one bird of the species calling, mark them both, using separate boxes. 
+\item If the calls overlap, the boxes can too. 
+\item You do not need to label calls of any other species of bird, unless you also want to train filters for them. 
+\item Do the same process for both the training and testing folders.
+\end{itemize}
+\end{description}
+
+\subsection{The training process}
+
+\begin{itemize}
+
+\item To begin training a recogniser, select `Train an automated recogniser' from the Recognisers menu. 
+\item Then follow the instructions to select the folder, and the name of the species:
+\begin{center}
+    \includegraphics[width=.4\textwidth]{Figs/Wizard_start}
+\end{center}
+
+\item AviaNZ will confirm these choices before starting the training process. 
+\item There are a few places during the process where you can modify choices that AviaNZ has made. 
+\item One is on the first page, where it says `Preferred sampling rate (Hz)'. If you don't know what these things mean, you can ignore them, but for experienced users, they are places where choices that AviaNZ has made might be improved upon. 
+\item Once the initial choices have been made, press the `Cluster' button, and AviaNZ will try to cluster your labelled training segments into groups of similar sounds. It will show the outputs of this in this interface:
+\begin{center}
+    \includegraphics[width=.6\textwidth]{Figs/Wizard_cluster}
+\end{center}
+\item We will improve this clustering over time, but at the moment it does make errors. 
+\item There are two ways that you can improve the recogniser that is made:
+
+\begin{description}
+\item[Give names to the clusters] It is intended that the clusters each represent different call types or sex of caller for some species. The default names are meaningless, since AviaNZ doesn't know about the species in advance, so it is normally useful to give a meaningful name by clicking on the name and typing a new one. 
+
+\item[Correct any errors] by moving the spectrograms between different clusters as appropriate. 
+\begin{itemize}
+\item To move a single spectrogram, just drag it to the correct cluster
+\item To move a whole group, click on each one (so it is marked with a tick) and then drag any of them to the correct cluster
+\item To move some to a new cluster, click on them, and then click on the `Create cluster' button. 
+\item To select all of the calls in a cluster, use the small tick box next to the name of the cluster
+\item You can play the calls by clicking on the top-left corner of them.
+\end{itemize}
+\end{description}
+
+
+    %\caption{As part of the training process, AviaNZ will show a curve showing how different parameter values trade-off between false positives, and false negatives on the training data. A perfect classifier would be on the top-left of the plot, spotting every call and not labelling any other calls as your species. In practice, if you want to see every example of your species calling, the classifier will also make more mistakes where it labels other calls (or noises) as your species: false positives. This means that you will need to spend more time reviewing the outputs after using the recogniser. Clicking on the curve selects the parameter choices for this call type.}
+
+    
+\item AviaNZ will now work through each cluster, and train an individual recogniser for that kind of call. 
+\item It will show you a variety of parameter settings:
+
+\begin{center}
+    \includegraphics[width=.4\textwidth]{Figs/Wizard_params}
+\end{center}
+
+\item If you don't know what they are, just ignore them. 
+\item The program will then search for good ways to represent those calls, which can take a while, and then show a plot of error rates for different parameter settings. 
+\item This is known as an ROC curve, and it is a plot of the recall (True Positive Rate) against the False Positive Rate for different parameter settings. It looks like these examples:
+\begin{center}
+    \includegraphics[width=.4\textwidth]{Figs/Wizard_ROC}
+\end{center}
+
+\begin{itemize}
+\item The perfect recogniser would be in the top-left corner of the graph. 
+\item Points lower down miss examples of the bird calling, while calls further to the right provide more false detections, i.e.., think the bird is calling when it is not. 
+\item You need to choose the compromise between these two that you are prepared to accept: more work in reviewing to get rid of false positives, or accepting that the software has not detected every call. 
+\item To make the choice, click near the point that you think is the best compromise on the curve, which AviaNZ will show as a black dot (you can see it in the picture above). 
+\item You don't have to click on it exactly, AviaNZ will show you which point is closest to where you clicked. 
+\item You need to do this for each call type. 
 \end{itemize}
 
-%\section{A Walkthrough}\label{labelling}
-%
-%This section shows you how I use the software to perform labelling. 
-%
-%\begin{itemize}
-%\item When the program starts, choose `ruru.wav' from the list of files. This is a five minute file, and quite noisy, and it has lots of calls in it. 
-%\item The two main plots show you the first 10 seconds of the recording. In the spectrogram plot, the grey speckle is noise, and the white marks inside it are the calls. Mostly people recognise the type of bird by identifying the patterns in these pictures. You should be able to see five calls, and then some noisy silence. I've highlighted the calls in this picture:
-%
-%\begin{figure}[h!]
-%\centering
-%\includegraphics[width=.8\textwidth]{ruru}
-%\end{figure}
-%
-%\item If you want to hear the calls, click on the play button (and make sure that the volume is turned up on your computer). 
-%\item Play with the `Brightness' and `Contrast' sliders (12) in Figure 1 until you find it easy to see the birdcalls. If you want to make the calls be in black instead of white, click on the  `Invert colour map' option in the Appearance menu. You can also change to a different colour scheme there. I chose the options to make it look like this:
-%
-%\begin{figure}[h!]
-%\centering
-%\includegraphics[width=.8\textwidth]{ruru2}
-%\end{figure}
-%
-%\item Decide if you like seeing 10 seconds. If you prefer a different length, either: (1) drag the end of the box in the overview picture (at the top of the screen) in or out, or (2) make the length of time in `Visible window length' longer or shorter. The plots will update automatically. 
-%\item Now we are ready to start to segment and label the calls. Click once with the mouse near the start of the call. Then move the mouse so that the blue box appears, and click again near the end of the call. In the drop-down box of bird names, click on `Ruru'. 
-%\item If you decide you missed the start or the end, you can drag the ends of the box by putting the mouse over them, then clicking and dragging them. You can also move the whole box. 
-%\item Move on to the next call and repeat.
-%\item If you think that this second call is also a ruru, press shift when you click the second time, and the menu won't drop down, and the box will also be labelled as 'Ruru'
-%\item If you aren't sure about a call, but think it is probably a ruru (or whatever bird) press control when you click and the menu options will have question marks on them. 
-%\item When you have labelled all of the calls, press the arrow button at the top-right of the screen to move on to the next part of the recording, or drag the slider at the bottom of the screen, and carry on. 
-%\item When you have finished a file, click on `Load File' to load another file, or click on `Quit' to close the program. 
-%\end{itemize}
-%
-%When doing this you will realise what a slow and laborious procedure it is. That's why we want to automate most of it. Unfortunately, the amount of noise in the files makes it hard. You can try the different algorithms under `Segment' and see if any of them work well for your files, but for this example, which is quite noisy, they make a lot of mistakes. You can use these options and then correct the mistakes instead. Here is how:
-%
-%\begin{itemize}
-%\item Click on `Segment' in the Actions menu. 
-%\item From the list of types, choose `Median Clipping' or `Fundamental Frequency'. Ignore the parameters for now, and click on the `Segment' button below them. You might have to wait for a while. 
-%\item Eventually the screen will show you lots of segment boxes. 
-%\item You can delete these and move them, and label them, by clicking on them and dragging appropriately. 
-%\end{itemize}
+\item In the Post-processing window, there is the potential to make another practical choice, which is whether or not to use the Fundamental Frequency calculation as part of the filter:
 
-%\section{Future Plans}\label{sec:future}
-%
-%\begin{itemize}
-%\item Quite a few things will not actually work through this interface, but through a screen before this one that asks for a directory to rip through and a species to look for in it. It will then show some outputs like the `Check Segments' outputs, except working. 
-%\item Add the denoising in, ditto the wavelet segmentation, including a training phase. These are pretty much done, just need a couple of weeks.
-%\item There is a whole load of feature extraction and learning algorithm work that is largely done, but isn't in this version. It's at least partly for development work at the moment, so I've kept it out of this version.
-%\item <Your ideas here, please>
-%\end{itemize}
+\begin{center}
+    \includegraphics[width=.4\textwidth]{Figs/Wizard_post}
+\end{center}
+
+\begin{itemize}
+\item For some calls, birds can produce a base note and then harmonics above that, and the fundamental frequency calculation tries to find the base note. 
+\item Where this works it can be helpful, so if you compare the number of training segments where the software found a fundamental frequency with those where it didn't, you can see whether or not it makes sense to use it. 
+\item You can also see the range of frequencies that were identified, so if they look wrong, don't use it. 
+\item If you don't know, AviaNZ will try to work it out for itself. 
+\end{itemize}
+
+\item Following this, you should save the recogniser you have trained. It is then a very good idea to test it. 
+    
+\end{itemize}
+
+\subsection{Testing a recogniser}\label{sec:testfilter}
+
+\begin{itemize}
+\item You should always test a recogniser, and use different files than the ones you trained it on.
+\item If you have prepared testing data already, you can do this straight away. 
+\item Otherwise save the recogniser and then test at a later date by using `Test a recogniser' in the Recognisers menu.
+\item You should also test a recogniser that you receive from somebody else (for example, from our webpage) before relying on it.
+\item Testing should use different sound files to the ones used for training. 
+\item It runs the recogniser over the files, and compares the results to the human annotations using the same error metrics that were defined in Section~\ref{sec:metrics}. It gives a better indication of how well the recogniser will work in practice. %If you look at the testing files after using this feature in the `Manual Processing' interface, you can see the annotations from both the human and machine in order to compare them. 
+
+\end{itemize}
+
+\subsection{Recogniser management}\label{sec:filters}
+
+You can rename, import, and export recognisers by using `Manage recognisers' in the Recognisers menu. If you have made recognisers for sounds that you think will be useful for other people, please upload them to our AviaNZ webpage.   
+
+
 
 \end{document}
