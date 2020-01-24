@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Nov 13 14:05:05 2019
-Working script
+
+This is a work version with all the different options
+
+
 @author: Virginia Listanti
 """
 
@@ -46,7 +49,7 @@ def ClickSearch(dirName, file, fs, featuress, count, Train=False):
     thr=mean(all_spec)+std(all_spec) (*)
     
     The clicks are discarded if longer than 0.5 sec
-
+    
     Clicks are stored into featuress using updateDataset
 
     """
@@ -79,10 +82,7 @@ def ClickSearch(dirName, file, fs, featuress, count, Train=False):
     df=16000/(np.shape(imspec)[0]+1) #frequency increment 
     dt=duration/(np.shape(imspec)[1]+1) #timeincrement
     up_len=math.ceil(0.5/dt) #0.5 second lenth in indices  
-#    low_len=math.floor(0.07/dt)
-#    print(low_len, up_len)
 
-    
     #Frequency band
     f0=3000
     index_f0=-1+math.floor(f0/df) #lower bound needs to be rounded down
@@ -219,7 +219,6 @@ def ClickSearch2(dirName, file, fs, featuress, count, Train=False):
     mean_spec_all=np.mean(imspec, axis=0)[2:]
 #    thr_spec=(np.mean(mean_spec_all)+np.std(mean_spec_all))*np.ones((np.shape(mean_spec)))
     thr_spec=np.mean(mean_spec_all)*np.ones((np.shape(mean_spec)))
-
     
     ##clickfinder
     #check when the mean is bigger than the threshold
@@ -254,7 +253,6 @@ def ClickSearch2(dirName, file, fs, featuress, count, Train=False):
         thisSpSegs=[]
         
     click_start=clicks_indices[0][0]
-
     click_end=clicks_indices[0][0]
 
     for i in range(1,np.shape(clicks_indices)[1]):
@@ -286,7 +284,6 @@ def ClickSearch2(dirName, file, fs, featuress, count, Train=False):
         click_label='Click'
     
     return click_label, featuress, count
-
 
 def updateDataset(file_name, dirName, featuress, count, spectrogram, segments, thisSpSegs, click_start, click_end, dt, Train=False):
     """
@@ -341,6 +338,7 @@ def updateDataset(file_name, dirName, featuress, count, spectrogram, segments, t
                         break
                     elif 'Noise' == seg[4][0]["species"]:
                         spec_label = 2   
+                        assigned_flag=True
                         break
                     else:
                         continue
@@ -952,8 +950,6 @@ with open(os.path.join(train_dir, 'sgramdata_train.json'), 'w') as outfile:
     json.dump(train_featuress, outfile)
     
 # Detect clicks in Test Dataset and save it without labels 
-    
-
 test_dir = "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TEST2" #changed directory
 annotation_file_test= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\Test_dataset.data"
 test_fold= "BAT SEARCH TESTS\Test_79" #Test folder where to save all the stats
@@ -961,8 +957,6 @@ test_fold= "BAT SEARCH TESTS\Test_79" #Test folder where to save all the stats
 with open(annotation_file_test) as f:
     segments_filewise_test = json.load(f)
 file_number=np.shape(segments_filewise_test)[0]
-
-
 #storing train and test dataset into test folder
 with open(test_dir+ '/' + test_fold+'\Train_dataset.data', 'w') as f2:
     json.dump(segments_filewise_train,f2)
@@ -985,7 +979,7 @@ for i in range(file_number):
     file = segments_filewise_test[i][0]
     control='False'
     click_label, test_featuress, count_end = ClickSearch(test_dir, file, fs, test_featuress, count_start, Train=False)
-    gen_spec= count_end-count_start # numb. of generated spectrograms    
+    gen_spec= count_end-count_start # numb. of generated spectrograms
     #update stored information on test file
     filewise_output.append([file, click_label, gen_spec, 'Noise', segments_filewise_test[i][1]]) #note final label inizialized to 'Noise'
     #if I have a click but not a spectrogram I update
@@ -1085,8 +1079,6 @@ x_train = sg_train
 y_train = target_train
 x_test = sg_test
 #y_test = target_test
-
-
 #train_images = x_train.reshape(x_train.shape[0],13, 512, 1) #changed image dimensions
 test_images = x_test.reshape(x_test.shape[0],6, 512, 1)
 input_shape = (6, 512, 1)
@@ -1271,7 +1263,6 @@ print(confusion_matrix)
 print("-------------------------------------------")
 
 #saving Click Detector Stats
-
 #cd_metrics_file=test_dir+'\\'+test_fold+'\\bat_detector_stats.txt'
 #file1=open(cd_metrics_file,"w")
 #L1=["Bat Detector stats on Testing Data \n"]
