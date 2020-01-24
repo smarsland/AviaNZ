@@ -18,6 +18,7 @@
   
   
     "SoundFileDir": {"type": "string"},
+    "RecentFiles": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
     "secsSave": {"type": "number", "minimum": 0},
     "windowWidth": {"type": "number", "minimum": 0},
     "widthOverviewSegment": {"type": "number", "minimum": 0},
@@ -58,6 +59,6 @@
     "window": {"type": "string"},
     "FiltersDir": {"type": "string"}
   },
-  "required": ["window_width", "incr", "minFreq", "maxFreq", "maxSearchDepth", "minSegment", "drawingRightBtn", "specMouseAction", "StartMaximized", "MultipleSpecies", "RequireNoiseData", "DOC", "ReorderList", "SoundFileDir", "secsSave", "windowWidth", "widthOverviewSegment", "maxFileShow", "fileOverlap", "brightness", "contrast", "overlap_allowed", "reviewSpecBuffer", "BirdListShort", "BirdListLong", "ColourList", "ColourSelected", "ColourNamed", "ColourNone", "ColourPossible", "cmap", "showAmplitudePlot", "showAnnotationOverview", "showPointerDetails", "readOnly", "transparentBoxes", "showListofFiles", "invertColourMap", "saveCorrections", "operator", "reviewer", "protocolOn", "protocolSize", "protocolInterval", "fs_start", "fs_end", "window", "FiltersDir"]
+  "required": ["window_width", "incr", "minFreq", "maxFreq", "maxSearchDepth", "minSegment", "drawingRightBtn", "specMouseAction", "StartMaximized", "MultipleSpecies", "RequireNoiseData", "DOC", "ReorderList", "SoundFileDir", "RecentFiles", "secsSave", "windowWidth", "widthOverviewSegment", "maxFileShow", "fileOverlap", "brightness", "contrast", "overlap_allowed", "reviewSpecBuffer", "BirdListShort", "BirdListLong", "ColourList", "ColourSelected", "ColourNamed", "ColourNone", "ColourPossible", "cmap", "showAmplitudePlot", "showAnnotationOverview", "showPointerDetails", "readOnly", "transparentBoxes", "showListofFiles", "invertColourMap", "saveCorrections", "operator", "reviewer", "protocolOn", "protocolSize", "protocolInterval", "fs_start", "fs_end", "window", "FiltersDir"]
 }
 
