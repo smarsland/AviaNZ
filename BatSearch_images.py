@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Nov 13 14:05:05 2019
-Working script
+
 @author: Virginia Listanti
 """
 
@@ -28,10 +28,14 @@ from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Flatte
 from tensorflow.keras.optimizers import RMSprop
 from tensorflow.keras.models import load_model
 
-
 import librosa
 import WaveletSegment
 import WaveletFunctions
+
+import cv2  # image -processing
+from scipy import misc
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 
 
 def ClickSearch(dirName, file, fs, featuress, count, Train=False):
@@ -46,42 +50,49 @@ def ClickSearch(dirName, file, fs, featuress, count, Train=False):
     thr=mean(all_spec)+std(all_spec) (*)
     
     The clicks are discarded if longer than 0.5 sec
-
+    
     Clicks are stored into featuress using updateDataset
-
+    
     """
     
     print("Click search on ",file)
     filename = dirName + '\\' + file
     
-    #Read audiodata
-    audiodata = wavio.read(filename)
-    sp = SignalProc.SignalProc(1024, 512) #outside?
-    sp.data = audiodata.data
+    img = mpimg.imread(filename) #read image
+    img2 = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # convert to grayscale
+    img2[-1, :] = 254 * np.ones((np.shape(img2[1]))) #cut last row
+    imspec=np.repeat(img2,8, axis=0) #repeat rows 7 times to fit invertspectrogram
+    imspec = -(imspec - 254.0 * np.ones(np.shape(imspec)))  # reverse value having the black as the most intense
+#    imspec=np.flipud(imspec) #reverse up and down of the spectrogram -> see AviaNZ spectrogram
+    imspec = imspec/np.max(imspec) #normalization
+    imspec = imspec[:, 1:np.shape(img2)[1]]  # Cutting first column because it only contains the scale
+    
+#    #Read audiodata
+#   keeping this just to read duration -> HACK
+    audiodata = wavio.read(filename[:-3]+'wav')
+#    sp = SignalProc.SignalProc(1024, 512) #outside?
+#    sp.data = audiodata.data
     duration=audiodata.nframes/fs
-    
-    #copyed from sp.wavRead to make everything consistent
-    # take only left channel
-    if np.shape(np.shape(sp.data))[0] > 1:
-        sp.data = sp.data[:, 0]
-    sp.audioFormat.setChannelCount(1)
-     # force float type
-    if sp.data.dtype != 'float':
-        sp.data = sp.data.astype('float')
-    sp.audioFormat.setSampleSize(audiodata.sampwidth * 8)
-    
-    #Spectrogram
-    sp.samplerate= fs
-    sgraw= sp.spectrogram(1024, 512, 'Blackman')
-    imspec=(10.*np.log10(sgraw)).T #transpose
-    imspec=np.flipud(imspec) #updown 
+#    
+#    #copyed from sp.wavRead to make everything consistent
+#    # take only left channel
+#    if np.shape(np.shape(sp.data))[0] > 1:
+#        sp.data = sp.data[:, 0]
+#    sp.audioFormat.setChannelCount(1)
+#     # force float type
+#    if sp.data.dtype != 'float':
+#        sp.data = sp.data.astype('float')
+#    sp.audioFormat.setSampleSize(audiodata.sampwidth * 8)
+#    
+#    #Spectrogram
+#    sp.samplerate= fs
+#    sgraw= sp.spectrogram(1024, 512, 'Blackman')
+#    imspec=(10.*np.log10(sgraw)).T #transpose
+#    imspec=np.flipud(imspec) #updown 
 
-    df=16000/(np.shape(imspec)[0]+1) #frequency increment 
+    df=88000/(np.shape(imspec)[0]+1) #frequency increment 
     dt=duration/(np.shape(imspec)[1]+1) #timeincrement
     up_len=math.ceil(0.5/dt) #0.5 second lenth in indices  
-#    low_len=math.floor(0.07/dt)
-#    print(low_len, up_len)
-
     
     #Frequency band
     f0=3000
@@ -89,10 +100,9 @@ def ClickSearch(dirName, file, fs, featuress, count, Train=False):
 #    print(f0,index_f0)
     f1=5000
     index_f1=-1+math.ceil(f1/df) #upper bound needs to be rounded up
-
     
     #Mean in the frequency band
-    mean_spec=np.mean(imspec[index_f0:index_f1,:], axis=0)
+    mean_spec=np.mean(imspec[index_f0:index_f1,:], axis=0) #added 0.01 to avoid divition by 0
 
     #Threshold
     mean_spec_all=np.mean(imspec, axis=0)[2:]
@@ -139,7 +149,7 @@ def ClickSearch(dirName, file, fs, featuress, count, Train=False):
                 clicks[click_start:click_end+1]=0
             else:
                 #savedataset
-                featuress, count=updateDataset(file, dirName, featuress, count, imspec,  segments, thisSpSegs, click_start, click_end, dt, Train)
+                featuress, count=updateDataset3(file, dirName, featuress, count, imspec,  segments, thisSpSegs, click_start, click_end, dt, Train)
                 #update
                 click_start=clicks_indices[0][i]
                 click_end=clicks_indices[0][i] 
@@ -148,7 +158,7 @@ def ClickSearch(dirName, file, fs, featuress, count, Train=False):
     if click_end-click_start+1>up_len:
         clicks[click_start:click_end+1]=0
     else:
-        featuress, count = updateDataset(file, dirName, featuress, count, imspec, segments, thisSpSegs, click_start, click_end, dt, Train)
+        featuress, count = updateDataset3(file, dirName, featuress, count, imspec, segments, thisSpSegs, click_start, click_end, dt, Train)
         
     #updating click_inidice
     clicks_indices=np.nonzero(clicks)
@@ -219,7 +229,6 @@ def ClickSearch2(dirName, file, fs, featuress, count, Train=False):
     mean_spec_all=np.mean(imspec, axis=0)[2:]
 #    thr_spec=(np.mean(mean_spec_all)+np.std(mean_spec_all))*np.ones((np.shape(mean_spec)))
     thr_spec=np.mean(mean_spec_all)*np.ones((np.shape(mean_spec)))
-
     
     ##clickfinder
     #check when the mean is bigger than the threshold
@@ -254,7 +263,6 @@ def ClickSearch2(dirName, file, fs, featuress, count, Train=False):
         thisSpSegs=[]
         
     click_start=clicks_indices[0][0]
-
     click_end=clicks_indices[0][0]
 
     for i in range(1,np.shape(clicks_indices)[1]):
@@ -286,7 +294,6 @@ def ClickSearch2(dirName, file, fs, featuress, count, Train=False):
         click_label='Click'
     
     return click_label, featuress, count
-
 
 def updateDataset(file_name, dirName, featuress, count, spectrogram, segments, thisSpSegs, click_start, click_end, dt, Train=False):
     """
@@ -341,6 +348,7 @@ def updateDataset(file_name, dirName, featuress, count, spectrogram, segments, t
                         break
                     elif 'Noise' == seg[4][0]["species"]:
                         spec_label = 2   
+                        assigned_flag=True
                         break
                     else:
                         continue
@@ -348,13 +356,14 @@ def updateDataset(file_name, dirName, featuress, count, spectrogram, segments, t
             spec_label=2
     
 # slice spectrogram   
-    win_pixel=1
+    win_pixel=2
     duration = click_end -click_start +1
     if duration > win_pixel:
         
         n = math.ceil(duration/win_pixel)
     #         inizialization
         start_pixel=click_start
+
         for i in range(n):
             end_pixel=start_pixel+win_pixel
             sgRaw=spectrogram[:,start_pixel:end_pixel] #not I am saving the spectrogram in the right dimension
@@ -429,6 +438,7 @@ def updateDataset2(file_name, dirName, featuress, count, spectrogram, segments, 
             spec_label=2
     
 # slice spectrogram   
+
     win_pixel=3
     ls = np.shape(spectrogram)[1]-1
     duration=click_end-click_start+1
@@ -468,7 +478,7 @@ def updateDataset2(file_name, dirName, featuress, count, spectrogram, segments, 
 
     return featuress, count
 
-def updateDataset3(file_name, dirName, featuress, count, spectrogram, segments, thisSpSegs, click_start, click_end, dt, Train=False):
+def updateDataset3(file_name, dirName, featuress, count, spectrogram, segments, thisSpSegs, click_start, click_end, dt=None, Train=False):
     """
     Update Dataset with current segment
     It take a piece of the spectrogram with fixed length centered in the
@@ -482,9 +492,10 @@ def updateDataset3(file_name, dirName, featuress, count, spectrogram, segments, 
         2 => Noise
     """
     #I assign a label t the spectrogram only for Train Dataset
-    click_start_sec=click_start*dt
-    click_end_sec=click_end*dt
+    
     if Train==True:
+        click_start_sec=click_start*dt
+        click_end_sec=click_end*dt
         assigned_flag=False #control flag
         for segix in thisSpSegs:
             seg = segments[segix]
@@ -527,7 +538,7 @@ def updateDataset3(file_name, dirName, featuress, count, spectrogram, segments, 
     
 # slice spectrogram   
 
-    win_pixel=6 
+    win_pixel=4 
     ls = np.shape(spectrogram)[1]-1
     click_center=int((click_start+click_end)/2)
 
@@ -900,7 +911,7 @@ def File_label4(predictions, spec_id, segments_filewise_test, filewise_output, f
 #Create train dataset for CNN from the results of clicksearch   
 train_dir = "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN2" #changed directory
 fs = 16000
-annotation_file_train= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN2\\Train_dataset.data"
+annotation_file_train= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN2\\Train_dataset_images.data"
 with open(annotation_file_train) as f:
     segments_filewise_train = json.load(f)
 file_number_train=np.shape(segments_filewise_train)[0]
@@ -953,15 +964,13 @@ with open(os.path.join(train_dir, 'sgramdata_train.json'), 'w') as outfile:
     
 # Detect clicks in Test Dataset and save it without labels 
     
-
 test_dir = "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TEST2" #changed directory
-annotation_file_test= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\Test_dataset.data"
-test_fold= "BAT SEARCH TESTS\Test_79" #Test folder where to save all the stats
-#os.mkdir(test_dir+ '/' + test_fold)
+annotation_file_test= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\Test_dataset_images.data"
+test_fold= "BAT SEARCH TESTS\Test_86" #Test folder where to save all the stats
+os.mkdir(test_dir+ '/' + test_fold)
 with open(annotation_file_test) as f:
     segments_filewise_test = json.load(f)
 file_number=np.shape(segments_filewise_test)[0]
-
 
 #storing train and test dataset into test folder
 with open(test_dir+ '/' + test_fold+'\Train_dataset.data', 'w') as f2:
@@ -985,7 +994,8 @@ for i in range(file_number):
     file = segments_filewise_test[i][0]
     control='False'
     click_label, test_featuress, count_end = ClickSearch(test_dir, file, fs, test_featuress, count_start, Train=False)
-    gen_spec= count_end-count_start # numb. of generated spectrograms    
+    gen_spec= count_end-count_start # numb. of generated spectrograms
+    
     #update stored information on test file
     filewise_output.append([file, click_label, gen_spec, 'Noise', segments_filewise_test[i][1]]) #note final label inizialized to 'Noise'
     #if I have a click but not a spectrogram I update
@@ -1086,12 +1096,11 @@ y_train = target_train
 x_test = sg_test
 #y_test = target_test
 
+train_images = x_train.reshape(x_train.shape[0],9, 512, 1) #changed image dimensions
+test_images = x_test.reshape(x_test.shape[0],9, 512, 1)
+input_shape = (9, 512, 1)
 
-#train_images = x_train.reshape(x_train.shape[0],13, 512, 1) #changed image dimensions
-test_images = x_test.reshape(x_test.shape[0],6, 512, 1)
-input_shape = (6, 512, 1)
-
-#train_images = train_images.astype('float32')
+train_images = train_images.astype('float32')
 test_images = test_images.astype('float32')
 
 num_labels=3 #change this variable, when changing number of labels
@@ -1150,9 +1159,7 @@ print('Best CNN is ', index_best_model)
 print('Best accuracy reached ',accuracies[index_best_model])
 modelpath=model_paths[index_best_model]    
 #recover model
-modelpath= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\BAT SEARCH TESTS\\Test_79\\model_3.h5"
 model=load_model(modelpath)
-
 #recovering labels
 predictions =model.predict(test_images)
 #predictions is an array #imagesX #of classes which entries are the probabilities
@@ -1271,23 +1278,22 @@ print(confusion_matrix)
 print("-------------------------------------------")
 
 #saving Click Detector Stats
-
-#cd_metrics_file=test_dir+'\\'+test_fold+'\\bat_detector_stats.txt'
-#file1=open(cd_metrics_file,"w")
-#L1=["Bat Detector stats on Testing Data \n"]
-#L2=['Number of files = %5d \n' %file_number]
-#L3=['TD = %5d \n' %TD]
-#L4=['FD = %5d \n' %FD]
-#L5=['TND = %5d \n' %TND]
-#L6=['FND = %5d \n' %FND]
-#L7=['Correctly classified files= %5d \n' %CoCl]
-#L8=['Uncorrectly classified files= %5d \n' %NCoCl]
-#L9=["Recall = %3.7f \n" %Recall,"Precision = %3.7f \n" %Precision, "Accuracy = %3.7f \n" %Accuracy, "True Detected rate = %3.7f \n" %TD_rate, "False Detected rate = %3.7f \n" %FD_rate, "True Negative Detected rate = %3.7f \n" %TND_rate, "False Negative Detected rate = %3.7f \n" %FND_rate, "Correctly Classified rate =%3.7f \n" %CoCl_rate, "Uncorrectly Classified rate =%3.7f \n" %NCoCl_rate ]
-##L10=["Confusion matrix \n %5d" %confusion_matrix ]
-#L10=['Model used %5d \n' %index_best_model]
-#L11=['Training accuracy for the model %3.7f \n' %accuracies[index_best_model]]
-#file1.writelines(np.concatenate((L1,L2,L3,L4, L5, L6, L7, L8, L9, L10, L11)))
-#file1.close()
+cd_metrics_file=test_dir+'\\'+test_fold+'\\bat_detector_stats.txt'
+file1=open(cd_metrics_file,"w")
+L1=["Bat Detector stats on Testing Data \n"]
+L2=['Number of files = %5d \n' %file_number]
+L3=['TD = %5d \n' %TD]
+L4=['FD = %5d \n' %FD]
+L5=['TND = %5d \n' %TND]
+L6=['FND = %5d \n' %FND]
+L7=['Correctly classified files= %5d \n' %CoCl]
+L8=['Uncorrectly classified files= %5d \n' %NCoCl]
+L9=["Recall = %3.7f \n" %Recall,"Precision = %3.7f \n" %Precision, "Accuracy = %3.7f \n" %Accuracy, "True Detected rate = %3.7f \n" %TD_rate, "False Detected rate = %3.7f \n" %FD_rate, "True Negative Detected rate = %3.7f \n" %TND_rate, "False Negative Detected rate = %3.7f \n" %FND_rate, "Correctly Classified rate =%3.7f \n" %CoCl_rate, "Uncorrectly Classified rate =%3.7f \n" %NCoCl_rate ]
+#L10=["Confusion matrix \n %5d" %confusion_matrix ]
+L10=['Model used %5d \n' %index_best_model]
+L11=['Training accuracy for the model %3.7f \n' %accuracies[index_best_model]]
+file1.writelines(np.concatenate((L1,L2,L3,L4, L5, L6, L7, L8, L9, L10, L11)))
+file1.close()
        
 #saving compared labels
 with open(test_dir+'\\' +test_fold+'\\Test_annotations_comparison.data', 'w') as f:

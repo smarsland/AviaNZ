@@ -35,13 +35,14 @@ dataset=[]
 for root, dirs, files in os.walk(str(dirName)):
     for file in files:
         #Work on .wav data
-        if file.endswith('.wav'):
-            sound_file=root+'/'+file
-            
-            if file +'.data' in files: 
-                annotation_file=sound_file+'.data'
+        if file.endswith('.bmp'):
+            sound_file=root+'/'+file[:-3]
+#            print(sound_file)
+            if file[:-3] +'wav.data' in files: 
+                annotation_file=sound_file+'wav.data'
+#                print(annotation_file)
                 segments = Segment.SegmentList()
-                segments.parseJSON(os.path.join(root, file + '.data'))
+                segments.parseJSON(annotation_file)
                 thisSpSegs = np.arange(len(segments)).tolist()
                 # Now find syllables within each segment, median clipping
                 label='Noise' #inizialization
@@ -91,8 +92,7 @@ for root, dirs, files in os.walk(str(dirName)):
 print ('number of file',len(dataset)) 
 print(dataset[0][0],dataset[0][1])               
 #save dataset                
-
-with open(dirName+'\Test_dataset.data', 'w') as f2:
+with open(dirName+'\Test_dataset_images.data', 'w') as f2:
     json.dump(dataset,f2)
             
             
