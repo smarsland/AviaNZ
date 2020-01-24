@@ -1452,7 +1452,10 @@ class HumanClassify1(QDialog):
                     lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
                 # add to long bird list then
                 if lsp not in self.longBirdList:
+                    print("Species", lsp, "not found in long bird list, adding")
                     self.longBirdList.append(lsp)
+                    cc = self.birds3.count()
+                    self.birds3.insertItem(cc-1, lsp)
                     self.saveConfig = True
 
             # all species by now are in the long bird list
