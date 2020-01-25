@@ -250,13 +250,17 @@ def File_label(predictions, spec_id, segments_filewise_test, filewise_output, fi
     FIle_label2 use the predictions made by the CNN to update the filewise annotations
     when we have 3 labels: 0 (LT), 1(ST), 2 (Noise)
     
-    METHOD: evaluation of probability over files
-        P(2)>50% => Noise
-        P(0)>70 => LT
-        P(1)>70 => ST
-        else => Both
+    METHOD: evaluation of probability over files combining mean of probability
+            + best3mean of probability
     
-     TODO: how can I had possible?
+    File labels:
+        LT
+        LT?
+        ST
+        ST?
+        Both
+        Both?
+        Noise
     """
    
     
@@ -505,10 +509,6 @@ TND_rate= (TND/file_number_train)*100
 print('True Negative Detected rate', TND_rate)
 print("-------------------------------------------")
 
-#saving dataset
-with open(os.path.join(train_dir, 'sgramdata_train.json'), 'w') as outfile:
-    json.dump(train_featuress, outfile)
-    
 # Detect clicks in Test Dataset and save it without labels 
     
 test_dir = "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TEST2" #changed directory
@@ -594,6 +594,11 @@ file1.close()
 #saving dataset
 with open(test_dir+'\\'+test_fold +'\\sgramdata_test.json', 'w') as outfile:
     json.dump(test_featuress, outfile)
+    
+#saving dataset
+with open(test_dir+'\\'+test_fold +'\\sgramdata_train.json', 'w') as outfile:
+    json.dump(train_featuress, outfile)
+    
     
 #Train CNN
 

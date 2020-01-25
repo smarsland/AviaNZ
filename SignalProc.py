@@ -1,4 +1,3 @@
-
 # SignalProc.py
 #
 # A variety of signal processing algorithms for AviaNZ.

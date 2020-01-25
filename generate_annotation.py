@@ -48,10 +48,7 @@ def genGT(dirName,species='Kiwi',duration=0,window=1, inc=None):
     print ("Generated GT")
 
 def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notargetsp=False):
-<<<<<<< Updated upstream
-=======
-#def annotation2GT_OvWin(datFile, species, duration=0,window=1, inc=None, notargetsp=False):
->>>>>>> Stashed changes
+
     """
     This generates the ground truth for a given sound file
     Given the AviaNZ annotation, returns the ground truth as a txt file
