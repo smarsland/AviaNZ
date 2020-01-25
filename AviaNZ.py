@@ -133,8 +133,10 @@ class AviaNZ(QMainWindow):
         # Whether or not the context menu allows multiple birds.
         self.multipleBirds = self.config['MultipleSpecies']
 
-        if len(self.config['RecentFiles'])>0:
+        if len(self.config['RecentFiles']) > 0:
             self.SoundFileDir = os.path.dirname(self.config['RecentFiles'][-1])
+            if not os.path.isdir(self.SoundFileDir):
+                self.SoundFileDir = self.config['SoundFileDir']
         else:
             self.SoundFileDir = self.config['SoundFileDir']
         self.filename = None
@@ -4757,7 +4759,7 @@ class AviaNZ(QMainWindow):
             ]},
 
             {'name': 'Paging', 'type': 'group', 'children': [
-                {'name': 'Page size', 'type': 'float', 'value': self.config['maxFileShow'], 'limits': (5, 900),
+                {'name': 'Page size', 'type': 'float', 'value': self.config['maxFileShow'], 'limits': (5, 3600),
                  'step': 5,
                  'suffix': ' sec'},
                 {'name': 'Page overlap', 'type': 'float', 'value': self.config['fileOverlap'], 'limits': (0, 20),
