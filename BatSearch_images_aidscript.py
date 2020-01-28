@@ -36,6 +36,7 @@ import matplotlib.image as mpimg
 fs=1600
 filename="D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\290116_001439.bmp"
 img = mpimg.imread(filename) #read image
+print('image shape', np.shape(img))
 img2 = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # convert to grayscale
 img2[-1, :] = 254 * np.ones((np.shape(img2[1]))) #cut last row
 imspec_bmp=np.repeat(img2,8, axis=0) #repeat rows 7 times to fit invertspectrogram
@@ -93,6 +94,7 @@ print('dt_bmp * 11 =', dt_bmp*11)
 fs=1600
 filename="D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\061216_013023.bmp"
 img = mpimg.imread(filename) #read image
+print('image shape', np.shape(img))
 img2 = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # convert to grayscale
 img2[-1, :] = 254 * np.ones((np.shape(img2[1]))) #cut last row
 imspec_bmp=np.repeat(img2,8, axis=0) #repeat rows 7 times to fit invertspectrogram

@@ -65,7 +65,7 @@ def ClickSearch(dirName, file, featuress, count, Train=False):
     imspec = -(imspec - 254.0 * np.ones(np.shape(imspec)))  # reverse value having the black as the most intense
 #    imspec=np.flipud(imspec) #reverse up and down of the spectrogram -> see AviaNZ spectrogram
     imspec = imspec/np.max(imspec) #normalization
-    imspec = imspec[:, 1:np.shape(img2)[1]]  # Cutting first column because it only contains the scale
+    imspec = imspec[:, 1:np.shape(img2)[1]-1]  # Cutting first column because it only contains the scale +1 colum
     
 #    #Read audiodata
 #   keeping this just to read duration -> HACK
@@ -93,6 +93,7 @@ def ClickSearch(dirName, file, featuress, count, Train=False):
 
     df=88000/(np.shape(imspec)[0]+1) #frequency increment 
     dt=(duration/11)/(np.shape(imspec)[1]+1) #timeincrement
+#    dt=0.029
     up_len=math.ceil(0.05/dt) #0.5 second lenth in indices  
     
     #Frequency band
@@ -199,7 +200,7 @@ def updateDataset(file_name, dirName, featuress, count, spectrogram, segments, t
         for segix in thisSpSegs:
             seg = segments[segix]
             if isinstance(seg[4][0], dict):
-                print('UpdateDataset Check')
+#                print('UpdateDataset Check')
                 if seg[0]<=click_start_sec and seg[1]>=click_end_sec:
                     if 'Bat (Long Tailed)' == seg[4][0]["species"]:
                         spec_label = 0
@@ -537,7 +538,7 @@ print("-------------------------------------------")
     
 test_dir = "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TEST2" #changed directory
 annotation_file_test= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\Test_dataset_images.data"
-test_fold= "BAT SEARCH TESTS\Test_Spec_01" #Test folder where to save all the stats
+test_fold= "BAT SEARCH TESTS\Test_Spec_05" #Test folder where to save all the stats
 os.mkdir(test_dir+ '/' + test_fold)
 with open(annotation_file_test) as f:
     segments_filewise_test = json.load(f)
@@ -847,7 +848,7 @@ L5=['FPD_post= %5d \n' %FPD_post]
 L6=['FND = %5d \n' %FND]
 L7=['Correctly classified files before check (1) = %5d \n' %CoCla_pre1]
 L8=['Correctly classified files before check (2) = %5d \n' %CoCla_pre2, 'Correctly classified files after check= %5d \n' %CoCla_post]
-L9=["Recall = %3.7f \n" %Recall,"Precision = %3.7f \n" %Precision, "Accuracy = %3.7f \n" %Accuracy, "True Detected rate = %3.7f \n" %TD_rate, "False Detected rate = %3.7f \n" %FD_rate, "True Negative Detected rate = %3.7f \n" %TND_rate, "False Negative Detected rate = %3.7f \n" %FND_rate]
+L9=["Recall = %3.7f \n" %Recall,"Precision pre = %3.7f \n" %Precision_pre, "Precision post = %3.7f \n" %Precision_post, "Accuracy pre 1= %3.7f \n" %Accuracy_pre1, "Accuracy pre 2= %3.7f \n" %Accuracy_pre2, "Accuracy post = %3.7f \n" %Accuracy_post,  "True Detected rate = %3.7f \n" %TD_rate, "False Detected rate pre = %3.7f \n" %FPD_pre_rate, "False Detected rate post = %3.7f \n" %FPD_post_rate, "False Negative Detected rate = %3.7f \n" %FND_rate]
 #L10=["Confusion matrix \n %5d" %confusion_matrix ]
 L10=['Model used %5d \n' %index_best_model]
 L11=['Training accuracy for the model %3.7f \n' %accuracies[index_best_model]]
