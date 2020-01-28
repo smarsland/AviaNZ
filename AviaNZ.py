@@ -25,7 +25,7 @@ from jsonschema import validate
 from shutil import copyfile
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence
-from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut
+from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt5.QtMultimedia import QAudio
 
@@ -515,9 +515,16 @@ class AviaNZ(QMainWindow):
         self.d_plot.hide()
 
         # The print out at the bottom of the spectrogram with data in
-        self.pointData = pg.TextItem(color=(255,0,0),anchor=(0,0))
-        self.segInfo = pg.TextItem(color=(255,0,0),anchor=(0,0))
-        #self.p_spec.addItem(self.pointData)
+        # Note: widgets cannot be directly added to GraphicsLayout, so need to convert
+        # them to proxy GraphicsWidgets using the proxy
+        self.pointData = QLabel()
+        self.pointData.setStyleSheet("QLabel { background-color : white; color : #CC0000; }")
+        self.pointDataProxy = QGraphicsProxyWidget()
+        self.pointDataProxy.setWidget(self.pointData)
+        self.segInfo = QLabel()
+        self.segInfo.setStyleSheet("QLabel { background-color : white; color : #CC0000; }")
+        self.segInfoProxy = QGraphicsProxyWidget()
+        self.segInfoProxy.setWidget(self.segInfo)
 
         # The various plots
         self.overviewImage = pg.ImageItem(enableMouse=False)
@@ -538,8 +545,8 @@ class AviaNZ(QMainWindow):
 
         # Connect up so can disconnect if not selected...
         self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
-        self.p_spec.addItem(self.pointData)
-        self.p_spec.addItem(self.segInfo)
+        self.w_spec.addItem(self.segInfoProxy, row=2, col=1)
+        self.w_spec.addItem(self.pointDataProxy, row=3, col=1)
 
         # The content of the other two docks
         self.w_controls = pg.LayoutWidget()
@@ -1402,11 +1409,10 @@ class AviaNZ(QMainWindow):
         self.config['showPointerDetails'] = self.showPointerDetails.isChecked()
         if self.showPointerDetails.isChecked():
             self.p_spec.scene().sigMouseMoved.connect(self.mouseMoved)
-            self.p_spec.addItem(self.pointData)
+            self.w_spec.addItem(self.pointDataProxy, row=3, col=1)
         else:
             self.p_spec.scene().sigMouseMoved.disconnect()
-            self.p_spec.removeItem(self.pointData)
-            #self.pointData.setText("")
+            self.w_spec.removeItem(self.pointDataProxy)
 
     def dragRectsTransparent(self):
         """ Listener for the check menu item that decides if the user wants the dragged rectangles to have colour or not.
@@ -1676,20 +1682,18 @@ class AviaNZ(QMainWindow):
         Work out which one, and move the region appropriately. Calls updateOverview to do the work. """
         minX, maxX = self.overviewImageRegion.getRegion()
         self.overviewImageRegion.setRegion([x, x+maxX-minX])
-        self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(x)*1000.0)
 
     def updateOverview(self, preserveLength=True):
-        """ Listener for when the overview box is changed. Also called by overviewSegmentClicked().
+        """ Listener for when the overview box is changed. Other functions call it indirectly by setRegion.
         Does the work of keeping all the plots in the right place as the overview moves.
         It sometimes updates a bit slowly. """
         if hasattr(self, 'media_obj'):
             if self.media_obj.state() == QAudio.ActiveState or self.media_obj.state() == QAudio.SuspendedState or self.media_slow.state() == QAudio.ActiveState:
                 self.stopPlayback()
-        #3/4/18: Want to stop it moving past either end
+
         # Need to disconnect the listener and reconnect it to avoid a recursive call
         minX, maxX = self.overviewImageRegion.getRegion()
-        #print minX, maxX
         if minX<0:
             l = maxX-minX
             minX=0.0
@@ -1728,8 +1732,6 @@ class AviaNZ(QMainWindow):
             self.p_plot.setXRange(self.convertSpectoAmpl(minX)*4, self.convertSpectoAmpl(maxX)*4)
         # self.setPlaySliderLimits(1000.0*self.convertSpectoAmpl(minX),1000.0*self.convertSpectoAmpl(maxX))
         self.scrollSlider.setValue(minX)
-        self.pointData.setPos(minX,0)
-        self.segInfo.setPos(minX,-5)
         self.config['windowWidth'] = self.convertSpectoAmpl(maxX-minX)
         # self.saveConfig = True
         self.timeaxis.update()
@@ -1748,7 +1750,6 @@ class AviaNZ(QMainWindow):
 
         self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
         self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
-        #self.specPlot.setImage(self.sg)
         self.setExtraPlot(self.extra)
 
         self.setColourMap(self.config['cmap'])
@@ -1759,7 +1760,7 @@ class AviaNZ(QMainWindow):
         FreqRange = self.sp.maxFreqShow-self.sp.minFreqShow
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
         SpecRange = FreqRange/height
-        
+
         if self.zooniverse:
             offset=6
             txt='<span style="color: #0F0; font-size:20pt">%s</div>'%str(0)
@@ -2420,9 +2421,9 @@ class AviaNZ(QMainWindow):
                 minutes = (time//60) % 60
                 hours = (time//3600) % 24
                 if hours>0:
-                    self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (hours,minutes,seconds, mousePoint.y() * self.sampleRate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
+                    self.pointData.setText('time=%.2d:%.2d:%05.2f (hh:mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (hours,minutes,seconds, mousePoint.y() * self.sampleRate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
                 else:
-                    self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz),power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
+                    self.pointData.setText('time=%.2d:%05.2f (mm:ss.ms), freq=%0.1f (Hz), power=%0.1f (dB)' % (minutes,seconds, mousePoint.y() * self.sampleRate//2 / np.shape(self.sg)[1] + self.sp.minFreqShow, self.sg[indexx, indexy]))
 
     def mouseClicked_ampl(self,evt):
         """ Listener for if the user clicks on the amplitude plot.
@@ -3075,7 +3076,6 @@ class AviaNZ(QMainWindow):
         minX, maxX = self.overviewImageRegion.getRegion()
         newminX = max(0,minX-(maxX-minX)*0.9)
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
-        self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
 
     def moveRight(self):
@@ -3084,7 +3084,6 @@ class AviaNZ(QMainWindow):
         minX, maxX = self.overviewImageRegion.getRegion()
         newminX = min(np.shape(self.sg)[0]-(maxX-minX),minX+(maxX-minX)*0.9)
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
-        self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
 
     def prepare5minMove(self):
@@ -3123,7 +3122,6 @@ class AviaNZ(QMainWindow):
         newminX = self.scrollSlider.value()
         minX, maxX = self.overviewImageRegion.getRegion()
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
-        self.updateOverview()
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
 
     def changeWidth(self, value):
@@ -3139,7 +3137,6 @@ class AviaNZ(QMainWindow):
         newmaxX = self.convertAmpltoSpec(value)+minX
         self.overviewImageRegion.setRegion([minX, newmaxX])
         self.scrollSlider.setMaximum(np.shape(self.sg)[0]-self.convertAmpltoSpec(self.widthWindow.value()))
-        # self.updateOverview()
 
 # ===============
 # Generate the various dialogs that match the menu items
@@ -3653,7 +3650,7 @@ class AviaNZ(QMainWindow):
         """ Create spectrogram dialog when the button is pressed.
         """
         if not hasattr(self,'spectrogramDialog'):
-            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow)
+            self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'])
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
@@ -3682,6 +3679,10 @@ class AviaNZ(QMainWindow):
 
                 self.loadFile(os.path.basename(self.filename))
                 # self.specPlot.setImage(self.sg)   # TODO: interface changes to adapt if window_len and incr changed! overview, main spec ect.
+
+                # these two are usually set by redoFreqAxis, but that is called only later in this case
+                self.spectrogramDialog.low.setValue(minFreq)
+                self.spectrogramDialog.high.setValue(maxFreq)
 
             self.redoFreqAxis(minFreq,maxFreq)
 
