@@ -134,16 +134,16 @@ class FileDataDialog(QDialog):
 class Spectrogram(QDialog):
     # Class for the spectrogram dialog box
     # TODO: Steal the graph from Raven (View/Configure Brightness)
-    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, DOC=True, parent=None):
+    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, window, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint | QtCore.Qt.WindowStaysOnTopHint)
         self.setMinimumWidth(300)
-        self.DOC = DOC
 
         self.windowType = QComboBox()
         self.windowType.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
+        self.windowType.setCurrentText(window)
 
         self.mean_normalise = QCheckBox()
         self.mean_normalise.setChecked(True)
@@ -157,49 +157,62 @@ class Spectrogram(QDialog):
         self.low = QSlider(Qt.Horizontal)
         self.low.setTickPosition(QSlider.TicksBelow)
         self.low.setTickInterval(1000)
-        self.low.setRange(minFreq,maxFreq)
         self.low.setSingleStep(100)
-        self.low.setValue(minFreqShow)
         self.low.valueChanged.connect(self.lowChange)
-        self.lowtext = QLabel(str(self.low.value()))
+        self.lowtext = QLabel()
+        self.lowtext.setAlignment(Qt.AlignRight)
+        self.lowChange(minFreqShow)
 
         self.high = QSlider(Qt.Horizontal)
         self.high.setTickPosition(QSlider.TicksBelow)
         self.high.setTickInterval(1000)
-        self.high.setRange(minFreq,maxFreq)
         self.high.setSingleStep(100)
-        self.high.setValue(maxFreqShow)
         self.high.valueChanged.connect(self.highChange)
-        self.hightext = QLabel(str(self.high.value()))
+        self.hightext = QLabel(str(self.high.value()) + ' Hz')
+        self.hightext.setAlignment(Qt.AlignRight)
+        self.highChange(maxFreqShow)
 
+        print("initing to", maxFreqShow)
+        self.setValues(minFreq, maxFreq, minFreqShow, maxFreqShow)
+        self.restore = QPushButton("Restore Defaults")
+        self.restore.clicked.connect(self.resetValues)
         self.activate = QPushButton("Update Spectrogram")
 
         self.window_width = QLineEdit(self)
+        self.window_width.setValidator(QIntValidator(1, 128000))
         self.window_width.setText(str(width))
         self.incr = QLineEdit(self)
+        self.incr.setValidator(QIntValidator(1, 128000))
         self.incr.setText(str(incr))
 
         Box = QVBoxLayout()
-        Box.addWidget(self.windowType)
-        Box.addWidget(QLabel('Mean normalise'))
-        Box.addWidget(self.mean_normalise)
-        Box.addWidget(QLabel('Equal loudness'))
-        Box.addWidget(self.equal_loudness)
-        Box.addWidget(QLabel('Multitapering'))
-        Box.addWidget(self.multitaper)
-        Box.addWidget(QLabel('Window Width'))
-        Box.addWidget(self.window_width)
-        Box.addWidget(QLabel('Hop'))
-        Box.addWidget(self.incr)
+        form = QFormLayout()
+        form.addRow('Window', self.windowType)
+        form.addRow('Mean normalise', self.mean_normalise)
+        form.addRow('Equal loudness', self.equal_loudness)
+        form.addRow('Multitapering', self.multitaper)
+        form.addRow('Window width', self.window_width)
+        form.addRow('Hop', self.incr)
+        form.setVerticalSpacing(15)
 
-        Box.addWidget(QLabel('Frequency range to show'))
-        Box.addWidget(QLabel('Lowest frequency'))
-        Box.addWidget(self.lowtext)
-        Box.addWidget(self.low)
-        Box.addWidget(QLabel('Highest frequency'))
-        Box.addWidget(self.high)
-        Box.addWidget(self.hightext)
+        form2 = pg.LayoutWidget()
+        form2.addWidget(QLabel('Lowest frequency'), row=0, col=0)
+        form2.addWidget(self.lowtext, row=0, col=1)
+        form2.addWidget(self.low, row=1, col=0, colspan=2)
+        form2.addWidget(QLabel('Highest frequency'), row=2, col=0)
+        form2.addWidget(self.hightext, row=2, col=1)
+        form2.addWidget(self.high, row=3, col=0, colspan=2)
+        form2.addWidget(QLabel(str(minFreq)), row=4, col=0)
+        self.labelMaxF = QLabel(str(maxFreq))
+        self.labelMaxF.setAlignment(Qt.AlignRight)
+        form2.addWidget(self.labelMaxF, row=4, col=1)
 
+        Box.addLayout(form)
+        Box.addSpacing(15)
+        Box.addWidget(QLabel('Frequency range to show:'))
+        Box.addWidget(form2)
+
+        Box.addWidget(self.restore)
         Box.addWidget(self.activate)
 
         # Now put everything into the frame
@@ -212,13 +225,31 @@ class Spectrogram(QDialog):
         self.high.setValue(maxFreqShow)
 
     def getValues(self):
+        if not self.incr.hasAcceptableInput() or not self.window_width.hasAcceptableInput():
+            print("ERROR: bad window parameters specified, overriding")
+            self.incr.setText('128')
+            self.window_width.setText('256')
         return [self.windowType.currentText(),self.mean_normalise.checkState(),self.equal_loudness.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text(),self.low.value(),self.high.value()]
 
     def lowChange(self,value):
-        self.lowtext.setText(str(value))
+        value = value // 100 * 100
+        self.lowtext.setText(str(value)+' Hz')
 
     def highChange(self,value):
-        self.hightext.setText(str(value))
+        value = value // 100 * 100
+        self.hightext.setText(str(value)+' Hz')
+
+    def resetValues(self):
+        self.windowType.setCurrentText('Hann')
+
+        self.mean_normalise.setChecked(True)
+        self.equal_loudness.setChecked(False)
+        self.multitaper.setChecked(False)
+
+        self.setValues(self.low.minimum(), self.low.maximum(), self.low.minimum(), self.high.maximum())
+
+        self.window_width.setText('256')
+        self.incr.setText('128')
 
     # def closeEvent(self, event):
     #     msg = QMessageBox()
@@ -230,10 +261,7 @@ class Spectrogram(QDialog):
     #     msg.exec_()
     #     return
 
-    # def resetValues(self,button):
-    #     print button.text()
 
-#======
 class OperatorReviewer(QDialog):
     # Class for the set operator dialog box
     def __init__(self, operator='', reviewer='', parent=None):
