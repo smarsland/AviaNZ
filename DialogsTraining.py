@@ -343,6 +343,7 @@ class BuildRecAdvWizard(QWizard):
                 self.segments, fs, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"),
                                                                                        self.field("species"),
                                                                                        feature=self.feature)
+                # segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
                 # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
                 #                                                                              self.field("species"),
                 #                                                                              feature=self.feature,

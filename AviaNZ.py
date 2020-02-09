@@ -1321,6 +1321,9 @@ class AviaNZ(QMainWindow):
 
                 self.drawProtocolMarks()
 
+                if self.config['Hartley'] and not os.path.isfile(self.filename + '.data'):
+                    self.addRegularSegments()
+
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
                 if hasattr(self,'seg'):
@@ -2105,17 +2108,18 @@ class AviaNZ(QMainWindow):
 
     def addRegularSegments(self):
         """ Perform the Hartley bodge: make a file with 10s segments every minute.
-            Currently not connected to anything, but would be good to add this to Actions."""
-        if len(self.segments) > 0 and self.segments[0][0] == 0 and self.segments[0][1] == 10:
-            # looks like these segments already present
-            print("Not adding segments")
-            return
+        """
+        if self.config['Hartley']:
+            if len(self.segments) > 0 and self.segments[0][0] == 0 and self.segments[0][1] == 10:
+                # looks like these segments already present
+                print("Regular segments already exist")
+                return
 
-        i = 0
-        while i < self.sp.fileLength / self.sampleRate:
-            self.segments.addSegment([i, i + self.config['protocolSize'], 0, 0, []])
-            i += self.config['protocolInterval']
-        self.segmentsToSave = True
+            i = 0
+            while i < self.sp.fileLength / self.sampleRate:
+                self.segments.addSegment([i, i + self.config['protocolSize'], 0, 0, []])
+                i += self.config['protocolInterval']
+            self.segmentsToSave = True
 
     def drawProtocolMarks(self):
         # if check-ignore protocol is used, mark check-ignore limits.
@@ -4775,6 +4779,8 @@ class AviaNZ(QMainWindow):
                  'suffix': ' sec'},
                 {'name': 'Make boxes transparent', 'type': 'bool',
                  'value': self.config['transparentBoxes']},
+                {'name': 'Intermittent sampling', 'type': 'bool',
+                 'value': self.config['Hartley']},
                 {'name': 'Auto save segments every', 'type': 'float', 'value': self.config['secsSave'],
                  'step': 5,
                  'limits': (5, 900),
@@ -4864,6 +4870,9 @@ class AviaNZ(QMainWindow):
             elif childName=='Annotation.Make boxes transparent':
                 self.config['transparentBoxes']=data
                 self.dragRectsTransparent()
+            elif childName == 'Annotation.Intermittent sampling':
+                self.config['Hartley'] = data
+                self.addRegularSegments()
             elif childName == 'Mouse settings.Use right button to make segments':
                 self.config['drawingRightBtn'] = data
                 if self.config['drawingRightBtn']:
