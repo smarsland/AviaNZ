@@ -90,10 +90,10 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_browse.setToolTip("Can select a folder with sub folders to process")
         self.w_browse.setFixedSize(150, 50)
         self.w_browse.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
-        self.w_dir = QLineEdit()
+        self.w_dir = QPlainTextEdit()
         self.w_dir.setFixedHeight(50)
         self.w_dir.setReadOnly(True)
-        self.w_dir.setText('')
+        self.w_dir.setPlainText('')
         self.w_dir.setToolTip("The folder being processed")
         self.w_dir.setStyleSheet("color : #808080;")
 
@@ -279,7 +279,7 @@ class AviaNZ_batchProcess(QMainWindow):
         else:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         #print("Dir:", self.dirName)
-        self.w_dir.setText(self.dirName)
+        self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
         self.fillFileList(self.dirName)
 
@@ -823,7 +823,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 self.listFiles.setCurrentRow(0)
 
         # update the "Browse" field text
-        self.w_dir.setText(self.dirName)
+        self.w_dir.setPlainText(self.dirName)
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on an item in filelist
