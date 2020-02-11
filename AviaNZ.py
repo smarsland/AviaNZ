@@ -363,6 +363,8 @@ class AviaNZ(QMainWindow):
 
         actionMenu = self.menuBar().addMenu("&Actions")
         actionMenu.addAction("&Delete all segments", self.deleteAll, "Ctrl+D")
+        actionMenu.addAction("&Mark regular segments", self.addRegularSegments, "Ctrl+M")
+
         actionMenu.addSeparator()
         actionMenu.addAction("Denoise",self.showDenoiseDialog)
         actionMenu.addAction("Add metadata about noise", self.addNoiseData, "Ctrl+N")
@@ -1321,9 +1323,6 @@ class AviaNZ(QMainWindow):
 
                 self.drawProtocolMarks()
 
-                if self.config['Hartley'] and not os.path.isfile(self.filename + '.data'):
-                    self.addRegularSegments()
-
                 self.statusRight.setText("Operator: " + str(self.operator) + ", Reviewer: " + str(self.reviewer))
 
                 if hasattr(self,'seg'):
@@ -2107,19 +2106,18 @@ class AviaNZ(QMainWindow):
             self.refreshOverviewWith(self.segments[i])
 
     def addRegularSegments(self):
-        """ Perform the Hartley bodge: make a file with 10s segments every minute.
-        """
-        if self.config['Hartley']:
-            if len(self.segments) > 0 and self.segments[0][0] == 0 and self.segments[0][1] == 10:
-                # looks like these segments already present
-                print("Regular segments already exist")
-                return
-
-            i = 0
-            while i < self.sp.fileLength / self.sampleRate:
-                self.segments.addSegment([i, i + self.config['protocolSize'], 0, 0, []])
-                i += self.config['protocolInterval']
-            self.segmentsToSave = True
+        """ Perform the Hartley bodge: add 10s segments every minute. """
+        segtimes = [(seg[0], seg[1]) for seg in self.segments]
+        i = 0
+        print("Adding segments (%d s every %d s)" %(self.config['protocolSize'], self.config['protocolInterval']))
+        while i < self.segments.metadata["Duration"]:
+            # check for segment presence in case of double click or other issues
+            if len(segtimes)>0 and (i, i+self.config['protocolSize']) in segtimes:
+                print("segment already exists, skipping")
+            else:
+                self.addSegment(i, i + self.config['protocolSize'])
+            i += self.config['protocolInterval']
+        self.segmentsToSave = True
 
     def drawProtocolMarks(self):
         # if check-ignore protocol is used, mark check-ignore limits.
@@ -2140,7 +2138,7 @@ class AviaNZ(QMainWindow):
                 linestart += self.config['fileOverlap']
             while linestart < self.datalength/self.sampleRate:
                 lineend = min(self.datalength/self.sampleRate, linestart + self.config['protocolSize'])
-                print("Adding to", linestart, lineend)
+                # print("Adding to", linestart, lineend)
                 line = pg.ROI(pos=(self.convertAmpltoSpec(linestart),0),
                               size=(self.convertAmpltoSpec(lineend-linestart),0), movable=False, pen=linePen)
                 self.protocolMarks.append(line)
@@ -4779,8 +4777,6 @@ class AviaNZ(QMainWindow):
                  'suffix': ' sec'},
                 {'name': 'Make boxes transparent', 'type': 'bool',
                  'value': self.config['transparentBoxes']},
-                {'name': 'Intermittent sampling', 'type': 'bool',
-                 'value': self.config['Hartley']},
                 {'name': 'Auto save segments every', 'type': 'float', 'value': self.config['secsSave'],
                  'step': 5,
                  'limits': (5, 900),
@@ -4870,9 +4866,6 @@ class AviaNZ(QMainWindow):
             elif childName=='Annotation.Make boxes transparent':
                 self.config['transparentBoxes']=data
                 self.dragRectsTransparent()
-            elif childName == 'Annotation.Intermittent sampling':
-                self.config['Hartley'] = data
-                self.addRegularSegments()
             elif childName == 'Mouse settings.Use right button to make segments':
                 self.config['drawingRightBtn'] = data
                 if self.config['drawingRightBtn']:
