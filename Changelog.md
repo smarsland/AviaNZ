@@ -2,12 +2,14 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ## [Unreleased]
 
+
 ## [2.1] - 2020-02-12
 
 ### Added
 
 - Intermittent sampling option (under 'Action' menu)
 - Recent files
+
 
 ## [2.0.2] - 2020-01-16
 
@@ -19,9 +21,11 @@ All notable changes to AviaNZ program will be documented in this file.
 
 - 'Skip if certainty above' default to 90 for clarity (earlier 100; Review Batch Results)
 
+
 ## [2.0.1] - 2019-11-26
 
 ### Fixed .WAV
+
 
 ## [2.0] - 2019-11-22
 
@@ -47,6 +51,7 @@ All notable changes to AviaNZ program will be documented in this file.
 
 
 [unreleased]: https://github.com/smarsland/AviaNZ/compare/v2.0...HEAD
+[2.1]: : https://github.com/smarsland/AviaNZ/compare/v2.0.2...v2.1
 [2.0.2]: https://github.com/smarsland/AviaNZ/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/smarsland/AviaNZ/compare/v2.0...v2.0.1
 [2.0]: https://github.com/smarsland/AviaNZ/compare/v1.5.1...v2.0
