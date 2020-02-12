@@ -51,7 +51,7 @@ All notable changes to AviaNZ program will be documented in this file.
 
 
 [unreleased]: https://github.com/smarsland/AviaNZ/compare/v2.0...HEAD
-[2.1]: : https://github.com/smarsland/AviaNZ/compare/v2.0.2...v2.1
+[2.1]: https://github.com/smarsland/AviaNZ/compare/v2.0.2...v2.1
 [2.0.2]: https://github.com/smarsland/AviaNZ/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/smarsland/AviaNZ/compare/v2.0...v2.0.1
 [2.0]: https://github.com/smarsland/AviaNZ/compare/v1.5.1...v2.0
