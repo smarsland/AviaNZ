@@ -391,14 +391,14 @@ class SegmentList(list):
 
         # deal with empty files
         thisSpSegs = self.getSpecies(species)
-        if len(thisSpSegs)==0:
-            print("Warning: no annotations for this species found in file", filename)
-            # delete the file to avoid problems with old GT files
-            try:
-                os.remove(eFile)
-            except Exception:
-                pass
-            return
+        # if len(thisSpSegs)==0:
+        #     print("Warning: no annotations for this species found in file", filename)
+        #     # delete the file to avoid problems with old GT files
+        #     try:
+        #         os.remove(eFile)
+        #     except Exception:
+        #         pass
+        #     return
 
         GT = np.tile([0, 0, None], (duration,1))
         # fill first column with "time"

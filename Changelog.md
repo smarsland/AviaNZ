@@ -2,6 +2,9 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Recogniser testing summary
 
 ## [2.1] - 2020-02-12
 
@@ -9,23 +12,15 @@ All notable changes to AviaNZ program will be documented in this file.
 
 - Intermittent sampling option (under 'Action' menu)
 - Recent files
-
-
-## [2.0.2] - 2020-01-16
-
-### Added
-
-- Splitting the extra long segments made by 'Any sound' mode (Batch Processing)
+- Split the extra long segments made by 'Any sound' mode (Batch Processing)
 
 ### Changed
 
 - 'Skip if certainty above' default to 90 for clarity (earlier 100; Review Batch Results)
 
+### Fixed
 
-## [2.0.1] - 2019-11-26
-
-### Fixed .WAV
-
+ - .WAV case-insensitive
 
 ## [2.0] - 2019-11-22
 
@@ -45,13 +40,11 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ### Changed
 
-- Filter format and segment format to allow call types and certainty [@file_format_specification.md] (https://github.com/smarsland/AviaNZ/blob/master/Docs/file_format_specification.md)
+- Filter format and segment format to allow call types and certainty (file_format_specification.md)
 - Windows setup as a wizard
 - Mac setup automated with a wrapper
 
 
 [unreleased]: https://github.com/smarsland/AviaNZ/compare/v2.0...HEAD
 [2.1]: https://github.com/smarsland/AviaNZ/compare/v2.0.2...v2.1
-[2.0.2]: https://github.com/smarsland/AviaNZ/compare/v2.0.1...v2.0.2
-[2.0.1]: https://github.com/smarsland/AviaNZ/compare/v2.0...v2.0.1
 [2.0]: https://github.com/smarsland/AviaNZ/compare/v1.5.1...v2.0
