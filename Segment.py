@@ -1196,11 +1196,20 @@ class PostProcess:
     subfilter:  AviaNZ format subfilter
     """
 
-    def __init__(self, audioData=None, sampleRate=0, segments=[], subfilter={}):
+    def __init__(self, audioData=None, sampleRate=0, tgtsampleRate=0, segments=[], subfilter={}, CNNmodel=None):
         self.audioData = audioData
         self.sampleRate = sampleRate
         self.segments = segments
         self.subfilter = subfilter
+
+        if CNNmodel:
+            self.CNNmodel = CNNmodel[0]    # CNNmodel is a list [model, win, inputdim, outputdict]
+            self.CNNwindow = CNNmodel[1]
+            self.CNNinputdim = CNNmodel[2]
+            self.CNNoutputs = CNNmodel[3]
+            self.tgtsampleRate = tgtsampleRate
+        else:
+            self.CNNmodel = None
 
         if subfilter != {}:
             self.minLen = subfilter['TimeRange'][0]
@@ -1213,6 +1222,97 @@ class PostProcess:
             self.minLen = 0.25
             self.fLow = 0
             self.fHigh = 0
+
+    def generateFeaturesCNN(self, seg, data, fs):
+        '''
+        Prepare a syllable to input to the CNN model
+        Returns the features (currently the spectrogram)
+        '''
+        featuress = []
+        n = (seg[1] - seg[0]) // self.CNNwindow
+        for i in range(int(n)):
+            audiodata = data[int(self.CNNwindow * i * fs):int(self.CNNwindow * (i + 1) * fs)]
+            sp = SignalProc.SignalProc(256, 128)
+            sp.data = audiodata
+            sp.sampleRate = fs
+            sgRaw = sp.spectrogram(256, 128)
+            maxg = np.max(sgRaw)
+            featuress.append([np.rot90(sgRaw / maxg).tolist()])
+        return featuress
+
+    def CNN(self):
+        """
+        Post-proc with CNN model, self.segments get updated
+        """
+        if self.CNNmodel:
+            if len(self.segments) == 0 or len(self.segments) == 1 and self.segments[0][0] == -1:
+                pass
+            else:
+                newSegments = copy.deepcopy(self.segments)
+                for seg in self.segments:
+                    if seg[0] == -1:
+                        continue
+                    else:
+                        print('--- Segment', seg)
+                        data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
+                        # find the syllables from the seg and generate features for CNN
+                        sp = SignalProc.SignalProc(256, 128)
+                        sp.data = data
+                        sp.sampleRate = self.sampleRate
+                        if self.sampleRate != self.tgtsampleRate:
+                            sp.resample(self.tgtsampleRate)
+                            data = sp.data
+                        _ = sp.spectrogram(256, 128)
+                        segment = Segmenter(sp, self.sampleRate)
+                        syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
+                        if len(syls) == 0:
+                            syls = segment.medianClip(thr=1.5, medfiltersize=5, minaxislength=9, minSegment=50)
+                        syls = segment.checkSegmentOverlap(syls)
+                        probs = 0
+                        i = 0
+                        for syl in syls:
+                            if syl[1] - syl[0] < self.CNNwindow:
+                                if (syl[0] - (self.CNNwindow - syl[1] + syl[0]) / 2) >= 0 and \
+                                        (syl[1] + (self.CNNwindow - syl[1] + syl[0]) / 2) <= seg[1]-seg[0]:
+                                    syl = [syl[0] - (self.CNNwindow - syl[1] + syl[0]) / 2,
+                                           syl[0] - (self.CNNwindow - syl[1] + syl[0]) / 2 + self.CNNwindow + 0.05]
+                                else:
+                                    continue
+                            featuress = self.generateFeaturesCNN(seg=[syl[0], syl[1]],
+                                                                 data=data[int(syl[0]*sp.sampleRate):int(syl[1]*sp.sampleRate)], fs=sp.sampleRate)
+                            featuress = np.array(featuress)
+                            # print(np.shape(featuress))
+                            featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
+                            print('\t# images in syl ', i+1, ': ', np.shape(featuress)[0])
+                            featuress = featuress.astype('float32')
+                            # predict with CNN
+                            p = self.CNNmodel.predict_proba(featuress)
+                            print('\t', p)
+                            if isinstance(probs, int):
+                                probs = p
+                            else:
+                                probs = np.vstack((probs, p))
+                            i += 1
+                        if isinstance(probs, int):
+                            prediction = len(self.CNNoutputs) - 1     # Remember that the noise class is always the last, male-0, femle-1, noise-2
+                        else:
+                            p = np.max(probs, axis=0).tolist()[:-1]
+                            p_n = np.mean(probs, axis=0)[-1].tolist()
+                            p.insert(len(p), p_n)
+                            # p_m, p_f, _ = np.max(probs, axis=0)
+                            # _, _, p_n = np.mean(probs, axis=0)
+                            print('\tSegment ', seg, '->', np.shape(probs)[0], ' images ->', p)
+                            # print(seg, p_m, p_f, p_n, np.shape(probs))
+                            prediction = np.argmax(p)
+                            if prediction == len(self.CNNoutputs) - 1 and any(x > 0.6 for x in p[:-1]):
+                                prediction = np.argmax(p[:-1])
+                                # prediction = self.CNNoutputs[str(prediction)]  # actual call type  # TODO
+                        if prediction == len(self.CNNoutputs) - 1:
+                            print('\tDeleted by CNN')
+                            newSegments.remove(seg)
+                        else:
+                            print("\t", seg, "Not deleted by CNN")
+                self.segments = newSegments
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):
         """ Calculate wind

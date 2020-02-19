@@ -98,6 +98,7 @@ class AviaNZ(QMainWindow):
         # Load filters
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
+        self.CNNDir = os.path.join(configdir, self.config['CNNDir'])
 
         # Load the birdlists - both are now necessary:
         self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], configdir)
@@ -4209,15 +4210,24 @@ class AviaNZ(QMainWindow):
             else:
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print('Post-processing...')
+                # load target CNN model if exists
+                self.CNNDicts = self.ConfigLoader.CNNmodels(self.filtersDir, self.CNNDir, [filtname])
                 # postProcess currently operates on single-level list of segments,
                 # so we run it over subfilters for wavelets:
                 for filtix in range(len(speciesData['Filters'])):
+                    CNNmodel = None
+                    if filtname in self.CNNDicts.keys():
+                        CNNmodel = self.CNNDicts[filtname]
                     post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
-                                               segments=newSegments[filtix],
-                                               subfilter=speciesData['Filters'][filtix])
+                                               tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
+                                               subfilter=speciesData['Filters'][filtix], CNNmodel=CNNmodel)
                     if wind:
                         post.wind()
                         print('After wind: segments: ', len(post.segments))
+                    if CNNmodel:
+                        print('Post-processing with CNN')
+                        post.CNN()
+                        print('After CNN: segments: ', len(post.segments))
                     if rain:
                         post.rainClick()
                         print('After rain segments: ', len(post.segments))
