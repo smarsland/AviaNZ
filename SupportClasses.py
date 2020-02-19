@@ -40,6 +40,7 @@ import numpy as np
 import os, json
 import sys
 import io
+from tensorflow.keras.models import model_from_json
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
@@ -794,6 +795,32 @@ class ConfigLoader(object):
                 print("Could not load filter:", filtfile, e)
         print("Loaded filters:", list(goodfilters.keys()))
         return goodfilters
+
+    def CNNmodels(self, dirfilters, dircnn, targetspecies):
+        """ Returns a dict of target CNN models
+            CNN models will always be in user configdir/CNN, otherwise it would be impossible to find.
+            """
+        print("Loading CNN models from folder %s" % dircnn)
+        targetmodels = dict()
+        for species in targetspecies:
+            filt = json.load(open(os.path.join(dirfilters, species + '.txt')))
+            if "CNN" not in filt:
+                continue
+            elif filt["CNN"]:
+                try:
+                    # arch = json.load(open(os.path.join(dircnn, filt["CNN"]["CNN_name"] + '.json')))
+                    json_file = open(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.json', 'r')
+                    loaded_model_json = json_file.read()
+                    json_file.close()
+                    model = model_from_json(loaded_model_json)
+                    model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
+                    print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
+                    model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
+                    targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"]]
+                except Exception as e:
+                    print("Could not load model :", os.path.join(dircnn, filt["CNN"]["CNN_name"]), e)
+        print("Loaded CNN models:", list(targetmodels.keys()))
+        return targetmodels
 
     def shortbl(self, file, configdir):
         # A fallback shortlist will be confirmed to exist in configdir.

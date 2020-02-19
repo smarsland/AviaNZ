@@ -61,6 +61,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.saveConfig = True
 
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
+        self.cnnDir = os.path.join(configdir, self.config['CNNDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
         # Make the window and associated widgets
@@ -406,6 +407,9 @@ class AviaNZ_batchProcess(QMainWindow):
             # convert list to string
             speciesStr = " & ".join(self.species)
 
+            # load target CNN models
+            self.CNNDicts = self.ConfigLoader.CNNmodels(self.filtersDir, self.cnnDir, self.species)
+
         # Parse the user-set time window to process
         timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
         timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
@@ -629,16 +633,24 @@ class AviaNZ_batchProcess(QMainWindow):
                             # 3. Check fundamental frq
                             # 4. Merge neighbours
                             # 5. Delete short segments
-                            print("Segments detected: ", len(thisPageSegs))
+                            print("Segments detected (all subfilters): ", thisPageSegs)
                             print("Post-processing...")
                             # postProcess currently operates on single-level list of segments,
                             # so we run it over subfilters for wavelets:
                             spInfo = filters[speciesix]
                             for filtix in range(len(spInfo['Filters'])):
-                                post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix])
+                                CNNmodel = None
+                                if spInfo['species'] in self.CNNDicts.keys():
+                                    CNNmodel = self.CNNDicts[spInfo['species']]
+                                post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel)
+                                print("Segments detected after WF: ", len(thisPageSegs[filtix]))
                                 if self.w_wind.isChecked():
                                     post.wind()
                                     print('After wind: segments: ', len(post.segments))
+                                if CNNmodel:
+                                    print('Post-processing with CNN')
+                                    post.CNN()
+                                    print('After CNN: segments: ', len(post.segments))
                                 if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
                                     if spInfo['Filters'][filtix]["F0"]:
                                         print("Checking for fundamental frequency...")
