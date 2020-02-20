@@ -61,7 +61,6 @@ class AviaNZ_batchProcess(QMainWindow):
         self.saveConfig = True
 
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
-        self.cnnDir = os.path.join(configdir, self.config['CNNDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
         # Make the window and associated widgets
@@ -407,8 +406,9 @@ class AviaNZ_batchProcess(QMainWindow):
             # convert list to string
             speciesStr = " & ".join(self.species)
 
-            # load target CNN models
-            self.CNNDicts = self.ConfigLoader.CNNmodels(self.filtersDir, self.cnnDir, self.species)
+            # load target CNN models (currently storing in the same dir as filters)
+            # format: {filtername: [model, win, inputdim, output]}
+            self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
 
         # Parse the user-set time window to process
         timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
