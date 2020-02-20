@@ -796,14 +796,15 @@ class ConfigLoader(object):
         print("Loaded filters:", list(goodfilters.keys()))
         return goodfilters
 
-    def CNNmodels(self, dirfilters, dircnn, targetspecies):
+    def CNNmodels(self, filters, dircnn, targetspecies):
         """ Returns a dict of target CNN models
-            CNN models will always be in user configdir/CNN, otherwise it would be impossible to find.
+            Filters - dict of loaded filter files
+            Targetspecies - list of species names to load
             """
         print("Loading CNN models from folder %s" % dircnn)
         targetmodels = dict()
         for species in targetspecies:
-            filt = json.load(open(os.path.join(dirfilters, species + '.txt')))
+            filt = filters[species]
             if "CNN" not in filt:
                 continue
             elif filt["CNN"]:
@@ -818,7 +819,7 @@ class ConfigLoader(object):
                     model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
                     targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"]]
                 except Exception as e:
-                    print("Could not load model :", os.path.join(dircnn, filt["CNN"]["CNN_name"]), e)
+                    print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]), e)
         print("Loaded CNN models:", list(targetmodels.keys()))
         return targetmodels
 
