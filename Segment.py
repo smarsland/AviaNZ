@@ -1261,38 +1261,51 @@ class PostProcess:
                         sp.sampleRate = self.sampleRate
                         if self.sampleRate != self.tgtsampleRate:
                             sp.resample(self.tgtsampleRate)
-                            data = sp.data
-                        _ = sp.spectrogram(256, 128)
-                        segment = Segmenter(sp, self.sampleRate)
-                        syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
-                        if len(syls) == 0:
-                            syls = segment.medianClip(thr=1.5, medfiltersize=5, minaxislength=9, minSegment=50)
-                        syls = segment.checkSegmentOverlap(syls)
+                        #     data = sp.data
+                        # _ = sp.spectrogram(256, 128)
+                        # segment = Segmenter(sp, self.sampleRate)
+                        # syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
+                        # if len(syls) == 0:
+                        #     syls = segment.medianClip(thr=1.5, medfiltersize=5, minaxislength=9, minSegment=50)
+                        # syls = segment.checkSegmentOverlap(syls)
+                        # probs = 0
+                        # i = 0
+                        # for syl in syls:
+                        #     if syl[1] - syl[0] < self.CNNwindow:
+                        #         if (syl[0] - (self.CNNwindow - syl[1] + syl[0]) / 2) >= 0 and \
+                        #                 (syl[1] + (self.CNNwindow - syl[1] + syl[0]) / 2) <= seg[1]-seg[0]:
+                        #             syl = [syl[0] - (self.CNNwindow - syl[1] + syl[0]) / 2,
+                        #                    syl[0] - (self.CNNwindow - syl[1] + syl[0]) / 2 + self.CNNwindow + 0.05]
+                        #         else:
+                        #             continue
+                        #     featuress = self.generateFeaturesCNN(seg=[syl[0], syl[1]],
+                        #                                          data=data[int(syl[0]*sp.sampleRate):int(syl[1]*sp.sampleRate)], fs=sp.sampleRate)
+                        #     featuress = np.array(featuress)
+                        #     # print(np.shape(featuress))
+                        #     featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
+                        #     print('\t# images in syllable ', i+1, ': ', np.shape(featuress)[0])
+                        #     featuress = featuress.astype('float32')
+                        #     # predict with CNN
+                        #     p = self.CNNmodel.predict_proba(featuress)
+                        #     # print('\t', p)
+                        #     if isinstance(probs, int):
+                        #         probs = p
+                        #     else:
+                        #         probs = np.vstack((probs, p))
+                        #     i += 1
+
+                        featuress = self.generateFeaturesCNN(seg=seg,
+                                                             data=sp.data, fs=sp.sampleRate)
+                        featuress = np.array(featuress)
+                        # print(np.shape(featuress))
+                        featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
+                        featuress = featuress.astype('float32')
+                        # predict with CNN
                         probs = 0
-                        i = 0
-                        for syl in syls:
-                            if syl[1] - syl[0] < self.CNNwindow:
-                                if (syl[0] - (self.CNNwindow - syl[1] + syl[0]) / 2) >= 0 and \
-                                        (syl[1] + (self.CNNwindow - syl[1] + syl[0]) / 2) <= seg[1]-seg[0]:
-                                    syl = [syl[0] - (self.CNNwindow - syl[1] + syl[0]) / 2,
-                                           syl[0] - (self.CNNwindow - syl[1] + syl[0]) / 2 + self.CNNwindow + 0.05]
-                                else:
-                                    continue
-                            featuress = self.generateFeaturesCNN(seg=[syl[0], syl[1]],
-                                                                 data=data[int(syl[0]*sp.sampleRate):int(syl[1]*sp.sampleRate)], fs=sp.sampleRate)
-                            featuress = np.array(featuress)
-                            # print(np.shape(featuress))
-                            featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
-                            print('\t# images in syllable ', i+1, ': ', np.shape(featuress)[0])
-                            featuress = featuress.astype('float32')
-                            # predict with CNN
-                            p = self.CNNmodel.predict_proba(featuress)
-                            # print('\t', p)
-                            if isinstance(probs, int):
-                                probs = p
-                            else:
-                                probs = np.vstack((probs, p))
-                            i += 1
+                        if np.shape(featuress)[0] > 0:
+                            probs = self.CNNmodel.predict_proba(featuress)
+                        else:
+                            probs = 0
                         if isinstance(probs, int):
                             prediction = len(self.CNNoutputs) - 1     # Remember that the noise class is always the last, male-0, femle-1, noise-2
                         else:
@@ -1311,15 +1324,17 @@ class PostProcess:
                             ind0 = np.argsort(probs[:, 0])
                             ind1 = np.argsort(probs[:, 1])
                             ind2 = np.argsort(probs[:, 2])
-                            meanp = [np.mean(probs[ind0[-5:], 0]), np.mean(probs[ind1[-5:], 1]), np.mean(probs[ind2[-5:], 2])]
-                            prediction = np.argmax(meanp)
-                            print('\tSegment ', seg, '->', np.shape(probs)[0], ' total images ->', meanp)
+                            meanprob = [np.mean(probs[ind0[-5:], 0]), np.mean(probs[ind1[-5:], 1]), np.mean(probs[ind2[-5:], 2])]
+                            prediction = np.argmax(meanprob)
+                            if prediction == len(self.CNNoutputs) - 1 and any(x > 0.6 for x in meanprob[:-1]):
+                                prediction = np.argmax(meanprob[:-1])
                             print(probs)
+                            print(np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
                         if prediction == len(self.CNNoutputs) - 1:
-                            print('\tDeleted by CNN')
+                            print('Deleted by CNN')
                             newSegments.remove(seg)
                         else:
-                            print("\t", seg, "Not deleted by CNN")
+                            print('Not deleted by CNN')
                 self.segments = newSegments
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):
