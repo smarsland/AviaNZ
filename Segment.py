@@ -1287,7 +1287,7 @@ class PostProcess:
                             featuress = featuress.astype('float32')
                             # predict with CNN
                             p = self.CNNmodel.predict_proba(featuress)
-                            print('\t', p)
+                            # print('\t', p)
                             if isinstance(probs, int):
                                 probs = p
                             else:

@@ -98,7 +98,6 @@ class AviaNZ(QMainWindow):
         # Load filters
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
-        self.CNNDir = os.path.join(configdir, self.config['CNNDir'])
 
         # Load the birdlists - both are now necessary:
         self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], configdir)
@@ -3205,13 +3204,14 @@ class AviaNZ(QMainWindow):
                 self.humanClassifyDialog1.resize(self.humanClassifyDialogSize)
 
             self.humanClassifyNextImage1()
-            self.humanClassifyDialog1.show()
-            self.humanClassifyDialog1.activateWindow()
+            #self.humanClassifyDialog1.activateWindow()
             #self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
             self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
             self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
             self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
-            # self.statusLeft.setText("Ready")
+            self.humanClassifyDialog1.exec_()
+            self.humanClassifyDialog1.stopPlayback()
+            self.statusLeft.setText("Ready")
 
     def humanClassifyClose1(self):
         """ Listener for the human verification dialog. """
@@ -3436,6 +3436,10 @@ class AviaNZ(QMainWindow):
                 self.humanClassifyDialog2.resize(self.humanClassifyDialogSize)
             self.humanClassifyDialog2.finish.clicked.connect(self.humanClassifyClose2)
             self.humanClassifyDialog2.exec_()
+            # after it's closed:
+            for btn in self.humanClassifyDialog2.buttons:
+                btn.stopPlayback()
+        self.statusLeft.setText("Ready")
 
     def humanClassifyClose2(self):
         print("Closed")
@@ -3975,7 +3979,7 @@ class AviaNZ(QMainWindow):
                 y2 = self.sp.maxFreq
             x1 = math.floor(x1 * self.config['incr'])
             x2 = math.floor(x2 * self.config['incr'])
-            filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', self.SoundFileDir, '*.wav')
+            filename, drop = QFileDialog.getSaveFileName(self, 'Save File as', '', '*.wav')
             if filename:
                 # filedialog doesn't attach extension
                 filename = str(filename)
@@ -4061,7 +4065,7 @@ class AviaNZ(QMainWindow):
     def testRecogniser(self, filter=None):
         """ Listener for the Test Recogniser action """
         self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir, filter)
-        self.testRecWizard.show()
+        self.testRecWizard.exec_()
 
     def saveNotestRecogniser(self):
         try:
@@ -4211,7 +4215,7 @@ class AviaNZ(QMainWindow):
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print('Post-processing...')
                 # load target CNN model if exists
-                self.CNNDicts = self.ConfigLoader.CNNmodels(self.filtersDir, self.CNNDir, [filtname])
+                self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, [filtname])
                 # postProcess currently operates on single-level list of segments,
                 # so we run it over subfilters for wavelets:
                 for filtix in range(len(speciesData['Filters'])):
@@ -4705,7 +4709,7 @@ class AviaNZ(QMainWindow):
 
     def manageFilters(self):
         self.filterManager = Dialogs.FilterManager(self.filtersDir)
-        self.filterManager.show()
+        self.filterManager.exec_()
 
     def addNoiseData(self):
         """ Listener for the adding metadata about noise action """
