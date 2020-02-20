@@ -1253,7 +1253,7 @@ class PostProcess:
                     if seg[0] == -1:
                         continue
                     else:
-                        print('--- Segment', seg)
+                        print('\n--- Segment', seg)
                         data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
                         # find the syllables from the seg and generate features for CNN
                         sp = SignalProc.SignalProc(256, 128)
@@ -1283,7 +1283,7 @@ class PostProcess:
                             featuress = np.array(featuress)
                             # print(np.shape(featuress))
                             featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
-                            print('\t# images in syl ', i+1, ': ', np.shape(featuress)[0])
+                            print('\t# images in syllable ', i+1, ': ', np.shape(featuress)[0])
                             featuress = featuress.astype('float32')
                             # predict with CNN
                             p = self.CNNmodel.predict_proba(featuress)
@@ -1296,17 +1296,25 @@ class PostProcess:
                         if isinstance(probs, int):
                             prediction = len(self.CNNoutputs) - 1     # Remember that the noise class is always the last, male-0, femle-1, noise-2
                         else:
-                            p = np.max(probs, axis=0).tolist()[:-1]
-                            p_n = np.mean(probs, axis=0)[-1].tolist()
-                            p.insert(len(p), p_n)
-                            # p_m, p_f, _ = np.max(probs, axis=0)
-                            # _, _, p_n = np.mean(probs, axis=0)
-                            print('\tSegment ', seg, '->', np.shape(probs)[0], ' images ->', p)
-                            # print(seg, p_m, p_f, p_n, np.shape(probs))
-                            prediction = np.argmax(p)
-                            if prediction == len(self.CNNoutputs) - 1 and any(x > 0.6 for x in p[:-1]):
-                                prediction = np.argmax(p[:-1])
-                                # prediction = self.CNNoutputs[str(prediction)]  # actual call type  # TODO
+                            # # Method I - mix of max and mean
+                            # p = np.max(probs, axis=0).tolist()[:-1]
+                            # p_n = np.mean(probs, axis=0)[-1].tolist()
+                            # p.insert(len(p), p_n)
+                            # print('\tSegment ', seg, '->', np.shape(probs)[0], ' images ->', p)
+                            # print(probs)
+                            # prediction = np.argmax(p)
+                            # if prediction == len(self.CNNoutputs) - 1 and any(x > 0.6 for x in p[:-1]):
+                            #     prediction = np.argmax(p[:-1])
+                            #     # prediction = self.CNNoutputs[str(prediction)]  # actual call type  # TODO
+
+                            # Method II - mean of best n
+                            ind0 = np.argsort(probs[:, 0])
+                            ind1 = np.argsort(probs[:, 1])
+                            ind2 = np.argsort(probs[:, 2])
+                            meanp = [np.mean(probs[ind0[-5:], 0]), np.mean(probs[ind1[-5:], 1]), np.mean(probs[ind2[-5:], 2])]
+                            prediction = np.argmax(meanp)
+                            print('\tSegment ', seg, '->', np.shape(probs)[0], ' total images ->', meanp)
+                            print(probs)
                         if prediction == len(self.CNNoutputs) - 1:
                             print('\tDeleted by CNN')
                             newSegments.remove(seg)
