@@ -3266,20 +3266,24 @@ class AviaNZ(QMainWindow):
         self.humanClassifyDialog1.setSegNumbers(segsDone, segsTotal)
 
         # Different calls for the two types of region
+        # Note: these are already in spec units, unlike in _batch.py
         if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
             x1nob = self.listRectanglesa2[self.box1id].pos()[0]
             x2nob = x1nob + self.listRectanglesa2[self.box1id].size()[0]
         else:
             x1nob, x2nob = self.listRectanglesa2[self.box1id].getRegion()
-        x1 = int(x1nob - self.config['reviewSpecBuffer'])
+        revBufSpecUnits = self.convertAmpltoSpec(self.config['reviewSpecBuffer'])
+        x1 = int(x1nob - revBufSpecUnits)
         x1 = max(x1, 0)
-        x2 = int(x2nob + self.config['reviewSpecBuffer'])
+        x2 = int(x2nob + revBufSpecUnits)
         x2 = min(x2, len(self.sg))
         x3 = int((self.listRectanglesa1[self.box1id].getRegion()[0] - self.config['reviewSpecBuffer']) * self.sampleRate)
         x3 = max(x3, 0)
         x4 = int((self.listRectanglesa1[self.box1id].getRegion()[1] + self.config['reviewSpecBuffer']) * self.sampleRate)
         x4 = min(x4, len(self.audiodata))
-        self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'], specnames, self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1, seg[0], seg[1], self.sp.minFreq, self.sp.maxFreq)
+        self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
+                                    specnames, x1nob-x1, x2nob-x1,
+                                    seg[0], seg[1], self.sp.minFreq, self.sp.maxFreq)
 
     def humanClassifyPrevImage(self):
         """ Go back one image by changing boxid and calling NextImage.
