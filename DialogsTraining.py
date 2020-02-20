@@ -707,7 +707,7 @@ class BuildRecAdvWizard(QWizard):
 
             # Create the buttons for each segment
             for seg in self.segments:
-                sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1]-seg[1][0], seg[1][0])
+                sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
                 newButton = SupportClasses.PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart, self.colourEnd, False, cluster=True)
                 self.picbuttons.append(newButton)
             # (updateButtons will place them in layouts and show them)
@@ -759,6 +759,7 @@ class BuildRecAdvWizard(QWizard):
                         c += 1
                         self.picbuttons[segix].show()
             self.flowLayout.update()
+            self.setColourLevels()
 
         def clearButtons(self):
             """ Remove existing buttons, call when merging clusters
@@ -800,11 +801,11 @@ class BuildRecAdvWizard(QWizard):
             except Exception:
                 pass
 
-        def loadFile(self, filename, duration=0, offset=0):
+        def loadFile(self, filename, duration=0, offset=0, silent=False):
             if duration == 0:
                 duration = None
             sp = SignalProc.SignalProc(512, 256)
-            sp.readWav(filename, duration, offset)
+            sp.readWav(filename, duration, offset, silent)
 
             sgRaw = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,
                                           multitaper=False, need_even=False)

@@ -776,6 +776,8 @@ class ConfigLoader(object):
 
         goodfilters = dict()
         for filtfile in filters:
+            if not filtfile.endswith("txt"):
+                continue
             try:
                 filt = json.load(open(os.path.join(dir, filtfile)))
 

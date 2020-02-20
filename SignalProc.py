@@ -59,7 +59,7 @@ class SignalProc:
         self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
         self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
-    def readWav(self, file, len=None, off=0):
+    def readWav(self, file, len=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
         wavobj = wavio.read(file, len, off)
         self.data = wavobj.data
@@ -80,13 +80,14 @@ class SignalProc:
         self.sampleRate = wavobj.rate
         self.audioFormat.setSampleRate(self.sampleRate)
 
-        print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
-
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
         self.maxFreq = self.sampleRate // 2
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
+
+        if not silent:
+            print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
     def resample(self, target):
         if len(self.data)==0:

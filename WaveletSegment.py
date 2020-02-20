@@ -914,7 +914,7 @@ class WaveletSegment:
         freqrange = (np.min(freqrange), np.max(freqrange))
 
         # avoid low-level nodes
-        low_level_nodes = list(range(15))
+        low_level_nodes = list(range(14))
         for item in nodes1:
             itemfrl, itemfru = WF.getWCFreq(item, self.spInfo["SampleRate"])
             if item not in low_level_nodes and itemfrl < freqrange[1] and itemfru > freqrange[0]:
