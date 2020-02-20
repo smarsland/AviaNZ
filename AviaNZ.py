@@ -1967,7 +1967,7 @@ class AviaNZ(QMainWindow):
                 plotNodes = json.load(open(os.path.join(self.filtersDir, 'plotnodes.txt')))
             except:
                 print("Couldn't load file, using default list")
-                plotNodes = [35, 36, 8, 41, 43, 45]
+                plotNodes = [48, 49, 52]
 
             # resample
             if self.sampleRate != 16000:
@@ -2975,6 +2975,7 @@ class AviaNZ(QMainWindow):
         # update the label
         self.listLabels[segID].setText(text,'k')
         self.listLabels[segID].update()
+        self.segmentsToSave = True
         QApplication.processEvents()
 
     def updateColour(self, segID=None):
@@ -3299,6 +3300,7 @@ class AviaNZ(QMainWindow):
         currSeg = self.segments[self.box1id]
 
         self.humanClassifyDialog1.stopPlayback()
+        self.segmentsToSave = True
         self.segmentsDone += 1
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
         # returned label is just a list of species names.
