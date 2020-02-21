@@ -220,8 +220,7 @@ class SegmentList(list):
             else:
                 # fallback to reading the wav:
                 try:
-                    wav = wavio.read(file[:-5])
-                    self.metadata["Duration"] = len(wav.data)/wav.rate
+                    self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
                 except Exception as e:
                     print("ERROR: duration not found in metadata, arguments, or read from wav")
                     print(file)
