@@ -28,6 +28,7 @@ from PyQt5.QtMultimedia import QAudioFormat
 from PyQt5.QtCore import Qt, QDir
 
 import numpy as np
+import wavio
 
 from pyqtgraph.Qt import QtGui
 from pyqtgraph.dockarea import *
@@ -105,11 +106,12 @@ class AviaNZ_batchProcess(QMainWindow):
         spp = list(self.FilterDicts.keys())
         self.w_spe1.addItems(spp)
         self.w_spe1.addItem("Any sound")
+        self.w_spe1.addItem("Any sound (Intermittent sampling)")
         self.w_spe1.currentTextChanged.connect(self.fillSpeciesBoxes)
         self.addSp = QPushButton("Add another recogniser")
         self.addSp.clicked.connect(self.addSpeciesBox)
 
-        w_resLabel = QLabel("Set size of presence/absence blocks in Excel output\n(Sheet 3)")
+        self.w_resLabel = QLabel("Set size of presence/absence blocks in Excel output\n(Sheet 3)")
         self.w_res = QSpinBox()
         self.w_res.setRange(1, 600)
         self.w_res.setSingleStep(5)
@@ -120,8 +122,8 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_timeEnd = QTimeEdit()
         self.w_timeEnd.setDisplayFormat('hh:mm:ss')
 
-        self.w_wind = QCheckBox("")
-        self.w_mergect = QCheckBox("")
+        self.w_wind = QCheckBox("Add wind filter")
+        self.w_mergect = QCheckBox("Merge different call types")
 
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
@@ -171,23 +173,25 @@ class AviaNZ_batchProcess(QMainWindow):
         self.d_detection.addWidget(self.boxSp, row=1, col=0, colspan=3)
 
         # Time Settings group
-        boxTime = QGroupBox()
+        self.boxTime = QGroupBox()
         formTime = QGridLayout()
         formTime.addWidget(w_timeLabel, 0, 0, 1, 2)
         formTime.addWidget(QLabel("Start time (hh:mm:ss)"), 1, 0)
         formTime.addWidget(self.w_timeStart, 1, 1)
         formTime.addWidget(QLabel("End time (hh:mm:ss)"), 2, 0)
         formTime.addWidget(self.w_timeEnd, 2, 1)
-        boxTime.setLayout(formTime)
-        self.d_detection.addWidget(boxTime, row=2, col=0, colspan=3)
+        self.boxTime.setLayout(formTime)
+        self.d_detection.addWidget(self.boxTime, row=2, col=0, colspan=3)
+
+        self.warning = QLabel("Warning!\nThe choosen \"Any sound\" mode will delete ALL the existing annotations\nin the above selected folder")
+        self.warning.setStyleSheet('QLabel {font-size:14px; color:red;}')
+        self.d_detection.addWidget(self.warning, row=3, col=0, colspan=3)
+        self.warning.hide()
 
         # Post Proc checkbox group
-        boxPost = QGroupBox("Post processing")
+        self.boxPost = QGroupBox("Post processing")
         formPost = QGridLayout()
-        formPost.addWidget(QLabel("Add wind filter"), 0, 0)
         formPost.addWidget(self.w_wind, 0, 1)
-        self.mergectlbl = QLabel("Merge different call types")
-        formPost.addWidget(self.mergectlbl, 2, 0)
         formPost.addWidget(self.w_mergect, 2, 1)
         formPost.addWidget(self.maxgaplbl, 3, 0)
         formPost.addWidget(self.maxgap, 3, 1)
@@ -195,8 +199,8 @@ class AviaNZ_batchProcess(QMainWindow):
         formPost.addWidget(self.minlen, 4, 1)
         formPost.addWidget(self.maxlenlbl, 5, 0)
         formPost.addWidget(self.maxlen, 5, 1)
-        boxPost.setLayout(formPost)
-        self.d_detection.addWidget(boxPost, row=3, col=0, colspan=3)
+        self.boxPost.setLayout(formPost)
+        self.d_detection.addWidget(self.boxPost, row=4, col=0, colspan=3)
         if len(spp) > 0:
             self.maxgaplbl.hide()
             self.maxgap.hide()
@@ -205,10 +209,11 @@ class AviaNZ_batchProcess(QMainWindow):
             self.maxlenlbl.hide()
             self.maxlen.hide()
 
-        self.d_detection.addWidget(w_resLabel, row=4, col=0)
-        self.d_detection.addWidget(self.w_res, row=4, col=1)
-        self.d_detection.addWidget(QLabel("(seconds)"), row=4, col=2)
-        self.d_detection.addWidget(self.w_processButton, row=5, col=2)
+        self.lblsec = QLabel("(seconds)")
+        self.d_detection.addWidget(self.w_resLabel, row=5, col=0)
+        self.d_detection.addWidget(self.w_res, row=5, col=1)
+        self.d_detection.addWidget(self.lblsec, row=5, col=2)
+        self.d_detection.addWidget(self.w_processButton, row=6, col=2)
 
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
@@ -337,7 +342,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # and show/hide minlen maxgap sliders
         spp = []
         currname = self.w_spe1.currentText()
-        if currname != "Any sound":
+        if currname not in ["Any sound", "Any sound (Intermittent sampling)"]:
             currfilt = self.FilterDicts[currname]
             # (can't use AllSp with any other filter)
             # Also don't add the same name again
@@ -351,8 +356,14 @@ class AviaNZ_batchProcess(QMainWindow):
             self.maxgap.hide()
             self.maxgaplbl.hide()
             self.w_mergect.show()
-            self.mergectlbl.show()
-        else:
+            self.boxPost.show()
+            self.boxTime.show()
+            self.addSp.show()
+            self.warning.hide()
+            self.w_resLabel.hide()
+            self.w_res.hide()
+            self.lblsec.hide()
+        elif currname != "Any sound (Intermittent sampling)":
             self.minlen.show()
             self.minlenlbl.show()
             self.maxlen.show()
@@ -360,7 +371,21 @@ class AviaNZ_batchProcess(QMainWindow):
             self.maxgap.show()
             self.maxgaplbl.show()
             self.w_mergect.hide()
-            self.mergectlbl.hide()
+            self.boxPost.show()
+            self.boxTime.show()
+            self.addSp.hide()
+            self.warning.show()
+            self.w_resLabel.hide()
+            self.w_res.hide()
+            self.lblsec.hide()
+        else:
+            self.boxPost.hide()
+            self.boxTime.hide()
+            self.addSp.hide()
+            self.warning.show()
+            self.w_resLabel.hide()
+            self.w_res.hide()
+            self.lblsec.hide()
 
         # (skip first box which is fixed)
         for box in self.speCombos[1:]:
@@ -371,6 +396,26 @@ class AviaNZ_batchProcess(QMainWindow):
             box.setCurrentText("")
 
             box.addItems(spp)
+
+    def addRegularSegments(self, wav):
+        """ Perform the Hartley bodge: add 10s segments every minute. """
+        # if wav.data exists get the duration
+        self.filename = wav
+        (rate, nseconds, nchannels, sampwidth) = wavio.readFmt(self.filename)
+        self.segments = Segment.SegmentList()
+        self.segments.metadata = dict()
+        self.segments.metadata["Operator"] = "Auto"
+        self.segments.metadata["Reviewer"] = ""
+        self.segments.metadata["Duration"] = nseconds
+        i = 0
+        segments = []
+        print("Adding segments (%d s every %d s) to %s" %(self.config['protocolSize'], self.config['protocolInterval'], str(self.filename)))
+        while i < nseconds:
+            segments.append([i, i + self.config['protocolSize']])
+            i += self.config['protocolInterval']
+        self.makeSegments(segments)
+        self.saveAnnotation()
+        self.log.appendFile(self.filename)
 
     # from memory_profiler import profile
     # fp = open('memory_profiler_batch.log', 'w+')
@@ -393,6 +438,9 @@ class AviaNZ_batchProcess(QMainWindow):
         if "Any sound" in self.species:
             self.method = "Default"
             speciesStr = "Any sound"
+        elif "Any sound (Intermittent sampling)" in self.species:
+            self.method = "Intermittent sampling"
+            speciesStr = "Intermittent sampling"
         else:
             self.method = "Wavelets"
 
@@ -410,10 +458,6 @@ class AviaNZ_batchProcess(QMainWindow):
             # format: {filtername: [model, win, inputdim, output]}
             self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
 
-        # Parse the user-set time window to process
-        timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
-        timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
-
         # LIST ALL WAV files that will be processed
         allwavs = []
         for root, dirs, files in os.walk(str(self.dirName)):
@@ -421,11 +465,17 @@ class AviaNZ_batchProcess(QMainWindow):
                 if filename.lower().endswith('.wav'):
                     allwavs.append(os.path.join(root, filename))
         total = len(allwavs)
+        if self.method != "Intermittent sampling":
+            # Parse the user-set time window to process
+            timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
+            timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
+            # LOG FILE is read here
+            # note: important to log all analysis settings here
+            settings = [self.method, self.w_res.value(), timeWindow_s, timeWindow_e,
+                        self.w_wind.isChecked(), self.w_mergect.isChecked()]
+        else:
+            settings = [self.method, self.config["protocolSize"], self.config["protocolInterval"]]
 
-        # LOG FILE is read here
-        # note: important to log all analysis settings here
-        settings = [self.method, self.w_res.value(), timeWindow_s, timeWindow_e,
-                    self.w_wind.isChecked(), self.w_mergect.isChecked()]
         self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, settings)
 
         # Ask for RESUME CONFIRMATION here
@@ -457,9 +507,11 @@ class AviaNZ_batchProcess(QMainWindow):
         # Ask for FINAL USER CONFIRMATION here
         cnt = len(self.filesDone)
         confirmedLaunch = QMessageBox.Cancel
-
-        text = "Species: " + speciesStr + ", resolution: "+ str(self.w_res.value()) + ", method: " + self.method + ".\nNumber of files to analyze: " + str(total) + ", " + str(cnt) + " done so far.\n"
-        text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
+        if self.method == "Intermittent sampling":
+            text = "Method: " + self.method + ".\nNumber of files to analyze: " + str(total) + "\n"
+        else:
+            text = "Species: " + speciesStr + ", resolution: "+ str(self.w_res.value()) + ", method: " + self.method + ".\nNumber of files to analyze: " + str(total) + ", " + str(cnt) + " done so far.\n"
+            text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
         text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
         if speciesStr=="Any sound":
             text += "\nWarning: any previous annotations in these files will be deleted!\n"
@@ -480,7 +532,7 @@ class AviaNZ_batchProcess(QMainWindow):
         # print current header (or old if resuming),
         # print old file list if resuming.
         self.log.file = open(self.log.file, 'w')
-        if speciesStr != "Any sound":
+        if speciesStr not in ["Any sound", "Intermittent sampling"]:
             self.log.reprintOld()
             # else single-sp runs should be deleted anyway
         if confirmedResume == QMessageBox.No:
@@ -498,264 +550,269 @@ class AviaNZ_batchProcess(QMainWindow):
         self.update()
         self.repaint()
         QtGui.QApplication.processEvents()
-        with pg.BusyCursor():
-            for filename in allwavs:
-                processingTimeStart = time.time()
-                self.filename = filename
-                self.segments = Segment.SegmentList()
-                # get remaining run time in min
-                hh,mm = divmod(processingTime * (total-cnt) / 60, 60)
-                cnt = cnt+1
-                print("*** Processing file %d / %d : %s ***" % (cnt, total, filename))
-                self.statusBar().showMessage("Processing file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm))
-                self.update()
-                self.repaint()
+        if self.method == "Intermittent sampling":
+            with pg.BusyCursor():
+                for filename in allwavs:
+                    self.addRegularSegments(filename)
+        else:
+            with pg.BusyCursor():
+                for filename in allwavs:
+                    processingTimeStart = time.time()
+                    self.filename = filename
+                    self.segments = Segment.SegmentList()
+                    # get remaining run time in min
+                    hh,mm = divmod(processingTime * (total-cnt) / 60, 60)
+                    cnt = cnt+1
+                    print("*** Processing file %d / %d : %s ***" % (cnt, total, filename))
+                    self.statusBar().showMessage("Processing file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm))
+                    self.update()
+                    self.repaint()
 
-                # if it was processed previously (stored in log)
-                if filename in self.filesDone:
-                    # skip the processing:
-                    print("File %s processed previously, skipping" % filename)
-                    continue
-
-                # check if file not empty
-                if os.stat(filename).st_size < 100:
-                    print("File %s empty, skipping" % filename)
-                    self.log.appendFile(filename)
-                    continue
-
-                # test the selected time window if it is a doc recording
-                inWindow = False
-
-                DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
-                if DOCRecording:
-                    startTime = DOCRecording.group(2)
-                    sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
-                    if timeWindow_s == timeWindow_e:
-                        inWindow = True
-                    elif timeWindow_s < timeWindow_e:
-                        if sTime >= timeWindow_s and sTime <= timeWindow_e:
-                            inWindow = True
-                        else:
-                            inWindow = False
-                    else:
-                        if sTime >= timeWindow_s or sTime <= timeWindow_e:
-                            inWindow = True
-                        else:
-                            inWindow = False
-                else:
-                    inWindow = True
-
-                if DOCRecording and not inWindow:
-                    print("Skipping out-of-time-window recording")
-                    self.log.appendFile(filename)
-                    continue
-
-                # ALL SYSTEMS GO: process this file
-                print("Loading file...")
-                # load audiodata and clean up old segments:
-                self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"))
-                # Segment over pages separately, to allow dealing with large files smoothly:
-                # page size fixed for now
-                samplesInPage = 900*16000
-                # (ceil division for large integers)
-                numPages = (len(self.audiodata) - 1) // samplesInPage + 1
-
-                print("Segmenting...")
-                self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
-
-                # Actual segmentation happens here:
-                for page in range(numPages):
-                    print("Segmenting page %d / %d" % (page+1, numPages))
-                    start = page*samplesInPage
-                    end = min(start+samplesInPage, len(self.audiodata))
-                    thisPageLen = (end-start) / self.sampleRate
-
-                    if thisPageLen < 2:
-                        print("Warning: can't process short file ends (%.2f s)" % thisPageLen)
+                    # if it was processed previously (stored in log)
+                    if filename in self.filesDone:
+                        # skip the processing:
+                        print("File %s processed previously, skipping" % filename)
                         continue
 
-                    # Process
-                    if speciesStr == "Any sound":
-                        # Create spectrogram for median clipping etc
-                        if not hasattr(self, 'sp'):
-                            self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
-                        self.sp.data = self.audiodata[start:end]
-                        self.sp.sampleRate = self.sampleRate
-                        _ = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
-                        self.seg = Segment.Segmenter(self.sp, self.sampleRate)
-                        # thisPageSegs = self.seg.bestSegments()
-                        thisPageSegs = self.seg.medianClip(thr=3.5)
-                        # Post-process
-                        # 1. Delete windy segments
-                        # 2. Delete rainy segments
-                        # 3. Check fundamental frq
-                        # 4. Merge neighbours
-                        # 5. Delete short segments
-                        print("Segments detected: ", len(thisPageSegs))
-                        print("Post-processing...")
-                        maxgap = int(self.maxgap.value())/1000
-                        minlen = int(self.minlen.value())/1000
-                        maxlen = int(self.maxlen.value())/1000
-                        post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate,
-                                                   segments=thisPageSegs, subfilter={})
-                        if self.w_wind.isChecked():
-                            post.wind()
-                            print('After wind segments: ', len(post.segments))
-                        post.segments = self.seg.joinGaps(post.segments, maxgap=maxgap)
-                        post.segments = self.seg.deleteShort(post.segments, minlength=minlen)
-                        print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' % (maxgap, minlen, len(post.segments)))
-                        # avoid extra long segments (for Isabel)
-                        post.segments = self.seg.splitLong(post.segments, maxlen = maxlen)
-                        print('Segments after splitting long segments (>%.2f secs): %d' % (maxlen, len(post.segments)))
+                    # check if file not empty
+                    if os.stat(filename).st_size < 100:
+                        print("File %s empty, skipping" % filename)
+                        self.log.appendFile(filename)
+                        continue
 
-                        # adjust segment starts for 15min "pages"
-                        if start != 0:
-                            for seg in post.segments:
-                                seg[0] += start/self.sampleRate
-                                seg[1] += start/self.sampleRate
-                        # attach mandatory "Don't Know"s etc and put on self.segments
-                        self.makeSegments(post.segments)
-                        del self.seg
-                        gc.collect()
+                    # test the selected time window if it is a doc recording
+                    inWindow = False
+
+                    DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
+                    if DOCRecording:
+                        startTime = DOCRecording.group(2)
+                        sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                        if timeWindow_s == timeWindow_e:
+                            inWindow = True
+                        elif timeWindow_s < timeWindow_e:
+                            if sTime >= timeWindow_s and sTime <= timeWindow_e:
+                                inWindow = True
+                            else:
+                                inWindow = False
+                        else:
+                            if sTime >= timeWindow_s or sTime <= timeWindow_e:
+                                inWindow = True
+                            else:
+                                inWindow = False
                     else:
-                        # read in the page and resample as needed
-                        self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new")
+                        inWindow = True
 
-                        allCtSegs = []
-                        for speciesix in range(len(filters)):
-                            print("Working with recogniser:", filters[speciesix])
-                            # note: using 'recaa' mode = partial antialias
-                            thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
+                    if DOCRecording and not inWindow:
+                        print("Skipping out-of-time-window recording")
+                        self.log.appendFile(filename)
+                        continue
 
+                    # ALL SYSTEMS GO: process this file
+                    print("Loading file...")
+                    # load audiodata and clean up old segments:
+                    self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"))
+                    # Segment over pages separately, to allow dealing with large files smoothly:
+                    # page size fixed for now
+                    samplesInPage = 900*16000
+                    # (ceil division for large integers)
+                    numPages = (len(self.audiodata) - 1) // samplesInPage + 1
+
+                    print("Segmenting...")
+                    self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
+
+                    # Actual segmentation happens here:
+                    for page in range(numPages):
+                        print("Segmenting page %d / %d" % (page+1, numPages))
+                        start = page*samplesInPage
+                        end = min(start+samplesInPage, len(self.audiodata))
+                        thisPageLen = (end-start) / self.sampleRate
+
+                        if thisPageLen < 2:
+                            print("Warning: can't process short file ends (%.2f s)" % thisPageLen)
+                            continue
+
+                        # Process
+                        if speciesStr == "Any sound":
+                            # Create spectrogram for median clipping etc
+                            if not hasattr(self, 'sp'):
+                                self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+                            self.sp.data = self.audiodata[start:end]
+                            self.sp.sampleRate = self.sampleRate
+                            _ = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
+                            self.seg = Segment.Segmenter(self.sp, self.sampleRate)
+                            # thisPageSegs = self.seg.bestSegments()
+                            thisPageSegs = self.seg.medianClip(thr=3.5)
                             # Post-process
                             # 1. Delete windy segments
                             # 2. Delete rainy segments
                             # 3. Check fundamental frq
                             # 4. Merge neighbours
                             # 5. Delete short segments
-                            print("Segments detected (all subfilters): ", thisPageSegs)
+                            print("Segments detected: ", len(thisPageSegs))
                             print("Post-processing...")
-                            # postProcess currently operates on single-level list of segments,
-                            # so we run it over subfilters for wavelets:
-                            spInfo = filters[speciesix]
-                            for filtix in range(len(spInfo['Filters'])):
-                                CNNmodel = None
-                                if spInfo['species'] in self.CNNDicts.keys():
-                                    CNNmodel = self.CNNDicts[spInfo['species']]
-                                post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel)
-                                print("Segments detected after WF: ", len(thisPageSegs[filtix]))
-                                if self.w_wind.isChecked():
-                                    post.wind()
-                                    print('After wind: segments: ', len(post.segments))
-                                if CNNmodel:
-                                    print('Post-processing with CNN')
-                                    post.CNN()
-                                    print('After CNN: segments: ', len(post.segments))
-                                if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
-                                    if spInfo['Filters'][filtix]["F0"]:
-                                        print("Checking for fundamental frequency...")
-                                        post.fundamentalFrq()
-                                        print("After FF segments:", len(post.segments))
-                                segmenter = Segment.Segmenter()
-                                post.segments = segmenter.joinGaps(post.segments, maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
-                                post.segments = segmenter.deleteShort(post.segments, minlength=spInfo['Filters'][filtix]['TimeRange'][0])
-                                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(spInfo['Filters'][filtix]['TimeRange'][3], spInfo['Filters'][filtix]['TimeRange'][0], len(post.segments)))
+                            maxgap = int(self.maxgap.value())/1000
+                            minlen = int(self.minlen.value())/1000
+                            maxlen = int(self.maxlen.value())/1000
+                            post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate,
+                                                       segments=thisPageSegs, subfilter={})
+                            if self.w_wind.isChecked():
+                                post.wind()
+                                print('After wind segments: ', len(post.segments))
+                            post.segments = self.seg.joinGaps(post.segments, maxgap=maxgap)
+                            post.segments = self.seg.deleteShort(post.segments, minlength=minlen)
+                            print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' % (maxgap, minlen, len(post.segments)))
+                            # avoid extra long segments (for Isabel)
+                            post.segments = self.seg.splitLong(post.segments, maxlen = maxlen)
+                            print('Segments after splitting long segments (>%.2f secs): %d' % (maxlen, len(post.segments)))
 
-                                # adjust segment starts for 15min "pages"
-                                if start != 0:
-                                    for seg in post.segments:
-                                        seg[0] += start/self.sampleRate
-                                        seg[1] += start/self.sampleRate
+                            # adjust segment starts for 15min "pages"
+                            if start != 0:
+                                for seg in post.segments:
+                                    seg[0] += start/self.sampleRate
+                                    seg[1] += start/self.sampleRate
+                            # attach mandatory "Don't Know"s etc and put on self.segments
+                            self.makeSegments(post.segments)
+                            del self.seg
+                            gc.collect()
+                        else:
+                            # read in the page and resample as needed
+                            self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new")
+
+                            allCtSegs = []
+                            for speciesix in range(len(filters)):
+                                print("Working with recogniser:", filters[speciesix])
+                                # note: using 'recaa' mode = partial antialias
+                                thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
+
+                                # Post-process
+                                # 1. Delete windy segments
+                                # 2. Delete rainy segments
+                                # 3. Check fundamental frq
+                                # 4. Merge neighbours
+                                # 5. Delete short segments
+                                print("Segments detected (all subfilters): ", thisPageSegs)
+                                print("Post-processing...")
+                                # postProcess currently operates on single-level list of segments,
+                                # so we run it over subfilters for wavelets:
+                                spInfo = filters[speciesix]
+                                for filtix in range(len(spInfo['Filters'])):
+                                    CNNmodel = None
+                                    if spInfo['species'] in self.CNNDicts.keys():
+                                        CNNmodel = self.CNNDicts[spInfo['species']]
+                                    post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel)
+                                    print("Segments detected after WF: ", len(thisPageSegs[filtix]))
+                                    if self.w_wind.isChecked():
+                                        post.wind()
+                                        print('After wind: segments: ', len(post.segments))
+                                    if CNNmodel:
+                                        print('Post-processing with CNN')
+                                        post.CNN()
+                                        print('After CNN: segments: ', len(post.segments))
+                                    if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
+                                        if spInfo['Filters'][filtix]["F0"]:
+                                            print("Checking for fundamental frequency...")
+                                            post.fundamentalFrq()
+                                            print("After FF segments:", len(post.segments))
+                                    segmenter = Segment.Segmenter()
+                                    post.segments = segmenter.joinGaps(post.segments, maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
+                                    post.segments = segmenter.deleteShort(post.segments, minlength=spInfo['Filters'][filtix]['TimeRange'][0])
+                                    print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(spInfo['Filters'][filtix]['TimeRange'][3], spInfo['Filters'][filtix]['TimeRange'][0], len(post.segments)))
+
+                                    # adjust segment starts for 15min "pages"
+                                    if start != 0:
+                                        for seg in post.segments:
+                                            seg[0] += start/self.sampleRate
+                                            seg[1] += start/self.sampleRate
+
+                                    if self.w_mergect.isChecked():
+                                        # collect segments from all call types
+                                        allCtSegs.extend(post.segments)
+                                    else:
+                                        # attach filter info and put on self.segments:
+                                        self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
 
                                 if self.w_mergect.isChecked():
-                                    # collect segments from all call types
-                                    allCtSegs.extend(post.segments)
-                                else:
-                                    # attach filter info and put on self.segments:
-                                    self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
+                                    # merge different call type segments
+                                    segmenter = Segment.Segmenter()
+                                    segs = segmenter.checkSegmentOverlap(allCtSegs)
+                                    print('allCtSegs:', allCtSegs)
+                                    print('segs:', segs)
+                                    # also merge neighbours (segments from different call types)
+                                    segs = segmenter.joinGaps(segs, maxgap=max([subf['TimeRange'][3] for subf in spInfo["Filters"]]))
+                                    # construct "Any call" info to place on the segments
+                                    flow = min([subf["FreqRange"][0] for subf in spInfo["Filters"]])
+                                    fhigh = max([subf["FreqRange"][1] for subf in spInfo["Filters"]])
+                                    ctinfo = {"calltype": "(Other)", "FreqRange": [flow, fhigh]}
+                                    print('self.species[speciesix]:', self.species[speciesix])
+                                    print('spInfo["species"]:', spInfo["species"])
+                                    self.makeSegments(segs, self.species[speciesix], spInfo["species"], ctinfo)
 
-                            if self.w_mergect.isChecked():
-                                # merge different call type segments
-                                segmenter = Segment.Segmenter()
-                                segs = segmenter.checkSegmentOverlap(allCtSegs)
-                                print('allCtSegs:', allCtSegs)
-                                print('segs:', segs)
-                                # also merge neighbours (segments from different call types)
-                                segs = segmenter.joinGaps(segs, maxgap=max([subf['TimeRange'][3] for subf in spInfo["Filters"]]))
-                                # construct "Any call" info to place on the segments
-                                flow = min([subf["FreqRange"][0] for subf in spInfo["Filters"]])
-                                fhigh = max([subf["FreqRange"][1] for subf in spInfo["Filters"]])
-                                ctinfo = {"calltype": "(Other)", "FreqRange": [flow, fhigh]}
-                                print('self.species[speciesix]:', self.species[speciesix])
-                                print('spInfo["species"]:', spInfo["species"])
-                                self.makeSegments(segs, self.species[speciesix], spInfo["species"], ctinfo)
+                    print('Segments in this file: ', self.segments)
+                    print("Segmentation complete. %d new segments marked" % len(self.segments))
 
-                print('Segments in this file: ', self.segments)
-                print("Segmentation complete. %d new segments marked" % len(self.segments))
+                    # export segments
+                    cleanexit = self.saveAnnotation()
+                    if cleanexit != 1:
+                        print("Warning: could not save segments!")
+                    # Log success for this file
+                    self.log.appendFile(self.filename)
 
-                # export segments
-                cleanexit = self.saveAnnotation()
-                if cleanexit != 1:
-                    print("Warning: could not save segments!")
-                # Log success for this file
-                self.log.appendFile(self.filename)
+                    # track how long it took to process one file:
+                    processingTime = time.time() - processingTimeStart
+                    print("File processed in", processingTime)
+                # END of audio batch processing
 
-                # track how long it took to process one file:
-                processingTime = time.time() - processingTimeStart
-                print("File processed in", processingTime)
-            # END of audio batch processing
+                # delete old results (xlsx)
+                # ! WARNING: any Detection...xlsx files will be DELETED,
+                # ! ANYWHERE INSIDE the specified dir, recursively
+                self.statusBar().showMessage("Preparing Excel output, almost done...")
+                self.update()
+                self.repaint()
+                for root, dirs, files in os.walk(str(self.dirName)):
+                    for filename in files:
+                        filenamef = os.path.join(root, filename)
+                        if fnmatch.fnmatch(filenamef, '*DetectionSummary_*.xlsx'):
+                            print("Removing excel file %s" % filenamef)
+                            os.remove(filenamef)
 
-            # delete old results (xlsx)
-            # ! WARNING: any Detection...xlsx files will be DELETED,
-            # ! ANYWHERE INSIDE the specified dir, recursively
-            self.statusBar().showMessage("Preparing Excel output, almost done...")
-            self.update()
-            self.repaint()
-            for root, dirs, files in os.walk(str(self.dirName)):
-                for filename in files:
-                    filenamef = os.path.join(root, filename)
-                    if fnmatch.fnmatch(filenamef, '*DetectionSummary_*.xlsx'):
-                        print("Removing excel file %s" % filenamef)
-                        os.remove(filenamef)
+                # Determine all species detected in at least one file
+                # (two loops ensure that all files will have pres/abs xlsx for all species.
+                # Ugly, but more readable this way)
+                if speciesStr != "Any sound":
+                    spList = set([filter["species"] for filter in filters])
+                else:
+                    spList = set()
+                for filename in allwavs:
+                    if not os.path.isfile(filename + '.data'):
+                        continue
 
-            # Determine all species detected in at least one file
-            # (two loops ensure that all files will have pres/abs xlsx for all species.
-            # Ugly, but more readable this way)
-            if speciesStr != "Any sound":
-                spList = set([filter["species"] for filter in filters])
-            else:
-                spList = set()
-            for filename in allwavs:
-                if not os.path.isfile(filename + '.data'):
-                    continue
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(filename + '.data')
+                    print(filename)
 
-                segments = Segment.SegmentList()
-                segments.parseJSON(filename + '.data')
-                print(filename)
+                    for seg in segments:
+                        spList.update([lab["species"] for lab in seg[4]])
 
-                for seg in segments:
-                    spList.update([lab["species"] for lab in seg[4]])
+                # Save the new excels
+                print("Exporting to Excel ...")
+                self.statusBar().showMessage("Exporting to Excel ...")
+                self.update()
+                self.repaint()
+                for filename in allwavs:
+                    if not os.path.isfile(filename + '.data'):
+                        continue
 
-            # Save the new excels
-            print("Exporting to Excel ...")
-            self.statusBar().showMessage("Exporting to Excel ...")
-            self.update()
-            self.repaint()
-            for filename in allwavs:
-                if not os.path.isfile(filename + '.data'):
-                    continue
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(filename + '.data')
 
-                segments = Segment.SegmentList()
-                segments.parseJSON(filename + '.data')
+                    # This will be incompatible with old .data files that didn't store file size!
+                    datalen = np.ceil(segments.metadata["Duration"])
 
-                # This will be incompatible with old .data files that didn't store file size!
-                datalen = np.ceil(segments.metadata["Duration"])
-
-                # sort by time and save
-                segments.orderTime()
-                success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
-                if success!=1:
-                    print("Warning: failed to export Excel output!")
+                    # sort by time and save
+                    segments.orderTime()
+                    success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
+                    if success!=1:
+                        print("Warning: failed to export Excel output!")
 
         # END of processing and exporting. Final cleanup
         self.log.file.close()
@@ -790,7 +847,8 @@ class AviaNZ_batchProcess(QMainWindow):
 
         self.segments.metadata["Operator"] = "Auto"
         self.segments.metadata["Reviewer"] = ""
-        self.segments.metadata["Duration"] = float(self.datalength)/self.sampleRate
+        if self.method != "Intermittent sampling":
+            self.segments.metadata["Duration"] = float(self.datalength)/self.sampleRate
         self.segments.metadata["noiseLevel"] = None
         self.segments.metadata["noiseTypes"] = []
 
