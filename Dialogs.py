@@ -44,22 +44,31 @@ class StartScreen(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('AviaNZ - Choose Task')
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.FramelessWindowHint | Qt.WindowCloseButtonHint)
         self.setAutoFillBackground(False)
-        self.setFixedSize(900, 350)
+        self.setFixedSize(860, 350)
         self.setStyleSheet("background-image: url(img/AviaNZ_SW_V2.jpg);")
         self.activateWindow()
 
         btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
         # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
-        b1 = QPushButton(" Manual Processing ")
-        b2 = QPushButton("      Batch Processing      ")
-        b3 = QPushButton(" Review Batch Results ")
-        l1 = QLabel("-------")
+        b1 = QPushButton("   Manual Processing   ")
+        b2 = QPushButton("     Batch Processing     ")
+        b3 = QPushButton("  Review Batch Results  ")
+        l1 = QLabel("------")
         l2 = QLabel("---")
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
         b3.setStyleSheet(btn_style)
         l1.setStyleSheet('QLabel {color:transparent}')
+        bclose = QtGui.QToolButton()
+        bclose.setIcon(QtGui.QIcon('img/close.png'))
+        bclose.setIconSize(QtCore.QSize(40, 40))
+        bclose.setToolTip("Close")
+        bclose.clicked.connect(self.reject)
+        
+        hboxclose = QHBoxLayout()
+        hboxclose.addWidget(bclose, alignment=Qt.AlignRight)        
 
         hbox = QHBoxLayout()
         hbox.addWidget(l1)
@@ -71,6 +80,7 @@ class StartScreen(QDialog):
         hbox.addWidget(l2)
 
         vbox = QVBoxLayout()
+        vbox.addLayout(hboxclose)
         vbox.addStretch(1)
         vbox.addLayout(hbox)
         vbox.addWidget(l1)
@@ -1072,7 +1082,7 @@ class HumanClassify1(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
 
         self.setModal(True)
         self.frame = QWidget()
@@ -1725,7 +1735,7 @@ class HumanClassify2(QDialog):
             self.setWindowTitle('Human review')
 
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
         # let the user quit without bothering rest of it
 
         self.sampleRate = sampleRate
