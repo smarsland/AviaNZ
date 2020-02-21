@@ -139,7 +139,7 @@ class BuildRecAdvWizard(QWizard):
                         spList.update([lab["species"] for seg in segments for lab in seg[4]])
 
                         # also retrieve its sample rate
-                        samplerate = wavio.readFmt(os.path.join(root, filename), 1)[0]
+                        samplerate = wavio.readFmt(os.path.join(root, filename))[0]
                         fs.append(samplerate)
             if len(fs)==0:
                 print("Warning: no suitable files found")
