@@ -115,6 +115,37 @@ class Wav(object):
         return s
 
 
+def readFmt(file):
+    """
+    Reads WAV file format.
+    Convenience function for when samplerate or duration are needed,
+    to avoid wasting RAM on loading the audiodata.
+
+    Parameters
+    ----------
+    file : string or file object
+        Either the name of a file or an open file pointer.
+    Returns
+    -------
+    A tuple of :
+        rate : float
+            The sampling frequency
+        nseconds : float
+            Number of seconds in file
+        nchannels : int
+            Number of channels in file
+        sampwidth : int
+            Sample width, in bites (16, 24 etc.)
+    """
+    wav = _wave.open(file)
+    rate = wav.getframerate()
+    nchannels = wav.getnchannels()
+    sampwidth = wav.getsampwidth() * 8
+    nseconds = float(wav.getnframes())/rate
+    wav.close()
+    return (rate, nseconds, nchannels, sampwidth)
+
+
 def read(file,nseconds=None,offset=0):
     """
     Read a WAV file.

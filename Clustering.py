@@ -409,8 +409,8 @@ class Clustering:
             for root, dirs, files in os.walk(str(dirname)):
                 for file in files:
                     if file.lower().endswith('.wav') and file + '.data' in files:
-                        wavobj = wavio.read(os.path.join(root, file))
-                        srlist.append(wavobj.rate)
+                        wavrate = wavio.readFmt(os.path.join(root, file))[0]
+                        srlist.append(wavrate)
                         # Read the annotation
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, file + '.data'))
@@ -427,8 +427,8 @@ class Clustering:
         # File mode (from the main interface)
         elif os.path.isfile(dirname):
             if dirname.lower().endswith('.wav') and os.path.exists(dirname + '.data'):
-                wavobj = wavio.read(dirname)
-                srlist.append(wavobj.rate)
+                wavrate = wavio.readFmt(dirname)[0]
+                srlist.append(wavrate)
                 # Read the annotation
                 segments = Segment.SegmentList()
                 segments.parseJSON(dirname + '.data')
@@ -700,8 +700,8 @@ class Clustering:
         for root, dirs, files in os.walk(str(dir)):
             for file in files:
                 if file.lower().endswith('.wav') and file + '.data' in files:
-                    wavobj = wavio.read(os.path.join(root, file))
-                    srlist.append(wavobj.rate)
+                    wavrate = wavio.readFmt(os.path.join(root, file))[0]
+                    srlist.append(wavrate)
                     # Read the annotation
                     segments = Segment.SegmentList()
                     segments.parseJSON(os.path.join(root, file + '.data'))
