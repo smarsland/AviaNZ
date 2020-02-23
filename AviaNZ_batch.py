@@ -183,7 +183,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.boxTime.setLayout(formTime)
         self.d_detection.addWidget(self.boxTime, row=2, col=0, colspan=3)
 
-        self.warning = QLabel("Warning!\nThe choosen \"Any sound\" mode will delete ALL the existing annotations\nin the above selected folder")
+        self.warning = QLabel("Warning!\nThe chosen \"Any sound\" mode will delete ALL the existing annotations\nin the above selected folder")
         self.warning.setStyleSheet('QLabel {font-size:14px; color:red;}')
         self.d_detection.addWidget(self.warning, row=3, col=0, colspan=3)
         self.warning.hide()
@@ -414,8 +414,6 @@ class AviaNZ_batchProcess(QMainWindow):
             segments.append([i, i + self.config['protocolSize']])
             i += self.config['protocolInterval']
         self.makeSegments(segments)
-        self.saveAnnotation()
-        self.log.appendFile(self.filename)
 
     # from memory_profiler import profile
     # fp = open('memory_profiler_batch.log', 'w+')
@@ -553,7 +551,42 @@ class AviaNZ_batchProcess(QMainWindow):
         if self.method == "Intermittent sampling":
             with pg.BusyCursor():
                 for filename in allwavs:
+                    # get remaining run time in min
+                    processingTimeStart = time.time()
+                    hh,mm = divmod(processingTime * (total-cnt) / 60, 60)
+                    cnt = cnt+1
+                    print("*** Processing file %d / %d : %s ***" % (cnt, total, filename))
+                    self.statusBar().showMessage("Processing file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm))
+                    self.update()
+                    self.repaint()
+
+                    # if it was processed previously (stored in log)
+                    if filename in self.filesDone:
+                        # skip the processing:
+                        print("File %s processed previously, skipping" % filename)
+                        continue
+
+                    # check if file not empty
+                    if os.stat(filename).st_size < 100:
+                        print("File %s empty, skipping" % filename)
+                        self.log.appendFile(filename)
+                        continue
+
+                    # actual processing
                     self.addRegularSegments(filename)
+
+                    print("%d intermittent segments marked" % len(self.segments))
+
+                    # export segments
+                    cleanexit = self.saveAnnotation()
+                    if cleanexit != 1:
+                        print("Warning: could not save segments!")
+                    # Log success for this file
+                    self.log.appendFile(filename)
+
+                    # track how long it took to process one file:
+                    processingTime = time.time() - processingTimeStart
+                    print("File processed in", processingTime)
         else:
             with pg.BusyCursor():
                 for filename in allwavs:
@@ -798,6 +831,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 self.statusBar().showMessage("Exporting to Excel ...")
                 self.update()
                 self.repaint()
+                msgtext = "Excel output is stored in " + os.path.join(self.dirName, "DetectionSummary_*.xlsx")
                 for filename in allwavs:
                     if not os.path.isfile(filename + '.data'):
                         continue
@@ -812,12 +846,15 @@ class AviaNZ_batchProcess(QMainWindow):
                     segments.orderTime()
                     success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
                     if success!=1:
+                        # if any file wasn't exported well, overwrite the message
+                        msgtext = "Warning: Excel output at " + self.dirName + " was not stored properly"
                         print("Warning: failed to export Excel output!")
 
         # END of processing and exporting. Final cleanup
         self.log.file.close()
         self.statusBar().showMessage("Processed all %d files" % total)
-        msg = SupportClasses.MessagePopup("d", "Finished", "Finished processing. Would you like to return to the start screen?")
+        msgtext = "Finished processing.\n" + msgtext + "\nWould you like to return to the start screen?"
+        msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         reply = msg.exec_()
         if reply == QMessageBox.Yes:
@@ -1301,6 +1338,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.statusBar().showMessage("Exporting to Excel ...")
             self.update()
             self.repaint()
+            msgtext = "Excel output is stored in " + os.path.join(self.dirName, "DetectionSummary_*.xlsx")
             for filename in allwavs:
                 if not os.path.isfile(filename + '.data'):
                     continue
@@ -1315,6 +1353,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 segments.orderTime()
                 success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
                 if success!=1:
+                    # if any file wasn't exported well, overwrite the message
+                    msgtext = "Warning: Excel output at " + self.dirName + " was not stored properly"
                     print("Warning: failed to save Excel output")
 
         # END of review and exporting. Final cleanup
@@ -1322,13 +1362,15 @@ class AviaNZ_reviewAll(QMainWindow):
         self.update()
         self.repaint()
         if filesuccess == 1:
-            msg = SupportClasses.MessagePopup("d", "Finished", "All files checked. Would you like to return to the start screen?")
+            msgtext = "All files checked.\n" + msgtext + "\nWould you like to return to the start screen?"
+            msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             reply = msg.exec_()
             if reply == QMessageBox.Yes:
                 QApplication.exit(1)
         else:
-            msg = SupportClasses.MessagePopup("w", "Review stopped", "Review stopped at file %s of %s.\nWould you like to return to the start screen?" % (cnt, total))
+            msgtext = "Review stopped at file %s of %s.\n%s\nWould you like to return to the start screen?" % (cnt, total, msgtext)
+            msg = SupportClasses.MessagePopup("w", "Review stopped", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             reply = msg.exec_()
             if reply == QMessageBox.Yes:
