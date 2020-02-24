@@ -4197,6 +4197,14 @@ class AviaNZ(QMainWindow):
                 else:
                     newSegments = self.findMatches(float(str(CCThr1)))
 
+            # Add certainty
+            if str(alg) not in ['Wavelets', 'Cross-Correlation']:
+                newSegments = [[seg, 0.0] for seg in newSegments]
+            elif str(alg) == 'Cross-Correlation':
+                newSegments = [[seg, 0.5] for seg in newSegments]
+            elif str(alg) == 'Wavelets':
+                len(speciesData['Filters'])
+                newSegments = [[[seg, 0.5] for seg in newSegments[filtix]] for filtix in range(len(speciesData['Filters']))]
             # Post-process
             # 1. Delete windy segments
             # 2. Delete rainy segments
@@ -4263,8 +4271,8 @@ class AviaNZ(QMainWindow):
                     y2 = min(self.sampleRate//2, speciesSubf['FreqRange'][1])
                     y2 = self.convertFreqtoY(y2)
                     for seg in newSegments[filtix]:
-                        self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
-                                [{"species": filtspecies, "certainty": 50, "filter": filtname, "calltype": speciesSubf["calltype"]}], index=-1)
+                        self.addSegment(float(seg[0][0]), float(seg[0][1]), y1, y2,
+                                [{"species": filtspecies, "certainty": seg[1], "filter": filtname, "calltype": speciesSubf["calltype"]}], index=-1)
                         self.segmentsToSave = True
             elif str(alg)=='Cross-Correlation' and species_cc != 'Choose species...':
                 for filtix in range(len(speciesData['Filters'])):
@@ -4274,11 +4282,11 @@ class AviaNZ(QMainWindow):
                     y2 = self.convertFreqtoY(y2)
                     for seg in newSegments[filtix]:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
-                                [{"species": species_cc.title(), "certainty": 50}], index=-1)
+                                [{"species": species_cc.title(), "certainty": seg[1]}], index=-1)
                         self.segmentsToSave = True
             else:
                 for seg in newSegments:
-                    self.addSegment(seg[0],seg[1])
+                    self.addSegment(seg[0][0],seg[0][1])
                     self.segmentsToSave = True
 
             self.segmentDialog.undo.setEnabled(True)

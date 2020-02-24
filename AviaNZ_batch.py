@@ -675,6 +675,8 @@ class AviaNZ_batchProcess(QMainWindow):
                             self.seg = Segment.Segmenter(self.sp, self.sampleRate)
                             # thisPageSegs = self.seg.bestSegments()
                             thisPageSegs = self.seg.medianClip(thr=3.5)
+                            # Add certainty
+                            thisPageSegs = [[seg, 0.0] for seg in thisPageSegs]
                             # Post-process
                             # 1. Delete windy segments
                             # 2. Delete rainy segments
@@ -701,8 +703,8 @@ class AviaNZ_batchProcess(QMainWindow):
                             # adjust segment starts for 15min "pages"
                             if start != 0:
                                 for seg in post.segments:
-                                    seg[0] += start/self.sampleRate
-                                    seg[1] += start/self.sampleRate
+                                    seg[0][0] += start/self.sampleRate
+                                    seg[0][1] += start/self.sampleRate
                             # attach mandatory "Don't Know"s etc and put on self.segments
                             self.makeSegments(post.segments)
                             del self.seg
@@ -716,7 +718,7 @@ class AviaNZ_batchProcess(QMainWindow):
                                 print("Working with recogniser:", filters[speciesix])
                                 # note: using 'recaa' mode = partial antialias
                                 thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
-
+                                thisPageSegs = [[[seg, 0.5] for seg in thisPageSegs[ct]] for ct in range(len(filters[speciesix]["Filters"]))]
                                 # Post-process
                                 # 1. Delete windy segments
                                 # 2. Delete rainy segments
@@ -866,16 +868,15 @@ class AviaNZ_batchProcess(QMainWindow):
         if subfilter is not None:
             y1 = subfilter["FreqRange"][0]
             y2 = min(subfilter["FreqRange"][1], self.sampleRate//2)
-            species = [{"species": species, "certainty": 50, "filter": filtName, "calltype": subfilter["calltype"]}]
             for s in segmentsNew:
-                segment = Segment.Segment([s[0], s[1], y1, y2, species])
+                segment = Segment.Segment([s[0][0], s[0][1], y1, y2, [{"species": species, "certainty": s[1], "filter": filtName, "calltype": subfilter["calltype"]}]])
                 self.segments.addSegment(segment)
         # for generic all-species segments:
         else:
             y1 = 0
             y2 = 0
             species = "Don't Know"
-            cert = 0
+            cert = 0.0
             self.segments.addBasicSegments(segmentsNew, [y1, y2], species=species, certainty=cert)
 
     def saveAnnotation(self):

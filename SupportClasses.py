@@ -632,7 +632,7 @@ class Log(object):
         allans = []
 
         # now, check if the specified log can be resumed:
-        if os.path.isfile(path) and settings[0] != "Intermittent sampling":
+        if os.path.isfile(path):
             try:
                 f = open(path, 'r+')
                 print("Found log file at %s" % path)
