@@ -69,23 +69,23 @@ def ClickSearch(dirName, file, featuress, count, Train=False):
     imspec = imspec/np.max(imspec) #normalization
     imspec = imspec[:, 1:np.shape(img2)[1]]  # Cutting first column because it only contains the scale and cutting last columns
     
-##    #Read audiodata
-##   keeping this just to read duration -> HACK
-#    fs=16000
-#    audiodata = wavio.read(filename[:-3]+'wav')
-#    sp = SignalProc.SignalProc(1024, 512) #outside?
-#    sp.data = audiodata.data
-#    duration=audiodata.nframes/fs
-#    
-#    #copyed from sp.wavRead to make everything consistent
-#    # take only left channel
-#    if np.shape(np.shape(sp.data))[0] > 1:
-#        sp.data = sp.data[:, 0]
-#    sp.audioFormat.setChannelCount(1)
-#     # force float type
-#    if sp.data.dtype != 'float':
-#        sp.data = sp.data.astype('float')
-#    sp.audioFormat.setSampleSize(audiodata.sampwidth * 8)
+#    #Read audiodata
+#   keeping this just to read duration -> HACK
+    fs=16000
+    audiodata = wavio.read(filename[:-3]+'wav')
+    sp = SignalProc.SignalProc(1024, 512) #outside?
+    sp.data = audiodata.data
+    duration=audiodata.nframes/fs
+    
+    #copyed from sp.wavRead to make everything consistent
+    # take only left channel
+    if np.shape(np.shape(sp.data))[0] > 1:
+        sp.data = sp.data[:, 0]
+    sp.audioFormat.setChannelCount(1)
+     # force float type
+    if sp.data.dtype != 'float':
+        sp.data = sp.data.astype('float')
+    sp.audioFormat.setSampleSize(audiodata.sampwidth * 8)
     
 #    #Spectrogram
 #    sp.samplerate= fs
@@ -94,11 +94,11 @@ def ClickSearch(dirName, file, featuress, count, Train=False):
 #    imspec=np.flipud(imspec) #updown 
 
     df=88000/(np.shape(imspec)[0]+1) #frequency increment 
-#    dt=(duration/11)/(np.shape(imspec)[1]+1) #timeincrement
+    dt=(duration/11)/(np.shape(imspec)[1]+1) #timeincrement
 #    print("file ", file, "dt " , dt)
-    dt=0.002909090909090909
-#    up_len=math.ceil(0.05/dt) #0.5 second lenth in indices divided by 11
-    up_len=17
+#    dt=0.002909090909090909
+    up_len=math.ceil(0.05/dt) #0.5 second lenth in indices divided by 11
+#    up_len=17
 #    up_len=math.ceil((0.5/11)/dt)
     
     
@@ -590,8 +590,8 @@ def metrics(confusion_matrix, file_num):
 ##MAIN
  
 #Create train dataset for CNN from the results of clicksearch   
-train_dir = "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN3" #changed directory
-annotation_file_train= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN2\\Train_dataset_images.data"
+train_dir = "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN4" #changed directory
+annotation_file_train= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN4\\Train_dataset_images.data"
 with open(annotation_file_train) as f:
     segments_filewise_train = json.load(f)
 file_number_train=np.shape(segments_filewise_train)[0]
@@ -642,7 +642,7 @@ print("-------------------------------------------")
     
 test_dir = "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TEST2" #changed directory
 annotation_file_test= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\Test_dataset_images.data"
-test_fold= "BAT SEARCH TESTS\Test_Spec_32" #Test folder where to save all the stats
+test_fold= "BAT SEARCH TESTS\Test_Spec_39" #Test folder where to save all the stats
 os.mkdir(test_dir+ '/' + test_fold)
 with open(annotation_file_test) as f:
     segments_filewise_test = json.load(f)
@@ -823,10 +823,94 @@ for i in range(10):
     print('Training n', i)
     history = model.fit(train_images, train_labels,
                         batch_size=32,
-                        epochs=30,
+                        epochs=20,
                         verbose=2)
+        #recovering labels
+    predictions =model.predict(test_images)
+    #predictions is an array #imagesX #of classes which entries are the probabilities
+    #for each classes
+    
+    filewise_output=File_label(predictions, spec_id, segments_filewise_test, filewise_output, file_number )
+    
+    #compare predicted_annotations with segments_filewise_test
+    #evaluate metrics
+        
+    # inizializing
+    confusion_matrix=np.zeros((7,4))
+    print('Estimating metrics')
+    for j in range(file_number):
+        assigned_label= filewise_output[j][3]
+        correct_label=segments_filewise_test[j][1]
+        if correct_label==assigned_label:
+            if correct_label=='Noise':
+                confusion_matrix[6][3]+=1
+            else:
+                if correct_label=='LT':
+                    confusion_matrix[0][0]+=1
+                elif correct_label=='ST':
+                    confusion_matrix[2][1]+=1
+                elif correct_label=='Both':
+                    confusion_matrix[4][2]+=1
+        else:
+            if correct_label=='Noise':
+                if assigned_label=='LT':
+                    confusion_matrix[0][3]+=1
+                elif assigned_label=='LT?':
+                    confusion_matrix[1][3]+=1
+                elif assigned_label=='ST':
+                    confusion_matrix[2][3]+=1
+                elif assigned_label=='ST?':
+                    confusion_matrix[3][3]+=1
+                elif assigned_label=='Both':
+                    confusion_matrix[4][3]+=1
+                elif assigned_label=='Both?':
+                    confusion_matrix[5][3]+=1
+            elif assigned_label=='Noise':
+                if correct_label=='LT':
+                    confusion_matrix[6][0]+=1
+                elif correct_label=='ST':
+                    confusion_matrix[6][1]+=1
+                elif correct_label=='Both':
+                    confusion_matrix[6][2]+=1
+            else:
+                if correct_label=='LT':
+                    if assigned_label=='LT?':
+                        confusion_matrix[1][0]+=1
+                    elif assigned_label=='ST':
+                        confusion_matrix[2][0]+=1
+                    elif assigned_label=='ST?':
+                        confusion_matrix[3][0]+=1
+                    elif assigned_label=='Both':
+                        confusion_matrix[4][0]+=1
+                    elif assigned_label=='Both?':
+                        confusion_matrix[5][0]+=1
+                elif correct_label=='ST':
+                    if assigned_label=='LT':
+                        confusion_matrix[0][1]+=1
+                    elif assigned_label=='LT?':
+                        confusion_matrix[1][1]+=1
+                    elif assigned_label=='ST?':
+                        confusion_matrix[3][1]+=1
+                    elif assigned_label=='Both':
+                        confusion_matrix[4][1]+=1
+                    elif assigned_label=='Both?':
+                        confusion_matrix[5][1]+=1
+                elif correct_label=='Both':
+                    if assigned_label=='LT':
+                        confusion_matrix[0][2]+=1
+                    elif assigned_label=='LT?':
+                        confusion_matrix[1][2]+=1
+                    elif assigned_label=='ST':
+                        confusion_matrix[2][2]+=1
+                    elif assigned_label=='ST?':
+                        confusion_matrix[3][2]+=1
+                    elif assigned_label=='Both?':
+                        confusion_matrix[5][2]+=1
+                     
+    Recall, Precision_pre, Precision_post, Accuracy_pre1,Accuracy_pre2, Accuracy_post, TD, FPD_pre, FPD_post, FND, CoCla_pre1, CoCla_pre2, CoCla_post=metrics(confusion_matrix, file_number)
+
     #save reached accuracy
-    accuracies[i]=history.history['acc'][-1]
+    accuracies[i]=Accuracy_post
     print('Accuracy reached',accuracies[i])
     #save model
     modelpath=test_dir+ '\\' + test_fold + '\\model_'+str(i)+'.h5' #aid variable

@@ -29,7 +29,7 @@ import os  # linux shell comands
 import Segment
 
 #dirName='/home/listanvirg/Data/Bat/BAT/TRAIN_DATA/LT'
-dirName='D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TRAIN2'
+dirName='D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TRAIN4'
 
 dataset=[]
 for root, dirs, files in os.walk(str(dirName)):
@@ -97,6 +97,7 @@ with open(dirName+'\Train_dataset_images.data', 'w') as f2:
     json.dump(dataset,f2)
             
             
+
             
             
             

@@ -32,7 +32,7 @@ import wavio
 
 #dirName='/home/listanvirg/Data/Bat/BAT/TEST_DATA/'
 #dirName='D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\TRAIN_DATA\\NONE'
-dirName='D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN\\MORE NOISE'
+dirName='D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN4'
 
 for root, dirs, files in os.walk(str(dirName)):
     for file in files:

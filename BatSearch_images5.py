@@ -9,6 +9,8 @@ Created on Wed Nov 13 14:05:05 2019
 
 #Part of the code is based on Nirosha Priyadarshani scripts makeTrainingData,py
 # and CNN_keras
+
+# Adding validation data for training
 """
 
 
@@ -591,7 +593,7 @@ def metrics(confusion_matrix, file_num):
  
 #Create train dataset for CNN from the results of clicksearch   
 train_dir = "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN3" #changed directory
-annotation_file_train= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN2\\Train_dataset_images.data"
+annotation_file_train= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN3\\Train_dataset_images.data"
 with open(annotation_file_train) as f:
     segments_filewise_train = json.load(f)
 file_number_train=np.shape(segments_filewise_train)[0]
@@ -642,7 +644,7 @@ print("-------------------------------------------")
     
 test_dir = "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TEST2" #changed directory
 annotation_file_test= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\Test_dataset_images.data"
-test_fold= "BAT SEARCH TESTS\Test_Spec_32" #Test folder where to save all the stats
+test_fold= "BAT SEARCH TESTS\Test_Spec_41" #Test folder where to save all the stats
 os.mkdir(test_dir+ '/' + test_fold)
 with open(annotation_file_test) as f:
     segments_filewise_test = json.load(f)
@@ -738,21 +740,38 @@ for i in range(np.shape(data_train)[0]):
     maxg = np.max(data_train[i][0][:])
     sg_train[i][:] = data_train[i][0][:]/maxg
     target_train[i][0] = data_train[i][-1]
+    
+# randomly choose 90% train data and keep the rest as validation data
+idxs = np.random.permutation(np.shape(sg_train)[0])
+x_train = sg_train[idxs[0:int(len(idxs)*0.9)]]
+y_train = target_train[idxs[0:int(len(idxs)*0.9)]]
+x_validation = sg_train[idxs[int(len(idxs)*0.9):]]
+y_validation = target_train[idxs[int(len(idxs)*0.9):]]
  
 #Check: how many files I am using for training
 print("-------------------------------------------")
 print('Number of spectrograms', np.shape(target_train)[0]) 
-print("Spectrograms for LT: ", np.shape(np.nonzero(target_train==0))[1])
-print("Spectrograms for ST: ", np.shape(np.nonzero(target_train==1))[1])
-print("Spectrograms for Noise: ", np.shape(np.nonzero(target_train==2))[1])
+print('Spectrogram used for training ',np.shape(y_train)[0])
+print("Spectrograms for LT: ", np.shape(np.nonzero(y_train==0))[1])
+print("Spectrograms for ST: ", np.shape(np.nonzero(y_train==1))[1])
+print("Spectrograms for Noise: ", np.shape(np.nonzero(y_train==2))[1])
+print('\n Spectrogram used for validation ',np.shape(y_validation)[0])
+print("Spectrograms for LT: ", np.shape(np.nonzero(y_validation==0))[1])
+print("Spectrograms for ST: ", np.shape(np.nonzero(y_validation==1))[1])
+print("Spectrograms for Noise: ", np.shape(np.nonzero(y_validation==2))[1])
 
 #Save training info into a file
 cnn_train_info_file=test_dir+'/'+test_fold+'\CNN_train_data_info.txt'
 file1=open(cnn_train_info_file,'w')
 L=['Number of spectrograms = %5d \n' %np.shape(target_train)[0], 
-   "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(target_train==0))[1],
-   "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(target_train==1))[1],
-   "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(target_train==2))[1]]
+   "Spectrogram used for training = %5d \n" %np.shape(y_train)[0],
+   "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_train==0))[1],
+   "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_train==1))[1],
+   "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_train==2))[1],
+   "\n Spectrogram used for validation = %5d \n" %np.shape(y_validation)[0],
+   "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_validation==0))[1],
+   "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_validation==1))[1],
+   "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_validation==2))[1]]
 file1.writelines(L)
 file1.close()
 
@@ -761,7 +780,8 @@ file1.close()
 data_test= test_featuress
 sg_test=np.ndarray(shape=(np.shape(data_test)[0],np.shape(data_test[0][0])[0], np.shape(data_test[0][0])[1]), dtype=float)
 spec_id=[]
-print('Number of test spectrograms', np.shape(data_test)[0])
+print('-------------------------------------------------------')
+print('\n Number of test spectrograms', np.shape(data_test)[0])
 for i in range(np.shape(data_test)[0]):
     maxg = np.max(data_test[i][0][:])
     sg_test[i][:] = data_test[i][0][:]/maxg
@@ -771,20 +791,23 @@ for i in range(np.shape(data_test)[0]):
 print('check on spec_id', np.shape(spec_id))    
 
 # Using different train and test datasets
-x_train = sg_train
-y_train = target_train
+#x_train = sg_train
+#y_train = target_train
 x_test = sg_test
 #y_test = target_test
 
 train_images = x_train.reshape(x_train.shape[0],6, 512, 1) #changed image dimensions
+validation_images = x_validation.reshape(x_validation.shape[0],6, 512, 1)
 test_images = x_test.reshape(x_test.shape[0],6, 512, 1)
 input_shape = (6, 512, 1)
 
 train_images = train_images.astype('float32')
+validation_images = validation_images.astype('float32')
 test_images = test_images.astype('float32')
 
 num_labels=3 #change this variable, when changing number of labels
 train_labels = tensorflow.keras.utils.to_categorical(y_train, num_labels)
+validation_labels = tensorflow.keras.utils.to_categorical(y_validation, num_labels)
 #test_labels = tensorflow.keras.utils.to_categorical(y_test, 8)   #change this to set labels  
 
 accuracies=np.zeros((10,1)) #initializing accuracies array
@@ -823,10 +846,95 @@ for i in range(10):
     print('Training n', i)
     history = model.fit(train_images, train_labels,
                         batch_size=32,
-                        epochs=30,
-                        verbose=2)
+                        epochs=20,
+                        verbose=2,
+                        validation_data=(validation_images, validation_labels))
+        #recovering labels
+    predictions =model.predict(test_images)
+    #predictions is an array #imagesX #of classes which entries are the probabilities
+    #for each classes
+    
+    filewise_output=File_label(predictions, spec_id, segments_filewise_test, filewise_output, file_number )
+    
+    #compare predicted_annotations with segments_filewise_test
+    #evaluate metrics
+        
+    # inizializing
+    confusion_matrix=np.zeros((7,4))
+    print('Estimating metrics')
+    for j in range(file_number):
+        assigned_label= filewise_output[j][3]
+        correct_label=segments_filewise_test[j][1]
+        if correct_label==assigned_label:
+            if correct_label=='Noise':
+                confusion_matrix[6][3]+=1
+            else:
+                if correct_label=='LT':
+                    confusion_matrix[0][0]+=1
+                elif correct_label=='ST':
+                    confusion_matrix[2][1]+=1
+                elif correct_label=='Both':
+                    confusion_matrix[4][2]+=1
+        else:
+            if correct_label=='Noise':
+                if assigned_label=='LT':
+                    confusion_matrix[0][3]+=1
+                elif assigned_label=='LT?':
+                    confusion_matrix[1][3]+=1
+                elif assigned_label=='ST':
+                    confusion_matrix[2][3]+=1
+                elif assigned_label=='ST?':
+                    confusion_matrix[3][3]+=1
+                elif assigned_label=='Both':
+                    confusion_matrix[4][3]+=1
+                elif assigned_label=='Both?':
+                    confusion_matrix[5][3]+=1
+            elif assigned_label=='Noise':
+                if correct_label=='LT':
+                    confusion_matrix[6][0]+=1
+                elif correct_label=='ST':
+                    confusion_matrix[6][1]+=1
+                elif correct_label=='Both':
+                    confusion_matrix[6][2]+=1
+            else:
+                if correct_label=='LT':
+                    if assigned_label=='LT?':
+                        confusion_matrix[1][0]+=1
+                    elif assigned_label=='ST':
+                        confusion_matrix[2][0]+=1
+                    elif assigned_label=='ST?':
+                        confusion_matrix[3][0]+=1
+                    elif assigned_label=='Both':
+                        confusion_matrix[4][0]+=1
+                    elif assigned_label=='Both?':
+                        confusion_matrix[5][0]+=1
+                elif correct_label=='ST':
+                    if assigned_label=='LT':
+                        confusion_matrix[0][1]+=1
+                    elif assigned_label=='LT?':
+                        confusion_matrix[1][1]+=1
+                    elif assigned_label=='ST?':
+                        confusion_matrix[3][1]+=1
+                    elif assigned_label=='Both':
+                        confusion_matrix[4][1]+=1
+                    elif assigned_label=='Both?':
+                        confusion_matrix[5][1]+=1
+                elif correct_label=='Both':
+                    if assigned_label=='LT':
+                        confusion_matrix[0][2]+=1
+                    elif assigned_label=='LT?':
+                        confusion_matrix[1][2]+=1
+                    elif assigned_label=='ST':
+                        confusion_matrix[2][2]+=1
+                    elif assigned_label=='ST?':
+                        confusion_matrix[3][2]+=1
+                    elif assigned_label=='Both?':
+                        confusion_matrix[5][2]+=1
+                     
+    Recall, Precision_pre, Precision_post, Accuracy_pre1,Accuracy_pre2, Accuracy_post, TD, FPD_pre, FPD_post, FND, CoCla_pre1, CoCla_pre2, CoCla_post=metrics(confusion_matrix, file_number)
+
     #save reached accuracy
-    accuracies[i]=history.history['acc'][-1]
+    accuracies[i]=Accuracy_post
     print('Accuracy reached',accuracies[i])
     #save model
     modelpath=test_dir+ '\\' + test_fold + '\\model_'+str(i)+'.h5' #aid variable
