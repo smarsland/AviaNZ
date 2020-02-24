@@ -177,7 +177,7 @@ class Segment(list):
         """ Returns a nicely-formatted string of this segment's info."""
         s = []
         for lab in self[4]:
-            labs = "sp.: {}, cert.: {}%".format(lab["species"], lab["certainty"]*100)
+            labs = "sp.: {}, cert.: {}%".format(lab["species"], round(lab["certainty"]*100))
             if "filter" in lab and lab["filter"]!="M":
                 labs += ", filter: " + lab["filter"]
             if "calltype" in lab:
@@ -763,9 +763,11 @@ class Segmenter:
         if isinstance(segments[0][0], list):
             while i < len(segments):
                 start = segments[i][0][0]
+                cert = [segments[i][1]]
                 while i + 1 < len(segments) and segments[i + 1][0][0] - segments[i][0][1] <= maxgap:
                     i += 1
-                out.append([[start, segments[i][0][1]], segments[i][1]])    # TODO: get avg prob?
+                    cert.append(segments[i][1])
+                out.append([[start, segments[i][0][1]], np.mean(cert)])
                 i += 1
         else:
             while i < len(segments):
@@ -793,25 +795,37 @@ class Segmenter:
                 out.append(seg)
         return out
 
-    def checkSegmentOverlap(self, segs):
+    def checkSegmentOverlap(self, segments):
         # Needs to be python array, not np array
         # Sort by increasing start times
-        if isinstance(segs, np.ndarray):
-            segs = segs.tolist()
-        segs = sorted(segs)
-        segs = np.array(segs)
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        segments = sorted(segments)
+        segments = np.array(segments)
 
         newsegs = []
+        s = 0
         # Loop over segs until the start value of 1 is not inside the end value of the previous
-        s=0
-        while s<len(segs):
-            i = s
-            end = segs[i,1]
-            while i < len(segs)-1 and segs[i+1,0] < end:
-                i += 1
-                end = max(end, segs[i,1])
-            newsegs.append([segs[s,0],end])
-            s = i+1
+        if isinstance(segments[0][0], list):
+            while s < len(segments):
+                i = s
+                end = segments[i][0][1]
+                cert = [segments[i][1]]
+                while i < len(segments) - 1 and segments[i + 1][0][0] < end:
+                    i += 1
+                    end = max(end, segments[i][0][1])
+                    cert.append(segments[i][1])
+                newsegs.append([[segments[s][0][0], end], np.mean(cert)])
+                s = i + 1
+        else:
+            while s<len(segments):
+                i = s
+                end = segments[i,1]
+                while i < len(segments)-1 and segments[i+1,0] < end:
+                    i += 1
+                    end = max(end, segments[i,1])
+                newsegs.append([segments[s,0],end])
+                s = i+1
 
         return newsegs
 
