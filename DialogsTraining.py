@@ -1914,7 +1914,7 @@ class TestRecWizard(QWizard):
             outfile.write("TP | FP | TN | FN seconds:\t\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
             outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (recall*100))
             outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (precision*100))
-            outfile.write("Specificity in 1 s resolution:\t%d %%\n" % (specificity*100))
+            outfile.write("Specificity in 1 s resolution:\t\t%d %%\n" % (specificity*100))
             outfile.write("Accuracy in 1 s resolution:\t\t%d %%\n" % (accuracy*100))
 
             # Post process:
@@ -1974,7 +1974,7 @@ class TestRecWizard(QWizard):
             outfile.write("TP | FP | TN | FN seconds:\t\t%.1f | %.1f | %.1f | %.1f\n" % (TP, FP, TN, FN))
             outfile.write("Recall (sensitivity) in 1 s resolution:\t%d %%\n" % (recall*100))
             outfile.write("Precision (PPV) in 1 s resolution:\t%d %%\n" % (precision*100))
-            outfile.write("Specificity in 1 s resolution:\t%d %%\n" % (specificity*100))
+            outfile.write("Specificity in 1 s resolution:\t\t%d %%\n" % (specificity*100))
             outfile.write("Accuracy in 1 s resolution:\t\t%d %%\n" % (accuracy*100))
             outfile.write("-------------------------\n\n")
 
