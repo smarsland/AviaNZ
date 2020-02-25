@@ -413,7 +413,8 @@ class AviaNZ_batchProcess(QMainWindow):
         while i < nseconds:
             segments.append([i, i + self.config['protocolSize']])
             i += self.config['protocolInterval']
-        self.makeSegments(segments)
+        post = Segment.PostProcess(audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
+        self.makeSegments(post.segments)
 
     # from memory_profiler import profile
     # fp = open('memory_profiler_batch.log', 'w+')
