@@ -4197,14 +4197,6 @@ class AviaNZ(QMainWindow):
                 else:
                     newSegments = self.findMatches(float(str(CCThr1)))
 
-            # Add certainty
-            if str(alg) not in ['Wavelets', 'Cross-Correlation']:
-                newSegments = [[seg, 0.0] for seg in newSegments]
-            elif str(alg) == 'Cross-Correlation':
-                newSegments = [[seg, 0.5] for seg in newSegments]
-            elif str(alg) == 'Wavelets':
-                len(speciesData['Filters'])
-                newSegments = [[[seg, 0.5] for seg in newSegments[filtix]] for filtix in range(len(speciesData['Filters']))]
             # Post-process
             # 1. Delete windy segments
             # 2. Delete rainy segments
@@ -4222,9 +4214,9 @@ class AviaNZ(QMainWindow):
                 if rain:
                     post.rainClick()
                     print('After rain segments: ', len(post.segments))
-                newSegments = self.seg.joinGaps(newSegments, maxgap=maxgap)
-                newSegments = self.seg.deleteShort(newSegments, minlength=minlen)
-                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' % (maxgap, minlen, len(newSegments)))
+                post.joinGaps(maxgap=maxgap)
+                post.deleteShort(minlength=minlen)
+                newSegments = post.segments
             else:
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print('Post-processing...')
@@ -4238,7 +4230,7 @@ class AviaNZ(QMainWindow):
                         CNNmodel = self.CNNDicts[filtname]
                     post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
-                                               subfilter=speciesData['Filters'][filtix], CNNmodel=CNNmodel)
+                                               subfilter=speciesData['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
                     if wind:
                         post.wind()
                         print('After wind: segments: ', len(post.segments))
@@ -4254,10 +4246,8 @@ class AviaNZ(QMainWindow):
                             print("Checking for fundamental frequency...")
                             post.fundamentalFrq()
                             print("After FF segments:", len(post.segments))
-                    segmenter = Segment.Segmenter()
-                    post.segments = segmenter.joinGaps(post.segments, maxgap=speciesData['Filters'][filtix]['TimeRange'][3])
-                    post.segments = segmenter.deleteShort(post.segments, minlength=speciesData['Filters'][filtix]['TimeRange'][0])
-                    print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' %(speciesData['Filters'][filtix]['TimeRange'][3], speciesData['Filters'][filtix]['TimeRange'][0], len(post.segments)))
+                    post.joinGaps(maxgap=speciesData['Filters'][filtix]['TimeRange'][3])
+                    post.deleteShort(minlength=speciesData['Filters'][filtix]['TimeRange'][0])
                     newSegments[filtix] = post.segments
                 # Merge sub-filter results
                 # TODO: Merge subfilter results

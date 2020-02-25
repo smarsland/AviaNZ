@@ -36,7 +36,6 @@ import re
 import math
 import copy
 import wavio
-from itertools import chain, repeat
 from scipy.interpolate import interp1d
 from scipy.signal import medfilt
 import skimage.measure as skm
@@ -743,7 +742,21 @@ class Segmenter:
 
     def deleteShort(self, segments, minlength=0.25):
         """ Checks whether segments are long enough.
-            Operates on start-end list [[1,3], [4,5]] -> [[1,3]].
+            Operates on start-end list:
+            [[1,3], [4,5]] -> [[1,3]].
+        """
+        out = []
+        if minlength == 0:
+            minlength = self.minlength
+        for seg in segments:
+            if seg[0]-seg[0] >= minlength:
+                out.append(seg)
+        return out
+
+    def deleteShort3(self, segments, minlength=0.25):
+        """ Checks whether segments are long enough.
+            Operates on start-end list with probs:
+            [[[1,3], 50], [[4,5], 90]] -> [[[1,3], 50]].
         """
         out = []
         if minlength == 0:
@@ -755,33 +768,46 @@ class Segmenter:
 
     def joinGaps(self, segments, maxgap=3):
         """ Merges segments within maxgap units.
-            Operates on start-end list [[1,2], [3,4]] -> [[1,4]] and
-            list [[start,end], prob], ...].
+            Operates on start-end list [[1,2], [3,4]] -> [[1,4]]
         """
         out = []
         i = 0
-        if isinstance(segments[0][0], list):
-            while i < len(segments):
-                start = segments[i][0][0]
-                cert = [segments[i][1]]
-                while i + 1 < len(segments) and segments[i + 1][0][0] - segments[i][0][1] <= maxgap:
-                    i += 1
-                    cert.append(segments[i][1])
-                out.append([[start, segments[i][0][1]], np.mean(cert)])
+        if len(segments)==0:
+            return out
+        while i < len(segments):
+            start = segments[i][0]
+            while i+1 < len(segments) and segments[i+1][0]-segments[i][1] <= maxgap:
                 i += 1
-        else:
-            while i < len(segments):
-                start = segments[i][0]
-                while i+1 < len(segments) and segments[i+1][0]-segments[i][1] <= maxgap:
-                    i += 1
-                out.append([start, segments[i][1]])
-                i += 1
+            out.append([start, segments[i][1]])
+            i += 1
         return out
 
-    def splitLong(self, segments, maxlen=10):
+    def joinGaps3(self, segments, maxgap=3):
+        """ Merges segments within maxgap units.
+            Operates on list of 3-element segments:
+            [[[1,2], 50], [[3,5], 70]] -> [[[1,5], 60]]
+            Currently, certainties are just averaged over the number of segs.
+        """
+        out = []
+        i = 0
+        if len(segments)==0:
+            return out
+
+        while i < len(segments):
+            start = segments[i][0][0]
+            cert = [segments[i][1]]
+            while i + 1 < len(segments) and segments[i + 1][0][0] - segments[i][0][1] <= maxgap:
+                i += 1
+                cert.append(segments[i][1])
+            out.append([[start, segments[i][0][1]], np.mean(cert)])
+            i += 1
+        return out
+
+    def splitLong3(self, segments, maxlen=10):
         """
         Splits long segments (> maxlen) evenly
-        Operates on start-end list [[1,2], [3,4]] -> [[1,4]].
+        Operates on list of 3-element segments:
+        [[[1,5], 50]] -> [[[1,3], 50], [[3,5], 50]]
         """
         out = []
         for seg in segments:
@@ -790,12 +816,16 @@ class Segmenter:
                 n = int(np.ceil(l/maxlen))
                 d = l/n
                 for i in range(n):
-                    out.append([[seg[0][0] + d*i, seg[0][0] + d * (i+1)], seg[1]])
+                    end = min(l, d * (i+1))
+                    out.append([[seg[0][0] + d*i, seg[0][0] + end], seg[1]])
             else:
                 out.append(seg)
         return out
 
     def checkSegmentOverlap(self, segments):
+        """ Merges overlapping segments.
+            Operates on start-end list [[1,3], [2,4]] -> [[1,4]]
+        """
         # Needs to be python array, not np array
         # Sort by increasing start times
         if isinstance(segments, np.ndarray):
@@ -806,26 +836,43 @@ class Segmenter:
         newsegs = []
         s = 0
         # Loop over segs until the start value of 1 is not inside the end value of the previous
-        if isinstance(segments[0][0], list):
-            while s < len(segments):
-                i = s
-                end = segments[i][0][1]
-                cert = [segments[i][1]]
-                while i < len(segments) - 1 and segments[i + 1][0][0] < end:
-                    i += 1
-                    end = max(end, segments[i][0][1])
-                    cert.append(segments[i][1])
-                newsegs.append([[segments[s][0][0], end], np.mean(cert)])
-                s = i + 1
-        else:
-            while s<len(segments):
-                i = s
-                end = segments[i,1]
-                while i < len(segments)-1 and segments[i+1,0] < end:
-                    i += 1
-                    end = max(end, segments[i,1])
-                newsegs.append([segments[s,0],end])
-                s = i+1
+        while s<len(segments):
+            i = s
+            end = segments[i,1]
+            while i < len(segments)-1 and segments[i+1,0] < end:
+                i += 1
+                end = max(end, segments[i,1])
+            newsegs.append([segments[s,0],end])
+            s = i+1
+
+        return newsegs
+
+    def checkSegmentOverlap3(self, segments):
+        """ Merges overllaping segments.
+            Operates on list of 3-element segments:
+            [[[1,3], 50], [[2,5], 70]] -> [[[1,5], 60]]
+            Currently, certainties are just averaged over the number of segs.
+        """
+        # Needs to be python array, not np array
+        # Sort by increasing start times
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        segments = sorted(segments)
+        segments = np.array(segments)
+
+        newsegs = []
+        s = 0
+        # Loop over segs until the start value of 1 is not inside the end value of the previous
+        while s < len(segments):
+            i = s
+            end = segments[i][0][1]
+            cert = [segments[i][1]]
+            while i < len(segments) - 1 and segments[i + 1][0][0] < end:
+                i += 1
+                end = max(end, segments[i][0][1])
+                cert.append(segments[i][1])
+            newsegs.append([[segments[s][0][0], end], np.mean(cert)])
+            s = i + 1
 
         return newsegs
 
@@ -1196,33 +1243,31 @@ class Segmenter:
     #     d = self.dtw(x,y,wantDistMatrix=True)
     #     print self.dtw_path(d)
 
-    def impMask(self, engp=90, fp=0.75):
-        """
-        Impulse mask
-        :param engp: energy percentile (for rows of the spectrogram)
-        :param fp: frequency proportion to consider it as an impulse (cols of the spectrogram)
-        :return: audiodata
-        """
-        print('Impulse masking...')
-        postp = PostProcess(audioData=self.data, sampleRate=self.fs, segments=[], subfilter={})
-        imps = postp.impulse_cal(fs=self.fs, engp=engp, fp=fp)    # 0 - presence of impulse noise
-        print('Samples to mask: ', len(self.data) - np.sum(imps))
-        # Mask only the affected samples
-        return np.multiply(self.data, imps)
 
 class PostProcess:
     """ This class implements few post processing methods basically to avoid false positives.
     Operates on detections from a single subfilter.
 
-    segments:   detected segments in form of [[s1,e1], [s2,e2],...
+    segments:   wavelet filter detections in format [[s1,e1], [s2,e2],...]
+        Will be converted to a list of [[s1, e1], prob] upon load,
+        and subsequent functions deal with certainty values.
     subfilter:  AviaNZ format subfilter
+    cert:       Default certainty to attach to the segments
     """
 
-    def __init__(self, audioData=None, sampleRate=0, tgtsampleRate=0, segments=[], subfilter={}, CNNmodel=None):
+    def __init__(self, audioData=None, sampleRate=0, tgtsampleRate=0, segments=[], subfilter={}, CNNmodel=None, cert=0):
         self.audioData = audioData
         self.sampleRate = sampleRate
-        self.segments = segments    # [[seg1, prob1], [seg2, prob2], ...]
         self.subfilter = subfilter
+
+        # Convert to [[s1, e1], cert]
+        self.segments = []
+        for seg in segments:
+            if len(seg) != 2:
+                continue
+            if seg[0]<0 or seg[1]<0:
+                continue
+            self.segments.append([seg, cert])
 
         if CNNmodel:
             self.CNNmodel = CNNmodel[0]    # CNNmodel is a list [model, win, inputdim, outputdict]
@@ -1266,61 +1311,62 @@ class PostProcess:
         """
         Post-proc with CNN model, self.segments get updated
         """
-        if self.CNNmodel:
-            if len(self.segments) == 0 or len(self.segments) == 1 and self.segments[0][0] == -1:
-                pass
+        if not self.CNNmodel:
+            print("ERROR: no CNN model specified")
+            return
+        if len(self.segments)==0:
+            print("No segments to classify by CNN")
+            return
+
+        newSegments = copy.deepcopy(self.segments)
+        i = 0
+        for seg in self.segments:
+            # print('\n--- Segment', seg)
+            data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
+            # find the syllables from the seg and generate features for CNN
+            sp = SignalProc.SignalProc(256, 128)
+            sp.data = data
+            sp.sampleRate = self.sampleRate
+            if self.sampleRate != self.tgtsampleRate:
+                sp.resample(self.tgtsampleRate)
+            featuress = self.generateFeaturesCNN(seg=seg[0],
+                                                 data=sp.data, fs=sp.sampleRate)
+            featuress = np.array(featuress)
+            featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
+            featuress = featuress.astype('float32')
+            # predict with CNN
+            if np.shape(featuress)[0] > 0:
+                probs = self.CNNmodel.predict_proba(featuress)
             else:
-                newSegments = copy.deepcopy(self.segments)
-                i = 0
-                for seg in self.segments:
-                    if seg[0] == -1:
-                        continue
+                probs = 0
+            if isinstance(probs, int):
+                prediction = len(self.CNNoutputs) - 1     # Remember that the noise class is always the last, male-0, femle-1, noise-2
+            else:
+                # mean of best n
+                ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
+                meanprob = [np.mean(probs[ind[i][-5:], i]) for i in range(np.shape(probs)[1])]
+                if any(x > 0.6 for x in meanprob[:-1]):
+                    prediction = np.argmax(meanprob[:-1])
+                    p = max(meanprob[:-1])
+                    if p > 0.8:
+                        probability = 0.7
                     else:
-                        # print('\n--- Segment', seg)
-                        data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
-                        # find the syllables from the seg and generate features for CNN
-                        sp = SignalProc.SignalProc(256, 128)
-                        sp.data = data
-                        sp.sampleRate = self.sampleRate
-                        if self.sampleRate != self.tgtsampleRate:
-                            sp.resample(self.tgtsampleRate)
-                        featuress = self.generateFeaturesCNN(seg=seg[0],
-                                                             data=sp.data, fs=sp.sampleRate)
-                        featuress = np.array(featuress)
-                        featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
-                        featuress = featuress.astype('float32')
-                        # predict with CNN
-                        if np.shape(featuress)[0] > 0:
-                            probs = self.CNNmodel.predict_proba(featuress)
-                        else:
-                            probs = 0
-                        if isinstance(probs, int):
-                            prediction = len(self.CNNoutputs) - 1     # Remember that the noise class is always the last, male-0, femle-1, noise-2
-                        else:
-                            # mean of best n
-                            ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
-                            meanprob = [np.mean(probs[ind[i][-5:], i]) for i in range(np.shape(probs)[1])]
-                            if any(x > 0.6 for x in meanprob[:-1]):
-                                prediction = np.argmax(meanprob[:-1])
-                                p = max(meanprob[:-1])
-                                if p > 0.8:
-                                    probability = 0.7
-                                else:
-                                    probability = 0.6
-                                newSegments[i][1] = probability
-                            else:
-                                prediction = len(self.CNNoutputs) - 1
-                            # prediction = self.CNNoutputs[str(prediction)]  # TODO: actual call type
-                            # print(probs)
-                            # print(np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
-                        if prediction == len(self.CNNoutputs) - 1:
-                            # print('Deleted by CNN')
-                            newSegments.remove(seg)
-                            i -= 1
-                        # else:
-                            # print('Not deleted by CNN')
-                    i += 1
-                self.segments = newSegments
+                        probability = 0.6
+                    newSegments[i][1] = probability
+                else:
+                    prediction = len(self.CNNoutputs) - 1
+                # prediction = self.CNNoutputs[str(prediction)]  # TODO: actual call type
+                # print(probs)
+                # print(np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
+            if prediction == len(self.CNNoutputs) - 1:
+                # print('Deleted by CNN')
+                newSegments.remove(seg)
+                i -= 1
+            # else:
+                # print('Not deleted by CNN')
+            i += 1
+        self.segments = newSegments
+        print("Segments remaining after CNN: ", len(self.segments))
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):
         """ Calculate wind
@@ -1371,99 +1417,27 @@ class PostProcess:
         :param fn_peak: min height of a peak to be considered it as a significant peak
         :return: self.segments get updated
         """
-        if len(self.segments) == 0 or len(self.segments) == 1 and self.segments[0][0] == -1:
-            pass
-        else:
-            newSegments = copy.deepcopy(self.segments)
-            for seg in self.segments:
-                if seg[0] == -1:
-                    continue
-                else:
-                    data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
-                    ind = np.flatnonzero(data).tolist()     # eliminate impulse masked sections
-                    data = np.asarray(data)[ind].tolist()
-                    if len(data) == 0:
-                        continue
-                    m, _, fn = self.wind_cal(data=data, sampleRate=self.sampleRate, fn_peak=fn_peak)
-                    if m > windT and not fn:
-                        print(seg[0], m, 'windy, deleted')
-                        newSegments.remove(seg)
-                    elif m > windT and fn:
-                        print(seg[0], m, 'windy, but possible bird call')
-                    else:
-                        print(seg[0], m, 'not windy/possible bird call')
-            self.segments = newSegments
+        if len(self.segments) == 0:
+            print("No segments to remove wind from")
+            return
 
-    def impulse_cal(self, fs, engp=90, fp=0.75, blocksize=10):
-        """
-        Find sections where impulse sounds occur e.g. clicks
-        window  -   window length (no overlap)
-        engp    -   energy percentile (thr), the percentile of energy to inform that a section got high energy across
-                    frequency bands
-        fp      -   frequency percentage (thr), the percentage of frequency bands to have high energy to mark a section
-                    as having impulse noise
-        blocksize - max number of consecutive blocks, 10 consecutive blocks (~1/25 sec) is a good value, to not to mask
-                    very close-range calls
-        :return: a binary list of length len(audioData) indicating presence of impulsive noise (0) otherwise (1)
-        """
-
-        # Calculate window length
-        w1 = np.floor(fs/250)      # Window length of 1/250 sec selected experimentally
-        arr = [2 ** i for i in range(5, 11)]
-        pos = np.abs(arr - w1).argmin()
-        window = arr[pos]
-
-        sp = SignalProc.SignalProc(window, window)     # No overlap
-        sp.data = self.audioData
-        sp.sampleRate = self.sampleRate
-        sg = sp.spectrogram(multitaper=False)
-
-        # For each frq band get sections where energy exceeds some (90%) percentile, engp
-        # and generate a binary spectrogram
-        sgb = np.zeros((np.shape(sg)))
-        ep = np.percentile(sg, engp, axis=0)    # note thr - 90% for energy percentile
-        for y in range(np.shape(sg)[1]):
-            ey = sg[:, y]
-            sgb[np.where(ey > ep[y]), y] = 1
-
-        # If lots of frq bands got 1 then predict a click
-        # 1 - presence of impulse noise, 0 - otherwise here
-        impulse = np.where(np.count_nonzero(sgb, axis=1) > np.shape(sgb)[1] * fp, 1, 0)     # Note thr fp
-
-        # When an impulsive noise detected, it's better to check neighbours to make sure its not a bird call
-        # very close to the microphone.
-        imp_inds = np.where(impulse > 0)[0].tolist()
-        imp = self.countConsecutive(imp_inds, len(impulse))
-
-        impulse = []
-        for item in imp:
-            if item > blocksize or item == 0:        # Note threshold - blocksize, 10 consecutive blocks ~1/25 sec
-                impulse.append(1)
+        newSegments = copy.deepcopy(self.segments)
+        for seg in self.segments:
+            data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
+            ind = np.flatnonzero(data).tolist()     # eliminate impulse masked sections
+            data = np.asarray(data)[ind].tolist()
+            if len(data) == 0:
+                continue
+            m, _, fn = self.wind_cal(data=data, sampleRate=self.sampleRate, fn_peak=fn_peak)
+            if m > windT and not fn:
+                print(seg[0], m, 'windy, deleted')
+                newSegments.remove(seg)
+            elif m > windT and fn:
+                print(seg[0], m, 'windy, but possible bird call')
             else:
-                impulse.append(0)
-
-        impulse = list(chain.from_iterable(repeat(e, window) for e in impulse))  # Make it same length as self.audioData
-
-        if len(impulse) > len(self.audioData):      # Sanity check
-            impulse = impulse[0:len(self.audioData)]
-        elif len(impulse) < len(self.audioData):
-            gap = len(self.audioData) - len(impulse)
-            impulse = np.pad(impulse, (0, gap), 'constant')
-
-        return impulse
-
-    def countConsecutive(self, nums, length):
-        gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s + 1 < e]
-        edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
-        edges = list(zip(edges, edges))
-        edges_reps = [item[1] - item[0] + 1 for item in edges]
-        res = np.zeros((length)).tolist()
-        t = 0
-        for item in edges:
-            for i in range(item[0], item[1]+1):
-                res[i] = edges_reps[t]
-            t += 1
-        return res
+                print(seg[0], m, 'not windy/possible bird call')
+        self.segments = newSegments
+        print("Segments remaining after wind: ", len(self.segments))
 
     def rainClick(self):
         """
@@ -1510,7 +1484,7 @@ class PostProcess:
             # Got to read from the source instead of using self.audioData - ff is wrong if you use self.audioData somehow
             sp = SignalProc.SignalProc(256, 128)
             if fileName:
-                sp.readWav(fileName, secs, seg[0][0])
+                sp.readWav(fileName, secs, seg[0])
                 self.sampleRate = sp.sampleRate
                 self.audioData = sp.data
             else:
@@ -1529,15 +1503,16 @@ class PostProcess:
             pitch = pitch[ind]
 
             if pitch.size == 0:
-                print('Segment ', seg[0], ' *++ no fundamental freq detected, could be faded call or noise')
+                print('Segment ', seg, ' *++ no fundamental freq detected, could be faded call or noise')
                 del self.segments[segix]
             elif pitch.size == 1:
                 if (pitch < self.F0[0]) or (pitch > self.F0[1]):
-                    print('segment ', seg[0], round(pitch), ' *-- fundamental freq is out of range, could be noise')
+                    print('segment ', seg, round(pitch), ' *-- fundamental freq is out of range, could be noise')
                     del self.segments[segix]
             elif (np.mean(pitch) < self.F0[0]) or (np.mean(pitch) > self.F0[1]):
-                print('segment* ', seg[0], round(np.mean(pitch)), pitch, np.median(pitch), ' *-- fundamental freq is out of range, could be noise')
+                print('segment* ', seg, round(np.mean(pitch)), pitch, np.median(pitch), ' *-- fundamental freq is out of range, could be noise')
                 del self.segments[segix]
+        print("Segments remaining after fundamental frequency: ", len(self.segments))
 
     def denoise_filter(self, level=5, d=False, f=False, f1=0, f2=0):
         """ Wavelet denoise and band-pass filter for fundamental frquency
@@ -1555,3 +1530,26 @@ class PostProcess:
             filteredDenoisedData = denoisedData
 
         return filteredDenoisedData
+
+    # The following are just wrappers for easier parsing of 3-element segment lists:
+    # Segmenter class still has its own joinGaps etc which operate on 2-element lists
+    def joinGaps(self, maxgap):
+        seg = Segmenter()
+        seg.joinGaps3(self.segments, maxgap=maxgap)
+        print("Segments remaining after merge (<=%d secs): %d" % (maxgap, len(self.segments)))
+
+    def deleteShort(self, minlength):
+        seg = Segmenter()
+        seg.deleteShort3(self.segments, minlength=minlength)
+        print("Segments remaining after deleting short (<%.2f secs): %d" % (minlength, len(self.segments)))
+
+    def splitLong(self, maxlen):
+        seg = Segmenter()
+        seg.splitLong3(self.segments, maxlen=maxlen)
+        print('Segments after splitting long segments (>%.2f secs): %d' % (maxlen, len(self.segments)))
+
+    def checkSegmentOverlap(self):
+        # Used for merging call types or different segmenter outputs
+        seg = Segmenter()
+        seg.checkSegmentOverlap3(self.segments)
+        print("Segments produced after merging: %d" % len(self.segments))

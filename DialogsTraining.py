@@ -1922,7 +1922,7 @@ class TestRecWizard(QWizard):
             detectedSpost = []
             detected01post = []
             for detfile in detectedS:
-                post = Segment.PostProcess(segments=detfile[0], subfilter=subfilter)
+                post = Segment.PostProcess(segments=detfile[0], subfilter=subfilter, cert=50)
                 print("got segments", len(post.segments))
 
                 if "F0" in subfilter and "F0Range" in subfilter and subfilter["F0"]:
@@ -1932,10 +1932,8 @@ class TestRecWizard(QWizard):
                 else:
                     print('Fund. freq. not requested')
 
-                segmenter = Segment.Segmenter()
-                post.segments = segmenter.joinGaps(post.segments, maxgap=subfilter['TimeRange'][3])
-                post.segments = segmenter.deleteShort(post.segments, minlength=subfilter['TimeRange'][0])
-                print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(subfilter['TimeRange'][3], subfilter['TimeRange'][0], len(post.segments)))
+                post.joinGaps(maxgap=subfilter['TimeRange'][3])
+                post.deleteShort(minlength=subfilter['TimeRange'][0])
 
                 detectedSpost.extend(post.segments)
                 print("kept segments", len(post.segments))

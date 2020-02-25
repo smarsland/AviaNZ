@@ -36,6 +36,8 @@ from spectrum import dpss, pmtm
 from spectrum import dpss
 # for fund freq
 from scipy.signal import medfilt
+# for impulse masking
+from itertools import chain, repeat
 
 
 class SignalProc:
@@ -784,4 +786,87 @@ class SignalProc:
             # Median Filter
             self.data = self.medianFilter(self.data,int(str(width)))
 
+    def impMask(self, engp=90, fp=0.75):
+        """
+        Impulse mask
+        :param engp: energy percentile (for rows of the spectrogram)
+        :param fp: frequency proportion to consider it as an impulse (cols of the spectrogram)
+        :return: audiodata
+        """
+        print('Impulse masking...')
+        imps = self.impulse_cal(fs=self.sampleRate, engp=engp, fp=fp)
+        print('Samples to mask: ', len(self.data) - np.sum(imps))
+        # Mask only the affected samples
+        return np.multiply(self.data, imps)
+
+    def impulse_cal(self, fs, engp=90, fp=0.75, blocksize=10):
+        """
+        Find sections where impulse sounds occur e.g. clicks
+        window  -   window length (no overlap)
+        engp    -   energy percentile (thr), the percentile of energy to inform that a section got high energy across
+                    frequency bands
+        fp      -   frequency percentage (thr), the percentage of frequency bands to have high energy to mark a section
+                    as having impulse noise
+        blocksize - max number of consecutive blocks, 10 consecutive blocks (~1/25 sec) is a good value, to not to mask
+                    very close-range calls
+        :return: a binary list of length len(data) indicating presence of impulsive noise (0) otherwise (1)
+        """
+
+        # Calculate window length
+        w1 = np.floor(fs/250)      # Window length of 1/250 sec selected experimentally
+        arr = [2 ** i for i in range(5, 11)]
+        pos = np.abs(arr - w1).argmin()
+        window = arr[pos]
+
+        sp = SignalProc(window, window)     # No overlap
+        sp.data = self.data
+        sp.sampleRate = self.sampleRate
+        sg = sp.spectrogram(multitaper=False)
+
+        # For each frq band get sections where energy exceeds some (90%) percentile, engp
+        # and generate a binary spectrogram
+        sgb = np.zeros((np.shape(sg)))
+        ep = np.percentile(sg, engp, axis=0)    # note thr - 90% for energy percentile
+        for y in range(np.shape(sg)[1]):
+            ey = sg[:, y]
+            sgb[np.where(ey > ep[y]), y] = 1
+
+        # If lots of frq bands got 1 then predict a click
+        # 1 - presence of impulse noise, 0 - otherwise here
+        impulse = np.where(np.count_nonzero(sgb, axis=1) > np.shape(sgb)[1] * fp, 1, 0)     # Note thr fp
+
+        # When an impulsive noise detected, it's better to check neighbours to make sure its not a bird call
+        # very close to the microphone.
+        imp_inds = np.where(impulse > 0)[0].tolist()
+        imp = self.countConsecutive(imp_inds, len(impulse))
+
+        impulse = []
+        for item in imp:
+            if item > blocksize or item == 0:        # Note threshold - blocksize, 10 consecutive blocks ~1/25 sec
+                impulse.append(1)
+            else:
+                impulse.append(0)
+
+        impulse = list(chain.from_iterable(repeat(e, window) for e in impulse))  # Make it same length as self.audioData
+
+        if len(impulse) > len(self.data):      # Sanity check
+            impulse = impulse[0:len(self.data)]
+        elif len(impulse) < len(self.data):
+            gap = len(self.data) - len(impulse)
+            impulse = np.pad(impulse, (0, gap), 'constant')
+
+        return impulse
+
+    def countConsecutive(self, nums, length):
+        gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s + 1 < e]
+        edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
+        edges = list(zip(edges, edges))
+        edges_reps = [item[1] - item[0] + 1 for item in edges]
+        res = np.zeros((length)).tolist()
+        t = 0
+        for item in edges:
+            for i in range(item[0], item[1]+1):
+                res[i] = edges_reps[t]
+            t += 1
+        return res
 
