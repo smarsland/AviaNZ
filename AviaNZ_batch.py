@@ -544,6 +544,7 @@ class AviaNZ_batchProcess(QMainWindow):
         processingTime = 0
         cleanexit = 0
         cnt = 0
+        msgtext = ""
         # clean up the UI before entering the long loop
         self.update()
         self.repaint()
@@ -675,8 +676,6 @@ class AviaNZ_batchProcess(QMainWindow):
                             self.seg = Segment.Segmenter(self.sp, self.sampleRate)
                             # thisPageSegs = self.seg.bestSegments()
                             thisPageSegs = self.seg.medianClip(thr=3.5)
-                            # Add certainty
-                            thisPageSegs = [[seg, 0.0] for seg in thisPageSegs]
                             # Post-process
                             # 1. Delete windy segments
                             # 2. Delete rainy segments
@@ -688,17 +687,13 @@ class AviaNZ_batchProcess(QMainWindow):
                             maxgap = int(self.maxgap.value())/1000
                             minlen = int(self.minlen.value())/1000
                             maxlen = int(self.maxlen.value())/1000
-                            post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate,
-                                                       segments=thisPageSegs, subfilter={})
+                            post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
                             if self.w_wind.isChecked():
                                 post.wind()
-                                print('After wind segments: ', len(post.segments))
-                            post.segments = self.seg.joinGaps(post.segments, maxgap=maxgap)
-                            post.segments = self.seg.deleteShort(post.segments, minlength=minlen)
-                            print('Segments after merge (<=%d secs) and delete short (<%.2f secs): %d' % (maxgap, minlen, len(post.segments)))
+                            post.joinGaps(maxgap)
+                            post.deleteShort(minlen)
                             # avoid extra long segments (for Isabel)
-                            post.segments = self.seg.splitLong(post.segments, maxlen = maxlen)
-                            print('Segments after splitting long segments (>%.2f secs): %d' % (maxlen, len(post.segments)))
+                            post.splitLong(maxlen)
 
                             # adjust segment starts for 15min "pages"
                             if start != 0:
@@ -718,7 +713,6 @@ class AviaNZ_batchProcess(QMainWindow):
                                 print("Working with recogniser:", filters[speciesix])
                                 # note: using 'recaa' mode = partial antialias
                                 thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
-                                thisPageSegs = [[[seg, 0.5] for seg in thisPageSegs[ct]] for ct in range(len(filters[speciesix]["Filters"]))]
                                 # Post-process
                                 # 1. Delete windy segments
                                 # 2. Delete rainy segments
@@ -734,30 +728,26 @@ class AviaNZ_batchProcess(QMainWindow):
                                     CNNmodel = None
                                     if spInfo['species'] in self.CNNDicts.keys():
                                         CNNmodel = self.CNNDicts[spInfo['species']]
-                                    post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel)
+                                    post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
                                     print("Segments detected after WF: ", len(thisPageSegs[filtix]))
                                     if self.w_wind.isChecked():
                                         post.wind()
-                                        print('After wind: segments: ', len(post.segments))
                                     if CNNmodel:
                                         print('Post-processing with CNN')
                                         post.CNN()
-                                        print('After CNN: segments: ', len(post.segments))
                                     if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
                                         if spInfo['Filters'][filtix]["F0"]:
                                             print("Checking for fundamental frequency...")
                                             post.fundamentalFrq()
-                                            print("After FF segments:", len(post.segments))
-                                    segmenter = Segment.Segmenter()
-                                    post.segments = segmenter.joinGaps(post.segments, maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
-                                    post.segments = segmenter.deleteShort(post.segments, minlength=spInfo['Filters'][filtix]['TimeRange'][0])
-                                    print('Segments after merge (<=%d secs) and delete short (<%.4f): %d' %(spInfo['Filters'][filtix]['TimeRange'][3], spInfo['Filters'][filtix]['TimeRange'][0], len(post.segments)))
+
+                                    post.joinGaps(maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
+                                    post.deleteShort(minlength=spInfo['Filters'][filtix]['TimeRange'][0])
 
                                     # adjust segment starts for 15min "pages"
                                     if start != 0:
                                         for seg in post.segments:
-                                            seg[0] += start/self.sampleRate
-                                            seg[1] += start/self.sampleRate
+                                            seg[0][0] += start/self.sampleRate
+                                            seg[0][1] += start/self.sampleRate
 
                                     if self.w_mergect.isChecked():
                                         # collect segments from all call types
@@ -768,19 +758,18 @@ class AviaNZ_batchProcess(QMainWindow):
 
                                 if self.w_mergect.isChecked():
                                     # merge different call type segments
-                                    segmenter = Segment.Segmenter()
-                                    segs = segmenter.checkSegmentOverlap(allCtSegs)
-                                    print('allCtSegs:', allCtSegs)
-                                    print('segs:', segs)
+                                    post.segments = allCtSegs
+                                    post.checkSegmentOverlap()
+
                                     # also merge neighbours (segments from different call types)
-                                    segs = segmenter.joinGaps(segs, maxgap=max([subf['TimeRange'][3] for subf in spInfo["Filters"]]))
+                                    post.joinGaps(maxgap=max([subf['TimeRange'][3] for subf in spInfo["Filters"]]))
                                     # construct "Any call" info to place on the segments
                                     flow = min([subf["FreqRange"][0] for subf in spInfo["Filters"]])
                                     fhigh = max([subf["FreqRange"][1] for subf in spInfo["Filters"]])
                                     ctinfo = {"calltype": "(Other)", "FreqRange": [flow, fhigh]}
                                     print('self.species[speciesix]:', self.species[speciesix])
                                     print('spInfo["species"]:', spInfo["species"])
-                                    self.makeSegments(segs, self.species[speciesix], spInfo["species"], ctinfo)
+                                    self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], ctinfo)
 
                     print('Segments in this file: ', self.segments)
                     print("Segmentation complete. %d new segments marked" % len(self.segments))
@@ -994,11 +983,10 @@ class AviaNZ_batchProcess(QMainWindow):
             print("%d segments loaded from .data file" % len(self.segments))
 
         # Do impulse masking by default
-        sg = Segment.Segmenter(sp=self.sp, fs=self.sampleRate)
         if anysound:
-            self.sp.data = sg.impMask(engp=70, fp=0.50)
+            self.sp.data = self.sp.impMask(engp=70, fp=0.50)
         else:
-            self.sp.data = sg.impMask()
+            self.sp.data = self.sp.impMask()
         self.audiodata = self.sp.data
         del self.sp
         gc.collect()
@@ -1231,6 +1219,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # main file review loop
         cnt = 0
         filesuccess = 1
+        msgtext = ""
         self.update()
         self.repaint()
 
