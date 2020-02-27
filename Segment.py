@@ -176,7 +176,7 @@ class Segment(list):
         """ Returns a nicely-formatted string of this segment's info."""
         s = []
         for lab in self[4]:
-            labs = "sp.: {}, cert.: {}%".format(lab["species"], round(lab["certainty"]*100))
+            labs = "sp.: {}, cert.: {}%".format(lab["species"], round(lab["certainty"]))
             if "filter" in lab and lab["filter"]!="M":
                 labs += ", filter: " + lab["filter"]
             if "calltype" in lab:
@@ -1349,9 +1349,9 @@ class PostProcess:
                     prediction = np.argmax(meanprob[:-1])
                     p = max(meanprob[:-1])
                     if p > 0.8:
-                        probability = 0.7
+                        probability = 70
                     else:
-                        probability = 0.6
+                        probability = 60
                     newSegments[i][1] = probability
                 else:
                     prediction = len(self.CNNoutputs) - 1
