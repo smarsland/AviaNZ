@@ -1078,7 +1078,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, multipleBirds, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, multipleBirds, audioFormat, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -1209,7 +1209,7 @@ class HumanClassify1(QDialog):
         self.tbox.setEnabled(False)
 
         # Audio playback object
-        self.media_obj2 = SupportClasses.ControllableAudio(self.parent.sp.audioFormat)
+        self.media_obj2 = SupportClasses.ControllableAudio(audioFormat)
         self.media_obj2.notify.connect(self.endListener)
 
         # The layouts
@@ -1392,8 +1392,6 @@ class HumanClassify1(QDialog):
         if maxFreq==0:
             maxFreq = sampleRate / 2
         self.duration = len(audiodata) / sampleRate * 1000 # in ms
-
-        #print("Parent species:" , self.parent.segments[self.parent.box1id][4])
 
         # fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
@@ -1712,17 +1710,16 @@ class HumanClassify2(QDialog):
         Allows quick confirm/leave/delete check over many segments.
 
         Construction:
-        1-3. spectrogram, audiodata, segments. Just provide full versions of these,
-          and this dialog will select the needed parts/segments.
+        1. a list of SignalProcs containing spectrograms for ALL the segments in arg2
+        2. SegmentList. Just provide full versions of this,
+          and this dialog will select the needed segments.
+        3. indices of segments to show (i.e. the selected species and current page)
         4. name of the species that we are reviewing
-        5-6. sampleRate, audioFormat for playback
-        7. increment which was used for the spectrogram
-        8-13. spec color parameters
-        14. page start, in seconds - to convert segment-time to spec-time
-        15. ???
+        5-10. spec color parameters
+        11. Filename - just for setting the window title
     """
 
-    def __init__(self, sg, audiodata, segments, label, sampleRate, audioFormat, incr, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, filename=None, startRead=0):
+    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, filename=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -1738,27 +1735,24 @@ class HumanClassify2(QDialog):
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
         # let the user quit without bothering rest of it
 
-        self.sampleRate = sampleRate
-        self.audiodata = audiodata
-        self.audioFormat = audioFormat
-        self.incr = incr
+        self.sps = sps
+
         self.lut = lut
         self.colourStart = colourStart
         self.colourEnd = colourEnd
         self.cmapInverted = cmapInverted
-        self.startRead = startRead
-
-        # Seems that image is backwards?
-        self.sg = np.fliplr(sg)
 
         # filter segments for the requested species
         self.segments = segments
-        self.indices2show = self.segments.getSpecies(label)
-        for i in reversed(self.indices2show):
-            # show segments which have midpoint in this page (ensures all are shown only once)
-            mid = (segments[i][0] + segments[i][1]) / 2
-            if mid < startRead or mid > startRead + len(audiodata)//sampleRate:
-                self.indices2show.remove(i)
+        self.indices2show = indicestoshow
+        # CHECK: do we need this?
+        # self.sampleRate = sampleRate
+        # self.audiodata = audiodata
+        # for i in reversed(self.indices2show):
+        #     # show segments which have midpoint in this page (ensures all are shown only once)
+        #     mid = (segments[i][0] + segments[i][1]) / 2
+        #     if mid < startRead or mid > startRead + len(audiodata)//sampleRate:
+        #         self.indices2show.remove(i)
 
         self.errors = []
 
@@ -1813,10 +1807,10 @@ class HumanClassify2(QDialog):
         vboxTop.addLayout(hboxSpecContr)
 
         # Controls at the bottom
-        #self.buttonPrev = QtGui.QToolButton()
-        #self.buttonPrev.setArrowType(Qt.LeftArrow)
-        #self.buttonPrev.setIconSize(QtCore.QSize(30,30))
-        #self.buttonPrev.clicked.connect(self.prevPage)
+        # self.buttonPrev = QtGui.QToolButton()
+        # self.buttonPrev.setArrowType(Qt.LeftArrow)
+        # self.buttonPrev.setIconSize(QtCore.QSize(30,30))
+        # self.buttonPrev.clicked.connect(self.prevPage)
 
         # TODO: Is this useful?
         self.pageLabel = QLabel()
@@ -1839,8 +1833,8 @@ class HumanClassify2(QDialog):
 
         # movement buttons and page numbers
         self.vboxBot = QHBoxLayout()
-        #vboxBot.addWidget(self.buttonPrev)
-        #vboxBot.addSpacing(20)
+        # vboxBot.addWidget(self.buttonPrev)
+        # vboxBot.addSpacing(20)
         self.vboxBot.addWidget(self.pageLabel)
         self.vboxBot.addSpacing(20)
         self.vboxBot.addWidget(self.none)
@@ -1895,32 +1889,26 @@ class HumanClassify2(QDialog):
         self.buttons = []
         self.marked = []
         for i in self.indices2show:
-            seg = self.segments[i]
+            # This will contain pre-made slices of spec and audio
+            sp = self.sps[i]
+            duration = len(sp.data)/sp.sampleRate
 
-            # select 10 s region around segment center
-            mid = (seg[0] + seg[1])/2 - self.startRead
-            tstart = min(len(self.audiodata)/self.sampleRate-1, max(0, mid-5))
-            tend = min(len(self.audiodata)/self.sampleRate, mid+5)
-
-            # find the right boundaries from the audiodata
-            x1a = int(tstart * self.sampleRate)
-            x2a = int(tend * self.sampleRate)
-            # get the right slice from the spectrogram:
-            x1 = int(self.convertAmpltoSpec(tstart))
-            x2 = int(self.convertAmpltoSpec(tend))
-
-            # boundaries of raw segment, in spec units, relative to start of seg:
-            unbufStart = self.convertAmpltoSpec(seg[0]-self.startRead) - x1
-            unbufStop = self.convertAmpltoSpec(seg[1]-self.startRead) - x1
+            # Seems that image is backwards?
+            sp.sg = np.fliplr(sp.sg)
+            self.minsg = 1
+            self.maxsg = 1
+            self.minsg = min(self.minsg, np.min(sp.sg))
+            self.maxsg = max(self.maxsg, np.max(sp.sg))
 
             # create the button:
-            newButton = SupportClasses.PicButton(i, self.sg[x1:x2, :], self.audiodata[x1a:x2a], self.audioFormat, tend-tstart, unbufStart, unbufStop, self.lut, self.colourStart, self.colourEnd, self.cmapInverted)
+            # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
+            newButton = SupportClasses.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:
                 self.specV = newButton.im1.size().height()
 
-            #newButton.setMinimumSize(self.specH, self.specV//2)
+            # newButton.setMinimumSize(self.specH, self.specV//2)
 
             self.buttons.append(newButton)
             self.buttons[-1].buttonClicked=False
@@ -1981,9 +1969,6 @@ class HumanClassify2(QDialog):
                 btn.media_obj.applyVolSlider(value)
         except Exception:
             pass
-
-    def convertAmpltoSpec(self, x):
-        return x * self.sampleRate / self.incr
 
     def countPages(self):
         """ Counts the total number of pages,
@@ -2080,20 +2065,17 @@ class HumanClassify2(QDialog):
         Translates the brightness and contrast values into appropriate image levels.
         Calculation is simple.
         """
-        minsg = np.min(self.sg)
-        maxsg = np.max(self.sg)
         if self.cmapInverted:
             brightness = self.brightnessSlider.value()
         else:
             brightness = 100-self.brightnessSlider.value()
         contrast = self.contrastSlider.value()
-        colourStart = (brightness / 100.0 * contrast / 100.0) * (maxsg - minsg) + minsg
-        colourEnd = (maxsg - minsg) * (1.0 - contrast / 100.0) + colourStart
+        colourStart = (brightness / 100.0 * contrast / 100.0) * (self.maxsg - self.minsg) + self.minsg
+        colourEnd = (self.maxsg - self.minsg) * (1.0 - contrast / 100.0) + colourStart
         for btn in self.buttons:
             btn.stopPlayback()
             btn.setImage(self.lut, colourStart, colourEnd, self.cmapInverted)
             btn.update()
-
 
 
 class FilterManager(QDialog):

@@ -109,6 +109,10 @@ class SignalProc:
 
         self.fileLength = len(self.data)
 
+    def convertAmpltoSpec(self, x):
+        """ Unit conversion, for easier use wherever spectrograms are needed """
+        return x*self.sampleRate/self.incr
+
     def setWidth(self,window_width,incr):
         # Does what it says. Called when the user modifies the spectrogram parameters
         self.window_width = window_width

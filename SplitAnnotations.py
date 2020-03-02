@@ -321,6 +321,12 @@ class SplitData(QMainWindow):
                 wavHasDt = int(0)
 
             if os.path.isfile(infile_c) and os.stat(infile_c).st_size>100:
+                # check if file is formatted correctly
+                with open(infile_c, 'br') as f:
+                    if f.read(4) != b'RIFF':
+                        print("Warning: file %s not formatted correctly, skipping" % infile_c)
+                        return
+
                 succ = SplitLauncher.launchCython(infile_c, outfile_c, self.cutLen, wavHasDt)
                 if succ!=0:
                     print("ERROR: C splitter failed on file", f)
