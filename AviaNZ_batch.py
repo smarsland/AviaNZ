@@ -283,7 +283,6 @@ class AviaNZ_batchProcess(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
-        #print("Dir:", self.dirName)
         self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
         self.fillFileList(self.dirName)
@@ -574,6 +573,12 @@ class AviaNZ_batchProcess(QMainWindow):
                         self.log.appendFile(filename)
                         continue
 
+                    # check if file is formatted correctly
+                    with open(filename, 'br') as f:
+                        if f.read(4) != b'RIFF':
+                            print("Warning: file %s not formatted correctly, skipping" % filename)
+                            continue
+
                     # actual processing
                     self.addRegularSegments(filename)
 
@@ -614,6 +619,12 @@ class AviaNZ_batchProcess(QMainWindow):
                         print("File %s empty, skipping" % filename)
                         self.log.appendFile(filename)
                         continue
+
+                    # check if file is formatted correctly
+                    with open(filename, 'br') as f:
+                        if f.read(4) != b'RIFF':
+                            print("Warning: file %s not formatted correctly, skipping" % filename)
+                            continue
 
                     # test the selected time window if it is a doc recording
                     inWindow = False
@@ -992,6 +1003,7 @@ class AviaNZ_batchProcess(QMainWindow):
         del self.sp
         gc.collect()
 
+
 class AviaNZ_reviewAll(QMainWindow):
     # Main class for reviewing batch processing results
     # Should call HumanClassify1 somehow
@@ -1112,9 +1124,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
-        self.w_files.addWidget(QLabel('View Only'), row=0, col=0)
-        self.w_files.addWidget(QLabel('Use Browse Folder button to choose data for processing'), row=1, col=0)
-        # self.w_files.addWidget(QLabel(''), row=2, col=0)
+        self.w_files.addWidget(QLabel('Double click to select a folder'), row=0, col=0)
+        self.w_files.addWidget(QLabel('Red files have annotations'), row=1, col=0)
         # List to hold the list of files
         self.listFiles = QListWidget()
         self.listFiles.setMinimumWidth(150)
@@ -1165,14 +1176,16 @@ class AviaNZ_reviewAll(QMainWindow):
         self.move(qr.topLeft())
 
     def browse(self):
-        # self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',"Wav files (*.wav)")
         if self.dirName:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process',str(self.dirName))
         else:
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         self.w_dir.setPlainText(self.dirName)
-        self.spList = set()
+        self.w_dir.setReadOnly(True)
+        self.fillFileList(self.dirName)
+
         # find species names from the annotations
+        self.spList = set()
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 if filename.lower().endswith('.wav') and filename+'.data' in files:
@@ -1190,7 +1203,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.spList.insert(0, 'Any sound')
         self.w_spe1.clear()
         self.w_spe1.addItems(self.spList)
-        self.fillFileList(self.dirName)
 
     def review(self):
         self.species = self.w_spe1.currentText()
@@ -1220,6 +1232,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # main file review loop
         cnt = 0
         filesuccess = 1
+        self.sps = []
         msgtext = ""
         self.update()
         self.repaint()
@@ -1240,6 +1253,12 @@ class AviaNZ_reviewAll(QMainWindow):
             if os.stat(filename).st_size < 100:
                 print("File %s empty, skipping" % filename)
                 continue
+
+            # check if file is formatted correctly
+            with open(filename, 'br') as f:
+                if f.read(4) != b'RIFF':
+                    print("Warning: file %s not formatted correctly, skipping" % filename)
+                    continue
 
             DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
             if DOCRecording:
@@ -1263,30 +1282,27 @@ class AviaNZ_reviewAll(QMainWindow):
                         self.goodsegments.append(seg)
                         self.segments.remove(seg)
 
-            if len(self.segments)==0:
-                # skip review dialog, but save the name into excel
+            # skip review dialog if there's no segments passing relevant criteria
+            # (self.segments will have all species even if only one is being reviewed)
+            if len(self.segments)==0 or self.species!='Any sound' and len(self.segments.getSpecies(self.species))==0:
                 print("No segments found in file %s" % filename)
                 filesuccess = 1
-            # file has segments, so call the right review dialog:
+                continue
+
+            # file has >=1 segments to review,
+            # so call the right dialog:
             # (they will update self.segments and store corrections)
-            elif self.species == 'Any sound':
-                self.loadFile(filename)
-                filesuccess = self.review_all(sTime)
+            if self.species == 'Any sound':
+                filesuccess = self.review_all(filename, sTime)
             else:
-                # check if there are any segments for this single species
-                if len(self.segments.getSpecies(self.species))==0:
-                    print("No segments found in file %s" % filename)
-                else:
-                    # thus, we can be sure that >=1 relevant segment exists
-                    # if this dialog is called.
-                    self.loadFile(filename)
-                    filesuccess = self.review_single(sTime)
+                filesuccess = self.review_single(filename, sTime)
 
             # break out of review loop if Esc detected
             # (return value will be 1 for correct close, 0 for Esc)
             if filesuccess == 0:
                 print("Review stopped")
                 break
+
             # otherwise re-add the segments that were good enough to skip review,
             # and save the corrected segment JSON
             self.segments.extend(self.goodsegments)
@@ -1367,16 +1383,16 @@ class AviaNZ_reviewAll(QMainWindow):
             if reply == QMessageBox.Yes:
                 QApplication.exit(1)
 
-    def review_single(self, sTime):
+    def review_single(self, filename, sTime):
         """ Initializes single species dialog, based on self.species
             (thus we don't need the small species choice dialog here).
             Updates self.segments as a side effect.
             Returns 1 for clean completion, 0 for Esc press or other dirty exit.
         """
         # Initialize the dialog for this file
-        self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments,
-                                                           self.species, self.sampleRate, self.sp.audioFormat,
-                                                           self.config['incr'], self.lut, self.colourStart,
+        self.loadFile(filename, self.species)
+        self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sps, self.segments,
+                                                           self.species, self.lut, self.colourStart,
                                                            self.colourEnd, self.config['invertColourMap'],
                                                            self.config['brightness'], self.config['contrast'], filename=self.filename)
         if hasattr(self, 'dialogPos'):
@@ -1440,7 +1456,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # done - the segments will be saved by the main loop
         return
 
-    def review_all(self, sTime, minLen=5):
+    def review_all(self, filename, sTime, minLen=5):
         """ Initializes all species dialog.
             Updates self.segments as a side effect.
             Returns 1 for clean completion, 0 for Esc press or other dirty exit.
@@ -1464,7 +1480,9 @@ class AviaNZ_reviewAll(QMainWindow):
             else:
                 self.longBirdList = None
 
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.config['MultipleSpecies'], self)
+        self.loadFile(filename)
+        # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.config['MultipleSpecies'], self.sps[0].audioFormat, self)
         self.box1id = -1
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
@@ -1483,9 +1501,20 @@ class AviaNZ_reviewAll(QMainWindow):
 
         return(1)
 
-    def loadFile(self, filename):
+    def loadFile(self, filename, species=None):
+        """ Needs to generate spectrograms and audiodatas
+            for each segment in self.segments.
+            The SignalProcs containing these are loaded into self.sps.
+        """
         with pg.BusyCursor():
-            with pg.ProgressDialog("Loading file...", 0, 4) as dlg:
+            # delete old instances to force release memory
+            for sp in reversed(range(len(self.sps))):
+                del self.sps[sp]
+            minsg = 1
+            maxsg = 1
+            gc.collect()
+
+            with pg.ProgressDialog("Loading file...", 0, len(self.segments)) as dlg:
                 dlg.setCancelButton(None)
                 dlg.setWindowIcon(QIcon('img/Avianz.ico'))
                 dlg.setWindowTitle('AviaNZ')
@@ -1494,50 +1523,89 @@ class AviaNZ_reviewAll(QMainWindow):
                 dlg.update()
                 dlg.repaint()
                 dlg.show()
-                # Create an instance of the Signal Processing class
-                if not hasattr(self,'sp'):
-                    self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
-                self.sp.readWav(filename)
-                dlg += 1
-                dlg.update()
-                dlg.repaint()
 
-                self.sampleRate = self.sp.sampleRate
-                self.audiodata = self.sp.data
-
-                self.datalength = np.shape(self.audiodata)[0]
-                print("Length of file is ",len(self.audiodata),float(self.datalength)/self.sampleRate,self.sampleRate)
-
-                # Filter the audiodata based on initial sliders
+                # Determine the sample rate and set some file-level parameters
+                samplerate, duration, _, _ = wavio.readFmt(filename)
                 minFreq = max(self.fLow.value(), 0)
-                maxFreq = min(self.fHigh.value(), self.sampleRate//2)
+                maxFreq = min(self.fHigh.value(), samplerate//2)
                 if maxFreq - minFreq < 100:
                     print("ERROR: less than 100 Hz band set for spectrogram")
                     return
                 print("Filtering samples to %d - %d Hz" % (minFreq, maxFreq))
-                self.sp.data = self.sp.ButterworthBandpass(self.audiodata, self.sampleRate, minFreq, maxFreq)
-                self.audiodata = self.sp.data
-                dlg += 1
-                dlg.update()
-                dlg.repaint()
 
-                # Get the data for the spectrogram
-                self.sgRaw = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
-                dlg += 1
-                dlg.update()
-                dlg.repaint()
-                maxsg = np.min(self.sgRaw)
-                self.sg = np.abs(np.where(self.sgRaw==0, 0.0, 10.0 * np.log10(self.sgRaw/maxsg)))
-                self.setColourMap()
+                # For single sp, no need to load all segments, but don't want to edit self.segments
+                if species is not None:
+                    indices2show = self.segments.getSpecies(species)
+                else:
+                    indices2show = range(len(self.segments))
 
-                # trim the spectrogram
-                height = self.sampleRate//2 / np.shape(self.sg)[1]
-                pixelstart = int(minFreq/height)
-                pixelend = int(maxFreq/height)
-                self.sg = self.sg[:,pixelstart:pixelend]
-                dlg += 1
-                dlg.update()
-                dlg.repaint()
+                # Load data into a list of SignalProcs (with spectrograms) for each segment
+                for segix in range(len(self.segments)):
+                    if segix in indices2show:
+                        seg = self.segments[segix]
+                        sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+
+                        if species is not None:
+                            mid = (seg[0]+seg[1])/2
+                            # buffered limits in audiodata (sec) = display limits
+                            x1 = max(0, mid-5)
+                            x2 = min(duration, mid+5)
+
+                            # unbuffered limits in audiodata
+                            x1nob = max(seg[0], x1)
+                            x2nob = min(seg[1], x2)
+                        else:
+                            # unbuffered limits in audiodata
+                            x1nob = seg[0]
+                            x2nob = seg[1]
+
+                            # buffered limits in audiodata (sec) = display limits
+                            x1 = max(x1nob - self.config['reviewSpecBuffer'], 0)
+                            x2 = min(x2nob + self.config['reviewSpecBuffer'], duration)
+
+                        # Load. segix>1 to print the format details only once for each file
+                        sp.readWav(filename, off=x1, len=x2-x1, silent=segix>1)
+
+                        # Filter the audiodata based on initial sliders
+                        sp.data = sp.ButterworthBandpass(sp.data, sp.sampleRate, minFreq, maxFreq)
+
+                        # need to also store unbuffered limits in spec units
+                        # (relative to start of segment)
+                        sp.x1nobspec = sp.convertAmpltoSpec(x1nob-x1)
+                        sp.x2nobspec = sp.convertAmpltoSpec(x2nob-x1)
+
+                        # Generate the spectrogram
+                        _ = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
+
+                        # collect min and max values for final colour scale
+                        minsg = min(np.min(sp.sg), minsg)
+                        maxsg = max(np.max(sp.sg), maxsg)
+                        sp.sg = np.abs(np.where(sp.sg==0, 0.0, 10.0 * np.log10(sp.sg/minsg)))
+
+                        # trim the spectrogram
+                        height = sp.sampleRate//2 / np.shape(sp.sg)[1]
+                        pixelstart = int(minFreq/height)
+                        pixelend = int(maxFreq/height)
+                        sp.sg = sp.sg[:,pixelstart:pixelend]
+                    else:
+                        sp = None
+
+                    self.sps.append(sp)
+
+                    dlg += 1
+                    dlg.update()
+                    dlg.repaint()
+
+            # sets the color map, based on the extremes of all segment spectrograms
+            cmap = self.config['cmap']
+            pos, colour, mode = colourMaps.colourMaps(cmap)
+            cmap = pg.ColorMap(pos, colour,mode)
+
+            self.lut = cmap.getLookupTable(0.0, 1.0, 256)
+            self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
+            self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
+
+        # END of file loading
 
     def humanClassifyNextImage1(self):
         # Get the next image
@@ -1551,6 +1619,9 @@ class AviaNZ_reviewAll(QMainWindow):
             # Show the next segment
             seg = self.segments[self.box1id]
 
+            # select the SignalProc with relevant data
+            sp = self.sps[self.box1id]
+
             # get a list of all species names present
             specnames = []
             for lab in seg[4]:
@@ -1560,22 +1631,15 @@ class AviaNZ_reviewAll(QMainWindow):
                     specnames.append(lab["species"])
             specnames = list(set(specnames))
 
-            x1nob = seg[0]
-            x2nob = seg[1]
-            x1 = int(self.convertAmpltoSpec(x1nob - self.config['reviewSpecBuffer']))
-            x1 = max(x1, 0)
-            x2 = int(self.convertAmpltoSpec(x2nob + self.config['reviewSpecBuffer']))
-            x2 = min(x2, len(self.sg))
-            x3 = int((x1nob - self.config['reviewSpecBuffer']) * self.sampleRate)
-            x3 = max(x3, 0)
-            x4 = int((x2nob + self.config['reviewSpecBuffer']) * self.sampleRate)
-            x4 = min(x4, len(self.audiodata))
             # these pass the axis limits set by slider
             minFreq = max(self.fLow.value(), 0)
-            maxFreq = min(self.fHigh.value(), self.sampleRate//2)
-            self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
-                                           specnames, self.convertAmpltoSpec(x1nob)-x1, self.convertAmpltoSpec(x2nob)-x1,
-                                           seg[0], seg[1], minFreq, maxFreq)
+            maxFreq = min(self.fHigh.value(), sp.sampleRate//2)
+
+            # specnames, then unbufstart in spec units rel to start, unbufend,
+            # then true time to display start, end,
+            self.humanClassifyDialog1.setImage(sp.sg, sp.data, sp.sampleRate, sp.incr,
+                                               specnames, sp.x1nobspec, sp.x2nobspec,
+                                               seg[0], seg[1], minFreq, maxFreq)
         else:
             # store position to popup the next one in there
             self.dialogSize = self.humanClassifyDialog1.size()
@@ -1658,26 +1722,6 @@ class AviaNZ_reviewAll(QMainWindow):
         if ev == Qt.Key_Escape and hasattr(self, 'humanClassifyDialog1'):
             self.humanClassifyDialog1.done(0)
 
-    def convertAmpltoSpec(self,x):
-        """ Unit conversion """
-        return x*self.sampleRate/self.config['incr']
-
-    def setColourMap(self):
-        """ Listener for the menu item that chooses a colour map.
-        Loads them from the file as appropriate and sets the lookup table.
-        """
-        cmap = self.config['cmap']
-
-        pos, colour, mode = colourMaps.colourMaps(cmap)
-
-        cmap = pg.ColorMap(pos, colour,mode)
-        self.lut = cmap.getLookupTable(0.0, 1.0, 256)
-        minsg = np.min(self.sg)
-        maxsg = np.max(self.sg)
-        self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
-        self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
-
-
     def fillFileList(self,fileName):
         """ Generates the list of files for the file listbox.
         fileName - currently opened file (marks it in the list).
@@ -1707,9 +1751,11 @@ class AviaNZ_reviewAll(QMainWindow):
             if file.fileName()+'.data' in listOfDataFiles:
                 item.setForeground(Qt.red)
 
+        # update the "Browse" field text
+        self.w_dir.setPlainText(self.dirName)
+
     def listLoadFile(self,current):
-        """ Listener for when the user clicks on an item in filelist
-        """
+        """ Listener for when the user clicks on an item in filelist """
 
         # Need name of file
         if type(current) is self.listitemtype:
@@ -1727,12 +1773,10 @@ class AviaNZ_reviewAll(QMainWindow):
             dir.cd(self.listOfFiles[i].fileName())
             # Now repopulate the listbox
             self.dirName=str(dir.absolutePath())
-            self.listFiles.clearSelection()
-            self.listFiles.clearFocus()
-            self.listFiles.clear()
+            # self.listFiles.clearSelection()
+            # self.listFiles.clearFocus()
+            # self.listFiles.clear()
             self.previousFile = None
-            if (i == len(self.listOfFiles)-1) and (self.listOfFiles[i].fileName() != current):
-                self.loadFile(current)
             self.fillFileList(current)
             # Show the selected file
             index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)

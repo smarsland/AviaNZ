@@ -1138,9 +1138,13 @@ class AviaNZ(QMainWindow):
             if os.stat(fullcurrent).st_size == 0:
                 print("Cannot open file %s of size 0!" % fullcurrent)
                 return(1)
-            elif os.stat(fullcurrent).st_size < 1000:
+            if os.stat(fullcurrent).st_size < 1000:
                 print("File %s appears to have only header" % fullcurrent)
                 return(1)
+            with open(fullcurrent, 'br') as f:
+                if f.read(4) != b'RIFF':
+                    print("File %s not formatted correctly" % fullcurrent)
+                    return(1)
 
             # setting this to True forces initial segment save
             # self.segmentsToSave = True
@@ -3197,7 +3201,7 @@ class AviaNZ(QMainWindow):
                         self.shortBirdList.insert(0,str(bird))
                         del self.shortBirdList[-1]
 
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.multipleBirds, self)
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.multipleBirds, self.sp.audioFormat, self)
 
             # load the first image:
             self.box1id = -1
@@ -3429,15 +3433,58 @@ class AviaNZ(QMainWindow):
 
         if self.humanClassifyDialog2a.exec_() == 1:
             self.revLabel = self.humanClassifyDialog2a.getValues()
+            sps = []
+            indices2show = self.segments.getSpecies(self.revLabel)
+            # only show segments that have midpoint in this page
+            # (to ensure all are shown once)
+            for ix in reversed(indices2show):
+                mid = (self.segments[ix][0] + self.segments[ix][1])/2
+                if mid > self.startRead + self.datalengthSec or mid < self.startRead:
+                    indices2show.remove(ix)
+
+            # re-read the wav and generate spectrograms as needed
+            with pg.BusyCursor():
+                for segix in range(len(self.segments)):
+                    if segix in indices2show:
+                        seg = self.segments[segix]
+                        sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+
+                        mid = (seg[0]+seg[1])/2
+
+                        # buffered limits in audiodata (sec) = display limits
+                        x1 = max(0, mid-5)
+                        x2 = min(self.datalengthSec, mid+5)
+
+                        # unbuffered limits in audiodata
+                        x1nob = max(seg[0], x1)
+                        x2nob = min(seg[1], x2)
+
+                        # Load
+                        sp.readWav(self.filename, off=x1, len=x2-x1, silent=True)
+
+                        # need to also store unbuffered limits in spec units
+                        # (relative to start of segment)
+                        sp.x1nobspec = sp.convertAmpltoSpec(x1nob-x1)
+                        sp.x2nobspec = sp.convertAmpltoSpec(x2nob-x1)
+
+                        # Generate the spectrogram
+                        _ = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
+
+                        # collect min and max values for final colour scale
+                        minsg = np.min(sp.sg)
+                        sp.sg = np.abs(np.where(sp.sg==0, 0.0, 10.0 * np.log10(sp.sg/minsg)))
+                    else:
+                        sp = None
+
+                    sps.append(sp)
 
             # main dialog:
             # Note: always showing only the current page
-            # For now we're passing in all the segments, and it'll adjust for page start
-            self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sg, self.audiodata, self.segments,
-                                                               self.revLabel, self.sampleRate, self.sp.audioFormat,
-                                                               self.config['incr'], self.lut, self.colourStart,
+            # For now we're passing in all the segments, and it'll select the ones for this sp
+            self.humanClassifyDialog2 = Dialogs.HumanClassify2(sps, self.segments, indices2show,
+                                                               self.revLabel, self.lut, self.colourStart,
                                                                self.colourEnd, self.config['invertColourMap'],
-                                                               self.config['brightness'], self.config['contrast'], startRead=self.startRead)
+                                                               self.config['brightness'], self.config['contrast'])
             if hasattr(self, 'humanClassifyDialogSize'):
                 self.humanClassifyDialog2.resize(self.humanClassifyDialogSize)
             self.humanClassifyDialog2.finish.clicked.connect(self.humanClassifyClose2)
