@@ -1391,7 +1391,7 @@ class AviaNZ_reviewAll(QMainWindow):
         """
         # Initialize the dialog for this file
         self.loadFile(filename, self.species)
-        self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sps, self.segments,
+        self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sps, self.segments, self.indices2show,
                                                            self.species, self.lut, self.colourStart,
                                                            self.colourEnd, self.config['invertColourMap'],
                                                            self.config['brightness'], self.config['contrast'], filename=self.filename)
@@ -1535,13 +1535,13 @@ class AviaNZ_reviewAll(QMainWindow):
 
                 # For single sp, no need to load all segments, but don't want to edit self.segments
                 if species is not None:
-                    indices2show = self.segments.getSpecies(species)
+                    self.indices2show = self.segments.getSpecies(species)
                 else:
-                    indices2show = range(len(self.segments))
+                    self.indices2show = range(len(self.segments))
 
                 # Load data into a list of SignalProcs (with spectrograms) for each segment
                 for segix in range(len(self.segments)):
-                    if segix in indices2show:
+                    if segix in self.indices2show:
                         seg = self.segments[segix]
                         sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
 
