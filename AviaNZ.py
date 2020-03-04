@@ -4394,13 +4394,15 @@ class AviaNZ(QMainWindow):
 
         # excel should be split by page size, but for short files just give the file size
         datalen = self.config['maxFileShow'] if self.nFileSections>1 else self.datalengthSec
-        success = self.segments.exportExcel(self.SoundFileDir, self.filename, action=action, pagelen=datalen, numpages=self.nFileSections, startTime=self.startTime)
+        excel = SupportClasses.ExcelIO()
+        self.segments.filename = self.filename
+        success = excel.export([self.segments], self.SoundFileDir, action=action, pagelen=datalen, numpages=self.nFileSections, startTime=self.startTime)
         # add user notification
         if success==0:
-            print("Warning: xlsx output was not saved")
+            print("Warning: Excel output was not saved")
             return
         else:
-            msg = SupportClasses.MessagePopup("d", "Segments Exported", "Check this directory for the excel output: " + '\n' + self.SoundFileDir)
+            msg = SupportClasses.MessagePopup("d", "Segments Exported", "Check this directory for the Excel output: " + '\n' + self.SoundFileDir)
             msg.exec_()
             return
 
