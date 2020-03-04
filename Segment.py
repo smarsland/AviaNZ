@@ -31,19 +31,12 @@ import librosa
 import time
 from ext import ce_denoise as ce
 import json
-import os
-import re
 import math
 import copy
 import wavio
 from scipy.interpolate import interp1d
 from scipy.signal import medfilt
 import skimage.measure as skm
-
-from PyQt5.QtCore import QTime
-from openpyxl import load_workbook, Workbook
-from openpyxl.styles import colors
-from openpyxl.styles import Font
 
 
 class Segment(list):
@@ -378,7 +371,6 @@ class SegmentList(list):
         species - string, will export the annotations for it.
         Window and inc defined as in waveletSegment.
         """
-
         if inc is None:
             inc = window
         resolution = math.gcd(int(100*window), int(100*inc)) / 100
@@ -422,214 +414,6 @@ class SegmentList(list):
                 f.write('\n')
             f.write('\n')
             print("output successfully saved to file", eFile)
-
-    def exportExcel(self, dirName, filename, action, pagelen, numpages=1, speciesList=[], startTime=0, resolution=1):
-        """ Exports the annotations to xlsx, with three sheets:
-        time stamps, presence/absence, and per second presence/absence.
-        Saves each species into a separate workbook,
-        + an extra workbook for all species (to function as a readable segment printout).
-        It makes the workbook if necessary.
-
-        Inputs
-            dirName:    xlsx will be stored here
-            filename:   name of the wav file, to be recorded inside the xlsx
-            action:     "append" or "overwrite" any found Excels
-            pagelen:    page length, seconds (for filling out absence)
-            numpages:   number of pages in this file (of size pagelen)
-            speciesList:    list of species that are currently processed -- will force an xlsx output even if none were detected
-            startTime:  timestamp for cell names
-            resolution: output resolution on excel (sheet 3) in seconds. Default is 1
-        """
-
-        pagelen = math.ceil(pagelen)
-
-        # will export species present in self, + passed as arg, + "all species" excel
-        speciesList = set(speciesList)
-        for seg in self:
-            speciesList.update([lab["species"] for lab in seg[4]])
-        speciesList.add("Any sound")
-        print("The following species were detected for export:", speciesList)
-
-        # ideally, we store relative paths, but that's not possible across drives:
-        try:
-            relfname = str(os.path.relpath(filename, dirName))
-        except Exception as e:
-            print("Falling back to absolute paths. Encountered exception:")
-            print(e)
-            relfname = str(os.path.abspath(filename))
-
-        # functions for filling out the excel sheets:
-        def writeToExcelp1(wb, segs, currsp):
-            ws = wb['Time Stamps']
-            r = ws.max_row + 1
-            # Print the filename
-            ws.cell(row=r, column=1, value=relfname)
-            # Loop over the segments
-            for seg in segs:
-                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTime).toString('hh:mm:ss')))
-                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTime).toString('hh:mm:ss')))
-                if seg[3]!=0:
-                    ws.cell(row=r, column=4, value=int(seg[2]))
-                    ws.cell(row=r, column=5, value=int(seg[3]))
-                if currsp=="Any sound":
-                    # print species and certainty
-                    text = [lab["species"] for lab in seg[4]]
-                    ws.cell(row=r, column=6, value=", ".join(text))
-                    text = [str(lab["certainty"]) for lab in seg[4]]
-                    ws.cell(row=r, column=7, value=", ".join(text))
-                else:
-                    # only print certainty
-                    text = []
-                    for lab in seg[4]:
-                        if lab["species"]==currsp:
-                            text.append(str(lab["certainty"]))
-                    ws.cell(row=r, column=6, value=", ".join(text))
-                r += 1
-
-        def writeToExcelp2(wb, segs):
-            # segs: a 2D list of [start, end, certainty] for each seg
-            ws = wb['Presence Absence']
-            r = ws.max_row + 1
-            ws.cell(row=r, column=1, value=relfname)
-            ws.cell(row=r, column=2, value='_')
-            if len(segs)>0:
-                pres = "Yes"
-                certainty = [lab[2] for lab in segs]
-                certainty = max(certainty)
-            else:
-                pres = "No"
-                certainty = 0
-            ws.cell(row=r, column=2, value=pres)
-            ws.cell(row=r, column=3, value=certainty)
-
-        def writeToExcelp3(wb, detected, pagenum):
-            # writes binary output DETECTED (per s) from page PAGENUM of length PAGELEN
-            starttime = pagenum * pagelen
-            ws = wb['Per Time Period']
-            # print resolution "header"
-            r = ws.max_row + 1
-            ws.cell(row=r, column=1, value=str(resolution) + ' secs resolution')
-            ft = Font(color=colors.DARKYELLOW)
-            ws.cell(row=r, column=1).font=ft
-            # print file name and page number
-            ws.cell(row=r+1, column=1, value=relfname)
-            ws.cell(row=r+1, column=2, value=str(pagenum+1))
-            # fill the header and detection columns
-            c = 3
-            for t in range(0, len(detected), resolution):
-                # absolute (within-file) times:
-                win_start = starttime + t
-                win_end = min(win_start+resolution, int(pagelen * numpages))
-                ws.cell(row=r, column=c, value=str(win_start) + '-' + str(win_end))
-                ws.cell(row=r, column=c).font = ft
-                # within-page times:
-                det = detected[t:win_end - starttime]
-                # max certainty on 0-100 scale:
-                det = max(det)
-                ws.cell(row=r+1, column=c, value=det)
-                c += 1
-
-        # now, generate the actual files, SEPARATELY FOR EACH SPECIES:
-        for species in speciesList:
-            print("Exporting species %s" % species)
-            # clean version for filename
-            speciesClean = re.sub(r'\W', "_", species)
-
-            # setup output files:
-            # if an Excel exists, append (so multiple files go into one worksheet)
-            # if not, create new
-            eFile = dirName + '/DetectionSummary_' + speciesClean + '.xlsx'
-
-            if action == "overwrite" or not os.path.isfile(eFile):
-                # make a new workbook:
-                wb = Workbook()
-
-                # First sheet
-                wb.create_sheet(title='Time Stamps', index=1)
-                ws = wb['Time Stamps']
-                ws.cell(row=1, column=1, value="File Name")
-                ws.cell(row=1, column=2, value="start (hh:mm:ss)")
-                ws.cell(row=1, column=3, value="end (hh:mm:ss)")
-                ws.cell(row=1, column=4, value="min freq. (Hz)")
-                ws.cell(row=1, column=5, value="max freq. (Hz)")
-                if species=="Any sound":
-                    ws.cell(row=1, column=6, value="species")
-                    ws.cell(row=1, column=7, value="certainty")
-                else:
-                    ws.cell(row=1, column=6, value="certainty")
-
-                    # Second sheet
-                    wb.create_sheet(title='Presence Absence', index=2)
-                    ws = wb['Presence Absence']
-                    ws.cell(row=1, column=1, value="File Name")
-                    ws.cell(row=1, column=2, value="Present?")
-                    ws.cell(row=1, column=3, value="Certainty, %")
-
-                    # Third sheet
-                    wb.create_sheet(title='Per Time Period', index=3)
-                    ws = wb['Per Time Period']
-                    ws.cell(row=1, column=1, value="File Name")
-                    ws.cell(row=1, column=2, value="Page")
-                    ws.cell(row=1, column=3, value="Maximum certainty of species presence (0 = absent)")
-
-                # Hack to delete original sheet
-                del wb['Sheet']
-            elif action == "append":
-                try:
-                    wb = load_workbook(eFile)
-                except Exception as e:
-                    print("ERROR: cannot open file %s to append" % eFile)  # no read permissions or smth
-                    print(e)
-                    return 0
-            else:
-                print("ERROR: unrecognised action", action)
-                return 0
-
-            # extract segments for the current species
-            # if species=="All", take ALL segments.
-            if species=="Any sound":
-                speciesSegs = self
-            else:
-                speciesSegs = [self[ix] for ix in self.getSpecies(species)]
-
-            # export segments
-            writeToExcelp1(wb, speciesSegs, species)
-
-            if species!="Any sound":
-                # extract the certainty from each label for current species
-                # to a 2D list of segs x [start, end, certainty]
-                speciesCerts = []
-                for seg in speciesSegs:
-                    for lab in seg[4]:
-                        if lab["species"]==species:
-                            speciesCerts.append([seg[0], seg[1], lab["certainty"]])
-
-                # export presence/absence and max certainty
-                writeToExcelp2(wb, speciesCerts)
-
-                # Generate per second binary output
-                # (assuming all pages are of same length as current data)
-                for p in range(0, numpages):
-                    detected = np.zeros(pagelen)
-                    # convert segs to max certainty at each second
-                    for seg in speciesCerts:
-                        for t in range(pagelen):
-                            # convert within-page time to segment (within-file) time
-                            truet = t + p*pagelen
-                            if math.floor(seg[0]) <= truet and truet < math.ceil(seg[1]):
-                                # store certainty if it's larger
-                                detected[t] = max(detected[t], seg[2])
-                    # write page p to xlsx
-                    writeToExcelp3(wb, detected, p)
-
-            # Save the file
-            try:
-                wb.save(eFile)
-            except Exception as e:
-                print("ERROR: could not create new file %s" % eFile)  # no read permissions or smth
-                print(e)
-                return 0
-        return 1
 
 
 class Segmenter:

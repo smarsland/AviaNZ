@@ -834,24 +834,35 @@ class AviaNZ_batchProcess(QMainWindow):
                 self.statusBar().showMessage("Exporting to Excel ...")
                 self.update()
                 self.repaint()
-                msgtext = "Excel output is stored in " + os.path.join(self.dirName, "DetectionSummary_*.xlsx")
+
+                self.allsegs = []
                 for filename in allwavs:
                     if not os.path.isfile(filename + '.data'):
                         continue
 
+                    print("Reading segments from", filename)
                     segments = Segment.SegmentList()
                     segments.parseJSON(filename + '.data')
 
-                    # This will be incompatible with old .data files that didn't store file size!
-                    datalen = np.ceil(segments.metadata["Duration"])
-
                     # sort by time and save
                     segments.orderTime()
-                    success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
-                    if success!=1:
-                        # if any file wasn't exported well, overwrite the message
-                        msgtext = "Warning: Excel output at " + self.dirName + " was not stored properly"
-                        print("Warning: failed to export Excel output!")
+                    # attach filename to be stored in Excel later
+                    segments.filename = filename
+
+                    # Collect all .data contents (as SegmentList objects)
+                    # for the Excel output
+                    self.allsegs.append(segments)
+
+                # Export the actual Excel
+                excel = SupportClasses.ExcelIO()
+                excsuccess = excel.export(self.allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList))
+
+            if excsuccess!=1:
+                # if any file wasn't exported well, overwrite the message
+                msgtext = "Warning: Excel output at " + self.dirName + " was not stored properly"
+                print("Warning: failed to save Excel output")
+            else:
+                msgtext = "Excel output is stored in " + os.path.join(self.dirName, "DetectionSummary_*.xlsx")
 
         # END of processing and exporting. Final cleanup
         self.log.file.close()
@@ -1325,49 +1336,49 @@ class AviaNZ_reviewAll(QMainWindow):
                         print("Removing excel file %s" % filenamef)
                         os.remove(filenamef)
 
-            # Determine all species detected in at least one file
-            # (two loops ensure that all files will have pres/abs xlsx for all species.
-            # Ugly, but more readable this way)
+            print("Exporting to Excel ...")
+            self.statusBar().showMessage("Exporting to Excel ...")
+            self.update()
+            self.repaint()
+
+            self.allsegs = []
             spList = set([self.species])
             for filename in allwavs:
                 if not os.path.isfile(filename + '.data'):
                     continue
 
+                print("Reading segments from", filename)
                 segments = Segment.SegmentList()
                 segments.parseJSON(filename + '.data')
-                print(filename)
 
+                # Determine all species detected in at least one file
                 for seg in segments:
                     spList.update([lab["species"] for lab in seg[4]])
 
-            # Collect all .data contents to an Excel file (no matter if review dialog exit was clean)
-            print("Exporting to Excel ...")
-            self.statusBar().showMessage("Exporting to Excel ...")
-            self.update()
-            self.repaint()
-            msgtext = "Excel output is stored in " + os.path.join(self.dirName, "DetectionSummary_*.xlsx")
-            for filename in allwavs:
-                if not os.path.isfile(filename + '.data'):
-                    continue
-
-                segments = Segment.SegmentList()
-                segments.parseJSON(filename + '.data')
-
-                # This will be incompatible with old .data files that didn't store file size!
-                datalen = np.ceil(segments.metadata["Duration"])
-
                 # sort by time and save
                 segments.orderTime()
-                success = segments.exportExcel(self.dirName, filename, "append", datalen, resolution=self.w_res.value(), speciesList=list(spList))
-                if success!=1:
-                    # if any file wasn't exported well, overwrite the message
-                    msgtext = "Warning: Excel output at " + self.dirName + " was not stored properly"
-                    print("Warning: failed to save Excel output")
+                # attach filename to be stored in Excel later
+                segments.filename = filename
+
+                # Collect all .data contents (as SegmentList objects)
+                # for the Excel output (no matter if review dialog exit was clean)
+                self.allsegs.append(segments)
+
+            # Export the actual Excel
+            excel = SupportClasses.ExcelIO()
+            excsuccess = excel.export(self.allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList))
 
         # END of review and exporting. Final cleanup
         self.statusBar().showMessage("Reviewed files " + str(cnt) + "/" + str(total))
         self.update()
         self.repaint()
+        if excsuccess!=1:
+            # if any file wasn't exported well, overwrite the message
+            msgtext = "Warning: Excel output at " + self.dirName + " was not stored properly"
+            print("Warning: failed to save Excel output")
+        else:
+            msgtext = "Excel output is stored in " + os.path.join(self.dirName, "DetectionSummary_*.xlsx")
+
         if filesuccess == 1:
             msgtext = "All files checked.\n" + msgtext + "\nWould you like to return to the start screen?"
             msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
