@@ -1354,7 +1354,6 @@ class HumanClassify1(QDialog):
 
     def zoomOut(self):
         self.plotAspect = self.plotAspect / 1.5
-        #self.plot.setImage(self.sg)
         self.pPlot.setAspectLocked(ratio=self.plotAspect)
         xyratio = np.shape(self.sg)
         xyratio = xyratio[0] / xyratio[1]
