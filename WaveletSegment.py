@@ -1038,8 +1038,7 @@ class WaveletSegment:
         n = math.ceil((len(self.sp.data) / self.sp.sampleRate)/resol)
 
         # Do impulse masking by default
-        sg = Segment.Segmenter(sp=self.sp, fs=self.sp.sampleRate)
-        self.sp.data = sg.impMask()
+        self.sp.data = self.sp.impMask()
 
         fileAnnotations = []
         # Get the segmentation from the txt file
