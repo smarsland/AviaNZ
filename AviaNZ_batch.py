@@ -23,7 +23,7 @@
 import os, re, fnmatch, sys, gc
 
 from PyQt5.QtGui import QIcon, QPixmap, QApplication, QFont
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame
 from PyQt5.QtMultimedia import QAudioFormat
 from PyQt5.QtCore import Qt, QDir
 
@@ -801,7 +801,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 # delete old results (xlsx)
                 # ! WARNING: any Detection...xlsx files will be DELETED,
                 # ! ANYWHERE INSIDE the specified dir, recursively
-                self.statusBar().showMessage("Preparing Excel output, almost done...")
+                self.statusBar().showMessage("Removing old Excel files, almost done...")
                 self.update()
                 self.repaint()
                 for root, dirs, files in os.walk(str(self.dirName)):
@@ -810,64 +810,14 @@ class AviaNZ_batchProcess(QMainWindow):
                         if fnmatch.fnmatch(filenamef, '*DetectionSummary_*.xlsx'):
                             print("Removing excel file %s" % filenamef)
                             os.remove(filenamef)
-
-                # Determine all species detected in at least one file
-                # (two loops ensure that all files will have pres/abs xlsx for all species.
-                # Ugly, but more readable this way)
-                if speciesStr != "Any sound":
-                    spList = set([filter["species"] for filter in filters])
-                else:
-                    spList = set()
-                for filename in allwavs:
-                    if not os.path.isfile(filename + '.data'):
-                        continue
-
-                    segments = Segment.SegmentList()
-                    segments.parseJSON(filename + '.data')
-                    print(filename)
-
-                    for seg in segments:
-                        spList.update([lab["species"] for lab in seg[4]])
-
-                # Save the new excels
-                print("Exporting to Excel ...")
-                self.statusBar().showMessage("Exporting to Excel ...")
-                self.update()
-                self.repaint()
-
-                self.allsegs = []
-                for filename in allwavs:
-                    if not os.path.isfile(filename + '.data'):
-                        continue
-
-                    print("Reading segments from", filename)
-                    segments = Segment.SegmentList()
-                    segments.parseJSON(filename + '.data')
-
-                    # sort by time and save
-                    segments.orderTime()
-                    # attach filename to be stored in Excel later
-                    segments.filename = filename
-
-                    # Collect all .data contents (as SegmentList objects)
-                    # for the Excel output
-                    self.allsegs.append(segments)
-
-                # Export the actual Excel
-                excel = SupportClasses.ExcelIO()
-                excsuccess = excel.export(self.allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList))
-
-            if excsuccess!=1:
-                # if any file wasn't exported well, overwrite the message
-                msgtext = "Warning: Excel output at " + self.dirName + " was not stored properly"
-                print("Warning: failed to save Excel output")
-            else:
-                msgtext = "Excel output is stored in " + os.path.join(self.dirName, "DetectionSummary_*.xlsx")
+                # We currently do not export any excels automatically
+                # in this mode. We only delete old excels, and let
+                # user generate new ones through Batch Review.
 
         # END of processing and exporting. Final cleanup
         self.log.file.close()
         self.statusBar().showMessage("Processed all %d files" % total)
-        msgtext = "Finished processing.\n" + msgtext + "\nWould you like to return to the start screen?"
+        msgtext = "Finished processing.\nWould you like to return to the start screen?"
         msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         reply = msg.exec_()
@@ -1047,11 +997,11 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setFixedSize(1000, 600)
+        self.setFixedSize(900, 600)
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
-        self.d_detection = Dock("Review",size=(700, 600))
+        self.d_detection = Dock("Review",size=(600, 600))
         # self.d_detection.hideTitleBar()
         self.d_files = Dock("File list", size=(300, 600))
 
@@ -1088,14 +1038,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.certBox.setValue(90)
         self.d_detection.addWidget(self.certBox, row=3, col=1)
 
-        self.w_resLabel = QLabel("Set size of presence/absence blocks\nin Excel output (Sheet 3)")
-        self.d_detection.addWidget(self.w_resLabel, row=4, col=0)
-        self.w_res = QSpinBox()
-        self.w_res.setRange(1,600)
-        self.w_res.setSingleStep(5)
-        self.w_res.setValue(60)
-        self.d_detection.addWidget(self.w_res, row=4, col=1)
-
         # sliders to select min/max frequencies for ALL SPECIES only
         self.fLow = QSlider(Qt.Horizontal)
         self.fLow.setTickPosition(QSlider.TicksBelow)
@@ -1117,18 +1059,37 @@ class AviaNZ_reviewAll(QMainWindow):
         receiverH = lambda value: self.fHighvalue.setText(str(value))
         self.fHigh.valueChanged.connect(receiverH)
         # add sliders to dock
-        self.d_detection.addWidget(self.fLowtext, row=5, col=0)
-        self.d_detection.addWidget(self.fLow, row=5, col=1)
-        self.d_detection.addWidget(self.fLowvalue, row=5, col=2)
-        self.d_detection.addWidget(self.fHightext, row=6, col=0)
-        self.d_detection.addWidget(self.fHigh, row=6, col=1)
-        self.d_detection.addWidget(self.fHighvalue, row=6, col=2)
+        self.d_detection.addWidget(self.fLowtext, row=4, col=0)
+        self.d_detection.addWidget(self.fLow, row=4, col=1)
+        self.d_detection.addWidget(self.fLowvalue, row=4, col=2)
+        self.d_detection.addWidget(self.fHightext, row=5, col=0)
+        self.d_detection.addWidget(self.fHigh, row=5, col=1)
+        self.d_detection.addWidget(self.fHighvalue, row=5, col=2)
 
         self.w_processButton = QPushButton("&Review Folder")
         self.w_processButton.setFixedHeight(50)
         self.w_processButton.clicked.connect(self.review)
-        self.d_detection.addWidget(self.w_processButton,row=11,col=2)
+        self.d_detection.addWidget(self.w_processButton,row=10,col=2)
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
+
+        # Excel export section
+        linesep = QFrame()
+        linesep.setFrameShape(QFrame.HLine)
+        linesep.setFrameShadow(QFrame.Sunken)
+        self.d_detection.addWidget(linesep, row=11, col=0, colspan=3)
+        self.w_resLabel = QLabel("Size (s) of presence/absence\nwindows in the output")
+        self.d_detection.addWidget(self.w_resLabel, row=12, col=0)
+        self.w_res = QSpinBox()
+        self.w_res.setRange(1,600)
+        self.w_res.setSingleStep(5)
+        self.w_res.setValue(60)
+        self.d_detection.addWidget(self.w_res, row=12, col=1)
+
+        w_excelButton = QPushButton("  Generate Excel  ")
+        w_excelButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px}')
+        w_excelButton.setFixedHeight(40)
+        w_excelButton.clicked.connect(self.exportExcel)
+        self.d_detection.addWidget(w_excelButton, row=12, col=2)
 
         self.w_browse.clicked.connect(self.browse)
         # print("spList after browse: ", self.spList)
@@ -1326,7 +1287,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # delete old results (xlsx)
             # ! WARNING: any Detection...xlsx files will be DELETED,
             # ! ANYWHERE INSIDE the specified dir, recursively
-            self.statusBar().showMessage("Preparing Excel output, almost done...")
+            self.statusBar().showMessage("Removing old Excel files, almost done...")
             self.update()
             self.repaint()
             for root, dirs, files in os.walk(str(self.dirName)):
@@ -1336,20 +1297,75 @@ class AviaNZ_reviewAll(QMainWindow):
                         print("Removing excel file %s" % filenamef)
                         os.remove(filenamef)
 
-            print("Exporting to Excel ...")
-            self.statusBar().showMessage("Exporting to Excel ...")
+        self.statusBar().showMessage("Reviewed files " + str(cnt) + "/" + str(total))
+        self.update()
+        self.repaint()
+
+        # END of review and exporting. Final cleanup
+        if filesuccess == 1:
+            msgtext = "All files checked.\nWould you like to return to the start screen?"
+            msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.Yes:
+                QApplication.exit(1)
+        else:
+            msgtext = "Review stopped at file %s of %s.\nWould you like to return to the start screen?" % (cnt, total)
+            msg = SupportClasses.MessagePopup("w", "Review stopped", msgtext)
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.Yes:
+                QApplication.exit(1)
+
+    def exportExcel(self):
+        """ Launched manually by pressing the button.
+            Cleans out old excels and creates a single new one.
+            Needs set self.species, self.dirName. """
+
+        self.species = self.w_spe1.currentText()
+        if self.dirName == '':
+            msg = SupportClasses.MessagePopup("w", "Select Folder", "Please select a folder to process!")
+            msg.exec_()
+            return
+
+        with pg.BusyCursor():
+            # delete old results (xlsx)
+            # ! WARNING: any Detection...xlsx files will be DELETED,
+            # ! ANYWHERE INSIDE the specified dir, recursively
+            self.statusBar().showMessage("Removing old Excel files...")
             self.update()
             self.repaint()
+            for root, dirs, files in os.walk(str(self.dirName)):
+                for filename in files:
+                    filenamef = os.path.join(root, filename)
+                    if fnmatch.fnmatch(filenamef, '*DetectionSummary_*.xlsx'):
+                        print("Removing excel file %s" % filenamef)
+                        os.remove(filenamef)
 
-            self.allsegs = []
-            spList = set([self.species])
-            for filename in allwavs:
-                if not os.path.isfile(filename + '.data'):
-                    continue
+        print("Exporting to Excel ...")
+        self.statusBar().showMessage("Exporting to Excel ...")
+        self.update()
+        self.repaint()
 
+        allsegs = []
+        # Note: one excel will always be generated for the currently selected species
+        spList = set([self.species])
+
+        # list all DATA files that can be processed
+        alldatas = []
+        for root, dirs, files in os.walk(str(self.dirName)):
+            for filename in files:
+                print(filename)
+                if filename.endswith('.data'):
+                    print("Appending" ,filename)
+                    filenamef = os.path.join(root, filename)
+                    alldatas.append(filenamef)
+
+        with pg.BusyCursor():
+            for filename in alldatas:
                 print("Reading segments from", filename)
                 segments = Segment.SegmentList()
-                segments.parseJSON(filename + '.data')
+                segments.parseJSON(filename)
 
                 # Determine all species detected in at least one file
                 for seg in segments:
@@ -1362,37 +1378,21 @@ class AviaNZ_reviewAll(QMainWindow):
 
                 # Collect all .data contents (as SegmentList objects)
                 # for the Excel output (no matter if review dialog exit was clean)
-                self.allsegs.append(segments)
+                allsegs.append(segments)
 
             # Export the actual Excel
             excel = SupportClasses.ExcelIO()
-            excsuccess = excel.export(self.allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList))
+            excsuccess = excel.export(allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList))
 
-        # END of review and exporting. Final cleanup
-        self.statusBar().showMessage("Reviewed files " + str(cnt) + "/" + str(total))
-        self.update()
-        self.repaint()
         if excsuccess!=1:
             # if any file wasn't exported well, overwrite the message
             msgtext = "Warning: Excel output at " + self.dirName + " was not stored properly"
-            print("Warning: failed to save Excel output")
+            print(msgtext)
+            msg = SupportClasses.MessagePopup("w", "Failed to export Excel file", msgtext)
         else:
             msgtext = "Excel output is stored in " + os.path.join(self.dirName, "DetectionSummary_*.xlsx")
-
-        if filesuccess == 1:
-            msgtext = "All files checked.\n" + msgtext + "\nWould you like to return to the start screen?"
-            msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            reply = msg.exec_()
-            if reply == QMessageBox.Yes:
-                QApplication.exit(1)
-        else:
-            msgtext = "Review stopped at file %s of %s.\n%s\nWould you like to return to the start screen?" % (cnt, total, msgtext)
-            msg = SupportClasses.MessagePopup("w", "Review stopped", msgtext)
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            reply = msg.exec_()
-            if reply == QMessageBox.Yes:
-                QApplication.exit(1)
+            msg = SupportClasses.MessagePopup("d", "Excel output produced", msgtext)
+        msg.exec_()
 
     def review_single(self, filename, sTime):
         """ Initializes single species dialog, based on self.species

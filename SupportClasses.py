@@ -1066,7 +1066,7 @@ class ExcelIO():
             ws.cell(row=r+1, column=c, value=detected[t])
             c += 1
 
-    def export(self, segments, dirName, action, pagelen=None, numpages=1, speciesList=[], startTime=0, resolution=10):
+    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=0, resolution=10):
         # will export species present in self, + passed as arg, + "all species" excel
         speciesList = set(speciesList)
         for segl in segments:
@@ -1162,8 +1162,10 @@ class ExcelIO():
                     # either read duration from this SegList
                     # or need current page length if called from manual
                     # (assuming all pages are of same length as current data)
-                    if pagelen is None:
+                    if pagelenarg is None:
                         pagelen = math.ceil(segsl.metadata["Duration"])
+                    else:
+                        pagelen = pagelenarg
 
                     # Generate pres/abs per custom resolution windows
                     for p in range(0, numpages):
