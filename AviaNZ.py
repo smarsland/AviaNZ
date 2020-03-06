@@ -4396,7 +4396,7 @@ class AviaNZ(QMainWindow):
         datalen = self.config['maxFileShow'] if self.nFileSections>1 else self.datalengthSec
         excel = SupportClasses.ExcelIO()
         self.segments.filename = self.filename
-        success = excel.export([self.segments], self.SoundFileDir, action=action, pagelen=datalen, numpages=self.nFileSections, startTime=self.startTime)
+        success = excel.export([self.segments], self.SoundFileDir, action=action, pagelenarg=datalen, numpages=self.nFileSections, startTime=self.startTime)
         # add user notification
         if success==0:
             print("Warning: Excel output was not saved")
