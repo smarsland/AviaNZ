@@ -1495,9 +1495,12 @@ class AviaNZ_reviewAll(QMainWindow):
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
         self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.config['MultipleSpecies'], self.sps[0].audioFormat, self)
         self.box1id = -1
+        # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
             self.humanClassifyDialog1.move(self.dialogPos)
+            self.humanClassifyDialog1.plotAspect = self.dialogPlotAspect
+            self.humanClassifyDialog1.pPlot.setAspectLocked(ratio=self.dialogPlotAspect)
         self.humanClassifyDialog1.setWindowTitle("AviaNZ - reviewing " + self.filename)
         self.humanClassifyNextImage1()
         # connect listeners
@@ -1655,6 +1658,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # store position to popup the next one in there
             self.dialogSize = self.humanClassifyDialog1.size()
             self.dialogPos = self.humanClassifyDialog1.pos()
+            self.dialogPlotAspect = self.humanClassifyDialog1.plotAspect
             self.humanClassifyDialog1.done(1)
 
     def humanClassifyPrevImage(self):
@@ -1723,6 +1727,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
         id = self.box1id
         del self.segments[id]
+        del self.sps[id]
+        # self.indicestoshow then becomes incorrect, but we don't use that in here anyway
 
         self.box1id = id-1
         self.segmentsToSave = True
