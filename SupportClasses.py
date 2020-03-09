@@ -816,12 +816,16 @@ class ConfigLoader(object):
                 continue
             elif filt["CNN"]:
                 try:
-                    # arch = json.load(open(os.path.join(dircnn, filt["CNN"]["CNN_name"] + '.json')))
                     json_file = open(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.json', 'r')
                     loaded_model_json = json_file.read()
                     json_file.close()
                     model = model_from_json(loaded_model_json)
-                    model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
+                    # weights .h5 or .hdf5 depending on the training mode
+                    if os.path.exists(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.hdf5'):
+                        model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.hdf5')
+                    else:
+                        model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
+                    print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                     print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                     model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
                     targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"]]
