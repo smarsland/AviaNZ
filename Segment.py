@@ -1124,25 +1124,26 @@ class PostProcess:
             else:
                 probs = 0
             if isinstance(probs, int):
-                prediction = len(self.CNNoutputs) - 1     # Remember that the noise class is always the last, male-0, femle-1, noise-2
+                prediction = len(self.CNNoutputs) - 2     # Remember that the noise class is always the second last,
+                                                          # male-0, femle-1, noise-2, silence-3
             else:
                 # mean of best n
                 ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
                 meanprob = [np.mean(probs[ind[i][-5:], i]) for i in range(np.shape(probs)[1])]
-                if any(x > 0.6 for x in meanprob[:-1]):
-                    prediction = np.argmax(meanprob[:-1])
-                    p = max(meanprob[:-1])
+                if any(x > 0.6 for x in meanprob[:-2]):
+                    prediction = np.argmax(meanprob[:-2])
+                    p = max(meanprob[:-2])
                     if p > 0.8:
                         probability = 70
                     else:
                         probability = 60
                     newSegments[i][1] = probability
                 else:
-                    prediction = len(self.CNNoutputs) - 1
+                    prediction = len(self.CNNoutputs) - 2 + np.argmax(meanprob[-2:])
                 # prediction = self.CNNoutputs[str(prediction)]  # TODO: actual call type
                 # print(probs)
                 # print(np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
-            if prediction == len(self.CNNoutputs) - 1:
+            if prediction in [len(self.CNNoutputs) - 2, len(self.CNNoutputs) - 1]:
                 # print('Deleted by CNN')
                 newSegments.remove(seg)
                 i -= 1

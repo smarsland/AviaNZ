@@ -6,6 +6,19 @@ All notable changes to AviaNZ program will be documented in this file.
 
 - Recogniser testing summary
 
+### Added
+
+- CNN layer after wavelet filter in the processing pipeline to improve the precision
+- Certainty improved after CNN post-proc
+- Trained CNN models for kiwi, ready to use
+- Separate excel export in Batch Review
+- Intermittent sampling
+
+### Changed
+
+- Human review made faster by loading the segments rather than reading whole file
+
+
 ## [2.1] - 2020-02-12
 
 ### Added
