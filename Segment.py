@@ -1099,6 +1099,7 @@ class PostProcess:
             self.fLow = subfilter['FreqRange'][0]
             self.fHigh = subfilter['FreqRange'][1]
             self.minLen = subfilter['TimeRange'][0]
+            self.calltype = subfilter['calltype']
         else:
             self.minLen = 0.25
             self.fLow = 0
@@ -1131,6 +1132,8 @@ class PostProcess:
         if len(self.segments)==0:
             print("No segments to classify by CNN")
             return
+        ctkey = int(list(self.CNNoutputs.keys())[list(self.CNNoutputs.values()).index(self.calltype)])
+        print('call type: ', self.calltype)
 
         for ix in reversed(range(len(self.segments))):
             seg = self.segments[ix]
@@ -1153,30 +1156,50 @@ class PostProcess:
             else:
                 probs = 0
             if isinstance(probs, int):
-                prediction = len(self.CNNoutputs) - 2     # Remember that the noise class is always the second last,
-                                                          # male-0, femle-1, noise-2, silence-3
+                # prediction = len(self.CNNoutputs) - 2     # Remember that the noise class is always the second last,
+                #                                           # male-0, femle-1, noise-2, silence-3
+                probability = 0
             else:
                 # mean of best n
                 ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
                 meanprob = [np.mean(probs[ind[i][-5:], i]) for i in range(np.shape(probs)[1])]
-                if any(x > 0.6 for x in meanprob[:-2]):
-                    prediction = np.argmax(meanprob[:-2])
-                    p = max(meanprob[:-2])
-                    if p > 0.8:
-                        probability = 70
-                    else:
-                        probability = 60
-                    self.segments[ix][1] = probability
-                else:
-                    prediction = len(self.CNNoutputs) - 2 + np.argmax(meanprob[-2:])
+                # Option 1: accept CNN predicted call type
+                # if any(x > 0.6 for x in meanprob[:-2]):
+                    # prediction = np.argmax(meanprob[:-2])
+                    # p = max(meanprob[:-2])
+                    # if p > 0.8:
+                    #     probability = 70
+                    # else:
+                    #     probability = 60
+                    # self.segments[ix][1] = probability
+                # else:
+                #     prediction = len(self.CNNoutputs) - 2 + np.argmax(meanprob[-2:])
                 # prediction = self.CNNoutputs[str(prediction)]  # TODO: actual call type
+                # print(seg)
                 # print(probs)
                 # print(np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
-            if prediction in [len(self.CNNoutputs) - 2, len(self.CNNoutputs) - 1]:
-                # print('Deleted by CNN')
+                # if prediction in [len(self.CNNoutputs) - 2, len(self.CNNoutputs) - 1]:
+                #     # print('Deleted by CNN')
+                #     del self.segments[ix]
+
+                # Option 2: confirm wavelet proposed call type
+                print(seg)
+                print(probs)
+                print(np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
+                if meanprob[ctkey] > 0.8:
+                    probability = 70
+                    self.segments[ix][1] = probability
+                elif meanprob[ctkey] > 0.6:
+                    probability = 60
+                    self.segments[ix][1] = probability
+                else:
+                    probability = 0
+
+            if probability == 0:
+                print('Deleted by CNN')
                 del self.segments[ix]
-            # else:
-                # print('Not deleted by CNN')
+            else:
+                print('Not deleted by CNN')
         print("Segments remaining after CNN: ", len(self.segments))
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):
