@@ -24,7 +24,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #     from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QWidget
-from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QEvent, QLineF
+from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QEvent, QLineF, QLine, QPoint, QSize
 from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
@@ -79,6 +79,58 @@ class TimeAxisMin(pg.AxisItem):
     def setOffset(self,offset):
         self.offset = offset
         self.update()
+
+
+class AxisWidget(QAbstractButton):
+    # Class for HumanClassify dialogs to put spectrograms on buttons
+    # Also includes playback capability.
+    def __init__(self, sgsize, minFreq, maxFreq, parent=None):
+        super(AxisWidget, self).__init__(parent)
+        self.minFreq = minFreq
+        self.maxFreq = maxFreq
+        self.sgsize = sgsize
+
+        # fixed size
+        self.setSizePolicy(0,0)
+        self.setMinimumSize(60, sgsize)
+
+    def paintEvent(self, event):
+        if type(event) is not bool:
+            painter = QPainter(self)
+            # actual axis line painting
+            bottomR = event.rect().bottomRight()
+            topR = event.rect().topRight()
+            painter.setPen(QPen(QColor(20,20,20), 1))
+            painter.drawLine(bottomR, topR)
+
+            fontsize = 11
+            painter.setFont(QFont("Helvetica", fontsize))
+
+            # draw tickmarks and numbers
+            currFrq = self.minFreq
+            tickmark = QLine(bottomR, QPoint(bottomR.x()-6, bottomR.y()))
+            painter.drawLine(tickmark)
+            painter.drawText(tickmark.x2()-22, tickmark.y2(), "%.1f" % currFrq)
+            for ticknum in range(3):
+                currFrq += (self.maxFreq - self.minFreq)/4
+                tickmark.translate(0, -event.rect().height()//4)
+                painter.drawLine(tickmark)
+                painter.drawText(tickmark.x2()-22, tickmark.y2()+7, "%.1f" % currFrq)
+            tickmark.translate(0, -tickmark.y2())
+            painter.drawLine(tickmark)
+            painter.drawText(tickmark.x2()-22, tickmark.y2()+15, "%.1f" % self.maxFreq)
+
+            painter.save()
+            painter.translate(10, event.rect().height()//2)
+            painter.rotate(-90)
+            painter.drawText(-12, 8, "kHz")
+            painter.restore()
+
+    def sizeHint(self):
+        return QSize(60, self.sgsize)
+
+    def minimumSizeHint(self):
+        return QSize(60, self.sgsize)
 
 
 class ShadedROI(pg.ROI):
