@@ -1855,7 +1855,15 @@ class HumanClassify2(QDialog):
         self.butStart = 0
         self.countPages()
 
+        self.flowAxes = pg.LayoutWidget()
+        self.flowAxes.setMinimumSize(60, self.specV+20)
         self.flowLayout.setMinimumSize(self.specH+20, self.specV+20)
+        self.flowAxes.setSizePolicy(0, 5)
+        hboxFlow = QHBoxLayout()
+        hboxFlow.addWidget(self.flowAxes)
+        #hboxFlow.addItem(QSpacerItem(1,1, 3,3))
+        #hboxFlow.addStretch(10)
+        hboxFlow.addWidget(self.flowLayout)
 
         # set overall layout of the dialog
         self.vboxFull = QVBoxLayout()
@@ -1863,7 +1871,7 @@ class HumanClassify2(QDialog):
         self.vboxFull.addLayout(vboxTop)
         self.vboxSpacer = QSpacerItem(1,1, 5, 5)
         self.vboxFull.addItem(self.vboxSpacer)
-        self.vboxFull.addWidget(self.flowLayout)
+        self.vboxFull.addLayout(hboxFlow)
         self.vboxFull.addLayout(self.vboxBot)
         # must be fixed size!
         vboxTop.setSizeConstraint(QLayout.SetFixedSize)
@@ -1925,7 +1933,7 @@ class HumanClassify2(QDialog):
         # space for remaining widgets:
         # width is just dialog width with small buffer for now
         spaceV = self.flowLayout.size().height() + self.vboxSpacer.geometry().height()
-        spaceH = self.size().width() - 20
+        spaceH = self.flowLayout.size().width()
 
         # this is the grid that fits in dialog, and self.* is the current grid
         # Let's say we leave 10px for spacing
@@ -1943,9 +1951,25 @@ class HumanClassify2(QDialog):
         return
 
     def redrawButtons(self):
+        # create one frequency axis
+        # (all of them are identical b/c only 1 file shown at each time)
+        exampleSP = self.sps[self.indices2show[0]]
+        minFreq = exampleSP.minFreqShow
+        maxFreq = exampleSP.maxFreqShow
+        if maxFreq==0:
+            maxFreq = exampleSP.sampleRate // 2
+        SgSize = np.shape(exampleSP.sg)[1]  # in spec units
+
         butNum = 0
         for row in range(self.numPicsV):
-            for col in range(self.numPicsH):
+            # add a frequency axis
+            # args: spectrogram height in spec units, min and max frq in kHz for axis ticks
+            sg_axis = SupportClasses.AxisWidget(SgSize, minFreq/1000, maxFreq/1000)
+            self.flowAxes.addWidget(sg_axis, row, 0)
+            self.flowAxes.layout.setRowMinimumHeight(row, self.specV+10)
+
+            # draw a row of buttons
+            for col in range(1, self.numPicsH+1):
                 # resizing shouldn't change which segments are displayed,
                 # so we use a fixed start point for counting shown buttons.
                 self.flowLayout.addWidget(self.buttons[self.butStart+butNum], row, col)
@@ -2050,6 +2074,16 @@ class HumanClassify2(QDialog):
                 del self.flowLayout.rows[r][c]
                 item.widget().hide()
         self.flowLayout.update()
+
+        for axnum in reversed(range(self.flowAxes.layout.count())):
+            item = self.flowAxes.layout.itemAt(axnum)
+            if item is not None:
+                self.flowAxes.layout.removeItem(item)
+                r,c = self.flowAxes.items[item.widget()]
+                self.flowAxes.layout.setRowMinimumHeight(r, 1)
+                del self.flowAxes.rows[r][c]
+                item.widget().hide()
+        self.flowAxes.update()
 
     def toggleAll(self):
         buttonsPerPage = self.numPicsV * self.numPicsH

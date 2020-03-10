@@ -1557,7 +1557,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 for segix in range(len(self.segments)):
                     if segix in self.indices2show:
                         seg = self.segments[segix]
-                        sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+                        # note that sp also stores the range of shown freqs
+                        sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
 
                         if species is not None:
                             mid = (seg[0]+seg[1])/2

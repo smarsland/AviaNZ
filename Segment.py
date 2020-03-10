@@ -1102,9 +1102,8 @@ class PostProcess:
             print("No segments to classify by CNN")
             return
 
-        newSegments = copy.deepcopy(self.segments)
-        i = 0
-        for seg in self.segments:
+        for ix in reversed(range(len(self.segments))):
+            seg = self.segments[ix]
             # print('\n--- Segment', seg)
             data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
             # find the syllables from the seg and generate features for CNN
@@ -1137,7 +1136,7 @@ class PostProcess:
                         probability = 70
                     else:
                         probability = 60
-                    newSegments[i][1] = probability
+                    self.segments[ix][1] = probability
                 else:
                     prediction = len(self.CNNoutputs) - 2 + np.argmax(meanprob[-2:])
                 # prediction = self.CNNoutputs[str(prediction)]  # TODO: actual call type
@@ -1145,12 +1144,9 @@ class PostProcess:
                 # print(np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
             if prediction in [len(self.CNNoutputs) - 2, len(self.CNNoutputs) - 1]:
                 # print('Deleted by CNN')
-                newSegments.remove(seg)
-                i -= 1
+                del self.segments[ix]
             # else:
                 # print('Not deleted by CNN')
-            i += 1
-        self.segments = newSegments
         print("Segments remaining after CNN: ", len(self.segments))
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):

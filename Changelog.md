@@ -5,6 +5,8 @@ All notable changes to AviaNZ program will be documented in this file.
 ### Fixed
 
 - Recogniser testing summary
+- Storing zoom levels between All Species review runs
+- Faster and safer Excel export
 
 ### Added
 
@@ -13,6 +15,7 @@ All notable changes to AviaNZ program will be documented in this file.
 - Trained CNN models for kiwi, ready to use
 - Separate excel export in Batch Review
 - Intermittent sampling
+- Single Species review now has a frequency axis
 
 ### Changed
 
