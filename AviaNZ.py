@@ -3394,6 +3394,10 @@ class AviaNZ(QMainWindow):
         self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
         self.listLabels = [self.listLabels[i] for i in sortOrder]
 
+        # SRM: Split segments greater than 10 seconds long
+        # **** what is self.segments? and the metadata??
+        self.segments.splitLongSeg()
+        print(self.segments)
         self.saveSegments()
 
         # First, determine which segments will be shown (i.e. visible in current page):
@@ -3554,7 +3558,10 @@ class AviaNZ(QMainWindow):
         # reverse loop to allow deleting segments
         for dl in reversed(todelete):
             self.deleteSegment(dl)
+        
+        self.segments.mergeSplitSeg()
         self.saveSegments()
+        # SRM: Should probably redraw the segments?
         self.statusLeft.setText("Ready")
         return
 
