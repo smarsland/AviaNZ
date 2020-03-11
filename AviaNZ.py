@@ -2209,6 +2209,7 @@ class AviaNZ(QMainWindow):
         remaking - can be turned to True to reuse some existing objects
         """
         print("Segment added at %d-%d, %d-%d" % (startpoint, endpoint, self.convertYtoFreq(y1), self.convertYtoFreq(y2)))
+        print(species)
         miny = self.convertFreqtoY(self.sp.minFreqShow)
         maxy = self.convertFreqtoY(self.sp.maxFreqShow)
 
@@ -3384,20 +3385,57 @@ class AviaNZ(QMainWindow):
         self.humanClassifyNextImage1()
         self.segmentsDone += 1
 
+    def splitLongSeg(self, maxlen=10):
+        """
+        Splits long segments (> maxlen) evenly
+        Operates on segment data structure
+        [[1,5,a,b], [{}]] -> [[1,3,a,b], [{}], [3,5,a,b], [{}]]
+        """
+        for seg in self.segments:
+            l = seg[1]-seg[0]
+            if l > maxlen:
+                n = int(np.ceil(l/maxlen))
+                d = l/n
+                seg[1] = seg[0]+d
+                for i in range(1,n):
+                    end = min(l, d * (i+1))
+                    self.addSegment(seg[0] + d*i, seg[0] + end, self.convertFreqtoY(seg[2]), self.convertFreqtoY(seg[3]), seg[4].copy())
+        
+    def mergeSplitSeg(self):
+        # After segments are split, put them back if all are still there
+        # Really simple -- assumes they are in order
+        # SRM
+        todelete = []
+        last = [0,0,0,0,0]
+        count=0
+        for seg in self.segments:
+            #print(math.isclose(seg[0],last[1]))
+            # Merge the two segments if they abut and have the same species
+            if math.isclose(seg[0],last[1]) and seg[4] == last[4]:
+                last[1] = seg[1]
+                todelete.append(count)
+            else:
+                last = seg
+            count+=1
+
+        for dl in reversed(todelete):
+            self.deleteSegment(dl)
+
+        self.removeSegments(delete=False)
+        self.drawfigMain(remaking=True)
+
     def humanRevDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
         """
         # Start by sorting the segments into increasing time order,
         # to make life easier
+        # SRM: Split segments greater than 10 seconds long
+        self.splitLongSeg()
         sortOrder = self.segments.orderTime()
         self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
         self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
         self.listLabels = [self.listLabels[i] for i in sortOrder]
 
-        # SRM: Split segments greater than 10 seconds long
-        # **** what is self.segments? and the metadata??
-        self.segments.splitLongSeg()
-        print(self.segments)
         self.saveSegments()
 
         # First, determine which segments will be shown (i.e. visible in current page):
@@ -3559,9 +3597,8 @@ class AviaNZ(QMainWindow):
         for dl in reversed(todelete):
             self.deleteSegment(dl)
         
-        self.segments.mergeSplitSeg()
+        self.mergeSplitSeg()
         self.saveSegments()
-        # SRM: Should probably redraw the segments?
         self.statusLeft.setText("Ready")
         return
 

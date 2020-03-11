@@ -415,37 +415,6 @@ class SegmentList(list):
             f.write('\n')
             print("output successfully saved to file", eFile)
 
-    def splitLongSeg(self, maxlen=10):
-        """
-        Splits long segments (> maxlen) evenly
-        Operates on segment data structure
-        [[1,5,a,b], [{}]] -> [[1,3,a,b], [{}], [3,5,a,b], [{}]]
-        """
-        for seg in self:
-            l = seg[1]-seg[0]
-            if l > maxlen:
-                n = int(np.ceil(l/maxlen))
-                d = l/n
-                seg[1] = seg[0]+d
-                for i in range(1,n):
-                    end = min(l, d * (i+1))
-                    self.addSegment([seg[0] + d*i, seg[0] + end, seg[2], seg[3], seg[4]])
-        self.orderTime()
-        
-    def mergeSplitSeg(self):
-        # After segments are split, put them back if all are still there
-        # Really simple -- assumes they are in order
-        # SRM
-        last = [0,0,0,0,0]
-        for seg in self:
-            print(math.isclose(seg[0],last[1]))
-            if math.isclose(seg[0],last[1]) and seg[4] == last[4]:
-                # Merge the two segments if they have the same species
-                last[1] = seg[1]
-                self.remove(seg)
-            last = seg
-        #print(self)
-
 class Segmenter:
     """ This class implements six forms of segmentation for the AviaNZ interface:
     Amplitude threshold (rubbish)

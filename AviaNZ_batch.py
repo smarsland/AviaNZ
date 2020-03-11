@@ -20,7 +20,7 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import os, re, fnmatch, sys, gc
+import os, re, fnmatch, sys, gc, math
 
 from PyQt5.QtGui import QIcon, QPixmap, QApplication, QFont
 from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame
@@ -1267,6 +1267,10 @@ class AviaNZ_reviewAll(QMainWindow):
             if self.species == 'Any sound':
                 filesuccess = self.review_all(filename, sTime)
             else:
+                # split long segments for single species review
+                self.splitLongSeg()
+                sortOrder = self.segments.orderTime()
+                print(self.segments)
                 filesuccess = self.review_single(filename, sTime)
 
             # break out of review loop if Esc detected
@@ -1419,6 +1423,50 @@ class AviaNZ_reviewAll(QMainWindow):
         else:
             return(1)
 
+    def splitLongSeg(self, maxlen=10):
+        """
+        Splits long segments (> maxlen) evenly
+        Operates on segment data structure
+        [[1,5,a,b], [{}]] -> [[1,3,a,b], [{}], [3,5,a,b], [{}]]
+        """
+        print("there")
+        print(self.segments)
+        for seg in self.segments:
+            l = seg[1]-seg[0]
+            if l > maxlen:
+                n = int(np.ceil(l/maxlen))
+                d = l/n
+                seg[1] = seg[0]+d
+                for i in range(1,n):
+                    end = min(l, d * (i+1))
+                    segment = Segment.Segment([seg[0] + d*i, seg[0] + end, seg[2], seg[3], seg[4].copy()])
+                    self.segments.addSegment(segment)
+                    #self.segments.append([seg[0] + d*i, seg[0] + end, seg[2], seg[3], seg[4].copy()])
+        
+    def mergeSplitSeg(self):
+        # After segments are split, put them back if all are still there
+        # Really simple -- assumes they are in order
+        # SRM
+        todelete = []
+        last = [0,0,0,0,0]
+        count=0
+        for seg in self.segments:
+            #print(math.isclose(seg[0],last[1]))
+            # Merge the two segments if they abut and have the same species
+            print(seg, seg[0], last[4])
+            if math.isclose(seg[0],last[1]) and seg[4] == last[4]:
+                last[1] = seg[1]
+                todelete.append(count)
+            else:
+                last = seg
+            count+=1
+
+        print(todelete)
+        for dl in reversed(todelete):
+            del self.segments[dl]
+
+        print(self.segments)
+
     def humanClassifyClose2(self):
         self.segmentsToSave = True
         todelete = []
@@ -1431,6 +1479,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # btn.index carries the index of segment shown on btn
             if btn.mark=="red":
                 outputErrors.append(currSeg)
+                todelete.append(btn.index)
                 # remove all labels for the current species
                 wipedAll = currSeg.wipeSpecies(self.species)
                 # drop the segment if it's the only species, or just update the graphics
@@ -1464,6 +1513,8 @@ class AviaNZ_reviewAll(QMainWindow):
         # reverse loop to allow deleting segments
         for dl in reversed(todelete):
             del self.segments[dl]
+
+        self.mergeSplitSeg()
         # done - the segments will be saved by the main loop
         return
 
