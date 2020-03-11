@@ -1306,6 +1306,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.repaint()
 
         # END of review and exporting. Final cleanup
+        self.ConfigLoader.configwrite(self.config, self.configfile)
         if filesuccess == 1:
             msgtext = "All files checked.\nWould you like to return to the start screen?"
             msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
@@ -1478,9 +1479,13 @@ class AviaNZ_reviewAll(QMainWindow):
                 # find "yellows", swap to "greens"
                 currSeg.confirmLabels(self.species)
 
-        # store position to popup the next one in there
+        # store position etc to carry over to the next file dialog
         self.dialogSize = self.humanClassifyDialog2.size()
         self.dialogPos = self.humanClassifyDialog2.pos()
+        self.config['brightness'] = self.humanClassifyDialog2.brightnessSlider.value()
+        self.config['contrast'] = self.humanClassifyDialog2.contrastSlider.value()
+        if not self.config['invertColourMap']:
+            self.config['brightness'] = 100-self.config['brightness']
         self.humanClassifyDialog2.done(1)
 
         # Save the errors in a file
@@ -1687,10 +1692,14 @@ class AviaNZ_reviewAll(QMainWindow):
                                                specnames, sp.x1nobspec, sp.x2nobspec,
                                                seg[0], seg[1], minFreq, maxFreq)
         else:
-            # store position to popup the next one in there
+            # store dialog properties such as position for the next file
             self.dialogSize = self.humanClassifyDialog1.size()
             self.dialogPos = self.humanClassifyDialog1.pos()
             self.dialogPlotAspect = self.humanClassifyDialog1.plotAspect
+            self.config['brightness'] = self.humanClassifyDialog1.brightnessSlider.value()
+            self.config['contrast'] = self.humanClassifyDialog1.contrastSlider.value()
+            if not self.config['invertColourMap']:
+                self.config['brightness'] = 100-self.config['brightness']
             self.humanClassifyDialog1.done(1)
 
     def humanClassifyPrevImage(self):
