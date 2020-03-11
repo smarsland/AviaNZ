@@ -1372,12 +1372,12 @@ class PostProcess:
     # Segmenter class still has its own joinGaps etc which operate on 2-element lists
     def joinGaps(self, maxgap):
         seg = Segmenter()
-        seg.joinGaps3(self.segments, maxgap=maxgap)
+        self.segments = seg.joinGaps3(self.segments, maxgap=maxgap)
         print("Segments remaining after merge (<=%d secs): %d" % (maxgap, len(self.segments)))
 
     def deleteShort(self, minlength):
         seg = Segmenter()
-        seg.deleteShort3(self.segments, minlength=minlength)
+        self.segments = seg.deleteShort3(self.segments, minlength=minlength)
         print("Segments remaining after deleting short (<%.2f secs): %d" % (minlength, len(self.segments)))
 
     def splitLong(self, maxlen):
