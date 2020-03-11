@@ -1392,7 +1392,7 @@ class AviaNZ(QMainWindow):
                 dlg += 1
                 dlg.update()
                 self.drawfigMain()
-                self.setWindowTitle('AviaNZ - ' + self.filename)
+                self.setWindowTitle('AviaNZ - Manual Processing ' + self.filename)
                 dlg += 1
                 dlg.update()
                 self.statusLeft.setText("Ready")

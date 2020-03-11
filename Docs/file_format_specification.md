@@ -71,7 +71,7 @@ Any extra parameters to be applied for all subfilters may be provided (such as `
 
 `Filters` - JSON array of filters corresponding to each type of call (at least one element). Each is a JSON object:
 
-    { "calltype": "clust1", "TimeRange": [1.0, 10.0, 0.3, 2], "WaveletParams": {"thr": 0.5, "M": 1.5, "nodes": [35, 37, 40]}, "FreqRange": [1000, 3000], ... }
+    { "calltype": "clust1", "TimeRange": [min call length, max call length, avg syllable length, max gap between syllables], "WaveletParams": {"thr": 0.5, "M": 1.5, "nodes": [35, 37, 40]}, "FreqRange": [1000, 3000], ... }
     
 `calltype` - either user-defined call type, or automatically generated cluster ID. String. Required.  
 `TimeRange` - JSON array of length 4: `[minlen, maxlen, avgsyl, maxgap]`, respectively min and max lengths of a call, average syllable length, and maximum gap between parts of same call. Required.
