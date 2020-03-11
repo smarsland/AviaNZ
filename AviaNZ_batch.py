@@ -1268,8 +1268,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 filesuccess = self.review_all(filename, sTime)
             else:
                 # split long segments for single species review
-                self.splitLongSeg()
-                sortOrder = self.segments.orderTime()
+                self.segments.splitLongSeg()
+                _ = self.segments.orderTime()
                 print(self.segments)
                 filesuccess = self.review_single(filename, sTime)
 
@@ -1423,26 +1423,6 @@ class AviaNZ_reviewAll(QMainWindow):
         else:
             return(1)
 
-    def splitLongSeg(self, maxlen=10):
-        """
-        Splits long segments (> maxlen) evenly
-        Operates on segment data structure
-        [[1,5,a,b], [{}]] -> [[1,3,a,b], [{}], [3,5,a,b], [{}]]
-        """
-        print("there")
-        print(self.segments)
-        for seg in self.segments:
-            l = seg[1]-seg[0]
-            if l > maxlen:
-                n = int(np.ceil(l/maxlen))
-                d = l/n
-                seg[1] = seg[0]+d
-                for i in range(1,n):
-                    end = min(l, d * (i+1))
-                    segment = Segment.Segment([seg[0] + d*i, seg[0] + end, seg[2], seg[3], seg[4].copy()])
-                    self.segments.addSegment(segment)
-                    #self.segments.append([seg[0] + d*i, seg[0] + end, seg[2], seg[3], seg[4].copy()])
-        
     def mergeSplitSeg(self):
         # After segments are split, put them back if all are still there
         # Really simple -- assumes they are in order
@@ -1511,7 +1491,7 @@ class AviaNZ_reviewAll(QMainWindow):
             file.close()
 
         # reverse loop to allow deleting segments
-        for dl in reversed(todelete):
+        for dl in reversed(list(set(todelete))):
             del self.segments[dl]
 
         self.mergeSplitSeg()

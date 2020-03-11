@@ -2209,7 +2209,6 @@ class AviaNZ(QMainWindow):
         remaking - can be turned to True to reuse some existing objects
         """
         print("Segment added at %d-%d, %d-%d" % (startpoint, endpoint, self.convertYtoFreq(y1), self.convertYtoFreq(y2)))
-        print(species)
         miny = self.convertFreqtoY(self.sp.minFreqShow)
         maxy = self.convertFreqtoY(self.sp.maxFreqShow)
 
@@ -3385,22 +3384,6 @@ class AviaNZ(QMainWindow):
         self.humanClassifyNextImage1()
         self.segmentsDone += 1
 
-    def splitLongSeg(self, maxlen=10):
-        """
-        Splits long segments (> maxlen) evenly
-        Operates on segment data structure
-        [[1,5,a,b], [{}]] -> [[1,3,a,b], [{}], [3,5,a,b], [{}]]
-        """
-        for seg in self.segments:
-            l = seg[1]-seg[0]
-            if l > maxlen:
-                n = int(np.ceil(l/maxlen))
-                d = l/n
-                seg[1] = seg[0]+d
-                for i in range(1,n):
-                    end = min(l, d * (i+1))
-                    self.addSegment(seg[0] + d*i, seg[0] + end, self.convertFreqtoY(seg[2]), self.convertFreqtoY(seg[3]), seg[4].copy())
-        
     def mergeSplitSeg(self):
         # After segments are split, put them back if all are still there
         # Really simple -- assumes they are in order
@@ -3421,16 +3404,27 @@ class AviaNZ(QMainWindow):
         for dl in reversed(todelete):
             self.deleteSegment(dl)
 
+        # need to update the merged segment boxes:
         self.removeSegments(delete=False)
         self.drawfigMain(remaking=True)
 
     def humanRevDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
         """
+        # SRM: Split segments greater than 10 seconds long
+        self.segments.splitLongSeg()
+        # Review also reads some parameters from segment rectangles.
+        # So, this will re-draw the updated segment boxes:
+        self.removeSegments(delete=False)
+        self.listRectanglesa1 = []
+        self.listRectanglesa2 = []
+        self.listLabels = []
+        self.box1id = -1
+        # Need remaking=False b/c number of segment changes
+        self.drawfigMain(remaking=False)
+
         # Start by sorting the segments into increasing time order,
         # to make life easier
-        # SRM: Split segments greater than 10 seconds long
-        self.splitLongSeg()
         sortOrder = self.segments.orderTime()
         self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
         self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
@@ -3596,7 +3590,7 @@ class AviaNZ(QMainWindow):
         # reverse loop to allow deleting segments
         for dl in reversed(todelete):
             self.deleteSegment(dl)
-        
+
         self.mergeSplitSeg()
         self.saveSegments()
         self.statusLeft.setText("Ready")
