@@ -1382,11 +1382,11 @@ class PostProcess:
 
     def splitLong(self, maxlen):
         seg = Segmenter()
-        seg.splitLong3(self.segments, maxlen=maxlen)
+        self.segments = seg.splitLong3(self.segments, maxlen=maxlen)
         print('Segments after splitting long segments (>%.2f secs): %d' % (maxlen, len(self.segments)))
 
     def checkSegmentOverlap(self):
         # Used for merging call types or different segmenter outputs
         seg = Segmenter()
-        seg.checkSegmentOverlap3(self.segments)
+        self.segments = seg.checkSegmentOverlap3(self.segments)
         print("Segments produced after merging: %d" % len(self.segments))
