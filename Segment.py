@@ -1095,6 +1095,7 @@ class PostProcess:
             self.fHigh = subfilter['FreqRange'][1]
             self.minLen = subfilter['TimeRange'][0]
             self.calltype = subfilter['calltype']
+            self.syllen = subfilter['TimeRange'][2]
         else:
             self.minLen = 0.25
             self.fLow = 0
@@ -1133,6 +1134,10 @@ class PostProcess:
         for ix in reversed(range(len(self.segments))):
             seg = self.segments[ix]
             # print('\n--- Segment', seg)
+            if seg[0][1] - seg[0][0] > max(self.syllen, 1):
+                n = 5
+            else:
+                n = 1
             data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
             # find the syllables from the seg and generate features for CNN
             sp = SignalProc.SignalProc(256, 128)
@@ -1157,7 +1162,7 @@ class PostProcess:
             else:
                 # mean of best n
                 ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
-                meanprob = [np.mean(probs[ind[i][-5:], i]) for i in range(np.shape(probs)[1])]
+                meanprob = [np.mean(probs[ind[i][-n:], i]) for i in range(np.shape(probs)[1])]
                 # Option 1: accept CNN predicted call type
                 # if any(x > 0.6 for x in meanprob[:-2]):
                     # prediction = np.argmax(meanprob[:-2])
@@ -1186,6 +1191,9 @@ class PostProcess:
                     self.segments[ix][1] = probability
                 elif meanprob[ctkey] > 0.6:
                     probability = 60
+                    self.segments[ix][1] = probability
+                elif meanprob[ctkey] > 0.5:
+                    probability = 55
                     self.segments[ix][1] = probability
                 else:
                     probability = 0
