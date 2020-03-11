@@ -124,6 +124,7 @@ class Segment(list):
         deletedAll = list(set([lab["species"] for lab in self[4]])) == [species]
         # note that removeLabel will re-add a Don't Know in the end, so can't just check the final label.
         for lab in self[4]:
+            print("Wiping label", lab)
             self.removeLabel(lab["species"], lab["certainty"])
         return deletedAll
 
@@ -150,7 +151,7 @@ class Segment(list):
                 except Exception as e:
                     text = "************ WARNING ************\n"
                     text += str(e)
-                    text += "\nWhile trying to remove key"+str(species)+"-"+str(certainty) + "from"+ str(self[4])
+                    text += "\nWhile trying to remove key "+str(species)+"-"+str(certainty) + " from "+ str(self[4])
                     text += "\nWhich had keys" + str(self.keys)
                     import SupportClasses
                     msg = SupportClasses.MessagePopup("w", "ERROR - please report", text)
@@ -345,6 +346,31 @@ class SegmentList(list):
         self.sort(key=lambda s: s[0])
 
         return(sttimes)
+
+    def splitLongSeg(self, maxlen=10):
+        """
+        Splits long segments (> maxlen) evenly
+        Operates on segment data structure
+        [[1,5,a,b], [{}]] -> [[1,3,a,b], [{}], [3,5,a,b], [{}]]
+        """
+        toadd = []
+        for seg in self:
+            l = seg[1]-seg[0]
+            if l > maxlen:
+                n = int(np.ceil(l/maxlen))
+                d = l/n
+                # adjust current seg to be the first piece
+                seg[1] = seg[0]+d
+                for i in range(1,n):
+                    end = min(l, d * (i+1))
+                    segpiece = copy.deepcopy(seg)
+                    segpiece[0] = seg[0] + d*i
+                    segpiece[1] = seg[0] + end
+                    # store further pieces to be added
+                    toadd.append(segpiece)
+        # now add them, to avoid messing with the loop length above
+        for seg in toadd:
+            self.addSegment(seg)
 
     def getSummaries(self):
         """ Calculates some summary parameters relevant for populating training dialogs.
