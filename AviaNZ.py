@@ -24,7 +24,7 @@ import sys, os, json, platform, re, shutil
 from jsonschema import validate
 from shutil import copyfile
 
-from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence
+from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
 from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt5.QtMultimedia import QAudio
@@ -756,6 +756,8 @@ class AviaNZ(QMainWindow):
         self.listFiles = QListWidget()
         self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
+        fileListDelegate = SupportClasses.FileListDelegate()
+        self.listFiles.setItemDelegate(fileListDelegate)
 
         self.w_files.addWidget(QLabel('Double click to open'),row=0,col=0)
         self.w_files.addWidget(QLabel('Red names have been viewed'),row=1,col=0)
@@ -1002,7 +1004,10 @@ class AviaNZ(QMainWindow):
         self.listFiles.clearSelection()
         self.listFiles.clearFocus()
         self.listFiles.clear()
+        pixmap = QPixmap(10, 10)
+        tempsl = Segment.SegmentList()
 
+        # set the icons to be shown on the right hand side
         self.listOfFiles = QDir(self.SoundFileDir).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
         listOfDataFiles = QDir(self.SoundFileDir).entryList(['*.data'])
         for file in self.listOfFiles:
@@ -1012,8 +1017,30 @@ class AviaNZ(QMainWindow):
                 item.setText(file.fileName() + "/")
             else:
                 item.setText(file.fileName())
+            # read the data file here and determine how to color this entry
             if file.fileName()+'.data' in listOfDataFiles:
                 item.setForeground(Qt.red)
+                # Try loading the segments to get min certainty
+                try:
+                    tempsl.parseJSON(os.path.join(self.SoundFileDir, file.fileName()+'.data'))
+                    if len(tempsl)==0:
+                        mincert = 100
+                    else:
+                        mincert = min([lab["certainty"] for seg in tempsl for lab in seg[4]])
+                except Exception as e:
+                    print("Could not determine certainty for file", file.fileName())
+                    print(e)
+                    mincert = 0
+
+                if mincert == 0:
+                    pixmap.fill(self.ColourNone)
+                    item.setIcon(QIcon(pixmap))
+                elif mincert < 100:
+                    pixmap.fill(self.ColourPossibleDark)
+                    item.setIcon(QIcon(pixmap))
+                else:
+                    pixmap.fill(self.ColourNamed)
+                    item.setIcon(QIcon(pixmap))
         # mark the current file
         if fileName:
             index = self.listFiles.findItems(fileName+"\/?",Qt.MatchRegExp)
@@ -5234,6 +5261,7 @@ class AviaNZ(QMainWindow):
 
             self.segmentsToSave = False
         else:
+            self.segmentsToSave = True
             print("Nothing to save")
 
     def closeFile(self):
