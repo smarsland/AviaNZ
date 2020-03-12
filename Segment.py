@@ -558,7 +558,7 @@ class Segmenter:
         if minlength == 0:
             minlength = self.minlength
         for seg in segments:
-            if seg[0]-seg[0] >= minlength:
+            if seg[1]-seg[0] >= minlength:
                 out.append(seg)
         return out
 
