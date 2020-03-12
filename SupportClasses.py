@@ -1396,6 +1396,7 @@ class PicButton(QAbstractButton):
         self.repaint()
         pg.QtGui.QApplication.processEvents()
 
+
 class Layout(pg.LayoutWidget):
     # Layout for the clustering that allows drag and drop
     buttonDragged = QtCore.Signal(int,object)
@@ -1411,3 +1412,12 @@ class Layout(pg.LayoutWidget):
         self.buttonDragged.emit(ev.pos().y(),ev.source())
         ev.setDropAction(Qt.MoveAction)
         ev.accept()
+
+
+class FileListDelegate(QtGui.QStyledItemDelegate):
+    # Handles item appearance in a list widget -
+    # in our case, moves the icons to the right side
+    def paint(self, painter, option, index):
+        option.decorationPosition = QtGui.QStyleOptionViewItem.Right
+        super(FileListDelegate, self).paint(painter, option, index)
+
