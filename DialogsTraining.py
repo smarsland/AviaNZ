@@ -1941,7 +1941,7 @@ class TestRecWizard(QWizard):
                 # back-convert to 0/1:
                 det01post = np.zeros(detfile[2])
                 for seg in post.segments:
-                    det01post[int(seg[0]):int(seg[1])] = 1
+                    det01post[int(seg[0][0]):int(seg[0][1])] = 1
                 detected01post.extend(det01post)
 
             # now, detectedS and detectedSpost contain lists of segments before/after post
