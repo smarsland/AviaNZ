@@ -1148,18 +1148,25 @@ class HumanClassify1(QDialog):
         self.numberDone.setAlignment(QtCore.Qt.AlignCenter)
         self.numberLeft.setAlignment(QtCore.Qt.AlignCenter)
 
-        iconSize = QtCore.QSize(50, 50)
+        iconSize = QtCore.QSize(45, 45)
         self.buttonPrev = QtGui.QToolButton()
         self.buttonPrev.setIcon(self.style().standardIcon(QtGui.QStyle.SP_ArrowBack))
         self.buttonPrev.setIconSize(iconSize)
 
+        self.buttonNext = QtGui.QToolButton()
+        self.buttonNext.setIcon(QtGui.QIcon('img/question.png'))
+        self.buttonNext.setIconSize(iconSize)
+        self.buttonNext.setStyleSheet("padding: 5px 5px 5px 5px")
+
         self.correct = QtGui.QToolButton()
         self.correct.setIcon(QtGui.QIcon('img/tick.jpg'))
         self.correct.setIconSize(iconSize)
+        self.correct.setStyleSheet("padding: 5px 5px 5px 5px")
 
         self.delete = QtGui.QToolButton()
         self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
         self.delete.setIconSize(iconSize)
+        self.delete.setStyleSheet("padding: 5px 5px 5px 5px")
 
         # The list of less common birds
         self.birds3 = QListWidget(self)
@@ -1175,7 +1182,7 @@ class HumanClassify1(QDialog):
         self.birds3.itemClicked.connect(self.listBirdsClicked)
 
         # An array of check boxes and a list and a text entry box
-        # Create an array of check boxes for the most common birds 
+        # Create an array of check boxes for the most common birds
         self.birds = QButtonGroup()
         self.birdbtns = []
         if self.multipleBirds:
@@ -1243,6 +1250,7 @@ class HumanClassify1(QDialog):
         hboxNextPrev.addWidget(self.numberDone)
         hboxNextPrev.addWidget(self.buttonPrev)
         hboxNextPrev.addWidget(self.correct)
+        hboxNextPrev.addWidget(self.buttonNext)
         hboxNextPrev.addWidget(self.delete)
         hboxNextPrev.addWidget(self.numberLeft)
 

@@ -1108,12 +1108,22 @@ class PostProcess:
         '''
         featuress = []
         n = (seg[1] - seg[0]) // self.CNNwindow
+
+        sp = SignalProc.SignalProc(256, 128)
+        sp.data = data
+        sp.sampleRate = fs
+        _ = sp.spectrogram()
+
+        # spectrograms of pre-cut segs are tiny bit shorter
+        # because spectrogram does not use the last bin:
+        # it uses len(data)-window bins
+        # so when extracting pieces of a premade spec, we need to adjust:
+        specFrameSize = len(range(0, int(self.CNNwindow * fs - sp.window_width), sp.incr))
+
         for i in range(int(n)):
-            audiodata = data[int(self.CNNwindow * i * fs):int(self.CNNwindow * (i + 1) * fs)]
-            sp = SignalProc.SignalProc(256, 128)
-            sp.data = audiodata
-            sp.sampleRate = fs
-            sgRaw = sp.spectrogram(256, 128)
+            sgstart = int(self.CNNwindow * i * fs / sp.incr)
+            sgend = sgstart + specFrameSize
+            sgRaw = sp.sg[sgstart:sgend,:]
             maxg = np.max(sgRaw)
             featuress.append([np.rot90(sgRaw / maxg).tolist()])
         return featuress
@@ -1183,9 +1193,9 @@ class PostProcess:
                 #     del self.segments[ix]
 
                 # Option 2: confirm wavelet proposed call type
-                print(seg)
-                print(probs)
-                print(np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
+                # print(seg)
+                # print(probs)
+                # print(np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
                 if meanprob[ctkey] > 0.8:
                     probability = 70
                     self.segments[ix][1] = probability

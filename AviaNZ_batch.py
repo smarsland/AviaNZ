@@ -1543,6 +1543,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
         self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
+        self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyQuestion)
         success = self.humanClassifyDialog1.exec_() # 1 on clean exit
 
         if success == 0:
@@ -1708,6 +1709,14 @@ class AviaNZ_reviewAll(QMainWindow):
         if self.box1id>0:
             self.box1id -= 2
             self.humanClassifyNextImage1()
+
+    def humanClassifyQuestion(self):
+        """ Go to next image, keeping this one as it was found
+            (so any changes made to it will be discarded, and cert kept) """
+        self.humanClassifyDialog1.stopPlayback()
+        self.humanClassifyDialog1.tbox.setText('')
+        self.humanClassifyDialog1.tbox.setEnabled(False)
+        self.humanClassifyNextImage1()
 
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
