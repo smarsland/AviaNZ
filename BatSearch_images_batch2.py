@@ -621,14 +621,14 @@ def update_confusion_matrix(file, assigned_label, correct_label, confusion_matri
 
 ######################### Main ###############################################
     
-bat_dir="D:\Desktop\Documents\Work\Bats\Smaller dataset"
+bat_dir="D:\Desktop\Documents\Work\Bats\Bat recoding files by category"
 test_dir = "D:\Desktop\Documents\Work\Bats"
-test_fold= "BAT SEARCH TESTS SMALL\Test_03" #Test folder where to save all the stats
+test_fold= "BAT SEARCH TESTS\Test_02" #Test folder where to save all the stats
 os.mkdir(test_dir+ '\\' + test_fold)
 #list of directory
 dirs=os.listdir(bat_dir)
 #recover model
-modelpath= "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TEST2\BAT SEARCH TESTS\Test_Spec_30\model_5.h5"
+modelpath= "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TEST2\BAT SEARCH TESTS\Test_Spec_55\model_1.h5"
 model=load_model(modelpath)
 #inizialization confusion_matrix
 confusion_matrix_tot=np.zeros((7,6))
@@ -715,7 +715,7 @@ for dirname in dirs:
         gen_spec= count_end-count_start # numb. of generated spectrograms
         count_cliks+=gen_spec
             
-        print('number of detected clicks = ', gen_spec)
+#        print('number of detected clicks = ', gen_spec)
         
         #update stored information on test file
         filewise_output.append([file, click_label, gen_spec, 'Noise', segments_filewise_test[i][1]]) #note final label inizialized to 'Noise'
@@ -740,7 +740,7 @@ for dirname in dirs:
         #note: I am not giving target!
         if click_label=='Click':
             #we enter in the cnn only if we got a click
-            print('check data_test shape ', np.shape(data_test))
+#            print('check data_test shape ', np.shape(data_test))
             sg_test=np.ndarray(shape=(np.shape(data_test)[0],np.shape(data_test[0][0])[0], np.shape(data_test[0][0])[1]), dtype=float)
             spec_id=[]
             print('Number of file spectrograms', np.shape(data_test)[0])
@@ -758,13 +758,13 @@ for dirname in dirs:
             input_shape = (6, 512, 1)
             test_images = test_images.astype('float32')
             
-            print('Clicks classification')
+#            print('Clicks classification')
             #recovering labels
             predictions =model.predict(test_images)
             #predictions is an array #imagesX #of classes which entries are the probabilities
             #for each classes
             
-            print('Assessing file label')
+#            print('Assessing file label')
             label=File_label(predictions)
         else:
             label='Noise'
@@ -772,7 +772,7 @@ for dirname in dirs:
         filewise_output[i][3] = label
         print('File classification = ', label)
         #updating confusion matrix
-        print ('Updating confusion_matrix')
+#        print ('Updating confusion_matrix')
         confusion_matrix, comparison_annotations, missed_files, false_positives, misclassified_files= update_confusion_matrix(file, label, segments_filewise_test[i][1], confusion_matrix, comparison_annotations, missed_files, false_positives, misclassified_files)
         
     #check if there where corrupted files
@@ -780,15 +780,16 @@ for dirname in dirs:
 #              update file numer
     if len(index_corrupted_files)!=0:
         file_number-=len(index_corrupted_files)
-        for index in index_corrupted_files:
-#            in this way we will have an empty list and not the expected list and we are not screwing with indeces
-            del segments_filewise_test[index][:]
-        #update dataset  on dataset directory              
-        with open(bat_dir+ '\\' + dirname+ '\\'+ test_fold+'\\updated_dataset.data', 'w') as f2:
-            json.dump(segments_filewise_test,f2)
-         #update dataset  on test direcotory
-        with open(test_dir+ '\\' + test_fold+'\\'+dirname+'_updated_dataset.data', 'w') as f2:
-            json.dump(segments_filewise_test,f2)
+#        LATER: REVIE THIS
+#        for index in index_corrupted_files:
+##            in this way we will have an empty list and not the expected list and we are not screwing with indeces
+#            del segments_filewise_test[index][:]
+#        #update dataset  on dataset directory              
+#        with open(bat_dir+ '\\' + dirname+ '\\'+ test_fold+'\\updated_dataset.data', 'w') as f2:
+#            json.dump(segments_filewise_test,f2)
+#         #update dataset  on test direcotory
+#        with open(test_dir+ '\\' + test_fold+'\\'+dirname+'_updated_dataset.data', 'w') as f2:
+#            json.dump(segments_filewise_test,f2)
             
         #store corrupted files on dataset directory            
         with open(bat_dir+ '\\' + dirname+ '\\'+ test_fold+'\\corrupted_files.data', 'w') as f2:

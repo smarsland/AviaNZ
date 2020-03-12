@@ -592,8 +592,8 @@ def metrics(confusion_matrix, file_num):
 ##MAIN
  
 #Create train dataset for CNN from the results of clicksearch   
-train_dir = "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN3" #changed directory
-annotation_file_train= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN3\\Train_dataset_images.data"
+train_dir = "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN4" #changed directory
+annotation_file_train= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN4\\Train_dataset_images.data"
 with open(annotation_file_train) as f:
     segments_filewise_train = json.load(f)
 file_number_train=np.shape(segments_filewise_train)[0]
@@ -644,7 +644,7 @@ print("-------------------------------------------")
     
 test_dir = "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TEST2" #changed directory
 annotation_file_test= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\Test_dataset_images.data"
-test_fold= "BAT SEARCH TESTS\Test_Spec_44" #Test folder where to save all the stats
+test_fold= "BAT SEARCH TESTS\Test_Spec_54" #Test folder where to save all the stats
 os.mkdir(test_dir+ '/' + test_fold)
 with open(annotation_file_test) as f:
     segments_filewise_test = json.load(f)
@@ -760,11 +760,19 @@ samples = expand_dims(sg_train_0, np.shape(sg_train_0)[0])
 it1 = datagen1.flow(samples, batch_size=batch_size)
 # generate samples
 batch_train_0 = it1.next()
-for i in range(int(np.round((4000-np.shape(sg_train_0)[0])/batch_size))):
+for i in range(int(np.round((1500-np.shape(sg_train_0)[0])/batch_size))):
     batch = it1.next()
     batch_train_0 = np.vstack((batch_train_0, batch))
+    
+print('sg_train_0 shape', np.shape(sg_train_0))
+    
+print('batch_train_0 shape', np.shape(batch_train_0))
+#add to original ones
+batch_train_0=np.reshape(batch_train_0,np.shape(batch_train_0)[0:3])
+print('batch_train_0 shape after reshape', np.shape(batch_train_0))
+sg_train_0_ag=np.concatenate((sg_train_0,batch_train_0), axis=0)
 #label
-target_train_0=np.zeros(np.shape(batch_train_0)[0])
+target_train_0=np.zeros(np.shape(sg_train_0_ag)[0])
 
 # class_1
 samples = expand_dims(sg_train_1, np.shape(sg_train_1)[0])
@@ -772,26 +780,43 @@ samples = expand_dims(sg_train_1, np.shape(sg_train_1)[0])
 it1 = datagen1.flow(samples, batch_size=batch_size)
 # generate samples
 batch_train_1 = it1.next()
-for i in range(int(np.round((4000-np.shape(sg_train_1)[0])/batch_size))):
+for i in range(int(np.round((1500-np.shape(sg_train_1)[0])/batch_size))):
     batch = it1.next()
     batch_train_1 = np.vstack((batch_train_1, batch))
-#label
-target_train_1=np.ones(np.shape(batch_train_1)[0])
 
+print('sg_train_1 shape', np.shape(sg_train_1))
+    
+print('batch_train_1 shape', np.shape(batch_train_1))
+#add to original ones
+batch_train_1=np.reshape(batch_train_1,np.shape(batch_train_1)[0:3])
+print('batch_train_1 shape after reshape', np.shape(batch_train_1))
+#add to original ones
+sg_train_1_ag=np.concatenate((sg_train_1,batch_train_1), axis=0)
+#label
+target_train_1=np.ones(np.shape(sg_train_1_ag)[0])
 # class_2
 samples = expand_dims(sg_train_2, np.shape(sg_train_2)[0])
 # prepare iterator
 it1 = datagen1.flow(samples, batch_size=batch_size)
 # generate samples
 batch_train_2 = it1.next()
-for i in range(int(np.round((8000-np.shape(sg_train_2)[0])/batch_size))):
+for i in range(int(np.round((9000-np.shape(sg_train_2)[0])/batch_size))):
     batch = it1.next()
     batch_train_2 = np.vstack((batch_train_2, batch))
+    
+print('sg_train_2 shape', np.shape(sg_train_2))
+    
+print('batch_train_2 shape', np.shape(batch_train_2))
+#add to original ones
+batch_train_2=np.reshape(batch_train_2,np.shape(batch_train_2)[0:3])
+print('batch_train_2 shape after reshape', np.shape(batch_train_2))
+#add to original ones
+sg_train_2_ag=np.concatenate((sg_train_2,batch_train_2), axis=0)
 #label
-target_train_2=2*np.ones(np.shape(batch_train_2)[0])
+target_train_2=2*np.ones(np.shape(sg_train_2_ag)[0])
 
 #unify train dataset
-sg_train=np.concatenate((batch_train_0, batch_train_1, batch_train_2), axis=0)
+sg_train=np.concatenate((sg_train_0_ag, sg_train_1_ag, sg_train_2_ag), axis=0)
 #sg_train.extend(batch_train_1)
 #sg_train.extend(batch_train_2)
 sg_train=np.asarray(sg_train, dtype=float)
@@ -888,7 +913,7 @@ for i in range(10):
     print('Training n', i)
     history = model.fit(train_images, train_labels,
                         batch_size=32,
-                        epochs=20,
+                        epochs=35,
                         verbose=2)
         #recovering labels
     predictions =model.predict(test_images)

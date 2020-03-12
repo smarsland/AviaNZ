@@ -30,6 +30,8 @@ from tensorflow.keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Flatte
 from tensorflow.keras.optimizers import RMSprop
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.callbacks import EarlyStopping
 from numpy import expand_dims
 
 import librosa
@@ -592,8 +594,8 @@ def metrics(confusion_matrix, file_num):
 ##MAIN
  
 #Create train dataset for CNN from the results of clicksearch   
-train_dir = "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN3" #changed directory
-annotation_file_train= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN3\\Train_dataset_images.data"
+train_dir = "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN4" #changed directory
+annotation_file_train= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN4\\Train_dataset_images.data"
 with open(annotation_file_train) as f:
     segments_filewise_train = json.load(f)
 file_number_train=np.shape(segments_filewise_train)[0]
@@ -644,7 +646,7 @@ print("-------------------------------------------")
     
 test_dir = "D:\Desktop\Documents\Work\Data\Bat\BAT\CNN experiment\TEST2" #changed directory
 annotation_file_test= "D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\Test_dataset_images.data"
-test_fold= "BAT SEARCH TESTS\Test_Spec_56" #Test folder where to save all the stats
+test_fold= "BAT SEARCH TESTS\Test_Spec_58" #Test folder where to save all the stats
 os.mkdir(test_dir+ '/' + test_fold)
 with open(annotation_file_test) as f:
     segments_filewise_test = json.load(f)
@@ -931,11 +933,18 @@ for i in range(10):
     #train the model
     #I am not giving validation_data
     print('Training n', i)
+    
+    #adding early stopping
+    checkpoint = ModelCheckpoint(test_dir+ '/' + test_fold+"/weights.{epoch:02d}-{val_loss:.2f}-{val_acc:.2f}.hdf5", monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', save_freq='epoch')
+    early = EarlyStopping(monitor='val_acc', min_delta=0, patience=3, verbose=1, mode='auto')
     history = model.fit(train_images, train_labels,
-                        batch_size=32,
-                        epochs=35,
-                        verbose=2,
-                        validation_data=(validation_images, validation_labels))
+                    batch_size=32,
+                    epochs=35,
+                    verbose=2,
+                    validation_data=(validation_images, validation_labels),
+                    callbacks=[checkpoint, early],
+                    shuffle=True)
+
         #recovering labels
     predictions =model.predict(test_images)
     #predictions is an array #imagesX #of classes which entries are the probabilities
