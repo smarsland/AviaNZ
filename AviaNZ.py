@@ -3521,8 +3521,8 @@ class AviaNZ(QMainWindow):
                         mid = (seg[0]+seg[1])/2
 
                         # buffered limits in audiodata (sec) = display limits
-                        x1 = max(0, mid-5)
-                        x2 = min(self.datalengthSec, mid+5)
+                        x1 = max(self.startRead, mid-5)
+                        x2 = min(self.startRead + self.datalengthSec, mid+5)
 
                         # unbuffered limits in audiodata
                         x1nob = max(seg[0], x1)

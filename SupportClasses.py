@@ -92,7 +92,8 @@ class AxisWidget(QAbstractButton):
 
         # fixed size
         self.setSizePolicy(0,0)
-        self.setMinimumSize(60, sgsize)
+        self.setMinimumSize(65, sgsize)
+        self.fontsize = int(sgsize/15)
 
     def paintEvent(self, event):
         if type(event) is not bool:
@@ -103,25 +104,25 @@ class AxisWidget(QAbstractButton):
             painter.setPen(QPen(QColor(20,20,20), 1))
             painter.drawLine(bottomR, topR)
 
-            fontsize = 11
-            painter.setFont(QFont("Helvetica", fontsize))
+            painter.setFont(QFont("Helvetica", self.fontsize))
 
             # draw tickmarks and numbers
             currFrq = self.minFreq
+            fontOffset = 6 + 3*self.fontsize
             tickmark = QLine(bottomR, QPoint(bottomR.x()-6, bottomR.y()))
             painter.drawLine(tickmark)
-            painter.drawText(tickmark.x2()-22, tickmark.y2(), "%.1f" % currFrq)
+            painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+1, "%.1f" % currFrq)
             for ticknum in range(3):
                 currFrq += (self.maxFreq - self.minFreq)/4
                 tickmark.translate(0, -event.rect().height()//4)
                 painter.drawLine(tickmark)
-                painter.drawText(tickmark.x2()-22, tickmark.y2()+7, "%.1f" % currFrq)
+                painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+self.fontsize//2, "%.1f" % currFrq)
             tickmark.translate(0, -tickmark.y2())
             painter.drawLine(tickmark)
-            painter.drawText(tickmark.x2()-22, tickmark.y2()+15, "%.1f" % self.maxFreq)
+            painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+self.fontsize+1, "%.1f" % self.maxFreq)
 
             painter.save()
-            painter.translate(10, event.rect().height()//2)
+            painter.translate(self.fontsize//2, event.rect().height()//2)
             painter.rotate(-90)
             painter.drawText(-12, 8, "kHz")
             painter.restore()
@@ -788,7 +789,7 @@ class MessagePopup(QMessageBox):
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v2.1 (February 2020)")
+            self.setText("The AviaNZ Program, v2.1.4 (March 2020)")
             self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))

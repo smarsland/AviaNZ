@@ -1152,6 +1152,7 @@ class HumanClassify1(QDialog):
         self.buttonPrev = QtGui.QToolButton()
         self.buttonPrev.setIcon(self.style().standardIcon(QtGui.QStyle.SP_ArrowBack))
         self.buttonPrev.setIconSize(iconSize)
+        self.buttonPrev.setStyleSheet("padding: 5px 5px 5px 5px")
 
         self.buttonNext = QtGui.QToolButton()
         self.buttonNext.setIcon(QtGui.QIcon('img/question.png'))
@@ -1864,7 +1865,7 @@ class HumanClassify2(QDialog):
         self.countPages()
 
         self.flowAxes = pg.LayoutWidget()
-        self.flowAxes.setMinimumSize(60, self.specV+20)
+        self.flowAxes.setMinimumSize(65, self.specV+20)
         self.flowLayout.setMinimumSize(self.specH+20, self.specV+20)
         self.flowAxes.setSizePolicy(0, 5)
         hboxFlow = QHBoxLayout()
