@@ -3174,7 +3174,6 @@ class AviaNZ(QMainWindow):
         self.saveSegments()
         # Store the current page to return to
         self.currentPage = self.currentFileSection
-        self.segmentsDone = 0
 
         # Check there are segments to show on this page
         if len(self.segments)>0:
@@ -3212,6 +3211,7 @@ class AviaNZ(QMainWindow):
             #self.humanClassifyDialog1.activateWindow()
             #self.humanClassifyDialog1.close.clicked.connect(self.humanClassifyClose1)
             self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
+            self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyQuestion)
             self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
             self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
             self.humanClassifyDialog1.exec_()
@@ -3299,13 +3299,20 @@ class AviaNZ(QMainWindow):
             self.selectSegment(nextseg)
             self.humanClassifyNextImage1()
 
+    def humanClassifyQuestion(self):
+        """ Go to next image, keeping this one as it was found
+            (so any changes made to it will be discarded, and cert kept) """
+        self.humanClassifyDialog1.stopPlayback()
+        self.humanClassifyDialog1.tbox.setText('')
+        self.humanClassifyDialog1.tbox.setEnabled(False)
+        self.humanClassifyNextImage1()
+
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
         currSeg = self.segments[self.box1id]
 
         self.humanClassifyDialog1.stopPlayback()
         self.segmentsToSave = True
-        self.segmentsDone += 1
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
         # returned label is just a list of species names.
 
@@ -3382,7 +3389,6 @@ class AviaNZ(QMainWindow):
         if nextseg >= 0:
             self.selectSegment(nextseg)
         self.humanClassifyNextImage1()
-        self.segmentsDone += 1
 
     def mergeSplitSeg(self):
         # After segments are split, put them back if all are still there
