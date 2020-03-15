@@ -397,7 +397,8 @@ class SplitData(QMainWindow):
         all = []
         for i in range(int(maxtime-1) // cutlen + 1):
             onelist = Segment.SegmentList()
-            onelist.metadata = segs.metadata
+            onelist.metadata = segs.metadata.copy()
+            onelist.metadata["Duration"] = min(self.cutLen, maxtime-i*self.cutLen)
             all.append(onelist)
 
         # separate segments into output files and adjust segment timestamps
