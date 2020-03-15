@@ -756,11 +756,9 @@ class AviaNZ(QMainWindow):
         self.listFiles = QListWidget()
         self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
-        fileListDelegate = SupportClasses.FileListDelegate()
-        self.listFiles.setItemDelegate(fileListDelegate)
 
         self.w_files.addWidget(QLabel('Double click to open'),row=0,col=0)
-        self.w_files.addWidget(QLabel('Red names have been viewed'),row=1,col=0)
+        self.w_files.addWidget(QLabel('Icon marks annotation certainty'),row=1,col=0)
         self.w_files.addWidget(self.listFiles,row=2,colspan=2)
 
         # The context menu (drops down on mouse click) to select birds
@@ -1017,29 +1015,33 @@ class AviaNZ(QMainWindow):
                 item.setText(file.fileName() + "/")
             else:
                 item.setText(file.fileName())
-            # read the data file here and determine how to color this entry
-            if file.fileName()+'.data' in listOfDataFiles:
-                item.setForeground(Qt.red)
-                # Try loading the segments to get min certainty
-                try:
-                    tempsl.parseJSON(os.path.join(self.SoundFileDir, file.fileName()+'.data'))
-                    if len(tempsl)==0:
-                        mincert = 100
-                    else:
-                        mincert = min([lab["certainty"] for seg in tempsl for lab in seg[4]])
-                except Exception as e:
-                    print("Could not determine certainty for file", file.fileName())
-                    print(e)
-                    mincert = 0
+                # read the data file here and determine how to color this entry
+                if file.fileName()+'.data' in listOfDataFiles:
+                    # item.setForeground(Qt.red)
+                    # Try loading the segments to get min certainty
+                    try:
+                        tempsl.parseJSON(os.path.join(self.SoundFileDir, file.fileName()+'.data'), silent=True)
+                        if len(tempsl)==0:
+                            mincert = 100
+                        else:
+                            mincert = min([lab["certainty"] for seg in tempsl for lab in seg[4]])
+                    except Exception as e:
+                        print("Could not determine certainty for file", file.fileName())
+                        print(e)
+                        mincert = 0
 
-                if mincert == 0:
-                    pixmap.fill(self.ColourNone)
-                    item.setIcon(QIcon(pixmap))
-                elif mincert < 100:
-                    pixmap.fill(self.ColourPossibleDark)
-                    item.setIcon(QIcon(pixmap))
+                    if mincert == 0:
+                        pixmap.fill(self.ColourNone)
+                        item.setIcon(QIcon(pixmap))
+                    elif mincert < 100:
+                        pixmap.fill(self.ColourPossibleDark)
+                        item.setIcon(QIcon(pixmap))
+                    else:
+                        pixmap.fill(self.ColourNamed)
+                        item.setIcon(QIcon(pixmap))
                 else:
-                    pixmap.fill(self.ColourNamed)
+                    # it is a file, but no .data
+                    pixmap.fill(QtGui.QColor(255,255,255,0))
                     item.setIcon(QIcon(pixmap))
         # mark the current file
         if fileName:

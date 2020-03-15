@@ -184,7 +184,7 @@ class SegmentList(list):
         and retrieving the right Segment from this list.
     """
 
-    def parseJSON(self, file, duration=0):
+    def parseJSON(self, file, duration=0, silent=False):
         """ Takes in a filename and reads metadata to self.metadata,
             and other segments to just the main body of self.
             If wav file is loaded, pass the true duration in s to check
@@ -202,7 +202,8 @@ class SegmentList(list):
         # first segment stores metadata
         self.metadata = dict()
         if isinstance(annots[0], list) and annots[0][0] == -1:
-            print("old format metadata detected")
+            if not silent:
+                print("old format metadata detected")
             self.metadata = {"Operator": annots[0][2], "Reviewer": annots[0][3]}
             # when file is loaded, true duration can be passed. Otherwise,
             # some old files have duration in samples, so need a rough check
@@ -245,7 +246,7 @@ class SegmentList(list):
                 print("ERROR: annotation in wrong format:", annot)
                 return
 
-            # This could be turned on to skip segments outside Duration bounds, 
+            # This could be turned on to skip segments outside Duration bounds,
             # but may result in deleting actually useful annotations if Duration was wrong
             # if annot[0] > self.metadata["Duration"] and annot[1] > self.metadata["Duration"]:
             #     print("Warning: ignoring segment outside set duration", annot)
@@ -283,7 +284,8 @@ class SegmentList(list):
                 annot[4] = listofdicts
 
             self.addSegment(annot)
-        print("%d segments read" % len(self))
+        if not silent:
+            print("%d segments read" % len(self))
 
     def addSegment(self, segment):
         """ Just a cleaner wrapper to allow adding segments quicker.

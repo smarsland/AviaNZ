@@ -92,8 +92,8 @@ class AxisWidget(QAbstractButton):
 
         # fixed size
         self.setSizePolicy(0,0)
-        self.setMinimumSize(65, sgsize)
-        self.fontsize = int(sgsize/15)
+        self.setMinimumSize(70, sgsize)
+        self.fontsize = min(max(int(math.sqrt(sgsize)*0.7), 8), 15)
 
     def paintEvent(self, event):
         if type(event) is not bool:
@@ -108,7 +108,7 @@ class AxisWidget(QAbstractButton):
 
             # draw tickmarks and numbers
             currFrq = self.minFreq
-            fontOffset = 6 + 3*self.fontsize
+            fontOffset = 5 + 2*self.fontsize
             tickmark = QLine(bottomR, QPoint(bottomR.x()-6, bottomR.y()))
             painter.drawLine(tickmark)
             painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+1, "%.1f" % currFrq)
@@ -1284,14 +1284,16 @@ class PicButton(QAbstractButton):
             self.im1 = im1.scaled(200, 150)
         else:
             self.specReductionFact = im1.size().width()/500
-            self.im1 = im1.scaled(500, im1.size().height())
+            # use original height if it is not extreme
+            prefheight = max(192, min(im1.size().height(), 512))
+            self.im1 = im1.scaled(500, prefheight)
 
         # draw lines
         if not self.cluster:
             unbufStartAdj = self.unbufStart / self.specReductionFact
             unbufStopAdj = self.unbufStop / self.specReductionFact
-            self.line1 = QLineF(unbufStartAdj, 0, unbufStartAdj, im1.size().height())
-            self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, im1.size().height())
+            self.line1 = QLineF(unbufStartAdj, 0, unbufStartAdj, self.im1.size().height())
+            self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, self.im1.size().height())
 
     def paintEvent(self, event):
         if type(event) is not bool:
@@ -1413,12 +1415,4 @@ class Layout(pg.LayoutWidget):
         self.buttonDragged.emit(ev.pos().y(),ev.source())
         ev.setDropAction(Qt.MoveAction)
         ev.accept()
-
-
-class FileListDelegate(QtGui.QStyledItemDelegate):
-    # Handles item appearance in a list widget -
-    # in our case, moves the icons to the right side
-    def paint(self, painter, option, index):
-        option.decorationPosition = QtGui.QStyleOptionViewItem.Right
-        super(FileListDelegate, self).paint(painter, option, index)
 
