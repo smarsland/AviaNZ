@@ -6,7 +6,9 @@ All notable changes to AviaNZ program will be documented in this file.
 
 - Recogniser testing summary
 - Storing zoom levels between All Species review runs
+- Better zoom and scaling in review dialogs
 - Faster and safer Excel export
+- Splitter outputs duration of existing .data files properly
 
 ### Added
 
@@ -16,10 +18,12 @@ All notable changes to AviaNZ program will be documented in this file.
 - Separate excel export in Batch Review
 - Intermittent sampling
 - Single Species review now has a frequency axis
+- All Species review now has a "Question" button to mark segments that need editing
 
 ### Changed
 
 - Human review made faster by loading the segments rather than reading whole file
+- Lots of visual updates
 
 
 ## [2.1] - 2020-02-12

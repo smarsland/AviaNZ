@@ -1099,11 +1099,15 @@ class HumanClassify1(QDialog):
         # exec_ forces the cursor into waiting
 
         # Set up the plot window, then the right and wrong buttons, and a close button
+        # wPlot: white area around the spectrogram
         self.wPlot = pg.GraphicsLayoutWidget()
         self.pPlot = self.wPlot.addViewBox(enableMouse=False, row=0, col=1)
         self.plot = pg.ImageItem()
         self.pPlot.addItem(self.plot)
-        self.plotAspect = 0.2
+        # Fix the aspect ratio to a preset number. Initial view box
+        # will be about 2:1, so aspect ratio of 2 means
+        # that a square spectrogram (e.g. 512x512) will fill it
+        self.plotAspect = 2
         self.pPlot.setAspectLocked(ratio=self.plotAspect)
         self.pPlot.disableAutoRange()
         self.pPlot.setLimits(xMin=0, yMin=-5)
@@ -1150,22 +1154,22 @@ class HumanClassify1(QDialog):
 
         iconSize = QtCore.QSize(45, 45)
         self.buttonPrev = QtGui.QToolButton()
-        self.buttonPrev.setIcon(self.style().standardIcon(QtGui.QStyle.SP_ArrowBack))
+        self.buttonPrev.setIcon(QtGui.QIcon('img/left2.png'))
         self.buttonPrev.setIconSize(iconSize)
         self.buttonPrev.setStyleSheet("padding: 5px 5px 5px 5px")
 
         self.buttonNext = QtGui.QToolButton()
-        self.buttonNext.setIcon(QtGui.QIcon('img/question.png'))
+        self.buttonNext.setIcon(QtGui.QIcon('img/questionL.png'))
         self.buttonNext.setIconSize(iconSize)
         self.buttonNext.setStyleSheet("padding: 5px 5px 5px 5px")
 
         self.correct = QtGui.QToolButton()
-        self.correct.setIcon(QtGui.QIcon('img/tick.jpg'))
+        self.correct.setIcon(QtGui.QIcon('img/check-mark2.png'))
         self.correct.setIconSize(iconSize)
         self.correct.setStyleSheet("padding: 5px 5px 5px 5px")
 
         self.delete = QtGui.QToolButton()
-        self.delete.setIcon(QtGui.QIcon('img/delete.jpg'))
+        self.delete.setIcon(QtGui.QIcon('img/deleteL.png'))
         self.delete.setIconSize(iconSize)
         self.delete.setStyleSheet("padding: 5px 5px 5px 5px")
 
@@ -1271,7 +1275,7 @@ class HumanClassify1(QDialog):
         self.volSlider.setValue(50)
         self.volIcon = QLabel()
         self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
 
         # Brightness and contrast sliders. Need to pass true (config) values of these as args
         self.brightnessSlider = QSlider(Qt.Horizontal)
@@ -1292,10 +1296,16 @@ class HumanClassify1(QDialog):
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
         # zoom buttons
-        self.zoomInBtn = QPushButton("+")
-        self.zoomOutBtn = QPushButton("-")
+        self.zoomInBtn = QtGui.QToolButton()
+        self.zoomOutBtn = QtGui.QToolButton()
+        self.zoomInBtn.setIcon(QtGui.QIcon('img/zoom-in.png'))
+        self.zoomOutBtn.setIcon(QtGui.QIcon('img/search.png'))
+        self.zoomInBtn.setIconSize(QtCore.QSize(24, 24))
+        self.zoomOutBtn.setIconSize(QtCore.QSize(24, 24))
         self.zoomInBtn.clicked.connect(self.zoomIn)
         self.zoomOutBtn.clicked.connect(self.zoomOut)
+        self.zoomInBtn.setStyleSheet("padding: 4px 4px 4px 4px")
+        self.zoomOutBtn.setStyleSheet("padding: 4px 4px 4px 4px")
 
         vboxSpecContr = pg.LayoutWidget()
         vboxSpecContr.addWidget(self.speciesTop, row=0, col=0, colspan=2)
@@ -1304,21 +1314,33 @@ class HumanClassify1(QDialog):
         vboxSpecContr.addWidget(self.playButton, row=2, col=0)
         vboxSpecContr.addWidget(self.volIcon, row=2, col=1)
         vboxSpecContr.addWidget(self.volSlider, row=2, col=2, colspan=2)
-        labelBr = QLabel("Bright.")
-        labelBr.setAlignment(QtCore.Qt.AlignRight)
+        labelBr = QLabel()
+        labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
+        labelBr.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         vboxSpecContr.addWidget(labelBr, row=2, col=4)
         vboxSpecContr.addWidget(self.brightnessSlider, row=2, col=5, colspan=2)
-        labelCo = QLabel("Contr.")
-        labelCo.setAlignment(QtCore.Qt.AlignRight)
+        labelCo = QLabel()
+        labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
+        labelCo.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         vboxSpecContr.addWidget(labelCo, row=2, col=7)
         vboxSpecContr.addWidget(self.contrastSlider, row=2, col=8, colspan=2)
-        vboxSpecContr.addWidget(self.zoomInBtn, row=2, col=10)
-        vboxSpecContr.addWidget(self.zoomOutBtn, row=2, col=11)
+        #spacer = QSpacerItem(1,1)
+        #vboxSpecContr.layout.addWidget(spacer, row=2, col=10)
+        vboxSpecContr.addWidget(self.zoomInBtn, row=2, col=11)
+        vboxSpecContr.addWidget(self.zoomOutBtn, row=2, col=12)
 
+        vboxSpecContr.layout.setColumnStretch(1, 1)
+        vboxSpecContr.layout.setColumnStretch(2, 2)
+        vboxSpecContr.layout.setColumnStretch(4, 1)
+        vboxSpecContr.layout.setColumnStretch(5, 2)
+        vboxSpecContr.layout.setColumnStretch(7, 1)
+        vboxSpecContr.layout.setColumnStretch(8, 2)
+        vboxSpecContr.layout.setColumnStretch(10, 1)
 
         vboxFull = QVBoxLayout()
         vboxFull.addWidget(vboxSpecContr)
         vboxFull.addLayout(hboxBirds)
+        vboxFull.addSpacing(7)
         vboxFull.addLayout(hboxNextPrev)
 
         self.setLayout(vboxFull)
@@ -1354,10 +1376,12 @@ class HumanClassify1(QDialog):
             # QApplication.processEvents()
 
     def zoomIn(self):
+        # resize the ViewBox with spec, lines, axis
         self.plotAspect = self.plotAspect * 1.5
         self.pPlot.setAspectLocked(ratio=self.plotAspect)
         xyratio = np.shape(self.sg)
         xyratio = xyratio[0] / xyratio[1]
+        # resize the white area around the spectrogram if it's under 500
         self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
         self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
 
@@ -1771,7 +1795,8 @@ class HumanClassify2(QDialog):
         self.volSlider.setValue(50)
         self.volIcon = QLabel()
         self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+        self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
+        #self.volIcon.setStyleSheet("padding: 0px 1px 0px 8px")
 
         # Brightness and contrast sliders - need to pass true (config) values of these as args
         self.brightnessSlider = QSlider(Qt.Horizontal)
@@ -1794,16 +1819,31 @@ class HumanClassify2(QDialog):
         hboxSpecContr = QHBoxLayout()
         hboxSpecContr.addWidget(self.volIcon)
         hboxSpecContr.addWidget(self.volSlider)
-        labelBr = QLabel("Bright.")
+        labelBr = QLabel()
+        labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
+        labelBr.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        #labelBr.setStyleSheet("padding: 0px 1px 0px 12px")
         hboxSpecContr.addWidget(labelBr)
         hboxSpecContr.addWidget(self.brightnessSlider)
-        labelCo = QLabel("Contr.")
+        labelCo = QLabel()
+        labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
+        labelCo.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        #labelCo.setStyleSheet("padding: 0px 1px 0px 12px")
         hboxSpecContr.addWidget(labelCo)
         hboxSpecContr.addWidget(self.contrastSlider)
+
+        hboxSpecContr.setStretch(0, 1)
+        hboxSpecContr.setStretch(1, 2)
+        hboxSpecContr.setStretch(2, 1)
+        hboxSpecContr.setStretch(3, 2)
+        hboxSpecContr.setStretch(4, 1)
+        hboxSpecContr.setStretch(5, 2)
+        hboxSpecContr.addStretch(3)
 
         label1 = QLabel('Click on the images that are incorrectly labelled.')
         label1.setFont(QtGui.QFont('SansSerif', 10))
         species = QLabel(label)
+        species.setStyleSheet("padding: 2px 0px 5px 0px")
         font = QtGui.QFont('SansSerif', 12)
         font.setBold(True)
         species.setFont(font)
@@ -1865,7 +1905,7 @@ class HumanClassify2(QDialog):
         self.countPages()
 
         self.flowAxes = pg.LayoutWidget()
-        self.flowAxes.setMinimumSize(65, self.specV+20)
+        self.flowAxes.setMinimumSize(70, self.specV+20)
         self.flowLayout.setMinimumSize(self.specH+20, self.specV+20)
         self.flowAxes.setSizePolicy(0, 5)
         hboxFlow = QHBoxLayout()
@@ -1967,7 +2007,8 @@ class HumanClassify2(QDialog):
         maxFreq = exampleSP.maxFreqShow
         if maxFreq==0:
             maxFreq = exampleSP.sampleRate // 2
-        SgSize = np.shape(exampleSP.sg)[1]  # in spec units
+        #SgSize = np.shape(exampleSP.sg)[1]  # in spec units
+        SgSize = self.specV
 
         butNum = 0
         for row in range(self.numPicsV):
