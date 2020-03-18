@@ -208,7 +208,7 @@ class BuildRecAdvWizard(QWizard):
                 self.warnLabel.setText("Warning: unusual sampling rate selected, make sure it is intended.")
             else:
                 self.warnLabel.setText("")
-            self.params.setText("Species: %s\nTraining data: %s\nSampling rate: %d\n" % (self.field("species"), self.field("trainDir"), fs))
+            self.params.setText("Species: %s\nTraining data: %s\nSampling rate: %d Hz\n" % (self.field("species"), self.field("trainDir"), fs))
 
     # page 3 - calculate and adjust clusters
     class WPageCluster(QWizardPage):

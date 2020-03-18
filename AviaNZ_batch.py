@@ -43,6 +43,7 @@ import colourMaps
 
 import webbrowser
 import json, time
+import copy
 
 
 class AviaNZ_batchProcess(QMainWindow):
@@ -1448,6 +1449,50 @@ class AviaNZ_reviewAll(QMainWindow):
 
         print(self.segments)
 
+    def species2clean(self, species):
+        """ Returns True when the species name got a special character"""
+        search = re.compile(r'[^A-Za-z0-9()-]').search
+        return bool(search(species))
+
+    def cleanSpecies(self):
+        """ Returns cleaned species name"""
+        return re.sub(r'[^A-Za-z0-9()-]', "_", self.species)
+
+    def saveCorrectJSON(self, file, outputErrors, mode, reviewer=""):
+        """ Returns 1 on succesful save.
+        Mode 1. Any Species Review saves .correction. Format [meta, [seg1, newlabel1], [seg2, newlabel2],...]
+        Mode 2. Single Species Review saves .correction_species. Format [meta, seg1, seg2,...]"""
+        if reviewer != "":
+            self.segments.metadata["Reviewer"] = reviewer
+        annots = [self.segments.metadata]
+
+        if os.path.isfile(file):
+            try:
+                f = open(file, 'r')
+                annotsold = json.load(f)
+                f.close()
+                for elem in annotsold:
+                    if not isinstance(elem, dict):
+                        annots.append(elem)
+            except Exception as e:
+                print("ERROR: file %s failed to load with error:" % file)
+                print(e)
+                return
+
+        if mode == 1:
+            if outputErrors[0] not in annots:
+                annots.append(outputErrors[0])
+        elif mode == 2:
+            for seg in outputErrors:
+                if seg not in annots:
+                    annots.append(seg)
+
+        file = open(file, 'w')
+        json.dump(annots, file)
+        file.write("\n")
+        file.close()
+        return 1
+
     def humanClassifyClose2(self):
         self.segmentsToSave = True
         todelete = []
@@ -1459,7 +1504,8 @@ class AviaNZ_reviewAll(QMainWindow):
             currSeg = self.segments[btn.index]
             # btn.index carries the index of segment shown on btn
             if btn.mark=="red":
-                outputErrors.append(currSeg)
+                cSeg = copy.deepcopy(currSeg)
+                outputErrors.append(cSeg)
                 todelete.append(btn.index)
                 # remove all labels for the current species
                 wipedAll = currSeg.wipeSpecies(self.species)
@@ -1490,10 +1536,13 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # Save the errors in a file
         if self.config['saveCorrections'] and len(outputErrors)>0:
-            speciesClean = re.sub(r'\W', "_", self.species)
-            file = open(self.filename + '.corrections_' + speciesClean, 'a')
-            json.dump(outputErrors, file,indent=1)
-            file.close()
+            if self.species2clean(self.species):
+                speciesClean = self.cleanSpecies()
+            else:
+                speciesClean = self.species
+            cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections_' + speciesClean), outputErrors, mode=2, reviewer=self.reviewer)
+            if cleanexit != 1:
+                print("Warning: could not save correction file!")
 
         # reverse loop to allow deleting segments
         for dl in reversed(list(set(todelete))):
@@ -1745,10 +1794,10 @@ class AviaNZ_reviewAll(QMainWindow):
         if label != [lab["species"] for lab in currSeg[4]]:
             if self.config['saveCorrections']:
                 # Save the correction
-                outputError = [currSeg, label]
-                file = open(self.filename + '.corrections', 'a')
-                json.dump(outputError, file, indent=1)
-                file.close()
+                outputError = [[currSeg, label]]
+                cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1, reviewer=self.reviewer)
+                if cleanexit != 1:
+                    print("Warning: could not save correction file!")
 
             # Create new segment label, assigning certainty 100 for each species:
             newlabel = []
