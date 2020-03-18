@@ -2140,6 +2140,8 @@ class AviaNZ(QMainWindow):
 
     def addRegularSegments(self):
         """ Perform the Hartley bodge: add 10s segments every minute. """
+        if self.box1id>-1:
+            self.deselectSegment(self.box1id)
         segtimes = [(seg[0], seg[1]) for seg in self.segments]
         i = 0
         print("Adding segments (%d s every %d s)" %(self.config['protocolSize'], self.config['protocolInterval']))
@@ -3235,6 +3237,8 @@ class AviaNZ(QMainWindow):
             self.box1id = -1
             if hasattr(self, 'humanClassifyDialogSize'):
                 self.humanClassifyDialog1.resize(self.humanClassifyDialogSize)
+                self.humanClassifyDialog1.plotAspect = self.dialogPlotAspect
+                self.humanClassifyDialog1.pPlot.setAspectLocked(ratio=self.dialogPlotAspect)
 
             self.humanClassifyNextImage1()
             #self.humanClassifyDialog1.activateWindow()
@@ -3250,6 +3254,7 @@ class AviaNZ(QMainWindow):
     def humanClassifyClose1(self):
         """ Listener for the human verification dialog. """
         self.humanClassifyDialogSize = self.humanClassifyDialog1.size()
+        self.dialogPlotAspect = self.humanClassifyDialog1.plotAspect
         self.humanClassifyDialog1.done(1)
         self.deselectSegment(self.box1id)
         self.box1id = -1
@@ -3257,6 +3262,7 @@ class AviaNZ(QMainWindow):
     def humanClassifyNextImage1(self):
         """ Get the next image """
         self.humanClassifyDialogSize = self.humanClassifyDialog1.size()
+        self.dialogPlotAspect = self.humanClassifyDialog1.plotAspect
         # identify which segment should be shown next or close, if no found
         # (Using listRectangles because it contains all segments from the current page)
         nextseg = self.box1id + 1

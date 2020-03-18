@@ -4,7 +4,7 @@
 # Splits wavs, and AviaNZ-format annotation files.
 
 #### CLEAN IMPORTS
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox, QStyle
 from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtGui import QIcon, QPixmap
 import sys
@@ -50,8 +50,9 @@ class SplitData(QMainWindow):
         label = QLabel("Select input folder with files to split:")
         self.w_browse = QPushButton(" Browse Folder")
         self.w_browse.setToolTip("Warning: files inside subfolders will not be processed!")
-        self.w_browse.setMinimumSize(180, 40)
-        self.w_browse.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.w_browse.setMinimumSize(170, 40)
+        self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        self.w_browse.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browse.clicked.connect(self.browse)
         self.w_browse.setSizePolicy(QSizePolicy(1,1))
 
@@ -66,8 +67,9 @@ class SplitData(QMainWindow):
         ## output
         labelO = QLabel("Select folder for storing split output:")
         self.w_browseO = QPushButton(" Browse Folder")
-        self.w_browseO.setMinimumSize(180, 40)
-        self.w_browseO.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.w_browseO.setMinimumSize(170, 40)
+        self.w_browseO.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        self.w_browseO.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browseO.clicked.connect(self.browseO)
         self.w_browseO.setSizePolicy(QSizePolicy(1,1))
 
@@ -100,7 +102,7 @@ class SplitData(QMainWindow):
 
         self.splitBut = QPushButton(" &Split!")
         self.splitBut.setFixedHeight(40)
-        self.splitBut.setStyleSheet('QPushButton {background-color: #2F79B5; font-weight: bold; font-size:14px} QPushButton:disabled {background-color :#B3BCC4}')
+        self.splitBut.setStyleSheet('QPushButton {background-color: #95b5ee; font-weight: bold; font-size:14px} QPushButton:disabled {background-color :#B3BCC4}')
         self.splitBut.clicked.connect(self.split)
         self.splitBut.setEnabled(False)
 
