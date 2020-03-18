@@ -106,4 +106,25 @@ Thus, a full filter file may look like this:
 ## CNN files (.JSON/.h5/.hdf5)
 
 A CNN model has two files: model architecture is stored in a JSON file and the weights are stored in a Hierarchical Data Format 5 file (.h5 or .hdf5).
-All the CNN models are stored in the user configdir/CNN and referred in the corresponding Filter files.
+All the CNN models are stored in the user configdir/Filters and referred in the corresponding Filter files.
+
+## Correction files (.corrections/ .corrections_species)
+
+All Species Review mode generates .corrections:
+
+A JSON array where the first element stores metadata, and each remaining element corresponds to a segment changed by reviewer:
+
+    [ Meta, [seg, newlabel], [seg, newlabel], [seg, newlabel] ... ]
+
+`Meta`: a JSON object (key-value pairs) containing any metadata, same as in .data
+`seg`: Each segment seg is a JSON array containing five elements, same as in .data
+`newlabel`: New label/s assigned to the segment by the reviewer
+
+Single Species Review mode generates .corrections_species:
+
+A JSON array where the first element stores metadata, and each remaining element corresponds to a segment deleted by reviewer:
+
+    [ Meta, seg, seg, seg ... ]
+
+`Meta`: a JSON object (key-value pairs) containing any metadata, same as in .data
+`seg`: Each segment seg is a JSON array containing five elements, same as in .data
