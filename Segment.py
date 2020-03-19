@@ -349,14 +349,17 @@ class SegmentList(list):
 
         return(sttimes)
 
-    def splitLongSeg(self, maxlen=10):
+    def splitLongSeg(self, maxlen=10, species=None):
         """
         Splits long segments (> maxlen) evenly
         Operates on segment data structure
-        [[1,5,a,b], [{}]] -> [[1,3,a,b], [{}], [3,5,a,b], [{}]]
+        [1,5,a,b, [{}]] -> [1,3,a,b, [{}]], [3,5,a,b, [{}]]
         """
         toadd = []
         for seg in self:
+            # if species is given, only split segments where it is present:
+            if species is not None and species not in [lab["species"] for lab in seg[4]]:
+                continue
             l = seg[1]-seg[0]
             if l > maxlen:
                 n = int(np.ceil(l/maxlen))

@@ -3457,7 +3457,7 @@ class AviaNZ(QMainWindow):
 
     def cleanSpecies(self):
         """ Returns cleaned species name"""
-        return re.sub(r'[^A-Za-z0-9()-]', "_", self.species)
+        return re.sub(r'[^A-Za-z0-9()-]', "_", self.revLabel)
 
     def saveCorrectJSON(self, file, outputErrors, mode, reviewer=""):
         """ Returns 1 on succesful save.
@@ -3497,71 +3497,70 @@ class AviaNZ(QMainWindow):
     def humanRevDialog2(self):
         """ Create the dialog that shows sets of calls to the user for verification.
         """
-        # SRM: Split segments greater than 10 seconds long
-        self.segments.splitLongSeg()
-        # Review also reads some parameters from segment rectangles.
-        # So, this will re-draw the updated segment boxes:
-        self.removeSegments(delete=False)
-        self.listRectanglesa1 = []
-        self.listRectanglesa2 = []
-        self.listLabels = []
-        self.box1id = -1
-        # Need remaking=False b/c number of segment changes
-        self.drawfigMain(remaking=False)
-
-        # Start by sorting the segments into increasing time order,
-        # to make life easier
-        sortOrder = self.segments.orderTime()
-        self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
-        self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
-        self.listLabels = [self.listLabels[i] for i in sortOrder]
-
-        self.saveSegments()
-
         # First, determine which segments will be shown (i.e. visible in current page):
-        segsInPage = []
-        for s in self.segments:
-            # skip segments entirely outside of the current page
-            if s[1] < self.startRead or s[0] > self.startRead+self.lenRead:
-                pass
-            else:
-                segsInPage.append(s)
+        possibleSpecies = set()
+        for seg in self.segments:
+            # Only show segments which are at least partly visible in this page:
+            # (might result in some shown twice, but otherwse difficult to ensure
+            # all segments are shown, given the 10 s piece split):
+            if seg[1] < self.startRead or seg[0] > self.startRead+self.datalengthSec:
+                continue
 
-        if len(segsInPage)==0:
-            msg = SupportClasses.MessagePopup("w", "No segments", "No segments to check")
-            msg.exec_()
-            return
-        self.statusLeft.setText("Checking...")
+            spInSeg = set([lab["species"] for lab in seg[4]])
 
-        # Get all labels into a single list
-        names = [sp["species"] for seg in segsInPage for sp in seg[4]]
+            # can't use single-species review on "Don't Know" segments
+            spInSeg.discard("Don't Know")
+
+            # see if there were any other species
+            if len(spInSeg)==0:
+                continue
+
+            # add to possible species
+            possibleSpecies.update(spInSeg)
 
         # TODO: at the moment, we're showing all "yellow" and "green" segments together.
 
-        # Make them unique
-        names = list(set(names))
-        try:
-            # can't use single-species review on "Don't Know" segments
-            names.remove("Don't Know")
-        except Exception:
-            pass
-        if len(names) == 0:
+        if len(possibleSpecies)==0:
             msg = SupportClasses.MessagePopup("w", "No segments", "No segments to check")
             msg.exec_()
             return
 
+        self.statusLeft.setText("Checking...")
         # mini dialog to select species:
-        self.humanClassifyDialog2a = Dialogs.HumanClassify2a(names)
+        self.humanClassifyDialog2a = Dialogs.HumanClassify2a(possibleSpecies)
 
         if self.humanClassifyDialog2a.exec_() == 1:
             self.revLabel = self.humanClassifyDialog2a.getValues()
+
+            # SRM: Split segments greater than 10 seconds long
+            self.segments.splitLongSeg(species=self.revLabel)
+            # Review also reads some parameters from segment rectangles.
+            # So, this will re-draw the updated segment boxes:
+            self.removeSegments(delete=False)
+            self.listRectanglesa1 = []
+            self.listRectanglesa2 = []
+            self.listLabels = []
+            self.box1id = -1
+            # Need remaking=False b/c number of segment changes
+            self.drawfigMain(remaking=False)
+
+            # Start by sorting the segments into increasing time order,
+            # to make life easier
+            sortOrder = self.segments.orderTime()
+            self.listRectanglesa1 = [self.listRectanglesa1[i] for i in sortOrder]
+            self.listRectanglesa2 = [self.listRectanglesa2[i] for i in sortOrder]
+            self.listLabels = [self.listLabels[i] for i in sortOrder]
+
+            self.saveSegments()
+
             sps = []
             indices2show = self.segments.getSpecies(self.revLabel)
-            # only show segments that have midpoint in this page
-            # (to ensure all are shown once)
+            # Only show segments which are at least partly visible in this page:
+            # (might result in some shown twice, but otherwse difficult to ensure
+            # all segments are shown, given the 10 s piece split):
             for ix in reversed(indices2show):
-                mid = (self.segments[ix][0] + self.segments[ix][1])/2
-                if mid > self.startRead + self.datalengthSec or mid < self.startRead:
+                seg = self.segments[ix]
+                if seg[0] > self.startRead + self.datalengthSec or seg[1] < self.startRead:
                     indices2show.remove(ix)
 
             # re-read the wav and generate spectrograms as needed

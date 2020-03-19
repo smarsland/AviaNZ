@@ -1272,7 +1272,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 filesuccess = self.review_all(filename, sTime)
             else:
                 # split long segments for single species review
-                self.segments.splitLongSeg()
+                self.segments.splitLongSeg(species=self.species)
                 _ = self.segments.orderTime()
                 print(self.segments)
                 filesuccess = self.review_single(filename, sTime)
