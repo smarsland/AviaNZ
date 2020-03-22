@@ -156,8 +156,9 @@ class AviaNZ_batchProcess(QMainWindow):
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
         self.w_processButton = QPushButton("&Process Folder")
+        self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.w_processButton.setIcon(QIcon(QPixmap('img/process.png')))
         self.w_processButton.clicked.connect(self.detect)
-        self.w_processButton.setStyleSheet('QPushButton {background-color: #95b5ee; font-weight: bold; font-size:14px} QPushButton:disabled {background-color :#B3BCC4}')
         self.w_processButton.setFixedSize(165, 50)
         self.w_browse.clicked.connect(self.browse)
 
@@ -416,6 +417,17 @@ class AviaNZ_batchProcess(QMainWindow):
             i += self.config['protocolInterval']
         post = Segment.PostProcess(audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
         self.makeSegments(post.segments)
+
+    def useWindF(self, flow, fhigh):
+        """
+        Check if the wind filter is appropriate for this species/call type.
+        Return true if wind filter target band 50-500 Hz does not overlap with flow-fhigh Hz.
+        """
+        if 50 < fhigh and 500 > flow:
+            print('Skipping wind filter...')
+            return False
+        else:
+            return True
 
     # from memory_profiler import profile
     # fp = open('memory_profiler_batch.log', 'w+')
@@ -744,7 +756,7 @@ class AviaNZ_batchProcess(QMainWindow):
                                         CNNmodel = self.CNNDicts[spInfo['species']]
                                     post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
                                     print("Segments detected after WF: ", len(thisPageSegs[filtix]))
-                                    if self.w_wind.isChecked():
+                                    if self.w_wind.isChecked() and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0], spInfo['Filters'][filtix]['FreqRange'][1]):
                                         post.wind()
                                     if CNNmodel:
                                         print('Post-processing with CNN')
@@ -1070,10 +1082,12 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.fHighvalue, row=5, col=2)
 
         self.w_processButton = QPushButton("&Review Folder")
-        self.w_processButton.setFixedHeight(50)
+        self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.w_processButton.setFixedHeight(45)
+        self.w_processButton.setFixedHeight(45)
+        self.w_processButton.setIcon(QIcon(QPixmap('img/review.png')))
         self.w_processButton.clicked.connect(self.review)
-        self.d_detection.addWidget(self.w_processButton,row=10,col=2)
-        self.w_processButton.setStyleSheet('QPushButton {background-color: #95b5ee; font-weight: bold; font-size:14px} QPushButton:disabled {background-color :#B3BCC4}')
+        self.d_detection.addWidget(self.w_processButton, row=10, col=2)
 
         # Excel export section
         linesep = QFrame()

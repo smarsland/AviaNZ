@@ -430,8 +430,7 @@ class AviaNZ(QMainWindow):
 
     def showCheatSheet(self):
         """ Show the cheatsheet of sample spectrograms (a pdf file)"""
-        # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/CheatSheet.pdf'))
-        webbrowser.open_new(r'http://avianz.net/index.php/cheat-sheet')
+        webbrowser.open_new(r'http://www.avianz.net/index.php/resources/cheat-sheet/about-cheat-sheet')
 
     def createFrame(self):
         """ Creates the main window.
@@ -4289,6 +4288,17 @@ class AviaNZ(QMainWindow):
         self.segmentDialog.undo.clicked.connect(self.segment_undo)
         self.segmentDialog.activate.clicked.connect(self.segment)
 
+    def useWindF(self, flow, fhigh):
+        """
+        Check if the wind filter is appropriate for this species/call type.
+        Return true if wind filter target band 50-500 Hz does not overlap with flow-fhigh Hz.
+        """
+        if 50 < fhigh and 500 > flow:
+            print('Skipping wind filter...')
+            return False
+        else:
+            return True
+
     def segment(self):
         """ Listener for the segmentation dialog. Calls the relevant segmenter.
         """
@@ -4406,7 +4416,7 @@ class AviaNZ(QMainWindow):
                     post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=speciesData['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
-                    if wind:
+                    if wind and self.useWindF(speciesData['Filters'][filtix]['FreqRange'][0], speciesData['Filters'][filtix]['FreqRange'][1]):
                         post.wind()
                         print('After wind: segments: ', len(post.segments))
                     if CNNmodel:
