@@ -123,9 +123,10 @@ class Segment(list):
         """
         deletedAll = list(set([lab["species"] for lab in self[4]])) == [species]
         # note that removeLabel will re-add a Don't Know in the end, so can't just check the final label.
-        for lab in self[4]:
-            print("Wiping label", lab)
-            self.removeLabel(lab["species"], lab["certainty"])
+        for lab in reversed(self[4]):
+            if lab["species"]==species:
+                print("Wiping label", lab)
+                self.removeLabel(lab["species"], lab["certainty"])
         return deletedAll
 
     def confirmLabels(self, species=None):
