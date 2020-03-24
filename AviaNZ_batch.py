@@ -1523,7 +1523,6 @@ class AviaNZ_reviewAll(QMainWindow):
             if btn.mark=="red":
                 cSeg = copy.deepcopy(currSeg)
                 outputErrors.append(cSeg)
-                todelete.append(btn.index)
                 # remove all labels for the current species
                 wipedAll = currSeg.wipeSpecies(self.species)
                 # drop the segment if it's the only species, or just update the graphics
@@ -1780,6 +1779,35 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Go to next image, keeping this one as it was found
             (so any changes made to it will be discarded, and cert kept) """
         self.humanClassifyDialog1.stopPlayback()
+        self.segmentsToSave = True
+        currSeg = self.segments[self.box1id]
+
+        # update the actual segment.
+        label, self.saveConfig, _ = self.humanClassifyDialog1.getValues()
+        print("working on ", self.box1id, currSeg)
+
+        # if any species names were changed,
+        # save the correction file
+        if label != [lab["species"] for lab in currSeg[4]]:
+            if self.config['saveCorrections']:
+                outputError = [[currSeg, label]]
+                cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
+                                                 reviewer=self.reviewer)
+                if cleanexit != 1:
+                    print("Warning: could not save correction file!")
+
+        # Then, just recreate the label with certainty 50 for all currently selected species:
+        # (not very neat but safer)
+
+        # Create new segment label, assigning certainty 50 for each species:
+        newlabel = []
+        for species in label:
+            if species == "Don't Know":
+                newlabel.append({"species": "Don't Know", "certainty": 0})
+            else:
+                newlabel.append({"species": species, "certainty": 50})
+        self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
+
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
         self.humanClassifyNextImage1()
