@@ -54,10 +54,19 @@ class TimeAxisHour(pg.AxisItem):
         super(TimeAxisHour, self).__init__(*args, **kwargs)
         self.offset = 0
         self.setLabel('Time', units='hh:mm:ss')
+        self.showMS = False
+
+    def setShowMS(self,value):
+        self.showMS = value
 
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
-        return [QTime(0,0,0).addSecs(value+self.offset).toString('hh:mm:ss') for value in values]
+        if self.showMS:
+            self.setLabel('Time', units='hh:mm:ss.ms')
+            return [QTime(0,0,0).addMSecs((value+self.offset)*1000).toString('hh:mm:ss.z') for value in values]
+        else:
+            self.setLabel('Time', units='hh:mm:ss')
+            return [QTime(0,0,0).addSecs(value+self.offset).toString('hh:mm:ss') for value in values]
 
     def setOffset(self,offset):
         self.offset = offset
@@ -70,11 +79,20 @@ class TimeAxisMin(pg.AxisItem):
     def __init__(self, *args, **kwargs):
         super(TimeAxisMin, self).__init__(*args, **kwargs)
         self.offset = 0
-        self.setLabel('Time', units='mm:ss')
+        self.setLabel('Time', units='mm:ss.z')
+        self.showMS = False
+
+    def setShowMS(self,value):
+        self.showMS = value
 
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
-        return [QTime(0,0,0).addSecs(value+self.offset).toString('mm:ss') for value in values]
+        if self.showMS:
+            self.setLabel('Time', units='mm:ss.ms')
+            return [QTime(0,0,0).addMSecs((value+self.offset)*1000).toString('mm:ss.z') for value in values]
+        else:
+            self.setLabel('Time', units='mm:ss')
+            return [QTime(0,0,0).addSecs(value+self.offset).toString('mm:ss') for value in values]
 
     def setOffset(self,offset):
         self.offset = offset

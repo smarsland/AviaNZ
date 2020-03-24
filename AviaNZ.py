@@ -1388,6 +1388,8 @@ class AviaNZ(QMainWindow):
                 if self.datalengthSec < self.windowSize:
                     self.windowSize = self.datalengthSec
                 self.widthWindow.setValue(self.windowSize)
+                if self.windowSize<3:
+                    self.timeaxis.setShowMS(True)
 
                 self.totalTime = self.convertMillisecs(1000*self.datalengthSec)
 
@@ -3174,6 +3176,13 @@ class AviaNZ(QMainWindow):
         newmaxX = self.convertAmpltoSpec(value)+minX
         self.overviewImageRegion.setRegion([minX, newmaxX])
         self.scrollSlider.setMaximum(np.shape(self.sg)[0]-self.convertAmpltoSpec(self.widthWindow.value()))
+
+        # Decide whether or not to show milliseconds
+        if value > 3:
+            self.timeaxis.setShowMS(False)
+        else:
+            self.timeaxis.setShowMS(True)
+              
 
 # ===============
 # Generate the various dialogs that match the menu items
