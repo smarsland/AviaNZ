@@ -30,6 +30,7 @@ import platform
 import wavio
 import json
 import copy
+from shutil import copyfile
 
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap
 from PyQt5.QtCore import QDir, Qt, QEvent
@@ -388,6 +389,46 @@ class BuildRecAdvWizard(QWizard):
                 self.segsChanged = False
                 self.wizard().redoTrainPages()
             return True
+
+        def validatePage(self):
+            self.updateAnnotations()
+            return True
+
+        def backupDatafiles(self):
+            print("Backing up files ", self.field("trainDir"))
+            listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
+            for file in listOfDataFiles:
+                source = self.field("trainDir") + '/' + file
+                destination = source[:-5] + ".backup"
+                if os.path.isfile(destination):
+                    pass
+                else:
+                    copyfile(source, destination)
+
+        def updateAnnotations(self):
+            """ Update annotation files. Assign call types suggested by clusters and remove any segment deleted in the
+            clustering. Keep a backup of the original .data."""
+            self.backupDatafiles()
+            print("Updating annotation files ", self.field("trainDir"))
+            listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
+            for file in listOfDataFiles:
+                # Read the annotation
+                segments = Segment.SegmentList()
+                newsegments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(self.field("trainDir"), file))
+                allSpSegs = np.arange(len(segments)).tolist()
+                newsegments.metadata = segments.metadata
+                for segix in allSpSegs:
+                    seg = segments[segix]
+                    if self.field("species") not in [fil["species"] for fil in seg[4]]:
+                        newsegments.addSegment(seg) # leave non-target segments unchanged
+                    else:
+                        for seg2 in self.segments:
+                            if seg2[1] == seg:
+                                # find the index of target sp and update call type
+                                seg[4][[fil["species"] for fil in seg[4]].index(self.field("species"))]["calltype"] = self.clusters[seg2[-1]]
+                                newsegments.addSegment(seg)
+                newsegments.saveJSON(os.path.join(self.field("trainDir"), file))
 
         def merge(self):
             """ Listener for the merge button. Merge the rows (clusters) checked into one cluster.
