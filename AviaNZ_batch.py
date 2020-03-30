@@ -155,7 +155,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.maxgap.valueChanged.connect(self.maxGapChange)
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
-        self.w_processButton = QPushButton("&Process Folder")
+        self.w_processButton = QPushButton("  &Process Folder")
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
         self.w_processButton.setIcon(QIcon(QPixmap('img/process.png')))
         self.w_processButton.clicked.connect(self.detect)
@@ -1081,7 +1081,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.fHigh, row=5, col=1)
         self.d_detection.addWidget(self.fHighvalue, row=5, col=2)
 
-        self.w_processButton = QPushButton("&Review Folder")
+        self.w_processButton = QPushButton("  &Review Folder")
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
         self.w_processButton.setFixedHeight(45)
         self.w_processButton.setFixedHeight(45)
@@ -1600,6 +1600,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
             self.humanClassifyDialog1.move(self.dialogPos)
+        if hasattr(self, 'dialogPlotAspect'):
             self.humanClassifyDialog1.plotAspect = self.dialogPlotAspect
             self.humanClassifyDialog1.pPlot.setAspectLocked(ratio=self.dialogPlotAspect)
         self.humanClassifyDialog1.setWindowTitle("AviaNZ - reviewing " + self.filename)

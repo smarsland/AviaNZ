@@ -25,7 +25,7 @@ from jsonschema import validate
 from shutil import copyfile
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
-from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget
+from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt5.QtMultimedia import QAudio
 
@@ -264,7 +264,8 @@ class AviaNZ(QMainWindow):
         Some of them are initialised according to the data in the configuration file."""
 
         fileMenu = self.menuBar().addMenu("&File")
-        fileMenu.addAction("&Open sound file", self.openFile, "Ctrl+O")
+        openIcon = self.style().standardIcon(QtGui.QStyle.SP_DialogOpenButton)
+        fileMenu.addAction(openIcon, "&Open sound file", self.openFile, "Ctrl+O")
         # fileMenu.addAction("&Change Directory", self.chDir)
         fileMenu.addAction("&Set Operator/Reviewer (Current File)", self.setOperatorReviewerDialog)
         fileMenu.addSeparator()
@@ -272,7 +273,7 @@ class AviaNZ(QMainWindow):
             fileMenu.addAction(recentfile, lambda arg=recentfile: self.openFile(arg))
         fileMenu.addSeparator()
         fileMenu.addAction("Restart Program",self.restart,"Ctrl+R")
-        fileMenu.addAction("Quit",QApplication.quit,"Ctrl+Q")
+        fileMenu.addAction(QIcon(QPixmap('img/exit.png')), "Quit",QApplication.quit,"Ctrl+Q")
 
         # This is a very bad way to do this, but I haven't worked anything else out (setMenuRole() didn't work)
         # Add it a second time, then it appears!
@@ -389,7 +390,6 @@ class AviaNZ(QMainWindow):
         actionMenu.addSeparator()
 
         actionMenu.addAction("Export current view as image",self.saveImage,"Ctrl+I")
-        actionMenu.addAction("Save selected sound", self.save_selected_sound)
 
         #actionMenu.addSeparator()
         #extraMenu = actionMenu.addMenu("Playback speed")
@@ -620,14 +620,12 @@ class AviaNZ(QMainWindow):
         self.playSegButton.setIconSize(QtCore.QSize(20, 20))
         self.playSegButton.setToolTip("Play selected")
         self.playSegButton.clicked.connect(self.playSelectedSegment)
-        self.playSegButton.setEnabled(False)
 
         self.playSlowButton = QtGui.QToolButton()
         self.playSlowButton.setIcon(QtGui.QIcon('img/playSlow.png'))
         self.playSlowButton.setIconSize(QtCore.QSize(20, 20))
         self.playSlowButton.setToolTip("Play slowly")
         self.playSlowButton.clicked.connect(self.playSlowSegment)
-        self.playSlowButton.setEnabled(False)
 
         #self.speedButton = QtGui.QToolButton()
         #self.speedButton.setPopupMode(QtGui.QToolButton.InstantPopup)
@@ -653,7 +651,6 @@ class AviaNZ(QMainWindow):
         self.quickDenButton.setIconSize(QtCore.QSize(20, 20))
         self.quickDenButton.setToolTip("Denoise segment")
         self.quickDenButton.clicked.connect(self.denoiseSeg)
-        self.quickDenButton.setEnabled(False)
 
         # self.quickDenNButton = QtGui.QToolButton()
         # self.quickDenNButton.setIcon(QtGui.QIcon('img/denoisesegment.png'))
@@ -673,7 +670,6 @@ class AviaNZ(QMainWindow):
         self.playBandLimitedSegButton.setIconSize(QtCore.QSize(20, 20))
         self.playBandLimitedSegButton.setToolTip("Play selected-band limited")
         self.playBandLimitedSegButton.clicked.connect(self.playBandLimitedSegment)
-        self.playBandLimitedSegButton.setEnabled(False)
 
         # Volume control
         self.volSlider = QSlider(Qt.Horizontal)
@@ -701,9 +697,27 @@ class AviaNZ(QMainWindow):
         self.contrastSlider.setTickInterval(1)
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
+        # Confirm button - auto ups the certainty to 100
+        self.confirmButton = QPushButton("   &Confirm labels")
+        self.confirmButton.clicked.connect(self.confirmSegment)
+        self.confirmButton.setIcon(QIcon(QPixmap('img/check-mark2.png')))
+        self.confirmButton.setStyleSheet("{padding: 3px 3px 3px 3px}")
+        self.confirmButton.setToolTip("Set all labels in this segment as certain")
+
         # Delete segment button. We have to get rid of the extra event args
-        deleteButton = QPushButton("&Delete current segment")
-        deleteButton.clicked.connect(lambda _ : self.deleteSegment())
+        self.deleteButton = QPushButton("  Delete segment")
+        self.deleteButton.clicked.connect(lambda _ : self.deleteSegment())
+        self.deleteButton.setIcon(QIcon(QPixmap('img/deleteL.png')))
+        self.deleteButton.setStyleSheet("{padding: 3px 3px 3px 3px}")
+
+        # export selected sound
+        self.exportSoundBtn = QPushButton("  &Save sound clip")
+        self.exportSoundBtn.clicked.connect(self.save_selected_sound)
+        self.exportSoundBtn.setIcon(QIcon(QPixmap('img/storage2.png')))
+        self.exportSoundBtn.setToolTip("Export the selected sound to a file")
+
+        # flips buttons to Disabled state
+        self.refreshSegmentControls()
 
         # The spinbox for changing the width shown in the controls dock
         self.widthWindow = QDoubleSpinBox()
@@ -733,9 +747,23 @@ class AviaNZ(QMainWindow):
         self.w_controls.addWidget(self.brightnessSlider,row=5,col=0,colspan=4)
         self.w_controls.addWidget(QLabel("Contrast"),row=6,col=0,colspan=4)
         self.w_controls.addWidget(self.contrastSlider,row=7,col=0,colspan=4)
-        self.w_controls.addWidget(QLabel('Visible window (seconds)'),row=8,col=0,colspan=4)
-        self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=4)
-        self.w_controls.addWidget(deleteButton,row=10,col=0,colspan=4)
+        self.w_controls.addWidget(QLabel('Visible window'),row=8,col=0,colspan=4)
+        self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=2)
+        self.w_controls.addWidget(QLabel('seconds'), row=9, col=2, colspan=2)
+        # spacer b/c pyqtgraph can't add spacer items
+        spacer = QWidget()
+        self.w_controls.addWidget(spacer, row=10, col=0, colspan=4)
+        self.w_controls.layout.setRowMinimumHeight(10, 3)
+
+        # empty widget to add in the gridlayout
+        segContrs = QGroupBox("Selected segment")
+        segContrs.setStyleSheet("QGroupBox:title{color: #505050; font-weight: 50}")
+        segContrsBox = QVBoxLayout()
+        segContrs.setLayout(segContrsBox)
+        segContrsBox.addWidget(self.confirmButton)
+        segContrsBox.addWidget(self.deleteButton)
+        segContrsBox.addWidget(self.exportSoundBtn)
+        self.w_controls.addWidget(segContrs, row=12, col=0, colspan=4)
 
         # The slider to show playback position
         # This is hidden, but controls the moving bar
@@ -837,6 +865,39 @@ class AviaNZ(QMainWindow):
             self.deleteSegment()
         elif ev == Qt.Key_Escape and (self.media_obj.isPlaying() or self.media_slow.isPlaying()):
             self.stopPlayback()
+
+    def refreshSegmentControls(self):
+        """ Just toggles all the segment controls on/off when a segment
+            is (de)selected. Call this after changing self.box1id.
+            Remember to update this when segment controls change!
+        """
+        # basic buttons which toggle on any segment selection
+        btns = [self.deleteButton, self.playSegButton, self.playSlowButton, self.quickDenButton, self.exportSoundBtn]
+
+        # if self.box1id is not -1, flip on, otherwise off
+        if self.box1id<0:
+            for btn in btns:
+                btn.setEnabled(False)
+            self.playBandLimitedSegButton.setEnabled(False)
+            self.confirmButton.setEnabled(False)
+        else:
+            for btn in btns:
+                btn.setEnabled(True)
+
+            # special case for BandLimitedButton b/c it requires set freq bands
+            if type(self.listRectanglesa2[self.box1id]) == self.ROItype:
+                # it's a rectangle box:
+                self.playBandLimitedSegButton.setEnabled(True)
+            else:
+                # it's a 0 to inf segment:
+                self.playBandLimitedSegButton.setEnabled(False)
+
+            # special case for Confirm button b/c it requires yellow segment
+            self.confirmButton.setEnabled(False)
+            for sp in self.segments[self.box1id][4]:
+                if sp["certainty"]<100 and sp["species"]!="Don't Know":
+                    self.confirmButton.setEnabled(True)
+                    break
 
     def makeFullBirdList(self, unsure=False):
         """ Makes a combo box holding the complete list of birds.
@@ -1097,11 +1158,8 @@ class AviaNZ(QMainWindow):
         # Reset the MultipleSpecies option
         self.multipleBirds = self.config['MultipleSpecies']
 
-        # reset playback buttons
-        self.playSegButton.setEnabled(False)
-        self.playSlowButton.setEnabled(False)
-        self.playBandLimitedSegButton.setEnabled(False)
-        self.quickDenButton.setEnabled(False)
+        # reset buttons which require segment selection
+        self.refreshSegmentControls()
 
         # Remove any fundamental frequencies drawn
         for r in self.segmentPlots:
@@ -2378,11 +2436,8 @@ class AviaNZ(QMainWindow):
     def selectSegment(self, boxid):
         """ Changes the segment colors and enables playback buttons."""
         # print("selected %d" % boxid)
-        self.playSegButton.setEnabled(True)
-        self.playSlowButton.setEnabled(True)
-        self.quickDenButton.setEnabled(True)
-        # self.quickDenNButton.setEnabled(True)
         self.box1id = boxid
+        self.refreshSegmentControls()
 
         # helps dealing with edge effects for various review functions
         if boxid>len(self.listRectanglesa1) or self.listRectanglesa1[boxid] is None:
@@ -2399,22 +2454,14 @@ class AviaNZ(QMainWindow):
             self.listRectanglesa1[boxid].update()
             self.listRectanglesa2[boxid].update()
 
-        # self.listRectanglesa2[boxid].setPen(fn.mkPen(self.ColourSelectedDark,width=1))
-        # if it's a rectangle:
-        if type(self.listRectanglesa2[boxid]) == self.ROItype:
-            self.playBandLimitedSegButton.setEnabled(True)
-
         # show details of selection
         self.segInfo.setText(self.segments[boxid].infoString())
 
     def deselectSegment(self, boxid):
         """ Restores the segment colors and disables playback buttons."""
         # print("deselected %d" % boxid)
-        self.playSegButton.setEnabled(False)
-        self.playSlowButton.setEnabled(False)
-        self.quickDenButton.setEnabled(False)
-        self.playBandLimitedSegButton.setEnabled(False)
         self.box1id = -1
+        self.refreshSegmentControls()
         # hide details of selection
         self.segInfo.setText("")
 
@@ -3245,6 +3292,7 @@ class AviaNZ(QMainWindow):
             self.box1id = -1
             if hasattr(self, 'humanClassifyDialogSize'):
                 self.humanClassifyDialog1.resize(self.humanClassifyDialogSize)
+            if hasattr(self, 'dialogPlotAspect'):
                 self.humanClassifyDialog1.plotAspect = self.dialogPlotAspect
                 self.humanClassifyDialog1.pPlot.setAspectLocked(ratio=self.dialogPlotAspect)
 
@@ -5253,6 +5301,26 @@ class AviaNZ(QMainWindow):
 
 # ============
 # Various actions: deleting segments, saving, quitting
+    def confirmSegment(self):
+        """ Listener for the Confirm segment button.
+            Ups the certainty to 100 on the current segment.
+            DO NOT use for All Sp Review, as that one may also change species and
+            needs to call refreshOverview with old species.
+        """
+        id = self.box1id
+        print("confirming id:", id)
+
+        if id>-1:
+            # force wipe old overview to empty
+            self.refreshOverviewWith(self.segments[id], delete=True)
+
+            # raise certainty to 100 on all labels in this seg
+            self.segments[id].confirmLabels()
+
+            self.refreshOverviewWith(self.segments[id])
+            self.updateText(id)
+            self.updateColour(id)
+
     def deleteSegment(self,id=-1,hr=False):
         """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
         human classify dialogs.
@@ -5289,10 +5357,7 @@ class AviaNZ(QMainWindow):
             self.box1id = -1
             self.segInfo.setText("")
             # reset segment playback buttons
-            self.playSegButton.setEnabled(False)
-            self.playSlowButton.setEnabled(False)
-            self.playBandLimitedSegButton.setEnabled(False)
-            self.quickDenButton.setEnabled(False)
+            self.refreshSegmentControls()
 
     def deleteAll(self):
         """ Listener for delete all button.
@@ -5311,10 +5376,7 @@ class AviaNZ(QMainWindow):
                 self.segmentsToSave = True
 
             # reset segment playback buttons
-            self.playSegButton.setEnabled(False)
-            self.playSlowButton.setEnabled(False)
-            self.playBandLimitedSegButton.setEnabled(False)
-            self.quickDenButton.setEnabled(False)
+            self.refreshSegmentControls()
 
     def removeSegments(self,delete=True):
         """ Remove all the segments in response to the menu selection, or when a new file is loaded. """
