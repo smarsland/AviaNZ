@@ -132,12 +132,22 @@ class Segment(list):
     def confirmLabels(self, species=None):
         """ Raise the certainty of this segment's uncertain labels to 100.
             Affects all species (if None) or indicated species.
+            Ignores "Don't Know" labels.
         """
+        toremove = []
         for labix in range(len(self[4])):
             lab = self[4][labix]
-            if (species is None or lab["species"]==species) and lab["certainty"] < 100:
-                lab["certainty"] = 100
-                self.keys[labix] = (lab["species"], lab["certainty"])
+            # check if this label is yellow:
+            if (species is None or lab["species"]==species) and lab["certainty"] < 100 and lab["species"]!="Don't Know":
+                # check if this segment has a green label for this species already
+                if (lab["species"], 100) in self.keys:
+                    # then just delete the yellow label
+                    toremove.append(lab)
+                else:
+                    lab["certainty"] = 100
+                    self.keys[labix] = (lab["species"], lab["certainty"])
+        for trlab in toremove:
+            self.removeLabel(trlab["species"], trlab["certainty"])
 
     def removeLabel(self, species, certainty):
         """ Removes label from this segment.
