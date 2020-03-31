@@ -1002,9 +1002,10 @@ class AviaNZ(QMainWindow):
         self.listFiles.clearFocus()
         self.listFiles.clear()
         pixmap = QPixmap(10, 10)
+        blackpen = fn.mkPen(color=(160,160,160,255), width=2)
         tempsl = Segment.SegmentList()
 
-        # set the icons to be shown on the right hand side
+        # set the icons to be shown on the left hand side
         self.listOfFiles = QDir(self.SoundFileDir).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
         listOfDataFiles = QDir(self.SoundFileDir).entryList(['*.data'])
         for file in self.listOfFiles:
@@ -1021,15 +1022,23 @@ class AviaNZ(QMainWindow):
                     try:
                         tempsl.parseJSON(os.path.join(self.SoundFileDir, file.fileName()+'.data'), silent=True)
                         if len(tempsl)==0:
-                            mincert = 100
+                            mincert = -1
                         else:
                             mincert = min([lab["certainty"] for seg in tempsl for lab in seg[4]])
                     except Exception as e:
                         print("Could not determine certainty for file", file.fileName())
                         print(e)
-                        mincert = 0
+                        mincert = -1
 
-                    if mincert == 0:
+                    if mincert == -1:
+                        # .data exists, but no annotations
+                        pixmap.fill(QtGui.QColor(255,255,255,0))
+                        painter = QtGui.QPainter(pixmap)
+                        painter.setPen(blackpen)
+                        painter.drawRect(pixmap.rect())
+                        painter.end()
+                        item.setIcon(QIcon(pixmap))
+                    elif mincert == 0:
                         pixmap.fill(self.ColourNone)
                         item.setIcon(QIcon(pixmap))
                     elif mincert < 100:
