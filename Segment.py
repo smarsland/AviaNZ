@@ -378,6 +378,54 @@ class SegmentList(list):
         for seg in toadd:
             self.addSegment(seg)
 
+    def mergeSplitSeg(self):
+        """ Inverse of the above: merges overlapping segments.
+            Merges only segments with identical labels,
+            so e.g. [kiwi, morepork] [kiwi] will not be merged.
+            Unlike analogs in Segmenter and PostProcess,
+            merges segments that only touch ([1,2][2,3]->[1,3]).
+
+            DOES NOT DELETE segments - returns indices to be deleted,
+            so an external handler needs to do the required interface updates.
+
+            ASSUMES sorted input!
+        """
+        todelete = []
+        if len(self)==0:
+            return []
+
+        # ideally, we'd loop over different labels, but not easy since they're unhashable.
+        # so we use a marker array to keep track of checked segments:
+        done = np.zeros(len(self))
+        while not np.all(done):
+            firstsegi = None
+            for segi in range(len(self)):
+                # was this already reviewed (when mergin another sp combo)?
+                if done[segi]==1:
+                    continue
+                # sets the first segment of this label
+                # (and the sp combo that will be merged now)
+                if firstsegi is None:
+                    firstsegi = segi
+                    done[segi] = 1
+                    continue
+                # ignore segments with labels other than the current one
+                if self[segi][4]!=self[firstsegi][4]:
+                    continue
+                # for subsequent segs, see if this can be merged to the previous one
+                if self[segi][0]<=self[firstsegi][1]:
+                    self[firstsegi][1] = max(self[segi][1], self[firstsegi][1])
+                    done[segi] = 1
+                    # mark this for deleting
+                    todelete.append(segi)
+                else:
+                    firstsegi = segi
+                    done[segi] = 1
+                    # no need to delete anything
+        # avoid duplicates in output to make life easier for later deletion
+        todelete = list(set(todelete))
+        return todelete
+
     def getSummaries(self):
         """ Calculates some summary parameters relevant for populating training dialogs.
             and returns other parameters for populating the training dialogs.

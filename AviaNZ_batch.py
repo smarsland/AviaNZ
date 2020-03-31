@@ -155,7 +155,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.maxgap.valueChanged.connect(self.maxGapChange)
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
-        self.w_processButton = QPushButton("&Process Folder")
+        self.w_processButton = QPushButton(" &Process Folder")
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
         self.w_processButton.setIcon(QIcon(QPixmap('img/process.png')))
         self.w_processButton.clicked.connect(self.detect)
@@ -1081,7 +1081,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.fHigh, row=5, col=1)
         self.d_detection.addWidget(self.fHighvalue, row=5, col=2)
 
-        self.w_processButton = QPushButton("&Review Folder")
+        self.w_processButton = QPushButton(" &Review Folder")
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
         self.w_processButton.setFixedHeight(45)
         self.w_processButton.setFixedHeight(45)
@@ -1283,13 +1283,17 @@ class AviaNZ_reviewAll(QMainWindow):
             # so call the right dialog:
             # (they will update self.segments and store corrections)
             if self.species == 'Any sound':
+                _ = self.segments.orderTime()
                 filesuccess = self.review_all(filename, sTime)
             else:
                 # split long segments for single species review
                 self.segments.splitLongSeg(species=self.species)
                 _ = self.segments.orderTime()
-                print(self.segments)
                 filesuccess = self.review_single(filename, sTime)
+            # merge back any split segments, plus ANY overlaps within calltypes
+            todelete = self.segments.mergeSplitSeg()
+            for dl in reversed(todelete):
+                del self.segments[dl]
 
             # break out of review loop if Esc detected
             # (return value will be 1 for correct close, 0 for Esc)
@@ -1564,7 +1568,6 @@ class AviaNZ_reviewAll(QMainWindow):
         for dl in reversed(list(set(todelete))):
             del self.segments[dl]
 
-        self.mergeSplitSeg()
         # done - the segments will be saved by the main loop
         return
 

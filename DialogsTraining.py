@@ -1374,7 +1374,7 @@ class BuildRecAdvWizard(QWizard):
             self.listFiles = QListWidget()
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
             self.listFiles.setMinimumWidth(150)
-            self.listFiles.setMinimumHeight(250)
+            self.listFiles.setMinimumHeight(200)
             filtdir = QDir(filtdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
             for file in filtdir:
                 item = QListWidgetItem(self.listFiles)
@@ -1598,9 +1598,13 @@ class BuildRecAdvWizard(QWizard):
                     self.resize(self.page(pageid).manualSizeHint)
                 else:
                     newsize = self.page(pageid).sizeHint()
+                    # need tiny adjustment for parameter pages
+                    if pageid in self.trainpages:
+                        newsize.setHeight(newsize.height()+80)
                     # print("Resizing to", newsize)
                     self.setMinimumSize(newsize)
                     self.adjustSize()
+                    # print("Current size", self.size())
         except Exception as e:
             print(e)
 
