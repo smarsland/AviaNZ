@@ -1111,6 +1111,9 @@ class AviaNZ(QMainWindow):
         # Remove spectral derivatives
         try:
             self.p_spec.removeItem(self.derivPlot)
+        except Exception:
+            pass
+        try:
             self.p_spec.removeItem(self.energyPlot)
         except Exception:
             pass
@@ -1582,7 +1585,8 @@ class AviaNZ(QMainWindow):
                 x, y = self.sp.max_energy(self.sg)
 
                 self.energyPlot = pg.ScatterPlotItem()
-                self.energyPlot.setData(x, y, pen=pg.mkPen('g', width=5))
+                self.energyPlot.setBrush(None)
+                self.energyPlot.setData(x, y, pen=pg.mkPen((0, 255, 0, 210), width=2))
 
                 self.p_spec.addItem(self.energyPlot)
             else:
@@ -3245,6 +3249,7 @@ class AviaNZ(QMainWindow):
             self.box1id = -1
             if hasattr(self, 'humanClassifyDialogSize'):
                 self.humanClassifyDialog1.resize(self.humanClassifyDialogSize)
+            if hasattr(self, 'dialogPlotAspect'):
                 self.humanClassifyDialog1.plotAspect = self.dialogPlotAspect
                 self.humanClassifyDialog1.pPlot.setAspectLocked(ratio=self.dialogPlotAspect)
 
