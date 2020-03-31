@@ -1006,7 +1006,7 @@ class BuildRecAdvWizard(QWizard):
             super(BuildRecAdvWizard.WPageTrain, self).__init__(parent)
             self.setTitle('Training results')
             self.setSubTitle('Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.')
-            self.setMinimumSize(600, 500)
+            self.setMinimumSize(520, 440)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
@@ -1023,7 +1023,7 @@ class BuildRecAdvWizard(QWizard):
             self.lblCluster = QLabel()
             self.lblCluster.setStyleSheet("QLabel { color : #808080; }")
             space = QLabel()
-            space.setFixedHeight(25)
+            space.setFixedHeight(20)
             spaceH = QLabel()
             spaceH.setFixedWidth(30)
 
@@ -1192,7 +1192,7 @@ class BuildRecAdvWizard(QWizard):
             super(BuildRecAdvWizard.WFFPage, self).__init__(parent)
             self.setTitle('Post-processing')
             self.setSubTitle('Set the post-processing options available below.')
-            self.setMinimumSize(250, 350)
+            self.setMinimumSize(250, 300)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
@@ -1601,6 +1601,11 @@ class BuildRecAdvWizard(QWizard):
                     # need tiny adjustment for parameter pages
                     if pageid in self.trainpages:
                         newsize.setHeight(newsize.height()+80)
+                    elif pageid-1 in self.trainpages:
+                        newsize.setWidth(newsize.width()+100)
+                        newsize.setHeight(newsize.height()+135)
+                    elif pageid-2 in self.trainpages:
+                        newsize.setHeight(newsize.height()+170)
                     # print("Resizing to", newsize)
                     self.setMinimumSize(newsize)
                     self.adjustSize()
@@ -2014,8 +2019,9 @@ class ROCCanvas(FigureCanvas):
     def __init__(self, parent=None, width=5, height=6, dpi=100):
         # reduce size on low-res monitors
         aspectratio = width/height
-        height = min(height, 0.7*QApplication.primaryScreen().availableSize().height()/dpi)
+        height = min(height, 0.6*(QApplication.primaryScreen().availableSize().height()-150)/dpi)
         width = height*aspectratio
+        # print("resetting to", height, width)
         plt.style.use('ggplot')
         self.MList = []
         self.thrList = []
@@ -2029,6 +2035,7 @@ class ROCCanvas(FigureCanvas):
         self.plotLines = []
 
         fig = Figure(figsize=(width, height), dpi=dpi)
+        fig.set_tight_layout(True)
 
         FigureCanvas.__init__(self, fig)
         self.setParent(parent)
