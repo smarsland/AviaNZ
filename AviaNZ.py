@@ -3281,6 +3281,15 @@ class AviaNZ(QMainWindow):
         self.deselectSegment(self.box1id)
         self.box1id = -1
 
+        # Merge what was split, and ANY OTHER call type overlaps:
+        todelete = self.segments.mergeSplitSeg()
+        # delete ones that merged into others
+        for dl in reversed(todelete):
+            self.deleteSegment(dl)
+        # need to update the merged segment boxes:
+        self.removeSegments(delete=False)
+        self.drawfigMain(remaking=True)
+
     def humanClassifyNextImage1(self):
         """ Get the next image """
         self.humanClassifyDialogSize = self.humanClassifyDialog1.size()
@@ -3486,30 +3495,6 @@ class AviaNZ(QMainWindow):
         if nextseg >= 0:
             self.selectSegment(nextseg)
         self.humanClassifyNextImage1()
-
-    def mergeSplitSeg(self):
-        # After segments are split, put them back if all are still there
-        # Really simple -- assumes they are in order
-        # SRM
-        todelete = []
-        last = [0,0,0,0,0]
-        count=0
-        for seg in self.segments:
-            #print(math.isclose(seg[0],last[1]))
-            # Merge the two segments if they abut and have the same species
-            if math.isclose(seg[0],last[1]) and seg[4] == last[4]:
-                last[1] = seg[1]
-                todelete.append(count)
-            else:
-                last = seg
-            count+=1
-
-        for dl in reversed(todelete):
-            self.deleteSegment(dl)
-
-        # need to update the merged segment boxes:
-        self.removeSegments(delete=False)
-        self.drawfigMain(remaking=True)
 
     def species2clean(self, species):
         """ Returns True when the species name got a special character"""
@@ -3742,7 +3727,15 @@ class AviaNZ(QMainWindow):
         for dl in reversed(todelete):
             self.deleteSegment(dl)
 
-        self.mergeSplitSeg()
+        # Merge what was split, and ANY OTHER call type overlaps:
+        todelete2 = self.segments.mergeSplitSeg()
+        # delete ones that merged into others
+        for dl in reversed(todelete2):
+            self.deleteSegment(dl)
+        # need to update the merged segment boxes:
+        self.removeSegments(delete=False)
+        self.drawfigMain(remaking=True)
+
         self.saveSegments()
         self.statusLeft.setText("Ready")
         return
@@ -3905,20 +3898,6 @@ class AviaNZ(QMainWindow):
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
-        self.spectrogramDialog.restore.clicked.connect(self.resetspValues)
-
-    def resetspValues(self):
-        self.spectrogramDialog.windowType.setCurrentText('Hann')
-
-        self.spectrogramDialog.mean_normalise.setChecked(True)
-        self.spectrogramDialog.equal_loudness.setChecked(False)
-        self.spectrogramDialog.multitaper.setChecked(False)
-
-        self.spectrogramDialog.setValues(self.spectrogramDialog.low.minimum(), self.spectrogramDialog.low.maximum(), self.spectrogramDialog.low.minimum(), self.spectrogramDialog.high.maximum())
-
-        self.spectrogramDialog.window_width.setText('256')
-        self.spectrogramDialog.incr.setText('128')
-        self.spectrogram()
 
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
