@@ -3900,9 +3900,25 @@ class AviaNZ(QMainWindow):
         """
         if not hasattr(self,'spectrogramDialog'):
             self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'])
+        # first save the annotations
+        self.saveSegments()
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
+        self.spectrogramDialog.restore.clicked.connect(self.resetspValues)
+
+    def resetspValues(self):
+        self.spectrogramDialog.windowType.setCurrentText('Hann')
+
+        self.spectrogramDialog.mean_normalise.setChecked(True)
+        self.spectrogramDialog.equal_loudness.setChecked(False)
+        self.spectrogramDialog.multitaper.setChecked(False)
+
+        self.spectrogramDialog.setValues(self.spectrogramDialog.low.minimum(), self.spectrogramDialog.low.maximum(), self.spectrogramDialog.low.minimum(), self.spectrogramDialog.high.maximum())
+
+        self.spectrogramDialog.window_width.setText('256')
+        self.spectrogramDialog.incr.setText('128')
+        self.spectrogram()
 
     def spectrogram(self):
         """ Listener for the spectrogram dialog.

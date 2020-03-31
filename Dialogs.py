@@ -184,7 +184,6 @@ class Spectrogram(QDialog):
         print("initing to", maxFreqShow)
         self.setValues(minFreq, maxFreq, minFreqShow, maxFreqShow)
         self.restore = QPushButton("Restore Defaults")
-        self.restore.clicked.connect(self.resetValues)
         self.activate = QPushButton("Update Spectrogram")
 
         self.window_width = QLineEdit(self)
@@ -247,29 +246,6 @@ class Spectrogram(QDialog):
     def highChange(self,value):
         value = value // 100 * 100
         self.hightext.setText(str(value)+' Hz')
-
-    def resetValues(self):
-        self.windowType.setCurrentText('Hann')
-
-        self.mean_normalise.setChecked(True)
-        self.equal_loudness.setChecked(False)
-        self.multitaper.setChecked(False)
-
-        self.setValues(self.low.minimum(), self.low.maximum(), self.low.minimum(), self.high.maximum())
-
-        self.window_width.setText('256')
-        self.incr.setText('128')
-
-    # def closeEvent(self, event):
-    #     msg = QMessageBox()
-    #     msg.setIcon(QMessageBox.Question)
-    #     msg.setText("Do you want to keep the new values?")
-    #     msg.setWindowTitle("Closing Spectrogram Dialog")
-    #     msg.setStandardButtons(QMessageBox.Yes|QMessageBox.No)
-    #     msg.buttonClicked.connect(self.resetValues)
-    #     msg.exec_()
-    #     return
-
 
 class OperatorReviewer(QDialog):
     # Class for the set operator dialog box
