@@ -1600,6 +1600,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
             self.humanClassifyDialog1.move(self.dialogPos)
+        if hasattr(self, 'dialogPlotAspect'):
             self.humanClassifyDialog1.plotAspect = self.dialogPlotAspect
             self.humanClassifyDialog1.pPlot.setAspectLocked(ratio=self.dialogPlotAspect)
         self.humanClassifyDialog1.setWindowTitle("AviaNZ - reviewing " + self.filename)

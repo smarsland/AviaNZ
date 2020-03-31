@@ -688,32 +688,37 @@ class SignalProc:
         return out
 
     def max_energy(self, sg,thr=1.2):
-        sg = sg/np.max(sg)
+        # Remember that spectrogram is actually rotated!
 
-        colmedians = np.median(sg, axis=0)
-        colmax = np.max(sg,axis=0)
-        colmaxinds = np.argmax(sg,axis=0)
+        colmaxinds = np.argmax(sg,axis=1)
 
-        #points = -np.ones(np.shape(sg)[1])
         points = np.zeros(np.shape(sg))
-        print(np.shape(points))
 
-        inds = np.where(colmax>thr*colmedians)
-        print(len(inds))
-        points[colmaxinds[inds],inds] = 1
+        # If one wants to show only some colmaxs:
+        # sg = sg/np.max(sg)
+        # colmedians = np.median(sg, axis=1)
+        # colmax = np.max(sg,axis=1)
+        # inds = np.where(colmax>thr*colmedians)
+        # print(len(inds))
+        # points[inds, colmaxinds[inds]] = 1
+
+        # just mark the argmax position in each column
+        points[range(points.shape[0]), colmaxinds] = 1
 
         x, y = np.where(points > 0)
 
+        # convert points y coord from spec units to Hz
+        yfr = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
+        yfr = np.asarray(yfr)
+
         # remove points beyond frq range to show
-        y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
-        y1 = np.asarray(y1)
-
-        valminfrq = self.minFreqShow / (self.sampleRate // 2 / np.shape(self.sg)[1])
-
-        inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
+        inds = np.where((yfr >= self.minFreqShow) & (yfr <= self.maxFreqShow))
         x = x[inds]
         y = y[inds]
-        y = [i - valminfrq for i in y]
+
+        # adjust y pos for when spec doesn't start at 0
+        specstarty = self.minFreqShow / (self.sampleRate // 2 / np.shape(self.sg)[1])
+        y = [i - specstarty for i in y]
 
         return x, y
 
