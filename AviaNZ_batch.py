@@ -46,11 +46,6 @@ import json, time
 import copy
 
 
-class TempStatusBar(QStatusBar):
-    def paintEvent(self, event):
-        print("------- repainting with message --------- ", self.currentMessage())
-        return super().paintEvent(event)
-
 class AviaNZ_batchProcess(QMainWindow):
     # Main class for batch processing
 
@@ -72,9 +67,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
-        self.setStatusBar(TempStatusBar())
         self.statusBar().showMessage("Ready for processing")
-
 
         self.setWindowTitle('AviaNZ - Batch Processing')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -567,9 +560,10 @@ class AviaNZ_batchProcess(QMainWindow):
         cnt = 0
         msgtext = ""
         # clean up the UI before entering the long loop
+        self.w_processButton.setEnabled(False)
         self.update()
         self.repaint()
-        QtGui.QApplication.processEvents()
+        QApplication.processEvents()
         if self.method == "Intermittent sampling":
             with pg.BusyCursor():
                 for filename in allwavs:
@@ -581,6 +575,7 @@ class AviaNZ_batchProcess(QMainWindow):
                     self.statusBar().showMessage("Processing file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm))
                     self.update()
                     self.repaint()
+                    QApplication.processEvents()
 
                     # if it was processed previously (stored in log)
                     if filename in self.filesDone:
@@ -589,7 +584,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         continue
 
                     # check if file not empty
-                    if os.stat(filename).st_size < 100:
+                    if os.stat(filename).st_size < 1000:
                         print("File %s empty, skipping" % filename)
                         self.log.appendFile(filename)
                         continue
@@ -628,6 +623,7 @@ class AviaNZ_batchProcess(QMainWindow):
                     self.statusBar().showMessage("Processing file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm))
                     self.update()
                     self.repaint()
+                    QApplication.processEvents()
 
                     # if it was processed previously (stored in log)
                     if filename in self.filesDone:
@@ -636,7 +632,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         continue
 
                     # check if file not empty
-                    if os.stat(filename).st_size < 100:
+                    if os.stat(filename).st_size < 1000:
                         print("File %s empty, skipping" % filename)
                         self.log.appendFile(filename)
                         continue
@@ -836,6 +832,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 # user generate new ones through Batch Review.
 
         # END of processing and exporting. Final cleanup
+        self.w_processButton.setEnabled(True)
         self.log.file.close()
         self.statusBar().showMessage("Processed all %d files" % total)
         msgtext = "Finished processing.\nWould you like to return to the start screen?"
@@ -1247,7 +1244,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 print("Warning: .data file lost for file", filename)
                 continue
 
-            if os.stat(filename).st_size < 100:
+            if os.stat(filename).st_size < 1000:
                 print("File %s empty, skipping" % filename)
                 continue
 
