@@ -23,7 +23,7 @@
 import os, re, fnmatch, sys, gc, math
 
 from PyQt5.QtGui import QIcon, QPixmap, QApplication, QFont
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QStatusBar
 from PyQt5.QtMultimedia import QAudioFormat
 from PyQt5.QtCore import Qt, QDir
 
@@ -46,6 +46,11 @@ import json, time
 import copy
 
 
+class TempStatusBar(QStatusBar):
+    def paintEvent(self, event):
+        print("------- repainting with message --------- ", self.currentMessage())
+        return super().paintEvent(event)
+
 class AviaNZ_batchProcess(QMainWindow):
     # Main class for batch processing
 
@@ -67,7 +72,9 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
+        self.setStatusBar(TempStatusBar())
         self.statusBar().showMessage("Ready for processing")
+
 
         self.setWindowTitle('AviaNZ - Batch Processing')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
