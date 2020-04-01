@@ -348,8 +348,8 @@ class AviaNZ(QMainWindow):
         self.showEnergies.setCheckable(True)
         self.showEnergies.setChecked(False)
 
-        if not self.DOC:
-            cqt = specMenu.addAction("Show CQT", self.showCQT)
+        # if not self.DOC:
+        #     cqt = specMenu.addAction("Show CQT", self.showCQT)
 
         specMenu.addSeparator()
 
@@ -447,7 +447,7 @@ class AviaNZ(QMainWindow):
         self.d_overview = Dock("Overview",size=(1200,150))
         self.d_ampl = Dock("Amplitude",size=(1200,150))
         self.d_spec = Dock("Spectrogram",size=(1200,300))
-        self.d_controls = Dock("Controls",size=(40,100))
+        self.d_controls = Dock("Controls",size=(40,90))
         self.d_files = Dock("Files",size=(40,200))
         self.d_plot = Dock("Plots",size=(1200,150))
         self.d_controls.setSizePolicy(1,1)
@@ -680,8 +680,10 @@ class AviaNZ(QMainWindow):
         self.volSlider.sliderMoved.connect(self.volSliderMoved)
         self.volSlider.setRange(0,100)
         self.volSlider.setValue(50)
-        self.volIcon = QLabel()
-        self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+        volIcon = QLabel()
+        #volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+        volIcon.setPixmap(QPixmap('img/volume.png').scaled(16, 16, transformMode=1))
+        volIcon.setAlignment(Qt.AlignCenter)
 
         # Brightness, and contrast sliders
         self.brightnessSlider = QSlider(Qt.Horizontal)
@@ -694,6 +696,10 @@ class AviaNZ(QMainWindow):
         self.brightnessSlider.setTickInterval(1)
         self.brightnessSlider.valueChanged.connect(self.setColourLevels)
 
+        brightnessLabel = QLabel()
+        brightnessLabel.setPixmap(QPixmap('img/brightstr24.png').scaled(16, 16, transformMode=1))
+        brightnessLabel.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+
         self.contrastSlider = QSlider(Qt.Horizontal)
         self.contrastSlider.setMinimum(0)
         self.contrastSlider.setMaximum(100)
@@ -701,11 +707,17 @@ class AviaNZ(QMainWindow):
         self.contrastSlider.setTickInterval(1)
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
+        contrastLabel = QLabel()
+        contrastLabel.setPixmap(QPixmap('img/contrstr24.png').scaled(16, 16, transformMode=1))
+        contrastLabel.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+
         # Delete segment button. We have to get rid of the extra event args
         deleteButton = QPushButton("&Delete current segment")
         deleteButton.clicked.connect(lambda _ : self.deleteSegment())
 
         # The spinbox for changing the width shown in the controls dock
+        windowLabel = QLabel('Visible window (seconds)')
+        windowLabel.setAlignment(Qt.AlignBottom)
         self.widthWindow = QDoubleSpinBox()
         self.widthWindow.setSingleStep(1.0)
         self.widthWindow.setDecimals(2)
@@ -724,18 +736,30 @@ class AviaNZ(QMainWindow):
             # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
             self.w_controls.addWidget(self.viewSpButton,row=1,col=3)
 
-        # hack for having some spacing
-        self.w_controls.layout.setRowMinimumHeight(2, 15)
-
-        self.w_controls.addWidget(self.volIcon, row=3, col=0)
-        self.w_controls.addWidget(self.volSlider, row=3, col=1, colspan=3)
-        self.w_controls.addWidget(QLabel("Brightness"),row=4,col=0,colspan=4)
+        self.w_controls.addWidget(volIcon, row=2, col=0)
+        self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=3)
+        self.w_controls.addWidget(brightnessLabel,row=4,col=0)
+        self.w_controls.addWidget(QLabel("Brightness"), row=4, col=1, colspan=3)
         self.w_controls.addWidget(self.brightnessSlider,row=5,col=0,colspan=4)
-        self.w_controls.addWidget(QLabel("Contrast"),row=6,col=0,colspan=4)
+        self.w_controls.addWidget(contrastLabel,row=6,col=0)
+        self.w_controls.addWidget(QLabel("Contrast"), row=6, col=1, colspan=3)
         self.w_controls.addWidget(self.contrastSlider,row=7,col=0,colspan=4)
-        self.w_controls.addWidget(QLabel('Visible window (seconds)'),row=8,col=0,colspan=4)
-        self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=4)
-        self.w_controls.addWidget(deleteButton,row=10,col=0,colspan=4)
+        self.w_controls.addWidget(windowLabel,row=9,col=0,colspan=4)
+        self.w_controls.addWidget(self.widthWindow,row=10,col=0,colspan=4)
+        self.w_controls.addWidget(deleteButton,row=11,col=0,colspan=4)
+
+        # add spacers to control stretch - seems to be ignored though
+        self.w_controls.addWidget(QLabel(), row=12, col=0)
+        self.w_controls.layout.setRowMinimumHeight(2, 25)
+        self.w_controls.layout.setRowMinimumHeight(3, 10)
+        self.w_controls.layout.setRowMinimumHeight(8, 10)
+        self.w_controls.layout.setRowMinimumHeight(12, 5)
+        # self.w_controls.layout.setColumnStretch(4, 3)
+        # set all cells to stretch equally
+        for r in range(11):
+            self.w_controls.layout.setRowStretch(r, 2)
+        for c in range(4):
+            self.w_controls.layout.setColumnStretch(c, 2)
 
         # The slider to show playback position
         # This is hidden, but controls the moving bar
@@ -1595,7 +1619,7 @@ class AviaNZ(QMainWindow):
 
                 self.energyPlot = pg.ScatterPlotItem()
                 self.energyPlot.setBrush(None)
-                self.energyPlot.setData(x, y, pen=pg.mkPen((0, 255, 0, 210), width=2))
+                self.energyPlot.setData(x, y, brush=pg.mkBrush((0, 255, 0, 130)), pen=pg.mkPen(None), size=5)
 
                 self.p_spec.addItem(self.energyPlot)
             else:
@@ -1618,11 +1642,11 @@ class AviaNZ(QMainWindow):
                 self.p_spec.removeItem(self.derivPlot)
             self.statusLeft.setText("Ready")
 
-    def showCQT(self):
-        cqt = self.sp.comp_cqt()
-        print(np.shape(cqt),np.shape(self.sg))
-        self.specPlot.setImage(10*np.log10(np.real(cqt*np.conj(cqt))).T)
-        self.p_spec.setXRange(0, np.shape(cqt)[1], update=True, padding=0)
+    # def showCQT(self):
+    #     cqt = self.sp.comp_cqt()
+    #     print(np.shape(cqt),np.shape(self.sg))
+    #     self.specPlot.setImage(10*np.log10(np.real(cqt*np.conj(cqt))).T)
+    #     self.p_spec.setXRange(0, np.shape(cqt)[1], update=True, padding=0)
 
     def showInvertedSpectrogram(self):
         """ Listener for the menu item that draws the spectrogram of the waveform of the inverted spectrogram."""
