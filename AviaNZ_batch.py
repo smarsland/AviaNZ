@@ -963,12 +963,14 @@ class AviaNZ_batchProcess(QMainWindow):
         else:
             self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
             # wipe same species:
-            for filt in self.FilterDicts.values():
-                if filt["species"] in species:
-                    print("Wiping species", filt["species"])
-                    oldsegs = self.segments.getSpecies(filt["species"])
+            for sp in species:
+                # shorthand for double-checking that it's not "Any Sound" etc
+                if sp in self.FilterDicts:
+                    spname = self.FilterDicts[sp]["species"]
+                    print("Wiping species", spname)
+                    oldsegs = self.segments.getSpecies(spname)
                     for i in reversed(oldsegs):
-                        wipeAll = self.segments[i].wipeSpecies(filt["species"])
+                        wipeAll = self.segments[i].wipeSpecies(spname)
                         if wipeAll:
                             del self.segments[i]
             print("%d segments loaded from .data file" % len(self.segments))
@@ -1334,14 +1336,14 @@ class AviaNZ_reviewAll(QMainWindow):
         # END of review and exporting. Final cleanup
         self.ConfigLoader.configwrite(self.config, self.configfile)
         if filesuccess == 1:
-            msgtext = "All files checked.\nWould you like to return to the start screen?"
+            msgtext = "All files checked. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
             msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             reply = msg.exec_()
             if reply == QMessageBox.Yes:
                 QApplication.exit(1)
         else:
-            msgtext = "Review stopped at file %s of %s.\nWould you like to return to the start screen?" % (cnt, total)
+            msgtext = "Review stopped at file %s of %s. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?" % (cnt, total)
             msg = SupportClasses.MessagePopup("w", "Review stopped", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             reply = msg.exec_()
