@@ -1485,14 +1485,14 @@ class BuildRecAdvWizard(QWizard):
         if platform.system() == 'Linux':
             self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) & Qt.WindowMaximizeButtonHint & Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
         self.setWizardStyle(QWizard.ModernStyle)
 
         # add the Save & Test button
         self.saveTestBtn = QPushButton("Save and Test")
         self.setButton(QWizard.CustomButton1, self.saveTestBtn)
         self.setButtonLayout([QWizard.Stretch, QWizard.BackButton, QWizard.NextButton, QWizard.CustomButton1, QWizard.FinishButton, QWizard.CancelButton])
-        self.setOptions(QWizard.HaveCustomButton1)
+        self.setOptions(QWizard.NoBackButtonOnStartPage | QWizard.HaveCustomButton1)
 
         self.filtersDir = filtdir
 
@@ -1846,8 +1846,9 @@ class TestRecWizard(QWizard):
         if platform.system() == 'Linux':
             self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) & Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
         self.setWizardStyle(QWizard.ModernStyle)
+        self.setOptions(QWizard.NoBackButtonOnStartPage)
 
         cl = SupportClasses.ConfigLoader()
         self.filterlist = cl.filters(filtdir)
