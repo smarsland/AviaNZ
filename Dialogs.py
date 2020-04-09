@@ -181,6 +181,10 @@ class Spectrogram(QDialog):
         self.hightext.setAlignment(Qt.AlignRight)
         self.highChange(maxFreqShow)
 
+        self.labelMinF = QLabel()
+        self.labelMaxF = QLabel()
+        self.labelMaxF.setAlignment(Qt.AlignRight)
+
         print("initing to", maxFreqShow)
         self.setValues(minFreq, maxFreq, minFreqShow, maxFreqShow)
         self.restore = QPushButton("Restore Defaults && Update")
@@ -211,9 +215,7 @@ class Spectrogram(QDialog):
         form2.addWidget(QLabel('Highest frequency'), row=2, col=0)
         form2.addWidget(self.hightext, row=2, col=1)
         form2.addWidget(self.high, row=3, col=0, colspan=2)
-        form2.addWidget(QLabel(str(minFreq)), row=4, col=0)
-        self.labelMaxF = QLabel(str(maxFreq))
-        self.labelMaxF.setAlignment(Qt.AlignRight)
+        form2.addWidget(self.labelMinF, row=4, col=0)
         form2.addWidget(self.labelMaxF, row=4, col=1)
 
         Box.addLayout(form)
@@ -232,6 +234,8 @@ class Spectrogram(QDialog):
         self.low.setValue(minFreqShow)
         self.high.setRange(minFreq,maxFreq)
         self.high.setValue(maxFreqShow)
+        self.labelMinF.setText(str(minFreq))
+        self.labelMaxF.setText(str(maxFreq))
 
     def getValues(self):
         if not self.incr.hasAcceptableInput() or not self.window_width.hasAcceptableInput():
