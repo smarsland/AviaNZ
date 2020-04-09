@@ -25,7 +25,7 @@ from jsonschema import validate
 from shutil import copyfile
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
-from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidget, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox
+from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt5.QtMultimedia import QAudio
 
@@ -491,6 +491,18 @@ class AviaNZ(QMainWindow):
         self.w_plot.addItem(self.p_plot,row=0,col=1)
         self.d_plot.addWidget(self.w_plot)
 
+        # Make the colours that are used in the interface
+        # The dark ones are to draw lines instead of boxes
+        self.ColourSelected = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], self.config['ColourSelected'][3])
+        self.ColourNamed = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], self.config['ColourNamed'][3])
+        self.ColourNone = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3])
+        self.ColourPossible = QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], self.config['ColourPossible'][3])
+
+        self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], 255)
+        self.ColourNamedDark = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], 255)
+        self.ColourNoneDark = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], 255)
+        self.ColourPossibleDark = QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], 255)
+
         # The axes
         # Time axis has to go separately in loadFile
         self.ampaxis = pg.AxisItem(orientation='left')
@@ -701,14 +713,14 @@ class AviaNZ(QMainWindow):
         self.confirmButton = QPushButton("   &Confirm labels")
         self.confirmButton.clicked.connect(self.confirmSegment)
         self.confirmButton.setIcon(QIcon(QPixmap('img/check-mark2.png')))
-        self.confirmButton.setStyleSheet("{padding: 3px 3px 3px 3px}")
+        self.confirmButton.setStyleSheet("QPushButton {padding: 3px 3px 3px 3px}")
         self.confirmButton.setToolTip("Set all labels in this segment as certain")
 
         # Delete segment button. We have to get rid of the extra event args
         self.deleteButton = QPushButton("  Delete segment")
         self.deleteButton.clicked.connect(lambda _ : self.deleteSegment())
         self.deleteButton.setIcon(QIcon(QPixmap('img/deleteL.png')))
-        self.deleteButton.setStyleSheet("{padding: 3px 3px 3px 3px}")
+        self.deleteButton.setStyleSheet("QPushButton {padding: 3px 3px 3px 3px}")
 
         # export selected sound
         self.exportSoundBtn = QPushButton("  &Save sound clip")
@@ -780,7 +792,7 @@ class AviaNZ(QMainWindow):
         self.d_spec.addWidget(self.scrollSlider)
 
         # List to hold the list of files
-        self.listFiles = QListWidget()
+        self.listFiles = SupportClasses.LightedFileList(self.ColourNone, self.ColourPossibleDark, self.ColourNamed)
         self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
@@ -800,18 +812,6 @@ class AviaNZ(QMainWindow):
         self.menuBirdList.triggered.connect(self.birdSelectedMenu)
         self.menuBird2.triggered.connect(self.birdSelectedMenu)
         #self.menuBirdList.aboutToHide.connect(self.processMultipleBirdSelections)
-
-        # Make the colours that are used in the interface
-        # The dark ones are to draw lines instead of boxes
-        self.ColourSelected = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], self.config['ColourSelected'][3])
-        self.ColourNamed = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], self.config['ColourNamed'][3])
-        self.ColourNone = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3])
-        self.ColourPossible = QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], self.config['ColourPossible'][3])
-
-        self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], 255)
-        self.ColourNamedDark = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], 255)
-        self.ColourNoneDark = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], 255)
-        self.ColourPossibleDark = QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], 255)
 
         # Hack to get the type of an ROI
         p_spec_r = SupportClasses.ShadedRectROI(0, 0)
@@ -1058,58 +1058,7 @@ class AviaNZ(QMainWindow):
             print("ERROR: directory %s doesn't exist" % self.soundFileDir)
             return
 
-        # clear file listbox
-        self.listFiles.clearSelection()
-        self.listFiles.clearFocus()
-        self.listFiles.clear()
-        pixmap = QPixmap(10, 10)
-        tempsl = Segment.SegmentList()
-
-        # set the icons to be shown on the right hand side
-        self.listOfFiles = QDir(self.SoundFileDir).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
-        listOfDataFiles = QDir(self.SoundFileDir).entryList(['*.data'])
-        for file in self.listOfFiles:
-            # If there is a .data version, colour the name red to show it has been labelled
-            item = QListWidgetItem(self.listFiles)
-            if file.isDir():
-                item.setText(file.fileName() + "/")
-            else:
-                item.setText(file.fileName())
-                # read the data file here and determine how to color this entry
-                if file.fileName()+'.data' in listOfDataFiles:
-                    # item.setForeground(Qt.red)
-                    # Try loading the segments to get min certainty
-                    try:
-                        tempsl.parseJSON(os.path.join(self.SoundFileDir, file.fileName()+'.data'), silent=True)
-                        if len(tempsl)==0:
-                            mincert = 100
-                        else:
-                            mincert = min([lab["certainty"] for seg in tempsl for lab in seg[4]])
-                    except Exception as e:
-                        print("Could not determine certainty for file", file.fileName())
-                        print(e)
-                        mincert = 0
-
-                    if mincert == 0:
-                        pixmap.fill(self.ColourNone)
-                        item.setIcon(QIcon(pixmap))
-                    elif mincert < 100:
-                        pixmap.fill(self.ColourPossibleDark)
-                        item.setIcon(QIcon(pixmap))
-                    else:
-                        pixmap.fill(self.ColourNamed)
-                        item.setIcon(QIcon(pixmap))
-                else:
-                    # it is a file, but no .data
-                    pixmap.fill(QtGui.QColor(255,255,255,0))
-                    item.setIcon(QIcon(pixmap))
-        # mark the current file
-        if fileName:
-            index = self.listFiles.findItems(fileName+"\/?",Qt.MatchRegExp)
-            if len(index)>0:
-                self.listFiles.setCurrentItem(index[0])
-            else:
-                self.listFiles.setCurrentRow(0)
+        self.listFiles.fill(self.SoundFileDir, fileName)
 
     def resetStorageArrays(self):
         """ Called when new files are loaded.
@@ -1239,18 +1188,17 @@ class AviaNZ(QMainWindow):
             if self.filename is not None:
                 self.closeFile()
 
-        # on first load:
-        if not hasattr(self, 'listOfFiles'):
-            self.fillFileList(current)
-
         # Update the file list to show the right location
         i=0
-        while i<len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current:
-            i+=1
-        if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
-            dir = QDir(self.SoundFileDir)
-            dir.cd(self.listOfFiles[i].fileName())
-            self.SoundFileDir=str(dir.absolutePath())
+        lof = self.listFiles.listOfFiles
+        # this is skipped on first load, when len=0
+        if len(lof)>0:
+            while i<len(lof)-1 and lof[i].fileName() != current:
+                i+=1
+            if lof[i].isDir() or (i == len(lof)-1 and lof[i].fileName() != current):
+                dir = QDir(self.SoundFileDir)
+                dir.cd(lof[i].fileName())
+                self.SoundFileDir=str(dir.absolutePath())
 
         # Now repopulate the listbox
         self.fillFileList(current)
@@ -3332,7 +3280,8 @@ class AviaNZ(QMainWindow):
 
         # a segment was found, so:
         # mark the current seg (also updates the colors)
-        self.deselectSegment(self.box1id)
+        if self.box1id>-1:
+            self.deselectSegment(self.box1id)
         self.selectSegment(nextseg)
 
         # Retrieve the current labels
@@ -4340,7 +4289,7 @@ class AviaNZ(QMainWindow):
 
     def testRecogniser(self, filter=None):
         """ Listener for the Test Recogniser action """
-        self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir, filter)
+        self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir, self.config, filter)
         self.testRecWizard.exec_()
 
     def saveNotestRecogniser(self):
@@ -5206,6 +5155,7 @@ class AviaNZ(QMainWindow):
                                                 self.config['ColourNamed'][2], self.config['ColourNamed'][3])
                 self.ColourNamedDark = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1],
                                                     self.config['ColourNamed'][2], 255)
+                self.listFiles.ColourNamed = self.ColourNamed
             elif childName=='Annotation.Segment colours.Possible':
                 rgbaVal = list(data.getRgb())
                 if rgbaVal[3] > 100:
@@ -5216,6 +5166,7 @@ class AviaNZ(QMainWindow):
                 self.ColourPossibleDark = QtGui.QColor(self.config['ColourPossible'][0],
                                                        self.config['ColourPossible'][1],
                                                        self.config['ColourPossible'][2], 255)
+                self.listFiles.ColourPossibleDark = self.ColourPossibleDark
             elif childName=="Annotation.Segment colours.Don't know":
                 rgbaVal = list(data.getRgb())
                 if rgbaVal[3] > 100:
@@ -5225,6 +5176,7 @@ class AviaNZ(QMainWindow):
                                                self.config['ColourNone'][2], self.config['ColourNone'][3])
                 self.ColourNoneDark = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1],
                                                    self.config['ColourNone'][2], 255)
+                self.listFiles.ColourNone = self.ColourNone
             elif childName=='Annotation.Segment colours.Currently selected':
                 rgbaVal = list(data.getRgb())
                 if rgbaVal[3] > 100:
@@ -5320,6 +5272,7 @@ class AviaNZ(QMainWindow):
             self.refreshOverviewWith(self.segments[id])
             self.updateText(id)
             self.updateColour(id)
+            self.segmentsToSave = True
 
     def deleteSegment(self,id=-1,hr=False):
         """ Listener for delete segment button, or backspace key. Also called when segments are deleted by the
@@ -5435,6 +5388,9 @@ class AviaNZ(QMainWindow):
             self.segments.metadata["Reviewer"] = self.reviewer
 
             self.segments.saveJSON(str(self.filename) + '.data')
+
+            # refresh this file's icon in file list dock
+            self.listFiles.refreshFile(os.path.basename(self.filename))
 
             self.segmentsToSave = False
         else:

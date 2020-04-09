@@ -22,9 +22,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import os, re, fnmatch, sys, gc, math
 
-from PyQt5.QtGui import QIcon, QPixmap, QApplication, QFont
+from PyQt5.QtGui import QIcon, QPixmap, QColor
 from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame
-from PyQt5.QtMultimedia import QAudioFormat
 from PyQt5.QtCore import Qt, QDir
 
 import numpy as np
@@ -220,8 +219,12 @@ class AviaNZ_batchProcess(QMainWindow):
 
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
+
         # List to hold the list of files
-        self.listFiles = QListWidget()
+        colourNone = QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3])
+        colourPossibleDark = QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], 255)
+        colourNamed = QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], self.config['ColourNamed'][3])
+        self.listFiles = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
         self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
@@ -288,7 +291,7 @@ class AviaNZ_batchProcess(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
-        self.fillFileList(self.dirName)
+        self.fillFileList()
 
     def addSpeciesBox(self):
         """ Deals with adding and moving species comboboxes """
@@ -870,9 +873,8 @@ class AviaNZ_batchProcess(QMainWindow):
 
         return 1
 
-    def fillFileList(self,fileName):
+    def fillFileList(self, fileName=None):
         """ Generates the list of files for the file listbox.
-        fileName - currently opened file (marks it in the list).
         Most of the work is to deal with directories in that list.
         It only sees *.wav files. Picks up *.data files, to make the filenames
         red in the list."""
@@ -881,30 +883,7 @@ class AviaNZ_batchProcess(QMainWindow):
             print("ERROR: directory %s doesn't exist" % self.soundFileDir)
             return
 
-        # clear file listbox
-        self.listFiles.clearSelection()
-        self.listFiles.clearFocus()
-        self.listFiles.clear()
-
-        self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
-        listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
-        for file in self.listOfFiles:
-            # If there is a .data version, colour the name red to show it has been labelled
-            item = QListWidgetItem(self.listFiles)
-            self.listitemtype = type(item)
-            if file.isDir():
-                item.setText(file.fileName() + "/")
-            else:
-                item.setText(file.fileName())
-            if file.fileName()+'.data' in listOfDataFiles:
-                item.setForeground(Qt.red)
-        # mark the current file
-        if fileName:
-            index = self.listFiles.findItems(fileName+"\/?", Qt.MatchRegExp)
-            if len(index)>0:
-                self.listFiles.setCurrentItem(index[0])
-            else:
-                self.listFiles.setCurrentRow(0)
+        self.listFiles.fill(self.dirName, fileName)
 
         # update the "Browse" field text
         self.w_dir.setPlainText(self.dirName)
@@ -914,7 +893,7 @@ class AviaNZ_batchProcess(QMainWindow):
         """
 
         # Need name of file
-        if type(current) is self.listitemtype:
+        if type(current) is QListWidgetItem:
             current = current.text()
             current = re.sub('\/.*', '', current)
 
@@ -922,11 +901,12 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # Update the file list to show the right one
         i=0
-        while i<len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current:
+        lof = self.listFiles.listOfFiles
+        while i<len(lof)-1 and lof[i].fileName() != current:
             i+=1
-        if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
+        if lof[i].isDir() or (i == len(lof)-1 and lof[i].fileName() != current):
             dir = QDir(self.dirName)
-            dir.cd(self.listOfFiles[i].fileName())
+            dir.cd(lof[i].fileName())
             # Now repopulate the listbox
             self.dirName=str(dir.absolutePath())
             self.previousFile = None
@@ -1116,8 +1096,12 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_files.addWidget(self.w_files)
         self.w_files.addWidget(QLabel('Double click to select a folder'), row=0, col=0)
         self.w_files.addWidget(QLabel('Red files have annotations'), row=1, col=0)
+
         # List to hold the list of files
-        self.listFiles = QListWidget()
+        colourNone = QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3])
+        colourPossibleDark = QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], 255)
+        colourNamed = QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], self.config['ColourNamed'][3])
+        self.listFiles = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
         self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
         self.w_files.addWidget(self.listFiles, row=2, col=0)
@@ -1172,19 +1156,11 @@ class AviaNZ_reviewAll(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
-        self.fillFileList(self.dirName)
+        # this will also collect some info about the dir
+        self.fillFileList()
 
         # find species names from the annotations
-        self.spList = set()
-        for root, dirs, files in os.walk(str(self.dirName)):
-            for filename in files:
-                if filename.lower().endswith('.wav') and filename+'.data' in files:
-                    f = os.path.join(root, filename+'.data')
-                    segments = Segment.SegmentList()
-                    segments.parseJSON(f)
-                    for seg in segments:
-                        self.spList.update([lab["species"] for lab in seg[4]])
-        self.spList = list(self.spList)
+        self.spList = list(self.listFiles.spList)
         # Can't review only "Don't Knows". Ideally this should call AllSpecies dialog tho
         try:
             self.spList.remove("Don't Know")
@@ -1884,34 +1860,16 @@ class AviaNZ_reviewAll(QMainWindow):
         if ev == Qt.Key_Escape and hasattr(self, 'humanClassifyDialog1'):
             self.humanClassifyDialog1.done(0)
 
-    def fillFileList(self,fileName):
+    def fillFileList(self,fileName=None):
         """ Generates the list of files for the file listbox.
-        fileName - currently opened file (marks it in the list).
-        Most of the work is to deal with directories in that list.
-        It only sees *.wav files. Picks up *.data and *_1.wav files, the first to make the filenames
-        red in the list, and the second to know if the files are long."""
+            fileName - currently opened file (marks it in the list).
+        """
 
         if not os.path.isdir(self.dirName):
             print("ERROR: directory %s doesn't exist" % self.soundFileDir)
             return
 
-        # clear file listbox
-        self.listFiles.clearSelection()
-        self.listFiles.clearFocus()
-        self.listFiles.clear()
-
-        self.listOfFiles = QDir(self.dirName).entryInfoList(['..','*.wav'],filters=QDir.AllDirs|QDir.NoDot|QDir.Files,sort=QDir.DirsFirst)
-        listOfDataFiles = QDir(self.dirName).entryList(['*.data'])
-        for file in self.listOfFiles:
-            # If there is a .data version, colour the name red to show it has been labelled
-            item = QListWidgetItem(self.listFiles)
-            self.listitemtype = type(item)
-            if file.isDir():
-                item.setText(file.fileName() + "/")
-            else:
-                item.setText(file.fileName())
-            if file.fileName()+'.data' in listOfDataFiles:
-                item.setForeground(Qt.red)
+        self.listFiles.fill(self.dirName, fileName)
 
         # update the "Browse" field text
         self.w_dir.setPlainText(self.dirName)
@@ -1920,7 +1878,7 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Listener for when the user clicks on an item in filelist """
 
         # Need name of file
-        if type(current) is self.listitemtype:
+        if type(current) is QListWidgetItem:
             current = current.text()
             current = re.sub('\/.*', '', current)
 
@@ -1928,16 +1886,14 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # Update the file list to show the right one
         i=0
-        while i<len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current:
+        lof = self.listFiles.listOfFiles
+        while i<len(lof)-1 and lof[i].fileName() != current:
             i+=1
-        if self.listOfFiles[i].isDir() or (i == len(self.listOfFiles)-1 and self.listOfFiles[i].fileName() != current):
+        if lof[i].isDir() or (i == len(lof)-1 and lof[i].fileName() != current):
             dir = QDir(self.dirName)
-            dir.cd(self.listOfFiles[i].fileName())
+            dir.cd(lof[i].fileName())
             # Now repopulate the listbox
             self.dirName=str(dir.absolutePath())
-            # self.listFiles.clearSelection()
-            # self.listFiles.clearFocus()
-            # self.listFiles.clear()
             self.previousFile = None
             self.fillFileList(current)
             # Show the selected file

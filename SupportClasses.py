@@ -23,8 +23,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #     from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QWidget
-from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QEvent, QLineF, QLine, QPoint, QSize
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QWidget, QListWidget, QListWidgetItem
+from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QEvent, QLineF, QLine, QPoint, QSize, QDir
 from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
@@ -35,6 +35,8 @@ import pyqtgraph.functions as fn
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import colors
 from openpyxl.styles import Font
+
+import Segment
 
 import wavio
 from time import sleep
@@ -1434,3 +1436,142 @@ class Layout(pg.LayoutWidget):
         ev.setDropAction(Qt.MoveAction)
         ev.accept()
 
+
+class LightedFileList(QListWidget):
+    """ File list with traffic light icons.
+        On init (or after any change), pass the red, darkyellow, and green colors.
+    """
+    def __init__(self, ColourNone, ColourPossibleDark, ColourNamed):
+        super().__init__()
+        self.ColourNone = ColourNone
+        self.ColourPossibleDark = ColourPossibleDark
+        self.ColourNamed = ColourNamed
+        self.soundDir = None
+        self.spList = set()
+        self.fsList = set()
+        self.listOfFiles = []
+
+        # for the traffic light icons
+        self.pixmap = QPixmap(10, 10)
+        self.blackpen = fn.mkPen(color=(160,160,160,255), width=2)
+        self.tempsl = Segment.SegmentList()
+
+    def fill(self, soundDir, fileName, readFmt=False, addWavNum=False):
+        """ read folder contents, populate the list widget.
+            soundDir: current dir
+            fileName: file which should be selected, or None
+            readFmt: should we read the wav header as well?
+            addWavNum: add extra info to the end of dir names
+        """
+        # clear current listbox
+        self.clearSelection()
+        self.clearFocus()
+        self.clear()
+        # collect some additional info about the current dir
+        self.spList = set()
+        self.fsList = set()
+        self.listOfFiles = []
+
+        with pg.BusyCursor():
+            # Read contents of current dir
+            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav'],filters=QDir.AllDirs | QDir.NoDot | QDir.Files,sort=QDir.DirsFirst)
+            self.soundDir = soundDir
+
+            for file in self.listOfFiles:
+                # add entry to the list
+                item = QListWidgetItem(self)
+
+                if file.isDir():
+                    # detailed dir view can be used for non-clickable instances
+                    if addWavNum and file.fileName()!="..":
+                        # count wavs in this dir:
+                        numwavs = 0
+                        for root, dirs, files in os.walk(file.filePath()):
+                            numwavs += sum(f.lower().endswith('.wav') for f in files)
+                        item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
+                    else:
+                        item.setText(file.fileName() + "/")
+                else:
+                    item.setText(file.fileName())
+
+                    # check for a data file here and color this entry based on that
+                    fullname = os.path.join(soundDir, file.fileName())
+                    # (also updates the directory info sets)
+                    self.paintItem(item, fullname+'.data')
+                    if readFmt:
+                        samplerate = wavio.readFmt(fullname)[0]
+                        self.fsList.add(samplerate)
+
+        if readFmt:
+            print("Found the following fs", self.fsList)
+
+        # mark the current file or first row (..), if not found
+        if fileName:
+            index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+            if len(index)>0:
+                self.setCurrentItem(index[0])
+            else:
+                self.setCurrentRow(0)
+
+
+    def refreshFile(self, fileName):
+        """ Repaint a single file icon.
+            fileName: file stem (dir will be read from self)
+        """
+        index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+        if len(index)==0:
+            return
+
+        if self.soundDir is None:
+            # something bad happened
+            print("Warning: soundDir not set, cannot find .data files")
+            return
+
+        curritem = index[0]
+        datafile = os.path.join(self.soundDir, fileName)+'.data'
+        self.paintItem(curritem, datafile)
+
+    def paintItem(self, item, datafile):
+        """ Read the JSON and draw the traffic light for a single item """
+        filesp = []
+        if os.path.isfile(datafile):
+            # Try loading the segments to get min certainty
+            try:
+                self.tempsl.parseJSON(datafile, silent=True)
+                if len(self.tempsl)==0:
+                    # .data exists, but empty - "file was looked at"
+                    mincert = -1
+                else:
+                    mincert = min([lab["certainty"] for seg in self.tempsl for lab in seg[4]])
+                    # also collect any species present
+                    filesp = [lab["species"] for seg in self.tempsl for lab in seg[4]]
+            except Exception as e:
+                # .data exists, but unreadable
+                print("Could not determine certainty for file", datafile)
+                print(e)
+                mincert = -1
+
+            if mincert == -1:
+                # .data exists, but no annotations
+                self.pixmap.fill(QColor(255,255,255,0))
+                painter = QPainter(self.pixmap)
+                painter.setPen(self.blackpen)
+                painter.drawRect(self.pixmap.rect())
+                painter.end()
+                item.setIcon(QIcon(self.pixmap))
+            elif mincert == 0:
+                self.pixmap.fill(self.ColourNone)
+                item.setIcon(QIcon(self.pixmap))
+            elif mincert < 100:
+                self.pixmap.fill(self.ColourPossibleDark)
+                item.setIcon(QIcon(self.pixmap))
+            else:
+                self.pixmap.fill(self.ColourNamed)
+                item.setIcon(QIcon(self.pixmap))
+        else:
+            # it is a file, but no .data
+            self.pixmap.fill(QColor(255,255,255,0))
+            item.setIcon(QIcon(self.pixmap))
+
+        # collect some extra info about this file as we've read it anyway
+        self.spList.update(filesp)
