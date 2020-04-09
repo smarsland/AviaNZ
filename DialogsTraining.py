@@ -27,12 +27,10 @@
 import os
 import time
 import platform
-import wavio
-import json
 import copy
 from shutil import copyfile
 
-from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap
+from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor
 from PyQt5.QtCore import QDir, Qt, QEvent
 from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QTextEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QInputDialog
 
@@ -46,7 +44,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 import numpy as np
 import colourMaps
-import SupportClasses as SupportClasses
+import SupportClasses
 import SignalProc
 import WaveletSegment
 import Segment
@@ -57,7 +55,7 @@ import Dialogs
 class BuildRecAdvWizard(QWizard):
     # page 1 - select training data
     class WPageData(QWizardPage):
-        def __init__(self, parent=None):
+        def __init__(self, config, parent=None):
             super(BuildRecAdvWizard.WPageData, self).__init__(parent)
             self.setTitle('Training data')
             self.setSubTitle('To start training, you need labelled calls from your species as training data (see the manual). Select the folder where this data is located. Then select the species.')
@@ -71,7 +69,10 @@ class BuildRecAdvWizard(QWizard):
             self.btnBrowse = QPushButton('Browse')
             self.btnBrowse.clicked.connect(self.browseTrainData)
 
-            self.listFiles = QListWidget()
+            colourNone = QColor(config['ColourNone'][0], config['ColourNone'][1], config['ColourNone'][2], config['ColourNone'][3])
+            colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
+            colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
+            self.listFiles = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(275)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
@@ -127,21 +128,13 @@ class BuildRecAdvWizard(QWizard):
                 print("Warning: directory doesn't exist")
                 return
 
-            self.listFiles.clear()
-            spList = set()
-            fs = []
-            # collect possible species from annotations:
-            for root, dirs, files in os.walk(dirName):
-                for filename in files:
-                    if filename.lower().endswith('.wav') and filename+'.data' in files:
-                        # this wav has data, so see what species are in there
-                        segments = Segment.SegmentList()
-                        segments.parseJSON(os.path.join(root, filename+'.data'))
-                        spList.update([lab["species"] for seg in segments for lab in seg[4]])
+            self.listFiles.fill(dirName, fileName=None, readFmt=True, addWavNum=True)
 
-                        # also retrieve its sample rate
-                        samplerate = wavio.readFmt(os.path.join(root, filename))[0]
-                        fs.append(samplerate)
+            # while reading the file, we also collected a list of species present there
+            spList = list(self.listFiles.spList)
+            # and sample rate info
+            fs = list(self.listFiles.fsList)
+
             if len(fs)==0:
                 print("Warning: no suitable files found")
                 return
@@ -152,30 +145,11 @@ class BuildRecAdvWizard(QWizard):
             self.fs.setSingleStep(4000)
             self.fs.setTickInterval(4000)
 
-            spList = list(spList)
             spList.insert(0, 'Choose species...')
             self.species.clear()
             self.species.addItems(spList)
-            print(spList,len(spList))
             if len(spList)==2:
                 self.species.setCurrentIndex(1)
-
-            listOfFiles = QDir(dirName).entryInfoList(['*.wav'], filters=QDir.AllDirs | QDir.NoDotAndDotDot | QDir.Files,sort=QDir.DirsFirst)
-            listOfDataFiles = QDir(dirName).entryList(['*.wav.data'])
-            for file in listOfFiles:
-                # Add the filename to the right list
-                item = QListWidgetItem(self.listFiles)
-                # count wavs in directories:
-                if file.isDir():
-                    numwavs = 0
-                    for root, dirs, files in os.walk(file.filePath()):
-                        numwavs += sum(f.lower().endswith('.wav') for f in files)
-                    item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
-                else:
-                    item.setText(file.fileName())
-                # If there is a .data version, colour the name red to show it has been labelled
-                if file.fileName()+'.data' in listOfDataFiles:
-                    item.setForeground(Qt.red)
 
     # page 2 - precluster
     class WPagePrecluster(QWizardPage):
@@ -1529,7 +1503,7 @@ class BuildRecAdvWizard(QWizard):
         self.filtersDir = filtdir
 
         # page 1: select training data
-        browsedataPage = BuildRecAdvWizard.WPageData()
+        browsedataPage = BuildRecAdvWizard.WPageData(config)
         browsedataPage.registerField("trainDir*", browsedataPage.trainDirName)
         browsedataPage.registerField("species*", browsedataPage.species, "currentText", browsedataPage.species.currentTextChanged)
         browsedataPage.registerField("fs*", browsedataPage.fs)
@@ -1639,7 +1613,7 @@ class BuildRecAdvWizard(QWizard):
 
 class TestRecWizard(QWizard):
     class WPageData(QWizardPage):
-        def __init__(self, filter=None, parent=None):
+        def __init__(self, config, filter=None, parent=None):
             super(TestRecWizard.WPageData, self).__init__(parent)
             self.setTitle('Testing data')
             self.setSubTitle('Select the folder with testing data, then choose species')
@@ -1656,7 +1630,10 @@ class TestRecWizard(QWizard):
             self.btnBrowse = QPushButton('Browse')
             self.btnBrowse.clicked.connect(self.browseTestData)
 
-            self.listFiles = QListWidget()
+            colourNone = QColor(config['ColourNone'][0], config['ColourNone'][1], config['ColourNone'][2], config['ColourNone'][3])
+            colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
+            colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
+            self.listFiles = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(275)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
@@ -1693,23 +1670,8 @@ class TestRecWizard(QWizard):
             dirName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose folder for testing')
             self.testDirName.setText(dirName)
 
-            self.listFiles.clear()
-            listOfFiles = QDir(dirName).entryInfoList(['*.wav'], filters=QDir.AllDirs | QDir.NoDotAndDotDot | QDir.Files,sort=QDir.DirsFirst)
-            listOfDataFiles = QDir(dirName).entryList(['*.wav.data'])
-            for file in listOfFiles:
-                # Add the filename to the right list
-                item = QListWidgetItem(self.listFiles)
-                # count wavs in directories:
-                if file.isDir():
-                    numwavs = 0
-                    for root, dirs, files in os.walk(file.filePath()):
-                        numwavs += sum(f.lower().endswith('.wav') for f in files)
-                    item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
-                else:
-                    item.setText(file.fileName())
-                # If there is a .data version, colour the name red to show it has been labelled
-                if file.fileName()+'.data' in listOfDataFiles:
-                    item.setForeground(Qt.red)
+            self.listFiles.fill(dirName, fileName=None, readFmt=False, addWavNum=True)
+
 
     class WPageMain(QWizardPage):
         def __init__(self, parent=None):
@@ -1855,7 +1817,7 @@ class TestRecWizard(QWizard):
             resstream.close()
 
     # Main init of the testing wizard
-    def __init__(self, filtdir, filter=None, parent=None):
+    def __init__(self, filtdir, config, filter=None, parent=None):
         super(TestRecWizard, self).__init__()
         self.setWindowTitle("Test Recogniser")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -1868,7 +1830,7 @@ class TestRecWizard(QWizard):
 
         cl = SupportClasses.ConfigLoader()
         self.filterlist = cl.filters(filtdir)
-        browsedataPage = TestRecWizard.WPageData(filter=filter)
+        browsedataPage = TestRecWizard.WPageData(config, filter=filter)
         browsedataPage.registerField("testDir*", browsedataPage.testDirName)
         browsedataPage.registerField("species*", browsedataPage.species, "currentText", browsedataPage.species.currentTextChanged)
         self.addPage(browsedataPage)
