@@ -102,8 +102,7 @@ class TimeAxisMin(pg.AxisItem):
 
 
 class AxisWidget(QAbstractButton):
-    # Class for HumanClassify dialogs to put spectrograms on buttons
-    # Also includes playback capability.
+    # Axis shown along the side of Single Sp buttons
     def __init__(self, sgsize, minFreq, maxFreq, parent=None):
         super(AxisWidget, self).__init__(parent)
         self.minFreq = minFreq
@@ -1317,6 +1316,10 @@ class PicButton(QAbstractButton):
 
     def paintEvent(self, event):
         if type(event) is not bool:
+            # this will repaint the entire widget, rather than
+            # trying to squish the image into the current viewport
+            rect = self.im1.rect()
+
             painter = QPainter(self)
             painter.setPen(QPen(QColor(80,255,80), 2))
             if self.cluster:
@@ -1327,7 +1330,7 @@ class PicButton(QAbstractButton):
                     painter.setOpacity(0.8)
                 elif self.mark == "red":
                     painter.setOpacity(0.5)
-            painter.drawImage(event.rect(), self.im1)
+            painter.drawImage(rect, self.im1)
             if not self.cluster:
                 painter.drawLine(self.line1)
                 painter.drawLine(self.line2)
@@ -1340,17 +1343,17 @@ class PicButton(QAbstractButton):
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220,220,0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "?")
+                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "?")
             elif self.mark == "yellow" and self.cluster:
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220, 220, 0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "√")
+                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "√")
             elif self.mark == "red":
                 painter.setOpacity(0.8)
                 painter.setPen(QPen(QColor(220,0,0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "X")
+                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "X")
             else:
                 print("ERROR: unrecognised segment mark")
                 return
