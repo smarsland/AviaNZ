@@ -272,6 +272,7 @@ class Clustering:
 
         # 1. Get the frequency band and sampling frequency from annotations
         fs, f1, f2 = self.getFrq(dirname, species)
+        print("Clustering using sampling rate", fs)
 
         # 2. Find the lower and upper bounds (relevant to the frq range)
         if feature == 'mfcc' and f1 != 0 and f2 != 0:

@@ -339,7 +339,7 @@ class BuildRecAdvWizard(QWizard):
 
                 # Create and show the buttons
                 self.clearButtons()
-                self.addButtons()
+                self.addButtons(fs)
                 self.updateButtons()
                 self.segsChanged = True
                 self.completeChanged.emit()
@@ -723,7 +723,7 @@ class BuildRecAdvWizard(QWizard):
             self.completeChanged.emit()
             print('updated clusters: ', self.clusters)
 
-        def addButtons(self):
+        def addButtons(self, tgtsamplerate):
             """ Only makes the PicButtons and self.clusters dict
             """
             self.clusters = []
@@ -732,10 +732,30 @@ class BuildRecAdvWizard(QWizard):
                 self.clusters.append((i, 'Cluster_' + str(i)))
             self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
 
+            # largest spec will be this wide
+            maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * tgtsamplerate // 256
+
             # Create the buttons for each segment
             for seg in self.segments:
-                sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
-                newButton = SupportClasses.PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart, self.colourEnd, False, cluster=True)
+                sp = SignalProc.SignalProc(512, 256)
+                sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
+
+                # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
+                incr = 256 * sp.sampleRate // tgtsamplerate
+                sgRaw = sp.spectrogram(window='Hann', incr=incr, mean_normalise=True, onesided=True,
+                                              multitaper=False, need_even=False)
+                maxsg = np.min(sgRaw)
+                self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+                self.setColourMap()
+
+                # buffer the image to largest spec size, so that the resulting buttons would have equal scale
+                if self.sg.shape[0]<maxspecsize:
+                    padlen = int(maxspecsize - self.sg.shape[0])//2
+                    sg = np.pad(self.sg, ((padlen, padlen), (0,0)), constant_values=np.quantile(self.sg, 0.1))
+                else:
+                    sg = self.sg
+
+                newButton = SupportClasses.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart, self.colourEnd, False, cluster=True)
                 self.picbuttons.append(newButton)
             # (updateButtons will place them in layouts and show them)
 
@@ -827,20 +847,6 @@ class BuildRecAdvWizard(QWizard):
                     btn.media_obj.applyVolSlider(value)
             except Exception:
                 pass
-
-        def loadFile(self, filename, duration=0, offset=0, silent=False):
-            if duration == 0:
-                duration = None
-            sp = SignalProc.SignalProc(512, 256)
-            sp.readWav(filename, duration, offset, silent)
-
-            sgRaw = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,
-                                          multitaper=False, need_even=False)
-            maxsg = np.min(sgRaw)
-            self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
-            self.setColourMap()
-
-            return self.sg, sp.data, sp.audioFormat
 
         def setColourMap(self):
             """ Listener for the menu item that chooses a colour map.

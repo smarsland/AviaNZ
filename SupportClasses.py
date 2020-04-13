@@ -1502,8 +1502,12 @@ class LightedFileList(QListWidget):
                     # (also updates the directory info sets)
                     self.paintItem(item, fullname+'.data')
                     if readFmt:
-                        samplerate = wavio.readFmt(fullname)[0]
-                        self.fsList.add(samplerate)
+                        try:
+                            samplerate = wavio.readFmt(fullname)[0]
+                            self.fsList.add(samplerate)
+                        except Exception as e:
+                            print("Warning: could not parse format of WAV file", fullname)
+                            print(e)
 
         if readFmt:
             print("Found the following fs", self.fsList)

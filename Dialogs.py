@@ -2433,8 +2433,17 @@ class Cluster(QDialog):
 
         # Create the buttons for each segment
         for seg in self.segments:
-            sg, audiodata, audioFormat = self.loadFile(seg[0], seg[1][1] - seg[1][0], seg[1][0])
-            newButton = SupportClasses.PicButton(1, np.fliplr(sg), audiodata, audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1],
+            sp = SignalProc.SignalProc(512, 256)
+            sp.readWav(seg[0], seg[1][1] - seg[1][0], seg[1][0])
+            sgRaw = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,
+                                   multitaper=False, need_even=False)
+            maxsg = np.min(sgRaw)
+            self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
+            self.setColourMap()
+
+            sg = self.sg
+
+            newButton = SupportClasses.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1],
                                           self.lut, self.colourStart, self.colourEnd, False, cluster=True)
             self.picbuttons.append(newButton)
         # (updateButtons will place them in layouts and show them)
@@ -2483,20 +2492,6 @@ class Cluster(QDialog):
                 btn.media_obj.applyVolSlider(value)
         except Exception:
             pass
-
-    def loadFile(self, filename, duration=0, offset=0):
-        if duration == 0:
-            duration = None
-        sp = SignalProc.SignalProc(512, 256)
-        sp.readWav(filename, duration, offset)
-
-        sgRaw = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,
-                                      multitaper=False, need_even=False)
-        maxsg = np.min(sgRaw)
-        self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
-        self.setColourMap()
-
-        return self.sg, sp.data, sp.audioFormat
 
     def setColourMap(self):
         """ Listener for the menu item that chooses a colour map.
