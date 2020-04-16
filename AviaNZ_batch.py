@@ -1077,7 +1077,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fHigh.setValue(8000)
         self.fHightext = QLabel('Show freq. below (Hz)')
         self.fHighvalue = QLabel('8000')
-        receiverH = lambda value: self.fHighvalue.setText(str(value))
+        receiverH = lambda value: self.fHighvalue.setText(str(int(value/2)))
         self.fHigh.valueChanged.connect(receiverH)
         # add sliders to dock
         self.d_detection.addWidget(self.fLowtext, row=4, col=0)
