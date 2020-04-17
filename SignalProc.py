@@ -553,7 +553,9 @@ class SignalProc:
 
     def mean_frequency(self,sampleRate,timederiv,freqderiv):
         freqs = sampleRate//2 / np.shape(timederiv)[1] * (np.arange(np.shape(timederiv)[1])+1)
-        mf = np.sum(freqs * (timederiv**2 + freqderiv**2),axis=1)/np.sum(timederiv**2 + freqderiv**2,axis=1)
+        mfd = np.sum(timederiv**2 + freqderiv**2,axis=1)
+        mfd = np.where(mfd==0,1,mfd)
+        mf = np.sum(freqs * (timederiv**2 + freqderiv**2),axis=1)/mfd
         return freqs,mf
 
     def goodness_of_pitch(self,spectral_deriv,sg):
@@ -582,7 +584,9 @@ class SignalProc:
         freqderiv = np.imag(S)
 
         # Frequency modulation is the angle $\pi/2 - direction of max change$
-        fm = np.arctan(np.max(timederiv**2, axis=0) / np.max(freqderiv**2, axis=0))
+        mfd = np.max(freqderiv**2, axis=0)
+        mfd = np.where(mfd==0,1,mfd)
+        fm = np.arctan(np.max(timederiv**2, axis=0) / mfd)
         spectral_deriv = -timederiv*np.sin(fm) + freqderiv*np.cos(fm)
 
         sg = np.sum(np.real(sg*np.conj(sg)), axis=2)

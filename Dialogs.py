@@ -2019,6 +2019,7 @@ class HumanClassify2(QDialog):
         for row in range(self.numPicsV):
             # add a frequency axis
             # args: spectrogram height in spec units, min and max frq in kHz for axis ticks
+            print(self.numPicsV)
             sg_axis = SupportClasses.AxisWidget(SgSize, minFreq/1000, maxFreq/1000)
             self.flowAxes.addWidget(sg_axis, row, 0)
             self.flowAxes.layout.setRowMinimumHeight(row, self.specV+10)
@@ -2033,10 +2034,18 @@ class HumanClassify2(QDialog):
                 self.flowLayout.layout.setRowMinimumHeight(row, self.specV+10)
                 self.buttons[self.butStart+butNum].show()
                 butNum += 1
-                # stop if we are out of segments
+
                 if self.butStart+butNum==len(self.buttons):
+                    # stop if we are out of segments
                     return
-        #self.update()
+
+        #for col in range(1, self.numPicsH+1):
+            #time_axis = SupportClasses.TimeAxisWidget(self.specH,10)
+            #self.flowLayout.addWidget(time_axis, self.numPicsH+1, col)
+            #self.flowLayout.layout.setRowMinimumHeight(self.numPicsH+1, self.specV+10)
+            #self.flowLayout.layout.setColumnMinimumWidth(col, self.specH+10)
+            #time_axis.show()
+
         self.repaint()
         pg.QtGui.QApplication.processEvents()
 
