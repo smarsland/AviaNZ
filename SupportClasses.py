@@ -151,6 +151,58 @@ class AxisWidget(QAbstractButton):
     def minimumSizeHint(self):
         return QSize(60, self.sgsize)
 
+class TimeAxisWidget(QAbstractButton):
+    # Class for HumanClassify dialogs to put spectrograms on buttons
+    # Also includes playback capability.
+    def __init__(self, sgsize, maxTime, parent=None):
+        super(TimeAxisWidget, self).__init__(parent)
+        self.sgsize = sgsize
+        self.maxTime = maxTime
+
+        # fixed size
+        self.setSizePolicy(0,0)
+        self.setMinimumSize(70, sgsize)
+        self.fontsize = min(max(int(math.sqrt(sgsize)*0.4), 8), 12)
+
+    def paintEvent(self, event):
+        if type(event) is not bool:
+            painter = QPainter(self)
+            # actual axis line painting
+            bottomL = event.rect().bottomLeft()
+            bottomR = event.rect().bottomRight()
+            painter.setPen(QPen(QColor(20,20,20), 1))
+
+            painter.setFont(QFont("Helvetica", self.fontsize))
+
+            # draw tickmarks and numbers
+            currTime = 0
+            fontOffset = 1.2*self.fontsize
+
+            painter.drawLine(bottomL.x(), bottomL.y()-2*fontOffset, bottomR.x(), bottomR.y()-2*fontOffset)
+
+            tickmark = QLine(bottomL.x(),bottomL.y()-2*fontOffset, bottomL.x(), bottomL.y()-2*fontOffset-6)
+            painter.drawLine(tickmark)
+            painter.drawText(tickmark.x1(), tickmark.y1()+2*fontOffset, "%.1f" % currTime)
+            for ticknum in range(4):
+                currTime += self.maxTime/5
+                tickmark.translate(event.rect().width()//5,0)
+                painter.drawLine(tickmark)
+                painter.drawText(tickmark.x1()-fontOffset, tickmark.y1()+2*fontOffset, "%.1f" % currTime)
+            tickmark.translate(event.rect().width()//5,0)
+            painter.drawLine(tickmark)
+            painter.drawText(tickmark.x2()-2*fontOffset, tickmark.y1()+2*fontOffset, "%.1f" % self.maxTime)
+
+            painter.save()
+            painter.translate(event.rect().width()//5,0)
+            #painter.rotate(-90)
+            painter.drawText((bottomR.x() - bottomL.x())//2, bottomL.y(), "s")
+            painter.restore()
+
+    def sizeHint(self):
+        return QSize(self.sgsize,60)
+
+    def minimumSizeHint(self):
+        return QSize(self.sgsize,60)
 
 class ShadedROI(pg.ROI):
     # A region of interest that is shaded, for marking segments
@@ -312,6 +364,10 @@ class LinearRegionItem2(pg.LinearRegionItem):
         self.bounds = bounds
         self.lines[0].btn = self.parent.MouseDrawingButton
         self.lines[1].btn = self.parent.MouseDrawingButton
+        self.setHoverBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 100)))
+
+    def setHoverBrush(self, *br, **kargs):
+        self.hoverBrush = fn.mkBrush(*br, **kargs)
 
     def mouseDragEvent(self, ev):
         if not self.movable or ev.button()==self.parent.MouseDrawingButton:
