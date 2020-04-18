@@ -1900,6 +1900,7 @@ class HumanClassify2(QDialog):
         # (fills self.buttons)
         # self.flowLayout = QGridLayout()
         self.flowLayout = pg.LayoutWidget()
+        self.flowLayout.layout.setAlignment(Qt.AlignLeft)
         # these sizes ensure at least one image fits:
         self.specV = 0
         self.specH = 0
