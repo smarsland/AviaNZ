@@ -215,14 +215,14 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, config, parent=None):
             super(BuildRecAdvWizard.WPageCluster, self).__init__(parent)
             self.setTitle('Cluster similar looking calls')
-            self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate. To move one call, just drag it with the mouse. To move more, click on them so they are marked with a tick and drag any of them. To merge two types, select all of one group by clicking the empty box next to the name, and then drag any of them. You might also want to name each type of call.')
+            self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
             # start larger than minimumSize, but not bigger than the screen:
             screenresol = QApplication.primaryScreen().availableSize()
             self.manualSizeHint = QSize(min(800, 0.9*screenresol.width()), min(600, 0.9*screenresol.height()))
             self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
             self.adjustSize()
 
-            instr = QLabel("Drag an image to a new class to move a single example. Click on a set of images (so that they are marked with a tick) and drag one of them to move several at once. Click the check box to the right of the name to select a whole cluster, for example to merge two. Click on the name and type a new one to change it. Select one or more images and click `Create cluster' to make another call type.")
+            instr = QLabel("To move one call, just drag it with the mouse. To move more, click on them so they are marked with a tick and drag any of them. To merge two types, select all of one group by clicking the empty box next to the name, and then drag any of them. You might also want to name each type of call.")
             instr.setWordWrap(True)
 
             self.sampleRate = 0
