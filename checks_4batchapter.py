@@ -859,56 +859,47 @@ for i in range(len(NT_ST)):
 #Save plots
 test_dir="D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TEST2\\BAT SEARCH TESTS\\Test_79\\study3\\Bat Chapter\\"
 
-#LT plot
-fig, axes=plt.subplots(3,1,sharex='all', sharey='col')
-fig.suptitle('LT files')
-axes[0].plot(LT_filenames,LT_LT_best3mean,'r', LT_LT_mean, 'b')
-axes[0].set_ylabel('LT prob.',  rotation=0, size='large')
-axes[1].plot(LT_filenames,LT_ST_best3mean,'r', LT_ST_mean, 'b')
-axes[1].set_ylabel('ST prob.',  rotation=0, size='large')
-axes[2].plot(LT_filenames,LT_NT_best3mean,'r', LT_NT_mean, 'b')
-axes[2].set_ylabel('Noise prob.',  rotation=0, size='large')
-axes[2].axes.xaxis.set_ticklabels([]) 
+#Plot all togheter
+# Lt first columin, st second, nt third
+fig, axes=plt.subplots(3,3,sharex='col', sharey='all')
+fig.suptitle('Class probabilities for each file type')
+#LT
+axes[0][0].plot(LT_filenames,LT_LT_best3mean,'r', LT_LT_mean, 'b')
+axes[0][0].set_title('LT files')
+axes[0][0].set_ylabel('Class 0',  rotation=0, size='large')
+axes[1][0].plot(LT_filenames,LT_ST_best3mean,'r', LT_ST_mean, 'b')
+axes[1][0].set_ylabel('Class 1',  rotation=0, size='large')
+axes[2][0].plot(LT_filenames,LT_NT_best3mean,'r', LT_NT_mean, 'b')
+axes[2][0].set_ylabel('Class 2',  rotation=0, size='large')
+axes[2][0].axes.xaxis.set_ticklabels([]) 
 
-#hide labels for inner plots
-for ax in axes.flat:
-    ax.label_outer()
+# #hide labels for inner plots
+# for ax in axes.flat:
+#     ax.label_outer()
 
-plt.savefig(test_dir+"LT_prob.png")
+#ST 
+axes[0][1].plot(ST_filenames,ST_LT_best3mean,'r', ST_LT_mean, 'b')
+axes[0][1].set_title('ST files')
+axes[1][1].plot(ST_filenames,ST_ST_best3mean,'r', ST_ST_mean, 'b')
+axes[2][1].plot(ST_filenames,ST_NT_best3mean,'r', ST_NT_mean, 'b')
+axes[2][1].axes.xaxis.set_ticklabels([]) 
 
-#ST plot
-fig, axes=plt.subplots(3,1,sharex='all', sharey='col')
-fig.suptitle('ST files')
-axes[0].plot(ST_filenames,ST_LT_best3mean,'r', ST_LT_mean, 'b')
-axes[0].set_ylabel('LT prob.',  rotation=0, size='large')
-axes[1].plot(ST_filenames,ST_ST_best3mean,'r', ST_ST_mean, 'b')
-axes[1].set_ylabel('ST prob.',  rotation=0, size='large')
-axes[2].plot(ST_filenames,ST_NT_best3mean,'r', ST_NT_mean, 'b')
-axes[2].set_ylabel('Noise prob.',  rotation=0, size='large')
-axes[2].axes.xaxis.set_ticklabels([]) 
-
-#hide labels for inner plots
-for ax in axes.flat:
-    ax.label_outer()
-
-plt.savefig(test_dir+"ST_prob.png")
+# #hide labels for inner plots
+# for ax in axes.flat:
+#     ax.label_outer()
 
 #NT plot
-fig, axes=plt.subplots(3,1,sharex='all', sharey='col')
-fig.suptitle('Noise files')
-axes[0].plot(NT_filenames,NT_LT_best3mean,'r', NT_LT_mean, 'b')
-axes[0].set_ylabel('LT prob.',  rotation=0, size='large')
-axes[1].plot(NT_filenames,NT_ST_best3mean,'r', NT_ST_mean, 'b')
-axes[1].set_ylabel('ST prob.',  rotation=0, size='large')
-axes[2].plot(NT_filenames,NT_NT_best3mean,'r', NT_NT_mean, 'b')
-axes[2].set_ylabel('Noise prob.',  rotation=0, size='large')
-axes[2].axes.xaxis.set_ticklabels([]) 
+axes[0][2].plot(NT_filenames,NT_LT_best3mean,'r', NT_LT_mean, 'b')
+axes[0][2].set_title('Noise files')
+axes[1][2].plot(NT_filenames,NT_ST_best3mean,'r', NT_ST_mean, 'b')
+axes[2][2].plot(NT_filenames,NT_NT_best3mean,'r', NT_NT_mean, 'b')
+axes[2][2].axes.xaxis.set_ticklabels([]) 
 
 #hide labels for inner plots
 for ax in axes.flat:
     ax.label_outer()
 
-plt.savefig(test_dir+"NT_prob.png")
+plt.savefig(test_dir+"all_prob.png")
 
 
 
