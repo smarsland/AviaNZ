@@ -2007,8 +2007,8 @@ class AviaNZ(QMainWindow):
 
         # plot energy in "rain"
         if self.extra == "Rain":
-            we_mean = np.zeros(int(self.datalengthSec))
-            we_std = np.zeros(int(self.datalengthSec))
+            we_mean = np.zeros(int(np.ceil(self.datalengthSec)))
+            we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(self.datalength/self.sampleRate)):
                 data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
                 tempsp = SignalProc.SignalProc()
@@ -3308,7 +3308,7 @@ class AviaNZ(QMainWindow):
         # Merge what was split, and ANY OTHER call type overlaps:
         todelete = self.segments.mergeSplitSeg()
         # delete ones that merged into others
-        for dl in reversed(todelete):
+        for dl in todelete:
             self.deleteSegment(dl)
         # need to update the merged segment boxes:
         self.removeSegments(delete=False)
@@ -3754,7 +3754,7 @@ class AviaNZ(QMainWindow):
         # Merge what was split, and ANY OTHER call type overlaps:
         todelete2 = self.segments.mergeSplitSeg()
         # delete ones that merged into others
-        for dl in reversed(todelete2):
+        for dl in todelete2:
             self.deleteSegment(dl)
         # need to update the merged segment boxes:
         self.removeSegments(delete=False)

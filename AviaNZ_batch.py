@@ -1298,7 +1298,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 filesuccess = self.review_single(filename, sTime)
             # merge back any split segments, plus ANY overlaps within calltypes
             todelete = self.segments.mergeSplitSeg()
-            for dl in reversed(todelete):
+            for dl in todelete:
                 del self.segments[dl]
 
             # break out of review loop if Esc detected
@@ -1561,7 +1561,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog2.done(1)
 
         # Save the errors in a file
-        if self.config['saveCorrections'] and len(outputErrors)>0:
+        if self.config['saveCorrections'] and len(outputErrors) > 0:
             if self.species2clean(self.species):
                 speciesClean = self.cleanSpecies()
             else:
@@ -1619,7 +1619,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
         self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyQuestion)
-        success = self.humanClassifyDialog1.exec_() # 1 on clean exit
+        success = self.humanClassifyDialog1.exec_()     # 1 on clean exit
 
         if success == 0:
             self.humanClassifyDialog1.stopPlayback()

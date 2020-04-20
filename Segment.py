@@ -424,6 +424,7 @@ class SegmentList(list):
                     # no need to delete anything
         # avoid duplicates in output to make life easier for later deletion
         todelete = list(set(todelete))
+        todelete.sort(reverse=True)
         return todelete
 
     def getSummaries(self):
@@ -1133,10 +1134,12 @@ class PostProcess:
             self.segments.append([seg, cert])
 
         if CNNmodel:
-            self.CNNmodel = CNNmodel[0]    # CNNmodel is a list [model, win, inputdim, outputdict]
+            self.CNNmodel = CNNmodel[0]    # CNNmodel is a list [model, win, inputdim, outputdict, windowInc, thrs]
             self.CNNwindow = CNNmodel[1]
             self.CNNinputdim = CNNmodel[2]
             self.CNNoutputs = CNNmodel[3]
+            self.CNNwindowInc = CNNmodel[4]
+            self.CNNthrs = CNNmodel[5]
             self.tgtsampleRate = tgtsampleRate
         else:
             self.CNNmodel = None
@@ -1163,7 +1166,7 @@ class PostProcess:
         featuress = []
         n = (seg[1] - seg[0]) // self.CNNwindow
 
-        sp = SignalProc.SignalProc(256, 128)
+        sp = SignalProc.SignalProc(self.CNNwindowInc[0], self.CNNwindowInc[1])
         sp.data = data
         sp.sampleRate = fs
         _ = sp.spectrogram()
@@ -1204,7 +1207,7 @@ class PostProcess:
                 n = 1
             data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
             # find the syllables from the seg and generate features for CNN
-            sp = SignalProc.SignalProc(256, 128)
+            sp = SignalProc.SignalProc()
             sp.data = data
             sp.sampleRate = self.sampleRate
             if self.sampleRate != self.tgtsampleRate:
@@ -1220,49 +1223,24 @@ class PostProcess:
             else:
                 probs = 0
             if isinstance(probs, int):
-                # prediction = len(self.CNNoutputs) - 2     # Remember that the noise class is always the second last,
-                #                                           # male-0, femle-1, noise-2, silence-3
-                probability = 0
+                # there is no at least one img generated from this segment, very unlikely to be a true seg.
+                certainty = 0
             else:
                 # mean of best n
                 ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
                 meanprob = [np.mean(probs[ind[i][-n:], i]) for i in range(np.shape(probs)[1])]
-                # Option 1: accept CNN predicted call type
-                # if any(x > 0.6 for x in meanprob[:-2]):
-                    # prediction = np.argmax(meanprob[:-2])
-                    # p = max(meanprob[:-2])
-                    # if p > 0.8:
-                    #     probability = 70
-                    # else:
-                    #     probability = 60
-                    # self.segments[ix][1] = probability
-                # else:
-                #     prediction = len(self.CNNoutputs) - 2 + np.argmax(meanprob[-2:])
-                # prediction = self.CNNoutputs[str(prediction)]  # TODO: actual call type
-                # print(seg)
-                # print(probs)
-                # print(np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
-                # if prediction in [len(self.CNNoutputs) - 2, len(self.CNNoutputs) - 1]:
-                #     # print('Deleted by CNN')
-                #     del self.segments[ix]
 
-                # Option 2: confirm wavelet proposed call type
-                # print(seg)
+                # Confirm wavelet proposed call type
                 # print(probs)
-                # print(np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
-                if meanprob[ctkey] > 0.8:
-                    probability = 70
-                    self.segments[ix][1] = probability
-                elif meanprob[ctkey] > 0.6:
-                    probability = 60
-                    self.segments[ix][1] = probability
-                elif meanprob[ctkey] > 0.5:
-                    probability = 55
-                    self.segments[ix][1] = probability
+                print(seg, '->', np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
+                if meanprob[ctkey] > self.CNNthrs[ctkey] and meanprob[-2] != 1:
+                    certainty = 70
+                    self.segments[ix][1] = certainty
                 else:
-                    probability = 0
+                    certainty = 0     # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
+                    # self.segments[ix][1] = certainty
 
-            if probability == 0:
+            if certainty == 0:
                 print('Deleted by CNN')
                 del self.segments[ix]
             else:

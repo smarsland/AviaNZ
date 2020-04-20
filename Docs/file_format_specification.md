@@ -92,6 +92,8 @@ Any extra subfilter parameters may follow, such as `"F0"`.
 `win` - input image width in seconds. Required.
 `inputdim` - input dimension in pixels. Required.
 `output` - the output classes/labels. Required.
+`windowInc` - window width and increment. Required.
+`thr`- threshold for each call type. Required.
 
 Thus, a full filter file may look like this:
 
@@ -100,7 +102,7 @@ Thus, a full filter file may look like this:
         { "calltype": "M", "TimeRange": [5, 60, 1, 3], "WaveletParams": {"nodes": [44, 45, 46], "thr": 0.5, "M": 1.5}, "F0": true, "FreqRange": [1500, 5000] },
         { "calltype": "F", "TimeRange": [10.0, 30.0, 0.8, 1.0], "WaveletParams": {"nodes": [41, 44], "thr": 0.8, "M": 2}, "FreqRange": [1000, 2500] }
       ],
-      "CNN": {"CNN_name": "Kiwi (Nth Is Brown)", "loss": "binary_crossentropy", "optimizer": "adam", "win": 0.25, "inputdim": [128, 30], "output": {"0": "Male", "1": "Female", "2": "Noise", "3": "Silence"}}
+      "CNN": {"CNN_name": "Kiwi (Little spotted)", "loss": "binary_crossentropy", "optimizer": "adam", "win": 0.25, "inputdim": [128, 30], "output": {"0": "M", "1": "F", "2": "Noise", "3": "Silence"}, "windowInc":[256, 128], "thr":[0.5, 0.3]}
     }
 
 ## CNN files (.JSON/.h5/.hdf5)
@@ -116,9 +118,9 @@ A JSON array where the first element stores metadata, and each remaining element
 
     [ Meta, [seg, newlabel], [seg, newlabel], [seg, newlabel] ... ]
 
-`Meta`: a JSON object (key-value pairs) containing any metadata, same as in .data
-`seg`: Each segment seg is a JSON array containing five elements, same as in .data
-`newlabel`: New label/s assigned to the segment by the reviewer
+`Meta`: a JSON object (key-value pairs) containing any metadata, same as in .data.
+`seg`: Each segment seg is a JSON array containing five elements, same as in .data.
+`newlabel`: New label/s assigned to the segment by the reviewer.
 
 Single Species Review mode generates .corrections_species:
 
@@ -126,5 +128,5 @@ A JSON array where the first element stores metadata, and each remaining element
 
     [ Meta, seg, seg, seg ... ]
 
-`Meta`: a JSON object (key-value pairs) containing any metadata, same as in .data
-`seg`: Each segment seg is a JSON array containing five elements, same as in .data
+`Meta`: a JSON object (key-value pairs) containing any metadata, same as in .data.
+`seg`: Each segment seg is a JSON array containing five elements, same as in .data.
