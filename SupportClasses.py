@@ -951,7 +951,8 @@ class ConfigLoader(object):
                     print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                     print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                     model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
-                    targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"]]
+                    targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
+                                             filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
                 except Exception as e:
                     print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]), e)
         print("Loaded CNN models:", list(targetmodels.keys()))
