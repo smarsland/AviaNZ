@@ -1181,6 +1181,17 @@ class PostProcess:
                 probs = self.CNNmodel.predict_proba(featuress)
             else:
                 probs = 0
+
+            print(seg, probs)
+            with open('temp/cnnfeats.txt', 'a') as f:
+                for pi in range(np.shape(probs)[0]):
+                    f.write(str(seg[0][0]))
+                    f.write('\t')
+                    f.write(str(seg[0][1]))
+                    f.write('\t')
+                    plist = probs[pi,:].tolist()
+                    f.write('\t'.join(map(str, plist)))
+                    f.write('\n')
             if isinstance(probs, int):
                 # prediction = len(self.CNNoutputs) - 2     # Remember that the noise class is always the second last,
                 #                                           # male-0, femle-1, noise-2, silence-3

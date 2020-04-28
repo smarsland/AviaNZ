@@ -434,7 +434,12 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
 
     def mousePressEvent(self, ev):
         super(ClickableRectItem, self).mousePressEvent(ev)
-        self.parentWidget().resend(self.mapRectToParent(self.boundingRect()).x())
+        # send the position of this rectangle in ViewBox coords
+        # left corner:
+        # x = self.mapRectToParent(self.boundingRect()).x()
+        # or center:
+        x = self.mapRectToParent(self.boundingRect()).center().x()
+        self.parentWidget().resend(x)
 
 
 class ControllableAudio(QAudioOutput):
