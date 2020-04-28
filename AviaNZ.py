@@ -25,7 +25,7 @@ from jsonschema import validate
 from shutil import copyfile
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
-from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox
+from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt5.QtMultimedia import QAudio
 
@@ -464,18 +464,99 @@ class AviaNZ(QMainWindow):
         containers, docks = self.area.findAll()
         self.state_cont = [cont.sizes() for cont in containers]
 
-        # Put content widgets in the docks
+        # Put content widgets in the docks:
+        # OVERVIEW dock
         self.w_overview = pg.LayoutWidget()
+        self.w_overview.layout.setColumnStretch(1, 10)
+        self.w_overview.layout.setColumnStretch(0, 0)
+        self.w_overview.layout.setColumnStretch(2, 0)
         self.d_overview.addWidget(self.w_overview)
+        # this will hold both overview image and segment boxes
         self.w_overview1 = pg.GraphicsLayoutWidget()
         self.w_overview1.ci.layout.setContentsMargins(0.5, 1, 0.5, 1)
-        self.w_overview.addWidget(self.w_overview1,row=0, col=2,rowspan=3)
+        self.w_overview1.ci.layout.setRowSpacing(0, 0)
+        #self.w_overview1.ci.layout.setRowSpacing(1, 0)
+        self.w_overview1.ci.layout.setRowStretchFactor(0, 7)
+        self.w_overview1.ci.layout.setRowStretchFactor(1, 1)
+        #self.w_overview1.ci.layout.setRowMaximumHeight(1, 40)
+
+        fileInfo = QHBoxLayout()
+        self.fileInfoSR = QLabel()
+        self.fileInfoSR.setStyleSheet("QLabel {color: #505050}")
+        self.fileInfoNCh = QLabel()
+        self.fileInfoNCh.setStyleSheet("QLabel {color: #505050}")
+        self.fileInfoSS = QLabel()
+        self.fileInfoSS.setStyleSheet("QLabel {color: #505050}")
+        self.fileInfoDur = QLabel()
+        self.fileInfoDur.setStyleSheet("QLabel {color: #505050}")
+        fileInfo.addWidget(self.fileInfoSR)
+        fileInfo.addSpacing(20)
+        fileInfo.addWidget(self.fileInfoNCh)
+        fileInfo.addSpacing(20)
+        fileInfo.addWidget(self.fileInfoSS)
+        fileInfo.addSpacing(20)
+        fileInfo.addWidget(self.fileInfoDur)
+        fileInfo.addStretch(5)
+
+        annotInfo = QLabel("<b>Annotations present</b> (details go here)")
 
         self.p_overview = self.w_overview1.addViewBox(enableMouse=False,enableMenu=False,row=0,col=0)
         self.p_overview2 = SupportClasses.ChildInfoViewBox(enableMouse=False, enableMenu=False)
         self.w_overview1.addItem(self.p_overview2,row=1,col=0)
         self.p_overview2.setXLink(self.p_overview)
+        self.p_overview2.setPreferredHeight(25)
 
+        # The buttons to move through the overview
+        self.leftBtn = QToolButton()
+        self.leftBtn.setArrowType(Qt.LeftArrow)
+        self.leftBtn.clicked.connect(self.moveLeft)
+        self.leftBtn.setToolTip("Move view back")
+        self.rightBtn = QToolButton()
+        self.rightBtn.setArrowType(Qt.RightArrow)
+        self.rightBtn.clicked.connect(self.moveRight)
+        self.rightBtn.setToolTip("Move view forward")
+        self.leftBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+
+        # Buttons to move to next/previous five minutes
+        self.prev5mins=QToolButton()
+        self.prev5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekBackward))
+        self.prev5mins.setMinimumSize(35, 25)
+        self.prev5mins.setToolTip("Previous page")
+        self.prev5mins.clicked.connect(self.movePrev5mins)
+        self.next5mins=QToolButton()
+        self.next5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekForward))
+        self.next5mins.setMinimumSize(35, 25)
+        self.next5mins.setToolTip("Next page")
+        self.next5mins.clicked.connect(self.moveNext5mins)
+        self.placeInFileLabel = QLabel('')
+        self.placeInFileLabel.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+
+        # position everything in the dock
+        self.w_overview.layout.addLayout(fileInfo, 0, 0, 1, 3)
+        #self.w_overview.addWidget(annotInfo, row=1, col=0, colspan=2)
+        self.w_overview.addWidget(self.w_overview1, row=2, col=1)
+        self.w_overview.addWidget(self.leftBtn,row=2,col=0)
+        self.w_overview.addWidget(self.rightBtn,row=2,col=2)
+        placeInFileBox = QHBoxLayout()
+        placeInFileBox.addStretch(10)
+        placeInFileBox.addWidget(self.prev5mins)
+        placeInFileBox.addWidget(self.placeInFileLabel)
+        placeInFileBox.addWidget(self.next5mins)
+        placeInFileBox.addStretch(10)
+        self.w_overview.layout.addLayout(placeInFileBox, 3, 1)
+
+        # Corresponding keyboard shortcuts:
+        self.moveLeftKey = QShortcut(QKeySequence(Qt.Key_Left), self)
+        self.moveLeftKey.activated.connect(self.moveLeft)
+        self.moveRightKey = QShortcut(QKeySequence(Qt.Key_Right), self)
+        self.moveRightKey.activated.connect(self.moveRight)
+        self.movePrev5minsKey = QShortcut(QKeySequence("Shift+Left"), self)
+        self.movePrev5minsKey.activated.connect(self.movePrev5mins)
+        self.moveNext5minsKey = QShortcut(QKeySequence("Shift+Right"), self)
+        self.moveNext5minsKey.activated.connect(self.moveNext5mins)
+
+        # AMPLITUDE dock
         self.w_ampl = pg.GraphicsLayoutWidget()
         self.p_ampl = SupportClasses.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False, thisIsAmpl=True)
         self.w_ampl.addItem(self.p_ampl,row=0,col=1)
@@ -542,7 +623,8 @@ class AviaNZ(QMainWindow):
         # The various plots
         self.overviewImage = pg.ImageItem(enableMouse=False)
         self.p_overview.addItem(self.overviewImage)
-        self.overviewImageRegion = pg.LinearRegionItem()
+        self.overviewImageRegion = pg.LinearRegionItem(pen=pg.mkPen(120,80,200, width=2),
+                hoverPen=pg.mkPen(60, 40, 230, width=3.5))
         # this is needed for compatibility with other shaded rectangles:
         self.overviewImageRegion.lines[0].btn = QtCore.Qt.RightButton
         self.overviewImageRegion.lines[1].btn = QtCore.Qt.RightButton
@@ -566,44 +648,6 @@ class AviaNZ(QMainWindow):
         self.d_controls.addWidget(self.w_controls)
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
-
-        # The buttons to move through the overview
-        self.leftBtn = QToolButton()
-        self.leftBtn.setArrowType(Qt.LeftArrow)
-        #self.connect(self.leftBtn, SIGNAL('clicked()'), self.moveLeft)
-        self.leftBtn.clicked.connect(self.moveLeft)
-        self.w_overview.addWidget(self.leftBtn,row=0,col=0)
-        self.rightBtn = QToolButton()
-        self.rightBtn.setArrowType(Qt.RightArrow)
-        #self.connect(self.rightBtn, SIGNAL('clicked()'), self.moveRight)
-        self.rightBtn.clicked.connect(self.moveRight)
-        self.w_overview.addWidget(self.rightBtn,row=0,col=1)
-
-        # Buttons to move to next/previous five minutes
-        self.prev5mins=QToolButton()
-        self.prev5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekBackward))
-        self.prev5mins.setToolTip("Previous page")
-        #self.connect(self.prev5mins, SIGNAL('clicked()'), self.movePrev5mins)
-        self.prev5mins.clicked.connect(self.movePrev5mins)
-        self.w_overview.addWidget(self.prev5mins,row=2,col=0)
-        self.next5mins=QToolButton()
-        self.next5mins.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaSeekForward))
-        self.next5mins.setToolTip("Next page")
-        #self.connect(self.next5mins, SIGNAL('clicked()'), self.moveNext5mins)
-        self.next5mins.clicked.connect(self.moveNext5mins)
-        self.w_overview.addWidget(self.next5mins,row=2,col=1)
-        self.placeInFileLabel = QLabel('')
-        self.w_overview.addWidget(self.placeInFileLabel,row=1,colspan=2)
-
-        # Corresponding keyboard shortcuts:
-        self.moveLeftKey = QShortcut(QKeySequence(Qt.Key_Left), self)
-        self.moveLeftKey.activated.connect(self.moveLeft)
-        self.moveRightKey = QShortcut(QKeySequence(Qt.Key_Right), self)
-        self.moveRightKey.activated.connect(self.moveRight)
-        self.movePrev5minsKey = QShortcut(QKeySequence("Shift+Left"), self)
-        self.movePrev5minsKey.activated.connect(self.movePrev5mins)
-        self.moveNext5minsKey = QShortcut(QKeySequence("Shift+Right"), self)
-        self.moveNext5minsKey.activated.connect(self.moveNext5mins)
 
         # Button to move to the next file in the list
         self.nextFileBtn=QToolButton()
@@ -1329,10 +1373,15 @@ class AviaNZ(QMainWindow):
                         self.moveNext5minsKey.setEnabled(False)
                     print('number of pages: ', self.nFileSections)
 
+                # Update overview info
                 if self.nFileSections == 1:
-                    self.placeInFileLabel.setText('')
+                    self.placeInFileLabel.setText("(%d s in 1 page)" % self.datalengthSec)
                 else:
-                    self.placeInFileLabel.setText("Page "+ str(self.currentFileSection+1) + " of " + str(self.nFileSections))
+                    self.placeInFileLabel.setText("Page %d of %d (%d s in page)" % (self.currentFileSection+1, self.nFileSections, self.datalengthSec))
+                self.fileInfoSR.setText("<b>Sampling rate:</b> %d Hz" % self.sampleRate)
+                self.fileInfoNCh.setText("<b>Channels:</b> %d" % self.sp.audioFormat.channelCount())
+                self.fileInfoSS.setText("<b>Bit depth:</b> %d" % self.sp.audioFormat.sampleSize())
+                self.fileInfoDur.setText("<b>Duration:</b> %d min %d s" % divmod(self.sp.fileLength // self.sampleRate, 60))
 
                 # Get the data for the main spectrogram
                 sgRaw = self.sp.spectrogram(self.config['window_width'], self.config['incr'], mean_normalise=self.sgMeanNormalise,
@@ -1712,18 +1761,20 @@ class AviaNZ(QMainWindow):
 
         # Add new overview segments
         for i in range(numSegments):
-            r = SupportClasses.ClickableRectItem(i*self.widthOverviewSegment, 0, self.widthOverviewSegment, 0.5)
-            r.setPen(pg.mkPen('k'))
+            r = SupportClasses.ClickableRectItem(i*self.widthOverviewSegment, 0, self.widthOverviewSegment, 1)
+            r.setPen(pg.mkPen(100, 100, 100))
             r.setBrush(pg.mkBrush('w'))
             self.SegmentRects.append(r)
             self.p_overview2.addItem(r)
         self.p_overview2.sigChildMessage.connect(self.overviewSegmentClicked)
+        self.p_overview2.setYRange(-0.2, 1, padding=0.02)
 
     def overviewSegmentClicked(self,x):
         """ Listener for an overview segment being clicked on.
         Work out which one, and move the region appropriately. Calls updateOverview to do the work. """
         minX, maxX = self.overviewImageRegion.getRegion()
-        self.overviewImageRegion.setRegion([x, x+maxX-minX])
+        halfwin = (maxX-minX)/2
+        self.overviewImageRegion.setRegion([x-halfwin, x+halfwin])
         self.playPosition = int(self.convertSpectoAmpl(x)*1000.0)
 
     def updateOverview(self, preserveLength=True):
