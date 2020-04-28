@@ -1262,7 +1262,13 @@ class AviaNZ(QMainWindow):
             dlg.update()
             if name is not None:
                 if not self.cheatsheet:
-                    self.filename = os.path.join(self.SoundFileDir, name)
+                    # TODO: TEMPORARY FIX for when SoundFileDir is changed but no file loaded
+                    temp = os.path.join(self.SoundFileDir, name)
+                    if not os.path.exists(temp):
+                        print("Warning: bad path specified, trying to guess:", temp)
+                        # leave self.filename unchanged
+                    else:
+                        self.filename = temp
                 else:
                     self.filename = name
                 dlg += 1
