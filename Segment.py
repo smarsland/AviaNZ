@@ -1164,7 +1164,9 @@ class PostProcess:
         Returns the features (currently the spectrogram)
         '''
         featuress = []
-        n = (seg[1] - seg[0]) // self.CNNwindow
+        hop = 0.1
+        n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / hop + 1)
+        # n = (seg[1] - seg[0]) // self.CNNwindow
 
         sp = SignalProc.SignalProc(self.CNNwindowInc[0], self.CNNwindowInc[1])
         sp.data = data
@@ -1178,8 +1180,10 @@ class PostProcess:
         specFrameSize = len(range(0, int(self.CNNwindow * fs - sp.window_width), sp.incr))
 
         for i in range(int(n)):
-            sgstart = int(self.CNNwindow * i * fs / sp.incr)
+            sgstart = int(hop * i * fs / sp.incr)
             sgend = sgstart + specFrameSize
+            if sgend > np.shape(sp.sg)[0]:
+                continue
             sgRaw = sp.sg[sgstart:sgend,:]
             maxg = np.max(sgRaw)
             featuress.append([np.rot90(sgRaw / maxg).tolist()])
@@ -1229,12 +1233,30 @@ class PostProcess:
                 # mean of best n
                 ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
                 meanprob = [np.mean(probs[ind[i][-n:], i]) for i in range(np.shape(probs)[1])]
+                # # mean of ct best n
+                # ind = np.argsort(probs[:, ctkey]).tolist()
+                # meanprob = [np.mean(probs[ind[-n:], i]) for i in range(np.shape(probs)[1])]
 
                 # Confirm wavelet proposed call type
                 # print(probs)
                 print(seg, '->', np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
-                if meanprob[ctkey] > self.CNNthrs[ctkey] and meanprob[-2] != 1:
+                if meanprob[ctkey] > self.CNNthrs[ctkey][3]:
+                    certainty = 80
+                    self.segments[ix][1] = certainty
+                elif meanprob[ctkey] > self.CNNthrs[ctkey][2] and \
+                        meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][2] \
+                        and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][2]:
                     certainty = 70
+                    self.segments[ix][1] = certainty
+                elif meanprob[ctkey] > self.CNNthrs[ctkey][1] and \
+                        meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][1] \
+                        and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][1]:
+                    certainty = 60
+                    self.segments[ix][1] = certainty
+                elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
+                        meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][0] \
+                        and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
+                    certainty = 50
                     self.segments[ix][1] = certainty
                 else:
                     certainty = 0     # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
