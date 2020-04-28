@@ -23,7 +23,7 @@
 import os, re, fnmatch, sys, gc, math
 
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QStatusBar
 from PyQt5.QtCore import Qt, QDir
 
 import numpy as np
@@ -154,7 +154,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.maxgap.valueChanged.connect(self.maxGapChange)
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
-        self.w_processButton = QPushButton("  &Process Folder")
+        self.w_processButton = QPushButton(" &Process Folder")
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
         self.w_processButton.setIcon(QIcon(QPixmap('img/process.png')))
         self.w_processButton.clicked.connect(self.detect)
@@ -563,9 +563,10 @@ class AviaNZ_batchProcess(QMainWindow):
         cnt = 0
         msgtext = ""
         # clean up the UI before entering the long loop
+        self.w_processButton.setEnabled(False)
         self.update()
         self.repaint()
-        QtGui.QApplication.processEvents()
+        QApplication.processEvents()
         if self.method == "Intermittent sampling":
             with pg.BusyCursor():
                 for filename in allwavs:
@@ -577,6 +578,7 @@ class AviaNZ_batchProcess(QMainWindow):
                     self.statusBar().showMessage("Processing file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm))
                     self.update()
                     self.repaint()
+                    QApplication.processEvents()
 
                     # if it was processed previously (stored in log)
                     if filename in self.filesDone:
@@ -585,7 +587,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         continue
 
                     # check if file not empty
-                    if os.stat(filename).st_size < 100:
+                    if os.stat(filename).st_size < 1000:
                         print("File %s empty, skipping" % filename)
                         self.log.appendFile(filename)
                         continue
@@ -624,6 +626,7 @@ class AviaNZ_batchProcess(QMainWindow):
                     self.statusBar().showMessage("Processing file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm))
                     self.update()
                     self.repaint()
+                    QApplication.processEvents()
 
                     # if it was processed previously (stored in log)
                     if filename in self.filesDone:
@@ -632,7 +635,7 @@ class AviaNZ_batchProcess(QMainWindow):
                         continue
 
                     # check if file not empty
-                    if os.stat(filename).st_size < 100:
+                    if os.stat(filename).st_size < 1000:
                         print("File %s empty, skipping" % filename)
                         self.log.appendFile(filename)
                         continue
@@ -832,6 +835,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 # user generate new ones through Batch Review.
 
         # END of processing and exporting. Final cleanup
+        self.w_processButton.setEnabled(True)
         self.log.file.close()
         self.statusBar().showMessage("Processed all %d files" % total)
         msgtext = "Finished processing.\nWould you like to return to the start screen?"
@@ -939,12 +943,14 @@ class AviaNZ_batchProcess(QMainWindow):
         else:
             self.segments.parseJSON(self.filename+'.data', float(self.datalength)/self.sampleRate)
             # wipe same species:
-            for filt in self.FilterDicts.values():
-                if filt["species"] in species:
-                    print("Wiping species", filt["species"])
-                    oldsegs = self.segments.getSpecies(filt["species"])
+            for sp in species:
+                # shorthand for double-checking that it's not "Any Sound" etc
+                if sp in self.FilterDicts:
+                    spname = self.FilterDicts[sp]["species"]
+                    print("Wiping species", spname)
+                    oldsegs = self.segments.getSpecies(spname)
                     for i in reversed(oldsegs):
-                        wipeAll = self.segments[i].wipeSpecies(filt["species"])
+                        wipeAll = self.segments[i].wipeSpecies(spname)
                         if wipeAll:
                             del self.segments[i]
             print("%d segments loaded from .data file" % len(self.segments))
@@ -1051,7 +1057,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fHigh.setValue(8000)
         self.fHightext = QLabel('Show freq. below (Hz)')
         self.fHighvalue = QLabel('8000')
-        receiverH = lambda value: self.fHighvalue.setText(str(value))
+        receiverH = lambda value: self.fHighvalue.setText(str(int(value/2)))
         self.fHigh.valueChanged.connect(receiverH)
         # add sliders to dock
         self.d_detection.addWidget(self.fLowtext, row=4, col=0)
@@ -1061,7 +1067,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.fHigh, row=5, col=1)
         self.d_detection.addWidget(self.fHighvalue, row=5, col=2)
 
-        self.w_processButton = QPushButton("  &Review Folder")
+        self.w_processButton = QPushButton(" &Review Folder")
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
         self.w_processButton.setFixedHeight(45)
         self.w_processButton.setFixedHeight(45)
@@ -1216,7 +1222,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 print("Warning: .data file lost for file", filename)
                 continue
 
-            if os.stat(filename).st_size < 100:
+            if os.stat(filename).st_size < 1000:
                 print("File %s empty, skipping" % filename)
                 continue
 
@@ -1259,13 +1265,17 @@ class AviaNZ_reviewAll(QMainWindow):
             # so call the right dialog:
             # (they will update self.segments and store corrections)
             if self.species == 'Any sound':
+                _ = self.segments.orderTime()
                 filesuccess = self.review_all(filename, sTime)
             else:
                 # split long segments for single species review
                 self.segments.splitLongSeg(species=self.species)
                 _ = self.segments.orderTime()
-                print(self.segments)
                 filesuccess = self.review_single(filename, sTime)
+            # merge back any split segments, plus ANY overlaps within calltypes
+            todelete = self.segments.mergeSplitSeg()
+            for dl in todelete:
+                del self.segments[dl]
 
             # break out of review loop if Esc detected
             # (return value will be 1 for correct close, 0 for Esc)
@@ -1302,14 +1312,14 @@ class AviaNZ_reviewAll(QMainWindow):
         # END of review and exporting. Final cleanup
         self.ConfigLoader.configwrite(self.config, self.configfile)
         if filesuccess == 1:
-            msgtext = "All files checked.\nWould you like to return to the start screen?"
+            msgtext = "All files checked. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
             msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             reply = msg.exec_()
             if reply == QMessageBox.Yes:
                 QApplication.exit(1)
         else:
-            msgtext = "Review stopped at file %s of %s.\nWould you like to return to the start screen?" % (cnt, total)
+            msgtext = "Review stopped at file %s of %s. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?" % (cnt, total)
             msg = SupportClasses.MessagePopup("w", "Review stopped", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             reply = msg.exec_()
@@ -1527,7 +1537,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog2.done(1)
 
         # Save the errors in a file
-        if self.config['saveCorrections'] and len(outputErrors)>0:
+        if self.config['saveCorrections'] and len(outputErrors) > 0:
             if self.species2clean(self.species):
                 speciesClean = self.cleanSpecies()
             else:
@@ -1540,7 +1550,6 @@ class AviaNZ_reviewAll(QMainWindow):
         for dl in reversed(list(set(todelete))):
             del self.segments[dl]
 
-        self.mergeSplitSeg()
         # done - the segments will be saved by the main loop
         return
 
@@ -1586,7 +1595,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
         self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyQuestion)
-        success = self.humanClassifyDialog1.exec_() # 1 on clean exit
+        success = self.humanClassifyDialog1.exec_()     # 1 on clean exit
 
         if success == 0:
             self.humanClassifyDialog1.stopPlayback()

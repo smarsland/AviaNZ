@@ -349,8 +349,8 @@ class AviaNZ(QMainWindow):
         self.showEnergies.setCheckable(True)
         self.showEnergies.setChecked(False)
 
-        if not self.DOC:
-            cqt = specMenu.addAction("Show CQT", self.showCQT)
+        # if not self.DOC:
+        #     cqt = specMenu.addAction("Show CQT", self.showCQT)
 
         specMenu.addSeparator()
 
@@ -447,7 +447,7 @@ class AviaNZ(QMainWindow):
         self.d_overview = Dock("Overview",size=(1200,150))
         self.d_ampl = Dock("Amplitude",size=(1200,150))
         self.d_spec = Dock("Spectrogram",size=(1200,300))
-        self.d_controls = Dock("Controls",size=(40,100))
+        self.d_controls = Dock("Controls",size=(40,90))
         self.d_files = Dock("Files",size=(40,200))
         self.d_plot = Dock("Plots",size=(1200,150))
         self.d_controls.setSizePolicy(1,1)
@@ -732,8 +732,10 @@ class AviaNZ(QMainWindow):
         self.volSlider.sliderMoved.connect(self.volSliderMoved)
         self.volSlider.setRange(0,100)
         self.volSlider.setValue(50)
-        self.volIcon = QLabel()
-        self.volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+        volIcon = QLabel()
+        #volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
+        volIcon.setPixmap(QPixmap('img/volume.png').scaled(16, 16, transformMode=1))
+        volIcon.setAlignment(Qt.AlignCenter)
 
         # Brightness, and contrast sliders
         self.brightnessSlider = QSlider(Qt.Horizontal)
@@ -746,12 +748,20 @@ class AviaNZ(QMainWindow):
         self.brightnessSlider.setTickInterval(1)
         self.brightnessSlider.valueChanged.connect(self.setColourLevels)
 
+        brightnessLabel = QLabel()
+        brightnessLabel.setPixmap(QPixmap('img/brightstr24.png').scaled(16, 16, transformMode=1))
+        brightnessLabel.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
+
         self.contrastSlider = QSlider(Qt.Horizontal)
         self.contrastSlider.setMinimum(0)
         self.contrastSlider.setMaximum(100)
         self.contrastSlider.setValue(self.config['contrast'])
         self.contrastSlider.setTickInterval(1)
         self.contrastSlider.valueChanged.connect(self.setColourLevels)
+
+        contrastLabel = QLabel()
+        contrastLabel.setPixmap(QPixmap('img/contrstr24.png').scaled(16, 16, transformMode=1))
+        contrastLabel.setAlignment(Qt.AlignCenter | Qt.AlignBottom)
 
         # Confirm button - auto ups the certainty to 100
         self.confirmButton = QPushButton("   &Confirm labels")
@@ -776,6 +786,8 @@ class AviaNZ(QMainWindow):
         self.refreshSegmentControls()
 
         # The spinbox for changing the width shown in the controls dock
+        windowLabel = QLabel('Visible window (seconds)')
+        windowLabel.setAlignment(Qt.AlignBottom)
         self.widthWindow = QDoubleSpinBox()
         self.widthWindow.setSingleStep(1.0)
         self.widthWindow.setDecimals(2)
@@ -794,15 +806,15 @@ class AviaNZ(QMainWindow):
             # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
             self.w_controls.addWidget(self.viewSpButton,row=1,col=3)
 
-        # hack for having some spacing
-        self.w_controls.layout.setRowMinimumHeight(2, 15)
-
-        self.w_controls.addWidget(self.volIcon, row=3, col=0)
-        self.w_controls.addWidget(self.volSlider, row=3, col=1, colspan=3)
-        self.w_controls.addWidget(QLabel("Brightness"),row=4,col=0,colspan=4)
+        self.w_controls.addWidget(volIcon, row=2, col=0)
+        self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=3)
+        self.w_controls.addWidget(brightnessLabel,row=4,col=0)
+        self.w_controls.addWidget(QLabel("Brightness"), row=4, col=1, colspan=3)
         self.w_controls.addWidget(self.brightnessSlider,row=5,col=0,colspan=4)
-        self.w_controls.addWidget(QLabel("Contrast"),row=6,col=0,colspan=4)
+        self.w_controls.addWidget(contrastLabel,row=6,col=0)
+        self.w_controls.addWidget(QLabel("Contrast"), row=6, col=1, colspan=3)
         self.w_controls.addWidget(self.contrastSlider,row=7,col=0,colspan=4)
+
         self.w_controls.addWidget(QLabel('Visible window'),row=8,col=0,colspan=4)
         self.w_controls.addWidget(self.widthWindow,row=9,col=0,colspan=2)
         self.w_controls.addWidget(QLabel('seconds'), row=9, col=2, colspan=2)
@@ -820,6 +832,19 @@ class AviaNZ(QMainWindow):
         segContrsBox.addWidget(self.deleteButton)
         segContrsBox.addWidget(self.exportSoundBtn)
         self.w_controls.addWidget(segContrs, row=12, col=0, colspan=4)
+
+        # # add spacers to control stretch - seems to be ignored though
+        # self.w_controls.addWidget(QLabel(), row=12, col=0)
+        # self.w_controls.layout.setRowMinimumHeight(2, 25)
+        # self.w_controls.layout.setRowMinimumHeight(3, 10)
+        # self.w_controls.layout.setRowMinimumHeight(8, 10)
+        # self.w_controls.layout.setRowMinimumHeight(12, 5)
+        # # self.w_controls.layout.setColumnStretch(4, 3)
+        # # set all cells to stretch equally
+        # for r in range(11):
+        #     self.w_controls.layout.setRowStretch(r, 2)
+        # for c in range(4):
+        #     self.w_controls.layout.setColumnStretch(c, 2)
 
         # The slider to show playback position
         # This is hidden, but controls the moving bar
@@ -1162,6 +1187,9 @@ class AviaNZ(QMainWindow):
         # Remove spectral derivatives
         try:
             self.p_spec.removeItem(self.derivPlot)
+        except Exception:
+            pass
+        try:
             self.p_spec.removeItem(self.energyPlot)
         except Exception:
             pass
@@ -1276,7 +1304,13 @@ class AviaNZ(QMainWindow):
             dlg.update()
             if name is not None:
                 if not self.cheatsheet:
-                    self.filename = os.path.join(self.SoundFileDir, name)
+                    # TODO: TEMPORARY FIX for when SoundFileDir is changed but no file loaded
+                    temp = os.path.join(self.SoundFileDir, name)
+                    if not os.path.exists(temp):
+                        print("Warning: bad path specified, trying to guess:", temp)
+                        # leave self.filename unchanged
+                    else:
+                        self.filename = temp
                 else:
                     self.filename = name
                 dlg += 1
@@ -1637,7 +1671,8 @@ class AviaNZ(QMainWindow):
                 x, y = self.sp.max_energy(self.sg)
 
                 self.energyPlot = pg.ScatterPlotItem()
-                self.energyPlot.setData(x, y, pen=pg.mkPen('g', width=5))
+                self.energyPlot.setBrush(None)
+                self.energyPlot.setData(x, y, brush=pg.mkBrush((0, 255, 0, 130)), pen=pg.mkPen(None), size=5)
 
                 self.p_spec.addItem(self.energyPlot)
             else:
@@ -1660,11 +1695,11 @@ class AviaNZ(QMainWindow):
                 self.p_spec.removeItem(self.derivPlot)
             self.statusLeft.setText("Ready")
 
-    def showCQT(self):
-        cqt = self.sp.comp_cqt()
-        print(np.shape(cqt),np.shape(self.sg))
-        self.specPlot.setImage(10*np.log10(np.real(cqt*np.conj(cqt))).T)
-        self.p_spec.setXRange(0, np.shape(cqt)[1], update=True, padding=0)
+    # def showCQT(self):
+    #     cqt = self.sp.comp_cqt()
+    #     print(np.shape(cqt),np.shape(self.sg))
+    #     self.specPlot.setImage(10*np.log10(np.real(cqt*np.conj(cqt))).T)
+    #     self.p_spec.setXRange(0, np.shape(cqt)[1], update=True, padding=0)
 
     def showInvertedSpectrogram(self):
         """ Listener for the menu item that draws the spectrogram of the waveform of the inverted spectrogram."""
@@ -2027,8 +2062,8 @@ class AviaNZ(QMainWindow):
 
         # plot energy in "rain"
         if self.extra == "Rain":
-            we_mean = np.zeros(int(self.datalengthSec))
-            we_std = np.zeros(int(self.datalengthSec))
+            we_mean = np.zeros(int(np.ceil(self.datalengthSec)))
+            we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(self.datalength/self.sampleRate)):
                 data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
                 tempsp = SignalProc.SignalProc()
@@ -3314,6 +3349,15 @@ class AviaNZ(QMainWindow):
         self.deselectSegment(self.box1id)
         self.box1id = -1
 
+        # Merge what was split, and ANY OTHER call type overlaps:
+        todelete = self.segments.mergeSplitSeg()
+        # delete ones that merged into others
+        for dl in todelete:
+            self.deleteSegment(dl)
+        # need to update the merged segment boxes:
+        self.removeSegments(delete=False)
+        self.drawfigMain(remaking=True)
+
     def humanClassifyNextImage1(self):
         """ Get the next image """
         self.humanClassifyDialogSize = self.humanClassifyDialog1.size()
@@ -3520,30 +3564,6 @@ class AviaNZ(QMainWindow):
         if nextseg >= 0:
             self.selectSegment(nextseg)
         self.humanClassifyNextImage1()
-
-    def mergeSplitSeg(self):
-        # After segments are split, put them back if all are still there
-        # Really simple -- assumes they are in order
-        # SRM
-        todelete = []
-        last = [0,0,0,0,0]
-        count=0
-        for seg in self.segments:
-            #print(math.isclose(seg[0],last[1]))
-            # Merge the two segments if they abut and have the same species
-            if math.isclose(seg[0],last[1]) and seg[4] == last[4]:
-                last[1] = seg[1]
-                todelete.append(count)
-            else:
-                last = seg
-            count+=1
-
-        for dl in reversed(todelete):
-            self.deleteSegment(dl)
-
-        # need to update the merged segment boxes:
-        self.removeSegments(delete=False)
-        self.drawfigMain(remaking=True)
 
     def species2clean(self, species):
         """ Returns True when the species name got a special character"""
@@ -3776,7 +3796,15 @@ class AviaNZ(QMainWindow):
         for dl in reversed(todelete):
             self.deleteSegment(dl)
 
-        self.mergeSplitSeg()
+        # Merge what was split, and ANY OTHER call type overlaps:
+        todelete2 = self.segments.mergeSplitSeg()
+        # delete ones that merged into others
+        for dl in todelete2:
+            self.deleteSegment(dl)
+        # need to update the merged segment boxes:
+        self.removeSegments(delete=False)
+        self.drawfigMain(remaking=True)
+
         self.saveSegments()
         self.statusLeft.setText("Ready")
         return
@@ -3934,6 +3962,8 @@ class AviaNZ(QMainWindow):
         """
         if not hasattr(self,'spectrogramDialog'):
             self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'])
+        # first save the annotations
+        self.saveSegments()
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
         self.spectrogramDialog.activate.clicked.connect(self.spectrogram)

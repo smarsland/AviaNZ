@@ -30,9 +30,9 @@ import platform
 import copy
 from shutil import copyfile
 
-from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor
-from PyQt5.QtCore import QDir, Qt, QEvent
-from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QTextEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QInputDialog
+from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor, QFileDialog, QScrollArea
+from PyQt5.QtCore import QDir, Qt, QEvent, QSize
+from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QTextEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -40,7 +40,6 @@ import matplotlib.ticker as mtick
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
 
 import numpy as np
 import colourMaps
@@ -49,7 +48,6 @@ import SignalProc
 import WaveletSegment
 import Segment
 import Clustering
-import Dialogs
 
 
 class BuildRecAdvWizard(QWizard):
@@ -74,7 +72,7 @@ class BuildRecAdvWizard(QWizard):
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
             self.listFiles = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFiles.setMinimumWidth(150)
-            self.listFiles.setMinimumHeight(275)
+            self.listFiles.setMinimumHeight(225)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
 
             selectSpLabel = QLabel("Choose the species for which you want to build the recogniser")
@@ -112,7 +110,7 @@ class BuildRecAdvWizard(QWizard):
             self.setLayout(layout)
 
         def browseTrainData(self):
-            trainDir = QtGui.QFileDialog.getExistingDirectory(self, 'Choose folder for training')
+            trainDir = QFileDialog.getExistingDirectory(self, 'Choose folder for training')
             self.trainDirName.setText(trainDir)
             self.fillFileList(trainDir)
 
@@ -190,11 +188,14 @@ class BuildRecAdvWizard(QWizard):
         def __init__(self, config, parent=None):
             super(BuildRecAdvWizard.WPageCluster, self).__init__(parent)
             self.setTitle('Cluster similar looking calls')
-            self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate. You might also want to name each type of call.')
-            self.setMinimumSize(800, 500)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+            self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
+            # start larger than minimumSize, but not bigger than the screen:
+            screenresol = QApplication.primaryScreen().availableSize()
+            self.manualSizeHint = QSize(min(800, 0.9*screenresol.width()), min(600, 0.9*screenresol.height()))
+            self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
             self.adjustSize()
-            instr = QLabel("Drag an image to a new class to move a single example. Click on a set of images (so that they are marked with a tick) and drag one of them to move several at once. Click the check box to the right of the name to select a whole cluster, for example to merge two. Click on the name and type a new one to change it. Select one or more images and click `Create cluster' to make another call type.")
+
+            instr = QLabel("To move one call, just drag it with the mouse. To move more, click on them so they are marked with a tick and drag any of them. To merge two types, select all of one group by clicking the empty box next to the name, and then drag any of them. You might also want to name each type of call.")
             instr.setWordWrap(True)
 
             self.sampleRate = 0
@@ -219,13 +220,13 @@ class BuildRecAdvWizard(QWizard):
             self.volSlider.setRange(0, 100)
             self.volSlider.setValue(50)
             volIcon = QLabel()
-            volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
 
             # Brightness, and contrast sliders
             labelBr = QLabel()
             labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
-            labelBr.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            labelBr.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.brightnessSlider = QSlider(Qt.Horizontal)
             self.brightnessSlider.setMinimum(0)
             self.brightnessSlider.setMaximum(100)
@@ -235,7 +236,7 @@ class BuildRecAdvWizard(QWizard):
 
             labelCo = QLabel()
             labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
-            labelCo.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            labelCo.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.contrastSlider = QSlider(Qt.Horizontal)
             self.contrastSlider.setMinimum(0)
             self.contrastSlider.setMaximum(100)
@@ -256,7 +257,7 @@ class BuildRecAdvWizard(QWizard):
             self.btnDeleteSeg.setFixedWidth(200)
             self.btnDeleteSeg.clicked.connect(self.deleteSelectedSegs)
 
-            # page 2 layout
+            # page 3 layout
             layout1 = QVBoxLayout()
             layout1.addWidget(instr)
             layout1.addWidget(self.lblSpecies)
@@ -281,12 +282,12 @@ class BuildRecAdvWizard(QWizard):
             #hboxBtns1.addWidget(lb)
             #hboxBtns1.addWidget(self.cmbUpdateSeg)
             #hboxBtns1.addWidget(self.btnUpdateSeg)
-            #hboxBtns1.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+            #hboxBtns1.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
             hboxBtns2 = QHBoxLayout()
             hboxBtns2.addWidget(self.btnCreateNewCluster)
             hboxBtns2.addWidget(self.btnDeleteSeg)
-            hboxBtns2.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            hboxBtns2.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
             hboxBtns = QHBoxLayout()
             #hboxBtns.addLayout(hboxBtns1)
@@ -298,14 +299,15 @@ class BuildRecAdvWizard(QWizard):
             vboxTop.addLayout(hboxBtns)
 
             # set up the images
-            #self.flowLayout = pg.LayoutWidget()
             self.flowLayout = SupportClasses.Layout()
-            self.flowLayout.setGeometry(QtCore.QRect(0, 0, 380, 247))
+            self.flowLayout.setMinimumSize(380, 247)
             self.flowLayout.buttonDragged.connect(self.moveSelectedSegs)
+            self.flowLayout.layout.setSizeConstraint(QLayout.SetMinimumSize)
 
-            self.scrollArea = QtGui.QScrollArea(self)
-            self.scrollArea.setWidgetResizable(True)
+            self.scrollArea = QScrollArea(self)
+            #self.scrollArea.setWidgetResizable(True)
             self.scrollArea.setWidget(self.flowLayout)
+            self.scrollArea.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
 
             # set overall layout of the dialog
             self.vboxFull = QVBoxLayout()
@@ -341,6 +343,7 @@ class BuildRecAdvWizard(QWizard):
                 self.clearButtons()
                 self.addButtons(fs)
                 self.updateButtons()
+                print("buttons added")
                 self.segsChanged = True
                 self.completeChanged.emit()
 
@@ -789,7 +792,7 @@ class BuildRecAdvWizard(QWizard):
                 tbox.setMinimumWidth(80)
                 tbox.setMaximumHeight(150)
                 tbox.setStyleSheet("border: none;")
-                tbox.setAlignment(QtCore.Qt.AlignCenter)
+                tbox.setAlignment(Qt.AlignCenter)
                 tbox.textChanged.connect(self.updateClusterNames)
                 self.tboxes.append(tbox)
                 self.flowLayout.addWidget(self.tboxes[-1], r, c)
@@ -805,6 +808,7 @@ class BuildRecAdvWizard(QWizard):
                         self.flowLayout.addWidget(self.picbuttons[segix], r, c)
                         c += 1
                         self.picbuttons[segix].show()
+            self.flowLayout.adjustSize()
             self.flowLayout.update()
             self.setColourLevels()
 
@@ -870,8 +874,8 @@ class BuildRecAdvWizard(QWizard):
             self.setTitle("Training parameters: %s" % cluster)
             self.setSubTitle("These fields were completed using the training data. Adjust if required.\nWhen ready, "
                              "press \"Train\". The process may take a long time.")
-            self.setMinimumSize(250, 350)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            #self.setMinimumSize(350, 430)
+            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
             self.adjustSize()
 
             self.lblSpecies = QLabel("")
@@ -888,7 +892,9 @@ class BuildRecAdvWizard(QWizard):
             calldescr.addRow('Call type:', lblCluster)
             calldescr.addRow('Number of segments:', self.numSegs)
             imgCluster = QLabel()
-            imgCluster.setPixmap(QPixmap.fromImage(picbtn.im1))
+            imgCluster.setFixedHeight(100)
+            picimg = QPixmap.fromImage(picbtn.im1)
+            imgCluster.setPixmap(picimg.scaledToHeight(100))
 
             # TimeRange parameters
             form1_step4 = QFormLayout()
@@ -1011,6 +1017,7 @@ class BuildRecAdvWizard(QWizard):
                 # happens when no segments have y limits
                 f_high = fs/2
             self.fHigh.setValue(min(fs/2,int(np.max(f_high))))
+            self.adjustSize()
 
     # page 5 - run training, show ROC
     class WPageTrain(QWizardPage):
@@ -1018,7 +1025,7 @@ class BuildRecAdvWizard(QWizard):
             super(BuildRecAdvWizard.WPageTrain, self).__init__(parent)
             self.setTitle('Training results')
             self.setSubTitle('Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.')
-            self.setMinimumSize(600, 500)
+            self.setMinimumSize(520, 440)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
@@ -1035,7 +1042,7 @@ class BuildRecAdvWizard(QWizard):
             self.lblCluster = QLabel()
             self.lblCluster.setStyleSheet("QLabel { color : #808080; }")
             space = QLabel()
-            space.setFixedHeight(25)
+            space.setFixedHeight(20)
             spaceH = QLabel()
             spaceH.setFixedWidth(30)
 
@@ -1204,7 +1211,7 @@ class BuildRecAdvWizard(QWizard):
             super(BuildRecAdvWizard.WFFPage, self).__init__(parent)
             self.setTitle('Post-processing')
             self.setSubTitle('Set the post-processing options available below.')
-            self.setMinimumSize(250, 350)
+            self.setMinimumSize(250, 300)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
@@ -1386,7 +1393,7 @@ class BuildRecAdvWizard(QWizard):
             self.listFiles = QListWidget()
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
             self.listFiles.setMinimumWidth(150)
-            self.listFiles.setMinimumHeight(250)
+            self.listFiles.setMinimumHeight(200)
             filtdir = QDir(filtdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
             for file in filtdir:
                 item = QListWidgetItem(self.listFiles)
@@ -1493,18 +1500,18 @@ class BuildRecAdvWizard(QWizard):
         super(BuildRecAdvWizard, self).__init__()
         self.setWindowTitle("Build Recogniser")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
         if platform.system() == 'Linux':
-            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
         self.setWizardStyle(QWizard.ModernStyle)
 
         # add the Save & Test button
         self.saveTestBtn = QPushButton("Save and Test")
         self.setButton(QWizard.CustomButton1, self.saveTestBtn)
         self.setButtonLayout([QWizard.Stretch, QWizard.BackButton, QWizard.NextButton, QWizard.CustomButton1, QWizard.FinishButton, QWizard.CancelButton])
-        self.setOptions(QWizard.HaveCustomButton1)
+        self.setOptions(QWizard.NoBackButtonOnStartPage | QWizard.HaveCustomButton1)
 
         self.filtersDir = filtdir
 
@@ -1602,11 +1609,26 @@ class BuildRecAdvWizard(QWizard):
         self.clusterPage.completeChanged.emit()
 
     def pageChangeResize(self, pageid):
+        # wizard dialog size needs to refresh when pages are flipped
         try:
             if self.page(pageid) is not None:
-                newsize = self.page(pageid).sizeHint()
-                self.setMinimumSize(newsize)
-                self.adjustSize()
+                # do not minimize the clustering page
+                if pageid==2:
+                    self.resize(self.page(pageid).manualSizeHint)
+                else:
+                    newsize = self.page(pageid).sizeHint()
+                    # need tiny adjustment for parameter pages
+                    if pageid in self.trainpages:
+                        newsize.setHeight(newsize.height()+80)
+                    elif pageid-1 in self.trainpages:
+                        newsize.setWidth(newsize.width()+100)
+                        newsize.setHeight(newsize.height()+135)
+                    elif pageid-2 in self.trainpages:
+                        newsize.setHeight(newsize.height()+170)
+                    # print("Resizing to", newsize)
+                    self.setMinimumSize(newsize)
+                    self.adjustSize()
+                    # print("Current size", self.size())
         except Exception as e:
             print(e)
 
@@ -1673,7 +1695,7 @@ class TestRecWizard(QWizard):
                 self.species.setCurrentText(self.initialFilter)
 
         def browseTestData(self):
-            dirName = QtGui.QFileDialog.getExistingDirectory(self, 'Choose folder for testing')
+            dirName = QFileDialog.getExistingDirectory(self, 'Choose folder for testing')
             self.testDirName.setText(dirName)
 
             self.listFiles.fill(dirName, fileName=None, readFmt=False, addWavNum=True)
@@ -1829,10 +1851,11 @@ class TestRecWizard(QWizard):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
         if platform.system() == 'Linux':
-            self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
         else:
-            self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) & QtCore.Qt.WindowCloseButtonHint)
+            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
         self.setWizardStyle(QWizard.ModernStyle)
+        self.setOptions(QWizard.NoBackButtonOnStartPage)
 
         cl = SupportClasses.ConfigLoader()
         self.filterlist = cl.filters(filtdir)
@@ -2002,6 +2025,11 @@ class TestRecWizard(QWizard):
 
 class ROCCanvas(FigureCanvas):
     def __init__(self, parent=None, width=5, height=6, dpi=100):
+        # reduce size on low-res monitors
+        aspectratio = width/height
+        height = min(height, 0.6*(QApplication.primaryScreen().availableSize().height()-150)/dpi)
+        width = height*aspectratio
+        # print("resetting to", height, width)
         plt.style.use('ggplot')
         self.MList = []
         self.thrList = []
@@ -2015,6 +2043,7 @@ class ROCCanvas(FigureCanvas):
         self.plotLines = []
 
         fig = Figure(figsize=(width, height), dpi=dpi)
+        fig.set_tight_layout(True)
 
         FigureCanvas.__init__(self, fig)
         self.setParent(parent)
