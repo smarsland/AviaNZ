@@ -181,9 +181,13 @@ class Spectrogram(QDialog):
         self.hightext.setAlignment(Qt.AlignRight)
         self.highChange(maxFreqShow)
 
+        self.labelMinF = QLabel()
+        self.labelMaxF = QLabel()
+        self.labelMaxF.setAlignment(Qt.AlignRight)
+
         print("initing to", maxFreqShow)
         self.setValues(minFreq, maxFreq, minFreqShow, maxFreqShow)
-        self.restore = QPushButton("Restore Defaults")
+        self.restore = QPushButton("Restore Defaults && Update")
         self.restore.clicked.connect(self.resetValues)
         self.activate = QPushButton("Update Spectrogram")
 
@@ -211,9 +215,7 @@ class Spectrogram(QDialog):
         form2.addWidget(QLabel('Highest frequency'), row=2, col=0)
         form2.addWidget(self.hightext, row=2, col=1)
         form2.addWidget(self.high, row=3, col=0, colspan=2)
-        form2.addWidget(QLabel(str(minFreq)), row=4, col=0)
-        self.labelMaxF = QLabel(str(maxFreq))
-        self.labelMaxF.setAlignment(Qt.AlignRight)
+        form2.addWidget(self.labelMinF, row=4, col=0)
         form2.addWidget(self.labelMaxF, row=4, col=1)
 
         Box.addLayout(form)
@@ -221,8 +223,8 @@ class Spectrogram(QDialog):
         Box.addWidget(QLabel('Frequency range to show:'))
         Box.addWidget(form2)
 
-        Box.addWidget(self.restore)
         Box.addWidget(self.activate)
+        Box.addWidget(self.restore)
 
         # Now put everything into the frame
         self.setLayout(Box)
@@ -232,6 +234,8 @@ class Spectrogram(QDialog):
         self.low.setValue(minFreqShow)
         self.high.setRange(minFreq,maxFreq)
         self.high.setValue(maxFreqShow)
+        self.labelMinF.setText(str(minFreq))
+        self.labelMaxF.setText(str(maxFreq))
 
     def getValues(self):
         if not self.incr.hasAcceptableInput() or not self.window_width.hasAcceptableInput():
@@ -259,6 +263,7 @@ class Spectrogram(QDialog):
 
         self.window_width.setText('256')
         self.incr.setText('128')
+        self.activate.clicked.emit()
 
     # def closeEvent(self, event):
     #     msg = QMessageBox()
@@ -1895,6 +1900,7 @@ class HumanClassify2(QDialog):
         # (fills self.buttons)
         # self.flowLayout = QGridLayout()
         self.flowLayout = pg.LayoutWidget()
+        self.flowLayout.layout.setAlignment(Qt.AlignLeft)
         # these sizes ensure at least one image fits:
         self.specV = 0
         self.specH = 0
@@ -2014,6 +2020,7 @@ class HumanClassify2(QDialog):
         for row in range(self.numPicsV):
             # add a frequency axis
             # args: spectrogram height in spec units, min and max frq in kHz for axis ticks
+            print(self.numPicsV)
             sg_axis = SupportClasses.AxisWidget(SgSize, minFreq/1000, maxFreq/1000)
             self.flowAxes.addWidget(sg_axis, row, 0)
             self.flowAxes.layout.setRowMinimumHeight(row, self.specV+10)
@@ -2028,10 +2035,18 @@ class HumanClassify2(QDialog):
                 self.flowLayout.layout.setRowMinimumHeight(row, self.specV+10)
                 self.buttons[self.butStart+butNum].show()
                 butNum += 1
-                # stop if we are out of segments
+
                 if self.butStart+butNum==len(self.buttons):
+                    # stop if we are out of segments
                     return
-        #self.update()
+
+        #for col in range(1, self.numPicsH+1):
+            #time_axis = SupportClasses.TimeAxisWidget(self.specH,10)
+            #self.flowLayout.addWidget(time_axis, self.numPicsH+1, col)
+            #self.flowLayout.layout.setRowMinimumHeight(self.numPicsH+1, self.specV+10)
+            #self.flowLayout.layout.setColumnMinimumWidth(col, self.specH+10)
+            #time_axis.show()
+
         self.repaint()
         pg.QtGui.QApplication.processEvents()
 

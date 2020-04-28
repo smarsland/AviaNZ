@@ -152,6 +152,58 @@ class AxisWidget(QAbstractButton):
     def minimumSizeHint(self):
         return QSize(60, self.sgsize)
 
+class TimeAxisWidget(QAbstractButton):
+    # Class for HumanClassify dialogs to put spectrograms on buttons
+    # Also includes playback capability.
+    def __init__(self, sgsize, maxTime, parent=None):
+        super(TimeAxisWidget, self).__init__(parent)
+        self.sgsize = sgsize
+        self.maxTime = maxTime
+
+        # fixed size
+        self.setSizePolicy(0,0)
+        self.setMinimumSize(70, sgsize)
+        self.fontsize = min(max(int(math.sqrt(sgsize)*0.4), 8), 12)
+
+    def paintEvent(self, event):
+        if type(event) is not bool:
+            painter = QPainter(self)
+            # actual axis line painting
+            bottomL = event.rect().bottomLeft()
+            bottomR = event.rect().bottomRight()
+            painter.setPen(QPen(QColor(20,20,20), 1))
+
+            painter.setFont(QFont("Helvetica", self.fontsize))
+
+            # draw tickmarks and numbers
+            currTime = 0
+            fontOffset = 1.2*self.fontsize
+
+            painter.drawLine(bottomL.x(), bottomL.y()-2*fontOffset, bottomR.x(), bottomR.y()-2*fontOffset)
+
+            tickmark = QLine(bottomL.x(),bottomL.y()-2*fontOffset, bottomL.x(), bottomL.y()-2*fontOffset-6)
+            painter.drawLine(tickmark)
+            painter.drawText(tickmark.x1(), tickmark.y1()+2*fontOffset, "%.1f" % currTime)
+            for ticknum in range(4):
+                currTime += self.maxTime/5
+                tickmark.translate(event.rect().width()//5,0)
+                painter.drawLine(tickmark)
+                painter.drawText(tickmark.x1()-fontOffset, tickmark.y1()+2*fontOffset, "%.1f" % currTime)
+            tickmark.translate(event.rect().width()//5,0)
+            painter.drawLine(tickmark)
+            painter.drawText(tickmark.x2()-2*fontOffset, tickmark.y1()+2*fontOffset, "%.1f" % self.maxTime)
+
+            painter.save()
+            painter.translate(event.rect().width()//5,0)
+            #painter.rotate(-90)
+            painter.drawText((bottomR.x() - bottomL.x())//2, bottomL.y(), "s")
+            painter.restore()
+
+    def sizeHint(self):
+        return QSize(self.sgsize,60)
+
+    def minimumSizeHint(self):
+        return QSize(self.sgsize,60)
 
 class ShadedROI(pg.ROI):
     # A region of interest that is shaded, for marking segments
@@ -313,6 +365,10 @@ class LinearRegionItem2(pg.LinearRegionItem):
         self.bounds = bounds
         self.lines[0].btn = self.parent.MouseDrawingButton
         self.lines[1].btn = self.parent.MouseDrawingButton
+        self.setHoverBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 100)))
+
+    def setHoverBrush(self, *br, **kargs):
+        self.hoverBrush = fn.mkBrush(*br, **kargs)
 
     def mouseDragEvent(self, ev):
         if not self.movable or ev.button()==self.parent.MouseDrawingButton:
@@ -813,7 +869,7 @@ class MessagePopup(QMessageBox):
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v2.1.4 (March 2020)")
+            self.setText("The AviaNZ Program, v2.2 (April 2020)")
             self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
@@ -901,7 +957,8 @@ class ConfigLoader(object):
                     print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                     print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
                     model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
-                    targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"]]
+                    targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
+                                             filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
                 except Exception as e:
                     print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]), e)
         print("Loaded CNN models:", list(targetmodels.keys()))
