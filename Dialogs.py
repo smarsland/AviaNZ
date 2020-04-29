@@ -1900,7 +1900,8 @@ class HumanClassify2(QDialog):
         # (fills self.buttons)
         # self.flowLayout = QGridLayout()
         self.flowLayout = pg.LayoutWidget()
-        self.flowLayout.layout.setAlignment(Qt.AlignLeft)
+        self.flowLayout.layout.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+
         # these sizes ensure at least one image fits:
         self.specV = 0
         self.specH = 0
@@ -1910,15 +1911,24 @@ class HumanClassify2(QDialog):
         self.butStart = 0
         self.countPages()
 
+        self.flowLayout.setMinimumSize(self.specH+20, self.specV+20)
+
+        # Freq axes
         self.flowAxes = pg.LayoutWidget()
         self.flowAxes.setMinimumSize(70, self.specV+20)
-        self.flowLayout.setMinimumSize(self.specH+20, self.specV+20)
         self.flowAxes.setSizePolicy(0, 5)
-        hboxFlow = QHBoxLayout()
-        hboxFlow.addWidget(self.flowAxes)
-        #hboxFlow.addItem(QSpacerItem(1,1, 3,3))
-        #hboxFlow.addStretch(10)
-        hboxFlow.addWidget(self.flowLayout)
+        # Time axes
+        self.flowAxesT = pg.LayoutWidget()
+        self.flowAxesT.setMinimumSize(self.specH+20, 40)
+        self.flowAxesT.setSizePolicy(5, 0)
+        self.flowAxesT.layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+
+        gridFlowAndAxes = QGridLayout()
+        gridFlowAndAxes.addWidget(self.flowAxes, 0, 0)
+        gridFlowAndAxes.addWidget(self.flowLayout, 0, 1)
+        gridFlowAndAxes.addWidget(self.flowAxesT, 1, 1)
+        gridFlowAndAxes.setRowStretch(0, 10)
+        gridFlowAndAxes.setRowStretch(1, 0)
 
         # set overall layout of the dialog
         self.vboxFull = QVBoxLayout()
@@ -1926,7 +1936,7 @@ class HumanClassify2(QDialog):
         self.vboxFull.addLayout(vboxTop)
         self.vboxSpacer = QSpacerItem(1,1, 5, 5)
         self.vboxFull.addItem(self.vboxSpacer)
-        self.vboxFull.addLayout(hboxFlow)
+        self.vboxFull.addLayout(gridFlowAndAxes)
         self.vboxFull.addLayout(self.vboxBot)
         # must be fixed size!
         vboxTop.setSizeConstraint(QLayout.SetFixedSize)
@@ -1969,8 +1979,6 @@ class HumanClassify2(QDialog):
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:
                 self.specV = newButton.im1.size().height()
-
-            # newButton.setMinimumSize(self.specH, self.specV//2)
 
             self.buttons.append(newButton)
             self.buttons[-1].buttonClicked=False
@@ -2020,13 +2028,18 @@ class HumanClassify2(QDialog):
         for row in range(self.numPicsV):
             # add a frequency axis
             # args: spectrogram height in spec units, min and max frq in kHz for axis ticks
-            print(self.numPicsV)
             sg_axis = SupportClasses.AxisWidget(SgSize, minFreq/1000, maxFreq/1000)
             self.flowAxes.addWidget(sg_axis, row, 0)
             self.flowAxes.layout.setRowMinimumHeight(row, self.specV+10)
 
             # draw a row of buttons
             for col in range(1, self.numPicsH+1):
+                if row==0:
+                    time_axis = SupportClasses.TimeAxisWidget(self.specH,10)
+                    self.flowAxesT.addWidget(time_axis, 0, col)
+                    self.flowAxesT.layout.setColumnMinimumWidth(col, self.specH+10)
+                    time_axis.show()
+
                 # resizing shouldn't change which segments are displayed,
                 # so we use a fixed start point for counting shown buttons.
                 self.flowLayout.addWidget(self.buttons[self.butStart+butNum], row, col)
@@ -2038,14 +2051,10 @@ class HumanClassify2(QDialog):
 
                 if self.butStart+butNum==len(self.buttons):
                     # stop if we are out of segments
-                    return
-
-        #for col in range(1, self.numPicsH+1):
-            #time_axis = SupportClasses.TimeAxisWidget(self.specH,10)
-            #self.flowLayout.addWidget(time_axis, self.numPicsH+1, col)
-            #self.flowLayout.layout.setRowMinimumHeight(self.numPicsH+1, self.specV+10)
-            #self.flowLayout.layout.setColumnMinimumWidth(col, self.specH+10)
-            #time_axis.show()
+                    break
+            if self.butStart+butNum==len(self.buttons):
+                # stop if we are out of segments
+                break
 
         self.repaint()
         pg.QtGui.QApplication.processEvents()
@@ -2129,6 +2138,7 @@ class HumanClassify2(QDialog):
     def clearButtons(self):
         for btn in self.buttons:
             btn.stopPlayback()
+        # clear pic buttons
         for btnum in reversed(range(self.flowLayout.layout.count())):
             item = self.flowLayout.layout.itemAt(btnum)
             if item is not None:
@@ -2140,6 +2150,7 @@ class HumanClassify2(QDialog):
                 item.widget().hide()
         self.flowLayout.update()
 
+        # clear freq axes
         for axnum in reversed(range(self.flowAxes.layout.count())):
             item = self.flowAxes.layout.itemAt(axnum)
             if item is not None:
@@ -2149,6 +2160,17 @@ class HumanClassify2(QDialog):
                 del self.flowAxes.rows[r][c]
                 item.widget().hide()
         self.flowAxes.update()
+
+        # clear time axes
+        for axnum in reversed(range(self.flowAxesT.layout.count())):
+            item = self.flowAxesT.layout.itemAt(axnum)
+            if item is not None:
+                self.flowAxesT.layout.removeItem(item)
+                r,c = self.flowAxesT.items[item.widget()]
+                self.flowAxesT.layout.setColumnMinimumWidth(r, 1)
+                del self.flowAxesT.rows[r][c]
+                item.widget().hide()
+        self.flowAxesT.update()
 
     def toggleAll(self):
         buttonsPerPage = self.numPicsV * self.numPicsH
