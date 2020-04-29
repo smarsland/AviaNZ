@@ -1527,10 +1527,11 @@ class LightedFileList(QListWidget):
         self.blackpen = fn.mkPen(color=(160,160,160,255), width=2)
         self.tempsl = Segment.SegmentList()
 
-    def fill(self, soundDir, fileName, readFmt=False, addWavNum=False):
+    def fill(self, soundDir, fileName, recursive=False, readFmt=False, addWavNum=False):
         """ read folder contents, populate the list widget.
             soundDir: current dir
             fileName: file which should be selected, or None
+            recursive: should we read the species list/format info from subdirs as well?
             readFmt: should we read the wav header as well?
             addWavNum: add extra info to the end of dir names
         """
@@ -1562,6 +1563,35 @@ class LightedFileList(QListWidget):
                         item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
                     else:
                         item.setText(file.fileName() + "/")
+
+                    # We still might need to walk the subfolders for sp lists and wav formats!
+                    if not recursive:
+                        continue
+                    if file.fileName()=="..":
+                        continue
+                    for root, dirs, files in os.walk(file.filePath()):
+                        for filename in files:
+                            filenamef = os.path.join(root, filename)
+                            if filename.lower().endswith('.wav'):
+                                if readFmt:
+                                    try:
+                                        samplerate = wavio.readFmt(filenamef)[0]
+                                        self.fsList.add(samplerate)
+                                    except Exception as e:
+                                        print("Warning: could not parse format of WAV file", filenamef)
+                                        print(e)
+                                dataf = filenamef + '.data'
+                                if os.path.isfile(dataf):
+                                    try:
+                                        self.tempsl.parseJSON(dataf, silent=True)
+                                        if len(self.tempsl)>0:
+                                            # collect any species present
+                                            filesp = [lab["species"] for seg in self.tempsl for lab in seg[4]]
+                                            self.spList.update(filesp)
+                                    except Exception as e:
+                                        # .data exists, but unreadable
+                                        print("Could not read DATA file", dataf)
+                                        print(e)
                 else:
                     item.setText(file.fileName())
 
@@ -1578,7 +1608,7 @@ class LightedFileList(QListWidget):
                             print(e)
 
         if readFmt:
-            print("Found the following fs", self.fsList)
+            print("Found the following Fs:", self.fsList)
 
         # mark the current file or first row (..), if not found
         if fileName:
