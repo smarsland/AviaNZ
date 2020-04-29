@@ -185,7 +185,6 @@ class AviaNZ(QMainWindow):
         # parse firstFile to dir and file parts
         if not cheatsheet and not zooniverse:
             self.SoundFileDir = os.path.dirname(firstFile)
-            firstFile = os.path.basename(firstFile)
             print("Working dir set to %s" % self.SoundFileDir)
             print("Opening file %s" % firstFile)
 
@@ -254,7 +253,7 @@ class AviaNZ(QMainWindow):
             self.timer.timeout.connect(self.saveSegments)
             self.timer.start(self.config['secsSave']*1000)
 
-            self.listLoadFile(firstFile)
+            self.listLoadFile(os.path.basename(firstFile))
 
         if self.DOC and not cheatsheet and not zooniverse:
             self.setOperatorReviewerDialog()
@@ -796,10 +795,10 @@ class AviaNZ(QMainWindow):
 
         # Place all these widgets in the Controls dock
         self.w_controls.addWidget(self.playButton,row=0,col=0)
-        self.w_controls.addWidget(self.stopButton,row=0,col=1)
-        self.w_controls.addWidget(self.playSegButton,row=0,col=2)
-        self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=3)
-        self.w_controls.addWidget(self.playSlowButton,row=1,col=0)
+        self.w_controls.addWidget(self.playSegButton,row=0,col=1)
+        self.w_controls.addWidget(self.playBandLimitedSegButton,row=0,col=2)
+        self.w_controls.addWidget(self.playSlowButton,row=0,col=3)
+        self.w_controls.addWidget(self.stopButton,row=1,col=0)
         #self.w_controls.addWidget(self.speedButton,row=1,col=1)
         if not self.DOC:
             self.w_controls.addWidget(self.quickDenButton,row=1,col=2)
@@ -808,6 +807,8 @@ class AviaNZ(QMainWindow):
 
         self.w_controls.addWidget(volIcon, row=2, col=0)
         self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=3)
+        self.w_controls.layout.setRowMinimumHeight(2, 30)
+
         self.w_controls.addWidget(brightnessLabel,row=4,col=0)
         self.w_controls.addWidget(QLabel("Brightness"), row=4, col=1, colspan=3)
         self.w_controls.addWidget(self.brightnessSlider,row=5,col=0,colspan=4)
@@ -1277,7 +1278,7 @@ class AviaNZ(QMainWindow):
 
         # if a file was clicked, open it
         if not os.path.isdir(fullcurrent):
-            self.loadFile(current)
+            self.loadFile(fullcurrent)
 
         return(0)
 
@@ -1287,34 +1288,26 @@ class AviaNZ(QMainWindow):
         For 2 channels, just take the first one.
         Normalisation can cause problems for some segmentations, e.g. Harma.
 
-        If no name is specified, loads the next section of the current file
-
         This method also gets the spectrogram to plot it, loads the segments from a *.data file, and
         passes the new data to any of the other classes that need it.
         Then it sets up the audio player and fills in the appropriate time data in the window, and makes
         the scroll bar and overview the appropriate lengths.
+
+        name: full path to the file to be loaded. If None, loads the next section of the current file
         """
         self.resetStorageArrays()
 
-        with pg.ProgressDialog("Loading..", 0, 7) as dlg:
+        with pg.ProgressDialog("Loading..", 0, 6) as dlg:
             dlg.setCancelButton(None)
             dlg.setWindowIcon(QIcon('img/Avianz.ico'))
             dlg.setWindowTitle('AviaNZ')
             dlg.show()
             dlg.update()
             if name is not None:
-                if not self.cheatsheet:
-                    # TODO: TEMPORARY FIX for when SoundFileDir is changed but no file loaded
-                    temp = os.path.join(self.SoundFileDir, name)
-                    if not os.path.exists(temp):
-                        print("Warning: bad path specified, trying to guess:", temp)
-                        # leave self.filename unchanged
-                    else:
-                        self.filename = temp
-                else:
-                    self.filename = name
-                dlg += 1
-                dlg.update()
+                if not os.path.exists(name):
+                    print("ERROR: tried to open non-existing file %s", name)
+                    return
+                self.filename = name
 
                 # Create an instance of the Signal Processing class
                 if not hasattr(self, 'sp'):
@@ -1354,11 +1347,8 @@ class AviaNZ(QMainWindow):
                 # This next line is a hack to make the axis update
                 #self.changeWidth(self.widthWindow.value())
 
-                dlg += 1
-                dlg.update()
-            else:
-                dlg += 2
-                dlg.update()
+            dlg += 1
+            dlg.update()
 
             # Read in the file and make the spectrogram
             # Determine where to start and how much to read for this page (in seconds):
@@ -3990,7 +3980,7 @@ class AviaNZ(QMainWindow):
                 if hasattr(self, 'seg'):
                     self.seg.setNewData(self.sp)
 
-                self.loadFile(os.path.basename(self.filename))
+                self.loadFile(self.filename)
                 # self.specPlot.setImage(self.sg)   # TODO: interface changes to adapt if window_len and incr changed! overview, main spec ect.
 
                 # these two are usually set by redoFreqAxis, but that is called only later in this case
@@ -4815,11 +4805,11 @@ class AviaNZ(QMainWindow):
         else:
             if self.box1id > -1:
                 self.stopPlayback()
-
+                # restart playback
                 start = self.listRectanglesa1[self.box1id].getRegion()[0] * 1000
                 stop = self.listRectanglesa1[self.box1id].getRegion()[1] * 1000
-
                 self.setPlaySliderLimits(start, stop)
+
                 self.bar.setMovable(False)
                 self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPause))
                 self.playSegButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
@@ -5330,7 +5320,7 @@ class AviaNZ(QMainWindow):
 
         self.resetStorageArrays()
         # pass the file name to reset interface properly
-        self.loadFile(os.path.basename(self.filename))
+        self.loadFile(self.filename)
 
 # ============
 # Various actions: deleting segments, saving, quitting

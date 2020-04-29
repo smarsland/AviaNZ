@@ -112,14 +112,16 @@ class AxisWidget(QAbstractButton):
         # fixed size
         self.setSizePolicy(0,0)
         self.setMinimumSize(70, sgsize)
-        self.fontsize = min(max(int(math.sqrt(sgsize)*0.7), 8), 15)
+        self.fontsize = min(max(int(math.sqrt(sgsize-30)*0.8), 9), 14)
 
     def paintEvent(self, event):
         if type(event) is not bool:
             painter = QPainter(self)
             # actual axis line painting
             bottomR = event.rect().bottomRight()
+            bottomR.setX(bottomR.x()-6)
             topR = event.rect().topRight()
+            topR.setX(topR.x()-6)
             painter.setPen(QPen(QColor(20,20,20), 1))
             painter.drawLine(bottomR, topR)
 
@@ -127,8 +129,8 @@ class AxisWidget(QAbstractButton):
 
             # draw tickmarks and numbers
             currFrq = self.minFreq
-            fontOffset = 5 + 2*self.fontsize
-            tickmark = QLine(bottomR, QPoint(bottomR.x()-6, bottomR.y()))
+            fontOffset = 5 + 2.6*self.fontsize
+            tickmark = QLine(bottomR, QPoint(bottomR.x()+6, bottomR.y()))
             painter.drawLine(tickmark)
             painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+1, "%.1f" % currFrq)
             for ticknum in range(3):
@@ -162,8 +164,9 @@ class TimeAxisWidget(QAbstractButton):
 
         # fixed size
         self.setSizePolicy(0,0)
-        self.setMinimumSize(70, sgsize)
-        self.fontsize = min(max(int(math.sqrt(sgsize)*0.4), 8), 12)
+        self.setMinimumSize(sgsize, 40)
+        self.setMaximumSize(sgsize, 50)
+        self.fontsize = min(max(int(math.sqrt(sgsize)*0.55), 9), 13)
 
     def paintEvent(self, event):
         if type(event) is not bool:
@@ -171,31 +174,34 @@ class TimeAxisWidget(QAbstractButton):
             # actual axis line painting
             bottomL = event.rect().bottomLeft()
             bottomR = event.rect().bottomRight()
+            top = event.rect().top()
             painter.setPen(QPen(QColor(20,20,20), 1))
 
             painter.setFont(QFont("Helvetica", self.fontsize))
 
             # draw tickmarks and numbers
             currTime = 0
-            fontOffset = 1.2*self.fontsize
+            fontOffset = 5+1.5*self.fontsize
+            if self.maxTime>4:
+                timeFormat = "%d"
+            else:
+                timeFormat = "%.1f"
 
-            painter.drawLine(bottomL.x(), bottomL.y()-2*fontOffset, bottomR.x(), bottomR.y()-2*fontOffset)
+            painter.drawLine(bottomL.x(), top+6, bottomR.x(), top+6)
 
-            tickmark = QLine(bottomL.x(),bottomL.y()-2*fontOffset, bottomL.x(), bottomL.y()-2*fontOffset-6)
+            tickmark = QLine(bottomL.x(), top+6, bottomL.x(), top)
             painter.drawLine(tickmark)
-            painter.drawText(tickmark.x1(), tickmark.y1()+2*fontOffset, "%.1f" % currTime)
+            painter.drawText(tickmark.x1(), tickmark.y1()+fontOffset, timeFormat % currTime)
             for ticknum in range(4):
                 currTime += self.maxTime/5
                 tickmark.translate(event.rect().width()//5,0)
                 painter.drawLine(tickmark)
-                painter.drawText(tickmark.x1()-fontOffset, tickmark.y1()+2*fontOffset, "%.1f" % currTime)
-            tickmark.translate(event.rect().width()//5,0)
+                painter.drawText(tickmark.x1()-fontOffset//4, tickmark.y1()+fontOffset, timeFormat % currTime)
+            tickmark.translate(event.rect().width()//5-2,0)
             painter.drawLine(tickmark)
-            painter.drawText(tickmark.x2()-2*fontOffset, tickmark.y1()+2*fontOffset, "%.1f" % self.maxTime)
+            painter.drawText(tickmark.x2()-fontOffset*0.6, tickmark.y1()+fontOffset, timeFormat % self.maxTime)
 
             painter.save()
-            painter.translate(event.rect().width()//5,0)
-            #painter.rotate(-90)
             painter.drawText((bottomR.x() - bottomL.x())//2, bottomL.y(), "s")
             painter.restore()
 
