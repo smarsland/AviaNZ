@@ -1443,7 +1443,8 @@ class HumanClassify1(QDialog):
 
         FreqRange = (maxFreq-minFreq)/1000.
         SgSize = np.shape(sg2)[1]
-        ticks = [[(0,minFreq/1000.), (SgSize/4, minFreq/1000.+FreqRange/4.), (SgSize/2, minFreq/1000.+FreqRange/2.), (3*SgSize/4, minFreq/1000.+3*FreqRange/4.), (SgSize,minFreq/1000.+FreqRange)]]
+        ticks = [(0,minFreq/1000.), (SgSize/4, minFreq/1000.+FreqRange/4.), (SgSize/2, minFreq/1000.+FreqRange/2.), (3*SgSize/4, minFreq/1000.+3*FreqRange/4.), (SgSize,minFreq/1000.+FreqRange)]
+        ticks = [[(tick[0], "%.1f" % tick[1] ) for tick in ticks]]
         self.sg_axis.setTicks(ticks)
         self.sg_axis.setLabel('kHz')
         #self.sg_axis2.setTicks(ticks)

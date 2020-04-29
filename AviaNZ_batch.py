@@ -23,7 +23,7 @@
 import os, re, fnmatch, sys, gc, math
 
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QListWidget, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QFormLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QStatusBar
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame
 from PyQt5.QtCore import Qt, QDir
 
 import numpy as np
@@ -1029,6 +1029,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_spe1 = QComboBox()
         self.spList = ['Any sound']
         self.w_spe1.addItems(self.spList)
+        self.w_spe1.setEnabled(False)
         self.d_detection.addWidget(self.w_spe1,row=2,col=1,colspan=2)
 
         minCertLab = QLabel("Skip if certainty above:")
@@ -1057,8 +1058,17 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fHigh.setValue(8000)
         self.fHightext = QLabel('Show freq. below (Hz)')
         self.fHighvalue = QLabel('8000')
-        receiverH = lambda value: self.fHighvalue.setText(str(int(value/2)))
+        receiverH = lambda value: self.fHighvalue.setText(str(int(value)))
         self.fHigh.valueChanged.connect(receiverH)
+
+        # FFT parameters
+        self.winwidthBox = QSpinBox()
+        self.incrBox = QSpinBox()
+        self.winwidthBox.setRange(2, 1000000)
+        self.incrBox.setRange(1, 1000000)
+        self.winwidthBox.setValue(self.config['window_width'])
+        self.incrBox.setValue(self.config['incr'])
+
         # add sliders to dock
         self.d_detection.addWidget(self.fLowtext, row=4, col=0)
         self.d_detection.addWidget(self.fLow, row=4, col=1)
@@ -1066,6 +1076,10 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.fHightext, row=5, col=0)
         self.d_detection.addWidget(self.fHigh, row=5, col=1)
         self.d_detection.addWidget(self.fHighvalue, row=5, col=2)
+        self.d_detection.addWidget(QLabel("FFT window size"), row=6, col=0)
+        self.d_detection.addWidget(self.winwidthBox, row=6, col=1)
+        self.d_detection.addWidget(QLabel("FFT hop size"), row=7, col=0)
+        self.d_detection.addWidget(self.incrBox, row=7, col=1)
 
         self.w_processButton = QPushButton(" &Review Folder")
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
@@ -1073,6 +1087,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_processButton.setFixedHeight(45)
         self.w_processButton.setIcon(QIcon(QPixmap('img/review.png')))
         self.w_processButton.clicked.connect(self.review)
+        self.w_processButton.setEnabled(False)
         self.d_detection.addWidget(self.w_processButton, row=10, col=2)
 
         # Excel export section
@@ -1088,12 +1103,13 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_res.setValue(60)
         self.d_detection.addWidget(self.w_res, row=13, col=1)
 
-        w_excelButton = QPushButton(" Generate Excel  ")
-        w_excelButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
-        w_excelButton.setFixedHeight(45)
-        w_excelButton.setIcon(QIcon(QPixmap('img/excel.png')))
-        w_excelButton.clicked.connect(self.exportExcel)
-        self.d_detection.addWidget(w_excelButton, row=13, col=2)
+        self.w_excelButton = QPushButton(" Generate Excel  ")
+        self.w_excelButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.w_excelButton.setFixedHeight(45)
+        self.w_excelButton.setIcon(QIcon(QPixmap('img/excel.png')))
+        self.w_excelButton.clicked.connect(self.exportExcel)
+        self.w_excelButton.setEnabled(False)
+        self.d_detection.addWidget(self.w_excelButton, row=13, col=2)
 
         self.w_browse.clicked.connect(self.browse)
         # print("spList after browse: ", self.spList)
@@ -1162,8 +1178,17 @@ class AviaNZ_reviewAll(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
+
         # this will also collect some info about the dir
-        self.fillFileList()
+        if self.fillFileList()==1:
+            self.w_spe1.setEnabled(False)
+            self.w_processButton.setEnabled(False)
+            self.w_excelButton.setEnabled(False)
+            return
+        else:
+            self.w_spe1.setEnabled(True)
+            self.w_processButton.setEnabled(True)
+            self.w_excelButton.setEnabled(True)
 
         # find species names from the annotations
         self.spList = list(self.listFiles.spList)
@@ -1175,6 +1200,11 @@ class AviaNZ_reviewAll(QMainWindow):
         self.spList.insert(0, 'Any sound')
         self.w_spe1.clear()
         self.w_spe1.addItems(self.spList)
+
+        # Also detect samplerates on dir change
+        minfs = min(self.listFiles.fsList)
+        self.fHigh.setRange(minfs//16, minfs//2)
+        self.fLow.setRange(0, minfs//2)
 
     def review(self):
         self.species = self.w_spe1.currentText()
@@ -1190,6 +1220,11 @@ class AviaNZ_reviewAll(QMainWindow):
             msg = SupportClasses.MessagePopup("w", "Select Folder", "Please select a folder to process!")
             msg.exec_()
             return
+
+        # Update config based on provided settings
+        self.config['window_width'] = self.winwidthBox.value()
+        self.config['incr'] = self.incrBox.value()
+        self.ConfigLoader.configwrite(self.config, self.configfile)
 
         # LIST ALL WAV + DATA pairs that can be processed
         allwavs = []
@@ -1875,10 +1910,10 @@ class AviaNZ_reviewAll(QMainWindow):
         """
 
         if not os.path.isdir(self.dirName):
-            print("ERROR: directory %s doesn't exist" % self.soundFileDir)
-            return
+            print("ERROR: directory %s doesn't exist" % self.dirName)
+            return(1)
 
-        self.listFiles.fill(self.dirName, fileName)
+        self.listFiles.fill(self.dirName, fileName, recursive=True, readFmt=True)
 
         # update the "Browse" field text
         self.w_dir.setPlainText(self.dirName)

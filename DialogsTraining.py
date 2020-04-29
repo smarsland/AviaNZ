@@ -126,7 +126,7 @@ class BuildRecAdvWizard(QWizard):
                 print("Warning: directory doesn't exist")
                 return
 
-            self.listFiles.fill(dirName, fileName=None, readFmt=True, addWavNum=True)
+            self.listFiles.fill(dirName, fileName=None, readFmt=True, addWavNum=True, recursive=True)
 
             # while reading the file, we also collected a list of species present there
             spList = list(self.listFiles.spList)
@@ -1698,7 +1698,7 @@ class TestRecWizard(QWizard):
             dirName = QFileDialog.getExistingDirectory(self, 'Choose folder for testing')
             self.testDirName.setText(dirName)
 
-            self.listFiles.fill(dirName, fileName=None, readFmt=False, addWavNum=True)
+            self.listFiles.fill(dirName, fileName=None, readFmt=False, addWavNum=True, recursive=True)
 
 
     class WPageMain(QWizardPage):
