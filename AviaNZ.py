@@ -3635,10 +3635,20 @@ class AviaNZ(QMainWindow):
         self.humanClassifyDialog2a = Dialogs.HumanClassify2a(possibleSpecies)
 
         if self.humanClassifyDialog2a.exec_() == 1:
-            self.revLabel = self.humanClassifyDialog2a.getValues()
+            self.revLabel, chunksize = self.humanClassifyDialog2a.getValues()
 
-            # SRM: Split segments greater than 10 seconds long
-            self.segments.splitLongSeg(species=self.revLabel)
+            # Split segments into chunks of requested size, or leave all if using max len
+            if chunksize==-1:
+                thisspsegs = self.segments.getSpecies(self.revLabel)
+                chunksize = 0
+                for si in thisspsegs:
+                    seg = self.segments[si]
+                    if seg[0]<=self.startRead+self.datalengthSec and seg[1]>=self.startRead:
+                        chunksize = max(chunksize, seg[1]-seg[0])
+                print("Auto-setting chunk size to:", chunksize)
+            else:
+                self.segments.splitLongSeg(species=self.revLabel, maxlen=chunksize)
+
             # Review also reads some parameters from segment rectangles.
             # So, this will re-draw the updated segment boxes:
             self.removeSegments(delete=False)
@@ -3670,6 +3680,7 @@ class AviaNZ(QMainWindow):
 
             # re-read the wav and generate spectrograms as needed
             with pg.BusyCursor():
+                halfChunk = 1.1/2 * chunksize
                 for segix in range(len(self.segments)):
                     if segix in indices2show:
                         seg = self.segments[segix]
@@ -3678,8 +3689,8 @@ class AviaNZ(QMainWindow):
                         mid = (seg[0]+seg[1])/2
 
                         # buffered limits in audiodata (sec) = display limits
-                        x1 = max(self.startRead, mid-5)
-                        x2 = min(self.startRead + self.datalengthSec, mid+5)
+                        x1 = max(self.startRead, mid-halfChunk)
+                        x2 = min(self.startRead + self.datalengthSec, mid+halfChunk)
 
                         # unbuffered limits in audiodata
                         x1nob = max(seg[0], x1)

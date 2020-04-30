@@ -1715,6 +1715,15 @@ class HumanClassify2a(QDialog):
         #self.birds.setCurrentRow(0)
         self.birds.itemDoubleClicked.connect(self.dbl)
 
+        self.chunksizeAuto = QRadioButton("Auto-pick view size")
+        self.chunksizeAuto.setChecked(True)
+        self.chunksizeManual = QRadioButton("View segments in chunks of:")
+        self.chunksizeManual.toggled.connect(self.chunkChanged)
+        self.chunksizeBox = QSpinBox()
+        self.chunksizeBox.setRange(1, 60)
+        self.chunksizeBox.setValue(10)
+        self.chunksizeBox.setEnabled(False)
+
         ok = QPushButton('OK')
         cancel = QPushButton('Cancel')
         ok.clicked.connect(self.ok)
@@ -1723,11 +1732,20 @@ class HumanClassify2a(QDialog):
         layout = QVBoxLayout()
         layout.addWidget(QLabel('Choose species/call type to review:'))
         layout.addWidget(self.birds)
+        layout.addWidget(self.chunksizeAuto)
+        chsHBox = QHBoxLayout()
+        chsHBox.addWidget(self.chunksizeManual)
+        chsHBox.addWidget(self.chunksizeBox)
+        chsHBox.addWidget(QLabel("s"))
+        layout.addLayout(chsHBox)
         layout.addWidget(ok)
         layout.addWidget(cancel)
 
         # Now put everything into the frame
         self.setLayout(layout)
+
+    def chunkChanged(self):
+        self.chunksizeBox.setEnabled(self.chunksizeManual.isChecked())
 
     def dbl(self,item):
         self.birds.setCurrentItem(item)
@@ -1740,7 +1758,12 @@ class HumanClassify2a(QDialog):
         self.reject()
 
     def getValues(self):
-        return self.birds.currentItem().text()
+        # chunksize: either manually set, or "-1" for auto-pick
+        if self.chunksizeManual.isChecked():
+            chs = self.chunksizeBox.value()
+        else:
+            chs = -1
+        return self.birds.currentItem().text(), chs
 
 class HumanClassify2(QDialog):
     """ Single Species review main dialog.
@@ -2024,6 +2047,7 @@ class HumanClassify2(QDialog):
             maxFreq = exampleSP.sampleRate // 2
         #SgSize = np.shape(exampleSP.sg)[1]  # in spec units
         SgSize = self.specV
+        duration = len(exampleSP.data)/exampleSP.sampleRate
 
         butNum = 0
         for row in range(self.numPicsV):
@@ -2036,7 +2060,7 @@ class HumanClassify2(QDialog):
             # draw a row of buttons
             for col in range(1, self.numPicsH+1):
                 if row==0:
-                    time_axis = SupportClasses.TimeAxisWidget(self.specH,10)
+                    time_axis = SupportClasses.TimeAxisWidget(self.specH, duration)
                     self.flowAxesT.addWidget(time_axis, 0, col)
                     self.flowAxesT.layout.setColumnMinimumWidth(col, self.specH+10)
                     time_axis.show()
