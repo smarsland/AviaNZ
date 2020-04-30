@@ -23,7 +23,7 @@
 import os, re, fnmatch, sys, gc, math
 
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame
 from PyQt5.QtCore import Qt, QDir
 
 import numpy as np
@@ -1069,6 +1069,16 @@ class AviaNZ_reviewAll(QMainWindow):
         self.winwidthBox.setValue(self.config['window_width'])
         self.incrBox.setValue(self.config['incr'])
 
+        # Single Sp review parameters
+        self.chunksizeAuto = QRadioButton("Auto-pick view size")
+        self.chunksizeAuto.setChecked(True)
+        self.chunksizeManual = QRadioButton("View segments in chunks of (s):")
+        self.chunksizeManual.toggled.connect(self.chunkChanged)
+        self.chunksizeBox = QSpinBox()
+        self.chunksizeBox.setRange(1, 60)
+        self.chunksizeBox.setValue(10)
+        self.chunksizeBox.setEnabled(False)
+
         # add sliders to dock
         self.d_detection.addWidget(self.fLowtext, row=4, col=0)
         self.d_detection.addWidget(self.fLow, row=4, col=1)
@@ -1080,6 +1090,10 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.winwidthBox, row=6, col=1)
         self.d_detection.addWidget(QLabel("FFT hop size"), row=7, col=0)
         self.d_detection.addWidget(self.incrBox, row=7, col=1)
+
+        self.d_detection.addWidget(self.chunksizeAuto, row=8, col=0)
+        self.d_detection.addWidget(self.chunksizeManual, row=8, col=1)
+        self.d_detection.addWidget(self.chunksizeBox, row=8, col=2)
 
         self.w_processButton = QPushButton(" &Review Folder")
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
@@ -1134,10 +1148,12 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_files.layout.setSpacing(10)
         self.show()
 
+    def chunkChanged(self):
+        self.chunksizeBox.setEnabled(self.chunksizeManual.isChecked())
+
     def createMenu(self):
         """ Create the basic menu.
         """
-
         helpMenu = self.menuBar().addMenu("&Help")
         helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
         aboutMenu = self.menuBar().addMenu("&About")
@@ -1300,12 +1316,8 @@ class AviaNZ_reviewAll(QMainWindow):
             # so call the right dialog:
             # (they will update self.segments and store corrections)
             if self.species == 'Any sound':
-                _ = self.segments.orderTime()
                 filesuccess = self.review_all(filename, sTime)
             else:
-                # split long segments for single species review
-                self.segments.splitLongSeg(species=self.species)
-                _ = self.segments.orderTime()
                 filesuccess = self.review_single(filename, sTime)
             # merge back any split segments, plus ANY overlaps within calltypes
             todelete = self.segments.mergeSplitSeg()
@@ -1444,8 +1456,23 @@ class AviaNZ_reviewAll(QMainWindow):
             Updates self.segments as a side effect.
             Returns 1 for clean completion, 0 for Esc press or other dirty exit.
         """
+        # Split segments into chunks of requested size, or leave all if using max len
+        if self.chunksizeManual.isChecked():
+            chunksize = self.chunksizeBox.value()
+            self.segments.splitLongSeg(species=self.species, maxlen=chunksize)
+        else:
+            chunksize = 0
+            thisspsegs = self.segments.getSpecies(self.species)
+            for si in thisspsegs:
+                seg = self.segments[si]
+                chunksize = max(chunksize, seg[1]-seg[0])
+            print("Auto-setting chunk size to:", chunksize)
+
+        _ = self.segments.orderTime()
+
+        self.loadFile(filename, self.species, chunksize)
+
         # Initialize the dialog for this file
-        self.loadFile(filename, self.species)
         self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sps, self.segments, self.indices2show,
                                                            self.species, self.lut, self.colourStart,
                                                            self.colourEnd, self.config['invertColourMap'],
@@ -1593,6 +1620,9 @@ class AviaNZ_reviewAll(QMainWindow):
             Updates self.segments as a side effect.
             Returns 1 for clean completion, 0 for Esc press or other dirty exit.
         """
+        # For equivalence with review_single
+        _ = self.segments.orderTime()
+
         # Load the birdlists:
         # short list is necessary, long list can be None
         # (on load, shortBirdList is copied over from config, and if that fails - can't start anything)
@@ -1638,7 +1668,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         return(1)
 
-    def loadFile(self, filename, species=None):
+    def loadFile(self, filename, species=None, chunksize=None):
         """ Needs to generate spectrograms and audiodatas
             for each segment in self.segments.
             The SignalProcs containing these are loaded into self.sps.
@@ -1673,6 +1703,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 # For single sp, no need to load all segments, but don't want to edit self.segments
                 if species is not None:
                     self.indices2show = self.segments.getSpecies(species)
+                    halfChunk = 1.1/2 * chunksize
                 else:
                     self.indices2show = range(len(self.segments))
 
@@ -1686,8 +1717,8 @@ class AviaNZ_reviewAll(QMainWindow):
                         if species is not None:
                             mid = (seg[0]+seg[1])/2
                             # buffered limits in audiodata (sec) = display limits
-                            x1 = max(0, mid-5)
-                            x2 = min(duration, mid+5)
+                            x1 = max(0, mid-halfChunk)
+                            x2 = min(duration, mid+halfChunk)
 
                             # unbuffered limits in audiodata
                             x1nob = max(seg[0], x1)
