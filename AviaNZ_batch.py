@@ -221,8 +221,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.listFiles.setMinimumWidth(150)
         self.listFiles.itemDoubleClicked.connect(self.listLoadFile)
 
-        #self.w_files.addWidget(QLabel('Double click to select a folder'), row=0, col=0)
-        self.w_files.addWidget(QLabel('Red files have annotations'), row=1, col=0)
+        self.w_files.addWidget(QLabel('Double click to select a folder'), row=0, col=0)
         self.w_files.addWidget(self.listFiles, row=2, col=0)
 
         self.d_detection.layout.setContentsMargins(20, 20, 20, 20)
@@ -889,7 +888,6 @@ class AviaNZ_batchProcess(QMainWindow):
         """ Populates the list of files for the file listbox.
             Returns an error code if the specified directory is bad.
         """
-
         if not os.path.isdir(self.dirName):
             print("ERROR: directory %s doesn't exist" % self.dirName)
             self.listFiles.clear()
@@ -1140,7 +1138,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_files = pg.LayoutWidget()
         self.d_files.addWidget(self.w_files)
         self.w_files.addWidget(QLabel('Double click to select a folder'), row=0, col=0)
-        self.w_files.addWidget(QLabel('Red files have annotations'), row=1, col=0)
 
         # List to hold the list of files
         colourNone = QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3])
@@ -1209,11 +1206,13 @@ class AviaNZ_reviewAll(QMainWindow):
             self.w_spe1.setEnabled(False)
             self.w_processButton.setEnabled(False)
             self.w_excelButton.setEnabled(False)
+            self.statusBar().showMessage("Select a directory to process")
             return
         else:
             self.w_spe1.setEnabled(True)
             self.w_processButton.setEnabled(True)
             self.w_excelButton.setEnabled(True)
+            self.statusBar().showMessage("Ready for processing")
 
         # find species names from the annotations
         self.spList = list(self.listFiles.spList)
@@ -1948,9 +1947,9 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Generates the list of files for the file listbox.
             fileName - currently opened file (marks it in the list).
         """
-
         if not os.path.isdir(self.dirName):
             print("ERROR: directory %s doesn't exist" % self.dirName)
+            self.listFiles.clear()
             return(1)
 
         self.listFiles.fill(self.dirName, fileName, recursive=True, readFmt=True)
