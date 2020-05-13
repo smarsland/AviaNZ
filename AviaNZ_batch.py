@@ -23,7 +23,7 @@
 import os, re, fnmatch, sys, gc, math
 
 from PyQt5.QtGui import QIcon, QPixmap, QColor
-from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame
+from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QProgressDialog
 from PyQt5.QtCore import Qt, QDir
 
 import numpy as np
@@ -41,6 +41,7 @@ import Dialogs
 import colourMaps
 
 import webbrowser
+import traceback
 import json, time
 import copy
 
@@ -66,7 +67,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
-        self.statusBar().showMessage("Ready for processing")
+        self.statusBar().showMessage("Select a directory to process")
 
         self.setWindowTitle('AviaNZ - Batch Processing')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -112,11 +113,6 @@ class AviaNZ_batchProcess(QMainWindow):
         self.addSp = QPushButton("Add another recogniser")
         self.addSp.clicked.connect(self.addSpeciesBox)
 
-        self.w_resLabel = QLabel("Set size of presence/absence blocks in Excel output\n(Sheet 3)")
-        self.w_res = QSpinBox()
-        self.w_res.setRange(1, 600)
-        self.w_res.setSingleStep(5)
-        self.w_res.setValue(60)
         w_timeLabel = QLabel("Want to process a subset of recordings only e.g. dawn or dusk?\nThen select the time window, otherwise skip")
         self.w_timeStart = QTimeEdit()
         self.w_timeStart.setDisplayFormat('hh:mm:ss')
@@ -159,6 +155,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_processButton.setIcon(QIcon(QPixmap('img/process.png')))
         self.w_processButton.clicked.connect(self.detect)
         self.w_processButton.setFixedSize(165, 50)
+        self.w_processButton.setEnabled(False)
         self.w_browse.clicked.connect(self.browse)
 
         self.d_detection.addWidget(self.w_dir, row=0, col=0, colspan=2)
@@ -211,10 +208,6 @@ class AviaNZ_batchProcess(QMainWindow):
             self.maxlenlbl.hide()
             self.maxlen.hide()
 
-        self.lblsec = QLabel("(seconds)")
-        self.d_detection.addWidget(self.w_resLabel, row=5, col=0)
-        self.d_detection.addWidget(self.w_res, row=5, col=1)
-        self.d_detection.addWidget(self.lblsec, row=5, col=2)
         self.d_detection.addWidget(self.w_processButton, row=6, col=2)
 
         self.w_files = pg.LayoutWidget()
@@ -291,7 +284,13 @@ class AviaNZ_batchProcess(QMainWindow):
             self.dirName = QtGui.QFileDialog.getExistingDirectory(self,'Choose Folder to Process')
         self.w_dir.setPlainText(self.dirName)
         self.w_dir.setReadOnly(True)
-        self.fillFileList()
+        # populate file list and update rest of interface:
+        if self.fillFileList()==0:
+            self.statusBar().showMessage("Ready for processing")
+            self.w_processButton.setEnabled(True)
+        else:
+            self.statusBar().showMessage("Select a directory to process")
+            self.w_processButton.setEnabled(False)
 
     def addSpeciesBox(self):
         """ Deals with adding and moving species comboboxes """
@@ -365,9 +364,6 @@ class AviaNZ_batchProcess(QMainWindow):
             self.boxTime.show()
             self.addSp.show()
             self.warning.hide()
-            self.w_resLabel.hide()
-            self.w_res.hide()
-            self.lblsec.hide()
         elif currname != "Any sound (Intermittent sampling)":
             self.minlen.show()
             self.minlenlbl.show()
@@ -380,17 +376,11 @@ class AviaNZ_batchProcess(QMainWindow):
             self.boxTime.show()
             self.addSp.hide()
             self.warning.show()
-            self.w_resLabel.hide()
-            self.w_res.hide()
-            self.lblsec.hide()
         else:
             self.boxPost.hide()
             self.boxTime.hide()
             self.addSp.hide()
             self.warning.show()
-            self.w_resLabel.hide()
-            self.w_res.hide()
-            self.lblsec.hide()
 
         # (skip first box which is fixed)
         for box in self.speCombos[1:]:
@@ -405,9 +395,7 @@ class AviaNZ_batchProcess(QMainWindow):
     def addRegularSegments(self, wav):
         """ Perform the Hartley bodge: add 10s segments every minute. """
         # if wav.data exists get the duration
-        self.filename = wav
         (rate, nseconds, nchannels, sampwidth) = wavio.readFmt(self.filename)
-        self.segments = Segment.SegmentList()
         self.segments.metadata = dict()
         self.segments.metadata["Operator"] = "Auto"
         self.segments.metadata["Reviewer"] = ""
@@ -440,7 +428,7 @@ class AviaNZ_batchProcess(QMainWindow):
         if not self.dirName:
             msg = SupportClasses.MessagePopup("w", "Select Folder", "Please select a folder to process!")
             msg.exec_()
-            return
+            return(1)
 
         # retrieve selected filter(s)
         self.species = set()
@@ -453,9 +441,11 @@ class AviaNZ_batchProcess(QMainWindow):
         if "Any sound" in self.species:
             self.method = "Default"
             speciesStr = "Any sound"
+            filters = None
         elif "Any sound (Intermittent sampling)" in self.species:
             self.method = "Intermittent sampling"
             speciesStr = "Intermittent sampling"
+            filters = None
         else:
             self.method = "Wavelets"
 
@@ -464,7 +454,7 @@ class AviaNZ_batchProcess(QMainWindow):
             samplerate = set([filt["SampleRate"] for filt in filters])
             if len(samplerate)>1:
                 print("ERROR: multiple sample rates found in selected recognisers, change selection")
-                return
+                return(1)
 
             # convert list to string
             speciesStr = " & ".join(self.species)
@@ -480,17 +470,18 @@ class AviaNZ_batchProcess(QMainWindow):
                 if filename.lower().endswith('.wav'):
                     allwavs.append(os.path.join(root, filename))
         total = len(allwavs)
+        # Parse the user-set time window to process
+        timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
+        timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
+
+        # LOG FILE is read here
+        # note: important to log all analysis settings here
         if self.method != "Intermittent sampling":
-            # Parse the user-set time window to process
-            timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
-            timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
-            # LOG FILE is read here
-            # note: important to log all analysis settings here
-            settings = [self.method, self.w_res.value(), timeWindow_s, timeWindow_e,
+            settings = [self.method, timeWindow_s, timeWindow_e,
                         self.w_wind.isChecked(), self.w_mergect.isChecked()]
         else:
-            settings = [self.method, self.config["protocolSize"], self.config["protocolInterval"]]
-
+            settings = [self.method, timeWindow_s, timeWindow_e,
+                        self.config["protocolSize"], self.config["protocolInterval"]]
         self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, settings)
 
         # Ask for RESUME CONFIRMATION here
@@ -511,7 +502,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
         if confirmedResume == QMessageBox.Cancel:
             # catch unclean (Esc) exits
-            return
+            return(2)
         elif confirmedResume == QMessageBox.No:
             # work on all files
             self.filesDone = []
@@ -525,7 +516,7 @@ class AviaNZ_batchProcess(QMainWindow):
         if self.method == "Intermittent sampling":
             text = "Method: " + self.method + ".\nNumber of files to analyze: " + str(total) + "\n"
         else:
-            text = "Species: " + speciesStr + ", resolution: "+ str(self.w_res.value()) + ", method: " + self.method + ".\nNumber of files to analyze: " + str(total) + ", " + str(cnt) + " done so far.\n"
+            text = "Species: " + speciesStr + ", method: " + self.method + ".\nNumber of files to analyze: " + str(total) + ", " + str(cnt) + " done so far.\n"
             text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
         text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
         if speciesStr=="Any sound":
@@ -540,7 +531,7 @@ class AviaNZ_batchProcess(QMainWindow):
 
         if confirmedLaunch == QMessageBox.Cancel:
             print("Analysis cancelled")
-            return
+            return(2)
 
         # update log: delete everything (by opening in overwrite mode),
         # reprint old headers,
@@ -566,262 +557,145 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_processButton.setEnabled(False)
         self.update()
         self.repaint()
+
+        dlg = QProgressDialog("Analyzing...", "Cancel run", cnt, total+1, self)
+        dlg.setFixedSize(350, 100)
+        dlg.setWindowIcon(QIcon('img/Avianz.ico'))
+        dlg.setWindowTitle("AviaNZ - running Batch Analysis")
+        dlg.open()
+        dlg.setValue(cnt)
+        dlg.update()
+        dlg.repaint()
         QApplication.processEvents()
-        if self.method == "Intermittent sampling":
-            with pg.BusyCursor():
-                for filename in allwavs:
-                    # get remaining run time in min
-                    processingTimeStart = time.time()
-                    hh,mm = divmod(processingTime * (total-cnt) / 60, 60)
-                    cnt = cnt+1
-                    print("*** Processing file %d / %d : %s ***" % (cnt, total, filename))
-                    self.statusBar().showMessage("Processing file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm))
-                    self.update()
-                    self.repaint()
-                    QApplication.processEvents()
+        QApplication.processEvents()
 
-                    # if it was processed previously (stored in log)
-                    if filename in self.filesDone:
-                        # skip the processing:
-                        print("File %s processed previously, skipping" % filename)
-                        continue
+        with pg.BusyCursor():
+            for filename in allwavs:
+                # get remaining run time in min
+                processingTimeStart = time.time()
+                hh,mm = divmod(processingTime * (total-cnt) / 60, 60)
+                cnt = cnt+1
+                progrtext = "file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm)
 
-                    # check if file not empty
-                    if os.stat(filename).st_size < 1000:
-                        print("File %s empty, skipping" % filename)
-                        self.log.appendFile(filename)
-                        continue
+                print("*** Processing" + progrtext + " ***")
+                self.statusBar().showMessage("Processing "+progrtext)
+                self.update()
 
-                    # check if file is formatted correctly
-                    with open(filename, 'br') as f:
-                        if f.read(4) != b'RIFF':
-                            print("Warning: file %s not formatted correctly, skipping" % filename)
-                            continue
+                # if it was processed previously (stored in log)
+                if filename in self.filesDone:
+                    # skip the processing:
+                    print("File %s processed previously, skipping" % filename)
+                    continue
 
-                    # actual processing
-                    self.addRegularSegments(filename)
-
-                    print("%d intermittent segments marked" % len(self.segments))
-
-                    # export segments
-                    cleanexit = self.saveAnnotation()
-                    if cleanexit != 1:
-                        print("Warning: could not save segments!")
-                    # Log success for this file
+                # check if file not empty
+                if os.stat(filename).st_size < 1000:
+                    print("File %s empty, skipping" % filename)
                     self.log.appendFile(filename)
+                    continue
 
-                    # track how long it took to process one file:
-                    processingTime = time.time() - processingTimeStart
-                    print("File processed in", processingTime)
-        else:
-            with pg.BusyCursor():
-                for filename in allwavs:
-                    processingTimeStart = time.time()
-                    self.filename = filename
-                    self.segments = Segment.SegmentList()
-                    # get remaining run time in min
-                    hh,mm = divmod(processingTime * (total-cnt) / 60, 60)
-                    cnt = cnt+1
-                    print("*** Processing file %d / %d : %s ***" % (cnt, total, filename))
-                    self.statusBar().showMessage("Processing file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm))
-                    self.update()
-                    self.repaint()
-                    QApplication.processEvents()
-
-                    # if it was processed previously (stored in log)
-                    if filename in self.filesDone:
-                        # skip the processing:
-                        print("File %s processed previously, skipping" % filename)
+                # check if file is formatted correctly
+                with open(filename, 'br') as f:
+                    if f.read(4) != b'RIFF':
+                        print("Warning: file %s not formatted correctly, skipping" % filename)
                         continue
 
-                    # check if file not empty
-                    if os.stat(filename).st_size < 1000:
-                        print("File %s empty, skipping" % filename)
-                        self.log.appendFile(filename)
-                        continue
+                # test the selected time window if it is a doc recording
+                inWindow = False
 
-                    # check if file is formatted correctly
-                    with open(filename, 'br') as f:
-                        if f.read(4) != b'RIFF':
-                            print("Warning: file %s not formatted correctly, skipping" % filename)
-                            continue
-
-                    # test the selected time window if it is a doc recording
-                    inWindow = False
-
-                    DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
-                    if DOCRecording:
-                        startTime = DOCRecording.group(2)
-                        sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
-                        if timeWindow_s == timeWindow_e:
-                            inWindow = True
-                        elif timeWindow_s < timeWindow_e:
-                            if sTime >= timeWindow_s and sTime <= timeWindow_e:
-                                inWindow = True
-                            else:
-                                inWindow = False
-                        else:
-                            if sTime >= timeWindow_s or sTime <= timeWindow_e:
-                                inWindow = True
-                            else:
-                                inWindow = False
-                    else:
+                DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
+                if DOCRecording:
+                    startTime = DOCRecording.group(2)
+                    sTime = int(startTime[:2]) * 3600 + int(startTime[2:4]) * 60 + int(startTime[4:6])
+                    if timeWindow_s == timeWindow_e:
+                        # (no time window set)
                         inWindow = True
+                    elif timeWindow_s < timeWindow_e:
+                        # for day times ("8 to 17")
+                        inWindow = (sTime >= timeWindow_s and sTime <= timeWindow_e)
+                    else:
+                        # for times that include midnight ("17 to 8")
+                        inWindow = (sTime >= timeWindow_s or sTime <= timeWindow_e)
+                else:
+                    inWindow = True
 
-                    if DOCRecording and not inWindow:
-                        print("Skipping out-of-time-window recording")
-                        self.log.appendFile(filename)
-                        continue
+                if DOCRecording and not inWindow:
+                    print("Skipping out-of-time-window recording")
+                    self.log.appendFile(filename)
+                    continue
 
-                    # ALL SYSTEMS GO: process this file
-                    print("Loading file...")
+                # ALL SYSTEMS GO: process this file
+                self.filename = filename
+                self.segments = Segment.SegmentList()
+                if self.method == "Intermittent sampling":
+                    try:
+                        self.addRegularSegments()
+                    except Exception as e:
+                        e = "Encountered error:\n" + traceback.format_exc()
+                        print("ERROR: ", e)
+                        self.statusBar().showMessage("Analysis stopped due to error")
+                        dlg.setValue(total+1)
+                        msg = SupportClasses.MessagePopup("w", "Analysis error!", e)
+                        msg.setStyleSheet("{color: #cc0000}")
+                        msg.exec_()
+                        self.w_processButton.setEnabled(True)
+                        self.log.file.close()
+                        return(1)
+                else:
                     # load audiodata and clean up old segments:
+                    print("Loading file...")
                     self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"))
-                    # Segment over pages separately, to allow dealing with large files smoothly:
-                    # page size fixed for now
-                    samplesInPage = 900*16000
-                    # (ceil division for large integers)
-                    numPages = (len(self.audiodata) - 1) // samplesInPage + 1
 
                     print("Segmenting...")
                     self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
 
-                    # Actual segmentation happens here:
-                    for page in range(numPages):
-                        print("Segmenting page %d / %d" % (page+1, numPages))
-                        start = page*samplesInPage
-                        end = min(start+samplesInPage, len(self.audiodata))
-                        thisPageLen = (end-start) / self.sampleRate
-
-                        if thisPageLen < 2:
-                            print("Warning: can't process short file ends (%.2f s)" % thisPageLen)
-                            continue
-
-                        # Process
-                        if speciesStr == "Any sound":
-                            # Create spectrogram for median clipping etc
-                            if not hasattr(self, 'sp'):
-                                self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
-                            self.sp.data = self.audiodata[start:end]
-                            self.sp.sampleRate = self.sampleRate
-                            _ = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
-                            self.seg = Segment.Segmenter(self.sp, self.sampleRate)
-                            # thisPageSegs = self.seg.bestSegments()
-                            thisPageSegs = self.seg.medianClip(thr=3.5)
-                            # Post-process
-                            # 1. Delete windy segments
-                            # 2. Delete rainy segments
-                            # 3. Check fundamental frq
-                            # 4. Merge neighbours
-                            # 5. Delete short segments
-                            print("Segments detected: ", len(thisPageSegs))
-                            print("Post-processing...")
-                            maxgap = int(self.maxgap.value())/1000
-                            minlen = int(self.minlen.value())/1000
-                            maxlen = int(self.maxlen.value())/1000
-                            post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
-                            if self.w_wind.isChecked():
-                                post.wind()
-                            post.joinGaps(maxgap)
-                            post.deleteShort(minlen)
-                            # avoid extra long segments (for Isabel)
-                            post.splitLong(maxlen)
-
-                            # adjust segment starts for 15min "pages"
-                            if start != 0:
-                                for seg in post.segments:
-                                    seg[0][0] += start/self.sampleRate
-                                    seg[0][1] += start/self.sampleRate
-                            # attach mandatory "Don't Know"s etc and put on self.segments
-                            self.makeSegments(post.segments)
-                            del self.seg
-                            gc.collect()
-                        else:
-                            # read in the page and resample as needed
-                            self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new")
-
-                            allCtSegs = []
-                            for speciesix in range(len(filters)):
-                                print("Working with recogniser:", filters[speciesix])
-                                # note: using 'recaa' mode = partial antialias
-                                thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
-                                # Post-process
-                                # 1. Delete windy segments
-                                # 2. Delete rainy segments
-                                # 3. Check fundamental frq
-                                # 4. Merge neighbours
-                                # 5. Delete short segments
-                                print("Segments detected (all subfilters): ", thisPageSegs)
-                                print("Post-processing...")
-                                # postProcess currently operates on single-level list of segments,
-                                # so we run it over subfilters for wavelets:
-                                spInfo = filters[speciesix]
-                                for filtix in range(len(spInfo['Filters'])):
-                                    CNNmodel = None
-                                    if spInfo['species'] in self.CNNDicts.keys():
-                                        CNNmodel = self.CNNDicts[spInfo['species']]
-                                    post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
-                                    print("Segments detected after WF: ", len(thisPageSegs[filtix]))
-                                    if self.w_wind.isChecked() and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0], spInfo['Filters'][filtix]['FreqRange'][1]):
-                                        post.wind()
-                                    if CNNmodel:
-                                        print('Post-processing with CNN')
-                                        post.CNN()
-                                    if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
-                                        if spInfo['Filters'][filtix]["F0"]:
-                                            print("Checking for fundamental frequency...")
-                                            post.fundamentalFrq()
-
-                                    post.joinGaps(maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
-                                    post.deleteShort(minlength=spInfo['Filters'][filtix]['TimeRange'][0])
-
-                                    # adjust segment starts for 15min "pages"
-                                    if start != 0:
-                                        for seg in post.segments:
-                                            seg[0][0] += start/self.sampleRate
-                                            seg[0][1] += start/self.sampleRate
-
-                                    if self.w_mergect.isChecked():
-                                        # collect segments from all call types
-                                        allCtSegs.extend(post.segments)
-                                    else:
-                                        # attach filter info and put on self.segments:
-                                        self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
-
-                                if self.w_mergect.isChecked():
-                                    # merge different call type segments
-                                    post.segments = allCtSegs
-                                    post.checkSegmentOverlap()
-
-                                    # also merge neighbours (segments from different call types)
-                                    post.joinGaps(maxgap=max([subf['TimeRange'][3] for subf in spInfo["Filters"]]))
-                                    # construct "Any call" info to place on the segments
-                                    flow = min([subf["FreqRange"][0] for subf in spInfo["Filters"]])
-                                    fhigh = max([subf["FreqRange"][1] for subf in spInfo["Filters"]])
-                                    ctinfo = {"calltype": "(Other)", "FreqRange": [flow, fhigh]}
-                                    print('self.species[speciesix]:', self.species[speciesix])
-                                    print('spInfo["species"]:', spInfo["species"])
-                                    self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], ctinfo)
+                    # Main work is done here:
+                    try:
+                        self.detectFile(speciesStr, filters)
+                    except Exception:
+                        e = "Encountered error:\n" + traceback.format_exc()
+                        print("ERROR: ", e)
+                        self.statusBar().showMessage("Analysis stopped due to error")
+                        dlg.setValue(total+1)
+                        msg = SupportClasses.MessagePopup("w", "Analysis error!", e)
+                        msg.setStyleSheet("QMessageBox QLabel{color: #cc0000}")
+                        msg.exec_()
+                        self.w_processButton.setEnabled(True)
+                        self.log.file.close()
+                        return(1)
 
                     print('Segments in this file: ', self.segments)
-                    print("Segmentation complete. %d new segments marked" % len(self.segments))
 
-                    # export segments
-                    cleanexit = self.saveAnnotation()
-                    if cleanexit != 1:
-                        print("Warning: could not save segments!")
-                    # Log success for this file
-                    self.log.appendFile(self.filename)
+                # export segments
+                print("%d new segments marked" % len(self.segments))
+                cleanexit = self.saveAnnotation()
+                if cleanexit != 1:
+                    print("Warning: could not save segments!")
 
-                    # track how long it took to process one file:
-                    processingTime = time.time() - processingTimeStart
-                    print("File processed in", processingTime)
+                # Log success for this file and update ProgrDlg
+                self.log.appendFile(filename)
+                dlg.setValue(cnt)
+                dlg.setLabelText("Analysed "+progrtext)
+                dlg.update()
+                if dlg.wasCanceled():
+                    print("Analysis cancelled")
+                    self.statusBar().showMessage("Analysis cancelled")
+                    self.w_processButton.setEnabled(True)
+                    self.log.file.close()
+                    return(2)
+
+                # Refresh GUI after each file (only the ProgressDialog which is modal)
+                QApplication.processEvents()
+                # track how long it took to process one file:
+                processingTime = time.time() - processingTimeStart
+                print("File processed in", processingTime)
                 # END of audio batch processing
 
+            if self.method!="Intermittent sampling":
                 # delete old results (xlsx)
                 # ! WARNING: any Detection...xlsx files will be DELETED,
                 # ! ANYWHERE INSIDE the specified dir, recursively
                 self.statusBar().showMessage("Removing old Excel files, almost done...")
+                dlg.setLabelText("Removing old Excel files...")
                 self.update()
                 self.repaint()
                 for root, dirs, files in os.walk(str(self.dirName)):
@@ -833,17 +707,149 @@ class AviaNZ_batchProcess(QMainWindow):
                 # We currently do not export any excels automatically
                 # in this mode. We only delete old excels, and let
                 # user generate new ones through Batch Review.
+                dlg.setValue(total+1)
+            else:
+                dlg.setValue(total+1)
 
         # END of processing and exporting. Final cleanup
+        self.statusBar().showMessage("Processed all %d files" % total)
         self.w_processButton.setEnabled(True)
         self.log.file.close()
-        self.statusBar().showMessage("Processed all %d files" % total)
         msgtext = "Finished processing.\nWould you like to return to the start screen?"
         msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
         reply = msg.exec_()
         if reply == QMessageBox.Yes:
             QApplication.exit(1)
+        else:
+            return(0)
+
+    def detectFile(self, speciesStr, filters):
+        """ Actual worker for a file in the detection loop.
+            Does not return anything - for use with external try/catch
+        """
+        # Segment over pages separately, to allow dealing with large files smoothly:
+        # page size fixed for now
+        samplesInPage = 900*16000
+        # (ceil division for large integers)
+        numPages = (len(self.audiodata) - 1) // samplesInPage + 1
+
+        # Actual segmentation happens here:
+        for page in range(numPages):
+            print("Segmenting page %d / %d" % (page+1, numPages))
+            start = page*samplesInPage
+            end = min(start+samplesInPage, len(self.audiodata))
+            thisPageLen = (end-start) / self.sampleRate
+
+            if thisPageLen < 2:
+                print("Warning: can't process short file ends (%.2f s)" % thisPageLen)
+                continue
+
+            # Process
+            if speciesStr == "Any sound":
+                # Create spectrogram for median clipping etc
+                if not hasattr(self, 'sp'):
+                    self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
+                self.sp.data = self.audiodata[start:end]
+                self.sp.sampleRate = self.sampleRate
+                _ = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
+                self.seg = Segment.Segmenter(self.sp, self.sampleRate)
+                # thisPageSegs = self.seg.bestSegments()
+                thisPageSegs = self.seg.medianClip(thr=3.5)
+                # Post-process
+                # 1. Delete windy segments
+                # 2. Delete rainy segments
+                # 3. Check fundamental frq
+                # 4. Merge neighbours
+                # 5. Delete short segments
+                print("Segments detected: ", len(thisPageSegs))
+                print("Post-processing...")
+                maxgap = int(self.maxgap.value())/1000
+                minlen = int(self.minlen.value())/1000
+                maxlen = int(self.maxlen.value())/1000
+                post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
+                if self.w_wind.isChecked():
+                    post.wind()
+                post.joinGaps(maxgap)
+                post.deleteShort(minlen)
+                # avoid extra long segments (for Isabel)
+                post.splitLong(maxlen)
+
+                # adjust segment starts for 15min "pages"
+                if start != 0:
+                    for seg in post.segments:
+                        seg[0][0] += start/self.sampleRate
+                        seg[0][1] += start/self.sampleRate
+                # attach mandatory "Don't Know"s etc and put on self.segments
+                self.makeSegments(post.segments)
+                del self.seg
+                gc.collect()
+            else:
+                # read in the page and resample as needed
+                self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new")
+
+                allCtSegs = []
+                for speciesix in range(len(filters)):
+                    print("Working with recogniser:", filters[speciesix])
+                    # note: using 'recaa' mode = partial antialias
+                    thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
+                    # Post-process
+                    # 1. Delete windy segments
+                    # 2. Delete rainy segments
+                    # 3. Check fundamental frq
+                    # 4. Merge neighbours
+                    # 5. Delete short segments
+                    print("Segments detected (all subfilters): ", thisPageSegs)
+                    print("Post-processing...")
+                    # postProcess currently operates on single-level list of segments,
+                    # so we run it over subfilters for wavelets:
+                    spInfo = filters[speciesix]
+                    for filtix in range(len(spInfo['Filters'])):
+                        CNNmodel = None
+                        if spInfo['species'] in self.CNNDicts.keys():
+                            CNNmodel = self.CNNDicts[spInfo['species']]
+                        post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
+                        print("Segments detected after WF: ", len(thisPageSegs[filtix]))
+                        if self.w_wind.isChecked() and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0], spInfo['Filters'][filtix]['FreqRange'][1]):
+                            post.wind()
+                        if CNNmodel:
+                            print('Post-processing with CNN')
+                            post.CNN()
+                        if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
+                            if spInfo['Filters'][filtix]["F0"]:
+                                print("Checking for fundamental frequency...")
+                                post.fundamentalFrq()
+
+                        post.joinGaps(maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
+                        post.deleteShort(minlength=spInfo['Filters'][filtix]['TimeRange'][0])
+
+                        # adjust segment starts for 15min "pages"
+                        if start != 0:
+                            for seg in post.segments:
+                                seg[0][0] += start/self.sampleRate
+                                seg[0][1] += start/self.sampleRate
+
+                        if self.w_mergect.isChecked():
+                            # collect segments from all call types
+                            allCtSegs.extend(post.segments)
+                        else:
+                            # attach filter info and put on self.segments:
+                            self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
+
+                    if self.w_mergect.isChecked():
+                        # merge different call type segments
+                        post.segments = allCtSegs
+                        post.checkSegmentOverlap()
+
+                        # also merge neighbours (segments from different call types)
+                        post.joinGaps(maxgap=max([subf['TimeRange'][3] for subf in spInfo["Filters"]]))
+                        # construct "Any call" info to place on the segments
+                        flow = min([subf["FreqRange"][0] for subf in spInfo["Filters"]])
+                        fhigh = max([subf["FreqRange"][1] for subf in spInfo["Filters"]])
+                        ctinfo = {"calltype": "(Other)", "FreqRange": [flow, fhigh]}
+                        print('self.species[speciesix]:', self.species[speciesix])
+                        print('spInfo["species"]:', spInfo["species"])
+                        self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], ctinfo)
 
     def makeSegments(self, segmentsNew, filtName=None, species=None, subfilter=None):
         """ Adds segments to self.segments """
@@ -878,19 +884,20 @@ class AviaNZ_batchProcess(QMainWindow):
         return 1
 
     def fillFileList(self, fileName=None):
-        """ Generates the list of files for the file listbox.
-        Most of the work is to deal with directories in that list.
-        It only sees *.wav files. Picks up *.data files, to make the filenames
-        red in the list."""
+        """ Populates the list of files for the file listbox.
+            Returns an error code if the specified directory is bad.
+        """
 
         if not os.path.isdir(self.dirName):
-            print("ERROR: directory %s doesn't exist" % self.soundFileDir)
-            return
+            print("ERROR: directory %s doesn't exist" % self.dirName)
+            self.listFiles.clear()
+            return(1)
 
         self.listFiles.fill(self.dirName, fileName)
 
         # update the "Browse" field text
         self.w_dir.setPlainText(self.dirName)
+        return(0)
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on an item in filelist
