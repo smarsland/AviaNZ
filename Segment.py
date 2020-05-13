@@ -31,6 +31,7 @@ import librosa
 import time
 from ext import ce_denoise as ce
 import json
+import os
 import math
 import copy
 import wavio
@@ -1238,15 +1239,19 @@ class PostProcess:
                 probs = 0
 
             print(seg, probs)
-            with open('temp/cnnfeats.txt', 'a') as f:
-                for pi in range(np.shape(probs)[0]):
-                    f.write(str(seg[0][0]))
-                    f.write('\t')
-                    f.write(str(seg[0][1]))
-                    f.write('\t')
-                    plist = probs[pi,:].tolist()
-                    f.write('\t'.join(map(str, plist)))
-                    f.write('\n')
+            try:
+                with open(os.path.join('temp', 'cnnfeats.txt'), 'a') as f:
+                    for pi in range(np.shape(probs)[0]):
+                        f.write(str(seg[0][0]))
+                        f.write('\t')
+                        f.write(str(seg[0][1]))
+                        f.write('\t')
+                        plist = probs[pi,:].tolist()
+                        f.write('\t'.join(map(str, plist)))
+                        f.write('\n')
+            except Exception as e:
+                print("ERROR: failed to export")
+                print(e)
             if isinstance(probs, int):
                 # there is no at least one img generated from this segment, very unlikely to be a true seg.
                 certainty = 0
