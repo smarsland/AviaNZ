@@ -1105,10 +1105,11 @@ class ExcelIO():
             if len(speciesSegs)==0:
                 continue
 
-            # Print the filename
-            ws.cell(row=r, column=1, value=segsl.filename)
             # Loop over the segments
             for seg in speciesSegs:
+                # Print the filename
+                ws.cell(row=r, column=1, value=segsl.filename)
+
                 # Time limits
                 ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTime).toString('hh:mm:ss')))
                 ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTime).toString('hh:mm:ss')))
