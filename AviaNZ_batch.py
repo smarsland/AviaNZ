@@ -558,10 +558,11 @@ class AviaNZ_batchProcess(QMainWindow):
         self.update()
         self.repaint()
 
-        dlg = QProgressDialog("Analyzing...", "Cancel run", cnt, total+1, self)
+        dlg = QProgressDialog("Analyzing file 1 / %d. Time remaining: ? h ?? min" % total, "Cancel run", cnt, total+1, self)
         dlg.setFixedSize(350, 100)
         dlg.setWindowIcon(QIcon('img/Avianz.ico'))
         dlg.setWindowTitle("AviaNZ - running Batch Analysis")
+        dlg.setWindowFlags(dlg.windowFlags() ^ Qt.WindowContextHelpButtonHint ^ Qt.WindowCloseButtonHint)
         dlg.open()
         dlg.setValue(cnt)
         dlg.update()
@@ -677,14 +678,15 @@ class AviaNZ_batchProcess(QMainWindow):
                 dlg.setLabelText("Analysed "+progrtext)
                 dlg.update()
                 if dlg.wasCanceled():
-                    print("Analysis cancelled")
-                    self.statusBar().showMessage("Analysis cancelled")
+                    print("Analysis canceled")
+                    dlg.setValue(total+1)
+                    self.statusBar().showMessage("Analysis canceled")
                     self.w_processButton.setEnabled(True)
                     self.log.file.close()
                     return(2)
-
                 # Refresh GUI after each file (only the ProgressDialog which is modal)
                 QApplication.processEvents()
+
                 # track how long it took to process one file:
                 processingTime = time.time() - processingTimeStart
                 print("File processed in", processingTime)
