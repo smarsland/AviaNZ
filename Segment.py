@@ -150,6 +150,33 @@ class Segment(list):
         for trlab in toremove:
             self.removeLabel(trlab["species"], trlab["certainty"])
 
+    def questionLabels(self, species=None):
+        """ Lower the certainty of this segment's certain labels to 50.
+            Affects all species (if None) or indicated species.
+            Ignores "Don't Know" labels.
+            (Could be merged with the above at some point.)
+            Returns True if it changed any labels.
+        """
+        anyChanged = False
+        toremove = []
+        for labix in range(len(self[4])):
+            lab = self[4][labix]
+            # check if this label is green:
+            if (species is None or lab["species"]==species) and lab["certainty"]==100 and lab["species"]!="Don't Know":
+                # check if this segment has a yellow label for this species already
+                otherLabels = [k[0]==lab["species"] and k[1]<100 for k in self.keys]
+                if len(otherLabels)>0:
+                    # then just delete this label
+                    toremove.append(lab)
+                else:
+                    lab["certainty"] = 50
+                    self.keys[labix] = (lab["species"], lab["certainty"])
+                anyChanged = True
+        for trlab in toremove:
+            self.removeLabel(trlab["species"], trlab["certainty"])
+
+        return(anyChanged)
+
     def removeLabel(self, species, certainty):
         """ Removes label from this segment.
             Does not delete the actual segment - that's left for the interface to take care of.
@@ -182,7 +209,7 @@ class Segment(list):
         """ Returns a nicely-formatted string of this segment's info."""
         s = []
         for lab in self[4]:
-            labs = "sp.: {}, cert.: {}%".format(lab["species"], round(lab["certainty"]))
+            labs = "sp.: %s, cert.: %d%%" % (lab["species"], lab["certainty"])
             if "filter" in lab and lab["filter"]!="M":
                 labs += ", filter: " + lab["filter"]
             if "calltype" in lab:
