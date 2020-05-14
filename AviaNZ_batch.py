@@ -1586,13 +1586,10 @@ class AviaNZ_reviewAll(QMainWindow):
                     todelete.append(btn.index)
             # fix certainty of the analyzed species
             elif btn.mark=="yellow":
-                for lbindex in range(len(currSeg[4])):
-                    label = currSeg[4][lbindex]
-                    # find "greens", swap to "yellows"
-                    if label["species"]==self.species and label["certainty"]==100:
-                        outputErrors.append(currSeg)
-                        label["certainty"] = 50
-                        currSeg.keys[lbindex] = (label["species"], label["certainty"])
+                # if there where any "greens", flip to "yellows", and store the correction
+                anyChanged = currSeg.questionLabels(self.species)
+                if anyChanged:
+                    outputErrors.append(currSeg)
             elif btn.mark=="green":
                 # find "yellows", swap to "greens"
                 currSeg.confirmLabels(self.species)
@@ -1842,13 +1839,24 @@ class AviaNZ_reviewAll(QMainWindow):
         self.segmentsToSave = True
         currSeg = self.segments[self.box1id]
 
-        # update the actual segment.
-        label, self.saveConfig, _ = self.humanClassifyDialog1.getValues()
-        print("working on ", self.box1id, currSeg)
+        label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
 
-        # if any species names were changed,
-        # save the correction file
+        # deal with manual bird entries under "Other"
+        if len(checkText) > 0:
+            if checkText in self.longBirdList:
+                pass
+            else:
+                self.longBirdList.append(checkText)
+                self.longBirdList = sorted(self.longBirdList, key=str.lower)
+                self.longBirdList.remove('Unidentifiable')
+                self.longBirdList.append('Unidentifiable')
+                self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
+
+        # update the actual segment.
+        print("working on ", self.box1id, currSeg)
         if label != [lab["species"] for lab in currSeg[4]]:
+            # if any species names were changed,
+            # save the correction file
             if self.config['saveCorrections']:
                 outputError = [[currSeg, label]]
                 cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
@@ -1856,17 +1864,24 @@ class AviaNZ_reviewAll(QMainWindow):
                 if cleanexit != 1:
                     print("Warning: could not save correction file!")
 
-        # Then, just recreate the label with certainty 50 for all currently selected species:
-        # (not very neat but safer)
+            # Then, just recreate the label with certainty 50 for all currently selected species:
+            # (not very neat but safer)
 
-        # Create new segment label, assigning certainty 50 for each species:
-        newlabel = []
-        for species in label:
-            if species == "Don't Know":
-                newlabel.append({"species": "Don't Know", "certainty": 0})
-            else:
-                newlabel.append({"species": species, "certainty": 50})
-        self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
+            # Create new segment label, assigning certainty 50 for each species:
+            newlabel = []
+            for species in label:
+                if species == "Don't Know":
+                    newlabel.append({"species": "Don't Know", "certainty": 0})
+                else:
+                    newlabel.append({"species": species, "certainty": 50})
+            self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
+        elif max([lab["certainty"] for lab in currSeg[4]])==100:
+            # if there are any "green" labels, but all species remained the same,
+            # need to drop certainty on those:
+            currSeg.questionLabels()
+        else:
+            # no sp or cert change needed
+            pass
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
@@ -1874,16 +1889,11 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def humanClassifyCorrect1(self):
         """ Correct segment labels, save the old ones if necessary """
+        self.humanClassifyDialog1.stopPlayback()
+        self.segmentsToSave = True
         currSeg = self.segments[self.box1id]
 
-        self.humanClassifyDialog1.stopPlayback()
         label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
-
-        # is this needed? this does not exist in AviaNZ.py?
-        # if len(checkText) > 0:
-        #     if label != checkText:
-        #         label = str(checkText)
-        #         self.humanClassifyDialog1.birdTextEntered()
 
         # deal with manual bird entries under "Other"
         if len(checkText) > 0:
