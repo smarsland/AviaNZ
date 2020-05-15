@@ -1173,7 +1173,8 @@ class PostProcess:
 
         if CNNmodel:
             self.CNNmodel = CNNmodel[0]    # CNNmodel is a list [model, win, inputdim, outputdict, windowInc, thrs]
-            self.CNNwindow = CNNmodel[1]
+            self.CNNwindow = CNNmodel[1][0]
+            self.CNNhop = CNNmodel[1][1]
             self.CNNinputdim = CNNmodel[2]
             self.CNNoutputs = CNNmodel[3]
             self.CNNwindowInc = CNNmodel[4]
@@ -1202,7 +1203,7 @@ class PostProcess:
         Returns the features (currently the spectrogram)
         '''
         featuress = []
-        hop = 0.1
+        hop = self.CNNhop
         n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / hop + 1)
         # n = (seg[1] - seg[0]) // self.CNNwindow
 
@@ -1222,10 +1223,73 @@ class PostProcess:
             sgend = sgstart + specFrameSize
             if sgend > np.shape(sp.sg)[0]:
                 continue
-            sgRaw = sp.sg[sgstart:sgend,:]
+            sgRaw = sp.sg[sgstart:sgend, :]
             maxg = np.max(sgRaw)
             featuress.append([np.rot90(sgRaw / maxg).tolist()])
         return featuress
+
+    def getCertainty(self, meanprob, ctkey):
+        '''
+        Calculate the certainty of a segment.
+        :param meanprob: best n mean probabilities
+        :param ctkey: current call type key
+        :return:
+        '''
+        if 'Silence' in self.CNNoutputs.values():
+            if meanprob[ctkey] > self.CNNthrs[ctkey][3]:
+                certainty = 80
+            elif meanprob[ctkey] > self.CNNthrs[ctkey][2] and \
+                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][2] \
+                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][2]:
+                certainty = 70
+            elif meanprob[ctkey] > self.CNNthrs[ctkey][1] and \
+                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][1] \
+                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][1]:
+                certainty = 60
+            elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
+                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][0] \
+                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
+                certainty = 50
+            else:
+                certainty = 0  # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
+                # self.segments[ix][1] = certainty
+        else:
+            if meanprob[ctkey] > self.CNNthrs[ctkey][3]:
+                certainty = 80
+            elif meanprob[ctkey] > self.CNNthrs[ctkey][2] and \
+                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][2]:
+                certainty = 70
+            elif meanprob[ctkey] > self.CNNthrs[ctkey][1] and \
+                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][1]:
+                certainty = 60
+            elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
+                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][0]:
+                certainty = 50
+            else:
+                certainty = 0  # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
+        return certainty
+
+    def getSubSegs(self, probs, ctkey, seg, imglength, incr):
+        '''
+        Fine tune segments during CNN.
+        Get predicted probability matrix on overlapped images of the segment and find sub-segments.
+        :param probs: probability matrix
+        :param ctkey: call type key
+        :param seg: parent segment
+        :param imglength: image length in sec
+        :param incr: hop in sec
+        :return:
+        '''
+        binaryout = np.zeros((np.shape(probs)[0]))
+        for i in range(len(binaryout)):
+            if self.getCertainty(probs[i], ctkey) > 0:  # probably need more work here, for now treat individual images same as the mean probs
+                binaryout[i] = 1
+        segmenter = Segmenter()
+        subsegs = segmenter.convert01(binaryout)
+        for i in range(len(subsegs)):
+            subsegs[i] = [[subsegs[i][0]*incr+seg[0][0], (subsegs[i][1]-1)*incr+imglength+seg[0][0]], seg[1]]
+        subsegs = segmenter.checkSegmentOverlap3(subsegs)
+        return subsegs
 
     def CNN(self):
         """
@@ -1239,6 +1303,7 @@ class PostProcess:
             return
         ctkey = int(list(self.CNNoutputs.keys())[list(self.CNNoutputs.values()).index(self.calltype)])
         print('call type: ', self.calltype)
+        ctnewseg = []
 
         for ix in reversed(range(len(self.segments))):
             seg = self.segments[ix]
@@ -1265,20 +1330,20 @@ class PostProcess:
             else:
                 probs = 0
 
-            print(seg, probs)
-            try:
-                with open(os.path.join('temp', 'cnnfeats.txt'), 'a') as f:
-                    for pi in range(np.shape(probs)[0]):
-                        f.write(str(seg[0][0]))
-                        f.write('\t')
-                        f.write(str(seg[0][1]))
-                        f.write('\t')
-                        plist = probs[pi,:].tolist()
-                        f.write('\t'.join(map(str, plist)))
-                        f.write('\n')
-            except Exception as e:
-                print("ERROR: failed to export")
-                print(e)
+            # print(seg, probs)
+            # try:
+            #     with open(os.path.join('temp', 'cnnfeats.txt'), 'a') as f:
+            #         for pi in range(np.shape(probs)[0]):
+            #             f.write(str(seg[0][0]))
+            #             f.write('\t')
+            #             f.write(str(seg[0][1]))
+            #             f.write('\t')
+            #             plist = probs[pi,:].tolist()
+            #             f.write('\t'.join(map(str, plist)))
+            #             f.write('\n')
+            # except Exception as e:
+            #     print("ERROR: failed to export")
+            #     print(e)
             if isinstance(probs, int):
                 # there is no at least one img generated from this segment, very unlikely to be a true seg.
                 certainty = 0
@@ -1293,33 +1358,22 @@ class PostProcess:
                 # Confirm wavelet proposed call type
                 # print(probs)
                 print(seg, '->', np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
-                if meanprob[ctkey] > self.CNNthrs[ctkey][3]:
-                    certainty = 80
-                    self.segments[ix][1] = certainty
-                elif meanprob[ctkey] > self.CNNthrs[ctkey][2] and \
-                        meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][2] \
-                        and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][2]:
-                    certainty = 70
-                    self.segments[ix][1] = certainty
-                elif meanprob[ctkey] > self.CNNthrs[ctkey][1] and \
-                        meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][1] \
-                        and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][1]:
-                    certainty = 60
-                    self.segments[ix][1] = certainty
-                elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
-                        meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][0] \
-                        and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
-                    certainty = 50
-                    self.segments[ix][1] = certainty
-                else:
-                    certainty = 0     # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
-                    # self.segments[ix][1] = certainty
+                certainty = self.getCertainty(meanprob, ctkey)
 
             if certainty == 0:
                 print('Deleted by CNN')
                 del self.segments[ix]
             else:
                 print('Not deleted by CNN')
+                subsegs = self.getSubSegs(probs, ctkey, seg, self.CNNwindow, self.CNNhop)
+                print(subsegs)
+                if subsegs != []:
+                    del self.segments[ix]
+                    for ns in subsegs[::-1]:
+                        ctnewseg.append(ns)
+        # if ctnewseg != []:
+        for ns in ctnewseg[::-1]:
+            self.segments.append(ns)
         print("Segments remaining after CNN: ", len(self.segments))
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):
