@@ -363,35 +363,34 @@ class CompareCalls(QMainWindow):
                     bestOverlap = np.max(overlap)
                     bestShift = (np.argmax(overlap)-300) * hop
                     self.pairwiseShifts[i, j] = bestShift
+                    self.pairwiseShifts[j, i] = -bestShift
                     print("Calculated best overlap: %.1f seconds at deltat = %.2f" % (bestOverlap, bestShift))
 
                     # The full series of overlaps for each delta is needed for review, so store
                     self.overlaps_forplot.append({'series': overlap, 'bestOverlap': bestOverlap, 'bestShift': bestShift, 'recorders': (rec1, rec2)})
 
         # At this point, we have a matrix of best pairwise adjustments (in s)
-        self.refreshMainOut()
 
-        # Need to convert it to vector of best global adjustments for each recorder.
-        # Assuming that all estimated shifts are true, and d(a,b) + d(b,c) = d(a,c),
-        # it's as easy as picking one starting point and following from there:
-        globalshift = 0
-        finaladj = [globalshift]
-        for i in range(1, len(self.allrecs)):
-            globalshift = globalshift + self.pairwiseShifts[i-1, i]
-            finaladj.append(globalshift)
-        # Additionally, total sum of absolute adjustments can be minimized if we de-median the shifts
-        finaladj = finaladj - np.median(finaladj)
-        print("Final global shifts:", finaladj)
+        # Extract connected components (subgraphs, each is a list of rec indices):
+        # will also determine the total shift for each recorder relative to component start
+        # (=sum of edge weights from pairwiseShifts adj. matrix)
+        # The shifts take into account user-set connectedness b/c shifts are added when traversing over recConnections.
+        self.cclist = self.connectedComponents()
+
+        print("Final global shifts:", self.allrecs, self.cclist)
 
         print("Clock adjustment complete")
         self.labelAdjust.setText("Clock adjustment complete")
         pm = self.style().standardIcon(QStyle.SP_DialogApplyButton).pixmap(QSize(12,12))
         self.labelAdjustIcon.setPixmap(pm)
         self.reviewAdjBtn.setEnabled(True)
+        self.refreshMainOut()
 
     def showAdjustmentsDialog(self):
         self.adjrevdialog = ReviewAdjustments(self.overlaps_forplot, self.hopSpin.value(), self)
         self.adjrevdialog.exec_()
+
+        self.cclist = self.connectedComponents()
 
         # update GUI after the dialog closes
         self.refreshMainOut()
@@ -415,21 +414,40 @@ class CompareCalls(QMainWindow):
         self.adjustmentsOut.setPlainText("\n".join(adjstr))
         self.adjustmentsOut.setReadOnly(True)
 
-        cclist = self.connectedComponents()
-        ccstr = ["-".join(comp) for comp in cclist]
-        ccstr = ";\n".join(ccstr)
+        # cclist is a list of vertex ids
+        ccstr = []
+        for comp in self.cclist:
+            recnames = []
+            shifts = []
+            for v in comp:
+                recnames.append(self.allrecs[v[0]])
+                shifts.append(v[1])
+            recnames = "-".join(recnames)  # ZA-ZB-ZC
+            shifts = "  ".join(map(str, shifts))  # 1  -2  4
+            ccstr.append(recnames + "\t|\t" + shifts)
+        ccstr = ";\n".join(ccstr)  # ZA-ZB-ZC  | 1  -2  4; ZD-ZE |  5 -10
         self.componentsOut.setPlainText(ccstr)
         self.componentsOut.setReadOnly(True)
 
-    # depth-first search
-    # Args: list where to store found nodes, starting node index, Bool list of visited nodes
+    # depth-first search for finding a connected subgraph
+    # and relative shift for each recorder within this subgraph
+    # Args:
+    # 1. list where to store found nodes
+    # 2. starting node index
+    # 3. Bool list of visited nodes
+    # Return: list of tuples [(rec number, shift)]
     def DFS(self, temp, v, visited):
         # Mark the current vertex as visited
         visited[v] = True
 
-        # Add this vertex to the current component
-        recname = self.allrecs[v]
-        temp.append(recname)
+        # Add this vertex and its shift to the current component
+        if len(temp)>0:
+            prevv = temp[-1][0]
+            shift = temp[-1][1] + self.pairwiseShifts[v, prevv]
+            print("total shift %.2f at %d / %s" %(shift, v, self.allrecs[v]))
+        else:
+            shift = 0
+        temp.append((v, shift))
 
         # Run DFS for all vertices adjacent to this
         listOfNeighbours = np.nonzero(self.recConnections[v,])[0]
@@ -439,6 +457,7 @@ class CompareCalls(QMainWindow):
         return temp
 
     # Retrieve connected components from an undirected graph
+    # (and calculate within-component shifts as we are traversing the graph anyway)
     def connectedComponents(self):
         visited = [False] * len(self.allrecs)
         componentList = []
@@ -446,7 +465,11 @@ class CompareCalls(QMainWindow):
             if not visited[v]:
                 component = []
                 componentList.append(self.DFS(component, v, visited))
-        print("Found the following components:")
+                # Additionally, total sum of absolute adjustments could be minimized if we de-median the shifts
+                # just need some testing before doing this
+                # component[,1] = component[,1] - np.median(component[,1])
+
+        print("Found the following components and shifts:")
         print(componentList)
         return componentList
 
