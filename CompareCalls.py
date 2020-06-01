@@ -1,24 +1,27 @@
 # Self-standing executable for tall comparison mode
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QStyle, QComboBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QDoubleSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QStyle, QComboBox, QDialog, QToolButton, QCheckBox
 from PyQt5.QtCore import QDir, Qt, QSize
 from PyQt5.QtGui import QIcon, QPixmap
 
 import sys
 import os
 import datetime as dt
-import itertools
+import numpy as np
 
 import pyqtgraph as pg
 
 import SupportClasses
 import Segment
 
+
 class CompareCalls(QMainWindow):
     def __init__(self):
         super(CompareCalls, self).__init__()
         print("Starting...")
         self.setWindowTitle("AviaNZ call comparator")
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
 
         # menu bar
         fileMenu = self.menuBar()#.addMenu("&File")
@@ -51,6 +54,7 @@ class CompareCalls(QMainWindow):
 
         # area showing the selected folder
         self.w_dir = QPlainTextEdit()
+        self.w_dir.setReadOnly(True)
         self.w_dir.setFixedHeight(40)
         self.w_dir.setPlainText('')
         self.w_dir.setSizePolicy(QSizePolicy(3,1))
@@ -63,12 +67,35 @@ class CompareCalls(QMainWindow):
         labelClockSp = QLabel("Select species to analyse:")
         self.clockSpBox = QComboBox()
 
+        labelHop = QLabel("Clock shift resolution (s)")
+        self.hopSpin = QDoubleSpinBox()
+        self.hopSpin.setSingleStep(0.1)
+        self.hopSpin.setDecimals(3)
+        self.hopSpin.setValue(1.0)
+
         self.suggestAdjBtn = QPushButton("Auto-suggest adjustment")
         self.suggestAdjBtn.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.suggestAdjBtn.clicked.connect(self.suggestAdjustment)
+        self.suggestAdjBtn.setEnabled(False)
 
+        self.labelAdjustIcon = QLabel()
         self.labelAdjust = QLabel()
+
+        self.reviewAdjBtn = QPushButton("Review suggested adjustments")
+        self.reviewAdjBtn.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
+        self.reviewAdjBtn.clicked.connect(self.showAdjustmentsDialog)
+        self.reviewAdjBtn.setEnabled(False)
+
+        # call review
+        self.compareBtn = QPushButton("Compare calls")
+        self.compareBtn.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
+        self.compareBtn.clicked.connect(self.showComparisonDialog)
+        self.compareBtn.setEnabled(False)
+
         self.adjustmentsOut = QPlainTextEdit()
+        self.adjustmentsOut.setReadOnly(True)
+        self.componentsOut = QPlainTextEdit()
+        self.componentsOut.setReadOnly(True)
 
         ### Layouts for each box
         # input dir
@@ -95,9 +122,15 @@ class CompareCalls(QMainWindow):
 
         clockadjGrid.addWidget(labelClockSp, 0, 0, 1, 1)
         clockadjGrid.addWidget(self.clockSpBox, 0, 1, 1, 3)
-        clockadjGrid.addWidget(self.suggestAdjBtn, 1, 0, 1, 4)
-        clockadjGrid.addWidget(self.labelAdjust, 2, 0, 1, 4)
-        clockadjGrid.addWidget(self.adjustmentsOut, 3, 0, 1, 4)
+        clockadjGrid.addWidget(labelHop, 1, 0, 1, 1)
+        clockadjGrid.addWidget(self.hopSpin, 1, 1, 1, 3)
+        clockadjGrid.addWidget(self.suggestAdjBtn, 2, 0, 1, 4)
+        hboxLabel2 = QHBoxLayout()
+        hboxLabel2.addWidget(self.labelAdjustIcon)
+        hboxLabel2.addWidget(self.labelAdjust)
+        hboxLabel2.addStretch(10)
+        clockadjGrid.addLayout(hboxLabel2, 3, 0, 1, 4)
+        clockadjGrid.addWidget(self.reviewAdjBtn, 4, 0, 1, 4)
 
         # call comparator
         comparisonGroup = QGroupBox("Call comparison")
@@ -105,11 +138,15 @@ class CompareCalls(QMainWindow):
         comparisonGroup.setLayout(comparisonGrid)
         comparisonGroup.setStyleSheet("QGroupBox:title{color: #505050; font-weight: 50}")
 
+        comparisonGrid.addWidget(self.compareBtn, 0,0,1,4)
+
         # output save btn and settings
         outputGroup = QGroupBox("Output")
         outputGrid = QGridLayout()
         outputGroup.setLayout(outputGrid)
         outputGroup.setStyleSheet("QGroupBox:title{color: #505050; font-weight: 50}")
+        outputGrid.addWidget(self.adjustmentsOut, 0, 0, 1, 4)
+        outputGrid.addWidget(self.componentsOut, 1, 0, 1, 4)
 
         ### Main Layout
         mainbox.addWidget(inputGroup)
@@ -130,6 +167,8 @@ class CompareCalls(QMainWindow):
         pm = self.style().standardIcon(QStyle.SP_DialogCancelButton).pixmap(QSize(12,12))
         self.labelDatasIcon.setPixmap(pm)
         self.suggestAdjBtn.setEnabled(False)
+        self.reviewAdjBtn.setEnabled(False)
+        self.compareBtn.setEnabled(False)
         self.clockSpBox.clear()
 
         self.annots = []
@@ -168,6 +207,7 @@ class CompareCalls(QMainWindow):
             spList = list(set(spList))
             self.clockSpBox.addItems(spList)
             self.suggestAdjBtn.setEnabled(True)
+            self.compareBtn.setEnabled(True)
 
     def checkInputDir(self):
         """ Checks the input file dir filenames etc. for validity
@@ -225,18 +265,23 @@ class CompareCalls(QMainWindow):
         print("Detected recorders:", self.allrecs)
         return(0)
 
-    def calculateOverlap(self, dtl1, dtl2):
+    def calculateOverlap(self, dtl1, dtl2, shift=0):
         """ Calculates total overlap between two lists of pairs of datetime obj:
             [(s1, e1), (s2, e2)] + [(s3, e3), (s4, e4)] -> total overl. in s
+            Shift: shifts dt1 by this many seconds (+ for lead, - for lag)
             Assumes that each tuple is in correct order (start, end).
         """
-        overl = 0
+        overl = dt.timedelta()
         for dt1 in dtl1:
+            st1 = dt1[0]+shift
+            end1 = dt1[1]+shift
             for dt2 in dtl2:
-                laststart = max(dt1[0], dt2[0])
-                firstend = min(dt1[1], dt2[1])
+                laststart = max(st1, dt2[0])
+                firstend = min(end1, dt2[1])
                 if firstend>laststart:
-                    overl = overl + (firstend - laststart).seconds
+                    overl = firstend - laststart + overl
+        # convert from datetime timedelta to seconds
+        overl = overl.total_seconds()
         return(overl)
 
     def suggestAdjustment(self):
@@ -247,7 +292,13 @@ class CompareCalls(QMainWindow):
 
         species = self.clockSpBox.currentText()
         # do shifts in this resolution (seconds)
-        hop = 1
+        hop = self.hopSpin.value()
+
+        # Disable GUI in case of errors
+        self.labelAdjust.setText("Clock adjustment not done")
+        pm = self.style().standardIcon(QStyle.SP_DialogCancelButton).pixmap(QSize(12,12))
+        self.labelAdjustIcon.setPixmap(pm)
+        self.reviewAdjBtn.setEnabled(False)
 
         # generate all recorder pairs
         if len(self.allrecs)>30:
@@ -286,8 +337,12 @@ class CompareCalls(QMainWindow):
 
                 speciesAnnots.append(thisRecAnnots)
 
-            # output: vector with 1 best time shift for each rec
-            adjustments = []
+            # matrix of pairwise connectivity between recorders
+            self.recConnections = np.ones((len(self.allrecs), len(self.allrecs)))
+
+            # determine 1 best time shift for each pair of recorders
+            self.pairwiseShifts = np.zeros((len(self.allrecs), len(self.allrecs)))
+            self.overlaps_forplot = []
             for i in range(len(self.allrecs)):
                 rec1 = self.allrecs[i]
                 rec1annots = speciesAnnots[i]
@@ -299,21 +354,238 @@ class CompareCalls(QMainWindow):
                     rec2 = self.allrecs[j]
                     rec2annots = speciesAnnots[j]
                     print("Comparing with recorder", rec2)
-                    overl = self.calculateOverlap(rec1annots, rec2annots)
-                    print("Calculated overlap: %d seconds" % overl)
 
-                    # find deltat that maximizes overlap between rec1annots and rec2annots
-                    # for deltat in range(-300, 301):
-                    #    calculateOverlap, rec1annots, rec2annots, deltat)
-                    bestShift = 0
+                    overlap = np.zeros(601)
+                    for shifti in range(-300, 301):
+                        shift = dt.timedelta(seconds=shifti * hop)
+                        overlap[shifti+300] = self.calculateOverlap(rec1annots, rec2annots, shift)
 
-                adjustments.append(bestShift)
+                    bestOverlap = np.max(overlap)
+                    bestShift = (np.argmax(overlap)-300) * hop
+                    self.pairwiseShifts[i, j] = bestShift
+                    print("Calculated best overlap: %.1f seconds at deltat = %.2f" % (bestOverlap, bestShift))
+
+                    # The full series of overlaps for each delta is needed for review, so store
+                    self.overlaps_forplot.append({'series': overlap, 'bestOverlap': bestOverlap, 'bestShift': bestShift, 'recorders': (rec1, rec2)})
+
+        # At this point, we have a matrix of best pairwise adjustments (in s)
+        self.refreshMainOut()
+
+        # Need to convert it to vector of best global adjustments for each recorder.
+        # Assuming that all estimated shifts are true, and d(a,b) + d(b,c) = d(a,c),
+        # it's as easy as picking one starting point and following from there:
+        globalshift = 0
+        finaladj = [globalshift]
+        for i in range(1, len(self.allrecs)):
+            globalshift = globalshift + self.pairwiseShifts[i-1, i]
+            finaladj.append(globalshift)
+        # Additionally, total sum of absolute adjustments can be minimized if we de-median the shifts
+        finaladj = finaladj - np.median(finaladj)
+        print("Final global shifts:", finaladj)
 
         print("Clock adjustment complete")
         self.labelAdjust.setText("Clock adjustment complete")
-        self.adjustmentsOut.setPlainText(",".join(map(str, adjustments)))
+        pm = self.style().standardIcon(QStyle.SP_DialogApplyButton).pixmap(QSize(12,12))
+        self.labelAdjustIcon.setPixmap(pm)
+        self.reviewAdjBtn.setEnabled(True)
+
+    def showAdjustmentsDialog(self):
+        self.adjrevdialog = ReviewAdjustments(self.overlaps_forplot, self.hopSpin.value(), self)
+        self.adjrevdialog.exec_()
+
+        # update GUI after the dialog closes
+        self.refreshMainOut()
+
+    def showComparisonDialog(self):
+        self.comparedialog = CompareCallsDialog(self)
+        self.comparedialog.exec_()
+
+    def refreshMainOut(self):
+        """ Collect information from self about shifts and connectivity
+            and print out nicely. """
+        adjstr = []
+        for i in range(len(self.allrecs)):
+            for j in range(i+1, len(self.allrecs)):
+                pairtext = "Shift %s w.r.t. %s: %.2f" % (self.allrecs[i], self.allrecs[j], self.pairwiseShifts[i,j])
+                if self.recConnections[i,j]==1:
+                    adjstr.append(pairtext)
+                else:
+                    adjstr.append(pairtext + " (not connected)")
+
+        self.adjustmentsOut.setPlainText("\n".join(adjstr))
+        self.adjustmentsOut.setReadOnly(True)
+
+        cclist = self.connectedComponents()
+        ccstr = ["-".join(comp) for comp in cclist]
+        ccstr = ";\n".join(ccstr)
+        self.componentsOut.setPlainText(ccstr)
+        self.componentsOut.setReadOnly(True)
+
+    # depth-first search
+    # Args: list where to store found nodes, starting node index, Bool list of visited nodes
+    def DFS(self, temp, v, visited):
+        # Mark the current vertex as visited
+        visited[v] = True
+
+        # Add this vertex to the current component
+        recname = self.allrecs[v]
+        temp.append(recname)
+
+        # Run DFS for all vertices adjacent to this
+        listOfNeighbours = np.nonzero(self.recConnections[v,])[0]
+        for i in listOfNeighbours:
+            if not visited[i]:
+                temp = self.DFS(temp, i, visited)
+        return temp
+
+    # Retrieve connected components from an undirected graph
+    def connectedComponents(self):
+        visited = [False] * len(self.allrecs)
+        componentList = []
+        for v in range(len(visited)):
+            if not visited[v]:
+                component = []
+                componentList.append(self.DFS(component, v, visited))
+        print("Found the following components:")
+        print(componentList)
+        return componentList
+
+
+class ReviewAdjustments(QDialog):
+    def __init__(self, adj, hop, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Check Clock Adjustments')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+
+        self.parent = parent
+
+        # list of dicts for each pair: {overlaps for each t, best overlap, best shift, (rec pair names)}
+        self.shifts = adj
+        self.xs = np.arange(-300*hop, 301*hop, hop)
+
+        # top section
+        self.labelCurrPage = QLabel("Page %s of %s" %(1, len(self.shifts)))
+        self.labelRecs = QLabel()
+
+        # middle section
+        # The buttons to move through the overview
+        self.leftBtn = QToolButton()
+        self.leftBtn.setArrowType(Qt.LeftArrow)
+        self.leftBtn.clicked.connect(self.moveLeft)
+        self.leftBtn.setToolTip("View previous pair")
+        self.rightBtn = QToolButton()
+        self.rightBtn.setArrowType(Qt.RightArrow)
+        self.rightBtn.clicked.connect(self.moveRight)
+        self.rightBtn.setToolTip("View next pair")
+        self.leftBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+
+        self.connectCheckbox = QCheckBox("Recorders are connected")
+        self.connectCheckbox.setChecked(self.parent.recConnections[0,1]==1)
+        self.connectCheckbox.toggled.connect(self.connectToggled)
+
+        # main graphic
+        mainpl = pg.PlotWidget()
+        self.p1 = mainpl.plot()
+        self.p1.setPen(pg.mkPen('k', width=1))
+        col = pg.mkColor(20, 255, 20, 150)
+        self.bestLineO = pg.InfiniteLine(angle=0, movable=False, pen={'color': col, 'width': 2})
+        self.bestLineSh = pg.InfiniteLine(angle=90, movable=False, pen={'color': col, 'width': 2})
+        mainpl.addItem(self.bestLineO)
+        mainpl.addItem(self.bestLineSh)
+
+        # init plot with page 1 data
+        self.currpage = 1
+        self.leftBtn.setEnabled(False)
+        if len(self.shifts)==1:
+            self.rightBtn.setEnabled(False)
+        self.setData()
+
+        # accept / close
+        closeBtn = QPushButton("Close")
+        closeBtn.clicked.connect(self.accept)
+        # cancelBtn = QPushButton("Cancel")
+        # cancelBtn.clicked.connect(self.reject)
+
+        # Layouts
+        box = QVBoxLayout()
+        topHBox = QHBoxLayout()
+        topHBox.addWidget(self.labelCurrPage, stretch=1)
+        topHBox.addWidget(self.labelRecs, stretch=3)
+        box.addLayout(topHBox)
+
+        midHBox = QHBoxLayout()
+        midHBox.addWidget(self.leftBtn)
+        midHBox.addWidget(mainpl, stretch=10)
+        midHBox.addWidget(self.rightBtn)
+        box.addLayout(midHBox)
+        box.addWidget(self.connectCheckbox)
+
+        bottomHBox = QHBoxLayout()
+        bottomHBox.addWidget(closeBtn)
+        # bottomHBox.addWidget(cancelBtn)
+        box.addLayout(bottomHBox)
+        self.setLayout(box)
+
+    def connectToggled(self, ischecked):
+        # convert recorder names to indices
+        i = self.parent.allrecs.index(self.rec1)
+        j = self.parent.allrecs.index(self.rec2)
+
+        # change that connectivity edge
+        if ischecked:
+            self.parent.recConnections[i, j] = 1
+        else:
+            self.parent.recConnections[i, j] = 0
+
+    def moveLeft(self):
+        self.currpage = self.currpage - 1
+        self.rightBtn.setEnabled(True)
+        if self.currpage==1:
+            self.leftBtn.setEnabled(False)
+        self.setData()
+
+    def moveRight(self):
+        self.currpage = self.currpage + 1
+        self.leftBtn.setEnabled(True)
+        if self.currpage==len(self.shifts):
+            self.rightBtn.setEnabled(False)
+        self.setData()
+
+    def setData(self):
+        # update plot etc
+        currdata = self.shifts[self.currpage-1]
+        self.p1.setData(y=currdata['series'], x=self.xs)
+        self.bestLineO.setValue(currdata['bestOverlap'])
+        self.bestLineSh.setValue(currdata['bestShift'])
+        self.labelCurrPage.setText("Page %s of %s" %(self.currpage, len(self.shifts)))
+        self.rec1 = currdata['recorders'][0]
+        self.rec2 = currdata['recorders'][1]
+        self.labelRecs.setText("Suggested shift for recorder %s w.r.t. %s" % (self.rec1, self.rec2))
+        i = self.parent.allrecs.index(self.rec1)
+        j = self.parent.allrecs.index(self.rec2)
+        self.connectCheckbox.setChecked(self.parent.recConnections[i, j]==1)
+
+
+class CompareCallsDialog(QDialog):
+    def __init__(self, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Compare Call Pairs')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
+
+        self.parent = parent
+        box = QVBoxLayout()
+        box.addWidget(QLabel("test"))
+        self.setLayout(box)
+
 
 #### MAIN LAUNCHER
+
+pg.setConfigOption('background','w')
+pg.setConfigOption('foreground','k')
+pg.setConfigOption('antialias',True)
 
 print("Starting AviaNZ call comparator")
 app = QApplication(sys.argv)
