@@ -13,6 +13,8 @@ import pyqtgraph as pg
 
 import SupportClasses
 import Segment
+import SignalProc
+import colourMaps
 
 
 class CompareCalls(QMainWindow):
@@ -91,6 +93,7 @@ class CompareCalls(QMainWindow):
         self.compareBtn.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.compareBtn.clicked.connect(self.showComparisonDialog)
         self.compareBtn.setEnabled(False)
+        self.compareRecSelector = QComboBox()
 
         self.adjustmentsOut = QPlainTextEdit()
         self.adjustmentsOut.setReadOnly(True)
@@ -138,7 +141,9 @@ class CompareCalls(QMainWindow):
         comparisonGroup.setLayout(comparisonGrid)
         comparisonGroup.setStyleSheet("QGroupBox:title{color: #505050; font-weight: 50}")
 
-        comparisonGrid.addWidget(self.compareBtn, 0,0,1,4)
+        comparisonGrid.addWidget(QLabel("Compare recorders:"), 0, 0, 1, 2)
+        comparisonGrid.addWidget(self.compareRecSelector, 0, 2, 1, 2)
+        comparisonGrid.addWidget(self.compareBtn, 1,0,1,4)
 
         # output save btn and settings
         outputGroup = QGroupBox("Output")
@@ -170,6 +175,7 @@ class CompareCalls(QMainWindow):
         self.reviewAdjBtn.setEnabled(False)
         self.compareBtn.setEnabled(False)
         self.clockSpBox.clear()
+        self.compareRecSelector.clear()
 
         self.annots = []
         self.allrecs = set()
@@ -206,6 +212,10 @@ class CompareCalls(QMainWindow):
                     spList.extend(filesp)
             spList = list(set(spList))
             self.clockSpBox.addItems(spList)
+            for i in range(len(self.allrecs)):
+                for j in range(i+1, len(self.allrecs)):
+                    pair = self.allrecs[i] + "-" + self.allrecs[j]
+                    self.compareRecSelector.addItem(pair)
             self.suggestAdjBtn.setEnabled(True)
             self.compareBtn.setEnabled(True)
 
@@ -396,8 +406,66 @@ class CompareCalls(QMainWindow):
         self.refreshMainOut()
 
     def showComparisonDialog(self):
-        self.comparedialog = CompareCallsDialog(self)
+        print("Extracting overlapping calls...")
+
+        # self.allrecs and annots were set after browsing the input dir,
+        # so here we just select the right annotations from them and pass to the dialog
+        rec1, rec2 = self.compareRecSelector.currentText().split("-")
+        annots1 = [sl for sl in self.annots if sl.recname==rec1]
+        annots2 = [sl for sl in self.annots if sl.recname==rec2]
+
+        # find the currently suggested shift for rec2 w.r.t rec1
+        i = self.allrecs.index(rec1)
+        j = self.allrecs.index(rec2)
+        rec2shift = self.pairwiseShifts[i, j]
+
+        # find the matching annotations from that pair of Segment Lists
+        # ideally need the one with biggest overlap to the other
+        # Or just: show an annotation if there is at least some overlap with another
+        # TODO in the dialog maybe?
+        annotspaired1 = []
+        annotspaired2 = []
+        for sl in annots1:
+            slpaired1 = []
+            slpaired2 = []
+
+            # extract the right sl from annots2 (matching timestamp)
+            # TODO this is very bodgy & might miss some annotation pairs:
+            # as we're only looking for segment matches in the first overlapping file from annots2
+            # - extreme case: file 00:00-15:00 cam have sl2match file -14:59-00:01
+            # and then very few segment-level matches will be found.
+            sl2match = None
+            filelen1 = dt.timedelta(seconds=sl.metadata["Duration"])
+            for sl2 in annots2:
+                filelen2 = dt.timedelta(seconds=sl2.metadata["Duration"])
+                if sl2.datetime-filelen1 < sl.datetime < sl2.datetime + filelen2:
+                    sl2match = sl2
+                    break
+
+            if sl2match is None:
+                print("Warning: no match for file %s found" % sl.wavname)
+                continue
+
+            # identify the matching segment from sl2
+            for seg in sl:
+                # TODO: find matching pair at segment level
+                seg2 = findMatchIn(sl2match, seg)
+                # store the pair in a SegmentList (to preserve filename etc)
+                slpaired1.append(seg)
+                slpaired2.append(seg2)
+            # store the SegmentList
+            if len(slpaired1)>0:
+                annotspaired1.append(slpaired1)
+                annotspaired2.append(slpaired2)
+
+        if len(annotspaired1)==0:
+            print("Warning: no overlapping annotations found!")
+            return
+
+        print("Reviewing calls...")
+        self.comparedialog = CompareCallsDialog(annotspaired1, annotspaired2, rec2shift, self)
         self.comparedialog.exec_()
+        print("Call comparison complete")
 
     def refreshMainOut(self):
         """ Collect information from self about shifts and connectivity
@@ -592,17 +660,150 @@ class ReviewAdjustments(QDialog):
 
 
 class CompareCallsDialog(QDialog):
-    def __init__(self, parent=None):
+    # Init args:
+    # 1. list of SegmentLists for rec1
+    # 2. list of SegmentLists for rec2
+    # 3. best shift for rec2
+    def __init__(self, annots1, annots2, rec2shift, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Compare Call Pairs')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
 
         self.parent = parent
+        self.rec1 = annots1[0].recname
+        self.rec2 = annots2[0].recname
+
+        self.annotpairs = [111]
+
+        # Set colour map
+        # cmap = self.config['cmap']
+        cmap = "Grey"
+        pos, colour, mode = colourMaps.colourMaps(cmap)
+        cmap = pg.ColorMap(pos, colour,mode)
+        self.lut = cmap.getLookupTable(0.0, 1.0, 256)
+
+        self.topLabel = QLabel("Comparing recorders %s (top) and %s" %(self.rec1, self.rec2))
+
+        # spectrograms
+        self.wPlot = pg.GraphicsLayoutWidget()
+        self.pPlot1 = self.wPlot.addViewBox(enableMouse=False, row=0, col=1)
+        self.pPlot2 = self.wPlot.addViewBox(enableMouse=False, row=1, col=1)
+
+        self.plot1 = pg.ImageItem()
+        self.plot2 = pg.ImageItem()
+        self.pPlot1.addItem(self.plot1)
+        self.pPlot2.addItem(self.plot2)
+
+        # Y (freq) axis
+        self.sg_axis1 = pg.AxisItem(orientation='left')
+        self.sg_axis1.linkToView(self.pPlot1)
+        self.sg_axis2 = pg.AxisItem(orientation='left')
+        self.sg_axis2.linkToView(self.pPlot2)
+        self.wPlot.addItem(self.sg_axis1, row=0, col=0)
+        self.wPlot.addItem(self.sg_axis2, row=1, col=0)
+
+        # The buttons to move through the overview
+        self.leftBtn = QToolButton()
+        self.leftBtn.setArrowType(Qt.LeftArrow)
+        self.leftBtn.clicked.connect(self.moveLeft)
+        self.leftBtn.setToolTip("View previous pair")
+        self.rightBtn = QToolButton()
+        self.rightBtn.setArrowType(Qt.RightArrow)
+        self.rightBtn.clicked.connect(self.moveRight)
+        self.rightBtn.setToolTip("View next pair")
+        self.leftBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.rightBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+
+        # accept / close
+        closeBtn = QPushButton("Close")
+        closeBtn.clicked.connect(self.accept)
+
+        # init GUI with page 1 data
+        self.currpage = 1
+        self.leftBtn.setEnabled(False)
+        if len(self.annotpairs)==1:
+            self.rightBtn.setEnabled(False)
+        self.setData()
+
+        # layout
         box = QVBoxLayout()
-        box.addWidget(QLabel("test"))
+        box.addWidget(self.topLabel)
+        midHBox = QHBoxLayout()
+        midHBox.addWidget(self.leftBtn)
+        midHBox.addWidget(self.wPlot, stretch=10)
+        midHBox.addWidget(self.rightBtn)
+        box.addLayout(midHBox)
+        box.addWidget(closeBtn)
         self.setLayout(box)
 
+    def moveLeft(self):
+        self.currpage = self.currpage - 1
+        self.rightBtn.setEnabled(True)
+        if self.currpage==1:
+            self.leftBtn.setEnabled(False)
+        self.setData()
+
+    def moveRight(self):
+        self.currpage = self.currpage + 1
+        self.leftBtn.setEnabled(True)
+        if self.currpage==len(self.annotpairs):
+            self.rightBtn.setEnabled(False)
+        self.setData()
+
+    def setData(self):
+        # update plot etc
+        currdata = self.annotpairs[self.currpage-1]
+
+        # TODO 
+        wav1 = "/home/julius/Documents/kiwis/test/kiwi_1min.wav"
+        wav2 = "/home/julius/Documents/kiwis/test/kiwi_1min.wav"
+        wav1start = 0
+        wav2start = 20
+        wav1len = 9
+        wav2len = 12
+
+        self.sp1 = SignalProc.SignalProc(256, 128)
+        self.sp1.readWav(wav1, off=wav1start, len=wav1len)
+        self.sp2 = SignalProc.SignalProc(256, 128)
+        self.sp2.readWav(wav2, off=wav2start, len=wav2len)
+        _ = self.sp1.spectrogram()
+        _ = self.sp2.spectrogram()
+
+        self.plot1.setImage(self.sp1.sg)
+        self.plot2.setImage(self.sp2.sg)
+        self.plot1.setLookupTable(self.lut)
+        self.plot2.setLookupTable(self.lut)
+        # TODO no color sliders yet
+        # self.setColourLevels()
+        # No scroll area yet
+        # self.scroll.horizontalScrollBar().setValue(0)
+
+        minFreq = 0
+        maxFreq = min(self.sp1.sampleRate, self.sp2.sampleRate)
+        FreqRange = (maxFreq-minFreq)/1000.
+
+        SgSize1 = np.shape(self.sp1.sg)[1]
+        SgSize2 = np.shape(self.sp2.sg)[1]
+        ticks1 = [(0,minFreq/1000.), (SgSize1/4, minFreq/1000.+FreqRange/4.), (SgSize1/2, minFreq/1000.+FreqRange/2.), (3*SgSize1/4, minFreq/1000.+3*FreqRange/4.), (SgSize1,minFreq/1000.+FreqRange)]
+        ticks1 = [[(tick[0], "%.1f" % tick[1] ) for tick in ticks1]]
+        ticks2 = [(0,minFreq/1000.), (SgSize2/4, minFreq/1000.+FreqRange/4.), (SgSize2/2, minFreq/1000.+FreqRange/2.), (3*SgSize2/4, minFreq/1000.+3*FreqRange/4.), (SgSize2,minFreq/1000.+FreqRange)]
+        ticks2 = [[(tick[0], "%.1f" % tick[1] ) for tick in ticks2]]
+        self.sg_axis1.setTicks(ticks1)
+        self.sg_axis2.setTicks(ticks2)
+        self.sg_axis1.setLabel('kHz')
+        self.sg_axis2.setLabel('kHz')
+
+        # self.p1.setData(y=currdata['series'], x=self.xs)
+        # self.bestLineO.setValue(currdata['bestOverlap'])
+        # self.bestLineSh.setValue(currdata['bestShift'])
+        # self.labelCurrPage.setText("Page %s of %s" %(self.currpage, len(self.shifts)))
+        # self.rec1 = currdata['recorders'][0]
+        # self.rec2 = currdata['recorders'][1]
+        # self.labelRecs.setText("Suggested shift for recorder %s w.r.t. %s" % (self.rec1, self.rec2))
+        # i = self.parent.allrecs.index(self.rec1)
+        # j = self.parent.allrecs.index(self.rec2)
+        # self.connectCheckbox.setChecked(self.parent.recConnections[i, j]==1)
 
 #### MAIN LAUNCHER
 
