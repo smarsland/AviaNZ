@@ -1649,6 +1649,7 @@ class HumanClassify1(QDialog):
             # hide remaining CT buttons in case more were shown before
             for ctbtn in self.ctbtns[len(possibleCts):]:
                 ctbtn.hide()
+                ctbtn.setChecked(False)
             for spbtn in self.birdbtns:
                 spbtn.hide()
             self.birds3.hide()
@@ -1847,7 +1848,10 @@ class HumanClassify1(QDialog):
             self.plot.setLevels([self.colourStart, self.colourEnd])
 
     def getValues(self):
-        return [self.label, self.saveConfig, self.tbox.text()]
+        # Note: we are reading off the calltypes from the label
+        # and not from radio buttons, b/c when no ct is present,
+        # radio buttons cannot be all disabled.
+        return [self.label, self.saveConfig, self.tbox.text(), self.ctLabel.text()]
 
 
 class HumanClassify2a(QDialog):

@@ -165,7 +165,7 @@ class Segment(list):
             if (species is None or lab["species"]==species) and lab["certainty"]==100 and lab["species"]!="Don't Know":
                 # check if this segment has a yellow label for this species already
                 otherLabels = [k[0]==lab["species"] and k[1]<100 for k in self.keys]
-                if len(otherLabels)>0:
+                if any(otherLabels):
                     # then just delete this label
                     toremove.append(lab)
                 else:
