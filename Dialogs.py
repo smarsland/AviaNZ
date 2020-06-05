@@ -1092,6 +1092,7 @@ class HumanClassify1(QDialog):
         self.setModal(True)
         self.frame = QWidget()
 
+        self.parent = parent
         self.lut = lut
         self.label = []
         self.colourStart = colourStart
@@ -1101,6 +1102,7 @@ class HumanClassify1(QDialog):
         self.longBirdList = longBirdList
         self.multipleBirds = multipleBirds
         self.saveConfig = False
+        self.viewingct = False
         # exec_ forces the cursor into waiting
 
         # Set up the plot window, then the right and wrong buttons, and a close button
@@ -1145,11 +1147,7 @@ class HumanClassify1(QDialog):
         # label for current segment assignment
         self.speciesTop = QLabel("Currently:")
         self.species = QLabel()
-        font = self.species.font()
-        font.setPointSize(24)
-        font.setBold(True)
-        self.species.setFont(font)
-        self.parent = parent
+        self.species.setStyleSheet("QLabel { font-size:22pt; font-weight: bold}")
 
         # The buttons to move through the overview
         self.numberDone = QLabel()
@@ -1219,11 +1217,33 @@ class HumanClassify1(QDialog):
 
         self.birds3.setEnabled(False)
 
+        # Call type label
+        self.ctLabel = QLabel("")
+        self.ctLabel.setStyleSheet("QLabel { font-size:16pt; font-weight: bold}")
+        self.ctLabel.hide()
+
+        # Call type buttons
+        self.ctbtns = []
+        for ct in range(10):
+            btn = QRadioButton("")
+            btn.clicked.connect(self.radioCtClicked)
+            btn.hide()
+            self.ctbtns.append(btn)
+
         # This is the text box for missing birds
         self.tbox = QLineEdit(self)
         self.tbox.setMaximumWidth(150)
         self.tbox.returnPressed.connect(self.birdTextEntered)
         self.tbox.setEnabled(False)
+        self.tboxLabel1 = QLabel("If bird isn't in list, select Other")
+        self.tboxLabel2 = QLabel("Type below, Return at end")
+
+        # button to switch to call type view
+        self.viewSpButton = QtGui.QToolButton()
+        self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
+        self.viewSpButton.setIconSize(QtCore.QSize(35, 20))
+        self.viewSpButton.setToolTip("Toggle between species/calltype views")
+        self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
         # Audio playback object
         self.media_obj2 = SupportClasses.ControllableAudio(audioFormat)
@@ -1243,11 +1263,23 @@ class HumanClassify1(QDialog):
                 birds3Layout.addWidget(btn)
             count += 1
 
-        birdListLayout = QVBoxLayout()
-        birdListLayout.addWidget(self.birds3)
-        birdListLayout.addWidget(QLabel("If bird isn't in list, select Other"))
-        birdListLayout.addWidget(QLabel("Type below, Return at end"))
-        birdListLayout.addWidget(self.tbox)
+        # Also add call types to columns 1-2 (either those or SP btns will be shown)
+        for btn in self.ctbtns[:5]:
+            btn.hide()
+            birds1Layout.addWidget(btn)
+        for btn in self.ctbtns[5:]:
+            btn.hide()
+            birds2Layout.addWidget(btn)
+
+        birdListLayout = QGridLayout()
+        birdListLayout.setRowStretch(0, 10)
+        birdListLayout.setRowStretch(1, 0)
+        birdListLayout.setRowStretch(2, 0)
+        birdListLayout.addWidget(self.birds3, 0, 0, 1, 3)
+        birdListLayout.addWidget(self.tboxLabel1, 1, 0, 1, 3)
+        birdListLayout.addWidget(self.tboxLabel2, 2, 0, 1, 3)
+        birdListLayout.addWidget(self.tbox, 3, 0, 1, 2)
+        birdListLayout.addWidget(self.viewSpButton, 3, 2, 1, 1)
 
         hboxBirds = QHBoxLayout()
         hboxBirds.addLayout(birds1Layout)
@@ -1312,10 +1344,16 @@ class HumanClassify1(QDialog):
         self.zoomInBtn.setStyleSheet("padding: 4px 4px 4px 4px")
         self.zoomOutBtn.setStyleSheet("padding: 4px 4px 4px 4px")
 
+        spNameBox = QHBoxLayout()
+        spNameBox.addWidget(self.speciesTop)
+        spNameBox.addWidget(self.species)
+        spNameBox.addWidget(self.ctLabel)
+        spNameBox.setStretch(0, 1)
+        spNameBox.setStretch(1, 7)
+        spNameBox.setStretch(2, 2)
+
         vboxSpecContr = pg.LayoutWidget()
-        vboxSpecContr.addWidget(self.speciesTop, row=0, col=0, colspan=2)
-        vboxSpecContr.addWidget(self.species, row=0, col=2, colspan=8)
-        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=12)
+        vboxSpecContr.addWidget(self.scroll, row=1, col=0, colspan=13)
         vboxSpecContr.addWidget(self.playButton, row=2, col=0)
         vboxSpecContr.addWidget(self.volIcon, row=2, col=1)
         vboxSpecContr.addWidget(self.volSlider, row=2, col=2, colspan=2)
@@ -1343,6 +1381,7 @@ class HumanClassify1(QDialog):
         vboxSpecContr.layout.setColumnStretch(10, 1)
 
         vboxFull = QVBoxLayout()
+        vboxFull.addLayout(spNameBox)
         vboxFull.addWidget(vboxSpecContr)
         vboxFull.addLayout(hboxBirds)
         vboxFull.addSpacing(7)
@@ -1416,10 +1455,11 @@ class HumanClassify1(QDialog):
         # based on these, update "previous" arrow status
         self.buttonPrev.setEnabled(done>0)
 
-    def setImage(self, sg, audiodata, sampleRate, incr, label, unbufStart, unbufStop, time1, time2, minFreq=0, maxFreq=0):
-        """ label - list of species in the current segment.
-            Currently, we ignore the certainty and just display the species.
-            During review, this updates self.label.
+    def setImage(self, sg, audiodata, sampleRate, incr, labels, unbufStart, unbufStop, time1, time2, minFreq=0, maxFreq=0):
+        """ labels - simply seg[4] of the current segment.
+            Be careful not to edit it, as it is NOT a deep copy!!
+            Used for extracting current species and calltype.
+            During review, this updates self.label and self.ctLabel.
         """
         self.audiodata = audiodata
         self.sg = sg
@@ -1487,28 +1527,42 @@ class HumanClassify1(QDialog):
             self.plot.setLevels([self.colourStart, self.colourEnd])
 
         # DEAL WITH SPECIES NAMES
+        # extract a string of current species names
+        specnames = []
+        for lab in labels:
+            if 0<lab["certainty"]<100:
+                specnames.append(lab["species"]+'?')
+            else:
+                specnames.append(lab["species"])
+        specnames = list(set(specnames))
 
-        # currently, we ignore the certainty and only display species:
-        self.species.setText(','.join(label))
+        # Update the "currently" labels
+        self.species.setText(','.join(specnames))
+
+        # extract the call type of the (first) species
+        if "calltype" in labels[0]:
+            self.ctLabel.setText(labels[0]["calltype"])
+        else:
+            self.ctLabel.setText("")
 
         # question marks are displayed on the first pass,
         # but any clicking sets certainty to 100 in effect.
-        for lsp_ix in range(len(label)):
-            if label[lsp_ix].endswith('?'):
-                label[lsp_ix] = label[lsp_ix][:-1]
+        for lsp_ix in range(len(specnames)):
+            if specnames[lsp_ix].endswith('?'):
+                specnames[lsp_ix] = specnames[lsp_ix][:-1]
             # move the label to the top of the list
             if self.parent.config['ReorderList']:
-                if label[lsp_ix] in self.shortBirdList:
-                    self.shortBirdList.remove(label[lsp_ix])
+                if specnames[lsp_ix] in self.shortBirdList:
+                    self.shortBirdList.remove(specnames[lsp_ix])
                 else:
                     del self.shortBirdList[-1]
-                self.shortBirdList.insert(0, label[lsp_ix])
+                self.shortBirdList.insert(0, specnames[lsp_ix])
 
         # clear selection
         self.birds3.clearSelection()
         self.updateButtonList()
         # Select the right species tickboxes / buttons
-        for lsp in label:
+        for lsp in specnames:
             # add ticks to the right checkboxes
             if lsp in self.shortBirdList[:29]:
                 ind = self.shortBirdList.index(lsp)
@@ -1536,7 +1590,86 @@ class HumanClassify1(QDialog):
                 ind = self.longBirdList.index(lsp)
                 self.birds3.item(ind).setSelected(True)
 
-        self.label = label
+        self.label = specnames
+
+        # Determine if we can review call types based on selected annotations
+        self.checkCallTypes()
+
+    def checkCallTypes(self):
+        # parses current annotations to determine if call type review allowed
+        # should be allowed, updates GUI accordingly
+        spWithCalltypes = [filt["species"] for filt in self.parent.FilterDicts.values()]
+        self.viewSpButton.setEnabled(False)
+        showCt = False
+        if len(self.label)>1:
+            self.viewSpButton.setToolTip("Cannot review call types when >1 species marked")
+        elif self.label[0]=="Don't Know":
+            self.viewSpButton.setToolTip("No call types possible without species marked")
+        elif self.label[0] not in spWithCalltypes:
+            self.viewSpButton.setToolTip("Cannot review call types as this species has no recogniser")
+        else:
+            self.viewSpButton.setToolTip("Toggle between species/calltype views")
+            self.viewSpButton.setEnabled(True)
+            # keep UI in the same SP/CT mode as it was before
+            showCt = self.viewingct
+
+        # this part actually refreshes the buttons (even if mode is the same, names
+        # or number of cts may have changed)
+        self.refreshCtUI(showCt)
+
+    def refreshCtUI(self, showCt):
+        # Hides/shows species/calltype checkboxes
+        # and updates calltype button lists (in case sp changed)
+        # will also update self.viewingct to reflect current state
+        if not (self.viewingct or showCt):
+            # everything was hidden and stays hidden
+            return
+        elif showCt:
+            # show calltype, hide species boxes
+
+            # extract all possible call types for selected species
+            possibleCts = set()
+            for filt in self.parent.FilterDicts.values():
+                if filt["species"]==self.label[0]:
+                    ctsinthisfilt = [subf["calltype"] for subf in filt["Filters"]]
+                    possibleCts.update(ctsinthisfilt)
+            possibleCts = list(possibleCts)
+
+            # show and update call type names to match selected species
+            for cti in range(len(possibleCts)):
+                btn = self.ctbtns[cti]
+                btn.show()
+                btn.setText(possibleCts[cti])
+                # mark current call type:
+                if possibleCts[cti]==self.ctLabel.text():
+                    btn.setChecked(True)
+                else:
+                    btn.setChecked(False)
+            self.ctLabel.show()
+            # hide remaining CT buttons in case more were shown before
+            for ctbtn in self.ctbtns[len(possibleCts):]:
+                ctbtn.hide()
+            for spbtn in self.birdbtns:
+                spbtn.hide()
+            self.birds3.hide()
+            self.tbox.hide()
+            self.tboxLabel1.hide()
+            self.tboxLabel2.hide()
+            self.viewSpButton.setIcon(QIcon('img/sp-ctlarge.png'))
+        else:
+            # show species, hide call type boxes
+            for ctbtn in self.ctbtns:
+                ctbtn.hide()
+            self.ctLabel.hide()
+            for spbtn in self.birdbtns:
+                spbtn.show()
+            self.birds3.show()
+            self.tbox.show()
+            self.tboxLabel1.show()
+            self.tboxLabel2.show()
+            self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
+
+        self.viewingct = showCt
 
     def tickBirdsClicked(self):
         # Listener for when the user selects a bird tick box
@@ -1585,6 +1718,9 @@ class HumanClassify1(QDialog):
                     dontknowButton.setChecked(True)
         self.species.setText(','.join(self.label))
 
+        # enable/disable CT mode button
+        self.checkCallTypes()
+
     def radioBirdsClicked(self):
         # Listener for when the user selects a radio button
         # Update the text and store the data
@@ -1596,6 +1732,19 @@ class HumanClassify1(QDialog):
                     self.birds3.setEnabled(False)
                     self.label = [button.text()]
                     self.species.setText(button.text())
+
+        # enable/disable CT mode button
+        self.checkCallTypes()
+
+    def radioCtClicked(self):
+        # Listener for when the user selects a call type
+        # Update the label and store the new CT as a property on self
+        # to be read when self...Correct is called
+        for btn in self.ctbtns:
+            if btn.isChecked():
+                print("Call type selected:", btn.text())
+                self.ctLabel.setText(btn.text())
+                break
 
     def listBirdsClicked(self, item):
         # Listener for clicks in the listbox of birds
@@ -1642,6 +1791,9 @@ class HumanClassify1(QDialog):
                 # for radio buttons, only "Other" will be selected already
 
             self.species.setText(','.join(self.label))
+
+        # enable/disable CT mode button
+        self.checkCallTypes()
 
     def birdTextEntered(self):
         # Listener for the text entry in the bird list

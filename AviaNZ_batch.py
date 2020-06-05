@@ -1796,23 +1796,16 @@ class AviaNZ_reviewAll(QMainWindow):
             # select the SignalProc with relevant data
             sp = self.sps[self.box1id]
 
-            # get a list of all species names present
-            specnames = []
-            for lab in seg[4]:
-                if 0<lab["certainty"]<100:
-                    specnames.append(lab["species"]+'?')
-                else:
-                    specnames.append(lab["species"])
-            specnames = list(set(specnames))
-
             # these pass the axis limits set by slider
             minFreq = max(self.fLow.value(), 0)
             maxFreq = min(self.fHigh.value(), sp.sampleRate//2)
 
-            # specnames, then unbufstart in spec units rel to start, unbufend,
+            # currLabel, then unbufstart in spec units rel to start, unbufend,
             # then true time to display start, end,
+            # NOTE: might be good to pass copy.deepcopy(seg[4])
+            # instead of seg[4], if any bugs come up due to Dialog1 changing the label
             self.humanClassifyDialog1.setImage(sp.sg, sp.data, sp.sampleRate, sp.incr,
-                                               specnames, sp.x1nobspec, sp.x2nobspec,
+                                               seg[4], sp.x1nobspec, sp.x2nobspec,
                                                seg[0], seg[1], minFreq, maxFreq)
         else:
             # store dialog properties such as position for the next file
