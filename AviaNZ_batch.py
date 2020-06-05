@@ -1832,7 +1832,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.segmentsToSave = True
         currSeg = self.segments[self.box1id]
 
-        label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
+        label, self.saveConfig, checkText, calltype = self.humanClassifyDialog1.getValues()
 
         # deal with manual bird entries under "Other"
         if len(checkText) > 0:
@@ -1876,6 +1876,15 @@ class AviaNZ_reviewAll(QMainWindow):
             # no sp or cert change needed
             pass
 
+        # incorporate selected call type:
+        if calltype!="":
+            print("Changing calltype to", calltype)
+            # Currently, only using the call type if a single species is selected:
+            if len(self.segments[self.box1id][4])==1:
+                self.segments[self.box1id][4][0]["calltype"] = calltype
+            else:
+                print("Warning: setting call types with multiple species labels not supported yet")
+
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
         self.humanClassifyNextImage1()
@@ -1886,7 +1895,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.segmentsToSave = True
         currSeg = self.segments[self.box1id]
 
-        label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
+        label, self.saveConfig, checkText, calltype = self.humanClassifyDialog1.getValues()
 
         # deal with manual bird entries under "Other"
         if len(checkText) > 0:
@@ -1922,6 +1931,15 @@ class AviaNZ_reviewAll(QMainWindow):
         else:
             # segment info matches, so don't do anything
             pass
+
+        # incorporate selected call type:
+        if calltype!="":
+            print("Changing calltype to", calltype)
+            # Currently, only using the call type if a single species is selected:
+            if len(self.segments[self.box1id][4])==1:
+                self.segments[self.box1id][4][0]["calltype"] = calltype
+            else:
+                print("Warning: setting call types with multiple species labels not supported yet")
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)

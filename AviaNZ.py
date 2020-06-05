@@ -1057,7 +1057,7 @@ class AviaNZ(QMainWindow):
         else:
             # otherwise, fill the species list
             # Put the selected bird name at the top of the list:
-            if self.config['ReorderList'] and hasattr(self,'segments') and self.box1id!=-1:
+            if self.config['ReorderList'] and hasattr(self,'segments') and self.box1id>-1:
                 for key in self.segments[self.box1id].keys:
                     # Either move the label to the top of the list, or delete the last
                     if key[0] in self.shortBirdList:
@@ -3279,6 +3279,8 @@ class AviaNZ(QMainWindow):
         """ Create the dialog that shows calls to the user for verification.
         Shows segments only from the page you are currently working in.
         """
+        if self.box1id>-1:
+            self.deselectSegment(self.box1id)
 
         # Start by sorting the segments into increasing time order,
         # to make life easier
@@ -3354,7 +3356,7 @@ class AviaNZ(QMainWindow):
         self.removeSegments(delete=False)
         self.drawfigMain(remaking=True)
 
-    def humanClassifyNextImage1(self):
+    def humanClassifyNextImage1(self, calledFromPrev=False):
         """ Get the next image """
         self.humanClassifyDialogSize = self.humanClassifyDialog1.size()
         self.dialogPlotAspect = self.humanClassifyDialog1.plotAspect
@@ -3371,7 +3373,9 @@ class AviaNZ(QMainWindow):
 
         # a segment was found, so:
         # mark the current seg (also updates the colors)
-        if self.box1id>-1:
+        # (a hack is needed because self.box1id may be -1 when going back
+        # from seg 1, and then we actually need to deselect that)
+        if calledFromPrev or self.box1id>-1:
             self.deselectSegment(self.box1id)
         self.selectSegment(nextseg)
 
@@ -3420,8 +3424,9 @@ class AviaNZ(QMainWindow):
         if self.box1id>0:
             nextseg = self.box1id - 2
             self.deselectSegment(self.box1id)
+            # this is needed b/c NextImage reads from self.box1id and deselects that:
             self.selectSegment(nextseg)
-            self.humanClassifyNextImage1()
+            self.humanClassifyNextImage1(calledFromPrev=True)
 
     def humanClassifyQuestion(self):
         """ Go to next image, keeping this one as it was found
@@ -3430,7 +3435,7 @@ class AviaNZ(QMainWindow):
 
         self.humanClassifyDialog1.stopPlayback()
         self.segmentsToSave = True
-        label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
+        label, self.saveConfig, checkText, calltype = self.humanClassifyDialog1.getValues()
 
         # deal with manual bird entries under "Other"
         if len(checkText) > 0:
@@ -3490,6 +3495,15 @@ class AviaNZ(QMainWindow):
             # no sp or cert change needed
             pass
 
+        # incorporate selected call type:
+        if calltype!="":
+            print("Changing calltype to", calltype)
+            # Currently, only using the call type if a single species is selected:
+            if len(self.segments[self.box1id][4])==1:
+                self.segments[self.box1id][4][0]["calltype"] = calltype
+            else:
+                print("Warning: setting call types with multiple species labels not supported yet")
+
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
 
@@ -3501,7 +3515,7 @@ class AviaNZ(QMainWindow):
 
         self.humanClassifyDialog1.stopPlayback()
         self.segmentsToSave = True
-        label, self.saveConfig, checkText = self.humanClassifyDialog1.getValues()
+        label, self.saveConfig, checkText, calltype = self.humanClassifyDialog1.getValues()
         # returned label is just a list of species names.
 
         # deal with manual bird entries under "Other"
@@ -3538,6 +3552,7 @@ class AviaNZ(QMainWindow):
                     newlabel.append({"species": "Don't Know", "certainty": 0})
                 else:
                     newlabel.append({"species": species, "certainty": 100})
+
             self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
 
             self.refreshOverviewWith(self.segments[self.box1id])
@@ -3557,6 +3572,15 @@ class AviaNZ(QMainWindow):
         else:
             # segment info matches, so don't do anything
             pass
+
+        # incorporate selected call type:
+        if calltype!="":
+            print("Changing calltype to", calltype)
+            # Currently, only using the call type if a single species is selected:
+            if len(self.segments[self.box1id][4])==1:
+                self.segments[self.box1id][4][0]["calltype"] = calltype
+            else:
+                print("Warning: setting call types with multiple species labels not supported yet")
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
@@ -4290,7 +4314,7 @@ class AviaNZ(QMainWindow):
         """ Listener for 'Save selected sound' menu item.
         choose destination and give it a name
         """
-        if self.box1id is None or self.box1id == -1:
+        if self.box1id is None or self.box1id<0:
             print("No box selected")
             msg = SupportClasses.MessagePopup("w", "No segment", "No sound selected to save")
             msg.exec_()
@@ -4748,7 +4772,7 @@ class AviaNZ(QMainWindow):
                     # print(time, time + len_seg,self.segments)
                     # self.addSegment(time, time+len_seg,y1,y2,[species+'?'])
                     segments.append([time, time+len_seg])
-        elif self.box1id is None or self.box1id == -1:
+        elif self.box1id is None or self.box1id<0:
             print("No box selected")
             msg = SupportClasses.MessagePopup("w", "No segment", "No segment selected to match")
             msg.exec_()
