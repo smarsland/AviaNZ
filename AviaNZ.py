@@ -671,14 +671,14 @@ class AviaNZ(QMainWindow):
         self.stopButton.clicked.connect(self.stopPlayback)
 
         self.playSegButton = QtGui.QToolButton()
-        self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
+        self.playSegButton.setIcon(QIcon('img/playsegment.png'))
         self.playSegButton.setIconSize(QtCore.QSize(20, 20))
         self.playSegButton.setToolTip("Play selected")
         self.playSegButton.clicked.connect(self.playSelectedSegment)
 
         self.playSlowButton = QtGui.QToolButton()
-        self.playSlowButton.setIcon(QtGui.QIcon('img/playSlow.png'))
-        self.playSlowButton.setIconSize(QtCore.QSize(20, 20))
+        self.playSlowButton.setIcon(QIcon('img/playSlow-w.png'))
+        self.playSlowButton.setIconSize(QtCore.QSize(35, 20))
         self.playSlowButton.setToolTip("Play slowly")
         self.playSlowButton.clicked.connect(self.playSlowSegment)
 
@@ -702,7 +702,7 @@ class AviaNZ(QMainWindow):
         self.playSlowButton.setMenu(speedMenu)
 
         self.quickDenButton = QtGui.QToolButton()
-        self.quickDenButton.setIcon(QtGui.QIcon('img/denoisesegment.png'))
+        self.quickDenButton.setIcon(QIcon('img/denoisesegment.png'))
         self.quickDenButton.setIconSize(QtCore.QSize(20, 20))
         self.quickDenButton.setToolTip("Denoise segment")
         self.quickDenButton.clicked.connect(self.denoiseSeg)
@@ -715,8 +715,8 @@ class AviaNZ(QMainWindow):
         # self.quickDenNButton.setEnabled(False)
 
         self.viewSpButton = QtGui.QToolButton()
-        self.viewSpButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_FileDialogInfoView))
-        self.viewSpButton.setIconSize(QtCore.QSize(20, 20))
+        self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
+        self.viewSpButton.setIconSize(QtCore.QSize(35, 20))
         self.viewSpButton.setToolTip("Toggle between species/calltype views")
         self.viewSpButton.clicked.connect(self.toggleViewSp)
 
@@ -2878,9 +2878,13 @@ class AviaNZ(QMainWindow):
         if self.viewCallType:
             self.viewCallType = False
             self.menuBirdList.triggered.connect(self.birdSelectedMenu)
+            self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
+            # not sure if we need to re-set the size after every icon change
+            # self.viewSpButton.setIconSize(QtCore.QSize(35, 20))
         else:
             self.viewCallType = True
             self.menuBirdList.triggered.connect(self.callSelectedMenu)
+            self.viewSpButton.setIcon(QIcon('img/sp-ctlarge.png'))
 
         for seg in range(len(self.listLabels)):
             if self.listLabels[seg] is not None:
@@ -3375,15 +3379,6 @@ class AviaNZ(QMainWindow):
         seg = self.segments[self.box1id]
         certs = min([lab["certainty"] for lab in seg[4]])
 
-        # get a list of all species names present
-        specnames = []
-        for lab in seg[4]:
-            if 0<lab["certainty"]<100:
-                specnames.append(lab["species"]+'?')
-            else:
-                specnames.append(lab["species"])
-        specnames = list(set(specnames))
-
         # Update the colour in case of sudden dialog closing
         if certs == 0:
             self.prevBoxCol = self.ColourNone
@@ -3413,8 +3408,10 @@ class AviaNZ(QMainWindow):
         x3 = max(x3, 0)
         x4 = int((self.listRectanglesa1[self.box1id].getRegion()[1] + self.config['reviewSpecBuffer']) * self.sampleRate)
         x4 = min(x4, len(self.audiodata))
+        # NOTE: might be good to pass copy.deepcopy(seg[4])
+        # instead of seg[4], if any bugs come up due to Dialog1 changing the label
         self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
-                                    specnames, x1nob-x1, x2nob-x1,
+                                    seg[4], x1nob-x1, x2nob-x1,
                                     seg[0], seg[1], self.sp.minFreq, self.sp.maxFreq)
 
     def humanClassifyPrevImage(self):
@@ -4942,9 +4939,9 @@ class AviaNZ(QMainWindow):
 
         # Reset all button icons:
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
-        self.playSlowButton.setIcon(QtGui.QIcon('img/playSlow.png'))
-        self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
+        self.playSegButton.setIcon(QIcon('img/playsegment.png'))
+        self.playSlowButton.setIcon(QIcon('img/playSlow-w.png'))
+        self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
 
         # OS X doesn't repaint them by default smh
         self.playButton.repaint()
@@ -4965,9 +4962,9 @@ class AviaNZ(QMainWindow):
 
         # Reset all button icons:
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.playSegButton.setIcon(QtGui.QIcon('img/playsegment.png'))
-        self.playSlowButton.setIcon(QtGui.QIcon('img/playSlow.png'))
-        self.playBandLimitedSegButton.setIcon(QtGui.QIcon('img/playBandLimited.png'))
+        self.playSegButton.setIcon(QIcon('img/playsegment.png'))
+        self.playSlowButton.setIcon(QIcon('img/playSlow-w.png'))
+        self.playBandLimitedSegButton.setIcon(QIcon('img/playBandLimited.png'))
 
         # OS X doesn't repaint them by default smh
         self.playButton.repaint()
