@@ -990,6 +990,10 @@ class AviaNZ_reviewAll(QMainWindow):
         self.config = self.ConfigLoader.config(self.configfile)
         self.saveConfig = True
 
+        # For some calltype functionality, a list of current filters is needed
+        filtersDir = os.path.join(configdir, self.config['FiltersDir'])
+        self.FilterDicts = self.ConfigLoader.filters(filtersDir)
+
         # Make the window and associated widgets
         QMainWindow.__init__(self, root)
 
