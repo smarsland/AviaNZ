@@ -597,6 +597,8 @@ class WaveletSegment:
                     start += int(inc_sr/samples_wc)
             nodenum += 1
 
+        C = None
+        E = None
         del C
         del E
         gc.collect()
@@ -724,6 +726,8 @@ class WaveletSegment:
                 start += inc
             detected = detect_ann
 
+        C = None
+        E = None
         del C
         del E
         gc.collect()
@@ -1014,6 +1018,7 @@ class WaveletSegment:
         # ann = np.reshape(self.annotation, (len(self.annotation), 1))
         # MLdata = np.append(WC, ann, axis=1)
         # np.savetxt(os.path.join(dirName, "energies.tsv"), MLdata, delimiter="\t")
+        denoisedData = None
         del denoisedData
         gc.collect()
         totalcalls = sum([sum(a) for a in self.annotation])
