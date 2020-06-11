@@ -1853,24 +1853,26 @@ class AviaNZ_reviewAll(QMainWindow):
         print("working on ", self.box1id, currSeg)
         if label != [lab["species"] for lab in currSeg[4]]:
             # if any species names were changed,
-            # save the correction file
-            if self.config['saveCorrections']:
-                outputError = [[currSeg, label]]
-                cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
-                                                 reviewer=self.reviewer)
-                if cleanexit != 1:
-                    print("Warning: could not save correction file!")
-
             # Then, just recreate the label with certainty 50 for all currently selected species:
             # (not very neat but safer)
-
-            # Create new segment label, assigning certainty 50 for each species:
             newlabel = []
             for species in label:
                 if species == "Don't Know":
                     newlabel.append({"species": "Don't Know", "certainty": 0})
                 else:
                     newlabel.append({"species": species, "certainty": 50})
+            # Note: currently only parsing the call type for the first species
+            if calltype!="":
+                newlabel[0]["calltype"] = calltype
+
+            # save the correction file
+            if self.config['saveCorrections']:
+                outputError = [[currSeg, newlabel]]
+                cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
+                                                 reviewer=self.reviewer)
+                if cleanexit != 1:
+                    print("Warning: could not save correction file!")
+
             self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
         elif max([lab["certainty"] for lab in currSeg[4]])==100:
             # if there are any "green" labels, but all species remained the same,
@@ -1882,12 +1884,9 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # incorporate selected call type:
         if calltype!="":
-            print("Changing calltype to", calltype)
-            # Currently, only using the call type if a single species is selected:
-            if len(self.segments[self.box1id][4])==1:
-                self.segments[self.box1id][4][0]["calltype"] = calltype
-            else:
-                print("Warning: setting call types with multiple species labels not supported yet")
+            # (this will also check if it changed, and store corrections if needed.
+            # If the species changed, the calltype is already updated, so this will do nothing)
+            self.updateCallType(self.box1id, calltype)
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
@@ -1912,14 +1911,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.longBirdList.append('Unidentifiable')
                 self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
 
+        # update the actual segment.
         if label != [lab["species"] for lab in currSeg[4]]:
-            if self.config['saveCorrections']:
-                # Save the correction
-                outputError = [[currSeg, label]]
-                cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1, reviewer=self.reviewer)
-                if cleanexit != 1:
-                    print("Warning: could not save correction file!")
-
             # Create new segment label, assigning certainty 100 for each species:
             newlabel = []
             for species in label:
@@ -1927,6 +1920,17 @@ class AviaNZ_reviewAll(QMainWindow):
                     newlabel.append({"species": "Don't Know", "certainty": 0})
                 else:
                     newlabel.append({"species": species, "certainty": 100})
+            # Note: currently only parsing the call type for the first species
+            if calltype!="":
+                newlabel[0]["calltype"] = calltype
+
+            if self.config['saveCorrections']:
+                # Save the correction
+                outputError = [[currSeg, newlabel]]
+                cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1, reviewer=self.reviewer)
+                if cleanexit != 1:
+                    print("Warning: could not save correction file!")
+
             self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
 
         elif 0 < min([lab["certainty"] for lab in currSeg[4]]) < 100:
@@ -1938,12 +1942,9 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # incorporate selected call type:
         if calltype!="":
-            print("Changing calltype to", calltype)
-            # Currently, only using the call type if a single species is selected:
-            if len(self.segments[self.box1id][4])==1:
-                self.segments[self.box1id][4][0]["calltype"] = calltype
-            else:
-                print("Warning: setting call types with multiple species labels not supported yet")
+            # (this will also check if it changed, and store corrections if needed.
+            # If the species changed, the calltype is already updated, so this will do nothing)
+            self.updateCallType(self.box1id, calltype)
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
@@ -1967,6 +1968,44 @@ class AviaNZ_reviewAll(QMainWindow):
         # (actually a poorly named listener for the Esc key)
         if ev == Qt.Key_Escape and hasattr(self, 'humanClassifyDialog1'):
             self.humanClassifyDialog1.done(0)
+
+    def updateCallType(self, boxid, calltype):
+        """ Compares calltype with oldseg labels, does safety checks,
+            updates the segment, and stores corrections.
+            boxid - id of segment being updated
+            calltype - new calltype to be placed on the first species of this segment
+        """
+        if calltype=="":
+            return
+        oldlab = self.segments[boxid][4]
+        if len(oldlab)==0:
+            print("Warning: can't add call type to empty segment")
+            return
+
+        # Currently, only working with the call type if a single species is selected:
+        if len(oldlab)>1:
+            print("Warning: setting call types with multiple species labels not supported yet")
+            return
+
+        if "calltype" in oldlab[0]:
+            if oldlab[0]["calltype"]==calltype:
+                # Nothing to change
+                return
+
+        print("Changing calltype to", calltype)
+
+        # save the correction file (unless it's already been saved when checking other changes)
+        if self.config['saveCorrections']:
+            newlabel = copy.deepcopy(oldlab)
+            newlabel[0]["calltype"] = calltype
+            outputError = [[self.segments[boxid], newlabel]]
+            cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
+                                             reviewer=self.reviewer)
+            if cleanexit != 1:
+                print("Warning: could not save correction file!")
+
+        # actually update the segment info
+        self.segments[boxid][4][0]["calltype"] = calltype
 
     def fillFileList(self,fileName=None):
         """ Generates the list of files for the file listbox.
