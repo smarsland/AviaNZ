@@ -202,6 +202,9 @@ class AviaNZ(QMainWindow):
         # Boxes with area smaller than this will be ignored -
         # to avoid accidentally creating little boxes
         self.minboxsize = 0.1
+        
+        # a hack to fix default font size (Win 10 suggests 7 pt for QLabels for some reason)
+        QApplication.setFont(QApplication.font("QMenu"))
         self.createMenu()
         self.createFrame()
 
@@ -506,12 +509,16 @@ class AviaNZ(QMainWindow):
         self.p_overview2.setPreferredHeight(25)
 
         # The buttons to move through the overview
-        self.leftBtn = QToolButton()
-        self.leftBtn.setArrowType(Qt.LeftArrow)
+        self.leftBtn = QPushButton()
+        self.leftBtn.setIcon(QIcon("img/overview-back.png"))
+        self.leftBtn.setIconSize(QtCore.QSize(7, 28))
+        self.leftBtn.setMinimumWidth(16)
         self.leftBtn.clicked.connect(self.moveLeft)
         self.leftBtn.setToolTip("Move view back")
-        self.rightBtn = QToolButton()
-        self.rightBtn.setArrowType(Qt.RightArrow)
+        self.rightBtn = QPushButton()
+        self.rightBtn.setIcon(QIcon("img/overview-next.png"))
+        self.rightBtn.setIconSize(QtCore.QSize(7, 28))
+        self.rightBtn.setMinimumWidth(16)
         self.rightBtn.clicked.connect(self.moveRight)
         self.rightBtn.setToolTip("Move view forward")
         self.leftBtn.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
@@ -1853,7 +1860,7 @@ class AviaNZ(QMainWindow):
         self.config['windowWidth'] = self.convertSpectoAmpl(maxX-minX)
         # self.saveConfig = True
         self.timeaxis.update()
-        pg.QtGui.QApplication.processEvents()
+        QApplication.processEvents()
 
     def drawfigMain(self,remaking=False):
         """ Draws the main amplitude and spectrogram plots and any segments on them.
@@ -2578,7 +2585,7 @@ class AviaNZ(QMainWindow):
 
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
-                modifiers = QtGui.QApplication.keyboardModifiers()
+                modifiers = QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
                     self.addSegment(self.start_ampl_loc, max(mousePoint.x(),0.0),species=self.lastSpecies)
                 elif modifiers == QtCore.Qt.ControlModifier:
@@ -2654,7 +2661,7 @@ class AviaNZ(QMainWindow):
                         # is it the first click on this segment?
                         if wasSelected==box1id:
                             # popup dialog
-                            modifiers = QtGui.QApplication.keyboardModifiers()
+                            modifiers = QApplication.keyboardModifiers()
                             if modifiers == QtCore.Qt.ControlModifier:
                                 self.fillBirdList(unsure=True)
                             else:
@@ -2738,7 +2745,7 @@ class AviaNZ(QMainWindow):
                 # If the user has pressed shift, copy the last species and don't use the context menu
                 # If they pressed Control, add ? to the names
                 # note: Ctrl+Shift combo doesn't have a Qt modifier and is ignored.
-                modifiers = QtGui.QApplication.keyboardModifiers()
+                modifiers = QApplication.keyboardModifiers()
                 if modifiers == QtCore.Qt.ShiftModifier:
                     self.addSegment(x1, x2, y1, y2, species=self.lastSpecies)
                 elif modifiers == QtCore.Qt.ControlModifier:
@@ -2828,7 +2835,7 @@ class AviaNZ(QMainWindow):
                         self.selectSegment(box1id)
                         # if this segment is clicked again, pop up bird menu:
                         if wasSelected==box1id:
-                            modifiers = QtGui.QApplication.keyboardModifiers()
+                            modifiers = QApplication.keyboardModifiers()
                             if modifiers == QtCore.Qt.ControlModifier:
                                 self.fillBirdList(unsure=True)
                             else:
