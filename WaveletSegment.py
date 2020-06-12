@@ -343,6 +343,77 @@ class WaveletSegment:
 
         return detected_bin_all, detected_out
 
+    def waveletSegment_cnn(self, dirName, filter):
+        """ Wrapper for segmentation to be used when generating cnn data.
+            Should be identical to processing the files in batch mode,
+            + returns annotations.
+            Does not do any processing besides basic conversion 0/1 -> [s,e].
+            Uses 15 min pages, if files are larger than that.
+
+            Args:
+            1. directory to process (recursively)
+            2. a filter with a single subfilter.
+
+            Return values:
+            1. list of (filename, [segments]) over all files and pages
+        """
+
+        # constant - files longer than this will be processed in pages
+        samplesInPage = 900*16000
+
+        # clear storage for multifile processing
+        detected_out = []
+        filenames = []
+        self.annotation = []
+
+        # find audio files with 0/1 annotations:
+        resol = 1.0
+        for root, dirs, files in os.walk(dirName):
+            for file in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[
+                                                                                                        :-4] + '-res' + str(
+                        float(resol)) + 'sec.txt' in files:
+                    filenames.append(os.path.join(root, file))
+        if len(filenames) < 1:
+            print("ERROR: no suitable files")
+            return
+
+        for filename in filenames:
+            # similar to _batch: loadFile(self.species)
+            # sets self.sp.data, self.sp.sampleRate, appends self.annotation
+            succ = self.loadData(filename)
+            if not succ:
+                print("ERROR: failed to load file", filename)
+                return
+
+            # (ceil division for large integers)
+            numPages = (len(self.sp.data) - 1) // samplesInPage + 1
+
+            for page in range(numPages):
+                print("Processing page %d / %d" % (page+1, numPages))
+                start = page*samplesInPage
+                end = min(start+samplesInPage, len(self.sp.data))
+                filelen = math.ceil((end-start)/self.sp.sampleRate)
+                if filelen < 2:
+                    print("Warning: can't process short file ends (%.2f s)" % filelen)
+                    continue
+
+                # read in page and resample as needed
+                # will also set self.spInfo with ADJUSTED nodes if resampling!
+                self.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=[filter], wpmode="new")
+
+                # segmentation, same as in batch mode. returns [[sub-filter1 segments]]
+                detected_segs = self.waveletSegment(0, wpmode="new")
+                if len(filter["Filters"]) > 1:
+                    out = []
+                    for subfilterdet in detected_segs:
+                        for seg in subfilterdet:
+                            out.append(seg)
+                    detected_out.append((filename, out))
+                else:
+                    detected_out.append((filename, detected_segs))
+
+        return detected_out
 
     def computeWaveletEnergy(self, data, sampleRate, nlevels=5, wpmode="new", window=1, inc=1):
         """ Computes the energy of the nodes in the wavelet packet decomposition
