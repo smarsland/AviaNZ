@@ -1522,6 +1522,7 @@ class LightedFileList(QListWidget):
         self.spList = set()
         self.fsList = set()
         self.listOfFiles = []
+        self.minCertainty = 100
 
         # for the traffic light icons
         self.pixmap = QPixmap(10, 10)
@@ -1544,6 +1545,7 @@ class LightedFileList(QListWidget):
         self.spList = set()
         self.fsList = set()
         self.listOfFiles = []
+        self.minCertainty = 100
 
         with pg.BusyCursor():
             # Read contents of current dir
@@ -1589,6 +1591,12 @@ class LightedFileList(QListWidget):
                                             # collect any species present
                                             filesp = [lab["species"] for seg in self.tempsl for lab in seg[4]]
                                             self.spList.update(filesp)
+                                            # min certainty
+                                            cert = [lab["certainty"] for seg in self.tempsl for lab in seg[4]]
+                                            if cert:
+                                                mincert = min(cert)
+                                                if self.minCertainty > mincert:
+                                                    self.minCertainty = mincert
                                     except Exception as e:
                                         # .data exists, but unreadable
                                         print("Could not read DATA file", dataf)
@@ -1606,6 +1614,24 @@ class LightedFileList(QListWidget):
                             self.fsList.add(samplerate)
                         except Exception as e:
                             print("Warning: could not parse format of WAV file", fullname)
+                            print(e)
+                    dataf = fullname + '.data'
+                    if os.path.isfile(dataf):
+                        try:
+                            self.tempsl.parseJSON(dataf, silent=True)
+                            if len(self.tempsl) > 0:
+                                # collect any species present
+                                filesp = [lab["species"] for seg in self.tempsl for lab in seg[4]]
+                                self.spList.update(filesp)
+                                # min certainty
+                                cert = [lab["certainty"] for seg in self.tempsl for lab in seg[4]]
+                                if cert:
+                                    mincert = min(cert)
+                                    if self.minCertainty > mincert:
+                                        self.minCertainty = mincert
+                        except Exception as e:
+                            # .data exists, but unreadable
+                            print("Could not read DATA file", dataf)
                             print(e)
 
         if readFmt:

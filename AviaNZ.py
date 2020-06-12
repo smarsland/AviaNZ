@@ -408,6 +408,7 @@ class AviaNZ(QMainWindow):
         # "Recognisers" menu
         recMenu = self.menuBar().addMenu("&Recognisers")
         recMenu.addAction("Train an automated recogniser", self.buildRecogniser)
+        recMenu.addAction("Train a CNN recogniser", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
 
@@ -4459,6 +4460,13 @@ class AviaNZ(QMainWindow):
         self.buildRecAdvWizard.exec_()
         # reread filters list with the new one
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
+
+    def buildCNN(self):
+        """Listener for 'Build a CNN'
+        """
+        self.saveSegments()
+        self.buildCNNWizard = DialogsTraining.BuildCNNWizard(self.filtersDir, self.config)
+        self.buildCNNWizard.exec_()
 
     def testRecogniser(self, filter=None):
         """ Listener for the Test Recogniser action """
