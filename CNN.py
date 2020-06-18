@@ -302,7 +302,7 @@ class CNN:
             modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5",
             monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
             save_freq='epoch')
-        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=3, verbose=1, mode='auto')
+        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=5, verbose=1, mode='auto')
         self.history = self.model.fit(self.train_images, self.train_labels,
                                       batch_size=32,
                                       epochs=50,
@@ -503,12 +503,13 @@ class GenerateData:
                 maxg = np.max(sgRaw_i)
                 featuress.append([np.rot90(sgRaw_i / maxg).tolist(), record[-1]])   # [spectrogram, label]
                 print(np.shape(sgRaw_i))
-                sgRaw_i = np.flip(sgRaw_i, 1)  # along y-axis
-                print(np.shape(sgRaw_i))
-                maxsg = np.min(sgRaw_i)
-                sg = np.abs(np.where(sgRaw_i == 0, 0.0, 10.0 * np.log10(sgRaw_i / maxsg)))
-                img_sg = pg.ImageItem(sg)
-                img_sg.save(os.path.join(dirName, 'img_sg', str(record[-1]) + '_' + "%05d" % count + '_' + record[0].split('\\')[-1][:-4] + '.png'))
+                # Save as image
+                # sgRaw_i = np.flip(sgRaw_i, 1)  # along y-axis
+                # # print(np.shape(sgRaw_i))
+                # maxsg = np.min(sgRaw_i)
+                # sg = np.abs(np.where(sgRaw_i == 0, 0.0, 10.0 * np.log10(sgRaw_i / maxsg)))
+                # img_sg = pg.ImageItem(sg)
+                # img_sg.save(os.path.join(dirName, 'img_sg', str(record[-1]) + '_' + "%05d" % count + '_' + record[0].split('\\')[-1][:-4] + '.png'))
                 count += 1
             if np.shape(featuress)[0] >= 1000:
                 with open(os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime())) + '.json', 'w') as outfile:
