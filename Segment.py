@@ -1289,32 +1289,18 @@ class PostProcess:
         :return:
         '''
         if 'Silence' in self.CNNoutputs.values():
-            if meanprob[ctkey] > self.CNNthrs[ctkey][3]:
-                certainty = 80
-            elif meanprob[ctkey] > self.CNNthrs[ctkey][2] and \
-                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][2] \
-                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][2]:
-                certainty = 70
-            elif meanprob[ctkey] > self.CNNthrs[ctkey][1] and \
-                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][1] \
-                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][1]:
-                certainty = 60
+            if meanprob[ctkey] > self.CNNthrs[ctkey][-1]:
+                certainty = 90
             elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
-                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][0] \
-                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
+                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][-1] \
+                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][-1]:
                 certainty = 50
             else:
                 certainty = 0  # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
                 # self.segments[ix][1] = certainty
         else:
-            if meanprob[ctkey] > self.CNNthrs[ctkey][3]:
-                certainty = 80
-            elif meanprob[ctkey] > self.CNNthrs[ctkey][2] and \
-                    meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][2]:
-                certainty = 70
-            elif meanprob[ctkey] > self.CNNthrs[ctkey][1] and \
-                    meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][1]:
-                certainty = 60
+            if meanprob[ctkey] > self.CNNthrs[ctkey][-1]:
+                certainty = 90
             elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
                     meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
                 certainty = 50
@@ -1330,18 +1316,10 @@ class PostProcess:
         :return:
         '''
         if 'Silence' in self.CNNoutputs.values():
-            if meanprob[ctkey] > self.CNNthrs[ctkey][3] and \
-                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][3] \
-                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][3]:
-                certainty = 80
-            elif meanprob[ctkey] > self.CNNthrs[ctkey][2] and \
-                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][2] \
-                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][2]:
-                certainty = 70
-            elif meanprob[ctkey] > self.CNNthrs[ctkey][1] and \
-                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][1] \
-                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][1]:
-                certainty = 60
+            if meanprob[ctkey] > self.CNNthrs[ctkey][-1] and \
+                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][-1] \
+                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][-1]:
+                certainty = 90
             elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
                     meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][0] \
                     and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
@@ -1350,15 +1328,9 @@ class PostProcess:
                 certainty = 0  # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
                 # self.segments[ix][1] = certainty
         else:
-            if meanprob[ctkey] > self.CNNthrs[ctkey][3] and \
-                    meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][3]:
-                certainty = 80
-            elif meanprob[ctkey] > self.CNNthrs[ctkey][2] and \
-                    meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][2]:
-                certainty = 70
-            elif meanprob[ctkey] > self.CNNthrs[ctkey][1] and \
-                    meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][1]:
-                certainty = 60
+            if meanprob[ctkey] > self.CNNthrs[ctkey][-1] and \
+                    meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][-1]:
+                certainty = 90
             elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
                     meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
                 certainty = 50
