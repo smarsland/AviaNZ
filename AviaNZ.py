@@ -1503,8 +1503,6 @@ class AviaNZ(QMainWindow):
                 self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
                 self.scrollSlider.setValue(0)
 
-                # Get the height of the amplitude for plotting the box
-                self.minampl = np.min(self.audiodata)+0.1*(np.max(self.audiodata)+np.abs(np.min(self.audiodata)))
                 self.drawOverview()
                 dlg += 1
                 dlg.update()
@@ -1606,12 +1604,12 @@ class AviaNZ(QMainWindow):
             # Because connecting-disconnecting slots is very dirty.
 
             # this will re-make segment boxes with correct moving abilities:
-            if hasattr(self, 'audiodata'):
+            if hasattr(self, 'sp'):
                 self.removeSegments(delete=False)
                 self.drawfigMain(remaking=True)
         else:
             self.p_spec.enableDrag = self.config['specMouseAction']==3
-            if hasattr(self, 'audiodata'):
+            if hasattr(self, 'sp'):
                 self.removeSegments(delete=False)
                 self.drawfigMain(remaking=True)
 
@@ -3419,7 +3417,7 @@ class AviaNZ(QMainWindow):
         x3 = int((self.listRectanglesa1[self.box1id].getRegion()[0] - self.config['reviewSpecBuffer']) * self.sampleRate)
         x3 = max(x3, 0)
         x4 = int((self.listRectanglesa1[self.box1id].getRegion()[1] + self.config['reviewSpecBuffer']) * self.sampleRate)
-        x4 = min(x4, len(self.audiodata))
+        x4 = min(x4, self.datalength)
         # NOTE: might be good to pass copy.deepcopy(seg[4])
         # instead of seg[4], if any bugs come up due to Dialog1 changing the label
         self.humanClassifyDialog1.setImage(self.sg[x1:x2, :], self.audiodata[x3:x4], self.sampleRate, self.config['incr'],
@@ -4508,7 +4506,10 @@ class AviaNZ(QMainWindow):
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
         """
-        self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata),DOC=self.DOC, species=self.FilterDicts)
+        maxampl = 0.001
+        if self.datalength>0:
+            maxampl = np.max(self.audiodata)
+        self.segmentDialog = Dialogs.Segmentation(maxampl,DOC=self.DOC, species=self.FilterDicts)
         self.segmentDialog.show()
         self.segmentDialog.activateWindow()
         self.segmentDialog.undo.clicked.connect(self.segment_undo)
@@ -4529,7 +4530,10 @@ class AviaNZ(QMainWindow):
         """ Listener for the segmentation dialog. Calls the relevant segmenter.
         """
         if self.CLI:
-            self.segmentDialog = Dialogs.Segmentation(np.max(self.audiodata))
+            maxampl = 0.001
+            if self.datalength>0:
+                maxampl = np.max(self.audiodata)
+            self.segmentDialog = Dialogs.Segmentation(maxampl)
 
         opstartingtime = time.time()
         print('Segmenting requested at ' + time.strftime('%H:%M:%S', time.gmtime(opstartingtime)))

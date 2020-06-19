@@ -1606,7 +1606,7 @@ class LightedFileList(QListWidget):
 
                     # check for a data file here and color this entry based on that
                     fullname = os.path.join(soundDir, file.fileName())
-                    # (also updates the directory info sets)
+                    # (also updates the directory info sets, and minCertainty)
                     self.paintItem(item, fullname+'.data')
                     if readFmt:
                         try:
@@ -1614,24 +1614,6 @@ class LightedFileList(QListWidget):
                             self.fsList.add(samplerate)
                         except Exception as e:
                             print("Warning: could not parse format of WAV file", fullname)
-                            print(e)
-                    dataf = fullname + '.data'
-                    if os.path.isfile(dataf):
-                        try:
-                            self.tempsl.parseJSON(dataf, silent=True)
-                            if len(self.tempsl) > 0:
-                                # collect any species present
-                                filesp = [lab["species"] for seg in self.tempsl for lab in seg[4]]
-                                self.spList.update(filesp)
-                                # min certainty
-                                cert = [lab["certainty"] for seg in self.tempsl for lab in seg[4]]
-                                if cert:
-                                    mincert = min(cert)
-                                    if self.minCertainty > mincert:
-                                        self.minCertainty = mincert
-                        except Exception as e:
-                            # .data exists, but unreadable
-                            print("Could not read DATA file", dataf)
                             print(e)
 
         if readFmt:
@@ -1674,7 +1656,11 @@ class LightedFileList(QListWidget):
                     # .data exists, but empty - "file was looked at"
                     mincert = -1
                 else:
-                    mincert = min([lab["certainty"] for seg in self.tempsl for lab in seg[4]])
+                    cert = [lab["certainty"] for seg in self.tempsl for lab in seg[4]]
+                    if cert:
+                        mincert = min(cert)
+                    else:
+                        mincert = -1
                     # also collect any species present
                     filesp = [lab["species"] for seg in self.tempsl for lab in seg[4]]
             except Exception as e:
@@ -1691,15 +1677,20 @@ class LightedFileList(QListWidget):
                 painter.drawRect(self.pixmap.rect())
                 painter.end()
                 item.setIcon(QIcon(self.pixmap))
+
+                # no change to self.minCertainty
             elif mincert == 0:
                 self.pixmap.fill(self.ColourNone)
                 item.setIcon(QIcon(self.pixmap))
+                self.minCertainty = 0
             elif mincert < 100:
                 self.pixmap.fill(self.ColourPossibleDark)
                 item.setIcon(QIcon(self.pixmap))
+                self.minCertainty = min(self.minCertainty, mincert)
             else:
                 self.pixmap.fill(self.ColourNamed)
                 item.setIcon(QIcon(self.pixmap))
+                # self.minCertainty cannot be changed by a cert=100 segment
         else:
             # it is a file, but no .data
             self.pixmap.fill(QColor(255,255,255,0))
