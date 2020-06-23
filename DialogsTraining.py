@@ -2520,7 +2520,7 @@ class BuildCNNWizard(QWizard):
                 for root, dirs, files in os.walk(str(self.field("trainDir2"))):
                     for file in files:
                         if file.lower().endswith('.wav') and file + '.corrections' in files:
-                            # Read the .correction
+                            # Read the .correction (from allspecies review)
                             cfile = os.path.join(root, file + '.corrections')
                             wavfile = os.path.join(root, file)
                             try:
@@ -2534,15 +2534,26 @@ class BuildCNNWizard(QWizard):
                             for seg in annots:
                                 if isinstance(seg, dict):
                                     continue
-                                else:
-                                    if seg[1][4]['species'] == self.species:
-                                        data.append(seg[1][:2])
-                                        data.append([wavfile, seg[1][:2], len(self.calltypes)])
-                                        self.correction = True
+                                if len(seg)!=2:
+                                    print("Warning: old format corrections detected")
+                                    continue
+                                oldlabel = seg[0][4]
+                                # check in cases like: [kiwi] -> [kiwi, morepork]
+                                # (these will be stored in .corrections, but aren't incorrect detections)
+                                newsp = [lab["species"] for lab in seg[1]]
+                                if len(oldlabel)!=1:
+                                    # this was made manually
+                                    print("Warning: ignoring labels with multiple species")
+                                    continue
+                                if oldlabel[0]['species'] == self.species and self.species not in newsp:
+                                    # data.append(seg[0][:2])
+                                    # store this as "noise" calltype
+                                    data.append([wavfile, seg[0][:2], len(self.calltypes)])
+                                    self.correction = True
 
                         elif file.lower().endswith('.wav') and file + '.corrections_' + self.cleanSpecies(
                                 self.species) in files:
-                            # Read the .correction
+                            # Read the .correction (from single sp review)
                             cfile = os.path.join(root, file + '.corrections_' + self.cleanSpecies(self.species))
                             wavfile = os.path.join(root, file)
                             try:
@@ -2557,6 +2568,7 @@ class BuildCNNWizard(QWizard):
                                 if isinstance(seg, dict):
                                     continue
                                 else:
+                                    # store this as "noise" calltype
                                     data.append([wavfile, seg[:2], len(self.calltypes)])
                                     self.correction = True
 
@@ -2569,8 +2581,8 @@ class BuildCNNWizard(QWizard):
                     data.append(x)
 
             # How many of each class
-            target = [rec[-1] for rec in data]
-            N = [np.shape(np.where(np.array(target) == i)[0])[0] for i in range(len(self.calltypes) + 1)]
+            target = np.array([rec[-1] for rec in data])
+            N = [np.sum(target == i) for i in range(len(self.calltypes) + 1)]
 
             return data, N
 
@@ -2598,11 +2610,19 @@ class BuildCNNWizard(QWizard):
                             for seg in annots:
                                 if isinstance(seg, dict):
                                     continue
-                                else:
-                                    if seg[1][4]['species'] == self.species:
-                                        data.append(seg[1][:2])
-                                        data.append([wavfile, seg[1][:2], len(self.calltypes)])
-                                        self.correction3 = True
+                                if len(seg)!=2:
+                                    print("Warning: old format corrections detected")
+                                    continue
+                                oldlabel = seg[0][4]
+                                newsp = [lab["species"] for lab in seg[1]]
+                                if len(oldlabel)!=1:
+                                    # this was made manually
+                                    print("Warning: ignoring labels with multiple species")
+                                    continue
+                                if oldlabel[0]['species'] == self.species and self.species not in newsp:
+                                    # data.append(seg[0][:2])
+                                    data.append([wavfile, seg[0][:2], len(self.calltypes)])
+                                    self.correction3 = True
 
                         elif file.lower().endswith('.wav') and file + '.corrections_' + self.cleanSpecies(
                                 self.species) in files:
@@ -2621,9 +2641,10 @@ class BuildCNNWizard(QWizard):
                                 if isinstance(seg, dict):
                                     continue
                                 else:
+                                    # store this as "noise" calltype
                                     data.append([wavfile, seg[:2], len(self.calltypes)])
                                     self.correction3 = True
-            print(np.shape(data))
+
             # Call type segments
             print('----CT data test:')
             for i in range(len(self.calltypes)):
@@ -2632,10 +2653,9 @@ class BuildCNNWizard(QWizard):
                 for x in ctdata:
                     data.append(x)
 
-            print(np.shape(data))
             # How many of each class
-            target = [rec[-1] for rec in data]
-            N = [np.shape(np.where(np.array(target) == i)[0])[0] for i in range(len(self.calltypes) + 1)]
+            target = np.array([rec[-1] for rec in data])
+            N = [np.sum(target == i) for i in range(len(self.calltypes) + 1)]
 
             return data, N
 
@@ -2958,6 +2978,8 @@ class BuildCNNWizard(QWizard):
             self.minimgtest = 0
             self.tmpdir2 = None
 
+            self.min_img_thr = 20    # TODO: 100
+
             self.msgspp = QLabel('')
             self.msgspp.setStyleSheet("QLabel { color : #808080; }")
             self.msgtrain1 = QLabel('')
@@ -3020,47 +3042,49 @@ class BuildCNNWizard(QWizard):
             self.calltypes = []
             for fi in self.currfilt['Filters']:
                 self.calltypes.append(fi['calltype'])
-            # Find train segments belong to each class
-            self.DataGen = CNN.GenerateData(self.currfilt, self.field("imgsec")/100, self.wizard().parameterPage.windowidth,
-                                        self.wizard().parameterPage.incwidth, self.wizard().parameterPage.imgsize[0],
-                                        self.wizard().parameterPage.imgsize[1])
-            self.segments = self.wizard().confirminputPage.trainsegments
-            N = self.wizard().confirminputPage.trainN
-            # for i in range(len(self.calltypes)):
-            #     self.msgseg.setText("%s:\t%d\n\n" % (self.msgseg.text() + self.calltypes[i], N[i]))
-            # self.msgseg.setText("%s:\t%d\n\n" % (self.msgseg.text() + "Noise", N[-1]))
 
-            # Generate train image data now
-            Nimg = self.genImgDataset(self.segments, trainmode=True)
-            for i in range(len(self.calltypes)):
-                self.msgimg.setText("%s:\t%d\n\n" % (self.msgimg.text() + self.calltypes[i], Nimg[i]))
-            self.msgimg.setText("%s:\t%d\n\n" % (self.msgimg.text() + "Noise", Nimg[-1]))
-            # We need at least some number of images from each class
-            self.minimg = min(Nimg)
-            if self.minimg < 50:    # TODO: 100
-                self.warnimg.setText('Warning: Need at least 50 image examples from each class to train CNN\n\n')
+            with pg.BusyCursor():
+                # Find train segments belong to each class
+                self.DataGen = CNN.GenerateData(self.currfilt, self.field("imgsec")/100, self.wizard().parameterPage.windowidth,
+                                            self.wizard().parameterPage.incwidth, self.wizard().parameterPage.imgsize[0],
+                                            self.wizard().parameterPage.imgsize[1])
+                self.segments = self.wizard().confirminputPage.trainsegments
+                N = self.wizard().confirminputPage.trainN
+                # for i in range(len(self.calltypes)):
+                #     self.msgseg.setText("%s:\t%d\n\n" % (self.msgseg.text() + self.calltypes[i], N[i]))
+                # self.msgseg.setText("%s:\t%d\n\n" % (self.msgseg.text() + "Noise", N[-1]))
 
-            # Find test segments belong to each class
-            self.segmentstest = self.wizard().confirminputPage.testsegments
-            Ntest = self.wizard().confirminputPage.testN
-            # for i in range(len(self.calltypes)):
-            #     self.msgsegtest.setText("%s:\t%d\n\n" % (self.msgsegtest.text() + self.calltypes[i], Ntest[i]))
-            # self.msgsegtest.setText("%s:\t%d\n\n" % (self.msgsegtest.text() + "Noise", Ntest[-1]))
+                # Generate train image data now
+                Nimg = self.genImgDataset(self.segments, trainmode=True)
+                for i in range(len(self.calltypes)):
+                    self.msgimg.setText("%s:\t%d\n\n" % (self.msgimg.text() + self.calltypes[i], Nimg[i]))
+                self.msgimg.setText("%s:\t%d\n\n" % (self.msgimg.text() + "Noise", Nimg[-1]))
+                # We need at least some number of images from each class
+                self.minimg = min(Nimg)
+                if self.minimg < self.min_img_thr:
+                    self.warnimg.setText('Warning: Need at least %d image examples from each class to train CNN\n\n' % self.min_img_thr)
 
-            # Generate test image data now
-            Nimgtest = self.genImgDataset(self.segmentstest, trainmode=False)
-            for i in range(len(self.calltypes)):
-                self.msgimgtest.setText("%s:\t%d\n\n" % (self.msgimgtest.text() + self.calltypes[i], Nimgtest[i]))
-            self.msgimgtest.setText("%s:\t%d\n\n" % (self.msgimgtest.text() + "Noise", Nimgtest[-1]))
-            # We need at least some number of images from each class
-            self.minimgtest = min(Nimgtest)
-            if self.minimgtest < 5:  # TODO
-                self.warnimgtest.setText('Warning: Need at least 5 image examples from each class to test CNN\n\n')
+                # Find test segments belong to each class
+                self.segmentstest = self.wizard().confirminputPage.testsegments
+                Ntest = self.wizard().confirminputPage.testN
+                # for i in range(len(self.calltypes)):
+                #     self.msgsegtest.setText("%s:\t%d\n\n" % (self.msgsegtest.text() + self.calltypes[i], Ntest[i]))
+                # self.msgsegtest.setText("%s:\t%d\n\n" % (self.msgsegtest.text() + "Noise", Ntest[-1]))
 
-            # create temp dir to hold model
-            self.tmpdir2 = tempfile.TemporaryDirectory(prefix='CNN_')
-            self.modelDir.setText(self.tmpdir2.name)
-            print('Temporary model dir:', self.tmpdir2.name)
+                # Generate test image data now
+                Nimgtest = self.genImgDataset(self.segmentstest, trainmode=False)
+                for i in range(len(self.calltypes)):
+                    self.msgimgtest.setText("%s:\t%d\n\n" % (self.msgimgtest.text() + self.calltypes[i], Nimgtest[i]))
+                self.msgimgtest.setText("%s:\t%d\n\n" % (self.msgimgtest.text() + "Noise", Nimgtest[-1]))
+                # We need at least some number of images from each class
+                self.minimgtest = min(Nimgtest)
+                if self.minimgtest < 5:  # TODO
+                    self.warnimgtest.setText('Warning: Need at least 5 image examples from each class to test CNN\n\n')
+
+                # create temp dir to hold model
+                self.tmpdir2 = tempfile.TemporaryDirectory(prefix='CNN_')
+                self.modelDir.setText(self.tmpdir2.name)
+                print('Temporary model dir:', self.tmpdir2.name)
 
             self.completeChanged.emit()
 
@@ -3101,7 +3125,7 @@ class BuildCNNWizard(QWizard):
             # self.modelDirwarn.setText('')
 
         def isComplete(self):
-            if self.minimg < 50 or self.modelDir.text() == '':  # TODO
+            if self.minimg < self.min_img_thr or self.modelDir.text() == '':  # TODO
                 return False
             else:
                 return True
@@ -3141,176 +3165,177 @@ class BuildCNNWizard(QWizard):
             for fi in self.currfilt['Filters']:
                 self.calltypes.append(fi['calltype'])
 
-            cnn = CNN.CNN(self.species, self.calltypes, self.fs, self.field("imgsec")/100, self.wizard().parameterPage.windowidth,
+            with pg.BusyCursor():
+                cnn = CNN.CNN(self.species, self.calltypes, self.fs, self.field("imgsec")/100, self.wizard().parameterPage.windowidth,
                                         self.wizard().parameterPage.incwidth, self.wizard().parameterPage.imgsize[0],
                                         self.wizard().parameterPage.imgsize[1])
-            # TODO: use np.memmap() to deal with large data
-            sg, ns = cnn.loadAllImageData(os.path.join(self.field("imgDir"), 'Train'))
-            print(ns)
+                # TODO: use np.memmap() to deal with large data
+                sg, ns = cnn.loadAllImageData(os.path.join(self.field("imgDir"), 'Train'))
+                print(ns)
 
-            # Data augmentation TODO: add augmenting with real noise?
-            # create image data augmentation generator in-build
-            datagen = ImageDataGenerator(width_shift_range=0.3, fill_mode='nearest')
-            batchsize = 32
-            t = 1000        # TODO
+                # Data augmentation TODO: add augmenting with real noise?
+                # create image data augmentation generator in-build
+                datagen = ImageDataGenerator(width_shift_range=0.3, fill_mode='nearest')
+                batchsize = 32
+                t = 1000        # TODO
 
-            # for each call type
-            for ct in range(len(self.calltypes) + 1):
-                if t - np.shape(sg[ct])[0] > batchsize:
-                    samples = expand_dims(sg[ct], np.shape(sg[ct])[0])
-                    # prepare iterator
-                    it = datagen.flow(samples, batch_size=batchsize)
-                    # generate samples
-                    batch = it.next()
-                    for i in range(int(np.round((t - np.shape(sg[ct])[0]) / batchsize))):
-                        newbatch = it.next()
-                        batch = np.vstack((batch, newbatch))
-                    sg[ct] = np.vstack((sg[ct].reshape(sg[ct].shape[0], cnn.imageheight, cnn.imagewidth, 1), batch))
-                else:
-                    sg[ct] = sg[ct].reshape(sg[ct].shape[0], cnn.imageheight, cnn.imagewidth, 1)
+                # for each call type
+                for ct in range(len(self.calltypes) + 1):
+                    if t - np.shape(sg[ct])[0] > batchsize:
+                        samples = expand_dims(sg[ct], np.shape(sg[ct])[0])
+                        # prepare iterator
+                        it = datagen.flow(samples, batch_size=batchsize)
+                        # generate samples
+                        batch = it.next()
+                        for i in range(int(np.round((t - np.shape(sg[ct])[0]) / batchsize))):
+                            newbatch = it.next()
+                            batch = np.vstack((batch, newbatch))
+                        sg[ct] = np.vstack((sg[ct].reshape(sg[ct].shape[0], cnn.imageheight, cnn.imagewidth, 1), batch))
+                    else:
+                        sg[ct] = sg[ct].reshape(sg[ct].shape[0], cnn.imageheight, cnn.imagewidth, 1)
 
-            n = [np.shape(sg[i])[0] for i in range(len(self.calltypes) + 1)]
-            print('Number of images after augmenting: ', n)
-            target = [None for ct in range(len(self.calltypes) + 1)]
-            for ct in range(len(self.calltypes) + 1):
-                target[ct] = np.ones((n[ct], 1)) * ct
+                n = [np.shape(sg[i])[0] for i in range(len(self.calltypes) + 1)]
+                print('Number of images after augmenting: ', n)
+                target = [None for ct in range(len(self.calltypes) + 1)]
+                for ct in range(len(self.calltypes) + 1):
+                    target[ct] = np.ones((n[ct], 1)) * ct
 
-            # Merge
-            sga = sg[0]
-            for ct in range(1, len(self.calltypes) + 1):
-                sga = np.vstack((sga, sg[ct]))
-            print('Merged sgs')
+                # Merge
+                sga = sg[0]
+                for ct in range(1, len(self.calltypes) + 1):
+                    sga = np.vstack((sga, sg[ct]))
+                print('Merged sgs')
 
-            targeta = target[0]
-            for ct in range(1, len(self.calltypes) + 1):
-                targeta = np.vstack((targeta, target[ct]))
-            print('Merged targets')
+                targeta = target[0]
+                for ct in range(1, len(self.calltypes) + 1):
+                    targeta = np.vstack((targeta, target[ct]))
+                print('Merged targets')
 
-            del target, sg
-            gc.collect()
-
-            idxs = np.random.permutation(sum(n))
-            cnn.train_images = sga[idxs[0:int(len(idxs) * 0.95)]]
-            cnn.val_images = sga[idxs[int(len(idxs) * 0.95):]]
-            del sga
-            gc.collect()
-            cnn.train_labels = targeta[idxs[0:int(len(idxs) * 0.95)]]
-            cnn.val_labels = targeta[idxs[int(len(idxs) * 0.95):]]
-            print('Selected train and validation data')
-
-            cnn.train_images = cnn.train_images.astype('float32')
-            cnn.val_images = cnn.val_images.astype('float32')
-
-            cnn.train_labels = tf.keras.utils.to_categorical(cnn.train_labels, len(self.calltypes) + 1)
-            cnn.val_labels = tf.keras.utils.to_categorical(cnn.val_labels, len(self.calltypes) + 1)
-            print('Data preparation complete')
-
-            print('Creating architecture...')
-            cnn.createArchitecture()
-            # clean the model dir
-            # self.cleanmodeldir()
-            print('Training...')
-            cnn.train(modelsavepath=self.field("modelDir"))
-            print('Training complete!')
-            self.msg.setText('Almost there!')
-
-            self.bestThr = [0 for i in range(len(self.calltypes) + 1)]
-
-            # TEST/PLOT
-            # Load all test data
-            sgtest, nstest = cnn.loadAllImageData(os.path.join(self.field("imgDir"), 'Test'))
-            # for each call type
-            for ct in range(len(self.calltypes) + 1):
-                sgtest[ct] = sgtest[ct].reshape(sgtest[ct].shape[0], cnn.imageheight, cnn.imagewidth, 1)
-
-            ntest = [np.shape(sgtest[i])[0] for i in range(len(self.calltypes) + 1)]
-            print('Number of test images: ', ntest)
-            targettest = [None for ct in range(len(self.calltypes) + 1)]
-            for ct in range(len(self.calltypes) + 1):
-                targettest[ct] = np.ones((ntest[ct], 1)) * ct
-
-            # Merge
-            sgatest = sgtest[0]
-            for ct in range(1, len(self.calltypes) + 1):
-                sgatest = np.vstack((sgatest, sgtest[ct]))
-            sgatest = sgatest.astype('float32')
-            print('Merged test sgs')
-
-            targetatest = targettest[0]
-            for ct in range(1, len(self.calltypes) + 1):
-                targetatest = np.vstack((targetatest, targettest[ct]))
-            print('Merged test targets')
-
-            try:
-                del targettest, sgtest
+                del target, sg
                 gc.collect()
-            except:
-                pass
 
-            for ct in range(len(self.calltypes) + 1):
-                res = self.testCT(ct, sgatest, targetatest)
-                # Create the widgets and add to the layout
-                # this is the Canvas Widget that displays the plot
-                figCanvas = ROCCanvasCNN(self, ct=ct, thr=res[0], TPR=res[1], FPR=res[2], Precision=res[3], Acc = res[4])
-                figCanvas.plotme()
-                # figCanvas.plotmeagain()
+                idxs = np.random.permutation(sum(n))
+                cnn.train_images = sga[idxs[0:int(len(idxs) * 0.95)]]
+                cnn.val_images = sga[idxs[int(len(idxs) * 0.95):]]
+                del sga
+                gc.collect()
+                cnn.train_labels = targeta[idxs[0:int(len(idxs) * 0.95)]]
+                cnn.val_labels = targeta[idxs[int(len(idxs) * 0.95):]]
+                print('Selected train and validation data')
 
-                marker = figCanvas.ax.plot([0, 1], [0, 1], marker='o', color='black', linestyle='dotted')[0]
-                figCanvas.marker = marker
+                cnn.train_images = cnn.train_images.astype('float32')
+                cnn.val_images = cnn.val_images.astype('float32')
 
-                caption = QLabel('')
-                caption.setStyleSheet("QLabel { color : #808080; }")
-                if ct == len(self.calltypes):
-                    self.layout.addWidget(QLabel('<b>Noise</b>'), ct, 0)
-                else:
-                    self.layout.addWidget(QLabel('<b>' + str(self.calltypes[ct]).title() + '</b>'), ct, 0)
-                self.layout.addWidget(figCanvas, ct, 1)
-                self.layout.addWidget(self.space, ct, 2)
-                self.layout.addWidget(caption, ct, 3)
+                cnn.train_labels = tf.keras.utils.to_categorical(cnn.train_labels, len(self.calltypes) + 1)
+                cnn.val_labels = tf.keras.utils.to_categorical(cnn.val_labels, len(self.calltypes) + 1)
+                print('Data preparation complete')
 
-                # figure click handler
-                def onclick(event):
-                    ct = event.canvas.ct
-                    thr = event.canvas.thrList
-                    TPR = event.canvas.TPR
-                    FPR = event.canvas.FPR
-                    Precision = event.canvas.Precision
-                    Acc = event.canvas.Acc
-                    fpr_cl = event.xdata
-                    tpr_cl = event.ydata
-                    if tpr_cl is None or fpr_cl is None:
-                        return
+                print('Creating architecture...')
+                cnn.createArchitecture()
+                # clean the model dir
+                # self.cleanmodeldir()
+                print('Training...')
+                cnn.train(modelsavepath=self.field("modelDir"))
+                print('Training complete!')
+                self.msg.setText('Almost there!')
 
-                    # get thr for closest point
-                    distarr = (tpr_cl - TPR) ** 2 + (fpr_cl - FPR) ** 2
-                    thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)[0]
-                    tpr_near = TPR[thr_min_ind]
-                    fpr_near = FPR[thr_min_ind]
-                    event.canvas.marker.set_visible(False)
-                    self.figCanvas[ct].draw()
-                    # figCanvas.draw()
-                    event.canvas.marker.set_xdata([fpr_cl, fpr_near])
-                    event.canvas.marker.set_ydata([tpr_cl, tpr_near])
-                    event.canvas.marker.set_visible(True)
-                    self.figCanvas[ct].ax.draw_artist(event.canvas.marker)
-                    self.figCanvas[ct].update()
+                self.bestThr = [0 for i in range(len(self.calltypes) + 1)]
 
-                    print("fpr_cl, tpr_cl: ", fpr_near, tpr_near)
+                # TEST/PLOT
+                # Load all test data
+                sgtest, nstest = cnn.loadAllImageData(os.path.join(self.field("imgDir"), 'Test'))
+                # for each call type
+                for ct in range(len(self.calltypes) + 1):
+                    sgtest[ct] = sgtest[ct].reshape(sgtest[ct].shape[0], cnn.imageheight, cnn.imagewidth, 1)
 
-                    # update sidebar
-                    # self.layout.itemAtPosition(ct, 3).widget().setText('\tThr: %.2f\n\tTrue Positive Rate: %.2f\n\tFalse Positive Rate: %.2f\n\tPrecision: %.2f\n\tAccuracy: %.2f' % (thr[thr_min_ind], tpr_near, FPR[thr_min_ind], Precision[thr_min_ind], Acc[thr_min_ind]))
-                    self.layout.itemAtPosition(ct, 3).widget().setText('\tTrue Positive Rate: %.2f\n\tFalse Positive Rate: %.2f\n\tPrecision: %.2f\n\tAccuracy: %.2f' % (TPR[thr_min_ind], FPR[thr_min_ind], Precision[thr_min_ind], Acc[thr_min_ind]))
-                    self.layout.update()
+                ntest = [np.shape(sgtest[i])[0] for i in range(len(self.calltypes) + 1)]
+                print('Number of test images: ', ntest)
+                targettest = [None for ct in range(len(self.calltypes) + 1)]
+                for ct in range(len(self.calltypes) + 1):
+                    targettest[ct] = np.ones((ntest[ct], 1)) * ct
 
-                    # this will save the best parameters to the global fields
-                    self.bestThr[ct] = thr[thr_min_ind]
+                # Merge
+                sgatest = sgtest[0]
+                for ct in range(1, len(self.calltypes) + 1):
+                    sgatest = np.vstack((sgatest, sgtest[ct]))
+                sgatest = sgatest.astype('float32')
+                print('Merged test sgs')
 
-                    self.completeChanged.emit()
+                targetatest = targettest[0]
+                for ct in range(1, len(self.calltypes) + 1):
+                    targetatest = np.vstack((targetatest, targettest[ct]))
+                print('Merged test targets')
 
-                figCanvas.figure.canvas.mpl_connect('button_press_event', onclick)
-                self.figCanvas.append(figCanvas)
+                try:
+                    del targettest, sgtest
+                    gc.collect()
+                except:
+                    pass
 
-            self.layout.update()
+                for ct in range(len(self.calltypes) + 1):
+                    res = self.testCT(ct, sgatest, targetatest)
+                    # Create the widgets and add to the layout
+                    # this is the Canvas Widget that displays the plot
+                    figCanvas = ROCCanvasCNN(self, ct=ct, thr=res[0], TPR=res[1], FPR=res[2], Precision=res[3], Acc = res[4])
+                    figCanvas.plotme()
+                    # figCanvas.plotmeagain()
+
+                    marker = figCanvas.ax.plot([0, 1], [0, 1], marker='o', color='black', linestyle='dotted')[0]
+                    figCanvas.marker = marker
+
+                    caption = QLabel('')
+                    caption.setStyleSheet("QLabel { color : #808080; }")
+                    if ct == len(self.calltypes):
+                        self.layout.addWidget(QLabel('<b>Noise</b>'), ct, 0)
+                    else:
+                        self.layout.addWidget(QLabel('<b>' + str(self.calltypes[ct]).title() + '</b>'), ct, 0)
+                    self.layout.addWidget(figCanvas, ct, 1)
+                    self.layout.addWidget(self.space, ct, 2)
+                    self.layout.addWidget(caption, ct, 3)
+
+                    # figure click handler
+                    def onclick(event):
+                        ct = event.canvas.ct
+                        thr = event.canvas.thrList
+                        TPR = event.canvas.TPR
+                        FPR = event.canvas.FPR
+                        Precision = event.canvas.Precision
+                        Acc = event.canvas.Acc
+                        fpr_cl = event.xdata
+                        tpr_cl = event.ydata
+                        if tpr_cl is None or fpr_cl is None:
+                            return
+
+                        # get thr for closest point
+                        distarr = (tpr_cl - TPR) ** 2 + (fpr_cl - FPR) ** 2
+                        thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)[0]
+                        tpr_near = TPR[thr_min_ind]
+                        fpr_near = FPR[thr_min_ind]
+                        event.canvas.marker.set_visible(False)
+                        self.figCanvas[ct].draw()
+                        # figCanvas.draw()
+                        event.canvas.marker.set_xdata([fpr_cl, fpr_near])
+                        event.canvas.marker.set_ydata([tpr_cl, tpr_near])
+                        event.canvas.marker.set_visible(True)
+                        self.figCanvas[ct].ax.draw_artist(event.canvas.marker)
+                        self.figCanvas[ct].update()
+
+                        print("fpr_cl, tpr_cl: ", fpr_near, tpr_near)
+
+                        # update sidebar
+                        # self.layout.itemAtPosition(ct, 3).widget().setText('\tThr: %.2f\n\tTrue Positive Rate: %.2f\n\tFalse Positive Rate: %.2f\n\tPrecision: %.2f\n\tAccuracy: %.2f' % (thr[thr_min_ind], tpr_near, FPR[thr_min_ind], Precision[thr_min_ind], Acc[thr_min_ind]))
+                        self.layout.itemAtPosition(ct, 3).widget().setText('\tTrue Positive Rate: %.2f\n\tFalse Positive Rate: %.2f\n\tPrecision: %.2f\n\tAccuracy: %.2f' % (TPR[thr_min_ind], FPR[thr_min_ind], Precision[thr_min_ind], Acc[thr_min_ind]))
+                        self.layout.update()
+
+                        # this will save the best parameters to the global fields
+                        self.bestThr[ct] = thr[thr_min_ind]
+
+                        self.completeChanged.emit()
+
+                    figCanvas.figure.canvas.mpl_connect('button_press_event', onclick)
+                    self.figCanvas.append(figCanvas)
+
+                self.layout.update()
 
         def testCT(self, ct, testimages, targets):
             '''

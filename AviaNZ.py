@@ -3596,8 +3596,17 @@ class AviaNZ(QMainWindow):
     def humanClassifyDelete1(self):
         """ If the user has deleted a segment in the review, delete it from the main display """
         self.humanClassifyDialog1.stopPlayback()
-
         self.segmentsToSave = True
+
+        # save the correction file
+        currSeg = self.segments[self.box1id]
+        if self.config['saveCorrections']:
+            outputError = [[currSeg, []]]
+            cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
+                                             reviewer=self.reviewer)
+            if cleanexit != 1:
+                print("Warning: could not save correction file!")
+
         # reselecting deals with colors and sets box1id
         nextseg = self.box1id - 1
         self.deselectSegment(self.box1id)

@@ -175,24 +175,34 @@ class CNN:
         :param file: JSON file with extracted features and labels
         :return:
         '''
-        with open(file) as f:
-            data = json.load(f)
-        features = np.ndarray(shape=(np.shape(data)[0], self.imageheight, self.imagewidth), dtype=float)
+        npzfile = file
+        dataz = np.load(npzfile)
+        numarrays = len(dataz)
+
+        labfile = file[:-4] + '_labels.json'
+        with open(labfile) as f:
+            labels = json.load(f)
+
+        # initialize output
+        features = np.ndarray(shape=(numarrays, self.imageheight, self.imagewidth), dtype=float)
+
         badind = []
         if noisepool:
-            for i in range(0, np.shape(data)[0]):
-                if np.shape(data[i][0]) == (self.imageheight, self.imagewidth):
-                    features[i][:] = data[i][0][:]
+            for i in range(0, numarrays):
+                key = "f%d" % i
+                if np.shape(dataz[key]) == (self.imageheight, self.imagewidth):
+                    features[i][:] = dataz[key][:]
                 else:
                     badind.append(i)
             features = np.delete(features, badind, 0)
             return features
         else:
-            targets = np.zeros((np.shape(data)[0], 1))
-            for i in range(0, np.shape(data)[0]):
-                if np.shape(data[i][0]) == (self.imageheight, self.imagewidth):
-                    features[i][:] = data[i][0][:]
-                    targets[i][0] = data[i][-1]
+            targets = np.zeros((numarrays, 1))
+            for i in range(0, numarrays):
+                key = "f%d" % i
+                if np.shape(dataz[key]) == (self.imageheight, self.imagewidth):
+                    features[i][:] = dataz[key][:]
+                    targets[i][0] = labels[key]
                 else:
                     badind.append(i)
             features = np.delete(features, badind, 0)
@@ -241,7 +251,7 @@ class CNN:
         pos = 0
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
-                if file.endswith('.json'):
+                if file.endswith('.npz'):
                     sg1, target1 = self.loadImageData(os.path.join(dirName, file))
                     if not pos:
                         sg = sg1
@@ -401,6 +411,7 @@ class GenerateData:
         autoSegments = ws.waveletSegment_cnn(dirName, self.filter)  # [(filename, [segments]), ...]
 
         #  now the diff between segment and autoSegments
+        print("autoSeg", autoSegments)
         for item in autoSegments:
             wavFile = item[0]
             if os.stat(wavFile).st_size != 0:
@@ -410,6 +421,7 @@ class GenerateData:
                     segments.parseJSON(wavFile + '.data')
                     sppSegments = segments.getSpecies(self.species)
                 for segAuto in item[1]:
+                    print("segAuto", segAuto)
                     overlapedwithGT = False
                     for ind in sppSegments:
                         segGT = segments[ind]
@@ -440,8 +452,9 @@ class GenerateData:
         :param hop:
         :return: save the preferred features into JSON files + save images. Currently the spectrogram images.
         '''
-
-        featuress = []
+        # featuress = []
+        out_npys = {}
+        out_labels = {}
         count = 0
         dhop = hop
         specFrameSize = len(range(0, int(self.length * self.fs - self.windowwidth), self.inc))
@@ -501,8 +514,18 @@ class GenerateData:
                     continue
                 sgRaw_i = sgRaw[sgstart:sgend, :]
                 maxg = np.max(sgRaw_i)
-                featuress.append([np.rot90(sgRaw_i / maxg).tolist(), record[-1]])   # [spectrogram, label]
+                # Normalize and rotate
+                sgRaw_i = np.rot90(sgRaw_i / maxg)
                 print(np.shape(sgRaw_i))
+
+                # Saving a JSON of [spectrogram, label]
+                # featuress.append([sgRaw_i.tolist(), record[-1]])
+
+                # Alternative saving format: numpy binary + JSON label
+                key = "f%d" % count
+                out_labels[key] = record[-1]
+                out_npys[key] = sgRaw_i
+
                 # Save as image
                 # sgRaw_i = np.flip(sgRaw_i, 1)  # along y-axis
                 # # print(np.shape(sgRaw_i))
@@ -511,15 +534,32 @@ class GenerateData:
                 # img_sg = pg.ImageItem(sg)
                 # img_sg.save(os.path.join(dirName, 'img_sg', str(record[-1]) + '_' + "%05d" % count + '_' + record[0].split('\\')[-1][:-4] + '.png'))
                 count += 1
-            if np.shape(featuress)[0] >= 1000:
-                with open(os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime())) + '.json', 'w') as outfile:
-                    json.dump(featuress, outfile)
-                del featuress
-                gc.collect()
-                featuress = []
+            if len(out_labels) >= 1000:
+                outprefix = os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime()))
+                # saving everything as JSON
+                # with open(outprefix + '.json', 'w') as outfile:
+                #     json.dump(featuress, outfile)
+                # saving as NPY array + labels JSON
+                with open(outprefix + '_labels.json', 'w') as outfile:
+                    json.dump(out_labels, outfile)
+                np.savez(outprefix + ".npz", **out_npys)
 
-        with open(os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime())) + '.json', 'w') as outfile:
-            json.dump(featuress, outfile)
+                # del featuress
+                out_npys = {}
+                out_labels = {}
+                gc.collect()
+                # featuress = []
+
+        outprefix = os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime()))
+        # saving everything as JSON
+        # with open(outprefix + '.json', 'w') as outfile:
+        #     json.dump(featuress, outfile)
+
+        # saving as NPY array + labels JSON
+        with open(outprefix + '_labels.json', 'w') as outfile:
+            json.dump(out_labels, outfile)
+        np.savez(outprefix + ".npz", **out_npys)
+
         # with open(os.path.join(dirName, 'melsgdata.json'), 'w') as outfile:
         #     json.dump(featuresmel, outfile)
         # with open(os.path.join(dirName, 'audiodata.json'), 'w') as outfile:

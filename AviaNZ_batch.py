@@ -1955,6 +1955,15 @@ class AviaNZ_reviewAll(QMainWindow):
         # (no need to update counter then)
         self.humanClassifyDialog1.stopPlayback()
 
+        # save the correction file
+        currSeg = self.segments[self.box1id]
+        if self.config['saveCorrections']:
+            outputError = [[currSeg, []]]
+            cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
+                                             reviewer=self.reviewer)
+            if cleanexit != 1:
+                print("Warning: could not save correction file!")
+
         id = self.box1id
         del self.segments[id]
         del self.sps[id]
