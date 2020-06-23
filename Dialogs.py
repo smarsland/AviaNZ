@@ -1640,11 +1640,14 @@ class HumanClassify1(QDialog):
                 btn = self.ctbtns[cti]
                 btn.show()
                 btn.setText(possibleCts[cti])
+                # (temp disable so that we could have all buttons unchecked if no CT selected)
+                btn.setAutoExclusive(False)
                 # mark current call type:
                 if possibleCts[cti]==self.ctLabel.text():
                     btn.setChecked(True)
                 else:
                     btn.setChecked(False)
+                btn.setAutoExclusive(True)
             self.ctLabel.show()
             # hide remaining CT buttons in case more were shown before
             for ctbtn in self.ctbtns[len(possibleCts):]:
