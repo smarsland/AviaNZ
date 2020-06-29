@@ -24,24 +24,25 @@
 #     from PyQt5.QtGui import QIcon, QPixmap
 
 import tensorflow as tf
-from sklearn.metrics import confusion_matrix
-
-from numpy import expand_dims
-from keras_preprocessing.image import ImageDataGenerator
+from skimage.transform import resize
 
 import json, os
 import numpy as np
 import math
 import gc
 from time import gmtime, strftime
-import pyqtgraph as pg
 
-import SupportClasses
 import SignalProc
 import WaveletSegment
 import Segment
 import  WaveletFunctions
 import librosa
+
+# from sklearn.metrics import confusion_matrix
+# from numpy import expand_dims
+# from keras_preprocessing.image import ImageDataGenerator
+# import pyqtgraph as pg
+# import SupportClasses
 
 class CNN:
     """ This class implements CNN training and data augmentation in AviaNZ.
@@ -169,7 +170,13 @@ class CNN:
             new_images[i][:] = self.pitchShift(audios[np.random.randint(0, np.shape(audios)[0])])
         return new_images
 
-    # Load train data
+    def loadCTImg(self, dirName):
+
+        filenames, labels = self.getImglist(dirName)
+
+        return np.array([resize(np.load(file_name), (self.imageheight, self.imagewidth, 1)) for file_name in
+                         filenames])
+
     def loadImageData(self, file, noisepool=False):
         '''
         :param file: JSON file with extracted features and labels
@@ -188,23 +195,29 @@ class CNN:
 
         badind = []
         if noisepool:
-            for i in range(0, numarrays):
-                key = "f%d" % i
+            i = 0
+            for key in dataz.files:
                 if np.shape(dataz[key]) == (self.imageheight, self.imagewidth):
                     features[i][:] = dataz[key][:]
                 else:
                     badind.append(i)
+                i += 1
             features = np.delete(features, badind, 0)
             return features
         else:
             targets = np.zeros((numarrays, 1))
-            for i in range(0, numarrays):
-                key = "f%d" % i
-                if np.shape(dataz[key]) == (self.imageheight, self.imagewidth):
-                    features[i][:] = dataz[key][:]
-                    targets[i][0] = labels[key]
-                else:
-                    badind.append(i)
+            i = 0
+            for key in dataz.files:
+                try:
+                    if np.shape(dataz[key]) == (self.imageheight, self.imagewidth):
+                        features[i][:] = dataz[key][:]
+                        targets[i][0] = labels[key]
+                    else:
+                        badind.append(i)
+                    i += 1
+                except Exception as e:
+                    print("Error: failed to load image because:", e)
+
             features = np.delete(features, badind, 0)
             targets = np.delete(targets, badind, 0)
             return features, targets
@@ -252,16 +265,18 @@ class CNN:
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
                 if file.endswith('.npz'):
+                    print('reading ', file)
                     sg1, target1 = self.loadImageData(os.path.join(dirName, file))
                     if not pos:
                         sg = sg1
                         target = target1
-                        pos += 1
+                        pos += np.shape(target1)[0]
                     else:
                         sg = np.vstack((sg, sg1))
                         target = np.vstack((target, target1))
+                        pos += np.shape(target1)[0]
 
-        # separate into classes
+        # Separate into classes
         ns = [np.shape(np.where(target == i)[0])[0] for i in range(len(self.calltypes) + 1)]
         sgCT = [np.empty((n, self.imageheight, self.imagewidth), dtype=float) for n in ns]
         idxs = [np.random.permutation(np.where(target == i)[0]).tolist() for i in range(len(self.calltypes) + 1)]
@@ -271,6 +286,24 @@ class CNN:
                 sgCT[ct][i][:] = sg[j][:]
                 i += 1
         return sgCT, ns
+
+    def getImglist(self, dirName):
+        ''' Returns the image filenames and labels in dirName:
+        '''
+        filenames = []
+        labels = []
+
+        for root, dirs, files in os.walk(dirName):
+            for file in files:
+                if file.endswith('.npy'):
+                    filenames.append(os.path.join(root, file))
+                    lbl = file.split('_')[0]
+                    labels.append(int(lbl))
+
+        # One hot vector representation of the labels
+        labels = tf.keras.utils.to_categorical(np.array(labels), len(self.calltypes) + 1)
+
+        return filenames, labels
 
     def createArchitecture(self):
         '''
@@ -301,7 +334,7 @@ class CNN:
         self.model.add(tf.keras.layers.Dense(len(self.calltypes)+1, activation='softmax'))
         self.model.summary()
 
-    def train(self, modelsavepath):
+    def train2(self, modelsavepath):
         ''' Train the model'''
 
         self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -320,6 +353,34 @@ class CNN:
                                       validation_data=(self.val_images, self.val_labels),
                                       callbacks=[checkpoint, early],
                                       shuffle=True)
+        # Save the model
+        # Serialize model to JSON
+        model_json = self.model.to_json()
+        with open(modelsavepath + "/model.json", "w") as json_file:
+            json_file.write(model_json)
+        # # just serialize final weights to H5, not necessary
+        # self.model.save_weights(modelsavepath + "/weights.h5")
+        print("Saved model to ", modelsavepath)
+
+    def train(self, modelsavepath, training_batch_generator, validation_batch_generator, batch_size):
+        ''' Train the model'''
+
+        self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+        if not os.path.exists(modelsavepath):
+            os.makedirs(modelsavepath)
+        checkpoint = tf.keras.callbacks.ModelCheckpoint(
+            modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5",
+            monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
+            save_freq='epoch')
+        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=5, verbose=1, mode='auto')
+
+        self.history = self.model.fit(training_batch_generator,
+                                      epochs=50,
+                                      verbose=1,
+                                      validation_data=validation_batch_generator,
+                                      callbacks=[checkpoint, early])
+
         # Save the model
         # Serialize model to JSON
         model_json = self.model.to_json()
@@ -445,16 +506,16 @@ class GenerateData:
         else:
             return False
 
-    def generateFeatures(self, dirName, dataset, hop):
+    def generateFeatures(self, dirName, dataset, hop, trainmode):
         '''
         Read the segment library and generate features
         :param dataset: segments in the form of [[file, [segment], label], ..]
         :param hop:
         :return: save the preferred features into JSON files + save images. Currently the spectrogram images.
         '''
-        # featuress = []
-        out_npys = {}
-        out_labels = {}
+        if not trainmode:
+            out_npys = {}
+            out_labels = {}
         count = 0
         dhop = hop
         specFrameSize = len(range(0, int(self.length * self.fs - self.windowwidth), self.inc))
@@ -481,18 +542,14 @@ class GenerateData:
             print('* hop:', hop, 'n:', n, 'syl:', record[2], 'label:', record[-1])
             try:
                 audiodata = self.loadFile(filename=record[0], duration=duration, offset=record[1][0], fs=self.fs, denoise=False)
-            except:
-                print('failed to load')
+            except Exception as e:
+                print("Warning: failed to load audio because:", e)
                 continue
             sp = SignalProc.SignalProc(self.windowwidth, self.inc)
             sp.data = audiodata
             sp.sampleRate = self.fs
             sgRaw = sp.spectrogram(self.windowwidth, self.inc)
-            # spectrograms of pre-cut segs are tiny bit shorter
-            # because spectrogram does not use the last bin:
-            # it uses len(data)-window bins
-            # so when extracting pieces of a premade spec, we need to adjust:
-            # specFrameSize = len(range(0, int(self.length * self.fs - sp.window_width), sp.incr))
+
             for i in range(int(n)):
                 print('**', record[0], self.length, record[1][0]+hop*i, self.fs, '************************************')
                 # start = int(hop * i * fs)
@@ -518,53 +575,38 @@ class GenerateData:
                 sgRaw_i = np.rot90(sgRaw_i / maxg)
                 print(np.shape(sgRaw_i))
 
-                # Saving a JSON of [spectrogram, label]
-                # featuress.append([sgRaw_i.tolist(), record[-1]])
+                # Save test data: numpy binary + JSON label
+                if not trainmode:
+                    key = "f%d" % count
+                    out_labels[key] = record[-1]
+                    out_npys[key] = sgRaw_i
 
-                # Alternative saving format: numpy binary + JSON label
-                key = "f%d" % count
-                out_labels[key] = record[-1]
-                out_npys[key] = sgRaw_i
-
-                # Save as image
-                # sgRaw_i = np.flip(sgRaw_i, 1)  # along y-axis
-                # # print(np.shape(sgRaw_i))
-                # maxsg = np.min(sgRaw_i)
-                # sg = np.abs(np.where(sgRaw_i == 0, 0.0, 10.0 * np.log10(sgRaw_i / maxsg)))
-                # img_sg = pg.ImageItem(sg)
-                # img_sg.save(os.path.join(dirName, 'img_sg', str(record[-1]) + '_' + "%05d" % count + '_' + record[0].split('\\')[-1][:-4] + '.png'))
+                # Save train data: individual images as npy
+                if trainmode:
+                    np.save(os.path.join(dirName, str(record[-1]),
+                                         str(record[-1]) + '_' + "%06d" % count + '_' + record[0].split('\\')[-1][:-4] + '.npy'), sgRaw_i)
                 count += 1
-            if len(out_labels) >= 1000:
-                outprefix = os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime()))
-                # saving everything as JSON
-                # with open(outprefix + '.json', 'w') as outfile:
-                #     json.dump(featuress, outfile)
-                # saving as NPY array + labels JSON
-                with open(outprefix + '_labels.json', 'w') as outfile:
-                    json.dump(out_labels, outfile)
-                np.savez(outprefix + ".npz", **out_npys)
+            if not trainmode:
+                if len(out_labels) >= 2000:
+                    outprefix = os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime()))
+                    # saving as NPY array + labels JSON
+                    with open(outprefix + '_labels.json', 'w') as outfile:
+                        json.dump(out_labels, outfile)
+                    np.savez(outprefix + ".npz", **out_npys)
 
-                # del featuress
-                out_npys = {}
-                out_labels = {}
-                gc.collect()
-                # featuress = []
+                    # del featuress
+                    out_npys = {}
+                    out_labels = {}
+                    gc.collect()
 
-        outprefix = os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime()))
-        # saving everything as JSON
-        # with open(outprefix + '.json', 'w') as outfile:
-        #     json.dump(featuress, outfile)
+        if not trainmode:
+            outprefix = os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime()))
+            # saving as NPY array + labels JSON
+            with open(outprefix + '_labels.json', 'w') as outfile:
+                json.dump(out_labels, outfile)
+            np.savez(outprefix + ".npz", **out_npys)
 
-        # saving as NPY array + labels JSON
-        with open(outprefix + '_labels.json', 'w') as outfile:
-            json.dump(out_labels, outfile)
-        np.savez(outprefix + ".npz", **out_npys)
-
-        # with open(os.path.join(dirName, 'melsgdata.json'), 'w') as outfile:
-        #     json.dump(featuresmel, outfile)
-        # with open(os.path.join(dirName, 'audiodata.json'), 'w') as outfile:
-        #     json.dump(featuresa, outfile)
-        print('completed feature extraction.\n ', specFrameSize)
+        print('Completed feature extraction')
         return specFrameSize, N
 
     def loadFile(self, filename, duration=0.0, offset=0, fs=0, denoise=False, f1=0, f2=0):
@@ -590,3 +632,25 @@ class GenerateData:
             audiodata = sp.bandpassFilter(audiodata, sampleRate, f1, f2)
 
         return audiodata
+
+
+class CustomGenerator(tf.keras.utils.Sequence):
+
+    def __init__(self, image_filenames, labels, batch_size, traindir, imghight, imgwidth, channels):
+        self.image_filenames = image_filenames
+        self.labels = labels
+        self.batch_size = batch_size
+        self.train_dir = traindir
+        self.imgheight = imghight
+        self.imgwidth = imgwidth
+        self.channels = channels
+
+    def __len__(self):
+        return (np.ceil(len(self.image_filenames) / float(self.batch_size))).astype(np.int)
+
+    def __getitem__(self, idx):
+        batch_x = self.image_filenames[idx * self.batch_size: (idx + 1) * self.batch_size]
+        batch_y = self.labels[idx * self.batch_size: (idx + 1) * self.batch_size]
+
+        # return np.array([resize(imread(os.path.join(self.train_dir , str(file_name))), (self.imgheight, self.imgwidth, self.channels)) for file_name in batch_x]) / 255.0, np.array(batch_y)
+        return np.array([resize(np.load(file_name), (self.imgheight, self.imgwidth, self.channels)) for file_name in batch_x]), np.array(batch_y)

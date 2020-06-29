@@ -50,6 +50,8 @@ import tensorflow as tf
 from keras_preprocessing.image import ImageDataGenerator
 from tensorflow.keras.models import model_from_json
 from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
 from numpy import expand_dims
 
 import numpy as np
@@ -2648,7 +2650,7 @@ class BuildCNNWizard(QWizard):
             # Call type segments
             print('----CT data test:')
             for i in range(len(self.calltypes)):
-                ctdata = self.DataGen.findCTsegments(self.field("trainDir2"), i)
+                ctdata = self.DataGen.findCTsegments(self.field("testDir"), i)
                 print(self.calltypes[i])
                 for x in ctdata:
                     data.append(x)
@@ -3091,13 +3093,15 @@ class BuildCNNWizard(QWizard):
         def genImgDataset(self, segments, trainmode=False):
             if trainmode:
                 os.makedirs(os.path.join(self.field("imgDir"), 'Train'))
+                for ct in range(len(self.calltypes) + 1):
+                    os.makedirs(os.path.join(self.field("imgDir"), 'Train', str(ct)))
                 self.wizard().parameterPage.imgsize[1], N = self.DataGen.generateFeatures(dirName=os.path.join(self.field("imgDir"), 'Train'),
-                                                                                      dataset=segments, hop=self.field("imgsec")/500)
+                                                                                      dataset=segments, hop=self.field("imgsec")/500, trainmode=True)
             else:
                 os.makedirs(os.path.join(self.field("imgDir"), 'Test'))
                 self.wizard().parameterPage.imgsize[1], N = self.DataGen.generateFeatures(
                     dirName=os.path.join(self.field("imgDir"), 'Test'),
-                    dataset=segments, hop=self.field("imgsec") / 500)
+                    dataset=segments, hop=self.field("imgsec") / 500, trainmode=False)
             return N
 
         def cleanSpecies(self, species):
@@ -3123,6 +3127,9 @@ class BuildCNNWizard(QWizard):
             # self.warnsegtest.setTest('')
             self.modelDir.setText('')
             # self.modelDirwarn.setText('')
+            # remove temp dirs
+            self.wizard().parameterPage.tmpdir1.cleanup()
+            self.wizard().gendataPage.tmpdir2.cleanup()
 
         def isComplete(self):
             if self.minimg < self.min_img_thr or self.modelDir.text() == '':  # TODO
@@ -3169,79 +3176,57 @@ class BuildCNNWizard(QWizard):
                 cnn = CNN.CNN(self.species, self.calltypes, self.fs, self.field("imgsec")/100, self.wizard().parameterPage.windowidth,
                                         self.wizard().parameterPage.incwidth, self.wizard().parameterPage.imgsize[0],
                                         self.wizard().parameterPage.imgsize[1])
-                # TODO: use np.memmap() to deal with large data
-                sg, ns = cnn.loadAllImageData(os.path.join(self.field("imgDir"), 'Train'))
-                print(ns)
+                batchsize = 32
 
-                # Data augmentation TODO: add augmenting with real noise?
+                # Data augmentation
+                filenames, labels = cnn.getImglist(os.path.join(self.field("imgDir"), 'Train'))
+                ns = [np.shape(np.where(labels == i)[0])[0] for i in range(len(self.calltypes) + 1)]
                 # create image data augmentation generator in-build
                 datagen = ImageDataGenerator(width_shift_range=0.3, fill_mode='nearest')
-                batchsize = 32
-                t = 1000        # TODO
-
-                # for each call type
+                t = 1000
+                # Data augmentation for each call type
                 for ct in range(len(self.calltypes) + 1):
-                    if t - np.shape(sg[ct])[0] > batchsize:
-                        samples = expand_dims(sg[ct], np.shape(sg[ct])[0])
+                    if t - ns[ct] > batchsize:
+                        # load this ct images
+                        samples = cnn.loadCTImg(os.path.join(self.field("imgDir"), 'Train', str(ct)))
                         # prepare iterator
                         it = datagen.flow(samples, batch_size=batchsize)
                         # generate samples
                         batch = it.next()
-                        for i in range(int(np.round((t - np.shape(sg[ct])[0]) / batchsize))):
+                        for j in range(int((t - ns[ct])/batchsize)):
                             newbatch = it.next()
                             batch = np.vstack((batch, newbatch))
-                        sg[ct] = np.vstack((sg[ct].reshape(sg[ct].shape[0], cnn.imageheight, cnn.imagewidth, 1), batch))
-                    else:
-                        sg[ct] = sg[ct].reshape(sg[ct].shape[0], cnn.imageheight, cnn.imagewidth, 1)
+                        # Save augmented data
+                        k = 0
+                        for sgRaw in batch:
+                            np.save(os.path.join(self.field("imgDir"), 'Train', str(ct), str(ct) + '_aug' + "%06d" % k + '.npy'), sgRaw)
+                            k += 1
 
-                n = [np.shape(sg[i])[0] for i in range(len(self.calltypes) + 1)]
-                print('Number of images after augmenting: ', n)
-                target = [None for ct in range(len(self.calltypes) + 1)]
-                for ct in range(len(self.calltypes) + 1):
-                    target[ct] = np.ones((n[ct], 1)) * ct
-
-                # Merge
-                sga = sg[0]
-                for ct in range(1, len(self.calltypes) + 1):
-                    sga = np.vstack((sga, sg[ct]))
-                print('Merged sgs')
-
-                targeta = target[0]
-                for ct in range(1, len(self.calltypes) + 1):
-                    targeta = np.vstack((targeta, target[ct]))
-                print('Merged targets')
-
-                del target, sg
-                gc.collect()
-
-                idxs = np.random.permutation(sum(n))
-                cnn.train_images = sga[idxs[0:int(len(idxs) * 0.95)]]
-                cnn.val_images = sga[idxs[int(len(idxs) * 0.95):]]
-                del sga
-                gc.collect()
-                cnn.train_labels = targeta[idxs[0:int(len(idxs) * 0.95)]]
-                cnn.val_labels = targeta[idxs[int(len(idxs) * 0.95):]]
-                print('Selected train and validation data')
-
-                cnn.train_images = cnn.train_images.astype('float32')
-                cnn.val_images = cnn.val_images.astype('float32')
-
-                cnn.train_labels = tf.keras.utils.to_categorical(cnn.train_labels, len(self.calltypes) + 1)
-                cnn.val_labels = tf.keras.utils.to_categorical(cnn.val_labels, len(self.calltypes) + 1)
-                print('Data preparation complete')
-
+                # Train - use custom image generator
+                filenames, labels = cnn.getImglist(os.path.join(self.field("imgDir"), 'Train'))
+                filenames, labels = shuffle(filenames, labels)
+                X_train_filenames, X_val_filenames, y_train, y_val = train_test_split(filenames,
+                                                                                      labels, test_size=0.05,
+                                                                                      random_state=1)
+                training_batch_generator = CNN.CustomGenerator(X_train_filenames, y_train, batchsize,
+                                                                  self.field("imgDir"), cnn.imageheight,
+                                                                  cnn.imagewidth, 1)
+                validation_batch_generator = CNN.CustomGenerator(X_val_filenames, y_val, batchsize,
+                                                                    self.field("imgDir"), cnn.imageheight,
+                                                                    cnn.imagewidth, 1)
                 print('Creating architecture...')
                 cnn.createArchitecture()
                 # clean the model dir
                 # self.cleanmodeldir()
                 print('Training...')
-                cnn.train(modelsavepath=self.field("modelDir"))
+                cnn.train(modelsavepath=self.field("modelDir"),
+                           training_batch_generator=training_batch_generator,
+                           validation_batch_generator=validation_batch_generator, batch_size=batchsize)
                 print('Training complete!')
-                self.msg.setText('Almost there!')
 
                 self.bestThr = [0 for i in range(len(self.calltypes) + 1)]
 
-                # TEST/PLOT
+                # TEST/PLOT TODO: Plot ROC on train data and add another page to show test results, same as in WF traininig
                 # Load all test data
                 sgtest, nstest = cnn.loadAllImageData(os.path.join(self.field("imgDir"), 'Test'))
                 # for each call type
