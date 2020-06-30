@@ -759,10 +759,8 @@ class AviaNZ_batchProcess(QMainWindow):
                 thisPageSegs = self.seg.medianClip(thr=3.5)
                 # Post-process
                 # 1. Delete windy segments
-                # 2. Delete rainy segments
-                # 3. Check fundamental frq
-                # 4. Merge neighbours
-                # 5. Delete short segments
+                # 2. Merge neighbours
+                # 3. Delete short segments
                 print("Segments detected: ", len(thisPageSegs))
                 print("Post-processing...")
                 maxgap = int(self.maxgap.value())/1000
@@ -796,8 +794,8 @@ class AviaNZ_batchProcess(QMainWindow):
                     thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
                     # Post-process
                     # 1. Delete windy segments
-                    # 2. Delete rainy segments
-                    # 3. Check fundamental frq
+                    # 2. CNN
+                    # 3. Fundamental frequency
                     # 4. Merge neighbours
                     # 5. Delete short segments
                     print("Segments detected (all subfilters): ", thisPageSegs)
