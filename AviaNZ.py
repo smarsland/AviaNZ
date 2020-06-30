@@ -23,6 +23,7 @@
 import sys, os, json, platform, re, shutil
 from jsonschema import validate
 from shutil import copyfile
+from time import gmtime, strftime
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
 from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout
@@ -4473,6 +4474,9 @@ class AviaNZ(QMainWindow):
         """
         self.saveSegments()
         self.buildCNNWizard = DialogsTraining.BuildCNNWizard(self.filtersDir, self.config)
+        self.buildCNNWizard.button(3).clicked.connect(self.saveNotestRecogniserCNN)
+        self.buildCNNWizard.saveTestBtn.clicked.connect(self.saveTestRecogniserCNN)
+        self.buildCNNWizard.activateWindow()
         self.buildCNNWizard.exec_()
 
     def testRecogniser(self, filter=None):
@@ -4511,6 +4515,108 @@ class AviaNZ(QMainWindow):
         except Exception as e:
             print("ERROR: could not save recogniser because:", e)
             self.buildRecAdvWizard.done(0)
+
+    def saveNotestRecogniserCNN(self):
+        # actually write out the filter and CNN model
+        modelsrc = os.path.join(self.buildCNNWizard.field("modelDir"), 'model.json')
+        CNN_name = self.buildCNNWizard.savePage.species + strftime("_%H-%M-%S", gmtime())
+        self.buildCNNWizard.savePage.currfilt["CNN"]["CNN_name"] = CNN_name
+        modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
+        weightsrc = self.buildCNNWizard.trainPage.bestweight
+        weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
+
+        if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
+            try:
+                filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
+                print("Saving a new recogniser", self.filename)
+                f = open(filename, 'w')
+                f.write(json.dumps(self.buildCNNWizard.savePage.currfilt))
+                f.close()
+                # Actually copy the model
+                copyfile(modelsrc, modelfile)
+                copyfile(weightsrc, weightfile)
+                # And remove temp dirs
+                self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
+                self.buildCNNWizard.gendataPage.tmpdir2.cleanup()
+                # prompt the user
+                msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
+                msg.exec_()
+            except Exception as e:
+                print("ERROR: could not save recogniser because:", e)
+        elif self.buildCNNWizard.savePage.saveoption != 'New':
+            try:
+                filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.field("filter"))
+                print("Updating the existing recogniser ", self.filename)
+                f = open(filename, 'w')
+                f.write(json.dumps(self.buildCNNWizard.savePage.currfilt))
+                f.close()
+                # Actually copy the model
+                copyfile(modelsrc, modelfile)
+                copyfile(weightsrc, weightfile)
+                # And remove temp dirs
+                self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
+                self.buildCNNWizard.gendataPage.tmpdir2.cleanup()
+                # prompt the user
+                # msg = SupportClasses.MessagePopup("d", "Training complete", "Recogniser is ready to use")
+                # msg.exec_()
+            except Exception as e:
+                print("ERROR: could not save recogniser because:", e)
+        else:
+            return
+
+    def saveTestRecogniserCNN(self):
+        # actually write out the filter and CNN model
+        modelsrc = os.path.join(self.buildCNNWizard.field("modelDir"), 'model.json')
+        CNN_name = self.buildCNNWizard.savePage.species + strftime("_%H-%M-%S", gmtime())
+        self.buildCNNWizard.savePage.currfilt["CNN"]["CNN_name"] = CNN_name
+        modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
+        weightsrc = self.buildCNNWizard.trainPage.bestweight
+        weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
+
+        if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
+            try:
+                filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
+                print("Saving a new recogniser", self.filename)
+                f = open(filename, 'w')
+                f.write(json.dumps(self.buildCNNWizard.savePage.currfilt))
+                f.close()
+                # Actually copy the model
+                copyfile(modelsrc, modelfile)
+                copyfile(weightsrc, weightfile)
+                # And remove temp dirs
+                self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
+                self.buildCNNWizard.gendataPage.tmpdir2.cleanup()
+                # prompt the user
+                msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
+                msg.exec_()
+                self.buildCNNWizard.done(1)
+                self.testRecogniser(filter=os.path.basename(filename))
+            except Exception as e:
+                print("ERROR: could not save recogniser because:", e)
+        elif self.buildCNNWizard.savePage.saveoption != 'New':
+            try:
+                filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.field("filter"))
+                print("Updating the existing recogniser ", self.filename)
+                f = open(filename, 'w')
+                f.write(json.dumps(self.buildCNNWizard.savePage.currfilt))
+                f.close()
+                # Actually copy the model
+                copyfile(modelsrc, modelfile)
+                copyfile(weightsrc, weightfile)
+                # And remove temp dirs
+                self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
+                self.buildCNNWizard.gendataPage.tmpdir2.cleanup()
+                # prompt the user
+                msg = SupportClasses.MessagePopup("d", "Training completed!",
+                                                  "Training completed!\nProceeding to testing.")
+                msg.exec_()
+                self.buildCNNWizard.done(1)
+                self.testRecogniser(filter=os.path.basename(filename))
+            except Exception as e:
+                print("ERROR: could not save recogniser because:", e)
+        else:
+            return
+
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.

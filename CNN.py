@@ -171,9 +171,14 @@ class CNN:
         return new_images
 
     def loadCTImg(self, dirName):
-
+        ''' Returns images of the call type subdirectory dirName'''
         filenames, labels = self.getImglist(dirName)
 
+        return np.array([resize(np.load(file_name), (self.imageheight, self.imagewidth, 1)) for file_name in
+                         filenames])
+
+    def loadImgBatch(self, filenames):
+        ''' Returns images given the list of file names'''
         return np.array([resize(np.load(file_name), (self.imageheight, self.imagewidth, 1)) for file_name in
                          filenames])
 
@@ -373,7 +378,7 @@ class CNN:
             modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5",
             monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
             save_freq='epoch')
-        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=5, verbose=1, mode='auto')
+        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=1, verbose=1, mode='auto')
 
         self.history = self.model.fit(training_batch_generator,
                                       epochs=50,
@@ -506,16 +511,13 @@ class GenerateData:
         else:
             return False
 
-    def generateFeatures(self, dirName, dataset, hop, trainmode):
+    def generateFeatures(self, dirName, dataset, hop):
         '''
         Read the segment library and generate features
         :param dataset: segments in the form of [[file, [segment], label], ..]
         :param hop:
         :return: save the preferred features into JSON files + save images. Currently the spectrogram images.
         '''
-        if not trainmode:
-            out_npys = {}
-            out_labels = {}
         count = 0
         dhop = hop
         specFrameSize = len(range(0, int(self.length * self.fs - self.windowwidth), self.inc))
@@ -575,36 +577,10 @@ class GenerateData:
                 sgRaw_i = np.rot90(sgRaw_i / maxg)
                 print(np.shape(sgRaw_i))
 
-                # Save test data: numpy binary + JSON label
-                if not trainmode:
-                    key = "f%d" % count
-                    out_labels[key] = record[-1]
-                    out_npys[key] = sgRaw_i
-
                 # Save train data: individual images as npy
-                if trainmode:
-                    np.save(os.path.join(dirName, str(record[-1]),
+                np.save(os.path.join(dirName, str(record[-1]),
                                          str(record[-1]) + '_' + "%06d" % count + '_' + record[0].split('\\')[-1][:-4] + '.npy'), sgRaw_i)
                 count += 1
-            if not trainmode:
-                if len(out_labels) >= 2000:
-                    outprefix = os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime()))
-                    # saving as NPY array + labels JSON
-                    with open(outprefix + '_labels.json', 'w') as outfile:
-                        json.dump(out_labels, outfile)
-                    np.savez(outprefix + ".npz", **out_npys)
-
-                    # del featuress
-                    out_npys = {}
-                    out_labels = {}
-                    gc.collect()
-
-        if not trainmode:
-            outprefix = os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime()))
-            # saving as NPY array + labels JSON
-            with open(outprefix + '_labels.json', 'w') as outfile:
-                json.dump(out_labels, outfile)
-            np.savez(outprefix + ".npz", **out_npys)
 
         print('Completed feature extraction')
         return specFrameSize, N
