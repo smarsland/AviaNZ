@@ -4537,7 +4537,7 @@ class AviaNZ(QMainWindow):
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
                 self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.gendataPage.tmpdir2.cleanup()
+                self.buildCNNWizard.trainPage.tmpdir2.cleanup()
                 # prompt the user
                 msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
                 msg.exec_()
@@ -4546,7 +4546,7 @@ class AviaNZ(QMainWindow):
         elif self.buildCNNWizard.savePage.saveoption != 'New':
             try:
                 filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.field("filter"))
-                print("Updating the existing recogniser ", self.filename)
+                print("Updating the existing recogniser ", filename)
                 f = open(filename, 'w')
                 f.write(json.dumps(self.buildCNNWizard.savePage.currfilt))
                 f.close()
@@ -4555,7 +4555,7 @@ class AviaNZ(QMainWindow):
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
                 self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.gendataPage.tmpdir2.cleanup()
+                self.buildCNNWizard.trainPage.tmpdir2.cleanup()
                 # prompt the user
                 # msg = SupportClasses.MessagePopup("d", "Training complete", "Recogniser is ready to use")
                 # msg.exec_()
@@ -4585,7 +4585,7 @@ class AviaNZ(QMainWindow):
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
                 self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.gendataPage.tmpdir2.cleanup()
+                self.buildCNNWizard.trainPage.tmpdir2.cleanup()
                 # prompt the user
                 msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
                 msg.exec_()
@@ -4605,7 +4605,7 @@ class AviaNZ(QMainWindow):
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
                 self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.gendataPage.tmpdir2.cleanup()
+                self.buildCNNWizard.trainPage.tmpdir2.cleanup()
                 # prompt the user
                 msg = SupportClasses.MessagePopup("d", "Training completed!",
                                                   "Training completed!\nProceeding to testing.")
@@ -4616,7 +4616,6 @@ class AviaNZ(QMainWindow):
                 print("ERROR: could not save recogniser because:", e)
         else:
             return
-
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
