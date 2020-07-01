@@ -2040,7 +2040,6 @@ class TestRecWizard(QWizard):
             outfile.write("Accuracy in 1 s resolution:\t\t%d %%\n" % (accuracy*100))
             outfile.write("-------------------------\n\n")
 
-
 class ROCCanvas(FigureCanvas):
     def __init__(self, parent=None, width=5, height=6, dpi=100):
         # reduce size on low-res monitors
@@ -2973,169 +2972,7 @@ class BuildCNNWizard(QWizard):
             else:
                 return False
 
-    # page 4 - CNN data gen
-    class WPageGeneratedata(QWizardPage):
-        def __init__(self, filterdir, config, parent=None):
-            super(BuildCNNWizard.WPageGeneratedata, self).__init__(parent)
-            self.setTitle('Train the CNN')
-            self.setSubTitle('When ready press \"Train CNN\" to start training. Please be aware that the process may take a long time.')
-
-            self.setMinimumSize(250, 150)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
-            self.adjustSize()
-
-            self.config = config
-            self.filtersDir = filterdir
-            self.minimg = 0
-            self.minimgtest = 0
-            self.tmpdir2 = None
-
-            self.min_img_thr = 20    # TODO: 100
-
-            self.msgspp = QLabel('')
-            self.msgspp.setStyleSheet("QLabel { color : #808080; }")
-            self.msgtrain1 = QLabel('')
-            self.msgtrain1.setStyleSheet("QLabel { color : #808080; }")
-            self.msgtrain2 = QLabel('')
-            self.msgtrain2.setStyleSheet("QLabel { color : #808080; }")
-            self.msgtest1 = QLabel('')
-            self.msgtest1.setStyleSheet("QLabel { color : #808080; }")
-
-            space = QLabel('').setFixedSize(40, 40)
-            self.msgseg = QLabel('')
-            self.msgseg.setStyleSheet("QLabel { color : #808080; }")
-            self.warnseg = QLabel('')
-            self.warnseg.setStyleSheet("QLabel { color : #800000; }")
-            self.msgimg = QLabel('')
-            self.msgimg.setStyleSheet("QLabel { color : #808080; }")
-            self.warnimg = QLabel('')
-            self.warnimg.setStyleSheet("QLabel { color : #800000; }")
-            # self.msgimgtest = QLabel('')
-            # self.msgimgtest.setStyleSheet("QLabel { color : #808080; }")
-            # self.warnimgtest = QLabel('')
-            # self.warnimgtest.setStyleSheet("QLabel { color : #800000; }")
-
-            self.modelDir = QLineEdit('')
-            self.modelDir.setReadOnly(True)
-            # btnBrowse = QPushButton('Browse')
-            # btnBrowse.clicked.connect(self.selectFolder)
-            # self.modelDirwarn = QLabel('')
-            # self.modelDirwarn.setStyleSheet("QLabel { color : #800000; }")
-
-            # page layout
-            layout = QGridLayout()
-            layout.addWidget(self.msgspp, 0, 0)
-            layout.addWidget(self.msgtrain2, 1, 0)
-            layout.addWidget(self.msgtrain1, 2, 0)
-            layout.addWidget(self.msgtest1, 3, 0)
-            layout.addWidget(space, 4, 0)
-            layout.addWidget(QLabel('<b>Training images generated</b>'), 5, 0)
-            # layout.addWidget(space, 5, 1)
-            # layout.addWidget(QLabel('<b>Testing images generated</b>'), 5, 2)
-            layout.addWidget(self.msgimg, 6, 0)
-            # layout.addWidget(self.msgimgtest, 6, 2)
-            layout.addWidget(self.warnimg, 7, 0)
-            # layout.addWidget(self.warnimgtest, 7, 2)
-            # layout.addWidget(space, 8, 0)
-            # layout.addWidget(QLabel('<b>Select/make an empty folder to save the model</b>'), 4, 0)
-            # layout.addWidget(self.modelDir, 5, 0, 1, 3)
-            # layout.addWidget(btnBrowse, 5, 3)
-            # layout.addWidget(self.modelDirwarn, 6, 0)
-            self.setLayout(layout)
-            self.setButtonText(QWizard.NextButton, 'Train CNN >')
-
-        def initializePage(self):
-            # self.wizard().button(QWizard.NextButton).setDefault(False)
-            self.ConfigLoader = SupportClasses.ConfigLoader()
-            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir)
-            self.currfilt = self.FilterDicts[self.field("filter")[:-4]]
-            self.fs = self.currfilt["SampleRate"]
-            self.species = self.currfilt["species"]
-            self.calltypes = []
-            for fi in self.currfilt['Filters']:
-                self.calltypes.append(fi['calltype'])
-
-            self.msgspp.setText("<b>Species:</b> %s" % (self.species))
-            if self.field("trainDir1"):
-                self.msgtrain1.setText("<b>Train data (Manually annotated):</b> %s" % (self.field("trainDir1")))
-            if self.field("trainDir2"):
-                self.msgtrain2.setText(
-                    "<b>Train data (Auto processed and reviewed):</b> %s" % (self.field("trainDir2")))
-            if self.field("testDir"):
-                self.msgtest1.setText("<b>Test data (Auto processed and reviewed):</b> %s" % (self.field("testDir")))
-
-            with pg.BusyCursor():
-                # Find train segments belong to each class
-                self.DataGen = CNN.GenerateData(self.currfilt, self.field("imgsec")/100, self.wizard().parameterPage.windowidth,
-                                            self.wizard().parameterPage.incwidth, self.wizard().parameterPage.imgsize[0],
-                                            self.wizard().parameterPage.imgsize[1])
-                self.segments = self.wizard().confirminputPage.trainsegments
-                N = self.wizard().confirminputPage.trainN
-                # for i in range(len(self.calltypes)):
-                #     self.msgseg.setText("%s:\t%d\n\n" % (self.msgseg.text() + self.calltypes[i], N[i]))
-                # self.msgseg.setText("%s:\t%d\n\n" % (self.msgseg.text() + "Noise", N[-1]))
-
-                # Generate train image data now
-                print('Generating CNN images...')
-                Nimg = self.genImgDataset(self.segments)
-                for i in range(len(self.calltypes)):
-                    self.msgimg.setText("%s:\t%d\n\n" % (self.msgimg.text() + self.calltypes[i], Nimg[i]))
-                self.msgimg.setText("%s:\t%d\n\n" % (self.msgimg.text() + "Noise", Nimg[-1]))
-                # We need at least some number of images from each class
-                self.minimg = min(Nimg)
-                if self.minimg < self.min_img_thr:
-                    self.warnimg.setText('Warning: Need at least %d image examples from each class to train CNN\n\n' % self.min_img_thr)
-
-                # create temp dir to hold model
-                self.tmpdir2 = tempfile.TemporaryDirectory(prefix='CNN_')
-                self.modelDir.setText(self.tmpdir2.name)
-                print('Temporary model dir:', self.tmpdir2.name)
-
-            self.completeChanged.emit()
-
-        def genImgDataset(self, segments):
-            ''' Generate train images'''
-            for ct in range(len(self.calltypes) + 1):
-                os.makedirs(os.path.join(self.field("imgDir"), str(ct)))
-            self.wizard().parameterPage.imgsize[1], N = self.DataGen.generateFeatures(dirName=self.field("imgDir"),
-                                                                                      dataset=segments,
-                                                                                      hop=self.field("imgsec")/500)
-            return N
-
-        def cleanSpecies(self, species):
-            """ Returns cleaned species name"""
-            return re.sub(r'[^A-Za-z0-9()-]', "_", species)
-
-        # def selectFolder(self):
-        #     dirName = QFileDialog.getExistingDirectory(self, 'Select folder to save CNN model')
-        #     self.modelDir.setText(dirName)
-        #     if any(os.scandir(dirName)):
-        #         print('Please select an empty folder')
-        #         self.modelDirwarn.setText('<b>Warning: selected folder is not empty, content will be deleted when you proceed</b>')
-        #     self.completeChanged.emit()
-
-        def cleanupPage(self):
-            self.msgimg.setText('')
-            # self.msgimgtest.setText('')
-            # self.msgseg.setText('')
-            # self.msgsegtest.setText('')
-            self.warnimg.setText('')
-            # self.warnimgtest.setText('')
-            # self.warnseg.setText('')
-            # self.warnsegtest.setTest('')
-            self.modelDir.setText('')
-            # self.modelDirwarn.setText('')
-            # remove temp dirs
-            self.wizard().parameterPage.tmpdir1.cleanup()
-            self.wizard().gendataPage.tmpdir2.cleanup()
-
-        def isComplete(self):
-            if self.minimg < self.min_img_thr or self.modelDir.text() == '':  # TODO
-                return False
-            else:
-                return True
-
-    # page 5 - CNN training and threshold setting
+    # page 4 - Generating CNN image data, training, and threshold setting
     class WPageTrain(QWizardPage):
         def __init__(self, filterdir, config, parent=None):
             super(BuildCNNWizard.WPageTrain, self).__init__(parent)
@@ -3151,6 +2988,10 @@ class BuildCNNWizard(QWizard):
             self.bestThr = []
             self.figCanvas = []
             self.bestweight = ''
+            self.tmpdir2 = None
+
+            self.modelDir = QLineEdit('')
+            self.modelDir.setReadOnly(True)
 
             self.space = QLabel('').setFixedSize(20, 50)
             self.msg = QLabel('')
@@ -3172,6 +3013,25 @@ class BuildCNNWizard(QWizard):
                 self.calltypes.append(fi['calltype'])
 
             with pg.BusyCursor():
+                # Find train segments belong to each class
+                self.DataGen = CNN.GenerateData(self.currfilt, self.field("imgsec")/100, self.wizard().parameterPage.windowidth,
+                                            self.wizard().parameterPage.incwidth, self.wizard().parameterPage.imgsize[0],
+                                            self.wizard().parameterPage.imgsize[1])
+                self.segments = self.wizard().confirminputPage.trainsegments
+
+                print('Generating CNN images...')
+                Nimg = self.genImgDataset(self.segments)
+                print('Generated images:\n')
+                for i in range(len(self.calltypes)):
+                    print("\t%s:\t%d\n\n" % (self.calltypes[i], Nimg[i]))
+                print("\t%s:\t%d\n\n" % ("Noise", Nimg[-1]))
+
+                # create temp dir to hold model
+                self.tmpdir2 = tempfile.TemporaryDirectory(prefix='CNN_')
+                self.modelDir.setText(self.tmpdir2.name)
+                print('Temporary model dir:', self.tmpdir2.name)
+
+                # CNN training
                 cnn = CNN.CNN(self.species, self.calltypes, self.fs, self.field("imgsec")/100, self.wizard().parameterPage.windowidth,
                                         self.wizard().parameterPage.incwidth, self.wizard().parameterPage.imgsize[0],
                                         self.wizard().parameterPage.imgsize[1])
@@ -3329,6 +3189,15 @@ class BuildCNNWizard(QWizard):
                         fig.savefig(os.path.join(self.field("modelDir"), str(ct) + '.jpg'))
                         plt.close()
 
+        def genImgDataset(self, segments):
+            ''' Generate train images'''
+            for ct in range(len(self.calltypes) + 1):
+                os.makedirs(os.path.join(self.field("imgDir"), str(ct)))
+            self.wizard().parameterPage.imgsize[1], N = self.DataGen.generateFeatures(dirName=self.field("imgDir"),
+                                                                                      dataset=segments,
+                                                                                      hop=self.field("imgsec")/500)
+            return N
+
         def testCT(self, ct, testimages, targets):
             '''
             :param ct: integer relevant to call type
@@ -3427,7 +3296,7 @@ class BuildCNNWizard(QWizard):
             else:
                 return True
 
-    # page 6 - Save Filter
+    # page 5 - Save Filter
     class WPageSave(QWizardPage):
         def __init__(self, filterdir, config, parent=None):
             super(BuildCNNWizard.WPageSave, self).__init__(parent)
@@ -3614,11 +3483,8 @@ class BuildCNNWizard(QWizard):
         self.parameterPage.registerField("imgDir*", self.parameterPage.imgDir)
         self.addPage(self.parameterPage)
 
-        self.gendataPage = BuildCNNWizard.WPageGeneratedata(filtdir, config)
-        self.gendataPage.registerField("modelDir*", self.gendataPage.modelDir)
-        self.addPage(self.gendataPage)
-
         self.trainPage = BuildCNNWizard.WPageTrain(filtdir, config)
+        self.trainPage.registerField("modelDir*", self.trainPage.modelDir)
         self.addPage(self.trainPage)
 
         # add the Save & Test button
