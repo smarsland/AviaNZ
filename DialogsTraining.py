@@ -2699,7 +2699,7 @@ class BuildCNNWizard(QWizard):
         def __init__(self, filterdir, config, parent=None):
             super(BuildCNNWizard.WPageParameters, self).__init__(parent)
             self.setTitle('Choose call length')
-            self.setSubTitle('When ready, press \"Generate CNN data\" to start preparing data for CNN. The process may take a long time.')
+            self.setSubTitle('When ready, press \"Generate CNN data and Train\" to start preparing data for CNN. The process may take a long time.')
 
             self.setMinimumSize(350, 200)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
@@ -2800,7 +2800,7 @@ class BuildCNNWizard(QWizard):
             # layout1. addLayout(layout3)
             layout1.addWidget(self.imgDirwarn)
             self.setLayout(layout1)
-            self.setButtonText(QWizard.NextButton, 'Generate CNN data >')
+            self.setButtonText(QWizard.NextButton, 'Generate CNN data and Train>')
 
         def initializePage(self):
             self.wizard().button(QWizard.NextButton).setDefault(False)
@@ -3453,6 +3453,7 @@ class BuildCNNWizard(QWizard):
                 item.setText(file)
             # filter file name
             self.enterFiltName = QLineEdit()
+            self.enterFiltName.textChanged.connect(self.textChanged)
 
             class FiltValidator(QValidator):
                 def validate(self, input, pos):
@@ -3480,10 +3481,10 @@ class BuildCNNWizard(QWizard):
             self.msgspp = QLabel('')
             self.msgspp.setStyleSheet("QLabel { color : #808080; }")
 
-            rbtn1 = QRadioButton('New recogniser (enter name bellow)')
-            rbtn1.setChecked(True)
-            rbtn1.val = "New"
-            rbtn1.toggled.connect(self.onClicked)
+            self.rbtn1 = QRadioButton('New recogniser (enter name bellow)')
+            self.rbtn1.setChecked(True)
+            self.rbtn1.val = "New"
+            self.rbtn1.toggled.connect(self.onClicked)
             self.rbtn2 = QRadioButton('Update existing')
             self.rbtn2.val = "Update"
             self.rbtn2.toggled.connect(self.onClicked)
@@ -3495,7 +3496,7 @@ class BuildCNNWizard(QWizard):
             layout.addWidget(self.msgspp, 1, 0)
             layout.addWidget(space, 2, 0)
             layout.addWidget(QLabel('<b>How do you want to save it?</b>'), 3, 0)
-            layout.addWidget(rbtn1, 4, 1)
+            layout.addWidget(self.rbtn1, 4, 1)
             layout.addWidget(self.rbtn2, 5, 1)
             layout.addWidget(space, 6, 0)
             layout.addWidget(QLabel("<i>Currently available recognisers</i>"), 7, 0)
@@ -3546,26 +3547,40 @@ class BuildCNNWizard(QWizard):
 
             self.wizard().saveTestBtn.setVisible(True)
             self.wizard().saveTestBtn.setEnabled(False)
-            try:
-                self.completeChanged.connect(self.refreshCustomBtn)
-            except Exception:
-                pass
+            self.completeChanged.emit()
 
         def refreshCustomBtn(self):
             if self.isComplete():
                 self.wizard().saveTestBtn.setEnabled(True)
             else:
                 self.wizard().saveTestBtn.setEnabled(False)
+            self.completeChanged.emit()
 
         def onClicked(self):
             radioBtn = self.sender()
             if radioBtn.isChecked():
                 self.saveoption = radioBtn.val
             self.refreshCustomBtn()
+            self.completeChanged.emit()
+
+        def textChanged(self, text):
+            self.refreshCustomBtn()
+            self.completeChanged.emit()
 
         def cleanupPage(self):
             self.wizard().saveTestBtn.setEnabled(False)
             self.enterFiltName.setText('')
+            self.rbtn1.setChecked(True)
+            self.saveoption = "New"
+            self.wizard().saveTestBtn.setVisible(False)
+
+        def isComplete(self):
+            if self.saveoption == 'New' and self.enterFiltName.text() != '' and self.enterFiltName.text() != '.txt':
+                return True
+            elif self.saveoption == "Update":
+                return True
+            else:
+                return False
 
 
     # Main init of the CNN training wizard
@@ -3616,5 +3631,4 @@ class BuildCNNWizard(QWizard):
         self.saveTestBtn.setVisible(False)
 
         self.savePage = BuildCNNWizard.WPageSave(filtdir, config)
-        self.savePage.registerField("filtfile*", self.savePage.enterFiltName)
         self.addPage(self.savePage)
