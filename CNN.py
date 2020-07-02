@@ -378,7 +378,7 @@ class CNN:
             modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5",
             monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
             save_freq='epoch')
-        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=1, verbose=1, mode='auto')
+        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=3, verbose=1, mode='auto')
 
         self.history = self.model.fit(training_batch_generator,
                                       epochs=50,
@@ -579,10 +579,11 @@ class GenerateData:
 
                 # Save train data: individual images as npy
                 np.save(os.path.join(dirName, str(record[-1]),
-                                         str(record[-1]) + '_' + "%06d" % count + '_' + record[0].split('\\')[-1][:-4] + '.npy'), sgRaw_i)
+                        str(record[-1]) + '_' + "%06d" % count + '_' + record[0].split(os.sep)[-1][:-4] + '.npy'),
+                        sgRaw_i)
                 count += 1
 
-        print('Completed feature extraction')
+        print('\n\nCompleted feature extraction')
         return specFrameSize, N
 
     def loadFile(self, filename, duration=0.0, offset=0, fs=0, denoise=False, f1=0, f2=0):
