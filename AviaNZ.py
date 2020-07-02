@@ -4518,11 +4518,11 @@ class AviaNZ(QMainWindow):
 
     def saveNotestRecogniserCNN(self):
         # actually write out the filter and CNN model
-        modelsrc = os.path.join(self.buildCNNWizard.field("modelDir"), 'model.json')
+        modelsrc = os.path.join(self.buildCNNWizard.parameterPage.tmpdir2.name, 'model.json')
         CNN_name = self.buildCNNWizard.savePage.species + strftime("_%H-%M-%S", gmtime())
         self.buildCNNWizard.savePage.currfilt["CNN"]["CNN_name"] = CNN_name
         modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
-        weightsrc = self.buildCNNWizard.trainPage.bestweight
+        weightsrc = self.buildCNNWizard.parameterPage.bestweight
         weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
 
         if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
@@ -4537,7 +4537,7 @@ class AviaNZ(QMainWindow):
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
                 self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.trainPage.tmpdir2.cleanup()
+                self.buildCNNWizard.parameterPage.tmpdir2.cleanup()
                 # prompt the user
                 msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
                 msg.exec_()
@@ -4555,7 +4555,7 @@ class AviaNZ(QMainWindow):
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
                 self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.trainPage.tmpdir2.cleanup()
+                self.buildCNNWizard.parameterPage.tmpdir2.cleanup()
                 # prompt the user
                 # msg = SupportClasses.MessagePopup("d", "Training complete", "Recogniser is ready to use")
                 # msg.exec_()
@@ -4566,11 +4566,11 @@ class AviaNZ(QMainWindow):
 
     def saveTestRecogniserCNN(self):
         # actually write out the filter and CNN model
-        modelsrc = os.path.join(self.buildCNNWizard.field("modelDir"), 'model.json')
+        modelsrc = os.path.join(self.buildCNNWizard.parameterPage.tmpdir2.name, 'model.json')
         CNN_name = self.buildCNNWizard.savePage.species + strftime("_%H-%M-%S", gmtime())
         self.buildCNNWizard.savePage.currfilt["CNN"]["CNN_name"] = CNN_name
         modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
-        weightsrc = self.buildCNNWizard.trainPage.bestweight
+        weightsrc = self.buildCNNWizard.parameterPage.bestweight
         weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
 
         if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
@@ -4585,7 +4585,7 @@ class AviaNZ(QMainWindow):
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
                 self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.trainPage.tmpdir2.cleanup()
+                self.buildCNNWizard.parameterPage.tmpdir2.cleanup()
                 # prompt the user
                 msg = SupportClasses.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
                 msg.exec_()
@@ -4605,7 +4605,7 @@ class AviaNZ(QMainWindow):
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
                 self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.trainPage.tmpdir2.cleanup()
+                self.buildCNNWizard.parameterPage.tmpdir2.cleanup()
                 # prompt the user
                 msg = SupportClasses.MessagePopup("d", "Training completed!",
                                                   "Training completed!\nProceeding to testing.")
