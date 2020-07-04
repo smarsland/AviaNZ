@@ -942,20 +942,6 @@ class BuildRecAdvWizard(QWizard):
             form1_step4.addRow('', self.fHightext)
             form1_step4.addRow('Upper frq. limit (Hz)', self.fHigh)
 
-            # thr, M parameters
-            thrLabel = QLabel('ROC curve points')
-            # MLabel = QLabel('ROC curve lines (M)')
-            self.cbxThr = QComboBox()
-            x = range(5, 51)
-            x = [str(i) for i in x]
-            self.cbxThr.addItems(x)
-            self.cbxThr.setCurrentIndex(5)
-            # self.cbxM = QComboBox()
-            # self.cbxM.addItems(['2', '3', '4', '5'])
-            form2_step4 = QFormLayout()
-            form2_step4.addRow(thrLabel, self.cbxThr)
-            # form2_step4.addRow(MLabel, self.cbxM)
-
             ### Step4 layout
             hboxTop = QHBoxLayout()
             hboxTop.addLayout(calldescr)
@@ -967,8 +953,6 @@ class BuildRecAdvWizard(QWizard):
             layout_step4.addLayout(hboxTop)
             layout_step4.addWidget(QLabel("<b>Call parameters</b>"))
             layout_step4.addLayout(form1_step4)
-            layout_step4.addWidget(QLabel("<b>Training parameters</b>"))
-            layout_step4.addLayout(form2_step4)
             self.setLayout(layout_step4)
 
             self.setButtonText(QWizard.NextButton, 'Train >')
@@ -1151,7 +1135,8 @@ class BuildRecAdvWizard(QWizard):
             avgslen = float(self.field("avgslen" + str(self.pageId)))
             fLow = int(self.field("fLow"+str(self.pageId)))
             fHigh = int(self.field("fHigh"+str(self.pageId)))
-            numthr = int(self.field("thr"+str(self.pageId)))
+            numthr = 50
+            # numthr = int(self.field("thr"+str(self.pageId)))
             # numM = int(self.field("M"+str(self.pageId)))
             # note: for each page we reset the filter to contain 1 calltype
             self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh]}]
@@ -1589,7 +1574,7 @@ class BuildRecAdvWizard(QWizard):
             page4.registerField("avgslen" + str(pageid), page4.avgslen)
             page4.registerField("fLow"+str(pageid), page4.fLow)
             page4.registerField("fHigh"+str(pageid), page4.fHigh)
-            page4.registerField("thr"+str(pageid), page4.cbxThr, "currentText", page4.cbxThr.currentTextChanged)
+            # page4.registerField("thr"+str(pageid), page4.cbxThr, "currentText", page4.cbxThr.currentTextChanged)
             # page4.registerField("M"+str(pageid), page4.cbxM, "currentText", page4.cbxM.currentTextChanged)
 
             # page 5: get training results
@@ -2044,12 +2029,6 @@ class ROCCanvas(FigureCanvas):
         width = height*aspectratio
         # print("resetting to", height, width)
         plt.style.use('ggplot')
-        self.MList = []
-        self.thrList = []
-        self.TPR = []
-        self.FPR = []
-        self.fpr_cl = None
-        self.tpr_cl = None
         self.parent = parent
 
         self.lines = None
@@ -2062,13 +2041,13 @@ class ROCCanvas(FigureCanvas):
         self.setParent(parent)
 
     def plotme(self):
-        valid_markers = ([item[0] for item in mks.MarkerStyle.markers.items() if
-                          item[1] is not 'nothing' and not item[1].startswith('tick') and not item[1].startswith('caret')])
-        markers = np.random.choice(valid_markers, 5, replace=False)
+        # valid_markers = ([item[0] for item in mks.MarkerStyle.markers.items() if
+        #                   item[1] is not 'nothing' and not item[1].startswith('tick') and not item[1].startswith('caret')])
+        # markers = np.random.choice(valid_markers, 5, replace=False)
 
         self.ax = self.figure.subplots()
         for i in range(5):
-            self.lines, = self.ax.plot([], [], marker=markers[i])
+            self.lines, = self.ax.plot([], [], marker='o')
             self.plotLines.append(self.lines)
         self.ax.set_title('ROC curve')
         self.ax.set_xlabel('False Positive Rate (FPR)')
@@ -2080,62 +2059,15 @@ class ROCCanvas(FigureCanvas):
         self.ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
         # ax.legend()
 
-    def plotmeagain(self, TPR, FPR):
+    def plotmeagain(self, TPR, FPR, CNN=False):
         # Update data (with the new _and_ the old points)
-        for i in range(np.shape(TPR)[0]):
-            self.plotLines[i].set_xdata(FPR[i])
-            self.plotLines[i].set_ydata(TPR[i])
-
-        # Need both of these in order to rescale
-        self.ax.relim()
-        self.ax.autoscale_view()
-        # We need to draw *and* flush
-        self.figure.canvas.draw()
-        self.figure.canvas.flush_events()
-
-class ROCCanvasCNN(FigureCanvas):
-    def __init__(self, parent=None, width=5, height=6, dpi=100, ct=0, thr=[], TPR=[], FPR=[], Precision=[], Acc=[]):
-        # reduce size on low-res monitors
-        aspectratio = width/height
-        height = min(height, 0.6*(QApplication.primaryScreen().availableSize().height()-150)/dpi)
-        width = height*aspectratio
-        # print("resetting to", height, width)
-        plt.style.use('ggplot')
-        self.ct = ct
-        self.thrList = thr
-        self.TPR = TPR
-        self.FPR = FPR
-        self.Precision = Precision
-        self.Acc = Acc
-        self.fpr_cl = None
-        self.tpr_cl = None
-        self.parent = parent
-
-        self.lines = None
-        self.plotLines = []
-
-        self.marker = None
-
-        fig = Figure(figsize=(width, height), dpi=dpi)
-        fig.canvas.draw()
-        fig.set_tight_layout(True)
-
-        FigureCanvas.__init__(self, fig)
-        self.setParent(parent)
-
-    def plotme(self):
-        self.ax = self.figure.subplots()
-        self.lines, = self.ax.plot(self.FPR, self.TPR, marker=mks.CARETDOWNBASE)
-        self.plotLines.append(self.lines)
-
-        self.ax.set_title('ROC curve')
-        self.ax.set_xlabel('False Positive Rate (FPR)')
-        self.ax.set_ylabel('True Positive Rate (TPR)')
-        # fig.canvas.set_window_title('ROC Curve')
-        self.ax.set_ybound(0, 1)
-        self.ax.set_xbound(0, 1)
-        self.ax.yaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
-        self.ax.xaxis.set_major_formatter(mtick.PercentFormatter(1, 0))
+        if CNN:
+            self.lines, = self.ax.plot(FPR, TPR, marker='o')
+            self.plotLines.append(self.lines)
+        else:
+            for i in range(np.shape(TPR)[0]):
+                self.plotLines[i].set_xdata(FPR[i])
+                self.plotLines[i].set_ydata(TPR[i])
 
         # Need both of these in order to rescale
         self.ax.relim()
@@ -3192,7 +3124,7 @@ class BuildCNNWizard(QWizard):
             super(BuildCNNWizard.WPageROC, self).__init__(parent)
             self.setTitle('Training results')
             self.setSubTitle('Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.')
-            self.setMinimumSize(450, 400)
+            self.setMinimumSize(350, 200)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
@@ -3222,11 +3154,12 @@ class BuildCNNWizard(QWizard):
             self.Acc = self.wizard().parameterPage.Accs[self.ct]
 
             # This is the Canvas Widget that displays the plot
-            self.figCanvas = ROCCanvasCNN(self, ct=0, thr=self.thrs, TPR=self.TPR, FPR=self.FPR, Precision=self.Precision, Acc=self.Acc)
+            self.figCanvas = ROCCanvas(self)
             self.figCanvas.plotme()
 
-            marker = self.figCanvas.ax.plot([0, 1], [0, 1], marker='o', color='black', linestyle='dotted')[0]
-            self.figCanvas.marker = marker
+            self.marker = self.figCanvas.ax.plot([0, 1], [0, 1], marker='o', color='black', linestyle='dotted')[0]
+            # self.marker.set_visible(False)
+            self.figCanvas.plotmeagain(self.TPR, self.FPR, CNN=True)
 
             if self.ct == len(self.wizard().parameterPage.calltypes):
                 self.lblCalltype.setText('Noise (treat same as call types)')
@@ -3246,12 +3179,13 @@ class BuildCNNWizard(QWizard):
                 thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)[0]
                 tpr_near = self.TPR[thr_min_ind]
                 fpr_near = self.FPR[thr_min_ind]
-                event.canvas.marker.set_visible(False)
+                self.marker.set_visible(False)
                 self.figCanvas.draw()
-                event.canvas.marker.set_xdata([fpr_cl, fpr_near])
-                event.canvas.marker.set_ydata([tpr_cl, tpr_near])
-                event.canvas.marker.set_visible(True)
-                self.figCanvas.ax.draw_artist(event.canvas.marker)
+                self.marker.set_xdata([fpr_cl, fpr_near])
+                self.marker.set_ydata([tpr_cl, tpr_near])
+                self.marker.set_visible(True)
+                self.figCanvas.ax.draw_artist(self.marker)
+                self.figCanvas.update()
 
                 print("fpr_cl, tpr_cl: ", fpr_near, tpr_near)
 
@@ -3260,12 +3194,13 @@ class BuildCNNWizard(QWizard):
                     '\tTrue Positive Rate: %.2f\n\tFalse Positive Rate: %.2f\n\tPrecision: %.2f\n\tAccuracy: %.2f' % (
                         self.TPR[thr_min_ind], self.FPR[thr_min_ind], self.Precision[thr_min_ind], self.Acc[thr_min_ind]))
 
-                # This will save the best parameters to the global fields
+                # This will save the best thr
                 self.wizard().parameterPage.bestThr[self.ct] = self.thrs[thr_min_ind]
 
                 self.completeChanged.emit()
 
             self.figCanvas.figure.canvas.mpl_connect('button_press_event', onclick)
+
             self.layout.addWidget(self.figCanvas, 2, 0)
             self.layout.addWidget(self.lblUpdate, 2, 1)
 
