@@ -540,13 +540,13 @@ class GenerateData:
             else:
                 hop = self.length
                 n = math.ceil((record[1][1] - record[1][0]) / hop)
-            N[record[-1]] += n
             print('* hop:', hop, 'n:', n, 'syl:', record[2], 'label:', record[-1])
             try:
                 audiodata = self.loadFile(filename=record[0], duration=duration, offset=record[1][0], fs=self.fs, denoise=False)
             except Exception as e:
                 print("Warning: failed to load audio because:", e)
                 continue
+            N[record[-1]] += n
             sp = SignalProc.SignalProc(self.windowwidth, self.inc)
             sp.data = audiodata
             sp.sampleRate = self.fs
