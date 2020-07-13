@@ -2106,10 +2106,6 @@ class BuildCNNWizard(QWizard):
             self.trainDirName2.setReadOnly(True)
             self.btnBrowseTrain2 = QPushButton('Browse')
             self.btnBrowseTrain2.clicked.connect(self.browseTrainData2)
-            # self.testDirName = QLineEdit()
-            # self.testDirName.setReadOnly(True)
-            # self.btnBrowseTest = QPushButton('Browse')
-            # self.btnBrowseTest.clicked.connect(self.browseTestData)
 
             colourNone = QColor(config['ColourNone'][0], config['ColourNone'][1], config['ColourNone'][2], config['ColourNone'][3])
             colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
@@ -2161,11 +2157,6 @@ class BuildCNNWizard(QWizard):
             layout.addWidget(rbtn1, 9, 0)
             layout.addWidget(rbtn2, 10, 0)
             layout.addWidget(space, 3, 2)
-            # layout.addWidget(QLabel('<b>TESTING data</b>'), 3, 3)
-            # layout.addWidget(QLabel('<i>Manually annotated</i>'), 4, 3)
-            # layout.addWidget(self.btnBrowseTest, 5, 3)
-            # layout.addWidget(self.testDirName, 6, 3)
-            # layout.addWidget(self.listFilesTest, 7, 3)
             self.setLayout(layout)
 
         def initializePage(self):
@@ -2193,17 +2184,6 @@ class BuildCNNWizard(QWizard):
             # also min certainty
             self.cert1 = self.listFilesTrain1.minCertainty
             self.completeChanged.emit()
-
-        # def browseTestData(self):
-        #     dirName = QFileDialog.getExistingDirectory(self, 'Choose folder with test data')
-        #     self.testDirName.setText(dirName)
-        #
-        #     self.listFilesTest.fill(dirName, fileName=None, readFmt=False, addWavNum=True, recursive=True)
-        #     # while reading the file, we also collected a list of species present there
-        #     self.splist3 = list(self.listFilesTest.spList)
-        #     # also min certainty
-        #     self.cert3 = self.listFilesTest.minCertainty
-        #     self.completeChanged.emit()
 
         def onClicked(self):
             radioBtn = self.sender()
@@ -2235,7 +2215,6 @@ class BuildCNNWizard(QWizard):
             self.hasant2 = False
             self.hasant3 = False
             self.correction = False
-            # self.correction3 = False
             self.trainsegments = []
             self.trainN = []
             self.testsegments = []
@@ -2253,12 +2232,6 @@ class BuildCNNWizard(QWizard):
             self.msgadir.setStyleSheet("QLabel { color : #808080; }")
             self.warnnoannt2 = QLabel("")
             self.warnnoannt2.setStyleSheet("QLabel { color : #800000; }")
-            # self.msgtdir = QLabel("")
-            # self.msgtdir.setFixedWidth(600)
-            # self.msgtdir.setWordWrap(True)
-            # self.msgtdir.setStyleSheet("QLabel { color : #808080; }")
-            # self.warnnoannt3 = QLabel("")
-            # self.warnnoannt3.setStyleSheet("QLabel { color : #800000; }")
 
             self.msgrecfilter = QLabel("")
             self.msgrecfilter.setStyleSheet("QLabel { color : #808080; }")
@@ -2278,12 +2251,8 @@ class BuildCNNWizard(QWizard):
             self.msgseg.setFixedWidth(600)
             self.msgseg.setWordWrap(True)
             self.msgseg.setStyleSheet("QLabel { color : #808080; }")
-            # self.msgsegtest = QLabel("")
-            # self.msgsegtest.setStyleSheet("QLabel { color : #808080; }")
             lblmsgseg = QLabel("<b>Segments detected<b>")
             lblmsgseg.setStyleSheet("QLabel { color : #808080; }")
-            # lblmsgseg2 = QLabel("<b>Segments detected<b>")
-            # lblmsgseg2.setStyleSheet("QLabel { color : #808080; }")
             self.warnseg = QLabel("")
             self.warnseg.setStyleSheet("QLabel { color : #800000; }")
             space = QLabel()
@@ -2303,9 +2272,6 @@ class BuildCNNWizard(QWizard):
             layout.addWidget(self.msgseg, 7, 2)
             layout.addWidget(self.warnseg, 8, 2)
             layout.addWidget(space, 9, 0)
-            # layout.addWidget(QLabel("<b>Selected TESTING data</b>"), 10, 0)
-            # layout.addWidget(self.msgtdir, 10, 2)
-            # layout.addWidget(self.warnnoannt3, 11, 2)
             layout.addWidget(space, 12, 0)
             layout.addWidget(QLabel("<b>Selected Recogniser</b>"), 13, 0)
             layout.addWidget(self.msgrecfilter, 13, 2)
@@ -2314,12 +2280,6 @@ class BuildCNNWizard(QWizard):
             layout.addWidget(self.msgrecclens, 16, 2)
             layout.addWidget(self.msgrecfs, 17, 2)
             layout.addWidget(self.warnLabel, 18, 2)
-            # layout.addWidget(space, 0, 1)
-            # layout.addWidget(QLabel("<b>Selected following TESTING data</b>"), 0, 2)
-            # layout.addWidget(self.msgtdir, 1, 2)
-            # layout.addWidget(self.warnnoannt3, 2, 2)
-            # layout.addWidget(lblmsgseg2, 9, 2)
-            # layout.addWidget(self.msgsegtest, 10, 2)
             self.setLayout(layout)
 
         def initializePage(self):
@@ -2378,22 +2338,6 @@ class BuildCNNWizard(QWizard):
 
             self.warnnoannt2.setText(warn)
 
-            # warn = ""
-            # # Check the annotation certainty
-            # if self.field("testDir") and self.wizard().browsedataPage.cert3 < 100:
-            #     warn += "Warning: Detected uncertain segments\n"
-            #     self.certainty3 = False
-
-            # # Check if there are annotations from the target species at all
-            # if self.field("testDir"):
-            #     if self.species not in self.wizard().browsedataPage.splist3:
-            #         warn += "Warning: No annotations of " + self.species + " detected\n"
-            #         self.hasant3 = False
-            #     else:
-            #         self.hasant3 = True
-            #
-            # self.warnnoannt3.setText(warn)
-
             if self.field("trainDir1"):
                 self.msgmdir.setText("<b>Manually annotated:</b> %s" % (self.field("trainDir1")))
             if self.field("trainDir2"):
@@ -2411,12 +2355,6 @@ class BuildCNNWizard(QWizard):
             for i in range(len(self.calltypes)):
                 self.msgseg.setText("%s:\t%d\t" % (self.msgseg.text() + self.calltypes[i], self.trainN[i]))
             self.msgseg.setText("%s:\t%d" % (self.msgseg.text() + "Noise", self.trainN[-1]))
-
-            # # Find segments belong to each class - Test data
-            # self.testsegments, self.testN = self.genSegmentDatasetTest()
-            # for i in range(len(self.calltypes)):
-            #     self.msgsegtest.setText("<b>%s:</b>\t%d\n\n" % (self.msgsegtest.text() + self.calltypes[i], self.testN[i]))
-            # self.msgsegtest.setText("%s:\t%d\n\n" % (self.msgsegtest.text() + "Noise", self.testN[-1]))
 
             # We need at least some number of segments from each class to proceed
             if min(self.trainN) < 5:    # TODO
@@ -2519,79 +2457,6 @@ class BuildCNNWizard(QWizard):
 
             return data, N
 
-        # def genSegmentDatasetTest(self):
-        #     data = []
-        #     self.DataGen = CNN.GenerateData(self.currfilt, 0, 0, 0, 0, 0)
-        #     print('----Noise data test:')
-        #     Dir3 - manually annotated
-        #     # Get noise segments from .corrections
-        #     if self.field("testDir") and os.path.isdir(self.field("testDir")) :
-        #         for root, dirs, files in os.walk(str(self.field("testDir"))):
-        #             for file in files:
-        #                 if file.lower().endswith('.wav') and file + '.corrections' in files:
-        #                     # Read the .correction
-        #                     cfile = os.path.join(root, file + '.corrections')
-        #                     wavfile = os.path.join(root, file)
-        #                     try:
-        #                         f = open(cfile, 'r')
-        #                         annots = json.load(f)
-        #                         f.close()
-        #                     except Exception as e:
-        #                         print("ERROR: file %s failed to load with error:" % file)
-        #                         print(e)
-        #                         return
-        #                     for seg in annots:
-        #                         if isinstance(seg, dict):
-        #                             continue
-        #                         if len(seg)!=2:
-        #                             print("Warning: old format corrections detected")
-        #                             continue
-        #                         oldlabel = seg[0][4]
-        #                         newsp = [lab["species"] for lab in seg[1]]
-        #                         if len(oldlabel)!=1:
-        #                             # this was made manually
-        #                             print("Warning: ignoring labels with multiple species")
-        #                             continue
-        #                         if oldlabel[0]['species'] == self.species and self.species not in newsp:
-        #                             # data.append(seg[0][:2])
-        #                             data.append([wavfile, seg[0][:2], len(self.calltypes)])
-        #                             self.correction3 = True
-        #
-        #                 elif file.lower().endswith('.wav') and file + '.corrections_' + self.cleanSpecies(
-        #                         self.species) in files:
-        #                     # Read the .correction
-        #                     cfile = os.path.join(root, file + '.corrections_' + self.cleanSpecies(self.species))
-        #                     wavfile = os.path.join(root, file)
-        #                     try:
-        #                         f = open(cfile, 'r')
-        #                         annots = json.load(f)
-        #                         f.close()
-        #                     except Exception as e:
-        #                         print("ERROR: file %s failed to load with error:" % file)
-        #                         print(e)
-        #                         return
-        #                     for seg in annots:
-        #                         if isinstance(seg, dict):
-        #                             continue
-        #                         else:
-        #                             # store this as "noise" calltype
-        #                             data.append([wavfile, seg[:2], len(self.calltypes)])
-        #                             self.correction3 = True
-        #
-        #     # Call type segments
-        #     print('----CT data test:')
-        #     for i in range(len(self.calltypes)):
-        #         ctdata = self.DataGen.findCTsegments(self.field("testDir"), i)
-        #         print(self.calltypes[i])
-        #         for x in ctdata:
-        #             data.append(x)
-        #
-        #     # How many of each class
-        #     target = np.array([rec[-1] for rec in data])
-        #     N = [np.sum(target == i) for i in range(len(self.calltypes))]
-        #
-        #     return data, N
-
         def cleanupPage(self):
             self.msgmdir.setText('')
             self.msgadir.setText('')
@@ -2622,7 +2487,7 @@ class BuildCNNWizard(QWizard):
         def __init__(self, filterdir, config, parent=None):
             super(BuildCNNWizard.WPageParameters, self).__init__(parent)
             self.setTitle('Choose call length')
-            self.setSubTitle('When ready, press \"Generate CNN images and Train\" to start preparing data for CNN.\nThe process may take a long time.')
+            self.setSubTitle('When ready, press \"Generate CNN images and Train\" to start preparing data for CNN and training.\nThe process may take a long time.')
 
             self.setMinimumSize(350, 200)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
@@ -2638,6 +2503,7 @@ class BuildCNNWizard(QWizard):
             self.tmpdir2 = None
             self.calltypes = []
             self.species = None
+            # Make pages to plot ROC for each call type OR automatically select thresholds
             self.redopages = True
 
             # Parameter/s
@@ -2715,6 +2581,10 @@ class BuildCNNWizard(QWizard):
             # self.modelDir = QLineEdit('')
             # self.modelDir.setReadOnly(True)
 
+            self.cbAutoThr = QCheckBox("Tick if you want AviaNZ to decide threshold/s")
+            self.cbAutoThr.setStyleSheet("QCheckBox { font-weight: bold; }")
+            self.cbAutoThr.toggled.connect(self.onClicked)
+
             # btnBrowse = QPushButton('Browse')
             # btnBrowse.clicked.connect(self.selectFolder)
             # layout3 = QHBoxLayout()
@@ -2728,6 +2598,7 @@ class BuildCNNWizard(QWizard):
             # layout1.addWidget(space)
             # layout1. addLayout(layout3)
             layout1.addWidget(self.imgDirwarn)
+            layout1.addWidget(self.cbAutoThr)
             self.setLayout(layout1)
             self.setButtonText(QWizard.NextButton, 'Generate CNN images and Train>')
 
@@ -2768,6 +2639,15 @@ class BuildCNNWizard(QWizard):
 
             self.setWindowInc()
             self.showimg()
+            self.completeChanged.emit()
+
+        def onClicked(self):
+            cbutton = self.sender()
+            if cbutton.isChecked():
+                self.wizard().autoThr = True
+            else:
+                self.wizard().autoThr = False
+            self.redopages = True
             self.completeChanged.emit()
 
         def showimg(self, indices=[]):
@@ -2883,6 +2763,7 @@ class BuildCNNWizard(QWizard):
         #         self.imgDirwarn.setText('<b>Warning: selected folder is not empty, content will be deleted when you proceed</b>')
         #     self.completeChanged.emit()
 
+        # DO ACTUAL TRAINING
         def validatePage(self):
             with pg.BusyCursor():
                 # Create temp dir to hold img data and model
@@ -2946,7 +2827,7 @@ class BuildCNNWizard(QWizard):
                 filenamesall, labelsall = cnn.getImglist(self.tmpdir1.name)
                 filenamesall, labelsall = shuffle(filenamesall, labelsall)
                 X_train_filenames, X_val_filenames, y_train, y_val = train_test_split(filenamesall,
-                                                                                      labelsall, test_size=0.05,
+                                                                                      labelsall, test_size=0.10,
                                                                                       random_state=1)
                 training_batch_generator = CNN.CustomGenerator(X_train_filenames, y_train, batchsize,
                                                                self.tmpdir1.name, cnn.imageheight,
@@ -2963,7 +2844,8 @@ class BuildCNNWizard(QWizard):
                           validation_batch_generator=validation_batch_generator, batch_size=batchsize)
                 print('Training complete!')
 
-                self.bestThr = [0 for i in range(len(self.calltypes) + 1)]
+                self.bestThr = [[0, 0] for i in range(len(self.calltypes) + 1)]
+                self.bestThrInd = [0 for i in range(len(self.calltypes) + 1)]
 
                 # 3. Prepare ROC plots
                 print('Generating ROC statistics...')
@@ -3017,10 +2899,26 @@ class BuildCNNWizard(QWizard):
                     else:
                         plt.title('Class: ' + str(self.calltypes[ct]))
                     if self.field("trainDir1"):
-                        fig.savefig(os.path.join(self.field("trainDir1"), str(ct) + '.jpg'))
+                        fig.savefig(os.path.join(self.field("trainDir1"), str(ct) + '.png'))
                     else:
-                        fig.savefig(os.path.join(self.field("trainDir2"), str(ct) + '.jpg'))
+                        fig.savefig(os.path.join(self.field("trainDir2"), str(ct) + '.png'))
                     plt.close()
+
+                # 4. Auto select the upper threshold (fpr = 0)
+                for ct in range(len(self.calltypes) + 1):
+                    try:
+                        self.bestThr[ct][1] = self.Thrs[self.FPRs[ct].index(0.0)]
+                    except:
+                        self.bestThr[ct][1] = self.Thrs[len(self.FPRs) - 1]
+
+                # 5. Auto select lower threshold IF the user asked so
+                if self.wizard().autoThr:
+                    for ct in range(len(self.calltypes) + 1):
+                        # Get min distance to ROC from (0 FPR, 1 TPR)
+                        distarr = (np.float64(1) - self.TPRs[ct]) ** 2 + (np.float64(0) - self.FPRs[ct]) ** 2
+                        thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)[0]
+                        self.bestThr[ct][0] = self.Thrs[thr_min_ind]
+                        self.bestThrInd[ct] = thr_min_ind
                 return True
 
         def genImgDataset(self, segments):
@@ -3118,7 +3016,7 @@ class BuildCNNWizard(QWizard):
                 self.wizard().redoROCPages()
             return True
 
-    # page 5 - ROC curve
+    # page 4 - ROC curve
     class WPageROC(QWizardPage):
         def __init__(self, ct, parent=None):
             super(BuildCNNWizard.WPageROC, self).__init__(parent)
@@ -3196,6 +3094,7 @@ class BuildCNNWizard(QWizard):
 
                 # This will save the best thr
                 self.wizard().parameterPage.bestThr[self.ct] = self.thrs[thr_min_ind]
+                self.wizard().parameterPage.bestThrInd[self.ct] = thr_min_ind
 
                 self.completeChanged.emit()
 
@@ -3217,7 +3116,78 @@ class BuildCNNWizard(QWizard):
             else:
                 return True
 
-    # page 5 - Save Filter
+    # page 5 - Summary
+    class WPageSummary(QWizardPage):
+        def __init__(self, filterdir, config, parent=None):
+            super(BuildCNNWizard.WPageSummary, self).__init__(parent)
+            self.setTitle('Training Summary')
+            self.setSubTitle('If you are happy with the CNN performance, press \"Save the Recogniser.\"')
+            self.setMinimumSize(250, 150)
+            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+            self.adjustSize()
+
+            self.config = config
+            self.filtersDir = filterdir
+
+            self.space = QLabel('').setFixedSize(20, 20)
+            self.msgfilter = QLabel('')
+            self.msgfilter.setStyleSheet("QLabel { color : #808080; }")
+            self.msgspp = QLabel('')
+            self.msgspp.setStyleSheet("QLabel { color : #808080; }")
+
+            # page layout
+            self.layout = QGridLayout()
+            self.layout.addWidget(self.msgfilter, 0, 0)
+            self.layout.addWidget(self.msgspp, 1, 0)
+            self.layout.addWidget(self.space, 2, 0)
+
+            self.setButtonText(QWizard.NextButton, 'Save the Recogniser>')
+            self.setLayout(self.layout)
+
+        def initializePage(self):
+            self.ConfigLoader = SupportClasses.ConfigLoader()
+            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir)
+            self.currfilt = self.FilterDicts[self.field("filter")[:-4]]
+            self.species = self.currfilt["species"]
+            self.calltypes = []
+            for fi in self.currfilt['Filters']:
+                self.calltypes.append(fi['calltype'])
+
+            self.msgfilter.setText("<b>Current recogniser:</b> %s" % (self.field("filter")))
+            self.msgspp.setText("<b>Species:</b> %s" % (self.species))
+
+            row = 3
+            for ct in range(len(self.calltypes)):
+                lblct = QLabel('Call type: ' + self.calltypes[ct])
+                lblct.setStyleSheet("QLabel { color : #808080; font-weight: bold; }")
+                self.layout.addWidget(lblct, row, 0, alignment=Qt.AlignTop)
+                lblctsumy = QLabel('True Positive Rate: %.2f\nFalse Positive Rate: %.2f\nPrecision: %.2f\nAccuracy: %.2f'
+                                   % (self.wizard().parameterPage.TPRs[ct][self.wizard().parameterPage.bestThrInd[ct]],
+                                      self.wizard().parameterPage.FPRs[ct][self.wizard().parameterPage.bestThrInd[ct]],
+                                      self.wizard().parameterPage.Precisions[ct][self.wizard().parameterPage.bestThrInd[ct]],
+                                      self.wizard().parameterPage.Accs[ct][self.wizard().parameterPage.bestThrInd[ct]]))
+                lblctsumy.setStyleSheet("QLabel { color : #808080; }")
+                self.layout.addWidget(self.space, row, 1)
+                self.layout.addWidget(lblctsumy, row, 2)
+                row += 1
+            self.layout.update()
+
+        def cleanupPage(self):
+            wgts = []
+            for ct in range(len(self.calltypes) ):
+                if self.layout.itemAtPosition(ct+3, 0):
+                    wgts.append(self.layout.itemAtPosition(ct+3, 0).widget())
+                if self.layout.itemAtPosition(ct+3, 1):
+                    wgts.append(self.layout.itemAtPosition(ct+3, 1).widget())
+                if self.layout.itemAtPosition(ct+3, 2):
+                    wgts.append(self.layout.itemAtPosition(ct+3, 2).widget())
+
+            for i in reversed(range(len(wgts))):
+                self.layout.removeWidget(wgts[i])
+                wgts[i].deleteLater()
+                del wgts[i]
+
+    # page 6 - Save Filter
     class WPageSave(QWizardPage):
         def __init__(self, filterdir, config, parent=None):
             super(BuildCNNWizard.WPageSave, self).__init__(parent)
@@ -3325,9 +3295,9 @@ class BuildCNNWizard(QWizard):
             thr = []
             for ct in range(len(self.calltypes)):
                 output[str(ct)] = self.calltypes[ct]
-                thr.append([self.wizard().parameterPage.bestThr[ct], 0.99])
+                thr.append(self.wizard().parameterPage.bestThr[ct])
             output[str(len(self.calltypes))] = "Noise"
-            thr.append([self.wizard().parameterPage.bestThr[len(self.calltypes)], 0.99])
+            thr.append(self.wizard().parameterPage.bestThr[len(self.calltypes)])
             CNNdic["output"] = output
             CNNdic["thr"] = thr
             print(CNNdic)
@@ -3392,7 +3362,6 @@ class BuildCNNWizard(QWizard):
         self.browsedataPage = BuildCNNWizard.WPageData(self.filtdir, self.config)
         self.browsedataPage.registerField("trainDir1*", self.browsedataPage.trainDirName1)
         self.browsedataPage.registerField("trainDir2*", self.browsedataPage.trainDirName2)
-        # self.browsedataPage.registerField("testDir*", self.browsedataPage.testDirName)
         self.browsedataPage.registerField("filter*", self.browsedataPage.species, "currentText", self.browsedataPage.species.currentTextChanged)
         self.addPage(self.browsedataPage)
 
@@ -3400,9 +3369,6 @@ class BuildCNNWizard(QWizard):
         self.addPage(self.confirminputPage)
 
         self.parameterPage = BuildCNNWizard.WPageParameters(self.filtdir, self.config)
-        # self.parameterPage.registerField("imgsec*", self.parameterPage.imgsec)
-        # self.parameterPage.registerField("imgDir*", self.parameterPage.imgDir)
-        # self.parameterPage.registerField("modelDir*", self.parameterPage.modelDir)
         self.addPage(self.parameterPage)
 
         # add the Save & Test button
@@ -3414,14 +3380,47 @@ class BuildCNNWizard(QWizard):
         self.setOptions(QWizard.NoBackButtonOnStartPage | QWizard.HaveCustomButton1)
         self.saveTestBtn.setVisible(False)
 
+        self.rocpages = []
+        self.autoThr = False
+
     def redoROCPages(self):
-        for i in range(len(self.parameterPage.calltypes) + 1):
-            if i == len(self.parameterPage.calltypes):
-                print("adding ROC page for class : Noise")
-            else:
-                print("adding ROC page for class:", self.parameterPage.calltypes[i])
-            page4 = BuildCNNWizard.WPageROC(i)
-            self.addPage(page4)
+        # clean any existing pages
+        for page in self.rocpages:
+            # for each calltype, remove roc page
+            self.removePage(page)
+        self.rocpages = []
+
+        if not self.autoThr:
+            for i in range(len(self.parameterPage.calltypes) + 1):
+                if i == len(self.parameterPage.calltypes):
+                    print("adding ROC page for class : Noise")
+                else:
+                    print("adding ROC page for class:", self.parameterPage.calltypes[i])
+                page4 = BuildCNNWizard.WPageROC(i)
+                pageid = self.addPage(page4)
+                self.rocpages.append(pageid)
+                # self.addPage(page4)
+
+        self.summaryPage = BuildCNNWizard.WPageSummary(self.filtdir, self.config)
+        pageid = self.addPage(self.summaryPage)
+        self.rocpages.append(pageid)
+
+        self.savePage = BuildCNNWizard.WPageSave(self.filtdir, self.config)
+        pageid = self.addPage(self.savePage)
+        self.rocpages.append(pageid)
+
+        self.parameterPage.setFinalPage(False)
+        self.parameterPage.completeChanged.emit()
+
+    def undoROCPages(self):
+        # clean any existing pages
+        for page in self.rocpages:
+            # for each calltype, remove roc page
+            self.removePage(page)
+        self.rocpages = []
+
+        self.summaryPage = BuildCNNWizard.WPageSummary(self.filtdir, self.config)
+        self.addPage(self.summaryPage)
 
         self.savePage = BuildCNNWizard.WPageSave(self.filtdir, self.config)
         self.addPage(self.savePage)

@@ -408,18 +408,19 @@ class AviaNZ(QMainWindow):
 
         # "Recognisers" menu
         recMenu = self.menuBar().addMenu("&Recognisers")
-        recMenu.addAction("Train an automated recogniser", self.buildRecogniser)
-        recMenu.addAction("Train a CNN recogniser", self.buildCNN)
+        extrarecMenu = recMenu.addMenu("Train an automated recogniser")
+        extrarecMenu.addAction("Train a wavelet recogniser", self.buildRecogniser)
+        extrarecMenu.addAction("Extend a wavelet recogniser with CNN", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
 
         helpMenu = self.menuBar().addMenu("&Help")
-        helpMenu.addAction("Help",self.showHelp,"Ctrl+H")
+        helpMenu.addAction("Help", self.showHelp, "Ctrl+H")
         helpMenu.addAction("Cheat Sheet", self.showCheatSheet)
         helpMenu.addSeparator()
-        helpMenu.addAction("About",self.showAbout,"Ctrl+A")
+        helpMenu.addAction("About", self.showAbout, "Ctrl+A")
         if platform.system() == 'Darwin':
-            helpMenu.addAction("About",self.showAbout,"Ctrl+A")
+            helpMenu.addAction("About", self.showAbout, "Ctrl+A")
 
     def showAbout(self):
         """ Create the About Message Box"""
