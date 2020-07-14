@@ -300,6 +300,8 @@ class WaveletSegment:
                 filelen = math.ceil((end-start)/self.sp.sampleRate)
                 if filelen < 2:
                     print("Warning: can't process short file ends (%.2f s)" % filelen)
+                    detected_bin_all = np.concatenate((detected_bin_all, np.zeros((filelen))))
+                    detected_out.append(([], filename, filelen))
                     continue
 
                 # read in page and resample as needed
