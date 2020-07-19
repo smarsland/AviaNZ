@@ -1290,26 +1290,7 @@ class PostProcess:
         '''
         if meanprob[ctkey] >= self.CNNthrs[ctkey][-1]:
             certainty = 90
-        elif meanprob[ctkey] >= self.CNNthrs[ctkey][0] and \
-                meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
-            certainty = 50
-        else:
-            certainty = 0  # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
-
-        return certainty
-
-    def getCertainty2(self, meanprob, ctkey):
-        '''
-        Calculate the certainty of an image.
-        :param meanprob: probabilities
-        :param ctkey: current call type key
-        :return:
-        '''
-        if meanprob[ctkey] >= self.CNNthrs[ctkey][-1] and \
-                meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][-1]:
-            certainty = 90
-        elif meanprob[ctkey] >= self.CNNthrs[ctkey][0] and \
-                meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
+        elif meanprob[ctkey] >= self.CNNthrs[ctkey][0]:
             certainty = 50
         else:
             certainty = 0  # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
@@ -1329,7 +1310,7 @@ class PostProcess:
         '''
         binaryout = np.zeros((np.shape(probs)[0]))
         for i in range(len(binaryout)):
-            if self.getCertainty2(probs[i], ctkey) > 0:
+            if self.getCertainty(probs[i], ctkey) > 0:
                 binaryout[i] = 1
         segmenter = Segmenter()
         if len(binaryout) == 1:
