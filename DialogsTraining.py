@@ -2611,6 +2611,7 @@ class BuildCNNWizard(QWizard):
             self.species = self.currfilt["species"]
             mincallengths = []
             maxcallengths = []
+            self.calltypes = []
             for fi in self.currfilt['Filters']:
                 self.calltypes.append(fi['calltype'])
                 mincallengths.append(fi['TimeRange'][0])
@@ -3093,7 +3094,7 @@ class BuildCNNWizard(QWizard):
                         self.TPR[thr_min_ind], self.FPR[thr_min_ind], self.Precision[thr_min_ind], self.Acc[thr_min_ind]))
 
                 # This will save the best thr
-                self.wizard().parameterPage.bestThr[self.ct] = self.thrs[thr_min_ind]
+                self.wizard().parameterPage.bestThr[self.ct][0] = self.thrs[thr_min_ind]
                 self.wizard().parameterPage.bestThrInd[self.ct] = thr_min_ind
 
                 self.completeChanged.emit()
@@ -3297,7 +3298,7 @@ class BuildCNNWizard(QWizard):
                 output[str(ct)] = self.calltypes[ct]
                 thr.append(self.wizard().parameterPage.bestThr[ct])
             output[str(len(self.calltypes))] = "Noise"
-            thr.append(self.wizard().parameterPage.bestThr[len(self.calltypes)])
+            # thr.append(self.wizard().parameterPage.bestThr[len(self.calltypes)])
             CNNdic["output"] = output
             CNNdic["thr"] = thr
             print(CNNdic)
@@ -3391,11 +3392,8 @@ class BuildCNNWizard(QWizard):
         self.rocpages = []
 
         if not self.autoThr:
-            for i in range(len(self.parameterPage.calltypes) + 1):
-                if i == len(self.parameterPage.calltypes):
-                    print("adding ROC page for class : Noise")
-                else:
-                    print("adding ROC page for class:", self.parameterPage.calltypes[i])
+            for i in range(len(self.parameterPage.calltypes)):
+                print("adding ROC page for class:", self.parameterPage.calltypes[i])
                 page4 = BuildCNNWizard.WPageROC(i)
                 pageid = self.addPage(page4)
                 self.rocpages.append(pageid)
