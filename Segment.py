@@ -1403,7 +1403,7 @@ class PostProcess:
 
                 # Confirm wavelet proposed call type
                 # print(probs)
-                print(seg, '->', np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
+                print('segment', seg, '->', np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
                 certainty = self.getCertainty(meanprob, ctkey)
 
             if certainty == 0:
@@ -1413,8 +1413,8 @@ class PostProcess:
                 print('Not deleted by CNN')
                 self.segments[ix][-1] = certainty
                 subsegs = self.getSubSegs(probs, ctkey, seg, self.CNNwindow, self.CNNhop)
-                print(subsegs)
                 if subsegs != []:
+                    print("Replaced with the following subsegments:", subsegs)
                     del self.segments[ix]
                     for ns in subsegs[::-1]:
                         ctnewseg.append(ns)

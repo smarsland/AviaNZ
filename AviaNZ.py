@@ -1502,7 +1502,7 @@ class AviaNZ(QMainWindow):
                 self.volSliderMoved(self.volSlider.value())
 
                 # Set the length of the scrollbar.
-                self.scrollSlider.setRange(0,np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value()))
+                self.scrollSlider.setRange(0,int(np.shape(self.sg)[0] - self.convertAmpltoSpec(self.widthWindow.value())))
                 self.scrollSlider.setValue(0)
 
                 self.drawOverview()
