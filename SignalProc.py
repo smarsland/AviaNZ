@@ -341,9 +341,9 @@ class SignalProc:
         lowStop = lowPass-band
         highStop = highPass+band
         # safety checks for values near edges
-        if lowStop<0:
+        if lowStop<=0:
             lowStop = lowPass/2
-        if highStop>1:
+        if highStop>=1:
             highStop = (1+highPass)/2
 
         if lowPass == 0 and highPass == 1:
