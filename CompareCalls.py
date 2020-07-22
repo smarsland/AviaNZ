@@ -216,6 +216,9 @@ class CompareCalls(QMainWindow):
                 for j in range(i+1, len(self.allrecs)):
                     pair = self.allrecs[i] + "-" + self.allrecs[j]
                     self.compareRecSelector.addItem(pair)
+
+            self.pairwiseShifts = np.zeros((len(self.allrecs), len(self.allrecs)))
+
             self.suggestAdjBtn.setEnabled(True)
             self.compareBtn.setEnabled(True)
 
@@ -448,15 +451,23 @@ class CompareCalls(QMainWindow):
 
             # identify the matching segment from sl2
             for seg in sl:
-                # TODO: find matching pair at segment level
-                seg2 = findMatchIn(sl2match, seg)
-                # store the pair in a SegmentList (to preserve filename etc)
-                slpaired1.append(seg)
-                slpaired2.append(seg2)
-            # store the SegmentList
+                # find matching pair at segment level
+                seg[0] = seg[0] + rec2shift
+                seg[1] = seg[1] + rec2shift
+                seg2 = self.findMatchIn(sl2match, seg)
+                # store the pair in a temp list (including filenames)
+                if len(seg2)>0:
+                    seg.recname = rec1
+                    seg2.recname = rec2
+                    seg.wavname = sl.wavname
+                    seg2.wavname = sl2.wavname
+                    slpaired1.append(seg)
+                    slpaired2.append(seg2)
+
+            # add this set of segments to the main long list
             if len(slpaired1)>0:
-                annotspaired1.append(slpaired1)
-                annotspaired2.append(slpaired2)
+                annotspaired1.extend(slpaired1)
+                annotspaired2.extend(slpaired2)
 
         if len(annotspaired1)==0:
             print("Warning: no overlapping annotations found!")
@@ -466,6 +477,17 @@ class CompareCalls(QMainWindow):
         self.comparedialog = CompareCallsDialog(annotspaired1, annotspaired2, rec2shift, self)
         self.comparedialog.exec_()
         print("Call comparison complete")
+
+    def findMatchIn(self, seglist, seg):
+        """ Returns one segment from seglist that has the most overlap with seg. """
+        overlaps = [min(seg[1], seg2[1]) - max(seg[0], seg2[0]) for seg2 in seglist]
+        mpos = np.argmax(overlaps)
+        if overlaps[mpos]<=0:
+            print("No match found for segment", seg)
+            return([])
+        m = seglist[mpos]
+        m.overlap = overlaps[mpos]
+        return(m)
 
     def refreshMainOut(self):
         """ Collect information from self about shifts and connectivity
@@ -674,7 +696,8 @@ class CompareCallsDialog(QDialog):
         self.rec1 = annots1[0].recname
         self.rec2 = annots2[0].recname
 
-        self.annotpairs = [111]
+        self.annots1 = annots1
+        self.annots2 = annots2
 
         # Set colour map
         # cmap = self.config['cmap']
@@ -683,7 +706,8 @@ class CompareCallsDialog(QDialog):
         cmap = pg.ColorMap(pos, colour,mode)
         self.lut = cmap.getLookupTable(0.0, 1.0, 256)
 
-        self.topLabel = QLabel("Comparing recorders %s (top) and %s" %(self.rec1, self.rec2))
+        self.topLabel = QLabel("Comparing recorders %s (top, shifted by %.1f) and %s (bottom)" %(self.rec1, rec2shift, self.rec2))
+        self.labelPair = QLabel()
 
         # spectrograms
         self.wPlot = pg.GraphicsLayoutWidget()
@@ -722,13 +746,14 @@ class CompareCallsDialog(QDialog):
         # init GUI with page 1 data
         self.currpage = 1
         self.leftBtn.setEnabled(False)
-        if len(self.annotpairs)==1:
+        if len(self.annots1)==1:
             self.rightBtn.setEnabled(False)
         self.setData()
 
         # layout
         box = QVBoxLayout()
         box.addWidget(self.topLabel)
+        box.addWidget(self.labelPair)
         midHBox = QHBoxLayout()
         midHBox.addWidget(self.leftBtn)
         midHBox.addWidget(self.wPlot, stretch=10)
@@ -747,21 +772,22 @@ class CompareCallsDialog(QDialog):
     def moveRight(self):
         self.currpage = self.currpage + 1
         self.leftBtn.setEnabled(True)
-        if self.currpage==len(self.annotpairs):
+        if self.currpage==len(self.annots1):
             self.rightBtn.setEnabled(False)
         self.setData()
 
     def setData(self):
         # update plot etc
-        currdata = self.annotpairs[self.currpage-1]
+        currseg1 = self.annots1[self.currpage-1]
+        currseg2 = self.annots2[self.currpage-1]
 
-        # TODO 
-        wav1 = "/home/julius/Documents/kiwis/test/kiwi_1min.wav"
-        wav2 = "/home/julius/Documents/kiwis/test/kiwi_1min.wav"
-        wav1start = 0
-        wav2start = 20
-        wav1len = 9
-        wav2len = 12
+        wav1 = currseg1.wavname
+        wav2 = currseg2.wavname
+
+        wav1start = currseg1[0]
+        wav2start = currseg2[0]
+        wav1len = currseg1[1]
+        wav2len = currseg2[1]
 
         self.sp1 = SignalProc.SignalProc(256, 128)
         self.sp1.readWav(wav1, off=wav1start, len=wav1len)
@@ -779,6 +805,7 @@ class CompareCallsDialog(QDialog):
         # No scroll area yet
         # self.scroll.horizontalScrollBar().setValue(0)
 
+        # axes
         minFreq = 0
         maxFreq = min(self.sp1.sampleRate, self.sp2.sampleRate)
         FreqRange = (maxFreq-minFreq)/1000.
@@ -794,13 +821,10 @@ class CompareCallsDialog(QDialog):
         self.sg_axis1.setLabel('kHz')
         self.sg_axis2.setLabel('kHz')
 
-        # self.p1.setData(y=currdata['series'], x=self.xs)
-        # self.bestLineO.setValue(currdata['bestOverlap'])
-        # self.bestLineSh.setValue(currdata['bestShift'])
+        # info fields
+        self.labelPair.setText("Showing calls at %.1f-%.1f s (adjusted) and %.1f-%.1f s" % (currseg1[0], currseg1[1], currseg2[0], currseg2[1]))
+
         # self.labelCurrPage.setText("Page %s of %s" %(self.currpage, len(self.shifts)))
-        # self.rec1 = currdata['recorders'][0]
-        # self.rec2 = currdata['recorders'][1]
-        # self.labelRecs.setText("Suggested shift for recorder %s w.r.t. %s" % (self.rec1, self.rec2))
         # i = self.parent.allrecs.index(self.rec1)
         # j = self.parent.allrecs.index(self.rec2)
         # self.connectCheckbox.setChecked(self.parent.recConnections[i, j]==1)
