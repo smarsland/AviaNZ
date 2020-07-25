@@ -790,10 +790,11 @@ class Log(object):
                 # (basically I'm parsing txt into json because I'm dumb)
                 while lend<len(lines):
                     #print(lines[lend])
-                    if lines[lend][0] == "#":
-                        allans.append([lines[lstart], lines[lstart+1], lines[lstart+2],
-                                        lines[lstart+3 : lend]])
-                        lstart = lend
+                    if len(lines[lend]) > 0:    # there are empty lines too
+                        if lines[lend][0] == "#":
+                            allans.append([lines[lstart], lines[lstart+1], lines[lstart+2],
+                                            lines[lstart+3 : lend]])
+                            lstart = lend
                     lend += 1
                 allans.append([lines[lstart], lines[lstart+1], lines[lstart+2],
                                 lines[lstart+3 : lend]])

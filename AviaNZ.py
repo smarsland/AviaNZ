@@ -86,7 +86,6 @@ class AviaNZ(QMainWindow):
         self.CLI = CLI
         self.cheatsheet = cheatsheet
         self.zooniverse = zooniverse
-        self.trainPerFile = True
 
         # configdir passes the standard user app dir based on OS.
         # At this point, the main config file should already be ensured to exist.
@@ -5771,8 +5770,12 @@ class AviaNZ(QMainWindow):
 @click.option('-z', '--zooniverse', is_flag=True, help='Make the Zooniverse images and sounds')
 @click.option('-f', '--infile', type=click.Path(), help='Input wav file (mandatory in CLI mode)')
 @click.option('-o', '--imagefile', type=click.Path(), help='If specified, a spectrogram will be saved to this file')
+@click.option('-b', '--batchmode', is_flag=True, help='Batch processing')
+@click.option('-d', '--sdir', type=click.Path(), help='Input sound directory, batch processing')
+@click.option('-r', '--recogniser', type=str, help='Recogniser name, batch processing')
+@click.option('-w', '--wind', is_flag=True, help='Apply wind filter')
 @click.argument('command', nargs=-1)
-def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
+def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, sdir, recogniser, wind, command):
     # determine location of config file and bird lists
     if platform.system() == 'Windows':
         # Win
@@ -5843,11 +5846,22 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, command):
     # run splash screen:
     if cli:
         print("Starting AviaNZ in CLI mode")
-        if not cheatsheet and not zooniverse and not isinstance(infile, str):
-            print("ERROR: valid input file (-f) is mandatory in CLI mode!")
-            sys.exit()
-        avianz = AviaNZ(configdir=configdir,CLI=True, cheatsheet=cheatsheet, zooniverse=zooniverse, firstFile=infile, imageFile=imagefile, command=command)
-        print("Analysis complete, closing AviaNZ")
+        if batchmode:
+            if os.path.isdir(sdir) and recogniser in confloader.filters(filterdir).keys():
+                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(root=None, configdir=configdir, minSegment=50, CLI=True,
+                                                               sdir=sdir, recogniser=recogniser, wind=wind, command=command)
+                print("Analysis complete, closing AviaNZ")
+            else:
+                print("ERROR: valid input dir (-d) and recogniser name (-r) are mandatory in CLI mode - batch!")
+                sys.exit()
+        else:
+            if (cheatsheet or zooniverse) and isinstance(infile, str):
+                avianz = AviaNZ(configdir=configdir, CLI=True, cheatsheet=cheatsheet, zooniverse=zooniverse,
+                                firstFile=infile, imageFile=imagefile, command=command)
+                print("Analysis complete, closing AviaNZ")
+            else:
+                print("ERROR: valid input file (-f) is mandatory in CLI mode!")
+                sys.exit()
     else:
         print("Starting AviaNZ in GUI mode")
         # This screen asks what you want to do, then processes the response
