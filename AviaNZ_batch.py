@@ -20,7 +20,7 @@
 
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import os, re, fnmatch, sys, gc, math
+import fnmatch, gc, sys, os, json, re
 
 from PyQt5.QtGui import QIcon, QPixmap, QColor
 from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QProgressDialog
@@ -40,21 +40,22 @@ import SupportClasses
 import Dialogs
 import colourMaps
 
-import webbrowser
 import traceback
-import json, time
-import copy
+import time
+
+import webbrowser, copy, math
 
 
 class AviaNZ_batchProcess(QMainWindow):
     # Main class for batch processing
 
-    def __init__(self, root=None, configdir='', minSegment=50):
+    def __init__(self, root=None, configdir='', minSegment=50, CLI=False, sdir='', recogniser=None, wind=False, command=''):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
         super(AviaNZ_batchProcess, self).__init__()
-        self.root = root
-        self.dirName=[]
+        # self.root = root
+        self.CLI = CLI
+        self.dirName = []
 
         # read config and filters from user location
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
@@ -65,15 +66,22 @@ class AviaNZ_batchProcess(QMainWindow):
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
-        # Make the window and associated widgets
-        QMainWindow.__init__(self, root)
-        self.statusBar().showMessage("Select a directory to process")
+        if not self.CLI:
+            # Make the window and associated widgets
+            QMainWindow.__init__(self, root)
+            self.statusBar().showMessage("Select a directory to process")
 
-        self.setWindowTitle('AviaNZ - Batch Processing')
-        self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.createMenu()
-        self.createFrame()
-        self.center()
+            self.setWindowTitle('AviaNZ - Batch Processing')
+            self.setWindowIcon(QIcon('img/Avianz.ico'))
+            self.createMenu()
+            self.createFrame()
+            self.center()
+        else:
+            self.dirName = sdir
+            self.species = [recogniser]
+            self.wind = wind
+            self.detect()
+
 
     def createFrame(self):
         # Make the window and set its size
@@ -120,7 +128,6 @@ class AviaNZ_batchProcess(QMainWindow):
         self.w_timeEnd.setDisplayFormat('hh:mm:ss')
 
         self.w_wind = QCheckBox("Add wind filter")
-        self.w_mergect = QCheckBox("Merge different call types")
 
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
@@ -191,13 +198,12 @@ class AviaNZ_batchProcess(QMainWindow):
         self.boxPost = QGroupBox("Post processing")
         formPost = QGridLayout()
         formPost.addWidget(self.w_wind, 0, 1)
-        formPost.addWidget(self.w_mergect, 2, 1)
-        formPost.addWidget(self.maxgaplbl, 3, 0)
-        formPost.addWidget(self.maxgap, 3, 1)
-        formPost.addWidget(self.minlenlbl, 4, 0)
-        formPost.addWidget(self.minlen, 4, 1)
-        formPost.addWidget(self.maxlenlbl, 5, 0)
-        formPost.addWidget(self.maxlen, 5, 1)
+        formPost.addWidget(self.maxgaplbl, 2, 0)
+        formPost.addWidget(self.maxgap, 2, 1)
+        formPost.addWidget(self.minlenlbl, 3, 0)
+        formPost.addWidget(self.minlen, 3, 1)
+        formPost.addWidget(self.maxlenlbl, 4, 0)
+        formPost.addWidget(self.maxlen, 4, 1)
         self.boxPost.setLayout(formPost)
         self.d_detection.addWidget(self.boxPost, row=4, col=0, colspan=3)
         if len(spp) > 0:
@@ -358,7 +364,6 @@ class AviaNZ_batchProcess(QMainWindow):
             self.maxlenlbl.hide()
             self.maxgap.hide()
             self.maxgaplbl.hide()
-            self.w_mergect.show()
             self.boxPost.show()
             self.boxTime.show()
             self.addSp.show()
@@ -370,7 +375,6 @@ class AviaNZ_batchProcess(QMainWindow):
             self.maxlenlbl.show()
             self.maxgap.show()
             self.maxgaplbl.show()
-            self.w_mergect.hide()
             self.boxPost.show()
             self.boxTime.show()
             self.addSp.hide()
@@ -423,19 +427,20 @@ class AviaNZ_batchProcess(QMainWindow):
     # fp = open('memory_profiler_batch.log', 'w+')
     # @profile(stream=fp)
     def detect(self):
-        # check if folder was selected:
-        if not self.dirName:
-            msg = SupportClasses.MessagePopup("w", "Select Folder", "Please select a folder to process!")
-            msg.exec_()
-            return(1)
+        if not self.CLI:
+            # check if folder was selected:
+            if not self.dirName:
+                msg = SupportClasses.MessagePopup("w", "Select Folder", "Please select a folder to process!")
+                msg.exec_()
+                return(1)
 
-        # retrieve selected filter(s)
-        self.species = set()
-        for box in self.speCombos:
-            if box.currentText() != "":
-                self.species.add(box.currentText())
-        self.species = list(self.species)
-        print("Species:", self.species)
+            # retrieve selected filter(s)
+            self.species = set()
+            for box in self.speCombos:
+                if box.currentText() != "":
+                    self.species.add(box.currentText())
+            self.species = list(self.species)
+            print("Recogniser:", self.species)
 
         if "Any sound" in self.species:
             self.method = "Default"
@@ -470,48 +475,78 @@ class AviaNZ_batchProcess(QMainWindow):
                     allwavs.append(os.path.join(root, filename))
         total = len(allwavs)
         # Parse the user-set time window to process
-        timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
-        timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
+        if self.CLI:
+            timeWindow_s = 0
+            timeWindow_e = 0
+        else:
+            timeWindow_s = self.w_timeStart.time().hour() * 3600 + self.w_timeStart.time().minute() * 60 + self.w_timeStart.time().second()
+            timeWindow_e = self.w_timeEnd.time().hour() * 3600 + self.w_timeEnd.time().minute() * 60 + self.w_timeEnd.time().second()
 
         # LOG FILE is read here
         # note: important to log all analysis settings here
         if self.method != "Intermittent sampling":
-            settings = [self.method, timeWindow_s, timeWindow_e,
-                        self.w_wind.isChecked(), self.w_mergect.isChecked()]
+            if self.CLI:
+                settings = [self.method, timeWindow_s, timeWindow_e, self.wind]
+            else:
+                settings = [self.method, timeWindow_s, timeWindow_e, self.w_wind.isChecked()]
         else:
             settings = [self.method, timeWindow_s, timeWindow_e,
                         self.config["protocolSize"], self.config["protocolInterval"]]
         self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, settings)
 
         # Ask for RESUME CONFIRMATION here
-        confirmedResume = QMessageBox.Cancel
-        if self.log.possibleAppend:
-            filesExistAndDone = set(self.log.filesDone).intersection(set(allwavs))
-            if len(filesExistAndDone) < total:
-                text = "Previous analysis found in this folder (analyzed " + str(len(filesExistAndDone)) + " out of " + str(total) + " files in this folder).\nWould you like to resume that analysis?"
-                msg = SupportClasses.MessagePopup("t", "Resume previous batch analysis?", text)
-                msg.setStandardButtons(QMessageBox.No | QMessageBox.Yes)
-                confirmedResume = msg.exec_()
+        if not self.CLI:
+            confirmedResume = QMessageBox.Cancel
+            if self.log.possibleAppend:
+                filesExistAndDone = set(self.log.filesDone).intersection(set(allwavs))
+                if len(filesExistAndDone) < total:
+                    text = "Previous analysis found in this folder (analyzed " + str(len(filesExistAndDone)) + " out of " + str(total) + " files in this folder).\nWould you like to resume that analysis?"
+                    msg = SupportClasses.MessagePopup("t", "Resume previous batch analysis?", text)
+                    msg.setStandardButtons(QMessageBox.No | QMessageBox.Yes)
+                    confirmedResume = msg.exec_()
+                else:
+                    print("All files appear to have previous analysis results")
+                    msg = SupportClasses.MessagePopup("d", "Already processed", "All files have previous analysis results")
+                    msg.exec_()
             else:
-                print("All files appear to have previous analysis results")
-                msg = SupportClasses.MessagePopup("d", "Already processed", "All files have previous analysis results")
-                msg.exec_()
-        else:
-            confirmedResume = QMessageBox.No
+                confirmedResume = QMessageBox.No
 
-        if confirmedResume == QMessageBox.Cancel:
-            # catch unclean (Esc) exits
-            return(2)
-        elif confirmedResume == QMessageBox.No:
-            # work on all files
-            self.filesDone = []
-        elif confirmedResume == QMessageBox.Yes:
-            # ignore files in log
-            self.filesDone = filesExistAndDone
+            if confirmedResume == QMessageBox.Cancel:
+                # catch unclean (Esc) exits
+                return(2)
+            elif confirmedResume == QMessageBox.No:
+                # work on all files
+                self.filesDone = []
+            elif confirmedResume == QMessageBox.Yes:
+                # ignore files in log
+                self.filesDone = filesExistAndDone
+        else:
+            if self.log.possibleAppend:
+                filesExistAndDone = set(self.log.filesDone).intersection(set(allwavs))
+                if len(filesExistAndDone) < total:
+                    confirmedResume = input("Previous analysis found in this folder (analyzed " +
+                                            str(len(filesExistAndDone)) + " out of " + str(total) +
+                                            " files in this folder).\nWould you like to resume that analysis?\n")
+                    if confirmedResume.lower() == 'yes' or confirmedResume.lower() == 'y':
+                        # ignore files in log
+                        self.filesDone = filesExistAndDone
+                        confirmedResume = True
+                    else:
+                        # work on all files
+                        self.filesDone = []
+                        confirmedResume = False
+                else:
+                    print("All files appear to have previous analysis results")
+                    return
+            else:
+                # work on all files
+                self.filesDone = []
+                confirmedResume = False
+
 
         # Ask for FINAL USER CONFIRMATION here
         cnt = len(self.filesDone)
-        confirmedLaunch = QMessageBox.Cancel
+        # confirmedLaunch = QMessageBox.Cancel
         if self.method == "Intermittent sampling":
             text = "Method: " + self.method + ".\nNumber of files to analyze: " + str(total) + "\n"
         else:
@@ -524,50 +559,69 @@ class AviaNZ_batchProcess(QMainWindow):
             text += "\nWarning: any previous annotations for the selected species in these files will be deleted!\n"
         text = "Analysis will be launched with these settings:\n" + text + "\nConfirm?"
 
-        msg = SupportClasses.MessagePopup("t", "Launch batch analysis", text)
-        msg.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
-        confirmedLaunch = msg.exec_()
+        if not self.CLI:
+            msg = SupportClasses.MessagePopup("t", "Launch batch analysis", text)
+            msg.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+            confirmedLaunch = msg.exec_()
 
-        if confirmedLaunch == QMessageBox.Cancel:
-            print("Analysis cancelled")
-            return(2)
+            if confirmedLaunch == QMessageBox.Cancel:
+                print("Analysis cancelled")
+                return(2)
 
-        # update log: delete everything (by opening in overwrite mode),
-        # reprint old headers,
-        # print current header (or old if resuming),
-        # print old file list if resuming.
-        self.log.file = open(self.log.file, 'w')
-        if speciesStr not in ["Any sound", "Intermittent sampling"]:
-            self.log.reprintOld()
-            # else single-sp runs should be deleted anyway
-        if confirmedResume == QMessageBox.No:
-            self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
-        elif confirmedResume == QMessageBox.Yes:
-            self.log.appendHeader(self.log.currentHeader, self.log.species, self.log.settings)
-            for f in self.log.filesDone:
-                self.log.appendFile(f)
+            # update log: delete everything (by opening in overwrite mode),
+            # reprint old headers,
+            # print current header (or old if resuming),
+            # print old file list if resuming.
+            self.log.file = open(self.log.file, 'w')
+            if speciesStr not in ["Any sound", "Intermittent sampling"]:
+                self.log.reprintOld()
+                # else single-sp runs should be deleted anyway
+            if confirmedResume == QMessageBox.No:
+                self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
+            elif confirmedResume == QMessageBox.Yes:
+                self.log.appendHeader(self.log.currentHeader, self.log.species, self.log.settings)
+                for f in self.log.filesDone:
+                    self.log.appendFile(f)
+        else:
+            # update log: delete everything (by opening in overwrite mode),
+            # reprint old headers,
+            # print current header (or old if resuming),
+            # print old file list if resuming.
+            self.log.file = open(self.log.file, 'w')
+            if speciesStr not in ["Any sound", "Intermittent sampling"]:
+                self.log.reprintOld()
+                # else single-sp runs should be deleted anyway
+
+            confirmedLaunch = input(text)
+            if confirmedLaunch.lower() == 'yes' or confirmedLaunch.lower() == 'y':
+                self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
+            else:
+                self.log.appendHeader(self.log.currentHeader, self.log.species, self.log.settings)
+                for f in self.log.filesDone:
+                    self.log.appendFile(f)
 
         # MAIN PROCESSING starts here
         processingTime = 0
         cleanexit = 0
         cnt = 0
         msgtext = ""
-        # clean up the UI before entering the long loop
-        self.w_processButton.setEnabled(False)
-        self.update()
-        self.repaint()
+        if not self.CLI:
+            # clean up the UI before entering the long loop
+            self.w_processButton.setEnabled(False)
+            self.update()
+            self.repaint()
 
-        dlg = QProgressDialog("Analyzing file 1 / %d. Time remaining: ? h ?? min" % total, "Cancel run", cnt, total+1, self)
-        dlg.setFixedSize(350, 100)
-        dlg.setWindowIcon(QIcon('img/Avianz.ico'))
-        dlg.setWindowTitle("AviaNZ - running Batch Analysis")
-        dlg.setWindowFlags(dlg.windowFlags() ^ Qt.WindowContextHelpButtonHint ^ Qt.WindowCloseButtonHint)
-        dlg.open()
-        dlg.setValue(cnt)
-        dlg.update()
-        dlg.repaint()
-        QApplication.processEvents()
-        QApplication.processEvents()
+            dlg = QProgressDialog("Analyzing file 1 / %d. Time remaining: ? h ?? min" % total, "Cancel run", cnt, total+1, self)
+            dlg.setFixedSize(350, 100)
+            dlg.setWindowIcon(QIcon('img/Avianz.ico'))
+            dlg.setWindowTitle("AviaNZ - running Batch Analysis")
+            dlg.setWindowFlags(dlg.windowFlags() ^ Qt.WindowContextHelpButtonHint ^ Qt.WindowCloseButtonHint)
+            dlg.open()
+            dlg.setValue(cnt)
+            dlg.update()
+            dlg.repaint()
+            QApplication.processEvents()
+            QApplication.processEvents()
 
         with pg.BusyCursor():
             for filename in allwavs:
@@ -578,8 +632,9 @@ class AviaNZ_batchProcess(QMainWindow):
                 progrtext = "file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm)
 
                 print("*** Processing" + progrtext + " ***")
-                self.statusBar().showMessage("Processing "+progrtext)
-                self.update()
+                if not self.CLI:
+                    self.statusBar().showMessage("Processing "+progrtext)
+                    self.update()
 
                 # if it was processed previously (stored in log)
                 if filename in self.filesDone:
@@ -632,12 +687,13 @@ class AviaNZ_batchProcess(QMainWindow):
                     except Exception as e:
                         e = "Encountered error:\n" + traceback.format_exc()
                         print("ERROR: ", e)
-                        self.statusBar().showMessage("Analysis stopped due to error")
-                        dlg.setValue(total+1)
-                        msg = SupportClasses.MessagePopup("w", "Analysis error!", e)
-                        msg.setStyleSheet("{color: #cc0000}")
-                        msg.exec_()
-                        self.w_processButton.setEnabled(True)
+                        if not self.CLI:
+                            self.statusBar().showMessage("Analysis stopped due to error")
+                            dlg.setValue(total+1)
+                            msg = SupportClasses.MessagePopup("w", "Analysis error!", e)
+                            msg.setStyleSheet("{color: #cc0000}")
+                            msg.exec_()
+                            self.w_processButton.setEnabled(True)
                         self.log.file.close()
                         return(1)
                 else:
@@ -654,12 +710,13 @@ class AviaNZ_batchProcess(QMainWindow):
                     except Exception:
                         e = "Encountered error:\n" + traceback.format_exc()
                         print("ERROR: ", e)
-                        self.statusBar().showMessage("Analysis stopped due to error")
-                        dlg.setValue(total+1)
-                        msg = SupportClasses.MessagePopup("w", "Analysis error!", e)
-                        msg.setStyleSheet("QMessageBox QLabel{color: #cc0000}")
-                        msg.exec_()
-                        self.w_processButton.setEnabled(True)
+                        if not self.CLI:
+                            self.statusBar().showMessage("Analysis stopped due to error")
+                            dlg.setValue(total+1)
+                            msg = SupportClasses.MessagePopup("w", "Analysis error!", e)
+                            msg.setStyleSheet("QMessageBox QLabel{color: #cc0000}")
+                            msg.exec_()
+                            self.w_processButton.setEnabled(True)
                         self.log.file.close()
                         return(1)
 
@@ -673,32 +730,51 @@ class AviaNZ_batchProcess(QMainWindow):
 
                 # Log success for this file and update ProgrDlg
                 self.log.appendFile(filename)
-                dlg.setValue(cnt)
-                dlg.setLabelText("Analysed "+progrtext)
-                dlg.update()
-                if dlg.wasCanceled():
-                    print("Analysis canceled")
-                    dlg.setValue(total+1)
-                    self.statusBar().showMessage("Analysis canceled")
-                    self.w_processButton.setEnabled(True)
-                    self.log.file.close()
-                    return(2)
-                # Refresh GUI after each file (only the ProgressDialog which is modal)
-                QApplication.processEvents()
+                if not self.CLI:
+                    dlg.setValue(cnt)
+                    dlg.setLabelText("Analysed "+progrtext)
+                    dlg.update()
+                    if dlg.wasCanceled():
+                        print("Analysis canceled")
+                        dlg.setValue(total+1)
+                        self.statusBar().showMessage("Analysis canceled")
+                        self.w_processButton.setEnabled(True)
+                        self.log.file.close()
+                        return(2)
+                    # Refresh GUI after each file (only the ProgressDialog which is modal)
+                    QApplication.processEvents()
 
                 # track how long it took to process one file:
                 processingTime = time.time() - processingTimeStart
                 print("File processed in", processingTime)
                 # END of audio batch processing
 
-            if self.method!="Intermittent sampling":
+            if not self.CLI:
+                if self.method!="Intermittent sampling":
+                    # delete old results (xlsx)
+                    # ! WARNING: any Detection...xlsx files will be DELETED,
+                    # ! ANYWHERE INSIDE the specified dir, recursively
+                    self.statusBar().showMessage("Removing old Excel files, almost done...")
+                    dlg.setLabelText("Removing old Excel files...")
+                    self.update()
+                    self.repaint()
+                    for root, dirs, files in os.walk(str(self.dirName)):
+                        for filename in files:
+                            filenamef = os.path.join(root, filename)
+                            if fnmatch.fnmatch(filenamef, '*DetectionSummary_*.xlsx'):
+                                print("Removing excel file %s" % filenamef)
+                                os.remove(filenamef)
+                    # We currently do not export any excels automatically
+                    # in this mode. We only delete old excels, and let
+                    # user generate new ones through Batch Review.
+                    dlg.setValue(total+1)
+                else:
+                    dlg.setValue(total+1)
+            elif self.method!="Intermittent sampling":
                 # delete old results (xlsx)
                 # ! WARNING: any Detection...xlsx files will be DELETED,
                 # ! ANYWHERE INSIDE the specified dir, recursively
-                self.statusBar().showMessage("Removing old Excel files, almost done...")
-                dlg.setLabelText("Removing old Excel files...")
-                self.update()
-                self.repaint()
+                print("Removing old Excel files...")
                 for root, dirs, files in os.walk(str(self.dirName)):
                     for filename in files:
                         filenamef = os.path.join(root, filename)
@@ -708,21 +784,23 @@ class AviaNZ_batchProcess(QMainWindow):
                 # We currently do not export any excels automatically
                 # in this mode. We only delete old excels, and let
                 # user generate new ones through Batch Review.
-                dlg.setValue(total+1)
-            else:
-                dlg.setValue(total+1)
 
         # END of processing and exporting. Final cleanup
-        self.statusBar().showMessage("Processed all %d files" % total)
-        self.w_processButton.setEnabled(True)
-        self.log.file.close()
-        msgtext = "Finished processing.\nWould you like to return to the start screen?"
-        msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
-        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        reply = msg.exec_()
-        if reply == QMessageBox.Yes:
-            QApplication.exit(1)
+        if not self.CLI:
+            self.statusBar().showMessage("Processed all %d files" % total)
+            self.w_processButton.setEnabled(True)
+            self.log.file.close()
+            msgtext = "Finished processing.\nWould you like to return to the start screen?"
+            msg = SupportClasses.MessagePopup("d", "Finished", msgtext)
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            reply = msg.exec_()
+            if reply == QMessageBox.Yes:
+                QApplication.exit(1)
+            else:
+                return(0)
         else:
+            print("Processed all %d files" % total)
+            self.log.file.close()
             return(0)
 
     def detectFile(self, speciesStr, filters):
@@ -809,7 +887,11 @@ class AviaNZ_batchProcess(QMainWindow):
                             CNNmodel = self.CNNDicts[spInfo['species']]
                         post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
                         print("Segments detected after WF: ", len(thisPageSegs[filtix]))
-                        if self.w_wind.isChecked() and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0], spInfo['Filters'][filtix]['FreqRange'][1]):
+                        if self.CLI:
+                            if self.wind and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0],
+                                                                         spInfo['Filters'][filtix]['FreqRange'][1]):
+                                post.wind()
+                        elif self.w_wind.isChecked() and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0], spInfo['Filters'][filtix]['FreqRange'][1]):
                             post.wind()
                         if CNNmodel:
                             print('Post-processing with CNN')
@@ -828,27 +910,8 @@ class AviaNZ_batchProcess(QMainWindow):
                                 seg[0][0] += start/self.sampleRate
                                 seg[0][1] += start/self.sampleRate
 
-                        if self.w_mergect.isChecked():
-                            # collect segments from all call types
-                            allCtSegs.extend(post.segments)
-                        else:
-                            # attach filter info and put on self.segments:
-                            self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
-
-                    if self.w_mergect.isChecked():
-                        # merge different call type segments
-                        post.segments = allCtSegs
-                        post.checkSegmentOverlap()
-
-                        # also merge neighbours (segments from different call types)
-                        post.joinGaps(maxgap=max([subf['TimeRange'][3] for subf in spInfo["Filters"]]))
-                        # construct "Any call" info to place on the segments
-                        flow = min([subf["FreqRange"][0] for subf in spInfo["Filters"]])
-                        fhigh = max([subf["FreqRange"][1] for subf in spInfo["Filters"]])
-                        ctinfo = {"calltype": "(Other)", "FreqRange": [flow, fhigh]}
-                        print('self.species[speciesix]:', self.species[speciesix])
-                        print('spInfo["species"]:', spInfo["species"])
-                        self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], ctinfo)
+                        # attach filter info and put on self.segments:
+                        self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
 
     def makeSegments(self, segmentsNew, filtName=None, species=None, subfilter=None):
         """ Adds segments to self.segments """
