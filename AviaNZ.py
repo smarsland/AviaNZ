@@ -4481,7 +4481,7 @@ class AviaNZ(QMainWindow):
 
     def testRecogniser(self, filter=None):
         """ Listener for the Test Recogniser action """
-        self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir, self.config, filter)
+        self.testRecWizard = DialogsTraining.TestRecWizard(self.filtersDir, self.configdir, filter)
         self.testRecWizard.exec_()
 
     def saveNotestRecogniser(self):
