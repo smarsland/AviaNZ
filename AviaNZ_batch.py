@@ -49,13 +49,15 @@ import webbrowser, copy, math
 class AviaNZ_batchProcess(QMainWindow):
     # Main class for batch processing
 
-    def __init__(self, root=None, configdir='', minSegment=50, CLI=False, sdir='', recogniser=None, wind=False, command=''):
+    def __init__(self, root=None, configdir='', minSegment=50, CLI=False, sdir='', recogniser=None, wind=False,
+                 command='', testmode=False):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
         super(AviaNZ_batchProcess, self).__init__()
         # self.root = root
         self.CLI = CLI
         self.dirName = []
+        self.testmode = testmode
 
         # read config and filters from user location
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
@@ -66,7 +68,7 @@ class AviaNZ_batchProcess(QMainWindow):
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
-        if not self.CLI:
+        if not self.CLI and not self.testmode:
             # Make the window and associated widgets
             QMainWindow.__init__(self, root)
             self.statusBar().showMessage("Select a directory to process")
@@ -76,12 +78,17 @@ class AviaNZ_batchProcess(QMainWindow):
             self.createMenu()
             self.createFrame()
             self.center()
-        else:
+        elif self.CLI:
             self.dirName = sdir
             self.species = [recogniser]
             self.wind = wind
             self.detect()
-
+        elif self.testmode:
+            self.dirName = sdir
+            self.species = [recogniser]
+            self.wind = wind
+            self.filesDone = []
+            self.detect()
 
     def createFrame(self):
         # Make the window and set its size
@@ -427,7 +434,7 @@ class AviaNZ_batchProcess(QMainWindow):
     # fp = open('memory_profiler_batch.log', 'w+')
     # @profile(stream=fp)
     def detect(self):
-        if not self.CLI:
+        if not self.CLI and not self.testmode:
             # check if folder was selected:
             if not self.dirName:
                 msg = SupportClasses.MessagePopup("w", "Select Folder", "Please select a folder to process!")
@@ -475,7 +482,7 @@ class AviaNZ_batchProcess(QMainWindow):
                     allwavs.append(os.path.join(root, filename))
         total = len(allwavs)
         # Parse the user-set time window to process
-        if self.CLI:
+        if self.CLI or self.testmode:
             timeWindow_s = 0
             timeWindow_e = 0
         else:
@@ -484,128 +491,129 @@ class AviaNZ_batchProcess(QMainWindow):
 
         # LOG FILE is read here
         # note: important to log all analysis settings here
-        if self.method != "Intermittent sampling":
-            if self.CLI:
-                settings = [self.method, timeWindow_s, timeWindow_e, self.wind]
-            else:
-                settings = [self.method, timeWindow_s, timeWindow_e, self.w_wind.isChecked()]
-        else:
-            settings = [self.method, timeWindow_s, timeWindow_e,
-                        self.config["protocolSize"], self.config["protocolInterval"]]
-        self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, settings)
-
-        # Ask for RESUME CONFIRMATION here
-        if not self.CLI:
-            confirmedResume = QMessageBox.Cancel
-            if self.log.possibleAppend:
-                filesExistAndDone = set(self.log.filesDone).intersection(set(allwavs))
-                if len(filesExistAndDone) < total:
-                    text = "Previous analysis found in this folder (analyzed " + str(len(filesExistAndDone)) + " out of " + str(total) + " files in this folder).\nWould you like to resume that analysis?"
-                    msg = SupportClasses.MessagePopup("t", "Resume previous batch analysis?", text)
-                    msg.setStandardButtons(QMessageBox.No | QMessageBox.Yes)
-                    confirmedResume = msg.exec_()
+        if not self.testmode:
+            if self.method != "Intermittent sampling":
+                if self.CLI or self.testmode:
+                    settings = [self.method, timeWindow_s, timeWindow_e, self.wind]
                 else:
-                    print("All files appear to have previous analysis results")
-                    msg = SupportClasses.MessagePopup("d", "Already processed", "All files have previous analysis results")
-                    msg.exec_()
+                    settings = [self.method, timeWindow_s, timeWindow_e, self.w_wind.isChecked()]
             else:
-                confirmedResume = QMessageBox.No
+                settings = [self.method, timeWindow_s, timeWindow_e,
+                            self.config["protocolSize"], self.config["protocolInterval"]]
+            self.log = SupportClasses.Log(os.path.join(self.dirName, 'LastAnalysisLog.txt'), speciesStr, settings)
 
-            if confirmedResume == QMessageBox.Cancel:
-                # catch unclean (Esc) exits
-                return(2)
-            elif confirmedResume == QMessageBox.No:
-                # work on all files
-                self.filesDone = []
-            elif confirmedResume == QMessageBox.Yes:
-                # ignore files in log
-                self.filesDone = filesExistAndDone
-        else:
-            if self.log.possibleAppend:
-                filesExistAndDone = set(self.log.filesDone).intersection(set(allwavs))
-                if len(filesExistAndDone) < total:
-                    confirmedResume = input("Previous analysis found in this folder (analyzed " +
-                                            str(len(filesExistAndDone)) + " out of " + str(total) +
-                                            " files in this folder).\nWould you like to resume that analysis?\n")
-                    if confirmedResume.lower() == 'yes' or confirmedResume.lower() == 'y':
-                        # ignore files in log
-                        self.filesDone = filesExistAndDone
-                        confirmedResume = True
+            # Ask for RESUME CONFIRMATION here
+            if not self.CLI:
+                confirmedResume = QMessageBox.Cancel
+                if self.log.possibleAppend:
+                    filesExistAndDone = set(self.log.filesDone).intersection(set(allwavs))
+                    if len(filesExistAndDone) < total:
+                        text = "Previous analysis found in this folder (analyzed " + str(len(filesExistAndDone)) + " out of " + str(total) + " files in this folder).\nWould you like to resume that analysis?"
+                        msg = SupportClasses.MessagePopup("t", "Resume previous batch analysis?", text)
+                        msg.setStandardButtons(QMessageBox.No | QMessageBox.Yes)
+                        confirmedResume = msg.exec_()
                     else:
-                        # work on all files
-                        self.filesDone = []
-                        confirmedResume = False
+                        print("All files appear to have previous analysis results")
+                        msg = SupportClasses.MessagePopup("d", "Already processed", "All files have previous analysis results")
+                        msg.exec_()
                 else:
-                    print("All files appear to have previous analysis results")
+                    confirmedResume = QMessageBox.No
+
+                if confirmedResume == QMessageBox.Cancel:
+                    # catch unclean (Esc) exits
+                    return(2)
+                elif confirmedResume == QMessageBox.No:
+                    # work on all files
+                    self.filesDone = []
+                elif confirmedResume == QMessageBox.Yes:
+                    # ignore files in log
+                    self.filesDone = filesExistAndDone
+            else:
+                if self.log.possibleAppend:
+                    filesExistAndDone = set(self.log.filesDone).intersection(set(allwavs))
+                    if len(filesExistAndDone) < total:
+                        confirmedResume = input("Previous analysis found in this folder (analyzed " +
+                                                str(len(filesExistAndDone)) + " out of " + str(total) +
+                                                " files in this folder).\nWould you like to resume that analysis?\n")
+                        if confirmedResume.lower() == 'yes' or confirmedResume.lower() == 'y':
+                            # ignore files in log
+                            self.filesDone = filesExistAndDone
+                            confirmedResume = True
+                        else:
+                            # work on all files
+                            self.filesDone = []
+                            confirmedResume = False
+                    else:
+                        print("All files appear to have previous analysis results")
+                        return
+                else:
+                    # work on all files
+                    self.filesDone = []
+                    confirmedResume = False
+
+            # Ask for FINAL USER CONFIRMATION here
+            cnt = len(self.filesDone)
+            # confirmedLaunch = QMessageBox.Cancel
+            if self.method == "Intermittent sampling":
+                text = "Method: " + self.method + ".\nNumber of files to analyze: " + str(total) + "\n"
+            else:
+                text = "Species: " + speciesStr + ", method: " + self.method + ".\nNumber of files to analyze: " + str(total) + ", " + str(cnt) + " done so far.\n"
+                text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
+            text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
+            if speciesStr=="Any sound":
+                text += "\nWarning: any previous annotations in these files will be deleted!\n"
+            else:
+                text += "\nWarning: any previous annotations for the selected species in these files will be deleted!\n"
+            text = "Analysis will be launched with these settings:\n" + text + "\nConfirm?"
+
+            if not self.CLI:
+                msg = SupportClasses.MessagePopup("t", "Launch batch analysis", text)
+                msg.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
+                confirmedLaunch = msg.exec_()
+
+                if confirmedLaunch == QMessageBox.Cancel:
+                    print("Analysis cancelled")
+                    return(2)
+
+                # update log: delete everything (by opening in overwrite mode),
+                # reprint old headers,
+                # print current header (or old if resuming),
+                # print old file list if resuming.
+                self.log.file = open(self.log.file, 'w')
+                if speciesStr not in ["Any sound", "Intermittent sampling"]:
+                    self.log.reprintOld()
+                    # else single-sp runs should be deleted anyway
+                if confirmedResume == QMessageBox.No:
+                    self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
+                elif confirmedResume == QMessageBox.Yes:
+                    self.log.appendHeader(self.log.currentHeader, self.log.species, self.log.settings)
+                    for f in self.log.filesDone:
+                        self.log.appendFile(f)
+            else:
+                # update log: delete everything (by opening in overwrite mode),
+                # reprint old headers,
+                # print current header (or old if resuming),
+                # print old file list if resuming.
+                self.log.file = open(self.log.file, 'w')
+                if speciesStr not in ["Any sound", "Intermittent sampling"]:
+                    self.log.reprintOld()
+                    # else single-sp runs should be deleted anyway
+
+                confirmedLaunch = input(text)
+                if confirmedLaunch.lower() == 'yes' or confirmedLaunch.lower() == 'y':
+                    self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
+                else:
+                    self.log.appendHeader(self.log.currentHeader, self.log.species, self.log.settings)
+                    for f in self.log.filesDone:
+                        self.log.appendFile(f)
                     return
-            else:
-                # work on all files
-                self.filesDone = []
-                confirmedResume = False
-
-
-        # Ask for FINAL USER CONFIRMATION here
-        cnt = len(self.filesDone)
-        # confirmedLaunch = QMessageBox.Cancel
-        if self.method == "Intermittent sampling":
-            text = "Method: " + self.method + ".\nNumber of files to analyze: " + str(total) + "\n"
-        else:
-            text = "Species: " + speciesStr + ", method: " + self.method + ".\nNumber of files to analyze: " + str(total) + ", " + str(cnt) + " done so far.\n"
-            text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
-        text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
-        if speciesStr=="Any sound":
-            text += "\nWarning: any previous annotations in these files will be deleted!\n"
-        else:
-            text += "\nWarning: any previous annotations for the selected species in these files will be deleted!\n"
-        text = "Analysis will be launched with these settings:\n" + text + "\nConfirm?"
-
-        if not self.CLI:
-            msg = SupportClasses.MessagePopup("t", "Launch batch analysis", text)
-            msg.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
-            confirmedLaunch = msg.exec_()
-
-            if confirmedLaunch == QMessageBox.Cancel:
-                print("Analysis cancelled")
-                return(2)
-
-            # update log: delete everything (by opening in overwrite mode),
-            # reprint old headers,
-            # print current header (or old if resuming),
-            # print old file list if resuming.
-            self.log.file = open(self.log.file, 'w')
-            if speciesStr not in ["Any sound", "Intermittent sampling"]:
-                self.log.reprintOld()
-                # else single-sp runs should be deleted anyway
-            if confirmedResume == QMessageBox.No:
-                self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
-            elif confirmedResume == QMessageBox.Yes:
-                self.log.appendHeader(self.log.currentHeader, self.log.species, self.log.settings)
-                for f in self.log.filesDone:
-                    self.log.appendFile(f)
-        else:
-            # update log: delete everything (by opening in overwrite mode),
-            # reprint old headers,
-            # print current header (or old if resuming),
-            # print old file list if resuming.
-            self.log.file = open(self.log.file, 'w')
-            if speciesStr not in ["Any sound", "Intermittent sampling"]:
-                self.log.reprintOld()
-                # else single-sp runs should be deleted anyway
-
-            confirmedLaunch = input(text)
-            if confirmedLaunch.lower() == 'yes' or confirmedLaunch.lower() == 'y':
-                self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
-            else:
-                self.log.appendHeader(self.log.currentHeader, self.log.species, self.log.settings)
-                for f in self.log.filesDone:
-                    self.log.appendFile(f)
 
         # MAIN PROCESSING starts here
         processingTime = 0
         cleanexit = 0
         cnt = 0
         msgtext = ""
-        if not self.CLI:
+        if not self.CLI and not self.testmode:
             # clean up the UI before entering the long loop
             self.w_processButton.setEnabled(False)
             self.update()
@@ -632,7 +640,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 progrtext = "file %d / %d. Time remaining: %d h %.2f min" % (cnt, total, hh, mm)
 
                 print("*** Processing" + progrtext + " ***")
-                if not self.CLI:
+                if not self.CLI and not self.testmode:
                     self.statusBar().showMessage("Processing "+progrtext)
                     self.update()
 
@@ -645,7 +653,8 @@ class AviaNZ_batchProcess(QMainWindow):
                 # check if file not empty
                 if os.stat(filename).st_size < 1000:
                     print("File %s empty, skipping" % filename)
-                    self.log.appendFile(filename)
+                    if not self.testmode:
+                        self.log.appendFile(filename)
                     continue
 
                 # check if file is formatted correctly
@@ -655,8 +664,6 @@ class AviaNZ_batchProcess(QMainWindow):
                         continue
 
                 # test the selected time window if it is a doc recording
-                inWindow = False
-
                 DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
                 if DOCRecording:
                     startTime = DOCRecording.group(2)
@@ -675,7 +682,8 @@ class AviaNZ_batchProcess(QMainWindow):
 
                 if DOCRecording and not inWindow:
                     print("Skipping out-of-time-window recording")
-                    self.log.appendFile(filename)
+                    if not self.testmode:
+                        self.log.appendFile(filename)
                     continue
 
                 # ALL SYSTEMS GO: process this file
@@ -710,7 +718,7 @@ class AviaNZ_batchProcess(QMainWindow):
                     except Exception:
                         e = "Encountered error:\n" + traceback.format_exc()
                         print("ERROR: ", e)
-                        if not self.CLI:
+                        if not self.CLI and not self.testmode:
                             self.statusBar().showMessage("Analysis stopped due to error")
                             dlg.setValue(total+1)
                             msg = SupportClasses.MessagePopup("w", "Analysis error!", e)
@@ -729,27 +737,28 @@ class AviaNZ_batchProcess(QMainWindow):
                     print("Warning: could not save segments!")
 
                 # Log success for this file and update ProgrDlg
-                self.log.appendFile(filename)
-                if not self.CLI:
-                    dlg.setValue(cnt)
-                    dlg.setLabelText("Analysed "+progrtext)
-                    dlg.update()
-                    if dlg.wasCanceled():
-                        print("Analysis canceled")
-                        dlg.setValue(total+1)
-                        self.statusBar().showMessage("Analysis canceled")
-                        self.w_processButton.setEnabled(True)
-                        self.log.file.close()
-                        return(2)
-                    # Refresh GUI after each file (only the ProgressDialog which is modal)
-                    QApplication.processEvents()
+                if not self.testmode:
+                    self.log.appendFile(filename)
+                    if not self.CLI:
+                        dlg.setValue(cnt)
+                        dlg.setLabelText("Analysed "+progrtext)
+                        dlg.update()
+                        if dlg.wasCanceled():
+                            print("Analysis canceled")
+                            dlg.setValue(total+1)
+                            self.statusBar().showMessage("Analysis canceled")
+                            self.w_processButton.setEnabled(True)
+                            self.log.file.close()
+                            return(2)
+                        # Refresh GUI after each file (only the ProgressDialog which is modal)
+                        QApplication.processEvents()
 
                 # track how long it took to process one file:
                 processingTime = time.time() - processingTimeStart
                 print("File processed in", processingTime)
                 # END of audio batch processing
 
-            if not self.CLI:
+            if not self.CLI and not self.testmode:
                 if self.method!="Intermittent sampling":
                     # delete old results (xlsx)
                     # ! WARNING: any Detection...xlsx files will be DELETED,
@@ -786,7 +795,7 @@ class AviaNZ_batchProcess(QMainWindow):
                 # user generate new ones through Batch Review.
 
         # END of processing and exporting. Final cleanup
-        if not self.CLI:
+        if not self.CLI and not self.testmode:
             self.statusBar().showMessage("Processed all %d files" % total)
             self.w_processButton.setEnabled(True)
             self.log.file.close()
@@ -800,7 +809,8 @@ class AviaNZ_batchProcess(QMainWindow):
                 return(0)
         else:
             print("Processed all %d files" % total)
-            self.log.file.close()
+            if not self.testmode:
+                self.log.file.close()
             return(0)
 
     def detectFile(self, speciesStr, filters):
@@ -877,39 +887,45 @@ class AviaNZ_batchProcess(QMainWindow):
                     # 4. Merge neighbours
                     # 5. Delete short segments
                     print("Segments detected (all subfilters): ", thisPageSegs)
-                    print("Post-processing...")
+                    if not self.testmode:
+                        print("Post-processing...")
                     # postProcess currently operates on single-level list of segments,
                     # so we run it over subfilters for wavelets:
                     spInfo = filters[speciesix]
                     for filtix in range(len(spInfo['Filters'])):
-                        CNNmodel = None
-                        if spInfo['species'] in self.CNNDicts.keys():
-                            CNNmodel = self.CNNDicts[spInfo['species']]
-                        post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
-                        print("Segments detected after WF: ", len(thisPageSegs[filtix]))
-                        if self.CLI:
-                            if self.wind and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0],
-                                                                         spInfo['Filters'][filtix]['FreqRange'][1]):
+                        if not self.testmode:
+                            CNNmodel = None
+                            if spInfo['species'] in self.CNNDicts.keys():
+                                CNNmodel = self.CNNDicts[spInfo['species']]
+                            post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
+                            print("Segments detected after WF: ", len(thisPageSegs[filtix]))
+                            if self.CLI:
+                                if self.wind and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0],
+                                                                             spInfo['Filters'][filtix]['FreqRange'][1]):
+                                    post.wind()
+                            elif self.w_wind.isChecked() and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0], spInfo['Filters'][filtix]['FreqRange'][1]):
                                 post.wind()
-                        elif self.w_wind.isChecked() and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0], spInfo['Filters'][filtix]['FreqRange'][1]):
-                            post.wind()
-                        if CNNmodel:
-                            print('Post-processing with CNN')
-                            post.CNN()
-                        if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
-                            if spInfo['Filters'][filtix]["F0"]:
-                                print("Checking for fundamental frequency...")
-                                post.fundamentalFrq()
+                            if CNNmodel:
+                                print('Post-processing with CNN')
+                                post.CNN()
+                            if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
+                                if spInfo['Filters'][filtix]["F0"]:
+                                    print("Checking for fundamental frequency...")
+                                    post.fundamentalFrq()
 
-                        post.joinGaps(maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
-                        post.deleteShort(minlength=spInfo['Filters'][filtix]['TimeRange'][0])
+                            post.joinGaps(maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
+                            post.deleteShort(minlength=spInfo['Filters'][filtix]['TimeRange'][0])
+                        else:
+                            post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate,
+                                                       tgtsampleRate=spInfo["SampleRate"],
+                                                       segments=thisPageSegs[filtix],
+                                                       subfilter=spInfo['Filters'][filtix], CNNmodel=None, cert=50)
 
                         # adjust segment starts for 15min "pages"
                         if start != 0:
                             for seg in post.segments:
                                 seg[0][0] += start/self.sampleRate
                                 seg[0][1] += start/self.sampleRate
-
                         # attach filter info and put on self.segments:
                         self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
 
@@ -941,7 +957,10 @@ class AviaNZ_batchProcess(QMainWindow):
         self.segments.metadata["noiseLevel"] = None
         self.segments.metadata["noiseTypes"] = []
 
-        self.segments.saveJSON(str(self.filename) + '.data')
+        if self.testmode:
+            self.segments.saveJSON(str(self.filename) + '.tmpdata')
+        else:
+            self.segments.saveJSON(str(self.filename) + '.data')
 
         return 1
 
