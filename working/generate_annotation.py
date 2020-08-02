@@ -48,10 +48,6 @@ def genGT(dirName,species='Kiwi',duration=0,window=1, inc=None):
     print ("Generated GT")
 
 def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notargetsp=False):
-<<<<<<< Updated upstream
-=======
-#def annotation2GT_OvWin(datFile, species, duration=0,window=1, inc=None, notargetsp=False):
->>>>>>> Stashed changes
     """
     This generates the ground truth for a given sound file
     Given the AviaNZ annotation, returns the ground truth as a txt file
@@ -67,7 +63,10 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
     # 75% overlap
         resol=(math.gcd(int(100*window),int(100*inc)))/100
 
+    print('window = ', window)
+    print('resol =', resol)
     datFile = wavFile + '.data'
+    print(datFile)
     #Virginia:changed file name appearence
     eFile = datFile[:-9] +'-res'+str(float(resol))+'sec.txt'
     print(eFile)
@@ -96,9 +95,15 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
         print(datFile)
         with open(datFile) as f:
             segments = json.load(f)
+        # print(segments[1:])
+        segments=segments[1:]
         for seg in segments:
+            
             if seg[0] == -1:
                 continue
+            # if 'Operator' is seg:
+            #     print('check')
+            #     continue
             #ORIGINAL Version
             #virginia: changed because I had problem on this
             #if not species.title() in seg[4]:
@@ -149,29 +154,33 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
                     type = 'C'
                 elif species == 'Bittern':
                     type = 'Bittern'
-                # Record call quality for evaluation purpose
-                if re.search('1', seg[4][0]):
-                    quality = '1'  # v close
-                elif re.search('2', seg[4][0]):
-                    quality = '2'  # close
-                elif re.search('3', seg[4][0]):
-                    quality = '3'  # fade
-                elif re.search('4', seg[4][0]):
-                    quality = '4'  # v fade
-                elif re.search('5', seg[4][0]):
-                    quality = '5'  # v v fade
+                # # Record call quality for evaluation purpose
+                # if re.search('1', seg[4][0]):
+                #     quality = '1'  # v close
+                # elif re.search('2', seg[4][0]):
+                #     quality = '2'  # close
+                # elif re.search('3', seg[4][0]):
+                #     quality = '3'  # fade
+                # elif re.search('4', seg[4][0]):
+                #     quality = '4'  # v fade
+                # elif re.search('5', seg[4][0]):
+                #     quality = '5'  # v v fade
                 #Virginia: start and end must be read in resol base
                 s=int(math.floor(seg[0]/resol))
                 e=int(math.ceil(seg[1]/resol))
                 print("start and end: ", s, e)
                 for i in range(s, e):
-                    # when there are overlapping calls priority for good quality one
-                    if GT[i][1] == '1' and GT[i][3] >= quality:
-                        continue
-                    else:
-                        GT[i][1] = str(1)
-                        GT[i][2] = type
-                        GT[i][3] = quality
+                    GT[i][1] = str(1)
+                    GT[i][2] = ''
+                    GT[i][3] = ''
+                # for i in range(s, e):
+                #     # when there are overlapping calls priority for good quality one
+                #     if GT[i][1] == '1' and GT[i][3] >= quality:
+                #         continue
+                #     else:
+                #         GT[i][1] = str(1)
+                #         GT[i][2] = type
+                #         GT[i][3] = quality
 
     # Empty files cannot be used now, and lead to problems
     # if len(GT)==0:
@@ -188,8 +197,10 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
     # now save GT as a .txt file
     # Virginia: from index reconstruct time
     for i in range(1, duration + 1):
-        GT[i - 1][0] = str(i*resol)  # add time as the first column to make GT readable
+        print(np.ceil(i)*resol)
+        GT[i - 1][0] = str(float(i*resol))  # add time as the first column to make GT readable
     # strings = (str(item) for item in GT)
+    print('resol =', resol)
     with open(eFile, "w") as f:
         for l, el in enumerate(GT):
             string = '\t'.join(map(str, el))
@@ -201,67 +212,6 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
     print(lenMin, lenMax, fLow, fHigh, sampleRate)
     #return [lenMin, lenMax, fLow, fHigh, sampleRate]
 
-<<<<<<< Updated upstream
 #Virginia:change directory name
-# genGT('D:\AviaNZ\Sound Files\Fiordland kiwi\Dataset\\Negative',species='Kiwi(Tokoeka Fiordland)',window=1, inc=1)
-=======
-def splitGT(dirName, window=1, inc=None):
-
-#From Nirosha
-
-    # Virginia: set increment and resolution
-    if inc==None:
-        inc=window
-        resol=window
-    else:
-    # Virginia: resolution is the "gcd" between window and inc. In this way I'm hoping to solve the case with
-    # 75% overlap
-        resol=(math.gcd(int(100*window),int(100*inc)))/100
-    slot1=int(math.ceil(300/resol))
-    slot2=int(math.ceil(600/resol))
-    slot3=int(math.ceil(900/resol))
-    new_dir='D:\Desktop\Documents\Work\Data\Filter experiment\Ruru\Test-5min'
-    for root, dirs, files in os.walk(str(dirName)):
-        for file in files:
-            if file.endswith('.txt'):
-                filename = root + '/' + file
-                filename2= new_dir + '/'+file
-                fileAnnotations = []
-                # Get the segmentation from the txt file
-                f = open(filename, "r")
-                if resol==0.25:
-                     f1 = filename2[:-15] + '_0' + filename2[-15:]
-                     f2 = filename2[:-15] + '_1' + filename2[-15:]
-                     f3 = filename2[:-15] + '_2' + filename2[-15:]
-                else:
-                    f1 = filename2[:-14] + '_0' + filename2[-14:]
-                    f2 = filename2[:-14] + '_1' + filename2[-14:]
-                    f3 = filename2[:-14] + '_2' + filename2[-14:]
-                f1out = open(f1, 'w')
-                f2out = open(f2, 'w')
-                f3out = open(f3, 'w')
-                i = 0
-                for line in f:
-                    #if i<300:
-                    if i<slot1:
-                        f1out.write(line)
-                    #elif i<600:
-                    elif i<slot2:
-                        f2out.write(line)
-                    #elif i<900:
-                    elif i<slot3:
-                        f3out.write(line)
-                    i = i+1
-                f1out.close()
-                f2out.close()
-                f3out.close()
-
-
-#Virginia:change directory name 
-#genGT('/home/listanvirg/Data/Filter experiment/Ruru',species='Morepork',window=1)
-genGT('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui',species='Kiwi',window=4, inc=3)
-#genGT('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru GT\Test',species='Morepork',window=0.5, inc=0.25)
-#splitGT('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru GT\Test',window=0.5, inc=0.25)
-
->>>>>>> Stashed changes
+genGT("D:\\Desktop\\Documents\\Work\\Zohara files\\TEST",species='Bigeye',window=0.05, inc=0.05)
 

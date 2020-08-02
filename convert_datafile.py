@@ -16,9 +16,10 @@ import wavio
 import math
 
 #dirName='/home/listanvirg/Data/Bat/BAT/TRAIN_DATA/LT'
-dirName='D:\Desktop\Documents\Work\Data\Bat\BAT\TRAIN_DATA\ST'
-samplerate1=176000
-samplerate2=16000
+# dirName='D:\Desktop\Documents\Work\Data\Bat\BAT\TRAIN_DATA\ST'
+dirName='D:\Desktop\Documents\Work\Zohara files\TEST'
+samplerate1=8000
+samplerate2=4000
 k=samplerate1/samplerate2
 
 for root, dirs, files in os.walk(str(dirName)):
@@ -45,5 +46,6 @@ for root, dirs, files in os.walk(str(dirName)):
                         seg[2] = seg[2] / k
                         #print(seg[2])
                         seg[3] = seg[3]/ k
-            with open(annotation_file, 'w') as f2:
+            new_annotation_file=annotation_file[:-9]+'_timeexpanded'+str(samplerate2)+'.wav.data'
+            with open(new_annotation_file, 'w') as f2:
                 json.dump(segments,f2)
