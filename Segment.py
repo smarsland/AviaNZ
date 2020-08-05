@@ -1372,7 +1372,7 @@ class PostProcess:
             featuress = featuress.astype('float32')
             # predict with CNN
             if np.shape(featuress)[0] > 0:
-                probs = self.CNNmodel.predict_proba(featuress)
+                probs = self.CNNmodel.predict(featuress)
             else:
                 probs = 0
 
@@ -1414,7 +1414,7 @@ class PostProcess:
                 self.segments[ix][-1] = certainty
                 subsegs = self.getSubSegs(probs, ctkey, seg, self.CNNwindow, self.CNNhop)
                 if subsegs != []:
-                    print("Replaced with the following subsegments:", subsegs)
+                    print("Replaced with sub-segments:", subsegs)
                     del self.segments[ix]
                     for ns in subsegs[::-1]:
                         ctnewseg.append(ns)
