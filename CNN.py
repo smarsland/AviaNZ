@@ -313,7 +313,6 @@ class CNN:
     def createArchitecture(self):
         '''
         Sets self.model
-        :return:
         '''
         self.model = tf.keras.models.Sequential()
         self.model.add(tf.keras.layers.Conv2D(32, kernel_size=(7, 7), activation='relu', input_shape=[self.imageheight, self.imagewidth, 1], padding='Same'))
