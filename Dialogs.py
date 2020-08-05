@@ -275,6 +275,124 @@ class Spectrogram(QDialog):
     #     msg.exec_()
     #     return
 
+#======
+class Excel2Annotation(QDialog):
+    # Class for Excel to AviaNZ annotation
+    def __init__(self, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Generate annotations from Excel')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setMinimumWidth(700)
+
+        self.txtExcel = QLineEdit()
+        self.txtExcel.setMinimumWidth(400)
+        self.txtExcel.setText('')
+        self.btnBrowseExcel = QPushButton("&Browse Excel")
+        self.btnBrowseExcel.setFixedWidth(220)
+        self.btnBrowseExcel.clicked.connect(self.browseExcel)
+
+        self.txtAudio = QLineEdit()
+        self.txtAudio.setMinimumWidth(400)
+        self.txtAudio.setText('')
+        self.btnBrowseAudio = QPushButton("Browse Corresponding Audio")
+        self.btnBrowseAudio.setFixedWidth(220)
+        self.btnBrowseAudio.setToolTip("Select corresponding .wav")
+        self.btnBrowseAudio.clicked.connect(self.browseAudio)
+
+        self.txtSpecies = QLineEdit()
+        self.txtSpecies.setMinimumWidth(400)
+        self.txtSpecies.setText('')
+        lblSpecies = QLabel("Species Name")
+        lblSpecies.setFixedWidth(220)
+        lblSpecies.setAlignment(Qt.AlignCenter)
+
+        self.btnGenerateAnnot = QPushButton("Generate AviaNZ Annotation")
+        self.btnGenerateAnnot.setFixedHeight(50)
+        self.btnGenerateAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+
+        # Show a template
+        tableWidget = QTableWidget()
+        tableWidget.setRowCount(4)
+        tableWidget.setColumnCount(4)
+        tableWidget.setHorizontalHeaderLabels("A;B;C;D".split(";"))
+        tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        tableWidget.setItem(0, 0, QTableWidgetItem("Start time (sec)"))
+        tableWidget.setItem(0, 1, QTableWidgetItem("End time (sec)"))
+        tableWidget.setItem(0, 2, QTableWidgetItem("Lower frequency (Hz)"))
+        tableWidget.setItem(0, 3, QTableWidgetItem("Upper frequency (Hz)"))
+        tableWidget.setItem(1, 0, QTableWidgetItem("42.15"))
+        tableWidget.setItem(1, 1, QTableWidgetItem("48.24"))
+        tableWidget.setItem(1, 2, QTableWidgetItem("546.26"))
+        tableWidget.setItem(1, 3, QTableWidgetItem("7492.35"))
+        tableWidget.setItem(2, 0, QTableWidgetItem("88.54"))
+        tableWidget.setItem(2, 1, QTableWidgetItem("95.25"))
+        tableWidget.setItem(2, 2, QTableWidgetItem("550.74"))
+        tableWidget.setItem(2, 3, QTableWidgetItem("7505.25"))
+        tableWidget.setItem(3, 0, QTableWidgetItem("684.15"))
+        tableWidget.setItem(3, 1, QTableWidgetItem("699.74"))
+        tableWidget.setItem(3, 2, QTableWidgetItem("560.25"))
+        tableWidget.setItem(3, 3, QTableWidgetItem("8000.30"))
+        tableWidget.setMinimumWidth(700)
+        tableWidget.setStyleSheet("QTableWidget { color : #808080; }")
+
+        Box = QVBoxLayout()
+        Box.addWidget(QLabel('Required Excel Format:'))
+        Box.addWidget(tableWidget)
+        Box.addWidget(QLabel())
+        Box1 = QHBoxLayout()
+        Box1.addWidget(self.btnBrowseExcel)
+        Box1.addWidget(self.txtExcel)
+        Box2 = QHBoxLayout()
+        Box2.addWidget(self.btnBrowseAudio)
+        Box2.addWidget(self.txtAudio)
+        Box3 = QHBoxLayout()
+        Box3.addWidget(lblSpecies)
+        Box3.addWidget(self.txtSpecies)
+        Box.addLayout(Box1)
+        Box.addLayout(Box2)
+        Box.addLayout(Box3)
+        Box.addWidget(QLabel())
+        Box.addWidget(self.btnGenerateAnnot)
+
+        # Now put everything into the frame
+        self.setLayout(Box)
+
+    def getValues(self):
+        if self.txtSpecies.text() and self.txtExcel.text() and self.txtAudio.text():
+            return [self.txtExcel.text(), self.txtAudio.text(), self.txtSpecies.text()]
+        else:
+            msg = SupportClasses.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
+            msg.exec_()
+            return []
+
+    def browseExcel(self):
+        try:
+            if not self.txtAudio.text():
+                userDir = os.path.expanduser("~")
+            else:
+                userDir, _ = os.path.split(self.txtAudio.text())
+            excelfile, _ = QtGui.QFileDialog.getOpenFileName(self, 'Open file', userDir, "Excel (*.xlsx *.xls)")
+            self.txtExcel.setText(excelfile)
+            self.txtExcel.setReadOnly(True)
+        except Exception as e:
+            print("ERROR: failed with error:")
+            print(e)
+            return
+
+    def browseAudio(self):
+        try:
+            if not self.txtExcel.text():
+                userDir = os.path.expanduser("~")
+            else:
+                userDir, _ = os.path.split(self.txtExcel.text())
+            audiofile, _ = QtGui.QFileDialog.getOpenFileName(self, 'Open file', userDir, "Audio (*.wav)")
+            self.txtAudio.setText(audiofile)
+            self.txtAudio.setReadOnly(True)
+        except Exception as e:
+            print("ERROR: failed with error:")
+            print(e)
+            return
 
 class OperatorReviewer(QDialog):
     # Class for the set operator dialog box
