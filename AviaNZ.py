@@ -55,6 +55,7 @@ import colourMaps
 import librosa
 import click, webbrowser, copy, math
 import time
+import openpyxl
 
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
@@ -412,6 +413,11 @@ class AviaNZ(QMainWindow):
         extrarecMenu.addAction("Extend a wavelet recogniser with CNN", self.buildCNN)
         recMenu.addAction("Test a recogniser", self.testRecogniser)
         recMenu.addAction("Manage recognisers", self.manageFilters)
+
+        # "Utilities" menu
+        utilMenu = self.menuBar().addMenu("&Utilities")
+        utilMenu.addAction("Excel to annotation", self.excel2Annotation)
+        # utilMenu.addAction("Split long recordings", self.splitter)
 
         helpMenu = self.menuBar().addMenu("&Help")
         helpMenu.addAction("Help", self.showHelp, "Ctrl+H")
@@ -4615,6 +4621,54 @@ class AviaNZ(QMainWindow):
             except Exception as e:
                 print("ERROR: could not save recogniser because:", e)
         else:
+            return
+
+    def excel2Annotation(self):
+        """ Utility function dialog: Generate AviaNZ style annotations given the start-end of calls in excel format
+        """
+        self.excel2AnnotationDialog = Dialogs.Excel2Annotation()
+        self.excel2AnnotationDialog.show()
+        self.excel2AnnotationDialog.activateWindow()
+        self.excel2AnnotationDialog.btnGenerateAnnot.clicked.connect(self.genExcel2Annot)
+
+    def genExcel2Annot(self):
+        """ Utility function: Generate AviaNZ style annotations given the start-end of calls in excel format"""
+
+        values = self.excel2AnnotationDialog.getValues()
+        if values:
+            [excelfile, audiofile, species] = values
+        else:
+            return
+
+        try:
+            # Read excel file
+            book = openpyxl.load_workbook(excelfile)
+            sheet = book.active
+            starttime = sheet['A2': 'A' + str(sheet.max_row)]
+            endtime = sheet['B2': 'B' + str(sheet.max_row)]
+            flow = sheet['C2': 'C' + str(sheet.max_row)]
+            fhigh = sheet['D2': 'D' + str(sheet.max_row)]
+
+            _, duration, _, _ = wavio.readFmt(audiofile)
+
+            annotation = []
+            for i in range(len(starttime)):
+                annotation.append([float(starttime[i][0].value), float(endtime[i][0].value), float(flow[i][0].value),
+                                   float(fhigh[i][0].value),
+                                   [{"species": species, "certainty": 100.0, "filter": "M", "calltype": species}]])
+            annotation.insert(0, {"Operator": "", "Reviewer": "", "Duration": duration})
+            file = open(audiofile + '.data', 'w')
+            json.dump(annotation, file)
+            file.close()
+            self.excel2AnnotationDialog.txtSpecies.setText('')
+            self.excel2AnnotationDialog.txtAudio.setText('')
+            self.excel2AnnotationDialog.txtExcel.setText('')
+            msg = SupportClasses.MessagePopup("d", "Generated annotation",
+                                              "Successfully saved the annotation file: " + '\n' + audiofile + '.data')
+            msg.exec_()
+        except Exception as e:
+            print("ERROR: Generating annotation failed with error:")
+            print(e)
             return
 
     def segmentationDialog(self):
