@@ -23,8 +23,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #     from PyQt5.QtGui import QIcon, QPixmap
-from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QWidget
-from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QEvent, QLineF
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QWidget, QListWidget, QListWidgetItem
+from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QEvent, QLineF, QLine, QPoint, QSize, QDir
 from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
@@ -32,14 +32,23 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
 
+from openpyxl import load_workbook, Workbook
+from openpyxl.styles import colors
+from openpyxl.styles import Font
+
+import Segment
+
 import wavio
 from time import sleep
 import time
 import math
 import numpy as np
 import os, json
+import re
 import sys
 import io
+from tensorflow.keras.models import model_from_json
+from tensorflow.keras.models import load_model
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
@@ -48,10 +57,19 @@ class TimeAxisHour(pg.AxisItem):
         super(TimeAxisHour, self).__init__(*args, **kwargs)
         self.offset = 0
         self.setLabel('Time', units='hh:mm:ss')
+        self.showMS = False
+
+    def setShowMS(self,value):
+        self.showMS = value
 
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
-        return [QTime(0,0,0).addSecs(value+self.offset).toString('hh:mm:ss') for value in values]
+        if self.showMS:
+            self.setLabel('Time', units='hh:mm:ss.ms')
+            return [QTime(0,0,0).addMSecs((value+self.offset)*1000).toString('hh:mm:ss.z') for value in values]
+        else:
+            self.setLabel('Time', units='hh:mm:ss')
+            return [QTime(0,0,0).addSecs(value+self.offset).toString('hh:mm:ss') for value in values]
 
     def setOffset(self,offset):
         self.offset = offset
@@ -64,16 +82,135 @@ class TimeAxisMin(pg.AxisItem):
     def __init__(self, *args, **kwargs):
         super(TimeAxisMin, self).__init__(*args, **kwargs)
         self.offset = 0
-        self.setLabel('Time', units='mm:ss')
+        self.setLabel('Time', units='mm:ss.z')
+        self.showMS = False
+
+    def setShowMS(self,value):
+        self.showMS = value
 
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
-        return [QTime(0,0,0).addSecs(value+self.offset).toString('mm:ss') for value in values]
+        if self.showMS:
+            self.setLabel('Time', units='mm:ss.ms')
+            return [QTime(0,0,0).addMSecs((value+self.offset)*1000).toString('mm:ss.z') for value in values]
+        else:
+            self.setLabel('Time', units='mm:ss')
+            return [QTime(0,0,0).addSecs(value+self.offset).toString('mm:ss') for value in values]
 
     def setOffset(self,offset):
         self.offset = offset
         self.update()
 
+
+class AxisWidget(QAbstractButton):
+    # Axis shown along the side of Single Sp buttons
+    def __init__(self, sgsize, minFreq, maxFreq, parent=None):
+        super(AxisWidget, self).__init__(parent)
+        self.minFreq = minFreq
+        self.maxFreq = maxFreq
+        self.sgsize = sgsize
+
+        # fixed size
+        self.setSizePolicy(0,0)
+        self.setMinimumSize(70, sgsize)
+        self.fontsize = min(max(int(math.sqrt(sgsize-30)*0.8), 9), 14)
+
+    def paintEvent(self, event):
+        if type(event) is not bool:
+            painter = QPainter(self)
+            # actual axis line painting
+            bottomR = event.rect().bottomRight()
+            bottomR.setX(bottomR.x()-6)
+            topR = event.rect().topRight()
+            topR.setX(topR.x()-6)
+            painter.setPen(QPen(QColor(20,20,20), 1))
+            painter.drawLine(bottomR, topR)
+
+            painter.setFont(QFont("Helvetica", self.fontsize))
+
+            # draw tickmarks and numbers
+            currFrq = self.minFreq
+            fontOffset = 5 + 2.6*self.fontsize
+            tickmark = QLine(bottomR, QPoint(bottomR.x()+6, bottomR.y()))
+            painter.drawLine(tickmark)
+            painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+1, "%.1f" % currFrq)
+            for ticknum in range(3):
+                currFrq += (self.maxFreq - self.minFreq)/4
+                tickmark.translate(0, -event.rect().height()//4)
+                painter.drawLine(tickmark)
+                painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+self.fontsize//2, "%.1f" % currFrq)
+            tickmark.translate(0, -tickmark.y2())
+            painter.drawLine(tickmark)
+            painter.drawText(tickmark.x2()-fontOffset, tickmark.y2()+self.fontsize+1, "%.1f" % self.maxFreq)
+
+            painter.save()
+            painter.translate(self.fontsize//2, event.rect().height()//2)
+            painter.rotate(-90)
+            painter.drawText(-12, 8, "kHz")
+            painter.restore()
+
+    def sizeHint(self):
+        return QSize(60, self.sgsize)
+
+    def minimumSizeHint(self):
+        return QSize(60, self.sgsize)
+
+class TimeAxisWidget(QAbstractButton):
+    # Class for HumanClassify dialogs to put spectrograms on buttons
+    # Also includes playback capability.
+    def __init__(self, sgsize, maxTime, parent=None):
+        super(TimeAxisWidget, self).__init__(parent)
+        self.sgsize = sgsize
+        self.maxTime = maxTime
+
+        # fixed size
+        self.setSizePolicy(0,0)
+        self.setMinimumSize(sgsize, 40)
+        self.setMaximumSize(sgsize, 50)
+        self.fontsize = min(max(int(math.sqrt(sgsize)*0.55), 9), 13)
+
+    def paintEvent(self, event):
+        if type(event) is not bool:
+            painter = QPainter(self)
+            # actual axis line painting
+            bottomL = event.rect().bottomLeft()
+            bottomR = event.rect().bottomRight()
+            top = event.rect().top()
+            painter.setPen(QPen(QColor(20,20,20), 1))
+
+            painter.setFont(QFont("Helvetica", self.fontsize))
+
+            # draw tickmarks and numbers
+            currTime = 0
+            fontOffset = 5+1.5*self.fontsize
+            if self.maxTime>=10:
+                timeFormat = "%d"
+            else:
+                timeFormat = "%.1f"
+
+            painter.drawLine(bottomL.x(), top+6, bottomR.x(), top+6)
+
+            tickmark = QLine(bottomL.x(), top+6, bottomL.x(), top)
+            painter.drawLine(tickmark)
+            painter.drawText(tickmark.x1(), tickmark.y1()+fontOffset, timeFormat % currTime)
+            for ticknum in range(4):
+                currTime += self.maxTime/5
+                tickmark.translate(event.rect().width()//5,0)
+                painter.drawLine(tickmark)
+                painter.drawText(tickmark.x1()-fontOffset//4, tickmark.y1()+fontOffset, timeFormat % currTime)
+            tickmark.translate(event.rect().width()//5-2,0)
+            painter.drawLine(tickmark)
+            painter.drawText(tickmark.x2()-fontOffset*0.7, tickmark.y1()+fontOffset, timeFormat % self.maxTime)
+
+            painter.save()
+            painter.drawText((bottomR.x() - bottomL.x())//2, bottomL.y(), "s")
+            painter.restore()
+
+    def sizeHint(self):
+        return QSize(self.sgsize,60)
+
+    def minimumSizeHint(self):
+        return QSize(self.sgsize,60)
 
 class ShadedROI(pg.ROI):
     # A region of interest that is shaded, for marking segments
@@ -235,6 +372,14 @@ class LinearRegionItem2(pg.LinearRegionItem):
         self.bounds = bounds
         self.lines[0].btn = self.parent.MouseDrawingButton
         self.lines[1].btn = self.parent.MouseDrawingButton
+        self.setHoverBrush(QtGui.QBrush(QtGui.QColor(0, 0, 255, 100)))
+
+    def setHoverBrush(self, *br, **kargs):
+        self.hoverBrush = fn.mkBrush(*br, **kargs)
+
+    def setPen(self, *pen, **kargs):
+        self.lines[0].setPen(*pen, **kargs)
+        self.lines[1].setPen(*pen, **kargs)
 
     def mouseDragEvent(self, ev):
         if not self.movable or ev.button()==self.parent.MouseDrawingButton:
@@ -356,7 +501,12 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
 
     def mousePressEvent(self, ev):
         super(ClickableRectItem, self).mousePressEvent(ev)
-        self.parentWidget().resend(self.mapRectToParent(self.boundingRect()).x())
+        # send the position of this rectangle in ViewBox coords
+        # left corner:
+        # x = self.mapRectToParent(self.boundingRect()).x()
+        # or center:
+        x = self.mapRectToParent(self.boundingRect()).center().x()
+        self.parentWidget().resend(x)
 
 
 class ControllableAudio(QAudioOutput):
@@ -730,7 +880,7 @@ class MessagePopup(QMessageBox):
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v2.0.2 (January 2020)")
+            self.setText("The AviaNZ Program, v2.2 (April 2020)")
             self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
@@ -775,6 +925,8 @@ class ConfigLoader(object):
 
         goodfilters = dict()
         for filtfile in filters:
+            if not filtfile.endswith("txt"):
+                continue
             try:
                 filt = json.load(open(os.path.join(dir, filtfile)))
 
@@ -794,6 +946,42 @@ class ConfigLoader(object):
                 print("Could not load filter:", filtfile, e)
         print("Loaded filters:", list(goodfilters.keys()))
         return goodfilters
+
+    def CNNmodels(self, filters, dircnn, targetspecies):
+        """ Returns a dict of target CNN models
+            Filters - dict of loaded filter files
+            Targetspecies - list of species names to load
+            """
+        print("Loading CNN models from folder %s" % dircnn)
+        targetmodels = dict()
+        for species in targetspecies:
+            filt = filters[species]
+            if "CNN" not in filt:
+                continue
+            elif filt["CNN"]:
+                if species == "NZ Bats":
+                    try:
+                        model = load_model(os.path.join(dircnn, filt["CNN"]["CNN_name"]))
+                        targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
+                                                 filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
+                    except Exception as e:
+                        print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]), e)
+                else:
+                    try:
+                        json_file = open(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.json', 'r')
+                        loaded_model_json = json_file.read()
+                        json_file.close()
+                        model = model_from_json(loaded_model_json)
+                        model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
+                        print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
+                        print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
+                        model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
+                        targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
+                                                 filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
+                    except Exception as e:
+                        print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]), e)
+        print("Loaded CNN models:", list(targetmodels.keys()))
+        return targetmodels
 
     def shortbl(self, file, configdir):
         # A fallback shortlist will be confirmed to exist in configdir.
@@ -832,7 +1020,6 @@ class ConfigLoader(object):
             return None
 
     def longbl(self, file, configdir):
-
         print("Loading long species list from file %s" % file)
         try:
             if os.path.isabs(file):
@@ -858,6 +1045,35 @@ class ConfigLoader(object):
         except Exception as e:
             print(e)
             msg = MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
+            msg.exec_()
+            return None
+
+    def batl(self, file, configdir):
+        print("Loading bat list from file %s" % file)
+        try:
+            if os.path.isabs(file):
+                # user-picked files will have absolute paths
+                blfile = file
+            else:
+                # initial file will have relative path,
+                # to allow looking it up in various OSes.
+                blfile = os.path.join(configdir, file)
+            if not os.path.isfile(blfile):
+                print("Warning: file %s not found, falling back to default" % blfile)
+                blfile = os.path.join(configdir, "ListBats.txt")
+
+            try:
+                readlist = json.load(open(blfile))
+                return readlist
+            except ValueError as e:
+                print(e)
+                msg = MessagePopup("w", "Bad species list", "Warning: file " + blfile + " corrupt, delete it to restore default. Reverting to default.")
+                msg.exec_()
+                return None
+
+        except Exception as e:
+            print(e)
+            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load bat list from " + file + ". Reverting to default.")
             msg.exec_()
             return None
 
@@ -892,10 +1108,265 @@ class ConfigLoader(object):
             print("ERROR while saving config file:")
             print(e)
 
+
+class ExcelIO():
+    """ Exports the annotations to xlsx, with three sheets:
+    time stamps, presence/absence, and per second presence/absence.
+    Saves each species into a separate workbook,
+    + an extra workbook for all species (to function as a readable segment printout).
+    It makes the workbook if necessary.
+
+    Inputs
+        segments:   list of SegmentList objects, with additional filename attribute
+        dirName:    xlsx will be stored here
+        filename:   name of the wav file, to be recorded inside the xlsx
+        action:     "append" or "overwrite" any found Excels
+        pagelen:    page length, seconds (for filling out absence)
+        numpages:   number of pages in this file (of size pagelen)
+        speciesList:    list of species that are currently processed -- will force an xlsx output even if none were detected
+        startTime:  timestamp for cell names
+        resolution: output resolution on excel (sheet 3) in seconds. Default is 1
+    """
+    # functions for filling out the excel sheets:
+    # First page lists all segments (of a species, if specified)
+    # segsLL: list of SegmentList with filename attribute
+    # startTime: offset from 0, when exporting a single page
+    def writeToExcelp1(self, wb, segsLL, currsp, startTime):
+        ws = wb['Time Stamps']
+        r = ws.max_row + 1
+
+        for segsl in segsLL:
+            # extract segments for the current species
+            # if species=="All", take ALL segments.
+            if currsp=="Any sound":
+                speciesSegs = segsl
+            else:
+                speciesSegs = [segsl[ix] for ix in segsl.getSpecies(currsp)]
+
+            if len(speciesSegs)==0:
+                continue
+
+            # Loop over the segments
+            for seg in speciesSegs:
+                # Print the filename
+                ws.cell(row=r, column=1, value=segsl.filename)
+
+                # Time limits
+                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTime).toString('hh:mm:ss')))
+                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTime).toString('hh:mm:ss')))
+                # Freq limits
+                if seg[3]!=0:
+                    ws.cell(row=r, column=4, value=int(seg[2]))
+                    ws.cell(row=r, column=5, value=int(seg[3]))
+                if currsp=="Any sound":
+                    # print species and certainty
+                    text = [lab["species"] for lab in seg[4]]
+                    ws.cell(row=r, column=6, value=", ".join(text))
+                    text = [str(lab["certainty"]) for lab in seg[4]]
+                    ws.cell(row=r, column=7, value=", ".join(text))
+                else:
+                    # only print certainty
+                    text = []
+                    for lab in seg[4]:
+                        if lab["species"]==currsp:
+                            text.append(str(lab["certainty"]))
+                    ws.cell(row=r, column=6, value=", ".join(text))
+                r += 1
+
+    # This stores pres/abs and max certainty for the species in each file
+    # segscert: a 2D list of segs x [start, end, certainty]
+    def writeToExcelp2(self, wb, segscert, filename):
+        ws = wb['Presence Absence']
+        r = ws.max_row + 1
+
+        ws.cell(row=r, column=1, value=filename)
+
+        # segs: a 2D list of [start, end, certainty] for each seg
+        if len(segscert)>0:
+            pres = "Yes"
+            certainty = [lab[2] for lab in segscert]
+            certainty = max(certainty)
+        else:
+            pres = "No"
+            certainty = 0
+        ws.cell(row=r, column=2, value=pres)
+        ws.cell(row=r, column=3, value=certainty)
+
+    # This stores pres/abs (or max cert) for the species
+    # in windows of size=resolution in each file
+    # segscert: a 2D list of segs x [start, end, certainty]
+    # pagenum: index of the current page, 0-base
+    # totpages: total number of pages
+    # pagelen: page length in s
+    def writeToExcelp3(self, wb, segscert, filename, pagenum, pagelen, totpages, resolution):
+        # writes binary output DETECTED (per s) from page PAGENUM of length PAGELEN
+        starttime = pagenum * pagelen
+        ws = wb['Per Time Period']
+        r = ws.max_row + 1
+
+        # print resolution "header"
+        ws.cell(row=r, column=1, value=str(resolution) + ' secs resolution')
+        ft = Font(color=colors.DARKYELLOW)
+        ws.cell(row=r, column=1).font=ft
+
+        # print file name and page number
+        ws.cell(row=r+1, column=1, value=filename)
+        ws.cell(row=r+1, column=2, value=str(pagenum+1))
+
+        detected = np.zeros(math.ceil(pagelen/resolution))
+        # convert segs to max certainty at each second
+        for seg in segscert:
+            # segment start-end, relative to this page start:
+            segStart = seg[0] - pagenum*pagelen
+            segEnd = seg[1] - pagenum*pagelen
+            # just in case of some old reversed segments:
+            if segStart > segEnd:
+                segStart, segEnd = segEnd, segStart
+
+            # segment is completely outside the current page:
+            if segEnd<0 or segStart>pagelen:
+                continue
+
+            # convert segment time in s to time in resol windows:
+            # map [1..1.999 -> 1
+            segStart = max(0, math.floor(segStart/resolution))
+            # map 2.0001...3] -> 3
+            segEnd = math.ceil(min(segEnd, pagelen)/resolution)
+            # range 1:3 selects windows 1 & 2
+            for t in range(segStart, segEnd):
+                # store certainty if it's larger
+                detected[t] = max(detected[t], seg[2])
+
+        # fill the header and detection columns
+        c = 3
+        for t in range(len(detected)):
+            # absolute (within-file) times:
+            win_start = starttime + t*resolution
+            win_end = min(win_start+resolution, int(pagelen * totpages))
+            ws.cell(row=r, column=c, value="%d-%d" % (win_start, win_end))
+            ws.cell(row=r, column=c).font = ft
+            ws.cell(row=r+1, column=c, value=detected[t])
+            c += 1
+
+    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=0, resolution=10):
+        # will export species present in self, + passed as arg, + "all species" excel
+        speciesList = set(speciesList)
+        for segl in segments:
+            for seg in segl:
+                speciesList.update([lab["species"] for lab in seg[4]])
+        speciesList.add("Any sound")
+        print("The following species were detected for export:", speciesList)
+
+        # check source .wav file names -
+        # ideally, we store relative paths, but that's not possible across drives:
+        for segl in segments:
+            try:
+                segl.filename = str(os.path.relpath(segl.filename, dirName))
+            except Exception as e:
+                print("Falling back to absolute paths. Encountered exception:")
+                print(e)
+                segl.filename = str(os.path.abspath(segl.filename))
+
+        # now, generate the actual files, SEPARATELY FOR EACH SPECIES:
+        for species in speciesList:
+            print("Exporting species %s" % species)
+            # clean version for filename
+            speciesClean = re.sub(r'\W', "_", species)
+
+            # setup output files:
+            # if an Excel exists, append (so multiple files go into one worksheet)
+            # if not, create new
+            eFile = os.path.join(dirName, 'DetectionSummary_' + speciesClean + '.xlsx')
+
+            if action == "overwrite" or not os.path.isfile(eFile):
+                # make a new workbook:
+                wb = Workbook()
+
+                # First sheet
+                wb.create_sheet(title='Time Stamps', index=1)
+                ws = wb['Time Stamps']
+                ws.cell(row=1, column=1, value="File Name")
+                ws.cell(row=1, column=2, value="start (hh:mm:ss)")
+                ws.cell(row=1, column=3, value="end (hh:mm:ss)")
+                ws.cell(row=1, column=4, value="min freq. (Hz)")
+                ws.cell(row=1, column=5, value="max freq. (Hz)")
+                if species=="Any sound":
+                    ws.cell(row=1, column=6, value="species")
+                    ws.cell(row=1, column=7, value="certainty")
+                else:
+                    ws.cell(row=1, column=6, value="certainty")
+
+                    # Second sheet
+                    wb.create_sheet(title='Presence Absence', index=2)
+                    ws = wb['Presence Absence']
+                    ws.cell(row=1, column=1, value="File Name")
+                    ws.cell(row=1, column=2, value="Present?")
+                    ws.cell(row=1, column=3, value="Certainty, %")
+
+                    # Third sheet
+                    wb.create_sheet(title='Per Time Period', index=3)
+                    ws = wb['Per Time Period']
+                    ws.cell(row=1, column=1, value="File Name")
+                    ws.cell(row=1, column=2, value="Page")
+                    ws.cell(row=1, column=3, value="Maximum certainty of species presence (0 = absent)")
+
+                # Hack to delete original sheet
+                del wb['Sheet']
+            elif action == "append":
+                try:
+                    wb = load_workbook(eFile)
+                except Exception as e:
+                    print("ERROR: cannot open file %s to append" % eFile)  # no read permissions or smth
+                    print(e)
+                    return 0
+            else:
+                print("ERROR: unrecognised action", action)
+                return 0
+
+            # export segments
+            self.writeToExcelp1(wb, segments, species, startTime)
+
+            if species!="Any sound":
+                # loop over all SegmentLists, i.e. for each wav file:
+                for segsl in segments:
+                    # extract the certainty from each label for current species
+                    # to a 2D list of segs x [start, end, certainty]
+                    # (for this wav file)
+                    speciesCerts = []
+                    for seg in segsl:
+                        for lab in seg[4]:
+                            if lab["species"]==species:
+                                speciesCerts.append([seg[0], seg[1], lab["certainty"]])
+
+                    # export presence/absence and max certainty
+                    self.writeToExcelp2(wb, speciesCerts, segsl.filename)
+
+                    # either read duration from this SegList
+                    # or need current page length if called from manual
+                    # (assuming all pages are of same length as current data)
+                    if pagelenarg is None:
+                        pagelen = math.ceil(segsl.metadata["Duration"])
+                    else:
+                        pagelen = pagelenarg
+
+                    # Generate pres/abs per custom resolution windows
+                    for p in range(0, numpages):
+                        self.writeToExcelp3(wb, speciesCerts, segsl.filename, p, pagelen, numpages, resolution)
+
+            # Save the file
+            try:
+                wb.save(eFile)
+            except Exception as e:
+                print("ERROR: could not create new file %s" % eFile)  # no read permissions or smth
+                print(e)
+                return 0
+        return 1
+
+
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, parent=None, cluster=False):
+    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, guide1=None, guide2=None, parent=None, cluster=False):
         super(PicButton, self).__init__(parent)
         self.index = index
         self.mark = "green"
@@ -904,6 +1375,21 @@ class PicButton(QAbstractButton):
         self.unbufStop = unbufStop
         self.cluster = cluster
         self.setMouseTracking(True)
+
+        self.playButton = QtGui.QToolButton(self)
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.hide()
+        # check if playback possible (e.g. batmode)
+        if len(audiodata)>0:
+            self.noaudio = False
+            self.playButton.clicked.connect(self.playImage)
+        else:
+            self.noaudio = True
+            # batmode frequency guides (in Y positions 0-1)
+            if guide1 is not None and guide2 is not None:
+                self.guide1y = guide1
+                self.guide2y = guide2
+
         # setImage reads some properties from self, to allow easy update
         # when color map changes
         self.setImage(lut, colStart, colEnd, cmapInv)
@@ -919,12 +1405,7 @@ class PicButton(QAbstractButton):
         self.media_obj = ControllableAudio(format)
         self.media_obj.notify.connect(self.endListener)
         self.audiodata = audiodata
-        self.duration = duration * 1000 # in ms
-
-        self.playButton = QtGui.QToolButton(self)
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.playButton.clicked.connect(self.playImage)
-        self.playButton.hide()
+        self.duration = duration * 1000  # in ms
 
     def setImage(self, lut, colStart, colEnd, cmapInv):
         # takes in a piece of spectrogram and produces a pair of images
@@ -937,22 +1418,40 @@ class PicButton(QAbstractButton):
             print("ERROR: button not shown, likely bad spectrogram coordinates")
             return
 
+        # Output image width - larger for batmode:
+        if self.noaudio:
+            targwidth = 750
+        else:
+            targwidth = 500
+
         # hardcode all image sizes
         if self.cluster:
             self.im1 = im1.scaled(200, 150)
         else:
-            self.specReductionFact = im1.size().width()/500
-            self.im1 = im1.scaled(500, im1.size().height())
+            self.specReductionFact = im1.size().width()/targwidth
+            # use original height if it is not extreme
+            prefheight = max(192, min(im1.size().height(), 512))
+            self.im1 = im1.scaled(targwidth, prefheight)
 
-        # draw lines
-        if not self.cluster:
+            heightRedFact = im1.size().height()/prefheight
+
+            # draw lines marking true segment position
             unbufStartAdj = self.unbufStart / self.specReductionFact
             unbufStopAdj = self.unbufStop / self.specReductionFact
-            self.line1 = QLineF(unbufStartAdj, 0, unbufStartAdj, im1.size().height())
-            self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, im1.size().height())
+            self.line1 = QLineF(unbufStartAdj, 0, unbufStartAdj, self.im1.size().height())
+            self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, self.im1.size().height())
+
+            # create guides for batmode
+            if self.noaudio:
+                self.guide1 = QLineF(0, self.im1.height() - self.guide1y/heightRedFact, targwidth, self.im1.height() - self.guide1y/heightRedFact)
+                self.guide2 = QLineF(0, self.im1.height() - self.guide2y/heightRedFact, targwidth, self.im1.height() - self.guide2y/heightRedFact)
 
     def paintEvent(self, event):
         if type(event) is not bool:
+            # this will repaint the entire widget, rather than
+            # trying to squish the image into the current viewport
+            rect = self.im1.rect()
+
             painter = QPainter(self)
             painter.setPen(QPen(QColor(80,255,80), 2))
             if self.cluster:
@@ -963,10 +1462,15 @@ class PicButton(QAbstractButton):
                     painter.setOpacity(0.8)
                 elif self.mark == "red":
                     painter.setOpacity(0.5)
-            painter.drawImage(event.rect(), self.im1)
+            painter.drawImage(rect, self.im1)
             if not self.cluster:
                 painter.drawLine(self.line1)
                 painter.drawLine(self.line2)
+
+            if self.noaudio:
+                painter.setPen(QPen(QColor(255,255,0), 2))
+                painter.drawLine(self.guide1)
+                painter.drawLine(self.guide2)
 
             # draw decision mark
             fontsize = int(self.im1.size().height() * 0.65)
@@ -976,28 +1480,32 @@ class PicButton(QAbstractButton):
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220,220,0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "?")
+                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "?")
             elif self.mark == "yellow" and self.cluster:
                 painter.setOpacity(0.9)
                 painter.setPen(QPen(QColor(220, 220, 0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "√")
+                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "√")
             elif self.mark == "red":
                 painter.setOpacity(0.8)
                 painter.setPen(QPen(QColor(220,0,0)))
                 painter.setFont(QFont("Helvetica", fontsize))
-                painter.drawText(self.im1.rect(), Qt.AlignHCenter | Qt.AlignVCenter, "X")
+                painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, "X")
             else:
                 print("ERROR: unrecognised segment mark")
                 return
 
     def enterEvent(self, QEvent):
         # to reset the icon if it didn't stop cleanly
+        if self.noaudio:
+            return
         if not self.media_obj.isPlaying():
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.show()
 
     def leaveEvent(self, QEvent):
+        if self.noaudio:
+            return
         if not self.media_obj.isPlaying():
             self.playButton.hide()
 
@@ -1055,6 +1563,7 @@ class PicButton(QAbstractButton):
         self.repaint()
         pg.QtGui.QApplication.processEvents()
 
+
 class Layout(pg.LayoutWidget):
     # Layout for the clustering that allows drag and drop
     buttonDragged = QtCore.Signal(int,object)
@@ -1070,3 +1579,207 @@ class Layout(pg.LayoutWidget):
         self.buttonDragged.emit(ev.pos().y(),ev.source())
         ev.setDropAction(Qt.MoveAction)
         ev.accept()
+
+
+class LightedFileList(QListWidget):
+    """ File list with traffic light icons.
+        On init (or after any change), pass the red, darkyellow, and green colors.
+    """
+    def __init__(self, ColourNone, ColourPossibleDark, ColourNamed):
+        super().__init__()
+        self.ColourNone = ColourNone
+        self.ColourPossibleDark = ColourPossibleDark
+        self.ColourNamed = ColourNamed
+        self.soundDir = None
+        self.spList = set()
+        self.fsList = set()
+        self.listOfFiles = []
+        self.minCertainty = 100
+
+        # for the traffic light icons
+        self.pixmap = QPixmap(10, 10)
+        self.blackpen = fn.mkPen(color=(160,160,160,255), width=2)
+        self.tempsl = Segment.SegmentList()
+
+    def fill(self, soundDir, fileName, recursive=False, readFmt=False, addWavNum=False):
+        """ read folder contents, populate the list widget.
+            soundDir: current dir
+            fileName: file which should be selected, or None
+            recursive: should we read the species list/format info from subdirs as well?
+            readFmt: should we read the wav header as well?
+            addWavNum: add extra info to the end of dir names
+        """
+        # clear current listbox
+        self.clearSelection()
+        self.clearFocus()
+        self.clear()
+        # collect some additional info about the current dir
+        self.spList = set()
+        self.fsList = set()
+        self.listOfFiles = []
+        self.minCertainty = 100
+
+        with pg.BusyCursor():
+            # Read contents of current dir
+            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav','*.bmp'],filters=QDir.AllDirs | QDir.NoDot | QDir.Files,sort=QDir.DirsFirst)
+            self.soundDir = soundDir
+
+            for file in self.listOfFiles:
+                # add entry to the list
+                item = QListWidgetItem(self)
+
+                if file.isDir():
+                    if file.fileName()=="..":
+                        item.setText(file.fileName() + "/")
+                        continue
+
+                    # detailed dir view can be used for non-clickable instances
+                    if addWavNum:
+                        # count wavs in this dir:
+                        numbmps = 0
+                        numwavs = 0
+                        for root, dirs, files in os.walk(file.filePath()):
+                            numwavs += sum(f.lower().endswith('.wav') for f in files)
+                            numbmps += sum(f.lower().endswith('.bmp') for f in files)
+                        # keep these strings as short as possible
+                        if numbmps==0:
+                            item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
+                        elif numwavs==0:
+                            item.setText("%s/\t\t(%d bmp files)" % (file.fileName(), numbmps))
+                        else:
+                            item.setText("%s/\t\t(%d wav, %d bmp files)" % (file.fileName(), numwavs, numbmps))
+                    else:
+                        item.setText(file.fileName() + "/")
+
+                    # We still might need to walk the subfolders for sp lists and wav formats!
+                    if not recursive:
+                        continue
+                    for root, dirs, files in os.walk(file.filePath()):
+                        for filename in files:
+                            filenamef = os.path.join(root, filename)
+                            if filename.lower().endswith('.wav') or filename.lower().endswith('.bmp'):
+                                # format collection only implemented for WAVs currently
+                                if readFmt and filename.lower().endswith('.wav'):
+                                    try:
+                                        samplerate = wavio.readFmt(filenamef)[0]
+                                        self.fsList.add(samplerate)
+                                    except Exception as e:
+                                        print("Warning: could not parse format of WAV file", filenamef)
+                                        print(e)
+
+                                # Data files can accompany either wavs or bmps
+                                dataf = filenamef + '.data'
+                                if os.path.isfile(dataf):
+                                    try:
+                                        self.tempsl.parseJSON(dataf, silent=True)
+                                        if len(self.tempsl)>0:
+                                            # collect any species present
+                                            filesp = [lab["species"] for seg in self.tempsl for lab in seg[4]]
+                                            self.spList.update(filesp)
+                                            # min certainty
+                                            cert = [lab["certainty"] for seg in self.tempsl for lab in seg[4]]
+                                            if cert:
+                                                mincert = min(cert)
+                                                if self.minCertainty > mincert:
+                                                    self.minCertainty = mincert
+                                    except Exception as e:
+                                        # .data exists, but unreadable
+                                        print("Could not read DATA file", dataf)
+                                        print(e)
+                else:
+                    item.setText(file.fileName())
+
+                    # check for a data file here and color this entry based on that
+                    fullname = os.path.join(soundDir, file.fileName())
+                    # (also updates the directory info sets, and minCertainty)
+                    self.paintItem(item, fullname+'.data')
+                    # format collection only implemented for WAVs currently
+                    if readFmt and file.fileName().lower().endswith('.wav'):
+                        try:
+                            samplerate = wavio.readFmt(fullname)[0]
+                            self.fsList.add(samplerate)
+                        except Exception as e:
+                            print("Warning: could not parse format of WAV file", fullname)
+                            print(e)
+
+        if readFmt:
+            print("Found the following Fs:", self.fsList)
+
+        # mark the current file or first row (..), if not found
+        if fileName:
+            index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+            if len(index)>0:
+                self.setCurrentItem(index[0])
+            else:
+                self.setCurrentRow(0)
+
+    def refreshFile(self, fileName):
+        """ Repaint a single file icon.
+            fileName: file stem (dir will be read from self)
+        """
+        index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+        if len(index)==0:
+            return
+
+        if self.soundDir is None:
+            # something bad happened
+            print("Warning: soundDir not set, cannot find .data files")
+            return
+
+        curritem = index[0]
+        datafile = os.path.join(self.soundDir, fileName)+'.data'
+        self.paintItem(curritem, datafile)
+
+    def paintItem(self, item, datafile):
+        """ Read the JSON and draw the traffic light for a single item """
+        filesp = []
+        if os.path.isfile(datafile):
+            # Try loading the segments to get min certainty
+            try:
+                self.tempsl.parseJSON(datafile, silent=True)
+                if len(self.tempsl)==0:
+                    # .data exists, but empty - "file was looked at"
+                    mincert = -1
+                else:
+                    cert = [lab["certainty"] for seg in self.tempsl for lab in seg[4]]
+                    if cert:
+                        mincert = min(cert)
+                    else:
+                        mincert = -1
+                    # also collect any species present
+                    filesp = [lab["species"] for seg in self.tempsl for lab in seg[4]]
+            except Exception as e:
+                # .data exists, but unreadable
+                print("Could not determine certainty for file", datafile)
+                print(e)
+                mincert = -1
+
+            if mincert == -1:
+                # .data exists, but no annotations
+                self.pixmap.fill(QColor(255,255,255,0))
+                painter = QPainter(self.pixmap)
+                painter.setPen(self.blackpen)
+                painter.drawRect(self.pixmap.rect())
+                painter.end()
+                item.setIcon(QIcon(self.pixmap))
+
+                # no change to self.minCertainty
+            elif mincert == 0:
+                self.pixmap.fill(self.ColourNone)
+                item.setIcon(QIcon(self.pixmap))
+                self.minCertainty = 0
+            elif mincert < 100:
+                self.pixmap.fill(self.ColourPossibleDark)
+                item.setIcon(QIcon(self.pixmap))
+                self.minCertainty = min(self.minCertainty, mincert)
+            else:
+                self.pixmap.fill(self.ColourNamed)
+                item.setIcon(QIcon(self.pixmap))
+                # self.minCertainty cannot be changed by a cert=100 segment
+        else:
+            # it is a file, but no .data
+            self.pixmap.fill(QColor(255,255,255,0))
+            item.setIcon(QIcon(self.pixmap))
+
+        # collect some extra info about this file as we've read it anyway
+        self.spList.update(filesp)

@@ -32,19 +32,12 @@ import time
 from ext import ce_denoise as ce
 import json
 import os
-import re
 import math
 import copy
 import wavio
-from itertools import chain, repeat
 from scipy.interpolate import interp1d
 from scipy.signal import medfilt
 import skimage.measure as skm
-
-from PyQt5.QtCore import QTime
-from openpyxl import load_workbook, Workbook
-from openpyxl.styles import colors
-from openpyxl.styles import Font
 
 
 class Segment(list):
@@ -131,19 +124,58 @@ class Segment(list):
         """
         deletedAll = list(set([lab["species"] for lab in self[4]])) == [species]
         # note that removeLabel will re-add a Don't Know in the end, so can't just check the final label.
-        for lab in self[4]:
-            self.removeLabel(lab["species"], lab["certainty"])
+        for lab in reversed(self[4]):
+            if lab["species"]==species:
+                print("Wiping label", lab)
+                self.removeLabel(lab["species"], lab["certainty"])
         return deletedAll
 
     def confirmLabels(self, species=None):
         """ Raise the certainty of this segment's uncertain labels to 100.
             Affects all species (if None) or indicated species.
+            Ignores "Don't Know" labels.
         """
+        toremove = []
         for labix in range(len(self[4])):
             lab = self[4][labix]
-            if (species is None or lab["species"]==species) and lab["certainty"] < 100:
-                lab["certainty"] = 100
-                self.keys[labix] = (lab["species"], lab["certainty"])
+            # check if this label is yellow:
+            if (species is None or lab["species"]==species) and lab["certainty"] < 100 and lab["species"]!="Don't Know":
+                # check if this segment has a green label for this species already
+                if (lab["species"], 100) in self.keys:
+                    # then just delete the yellow label
+                    toremove.append(lab)
+                else:
+                    lab["certainty"] = 100
+                    self.keys[labix] = (lab["species"], lab["certainty"])
+        for trlab in toremove:
+            self.removeLabel(trlab["species"], trlab["certainty"])
+
+    def questionLabels(self, species=None):
+        """ Lower the certainty of this segment's certain labels to 50.
+            Affects all species (if None) or indicated species.
+            Ignores "Don't Know" labels.
+            (Could be merged with the above at some point.)
+            Returns True if it changed any labels.
+        """
+        anyChanged = False
+        toremove = []
+        for labix in range(len(self[4])):
+            lab = self[4][labix]
+            # check if this label is green:
+            if (species is None or lab["species"]==species) and lab["certainty"]==100 and lab["species"]!="Don't Know":
+                # check if this segment has a yellow label for this species already
+                otherLabels = [k[0]==lab["species"] and k[1]<100 for k in self.keys]
+                if any(otherLabels):
+                    # then just delete this label
+                    toremove.append(lab)
+                else:
+                    lab["certainty"] = 50
+                    self.keys[labix] = (lab["species"], lab["certainty"])
+                anyChanged = True
+        for trlab in toremove:
+            self.removeLabel(trlab["species"], trlab["certainty"])
+
+        return(anyChanged)
 
     def removeLabel(self, species, certainty):
         """ Removes label from this segment.
@@ -158,7 +190,7 @@ class Segment(list):
                 except Exception as e:
                     text = "************ WARNING ************\n"
                     text += str(e)
-                    text += "\nWhile trying to remove key"+str(species)+"-"+str(certainty) + "from"+ str(self[4])
+                    text += "\nWhile trying to remove key "+str(species)+"-"+str(certainty) + " from "+ str(self[4])
                     text += "\nWhich had keys" + str(self.keys)
                     import SupportClasses
                     msg = SupportClasses.MessagePopup("w", "ERROR - please report", text)
@@ -177,7 +209,7 @@ class Segment(list):
         """ Returns a nicely-formatted string of this segment's info."""
         s = []
         for lab in self[4]:
-            labs = "sp.: {}, cert.: {}%".format(lab["species"], lab["certainty"])
+            labs = "sp.: %s, cert.: %d%%" % (lab["species"], lab["certainty"])
             if "filter" in lab and lab["filter"]!="M":
                 labs += ", filter: " + lab["filter"]
             if "calltype" in lab:
@@ -191,7 +223,7 @@ class SegmentList(list):
         and retrieving the right Segment from this list.
     """
 
-    def parseJSON(self, file, duration=0):
+    def parseJSON(self, file, duration=0, silent=False):
         """ Takes in a filename and reads metadata to self.metadata,
             and other segments to just the main body of self.
             If wav file is loaded, pass the true duration in s to check
@@ -209,7 +241,8 @@ class SegmentList(list):
         # first segment stores metadata
         self.metadata = dict()
         if isinstance(annots[0], list) and annots[0][0] == -1:
-            print("old format metadata detected")
+            if not silent:
+                print("old format metadata detected")
             self.metadata = {"Operator": annots[0][2], "Reviewer": annots[0][3]}
             # when file is loaded, true duration can be passed. Otherwise,
             # some old files have duration in samples, so need a rough check
@@ -220,8 +253,7 @@ class SegmentList(list):
             else:
                 # fallback to reading the wav:
                 try:
-                    wav = wavio.read(file[:-5])
-                    self.metadata["Duration"] = len(wav.data)/wav.rate
+                    self.metadata["Duration"] = wavio.readFmt(file[:-5])[1]
                 except Exception as e:
                     print("ERROR: duration not found in metadata, arguments, or read from wav")
                     print(file)
@@ -253,7 +285,7 @@ class SegmentList(list):
                 print("ERROR: annotation in wrong format:", annot)
                 return
 
-            # This could be turned on to skip segments outside Duration bounds, 
+            # This could be turned on to skip segments outside Duration bounds,
             # but may result in deleting actually useful annotations if Duration was wrong
             # if annot[0] > self.metadata["Duration"] and annot[1] > self.metadata["Duration"]:
             #     print("Warning: ignoring segment outside set duration", annot)
@@ -291,7 +323,8 @@ class SegmentList(list):
                 annot[4] = listofdicts
 
             self.addSegment(annot)
-        print("%d segments read" % len(self))
+        if not silent:
+            print("%d segments read" % len(self))
 
     def addSegment(self, segment):
         """ Just a cleaner wrapper to allow adding segments quicker.
@@ -305,9 +338,9 @@ class SegmentList(list):
     def addBasicSegments(self, seglist, freq=[0,0], **kwd):
         """ Allows to add bunch of basic segments from segmentation
             with identical species/certainty/freq values.
-            seglist - list of 2-col segments [t1, t2]
+            seglist - list of 2-col segments [[t1, t2],prob]
             label is built from kwd.
-            These will be converted to [t1, t2, freq[0], freq[1], label]
+            These will be converted to [[t1, t2, freq[0], freq[1], label], ...]
             and stored.
         """
         if not isinstance(freq, list) or freq[0]<0 or freq[1]<0:
@@ -315,7 +348,7 @@ class SegmentList(list):
             return
 
         for seg in seglist:
-            newseg = [seg[0], seg[1], freq[0], freq[1], [kwd]]
+            newseg = [seg[0][0], seg[0][1], freq[0], freq[1], [kwd]]
             self.addSegment(newseg)
 
     def getSpecies(self, species):
@@ -329,6 +362,22 @@ class SegmentList(list):
                     out.append(segi)
                     # go to next seg
                     break
+        return(out)
+
+    def getCalltype(self, species, calltype):
+        """ Returns indices of all segments that have the indicated species & calltype in label. """
+        out = []
+        for segi in range(len(self)):
+            # check each label in this segment:
+            labs = self[segi][4]
+            for lab in labs:
+                try:
+                    if lab["species"] == species and lab["calltype"] == calltype:
+                        out.append(segi)
+                        # go to next seg
+                        break
+                except:
+                    pass
         return(out)
 
     def saveJSON(self, file, reviewer=""):
@@ -355,6 +404,83 @@ class SegmentList(list):
 
         return(sttimes)
 
+    def splitLongSeg(self, maxlen=10, species=None):
+        """
+        Splits long segments (> maxlen) evenly
+        Operates on segment data structure
+        [1,5,a,b, [{}]] -> [1,3,a,b, [{}]], [3,5,a,b, [{}]]
+        """
+        toadd = []
+        for seg in self:
+            # if species is given, only split segments where it is present:
+            if species is not None and species not in [lab["species"] for lab in seg[4]]:
+                continue
+            l = seg[1]-seg[0]
+            if l > maxlen:
+                n = int(np.ceil(l/maxlen))
+                d = l/n
+                # adjust current seg to be the first piece
+                seg[1] = seg[0]+d
+                for i in range(1,n):
+                    end = min(l, d * (i+1))
+                    segpiece = copy.deepcopy(seg)
+                    segpiece[0] = seg[0] + d*i
+                    segpiece[1] = seg[0] + end
+                    # store further pieces to be added
+                    toadd.append(segpiece)
+        # now add them, to avoid messing with the loop length above
+        for seg in toadd:
+            self.addSegment(seg)
+
+    def mergeSplitSeg(self):
+        """ Inverse of the above: merges overlapping segments.
+            Merges only segments with identical labels,
+            so e.g. [kiwi, morepork] [kiwi] will not be merged.
+            Unlike analogs in Segmenter and PostProcess,
+            merges segments that only touch ([1,2][2,3]->[1,3]).
+
+            DOES NOT DELETE segments - returns indices to be deleted,
+            so an external handler needs to do the required interface updates.
+
+            ASSUMES sorted input!
+        """
+        todelete = []
+        if len(self)==0:
+            return []
+
+        # ideally, we'd loop over different labels, but not easy since they're unhashable.
+        # so we use a marker array to keep track of checked segments:
+        done = np.zeros(len(self))
+        while not np.all(done):
+            firstsegi = None
+            for segi in range(len(self)):
+                # was this already reviewed (when mergin another sp combo)?
+                if done[segi]==1:
+                    continue
+                # sets the first segment of this label
+                # (and the sp combo that will be merged now)
+                if firstsegi is None:
+                    firstsegi = segi
+                    done[segi] = 1
+                    continue
+                # ignore segments with labels other than the current one
+                if self[segi][4]!=self[firstsegi][4]:
+                    continue
+                # for subsequent segs, see if this can be merged to the previous one
+                if self[segi][0]<=self[firstsegi][1]:
+                    self[firstsegi][1] = max(self[segi][1], self[firstsegi][1])
+                    done[segi] = 1
+                    # mark this for deleting
+                    todelete.append(segi)
+                else:
+                    firstsegi = segi
+                    done[segi] = 1
+                    # no need to delete anything
+        # avoid duplicates in output to make life easier for later deletion
+        todelete = list(set(todelete))
+        todelete.sort(reverse=True)
+        return todelete
+
     def getSummaries(self):
         """ Calculates some summary parameters relevant for populating training dialogs.
             and returns other parameters for populating the training dialogs.
@@ -380,7 +506,6 @@ class SegmentList(list):
         species - string, will export the annotations for it.
         Window and inc defined as in waveletSegment.
         """
-
         if inc is None:
             inc = window
         resolution = math.gcd(int(100*window), int(100*inc)) / 100
@@ -391,14 +516,14 @@ class SegmentList(list):
 
         # deal with empty files
         thisSpSegs = self.getSpecies(species)
-        if len(thisSpSegs)==0:
-            print("Warning: no annotations for this species found in file", filename)
-            # delete the file to avoid problems with old GT files
-            try:
-                os.remove(eFile)
-            except Exception:
-                pass
-            return
+        # if len(thisSpSegs)==0:
+        #     print("Warning: no annotations for this species found in file", filename)
+        #     # delete the file to avoid problems with old GT files
+        #     try:
+        #         os.remove(eFile)
+        #     except Exception:
+        #         pass
+        #     return
 
         GT = np.tile([0, 0, None], (duration,1))
         # fill first column with "time"
@@ -424,215 +549,6 @@ class SegmentList(list):
                 f.write('\n')
             f.write('\n')
             print("output successfully saved to file", eFile)
-
-    def exportExcel(self, dirName, filename, action, pagelen, numpages=1, speciesList=[], startTime=0, resolution=1):
-        """ Exports the annotations to xlsx, with three sheets:
-        time stamps, presence/absence, and per second presence/absence.
-        Saves each species into a separate workbook,
-        + an extra workbook for all species (to function as a readable segment printout).
-        It makes the workbook if necessary.
-
-        Inputs
-            dirName:    xlsx will be stored here
-            filename:   name of the wav file, to be recorded inside the xlsx
-            action:     "append" or "overwrite" any found Excels
-            pagelen:    page length, seconds (for filling out absence)
-            numpages:   number of pages in this file (of size pagelen)
-            speciesList:    list of species that are currently processed -- will force an xlsx output even if none were detected
-            startTime:  timestamp for cell names
-            resolution: output resolution on excel (sheet 3) in seconds. Default is 1
-        """
-
-        pagelen = math.ceil(pagelen)
-
-        # will export species present in self, + passed as arg, + "all species" excel
-        speciesList = set(speciesList)
-        for seg in self:
-            speciesList.update([lab["species"] for lab in seg[4]])
-        speciesList.add("Any sound")
-        print("The following species were detected for export:", speciesList)
-
-        # ideally, we store relative paths, but that's not possible across drives:
-        try:
-            relfname = str(os.path.relpath(filename, dirName))
-        except Exception as e:
-            print("Falling back to absolute paths. Encountered exception:")
-            print(e)
-            relfname = str(os.path.abspath(filename))
-
-        # functions for filling out the excel sheets:
-        def writeToExcelp1(wb, segs, currsp):
-            ws = wb['Time Stamps']
-            r = ws.max_row + 1
-            # Print the filename
-            ws.cell(row=r, column=1, value=relfname)
-            # Loop over the segments
-            for seg in segs:
-                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTime).toString('hh:mm:ss')))
-                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTime).toString('hh:mm:ss')))
-                if seg[3]!=0:
-                    ws.cell(row=r, column=4, value=int(seg[2]))
-                    ws.cell(row=r, column=5, value=int(seg[3]))
-                if currsp=="Any sound":
-                    # print species and certainty
-                    text = [lab["species"] for lab in seg[4]]
-                    ws.cell(row=r, column=6, value=", ".join(text))
-                    text = [str(lab["certainty"]) for lab in seg[4]]
-                    ws.cell(row=r, column=7, value=", ".join(text))
-                else:
-                    # only print certainty
-                    text = []
-                    for lab in seg[4]:
-                        if lab["species"]==currsp:
-                            text.append(str(lab["certainty"]))
-                    ws.cell(row=r, column=6, value=", ".join(text))
-                r += 1
-
-        def writeToExcelp2(wb, segs):
-            # segs: a 2D list of [start, end, certainty] for each seg
-            ws = wb['Presence Absence']
-            r = ws.max_row + 1
-            ws.cell(row=r, column=1, value=relfname)
-            ws.cell(row=r, column=2, value='_')
-            if len(segs)>0:
-                pres = "Yes"
-                certainty = [lab[2] for lab in segs]
-                certainty = max(certainty)
-            else:
-                pres = "No"
-                certainty = 0
-            ws.cell(row=r, column=2, value=pres)
-            ws.cell(row=r, column=3, value=certainty)
-
-        def writeToExcelp3(wb, detected, pagenum):
-            # writes binary output DETECTED (per s) from page PAGENUM of length PAGELEN
-            starttime = pagenum * pagelen
-            ws = wb['Per Time Period']
-            # print resolution "header"
-            r = ws.max_row + 1
-            ws.cell(row=r, column=1, value=str(resolution) + ' secs resolution')
-            ft = Font(color=colors.DARKYELLOW)
-            ws.cell(row=r, column=1).font=ft
-            # print file name and page number
-            ws.cell(row=r+1, column=1, value=relfname)
-            ws.cell(row=r+1, column=2, value=str(pagenum+1))
-            # fill the header and detection columns
-            c = 3
-            for t in range(0, len(detected), resolution):
-                # absolute (within-file) times:
-                win_start = starttime + t
-                win_end = min(win_start+resolution, int(pagelen * numpages))
-                ws.cell(row=r, column=c, value=str(win_start) + '-' + str(win_end))
-                ws.cell(row=r, column=c).font = ft
-                # within-page times:
-                det = detected[t:win_end - starttime]
-                # max certainty on 0-100 scale:
-                det = max(det)
-                ws.cell(row=r+1, column=c, value=det)
-                c += 1
-
-        # now, generate the actual files, SEPARATELY FOR EACH SPECIES:
-        for species in speciesList:
-            print("Exporting species %s" % species)
-            # clean version for filename
-            speciesClean = re.sub(r'\W', "_", species)
-
-            # setup output files:
-            # if an Excel exists, append (so multiple files go into one worksheet)
-            # if not, create new
-            eFile = dirName + '/DetectionSummary_' + speciesClean + '.xlsx'
-
-            if action == "overwrite" or not os.path.isfile(eFile):
-                # make a new workbook:
-                wb = Workbook()
-
-                # First sheet
-                wb.create_sheet(title='Time Stamps', index=1)
-                ws = wb['Time Stamps']
-                ws.cell(row=1, column=1, value="File Name")
-                ws.cell(row=1, column=2, value="start (hh:mm:ss)")
-                ws.cell(row=1, column=3, value="end (hh:mm:ss)")
-                ws.cell(row=1, column=4, value="min freq. (Hz)")
-                ws.cell(row=1, column=5, value="max freq. (Hz)")
-                if species=="Any sound":
-                    ws.cell(row=1, column=6, value="species")
-                    ws.cell(row=1, column=7, value="certainty")
-                else:
-                    ws.cell(row=1, column=6, value="certainty")
-
-                    # Second sheet
-                    wb.create_sheet(title='Presence Absence', index=2)
-                    ws = wb['Presence Absence']
-                    ws.cell(row=1, column=1, value="File Name")
-                    ws.cell(row=1, column=2, value="Present?")
-                    ws.cell(row=1, column=3, value="Certainty, %")
-
-                    # Third sheet
-                    wb.create_sheet(title='Per Time Period', index=3)
-                    ws = wb['Per Time Period']
-                    ws.cell(row=1, column=1, value="File Name")
-                    ws.cell(row=1, column=2, value="Page")
-                    ws.cell(row=1, column=3, value="Maximum certainty of species presence (0 = absent)")
-
-                # Hack to delete original sheet
-                del wb['Sheet']
-            elif action == "append":
-                try:
-                    wb = load_workbook(eFile)
-                except Exception as e:
-                    print("ERROR: cannot open file %s to append" % eFile)  # no read permissions or smth
-                    print(e)
-                    return 0
-            else:
-                print("ERROR: unrecognised action", action)
-                return 0
-
-            # extract segments for the current species
-            # if species=="All", take ALL segments.
-            if species=="Any sound":
-                speciesSegs = self
-            else:
-                speciesSegs = [self[ix] for ix in self.getSpecies(species)]
-
-            # export segments
-            writeToExcelp1(wb, speciesSegs, species)
-
-            if species!="Any sound":
-                # extract the certainty from each label for current species
-                # to a 2D list of segs x [start, end, certainty]
-                speciesCerts = []
-                for seg in speciesSegs:
-                    for lab in seg[4]:
-                        if lab["species"]==species:
-                            speciesCerts.append([seg[0], seg[1], lab["certainty"]])
-
-                # export presence/absence and max certainty
-                writeToExcelp2(wb, speciesCerts)
-
-                # Generate per second binary output
-                # (assuming all pages are of same length as current data)
-                for p in range(0, numpages):
-                    detected = np.zeros(pagelen)
-                    # convert segs to max certainty at each second
-                    for seg in speciesCerts:
-                        for t in range(pagelen):
-                            # convert within-page time to segment (within-file) time
-                            truet = t + p*pagelen
-                            if math.floor(seg[0]) <= truet and truet < math.ceil(seg[1]):
-                                # store certainty if it's larger
-                                detected[t] = max(detected[t], seg[2])
-                    # write page p to xlsx
-                    writeToExcelp3(wb, detected, p)
-
-            # Save the file
-            try:
-                wb.save(eFile)
-            except Exception as e:
-                print("ERROR: could not create new file %s" % eFile)  # no read permissions or smth
-                print(e)
-                return 0
-        return 1
-
 
 class Segmenter:
     """ This class implements six forms of segmentation for the AviaNZ interface:
@@ -742,68 +658,139 @@ class Segmenter:
             t += 1
         return out
 
-    def deleteShort(self, segs, minlength=0.25):
+    def deleteShort(self, segments, minlength=0.25):
         """ Checks whether segments are long enough.
-            Operates on start-end list [[1,3], [4,5]] -> [[1,3]].
+            Operates on start-end list:
+            [[1,3], [4,5]] -> [[1,3]].
         """
         out = []
         if minlength == 0:
             minlength = self.minlength
-        for seg in segs:
+        for seg in segments:
             if seg[1]-seg[0] >= minlength:
                 out.append(seg)
         return out
 
-    def joinGaps(self, segs, maxgap=3):
+    def deleteShort3(self, segments, minlength=0.25):
+        """ Checks whether segments are long enough.
+            Operates on start-end list with probs:
+            [[[1,3], 50], [[4,5], 90]] -> [[[1,3], 50]].
+        """
+        out = []
+        if minlength == 0:
+            minlength = self.minlength
+        for seg in segments:
+            if seg[0][1]-seg[0][0] >= minlength:
+                out.append(seg)
+        return out
+
+    def joinGaps(self, segments, maxgap=3):
         """ Merges segments within maxgap units.
-            Operates on start-end list [[1,2], [3,4]] -> [[1,4]].
+            Operates on start-end list [[1,2], [3,4]] -> [[1,4]]
         """
         out = []
         i = 0
-        while i < len(segs):
-            start = segs[i][0]
-            while i+1 < len(segs) and segs[i+1][0]-segs[i][1] <= maxgap:
+        if len(segments)==0:
+            return out
+        while i < len(segments):
+            start = segments[i][0]
+            while i+1 < len(segments) and segments[i+1][0]-segments[i][1] <= maxgap:
                 i += 1
-            out.append([start, segs[i][1]])
+            out.append([start, segments[i][1]])
             i += 1
         return out
 
-    def splitLong(self, segs, maxlen=10):
-        """
-        Splits long segments (> maxlen) evenly
-        Operates on start-end list [[1,2], [3,4]] -> [[1,4]].
+    def joinGaps3(self, segments, maxgap=3):
+        """ Merges segments within maxgap units.
+            Operates on list of 3-element segments:
+            [[[1,2], 50], [[3,5], 70]] -> [[[1,5], 60]]
+            Currently, certainties are just averaged over the number of segs.
         """
         out = []
-        for seg in segs:
-            l = seg[1]-seg[0]
+        i = 0
+        if len(segments)==0:
+            return out
+
+        while i < len(segments):
+            start = segments[i][0][0]
+            cert = [segments[i][1]]
+            while i + 1 < len(segments) and segments[i + 1][0][0] - segments[i][0][1] <= maxgap:
+                i += 1
+                cert.append(segments[i][1])
+            out.append([[start, segments[i][0][1]], np.mean(cert)])
+            i += 1
+        return out
+
+    def splitLong3(self, segments, maxlen=10):
+        """
+        Splits long segments (> maxlen) evenly
+        Operates on list of 3-element segments:
+        [[[1,5], 50]] -> [[[1,3], 50], [[3,5], 50]]
+        """
+        out = []
+        for seg in segments:
+            l = seg[0][1]-seg[0][0]
             if l > maxlen:
                 n = int(np.ceil(l/maxlen))
                 d = l/n
                 for i in range(n):
-                    out.append([seg[0] + d*i, seg[0] + d * (i+1)])
+                    end = min(l, d * (i+1))
+                    out.append([[seg[0][0] + d*i, seg[0][0] + end], seg[1]])
             else:
                 out.append(seg)
         return out
 
-    def checkSegmentOverlap(self, segs):
+    def checkSegmentOverlap(self, segments):
+        """ Merges overlapping segments.
+            Operates on start-end list [[1,3], [2,4]] -> [[1,4]]
+        """
         # Needs to be python array, not np array
         # Sort by increasing start times
-        if isinstance(segs, np.ndarray):
-            segs = segs.tolist()
-        segs = sorted(segs)
-        segs = np.array(segs)
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        segments = sorted(segments)
+        segments = np.array(segments)
 
         newsegs = []
+        s = 0
         # Loop over segs until the start value of 1 is not inside the end value of the previous
-        s=0
-        while s<len(segs):
+        while s<len(segments):
             i = s
-            end = segs[i,1]
-            while i < len(segs)-1 and segs[i+1,0] < end:
+            end = segments[i,1]
+            while i < len(segments)-1 and segments[i+1,0] < end:
                 i += 1
-                end = max(end, segs[i,1])
-            newsegs.append([segs[s,0],end])
+                end = max(end, segments[i,1])
+            newsegs.append([segments[s,0],end])
             s = i+1
+
+        return newsegs
+
+    def checkSegmentOverlap3(self, segments):
+        """ Merges overllaping segments.
+            Operates on list of 3-element segments:
+            [[[1,3], 50], [[2,5], 70]] -> [[[1,5], 60]]
+            Currently, certainties are just averaged over the number of segs.
+        """
+        # Needs to be python array, not np array
+        # Sort by increasing start times
+        if isinstance(segments, np.ndarray):
+            segments = segments.tolist()
+        segments = sorted(segments)
+        segments = np.array(segments)
+
+        newsegs = []
+        s = 0
+        # Loop over segs until the start value of 1 is not inside the end value of the previous
+        while s < len(segments):
+            i = s
+            end = segments[i][0][1]
+            cert = [segments[i][1]]
+            while i < len(segments) - 1 and segments[i + 1][0][0] < end:
+                i += 1
+                end = max(end, segments[i][0][1])
+                cert.append(segments[i][1])
+            newsegs.append([[segments[s][0][0], end], np.mean(cert)])
+            s = i + 1
 
         return newsegs
 
@@ -1174,45 +1161,307 @@ class Segmenter:
     #     d = self.dtw(x,y,wantDistMatrix=True)
     #     print self.dtw_path(d)
 
-    def impMask(self, engp=90, fp=0.75):
-        """
-        Impulse mask
-        :param engp: energy percentile (for rows of the spectrogram)
-        :param fp: frequency proportion to consider it as an impulse (cols of the spectrogram)
-        :return: audiodata
-        """
-        print('Impulse masking...')
-        postp = PostProcess(audioData=self.data, sampleRate=self.fs, segments=[], subfilter={})
-        imps = postp.impulse_cal(fs=self.fs, engp=engp, fp=fp)    # 0 - presence of impulse noise
-        print('Samples to mask: ', len(self.data) - np.sum(imps))
-        # Mask only the affected samples
-        return np.multiply(self.data, imps)
 
 class PostProcess:
     """ This class implements few post processing methods basically to avoid false positives.
     Operates on detections from a single subfilter.
 
-    segments:   detected segments in form of [[s1,e1], [s2,e2],...
+    segments:   wavelet filter detections in format [[s1,e1], [s2,e2],...]
+        Will be converted to a list of [[s1, e1], prob] upon load,
+        and subsequent functions deal with certainty values.
     subfilter:  AviaNZ format subfilter
+    cert:       Default certainty to attach to the segments
     """
 
-    def __init__(self, audioData=None, sampleRate=0, segments=[], subfilter={}):
+    def __init__(self, audioData=None, sampleRate=0, tgtsampleRate=0, segments=[], subfilter={}, CNNmodel=None, cert=0):
         self.audioData = audioData
         self.sampleRate = sampleRate
-        self.segments = segments
         self.subfilter = subfilter
+
+        # Convert to [[s1, e1], cert]
+        self.segments = []
+        for seg in segments:
+            if len(seg) != 2:
+                continue
+            if seg[0]<0 or seg[1]<0:
+                continue
+            self.segments.append([seg, cert])
+
+        if CNNmodel:
+            self.CNNmodel = CNNmodel[0]    # CNNmodel is a list [model, win, inputdim, outputdict, windowInc, thrs]
+            self.CNNwindow = CNNmodel[1][0]
+            self.CNNhop = CNNmodel[1][1]
+            self.CNNinputdim = CNNmodel[2]
+            self.CNNoutputs = CNNmodel[3]
+            self.CNNwindowInc = CNNmodel[4]
+            self.CNNthrs = CNNmodel[5]
+            self.tgtsampleRate = tgtsampleRate
+        else:
+            self.CNNmodel = None
 
         if subfilter != {}:
             self.minLen = subfilter['TimeRange'][0]
+            self.maxLen = subfilter['TimeRange'][1]
             if 'F0Range' in subfilter:
                 self.F0 = subfilter['F0Range']
             self.fLow = subfilter['FreqRange'][0]
             self.fHigh = subfilter['FreqRange'][1]
             self.minLen = subfilter['TimeRange'][0]
+            self.calltype = subfilter['calltype']
+            self.syllen = subfilter['TimeRange'][2]
         else:
             self.minLen = 0.25
             self.fLow = 0
             self.fHigh = 0
+
+    def generateFeaturesCNN(self, seg, data, fs):
+        '''
+        Prepare a syllable to input to the CNN model
+        Returns the features (currently the spectrogram)
+        '''
+        featuress = []
+        hop = self.CNNhop
+        n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / hop + 1)
+        # n = (seg[1] - seg[0]) // self.CNNwindow
+
+        sp = SignalProc.SignalProc(self.CNNwindowInc[0], self.CNNwindowInc[1])
+        sp.data = data
+        sp.sampleRate = fs
+        _ = sp.spectrogram()
+
+        # spectrograms of pre-cut segs are tiny bit shorter
+        # because spectrogram does not use the last bin:
+        # it uses len(data)-window bins
+        # so when extracting pieces of a premade spec, we need to adjust:
+        specFrameSize = len(range(0, int(self.CNNwindow * fs - sp.window_width), sp.incr))
+
+        for i in range(int(n)):
+            sgstart = int(hop * i * fs / sp.incr)
+            sgend = sgstart + specFrameSize
+            if sgend > np.shape(sp.sg)[0]:
+                continue
+            sgRaw = sp.sg[sgstart:sgend, :]
+            maxg = np.max(sgRaw)
+            featuress.append([np.rot90(sgRaw / maxg).tolist()])
+        return featuress
+
+    def generateFeaturesCNN2(self, seg, data, fs):
+        '''
+        Prepare a syllable to input to the CNN model
+        Returns the features (currently the spectrogram)
+        '''
+        featuress = []
+        hop = self.CNNhop
+        n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / hop + 1)
+        # n = (seg[1] - seg[0]) // self.CNNwindow
+
+        sp = SignalProc.SignalProc(self.CNNwindowInc[0], self.CNNwindowInc[1])
+        sp.data = data
+        sp.sampleRate = fs
+        sgRaw1 = sp.spectrogram(window='Hann')
+        sgRaw2 = sp.spectrogram(window='Hamming')
+        sgRaw3 = sp.spectrogram(window='Welch')
+
+        # spectrograms of pre-cut segs are tiny bit shorter
+        # because spectrogram does not use the last bin:
+        # it uses len(data)-window bins
+        # so when extracting pieces of a premade spec, we need to adjust:
+        specFrameSize = len(range(0, int(self.CNNwindow * fs - sp.window_width), sp.incr))
+
+        for i in range(int(n)):
+            sgstart = int(hop * i * fs / sp.incr)
+            sgend = sgstart + specFrameSize
+            if sgend > np.shape(sp.sg)[0]:
+                continue
+            sgRaw_i = np.ndarray(shape=(np.shape(sgRaw1[sgstart:sgend, :])[0],
+                                        np.shape(sgRaw1[sgstart:sgend, :])[1], 3), dtype=float)
+            sgRaw_i[:, :, 0] = sgRaw1[sgstart:sgend, :] / np.max(sgRaw1[sgstart:sgend, :])
+            sgRaw_i[:, :, 1] = sgRaw2[sgstart:sgend, :] / np.max(sgRaw2[sgstart:sgend, :])
+            sgRaw_i[:, :, 2] = sgRaw3[sgstart:sgend, :] / np.max(sgRaw3[sgstart:sgend, :])
+            featuress.append([np.rot90(sgRaw_i).tolist()])
+        return featuress
+
+    def getCertainty(self, meanprob, ctkey):
+        '''
+        Calculate the certainty of a segment.
+        :param meanprob: best n mean probabilities
+        :param ctkey: current call type key
+        :return:
+        '''
+        if 'Silence' in self.CNNoutputs.values():
+            if meanprob[ctkey] > self.CNNthrs[ctkey][-1]:
+                certainty = 90
+            elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
+                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][-1] \
+                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][-1]:
+                certainty = 50
+            else:
+                certainty = 0  # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
+                # self.segments[ix][1] = certainty
+        else:
+            if meanprob[ctkey] > self.CNNthrs[ctkey][-1]:
+                certainty = 90
+            elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
+                    meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
+                certainty = 50
+            else:
+                certainty = 0  # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
+        return certainty
+
+    def getCertainty2(self, meanprob, ctkey):
+        '''
+        Calculate the certainty of an image.
+        :param meanprob: probabilities
+        :param ctkey: current call type key
+        :return:
+        '''
+        if 'Silence' in self.CNNoutputs.values():
+            if meanprob[ctkey] > self.CNNthrs[ctkey][-1] and \
+                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][-1] \
+                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][-1]:
+                certainty = 90
+            elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
+                    meanprob[len(self.CNNoutputs) - 2] < self.CNNthrs[len(self.CNNoutputs) - 2][0] \
+                    and meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
+                certainty = 50
+            else:
+                certainty = 0  # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
+                # self.segments[ix][1] = certainty
+        else:
+            if meanprob[ctkey] > self.CNNthrs[ctkey][-1] and \
+                    meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][-1]:
+                certainty = 90
+            elif meanprob[ctkey] > self.CNNthrs[ctkey][0] and \
+                    meanprob[len(self.CNNoutputs) - 1] < self.CNNthrs[len(self.CNNoutputs) - 1][0]:
+                certainty = 50
+            else:
+                certainty = 0  # TODO: set certainty to 20, when AviaNZ interface is ready to hide uncertain segments?
+        return certainty
+
+    def getSubSegs(self, probs, ctkey, seg, imglength, incr):
+        '''
+        Fine tune a segment - during CNN.
+        Get predicted probability matrix on overlapped images of the segment and find sub-segments.
+        :param probs: probability matrix
+        :param ctkey: call type key
+        :param seg: parent segment
+        :param imglength: image length in sec
+        :param incr: hop in sec
+        :return: sub-segments
+        '''
+        binaryout = np.zeros((np.shape(probs)[0]))
+        for i in range(len(binaryout)):
+            if self.getCertainty2(probs[i], ctkey) > 0:
+                binaryout[i] = 1
+        segmenter = Segmenter()
+        if len(binaryout) == 1:
+            binaryout = np.append(binaryout, 0)
+        subsegs = segmenter.convert01(binaryout)
+        for i in range(len(subsegs)):
+            subsegs[i] = [[subsegs[i][0]*incr+seg[0][0], (subsegs[i][1]-1)*incr+imglength+seg[0][0]], seg[1]]
+        subsegs = segmenter.checkSegmentOverlap3(subsegs)
+        return subsegs
+
+    def CNN(self):
+        """
+        Post-proc with CNN model, self.segments get updated
+        """
+        if not self.CNNmodel:
+            print("ERROR: no CNN model specified")
+            return
+        if len(self.segments)==0:
+            print("No segments to classify by CNN")
+            return
+        ctkey = int(list(self.CNNoutputs.keys())[list(self.CNNoutputs.values()).index(self.calltype)])
+        print('call type: ', self.calltype)
+        ctnewseg = []
+
+        for ix in reversed(range(len(self.segments))):
+            seg = self.segments[ix]
+            # print('\n--- Segment', seg)
+            if seg[0][1] - seg[0][0] > max(self.syllen, 1):
+                n = 5
+            else:
+                n = 1
+            # expand the segment if its too small
+            callength = max(self.CNNwindow, self.maxLen/2)
+            # callength = self.CNNwindow
+            if callength >= seg[0][1] - seg[0][0]:
+                duration = seg[0][1] - seg[0][0]
+                seg[0][0] = seg[0][0] - (callength - duration) / 2 - 0.0005
+                seg[0][1] = seg[0][1] + (callength - duration) / 2 + 0.0005
+                if seg[0][0] < 0:
+                    seg[0][0] = 0
+                    seg[0][1] = callength
+                elif seg[0][1]*self.sampleRate > len(self.audioData):
+                    seg[0][0] = len(self.audioData)/self.sampleRate - callength - 0.0005
+                    seg[0][1] = len(self.audioData)/self.sampleRate
+                data = self.audioData[int(seg[0][0] * self.sampleRate):int(seg[0][1] * self.sampleRate)]
+            else:
+                data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
+            # find the syllables from the seg and generate features for CNN
+            sp = SignalProc.SignalProc()
+            sp.data = data
+            sp.sampleRate = self.sampleRate
+            if self.sampleRate != self.tgtsampleRate:
+                sp.resample(self.tgtsampleRate)
+            featuress = self.generateFeaturesCNN(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            # featuress = self.generateFeaturesCNN2(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            featuress = np.array(featuress)
+            featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
+            # featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 3)
+            featuress = featuress.astype('float32')
+            # predict with CNN
+            if np.shape(featuress)[0] > 0:
+                probs = self.CNNmodel.predict_proba(featuress)
+            else:
+                probs = 0
+
+            # print(seg, probs)
+            # try:
+            #     with open(os.path.join('temp', 'cnnfeats.txt'), 'a') as f:
+            #         for pi in range(np.shape(probs)[0]):
+            #             f.write(str(seg[0][0]))
+            #             f.write('\t')
+            #             f.write(str(seg[0][1]))
+            #             f.write('\t')
+            #             plist = probs[pi,:].tolist()
+            #             f.write('\t'.join(map(str, plist)))
+            #             f.write('\n')
+            # except Exception as e:
+            #     print("ERROR: failed to export")
+            #     print(e)
+            if isinstance(probs, int):
+                # there is no at least one img generated from this segment, very unlikely to be a true seg.
+                certainty = 0
+            else:
+                # # mean of best n
+                # ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
+                # meanprob = [np.mean(probs[ind[i][-n:], i]) for i in range(np.shape(probs)[1])]
+                # mean of ct best n
+                ind = np.argsort(probs[:, ctkey]).tolist()
+                meanprob = [np.mean(probs[ind[-n:], i]) for i in range(np.shape(probs)[1])]
+
+                # Confirm wavelet proposed call type
+                # print(probs)
+                print(seg, '->', np.shape(probs)[0], ' total images -> mean prob of best n (=<5)', meanprob)
+                certainty = self.getCertainty(meanprob, ctkey)
+
+            if certainty == 0:
+                print('Deleted by CNN')
+                del self.segments[ix]
+            else:
+                print('Not deleted by CNN')
+                self.segments[ix][-1] = certainty
+                subsegs = self.getSubSegs(probs, ctkey, seg, self.CNNwindow, self.CNNhop)
+                print(subsegs)
+                if subsegs != []:
+                    del self.segments[ix]
+                    for ns in subsegs[::-1]:
+                        ctnewseg.append(ns)
+        for ns in ctnewseg[::-1]:
+            self.segments.append(ns)
+        print("Segments remaining after CNN: ", len(self.segments))
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):
         """ Calculate wind
@@ -1263,99 +1512,27 @@ class PostProcess:
         :param fn_peak: min height of a peak to be considered it as a significant peak
         :return: self.segments get updated
         """
-        if len(self.segments) == 0 or len(self.segments) == 1 and self.segments[0][0] == -1:
-            pass
-        else:
-            newSegments = copy.deepcopy(self.segments)
-            for seg in self.segments:
-                if seg[0] == -1:
-                    continue
-                else:
-                    data = self.audioData[int(seg[0]*self.sampleRate):int(seg[1]*self.sampleRate)]
-                    ind = np.flatnonzero(data).tolist()     # eliminate impulse masked sections
-                    data = np.asarray(data)[ind].tolist()
-                    if len(data) == 0:
-                        continue
-                    m, _, fn = self.wind_cal(data=data, sampleRate=self.sampleRate, fn_peak=fn_peak)
-                    if m > windT and not fn:
-                        print(seg, m, 'windy, deleted')
-                        newSegments.remove(seg)
-                    elif m > windT and fn:
-                        print(seg, m, 'windy, but possible bird call')
-                    else:
-                        print(seg, m, 'not windy/possible bird call')
-            self.segments = newSegments
+        if len(self.segments) == 0:
+            print("No segments to remove wind from")
+            return
 
-    def impulse_cal(self, fs, engp=90, fp=0.75, blocksize=10):
-        """
-        Find sections where impulse sounds occur e.g. clicks
-        window  -   window length (no overlap)
-        engp    -   energy percentile (thr), the percentile of energy to inform that a section got high energy across
-                    frequency bands
-        fp      -   frequency percentage (thr), the percentage of frequency bands to have high energy to mark a section
-                    as having impulse noise
-        blocksize - max number of consecutive blocks, 10 consecutive blocks (~1/25 sec) is a good value, to not to mask
-                    very close-range calls
-        :return: a binary list of length len(audioData) indicating presence of impulsive noise (0) otherwise (1)
-        """
-
-        # Calculate window length
-        w1 = np.floor(fs/250)      # Window length of 1/250 sec selected experimentally
-        arr = [2 ** i for i in range(5, 11)]
-        pos = np.abs(arr - w1).argmin()
-        window = arr[pos]
-
-        sp = SignalProc.SignalProc(window, window)     # No overlap
-        sp.data = self.audioData
-        sp.sampleRate = self.sampleRate
-        sg = sp.spectrogram(multitaper=False)
-
-        # For each frq band get sections where energy exceeds some (90%) percentile, engp
-        # and generate a binary spectrogram
-        sgb = np.zeros((np.shape(sg)))
-        ep = np.percentile(sg, engp, axis=0)    # note thr - 90% for energy percentile
-        for y in range(np.shape(sg)[1]):
-            ey = sg[:, y]
-            sgb[np.where(ey > ep[y]), y] = 1
-
-        # If lots of frq bands got 1 then predict a click
-        # 1 - presence of impulse noise, 0 - otherwise here
-        impulse = np.where(np.count_nonzero(sgb, axis=1) > np.shape(sgb)[1] * fp, 1, 0)     # Note thr fp
-
-        # When an impulsive noise detected, it's better to check neighbours to make sure its not a bird call
-        # very close to the microphone.
-        imp_inds = np.where(impulse > 0)[0].tolist()
-        imp = self.countConsecutive(imp_inds, len(impulse))
-
-        impulse = []
-        for item in imp:
-            if item > blocksize or item == 0:        # Note threshold - blocksize, 10 consecutive blocks ~1/25 sec
-                impulse.append(1)
+        newSegments = copy.deepcopy(self.segments)
+        for seg in self.segments:
+            data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
+            ind = np.flatnonzero(data).tolist()     # eliminate impulse masked sections
+            data = np.asarray(data)[ind].tolist()
+            if len(data) == 0:
+                continue
+            m, _, fn = self.wind_cal(data=data, sampleRate=self.sampleRate, fn_peak=fn_peak)
+            if m > windT and not fn:
+                print(seg[0], m, 'windy, deleted')
+                newSegments.remove(seg)
+            elif m > windT and fn:
+                print(seg[0], m, 'windy, but possible bird call')
             else:
-                impulse.append(0)
-
-        impulse = list(chain.from_iterable(repeat(e, window) for e in impulse))  # Make it same length as self.audioData
-
-        if len(impulse) > len(self.audioData):      # Sanity check
-            impulse = impulse[0:len(self.audioData)]
-        elif len(impulse) < len(self.audioData):
-            gap = len(self.audioData) - len(impulse)
-            impulse = np.pad(impulse, (0, gap), 'constant')
-
-        return impulse
-
-    def countConsecutive(self, nums, length):
-        gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s + 1 < e]
-        edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
-        edges = list(zip(edges, edges))
-        edges_reps = [item[1] - item[0] + 1 for item in edges]
-        res = np.zeros((length)).tolist()
-        t = 0
-        for item in edges:
-            for i in range(item[0], item[1]+1):
-                res[i] = edges_reps[t]
-            t += 1
-        return res
+                print(seg[0], m, 'not windy/possible bird call')
+        self.segments = newSegments
+        print("Segments remaining after wind: ", len(self.segments))
 
     def rainClick(self):
         """
@@ -1395,7 +1572,7 @@ class PostProcess:
         Check for fundamental frequency of the segments, discard the segments that do not indicate the species.
         '''
         for segix in reversed(range(len(self.segments))):
-            seg = self.segments[segix]
+            seg = self.segments[segix][0]
 
             # read the sound segment and check fundamental frq.
             secs = int(seg[1] - seg[0])
@@ -1430,6 +1607,7 @@ class PostProcess:
             elif (np.mean(pitch) < self.F0[0]) or (np.mean(pitch) > self.F0[1]):
                 print('segment* ', seg, round(np.mean(pitch)), pitch, np.median(pitch), ' *-- fundamental freq is out of range, could be noise')
                 del self.segments[segix]
+        print("Segments remaining after fundamental frequency: ", len(self.segments))
 
     def denoise_filter(self, level=5, d=False, f=False, f1=0, f2=0):
         """ Wavelet denoise and band-pass filter for fundamental frquency
@@ -1447,3 +1625,26 @@ class PostProcess:
             filteredDenoisedData = denoisedData
 
         return filteredDenoisedData
+
+    # The following are just wrappers for easier parsing of 3-element segment lists:
+    # Segmenter class still has its own joinGaps etc which operate on 2-element lists
+    def joinGaps(self, maxgap):
+        seg = Segmenter()
+        self.segments = seg.joinGaps3(self.segments, maxgap=maxgap)
+        print("Segments remaining after merge (<=%d secs): %d" % (maxgap, len(self.segments)))
+
+    def deleteShort(self, minlength):
+        seg = Segmenter()
+        self.segments = seg.deleteShort3(self.segments, minlength=minlength)
+        print("Segments remaining after deleting short (<%.2f secs): %d" % (minlength, len(self.segments)))
+
+    def splitLong(self, maxlen):
+        seg = Segmenter()
+        self.segments = seg.splitLong3(self.segments, maxlen=maxlen)
+        print('Segments after splitting long segments (>%.2f secs): %d' % (maxlen, len(self.segments)))
+
+    def checkSegmentOverlap(self):
+        # Used for merging call types or different segmenter outputs
+        seg = Segmenter()
+        self.segments = seg.checkSegmentOverlap3(self.segments)
+        print("Segments produced after merging: %d" % len(self.segments))

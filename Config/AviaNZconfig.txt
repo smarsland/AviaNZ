@@ -10,6 +10,7 @@
 "brightness": 50, "contrast": 50, "overlap_allowed": 5, "reviewSpecBuffer": 1,
 "BirdListShort": "ListCommonBirds.txt",
 "BirdListLong": "ListDOCBirds.txt",
+"BatList": "ListBats.txt",
 "RecentFiles": [],
 "ColourList": ["Grey", "Viridis", "Inferno", "Plasma", "Autumn", "Cool", "Bone",
                 "Copper", "Hot", "Jet", "Thermal", "Flame", "Yellowy", "Bipolar", "Spectrum"],
@@ -21,5 +22,5 @@
 "readOnly": false, "transparentBoxes": false, "showListofFiles": true,
 "invertColourMap": false, "saveCorrections": true,
 "operator": "Stephen", "reviewer": "Nirosha",
-"protocolOn": false, "protocolSize": 10, "protocolInterval": 60,
+"protocolOn": false, "protocolSize": 15, "protocolInterval": 300,
 "fs_start": 0, "fs_end": 0, "window": "Hann", "FiltersDir": "Filters"}

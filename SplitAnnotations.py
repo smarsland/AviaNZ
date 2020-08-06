@@ -4,7 +4,7 @@
 # Splits wavs, and AviaNZ-format annotation files.
 
 #### CLEAN IMPORTS
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox, QStyle
 from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtGui import QIcon, QPixmap
 import sys
@@ -50,8 +50,9 @@ class SplitData(QMainWindow):
         label = QLabel("Select input folder with files to split:")
         self.w_browse = QPushButton(" Browse Folder")
         self.w_browse.setToolTip("Warning: files inside subfolders will not be processed!")
-        self.w_browse.setMinimumSize(180, 40)
-        self.w_browse.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.w_browse.setMinimumSize(170, 40)
+        self.w_browse.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        self.w_browse.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browse.clicked.connect(self.browse)
         self.w_browse.setSizePolicy(QSizePolicy(1,1))
 
@@ -66,8 +67,9 @@ class SplitData(QMainWindow):
         ## output
         labelO = QLabel("Select folder for storing split output:")
         self.w_browseO = QPushButton(" Browse Folder")
-        self.w_browseO.setMinimumSize(180, 40)
-        self.w_browseO.setStyleSheet('QPushButton {background-color: #A3C1DA; font-weight: bold; font-size:14px}')
+        self.w_browseO.setMinimumSize(170, 40)
+        self.w_browseO.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+        self.w_browseO.setStyleSheet('QPushButton {background-color: #c4ccd3; font-weight: bold; font-size:14px; padding: 3px 3px 3px 3px}')
         self.w_browseO.clicked.connect(self.browseO)
         self.w_browseO.setSizePolicy(QSizePolicy(1,1))
 
@@ -100,7 +102,7 @@ class SplitData(QMainWindow):
 
         self.splitBut = QPushButton(" &Split!")
         self.splitBut.setFixedHeight(40)
-        self.splitBut.setStyleSheet('QPushButton {background-color: #2F79B5; font-weight: bold; font-size:14px} QPushButton:disabled {background-color :#B3BCC4}')
+        self.splitBut.setStyleSheet('QPushButton {background-color: #95b5ee; font-weight: bold; font-size:14px} QPushButton:disabled {background-color :#B3BCC4}')
         self.splitBut.clicked.connect(self.split)
         self.splitBut.setEnabled(False)
 
@@ -321,6 +323,12 @@ class SplitData(QMainWindow):
                 wavHasDt = int(0)
 
             if os.path.isfile(infile_c) and os.stat(infile_c).st_size>100:
+                # check if file is formatted correctly
+                with open(infile_c, 'br') as f:
+                    if f.read(4) != b'RIFF':
+                        print("Warning: file %s not formatted correctly, skipping" % infile_c)
+                        return
+
                 succ = SplitLauncher.launchCython(infile_c, outfile_c, self.cutLen, wavHasDt)
                 if succ!=0:
                     print("ERROR: C splitter failed on file", f)
@@ -391,7 +399,8 @@ class SplitData(QMainWindow):
         all = []
         for i in range(int(maxtime-1) // cutlen + 1):
             onelist = Segment.SegmentList()
-            onelist.metadata = segs.metadata
+            onelist.metadata = segs.metadata.copy()
+            onelist.metadata["Duration"] = min(self.cutLen, maxtime-i*self.cutLen)
             all.append(onelist)
 
         # separate segments into output files and adjust segment timestamps

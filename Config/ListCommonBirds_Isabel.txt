@@ -1,0 +1,22 @@
+[
+ "Piwakawaka",
+ "Tui (Song)",
+ "Tui (Wing flutter)",
+ "Kereru (song or flutter)",
+ "Blackbird",
+ "Piwakawaka",
+ "Mynah",
+ "Ruru",
+ "Kiwi (female)",
+ "Kiwi (male)",
+ "Weta",
+ "Cricket",
+ "Kuera/Brown Quail",
+ "Rosella",
+ "Torea/Oystercatcher",
+ "Toutouwai",
+ "Chaffinch",
+ "Kotare",
+ "Sparrow",
+ "California Quail"
+]

@@ -1,3 +1,4 @@
+
 # SignalProc.py
 #
 # A variety of signal processing algorithms for AviaNZ.
@@ -28,6 +29,7 @@ import librosa
 import copy
 import gc
 
+from PyQt5.QtGui import QImage
 from PyQt5.QtMultimedia import QAudioFormat
 # for multitaper spec:
 from spectrum import dpss, pmtm
@@ -35,6 +37,8 @@ from spectrum import dpss, pmtm
 from spectrum import dpss
 # for fund freq
 from scipy.signal import medfilt
+# for impulse masking
+from itertools import chain, repeat
 
 
 class SignalProc:
@@ -58,7 +62,7 @@ class SignalProc:
         self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
         self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
-    def readWav(self, file, len=None, off=0):
+    def readWav(self, file, len=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
         wavobj = wavio.read(file, len, off)
         self.data = wavobj.data
@@ -79,13 +83,105 @@ class SignalProc:
         self.sampleRate = wavobj.rate
         self.audioFormat.setSampleRate(self.sampleRate)
 
-        print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
-
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
         self.maxFreq = self.sampleRate // 2
         self.minFreqShow = max(self.minFreq, self.minFreqShow)
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
+
+        if not silent:
+            print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
+
+    def readBmp(self, file, len=None, off=0, silent=False, rotate=True):
+        """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
+            For similarity with readWav, accepts len and off args, in seconds.
+            rotate: if True, rotates to match setImage and other spectrograms (rows=time)
+                otherwise preserves normal orientation (cols=time)
+        """
+        # !! Important to set these, as they are used in other functions
+        self.sampleRate = 176000
+        self.incr = 512
+
+        img = QImage(file, "BMP")
+        h = img.height()
+        w = img.width()
+        colc = img.colorCount()
+        if h==0 or w==0:
+            print("ERROR: image was not loaded")
+            return(1)
+
+        # Check color format and convert to grayscale
+        if not silent and (not img.allGray() or colc>256):
+            print("Warning: image provided not in 8-bit grayscale, information will be lost")
+        img.convertTo(QImage.Format_Grayscale8)
+
+        # Convert to numpy
+        # (remember that pyqtgraph images are column-major)
+        ptr = img.constBits()
+        ptr.setsize(h*w*1)
+        img2 = np.array(ptr).reshape(h, w)
+
+        # Determine if original image was rotated, based on expected num of freq bins and freq 0 being empty
+        if h==64 and np.median(img2[-1, :]==0):
+            # standard DoC format
+            pass
+        elif w==64 and np.median(img2[:, -1]==0):
+            # seems like DoC format, rotated at -90*
+            img2 = np.rot90(img2, 1, (1,0))
+            w, h = h, w
+        else:
+            print("ERROR: image does not appear to be in DoC format!")
+            print("Format details:")
+            print(img2)
+            print(h, w)
+            print(min(img2[-1,:]), max(img2[-1,:]))
+            print(np.sum(np.nonzero(img2[-1,:])))
+            return(1)
+
+        # Could skip that for visuaal mode - maybe useful for establishing contrast?
+        img2[-1, :] = 254  # lowest freq bin is 0, flip that
+        img2 = 254.0 - img2  # reverse value having the black as the most intense
+        img2 = img2/np.max(img2)  # normalization
+        img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
+        img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
+
+        self.data = []
+        self.fileLength = (w-2)*self.incr + self.window_width  # in samples
+        # Alternatively:
+        # self.fileLength = self.convertSpectoAmpl(h-1)*self.sampleRate
+
+        # NOTE: conversions will use self.sampleRate and self.incr, so ensure those are already set!
+        # trim to specified offset and length:
+        if off>0 or len is not None:
+            # Convert offset from seconds to pixels
+            off = int(self.convertAmpltoSpec(off))
+            if len is None:
+                img2 = img2[:, off:]
+            else:
+                # Convert length from seconds to pixels:
+                len = int(self.convertAmpltoSpec(len))
+                img2 = img2[:, off:(off+len)]
+
+        if rotate:
+            # rotate for display, b/c required spectrogram dimensions are:
+            #  t increasing over rows, f increasing over cols
+            # This will be enough if the original image was spectrogram-shape.
+            img2 = np.rot90(img2, 1, (1,0))
+
+        self.sg = img2
+
+        self.audioFormat.setChannelCount(0)
+        self.audioFormat.setSampleSize(0)
+        self.audioFormat.setSampleRate(self.sampleRate)
+
+        self.minFreq = 0
+        self.maxFreq = self.sampleRate //2
+        self.minFreqShow = max(self.minFreq, self.minFreqShow)
+        self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
+
+        if not silent:
+            print("Detected BMP format: %d x %d px, %d colours" % (w, h, colc))
+        return(0)
 
     def resample(self, target):
         if len(self.data)==0:
@@ -104,6 +200,19 @@ class SignalProc:
         self.maxFreq = self.sampleRate // 2
 
         self.fileLength = len(self.data)
+
+    def convertAmpltoSpec(self, x):
+        """ Unit conversion, for easier use wherever spectrograms are needed """
+        return x*self.sampleRate/self.incr
+
+    def convertSpectoAmpl(self,x):
+        """ Unit conversion """
+        return x*self.incr/self.sampleRate
+
+    def convertFreqtoY(self,f):
+        """ Unit conversion """
+        sgy = np.shape(self.sg)[1]
+        return (f-self.minFreqShow) * sgy / (self.sampleRate//2)
 
     def setWidth(self,window_width,incr):
         # Does what it says. Called when the user modifies the spectrogram parameters
@@ -545,7 +654,9 @@ class SignalProc:
 
     def mean_frequency(self,sampleRate,timederiv,freqderiv):
         freqs = sampleRate//2 / np.shape(timederiv)[1] * (np.arange(np.shape(timederiv)[1])+1)
-        mf = np.sum(freqs * (timederiv**2 + freqderiv**2),axis=1)/np.sum(timederiv**2 + freqderiv**2,axis=1)
+        mfd = np.sum(timederiv**2 + freqderiv**2,axis=1)
+        mfd = np.where(mfd==0,1,mfd)
+        mf = np.sum(freqs * (timederiv**2 + freqderiv**2),axis=1)/mfd
         return freqs,mf
 
     def goodness_of_pitch(self,spectral_deriv,sg):
@@ -574,7 +685,9 @@ class SignalProc:
         freqderiv = np.imag(S)
 
         # Frequency modulation is the angle $\pi/2 - direction of max change$
-        fm = np.arctan(np.max(timederiv**2, axis=0) / np.max(freqderiv**2, axis=0))
+        mfd = np.max(freqderiv**2, axis=0)
+        mfd = np.where(mfd==0,1,mfd)
+        fm = np.arctan(np.max(timederiv**2, axis=0) / mfd)
         spectral_deriv = -timederiv*np.sin(fm) + freqderiv*np.cos(fm)
 
         sg = np.sum(np.real(sg*np.conj(sg)), axis=2)
@@ -680,32 +793,37 @@ class SignalProc:
         return out
 
     def max_energy(self, sg,thr=1.2):
-        sg = sg/np.max(sg)
+        # Remember that spectrogram is actually rotated!
 
-        colmedians = np.median(sg, axis=0)
-        colmax = np.max(sg,axis=0)
-        colmaxinds = np.argmax(sg,axis=0)
+        colmaxinds = np.argmax(sg,axis=1)
 
-        #points = -np.ones(np.shape(sg)[1])
         points = np.zeros(np.shape(sg))
-        print(np.shape(points))
 
-        inds = np.where(colmax>thr*colmedians)
-        print(len(inds))
-        points[colmaxinds[inds],inds] = 1
+        # If one wants to show only some colmaxs:
+        # sg = sg/np.max(sg)
+        # colmedians = np.median(sg, axis=1)
+        # colmax = np.max(sg,axis=1)
+        # inds = np.where(colmax>thr*colmedians)
+        # print(len(inds))
+        # points[inds, colmaxinds[inds]] = 1
+
+        # just mark the argmax position in each column
+        points[range(points.shape[0]), colmaxinds] = 1
 
         x, y = np.where(points > 0)
 
+        # convert points y coord from spec units to Hz
+        yfr = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
+        yfr = np.asarray(yfr)
+
         # remove points beyond frq range to show
-        y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
-        y1 = np.asarray(y1)
-
-        valminfrq = self.minFreqShow / (self.sampleRate // 2 / np.shape(self.sg)[1])
-
-        inds = np.where((y1 >= self.minFreqShow) & (y1 <= self.maxFreqShow))
+        inds = np.where((yfr >= self.minFreqShow) & (yfr <= self.maxFreqShow))
         x = x[inds]
         y = y[inds]
-        y = [i - valminfrq for i in y]
+
+        # adjust y pos for when spec doesn't start at 0
+        specstarty = self.minFreqShow / (self.sampleRate // 2 / np.shape(self.sg)[1])
+        y = [i - specstarty for i in y]
 
         return x, y
 
@@ -782,4 +900,87 @@ class SignalProc:
             # Median Filter
             self.data = self.medianFilter(self.data,int(str(width)))
 
+    def impMask(self, engp=90, fp=0.75):
+        """
+        Impulse mask
+        :param engp: energy percentile (for rows of the spectrogram)
+        :param fp: frequency proportion to consider it as an impulse (cols of the spectrogram)
+        :return: audiodata
+        """
+        print('Impulse masking...')
+        imps = self.impulse_cal(fs=self.sampleRate, engp=engp, fp=fp)
+        print('Samples to mask: ', len(self.data) - np.sum(imps))
+        # Mask only the affected samples
+        return np.multiply(self.data, imps)
+
+    def impulse_cal(self, fs, engp=90, fp=0.75, blocksize=10):
+        """
+        Find sections where impulse sounds occur e.g. clicks
+        window  -   window length (no overlap)
+        engp    -   energy percentile (thr), the percentile of energy to inform that a section got high energy across
+                    frequency bands
+        fp      -   frequency percentage (thr), the percentage of frequency bands to have high energy to mark a section
+                    as having impulse noise
+        blocksize - max number of consecutive blocks, 10 consecutive blocks (~1/25 sec) is a good value, to not to mask
+                    very close-range calls
+        :return: a binary list of length len(data) indicating presence of impulsive noise (0) otherwise (1)
+        """
+
+        # Calculate window length
+        w1 = np.floor(fs/250)      # Window length of 1/250 sec selected experimentally
+        arr = [2 ** i for i in range(5, 11)]
+        pos = np.abs(arr - w1).argmin()
+        window = arr[pos]
+
+        sp = SignalProc(window, window)     # No overlap
+        sp.data = self.data
+        sp.sampleRate = self.sampleRate
+        sg = sp.spectrogram(multitaper=False)
+
+        # For each frq band get sections where energy exceeds some (90%) percentile, engp
+        # and generate a binary spectrogram
+        sgb = np.zeros((np.shape(sg)))
+        ep = np.percentile(sg, engp, axis=0)    # note thr - 90% for energy percentile
+        for y in range(np.shape(sg)[1]):
+            ey = sg[:, y]
+            sgb[np.where(ey > ep[y]), y] = 1
+
+        # If lots of frq bands got 1 then predict a click
+        # 1 - presence of impulse noise, 0 - otherwise here
+        impulse = np.where(np.count_nonzero(sgb, axis=1) > np.shape(sgb)[1] * fp, 1, 0)     # Note thr fp
+
+        # When an impulsive noise detected, it's better to check neighbours to make sure its not a bird call
+        # very close to the microphone.
+        imp_inds = np.where(impulse > 0)[0].tolist()
+        imp = self.countConsecutive(imp_inds, len(impulse))
+
+        impulse = []
+        for item in imp:
+            if item > blocksize or item == 0:        # Note threshold - blocksize, 10 consecutive blocks ~1/25 sec
+                impulse.append(1)
+            else:
+                impulse.append(0)
+
+        impulse = list(chain.from_iterable(repeat(e, window) for e in impulse))  # Make it same length as self.audioData
+
+        if len(impulse) > len(self.data):      # Sanity check
+            impulse = impulse[0:len(self.data)]
+        elif len(impulse) < len(self.data):
+            gap = len(self.data) - len(impulse)
+            impulse = np.pad(impulse, (0, gap), 'constant')
+
+        return impulse
+
+    def countConsecutive(self, nums, length):
+        gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s + 1 < e]
+        edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
+        edges = list(zip(edges, edges))
+        edges_reps = [item[1] - item[0] + 1 for item in edges]
+        res = np.zeros((length)).tolist()
+        t = 0
+        for item in edges:
+            for i in range(item[0], item[1]+1):
+                res[i] = edges_reps[t]
+            t += 1
+        return res
 

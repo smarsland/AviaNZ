@@ -264,13 +264,15 @@ class Clustering:
         :param minlen: min syllable length in secs
         :param denoise: True/False
         :param alg: algorithm to use, default to agglomerative
-        :return: clustered segments, fs, nclasses, duration
+        :return: clustered segments - a list of lists [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
+                 fs, nclasses, syllable duration (median)
         """
 
         self.alg = alg
 
         # 1. Get the frequency band and sampling frequency from annotations
         fs, f1, f2 = self.getFrq(dirname, species)
+        print("Clustering using sampling rate", fs)
 
         # 2. Find the lower and upper bounds (relevant to the frq range)
         if feature == 'mfcc' and f1 != 0 and f2 != 0:
@@ -285,6 +287,7 @@ class Clustering:
 
         # 3. Clustering at syllable level, therefore find the syllables in each segment
         dataset = self.findSyllables(dirname, species, minlen, fs, f1, f2, denoise)
+        # dataset format: [[file1, seg1, syl1], [file1, seg1, syl2], [file1, seg2, syl1],..]
 
         # Make syllables fixed-length (again to have same sized feature matrices) and generate features
         lengths = []
@@ -342,16 +345,17 @@ class Clustering:
 
         model = self.trainModel()
         predicted_labels = model.labels_
+        print(predicted_labels)
         # clusters = len(set(model.labels_))
 
         # Attach the label to each syllable
         for i in range(len(predicted_labels)):
-            dataset[i].insert(4, predicted_labels[i])
+            dataset[i].insert(4, predicted_labels[i])   # dataset format [[file1, seg1, syl1, features, predict], ...]
 
         clustered_dataset = []
         for record in dataset:
             if record[:2] not in clustered_dataset:
-                clustered_dataset.append(record[:2])
+                clustered_dataset.append(record[:2])    # clustered_dataset [[file1, seg1], ...]
 
         labels = [[] for i in range(len(clustered_dataset))]
         for i in range(len(predicted_labels)):
@@ -390,6 +394,7 @@ class Clustering:
         # Update the labels
         for i in range(len(clustered_dataset)):
             clustered_dataset[i].insert(4, dic[labels[i]])
+            # clustered_dataset format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
 
         return clustered_dataset, fs, nclasses, duration
 
@@ -405,8 +410,8 @@ class Clustering:
             for root, dirs, files in os.walk(str(dirname)):
                 for file in files:
                     if file.lower().endswith('.wav') and file + '.data' in files:
-                        wavobj = wavio.read(os.path.join(root, file))
-                        srlist.append(wavobj.rate)
+                        wavrate = wavio.readFmt(os.path.join(root, file))[0]
+                        srlist.append(wavrate)
                         # Read the annotation
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, file + '.data'))
@@ -423,8 +428,8 @@ class Clustering:
         # File mode (from the main interface)
         elif os.path.isfile(dirname):
             if dirname.lower().endswith('.wav') and os.path.exists(dirname + '.data'):
-                wavobj = wavio.read(dirname)
-                srlist.append(wavobj.rate)
+                wavrate = wavio.readFmt(dirname)[0]
+                srlist.append(wavrate)
                 # Read the annotation
                 segments = Segment.SegmentList()
                 segments.parseJSON(dirname + '.data')
@@ -467,8 +472,17 @@ class Clustering:
         return fs, f1, f2
 
     def findSyllables(self, dirname, species, minlen, fs, f1, f2, denoise):
+        """ Find the syllables
+        :param dirname: directory with the sound and annotation files OR a single wave file (having its .data)
+        :param species: target species
+        :param minlen: minimum length of a segment
+        :param fs: sampling frequency
+        :param f1: lower frequency bound
+        :param f2: higher frequency bound
+        :param denoise: denoise or not binary
+        :return: a list of lists [[file1, seg1, syl1], [file1, seg1, syl2], [file1, seg2, syl1],..]
+        """
         dataset = []
-        maxgap = 0
         if os.path.isdir(dirname):
             for root, dirs, files in os.walk(str(dirname)):
                 for file in files:
@@ -687,8 +701,8 @@ class Clustering:
         for root, dirs, files in os.walk(str(dir)):
             for file in files:
                 if file.lower().endswith('.wav') and file + '.data' in files:
-                    wavobj = wavio.read(os.path.join(root, file))
-                    srlist.append(wavobj.rate)
+                    wavrate = wavio.readFmt(os.path.join(root, file))[0]
+                    srlist.append(wavrate)
                     # Read the annotation
                     segments = Segment.SegmentList()
                     segments.parseJSON(os.path.join(root, file + '.data'))
