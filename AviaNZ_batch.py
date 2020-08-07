@@ -458,7 +458,11 @@ class AviaNZ_batchProcess(QMainWindow):
             speciesStr = "Intermittent sampling"
             filters = None
         else:
-            self.method = "Wavelets"
+            if "NZ Bats" in self.species:
+                self.method = "Click"
+                self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
+            else:
+                self.method = "Wavelets"
 
             # double-check that all Fs are equal
             filters = [self.FilterDicts[name] for name in self.species]
@@ -474,13 +478,14 @@ class AviaNZ_batchProcess(QMainWindow):
             # format: {filtername: [model, win, inputdim, output]}
             self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, self.species)
 
-        # LIST ALL WAV files that will be processed
+        # LIST ALL FILES that will be processed (either wav or bmp, depending on mode)
         allwavs = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
-                if filename.lower().endswith('.wav'):
+                if (self.method!="Click" and filename.lower().endswith('.wav')) or (self.method=="Click" and filename.lower().endswith('.bmp')):
                     allwavs.append(os.path.join(root, filename))
         total = len(allwavs)
+
         # Parse the user-set time window to process
         if self.CLI or self.testmode:
             timeWindow_s = 0
@@ -553,19 +558,19 @@ class AviaNZ_batchProcess(QMainWindow):
 
             # Ask for FINAL USER CONFIRMATION here
             cnt = len(self.filesDone)
-            # confirmedLaunch = QMessageBox.Cancel
             if self.method == "Intermittent sampling":
                 text = "Method: " + self.method + ".\nNumber of files to analyze: " + str(total) + "\n"
             else:
                 text = "Species: " + speciesStr + ", method: " + self.method + ".\nNumber of files to analyze: " + str(total) + ", " + str(cnt) + " done so far.\n"
                 text += "Output stored in " + self.dirName + "/DetectionSummary_*.xlsx.\n"
             text += "Log file stored in " + self.dirName + "/LastAnalysisLog.txt.\n"
-            if speciesStr=="Any sound":
+            if speciesStr=="Any sound" or self.method=="Click":
                 text += "\nWarning: any previous annotations in these files will be deleted!\n"
             else:
                 text += "\nWarning: any previous annotations for the selected species in these files will be deleted!\n"
             text = "Analysis will be launched with these settings:\n" + text + "\nConfirm?"
 
+            # TODO: not sure these modes do the same
             if not self.CLI:
                 msg = SupportClasses.MessagePopup("t", "Launch batch analysis", text)
                 msg.setStandardButtons(QMessageBox.Cancel | QMessageBox.Ok)
@@ -659,8 +664,9 @@ class AviaNZ_batchProcess(QMainWindow):
 
                 # check if file is formatted correctly
                 with open(filename, 'br') as f:
-                    if f.read(4) != b'RIFF':
+                    if (self.method=="Click" and f.read(2) != b'BM') or (self.method!="Click" and f.read(4) != b'RIFF'):
                         print("Warning: file %s not formatted correctly, skipping" % filename)
+                        self.log.appendFile(filename)
                         continue
 
                 # test the selected time window if it is a doc recording
@@ -705,15 +711,17 @@ class AviaNZ_batchProcess(QMainWindow):
                         self.log.file.close()
                         return(1)
                 else:
-                    # load audiodata and clean up old segments:
+                    # load audiodata/spectrogram and clean up old segments:
                     print("Loading file...")
                     self.loadFile(species=self.species, anysound=(speciesStr == "Any sound"))
 
-                    print("Segmenting...")
-                    self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
+                    # initialize empty segmenter
+                    if self.method=="Wavelets":
+                        self.ws = WaveletSegment.WaveletSegment(wavelet='dmey2')
 
                     # Main work is done here:
                     try:
+                        print("Segmenting...")
                         self.detectFile(speciesStr, filters)
                     except Exception:
                         e = "Encountered error:\n" + traceback.format_exc()
@@ -821,16 +829,16 @@ class AviaNZ_batchProcess(QMainWindow):
         # page size fixed for now
         samplesInPage = 900*16000
         # (ceil division for large integers)
-        numPages = (len(self.audiodata) - 1) // samplesInPage + 1
+        numPages = (self.datalength - 1) // samplesInPage + 1
 
         # Actual segmentation happens here:
         for page in range(numPages):
             print("Segmenting page %d / %d" % (page+1, numPages))
             start = page*samplesInPage
-            end = min(start+samplesInPage, len(self.audiodata))
+            end = min(start+samplesInPage, self.datalength)
             thisPageLen = (end-start) / self.sampleRate
 
-            if thisPageLen < 2:
+            if thisPageLen < 2 and self.method!="Click":
                 print("Warning: can't process short file ends (%.2f s)" % thisPageLen)
                 continue
 
@@ -872,20 +880,26 @@ class AviaNZ_batchProcess(QMainWindow):
                 del self.seg
                 gc.collect()
             else:
-                # read in the page and resample as needed
-                self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new")
+                if self.method!="Click":
+                    # read in the page and resample as needed
+                    self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new")
 
                 allCtSegs = []
+                data_test = []
+                click_label = 'None'
                 for speciesix in range(len(filters)):
                     print("Working with recogniser:", filters[speciesix])
-                    # note: using 'recaa' mode = partial antialias
-                    thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
-                    # Post-process
-                    # 1. Delete windy segments
-                    # 2. CNN
-                    # 3. Fundamental frequency
-                    # 4. Merge neighbours
-                    # 5. Delete short segments
+                    if self.method!="Click":
+                        # note: using 'recaa' mode = partial antialias
+                        thisPageSegs = self.ws.waveletSegment(speciesix, wpmode="new")
+                    else:
+                        click_label, data_test, gen_spec = self.ClickSearch(self.sp.sg, self.filename)
+                        print('number of detected clicks = ', gen_spec)
+                        thisPageSegs = []
+
+
+                    # Post-process:
+                    # CNN-classify, delete windy, rainy segments, check for FundFreq, merge gaps etc.
                     print("Segments detected (all subfilters): ", thisPageSegs)
                     if not self.testmode:
                         print("Post-processing...")
@@ -894,52 +908,111 @@ class AviaNZ_batchProcess(QMainWindow):
                     spInfo = filters[speciesix]
                     for filtix in range(len(spInfo['Filters'])):
                         if not self.testmode:
+                            # TODO THIS IS FULL POST-PROC PIPELINE FOR BIRDS AND BATS
+                            # -- Need to check how this should interact with the testmode
                             CNNmodel = None
                             if spInfo['species'] in self.CNNDicts.keys():
+                                # This list contains the model itself, plus parameters for running it
                                 CNNmodel = self.CNNDicts[spInfo['species']]
-                            post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
-                            print("Segments detected after WF: ", len(thisPageSegs[filtix]))
-                            if self.CLI:
-                                if self.wind and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0],
-                                                                             spInfo['Filters'][filtix]['FreqRange'][1]):
-                                    post.wind()
-                            elif self.w_wind.isChecked() and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0], spInfo['Filters'][filtix]['FreqRange'][1]):
-                                post.wind()
-                            if CNNmodel:
-                                print('Post-processing with CNN')
-                                post.CNN()
-                            if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
-                                if spInfo['Filters'][filtix]["F0"]:
-                                    print("Checking for fundamental frequency...")
-                                    post.fundamentalFrq()
 
-                            post.joinGaps(maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
-                            post.deleteShort(minlength=spInfo['Filters'][filtix]['TimeRange'][0])
+                            if self.method=="Click":
+                                # bat-style CNN:
+                                model = CNNmodel[0]
+                                thr1 = CNNmodel[5][0]
+                                thr2 = CNNmodel[5][1]
+                                if click_label=='Click':
+                                    # we enter in the cnn only if we got a click
+                                    sg_test = np.ndarray(shape=(np.shape(data_test)[0],np.shape(data_test[0][0])[0], np.shape(data_test[0][0])[1]), dtype=float)
+                                    spec_id=[]
+                                    print('Number of file spectrograms = ', np.shape(data_test)[0])
+                                    for j in range(np.shape(data_test)[0]):
+                                        maxg = np.max(data_test[j][0][:])
+                                        sg_test[j][:] = data_test[j][0][:]/maxg
+                                        spec_id.append(data_test[j][1:3])
+
+                                    # CNN classification of clicks
+                                    x_test = sg_test
+                                    test_images = x_test.reshape(x_test.shape[0],6, 512, 1)
+                                    test_images = test_images.astype('float32')
+
+                                    # recovering labels
+                                    predictions = model.predict(test_images)
+                                    # predictions is an array #imagesX #of classes which entries are the probabilities for each class
+
+                                    # Create a label (list of dicts with species, certs) for the single segment
+                                    print('Assessing file label...')
+                                    label = self.File_label(predictions, thr1=thr1, thr2=thr2)
+                                    print('CNN detected: ', label)
+                                    if len(label)>0:
+                                        # Convert the annotation into a full segment in self.segments
+                                        thisPageStart = start / self.sampleRate
+                                        self.makeSegments([thisPageStart, thisPageLen, label])
+                                else:
+                                    # do not create any segments
+                                    print("Nothing detected")
+                            else:
+                                # bird-style CNN and other processing:
+                                post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
+                                print("Segments detected after WF: ", len(thisPageSegs[filtix]))
+                                if self.CLI:
+                                    if self.wind and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0],
+                                                                                 spInfo['Filters'][filtix]['FreqRange'][1]):
+                                        post.wind()
+                                elif self.w_wind.isChecked() and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0], spInfo['Filters'][filtix]['FreqRange'][1]):
+                                        post.wind()
+
+                                if CNNmodel:
+                                    print('Post-processing with CNN')
+                                    post.CNN()
+                                if 'F0' in spInfo['Filters'][filtix] and 'F0Range' in spInfo['Filters'][filtix]:
+                                    if spInfo['Filters'][filtix]["F0"]:
+                                        print("Checking for fundamental frequency...")
+                                        post.fundamentalFrq()
+
+                                post.joinGaps(maxgap=spInfo['Filters'][filtix]['TimeRange'][3])
+                                post.deleteShort(minlength=spInfo['Filters'][filtix]['TimeRange'][0])
+
+                                # adjust segment starts for 15min "pages"
+                                if start != 0:
+                                    for seg in post.segments:
+                                        seg[0][0] += start/self.sampleRate
+                                        seg[0][1] += start/self.sampleRate
+                                # attach filter info and put on self.segments:
+                                self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
                         else:
+                            # TODO: THIS IS testmode. NOT USING ANY BAT STUFF THEN
+                            # I.E. testmode not adapted to bats
                             post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate,
                                                        tgtsampleRate=spInfo["SampleRate"],
                                                        segments=thisPageSegs[filtix],
                                                        subfilter=spInfo['Filters'][filtix], CNNmodel=None, cert=50)
-
-                        # adjust segment starts for 15min "pages"
-                        if start != 0:
-                            for seg in post.segments:
-                                seg[0][0] += start/self.sampleRate
-                                seg[0][1] += start/self.sampleRate
-                        # attach filter info and put on self.segments:
-                        self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
+                            # adjust segment starts for 15min "pages"
+                            if start != 0:
+                                for seg in post.segments:
+                                    seg[0][0] += start/self.sampleRate
+                                    seg[0][1] += start/self.sampleRate
+                            # attach filter info and put on self.segments:
+                            self.makeSegments(post.segments, self.species[speciesix], spInfo["species"], spInfo['Filters'][filtix])
 
     def makeSegments(self, segmentsNew, filtName=None, species=None, subfilter=None):
         """ Adds segments to self.segments """
-        # for wavelet segments: (same as self.species!="Any sound")
-        if subfilter is not None:
+        if self.method=="Click":
+            # Batmode: segmentsNew should be already prepared as: [x1, x2, labels]
+            y1 = 0
+            y2 = 0
+            if len(segmentsNew)!=3:
+                print("Warning: segment format does not match bat mode")
+            segment = Segment.Segment([segmentsNew[0], segmentsNew[1], y1, y2, segmentsNew[2]])
+            self.segments.addSegment(segment)
+        elif subfilter is not None:
+            # for wavelet segments: (same as self.species!="Any sound")
             y1 = subfilter["FreqRange"][0]
             y2 = min(subfilter["FreqRange"][1], self.sampleRate//2)
             for s in segmentsNew:
                 segment = Segment.Segment([s[0][0], s[0][1], y1, y2, [{"species": species, "certainty": s[1], "filter": filtName, "calltype": subfilter["calltype"]}]])
                 self.segments.addSegment(segment)
-        # for generic all-species segments:
         else:
+            # for generic all-species segments:
             y1 = 0
             y2 = 0
             species = "Don't Know"
@@ -1009,16 +1082,23 @@ class AviaNZ_batchProcess(QMainWindow):
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):
             self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
-        self.sp.readWav(self.filename)
-        self.sampleRate = self.sp.sampleRate
-        self.audiodata = self.sp.data
 
-        self.datalength = np.shape(self.audiodata)[0]
-        print("Read %d samples, %f s at %d Hz" % (len(self.audiodata), float(self.datalength)/self.sampleRate, self.sampleRate))
+        # Read audiodata or spectrogram
+        if self.method=="Wavelets":
+            self.sp.readWav(self.filename)
+            self.sampleRate = self.sp.sampleRate
+            self.audiodata = self.sp.data
+
+            self.datalength = np.shape(self.audiodata)[0]
+            print("Read %d samples, %f s at %d Hz" % (len(self.audiodata), float(self.datalength)/self.sampleRate, self.sampleRate))
+        else:
+            self.sp.readBmp(self.filename, rotate=False)
+            self.sampleRate = self.sp.sampleRate
+            self.datalength = self.sp.fileLength
 
         # Read in stored segments (useful when doing multi-species)
         self.segments = Segment.SegmentList()
-        if species==["Any sound"] or not os.path.isfile(self.filename + '.data'):
+        if species==["Any sound"] or not os.path.isfile(self.filename + '.data') or self.method=="Click":
             # Initialize default metadata values
             self.segments.metadata = dict()
             self.segments.metadata["Operator"] = "Auto"
@@ -1042,14 +1122,223 @@ class AviaNZ_batchProcess(QMainWindow):
                             del self.segments[i]
             print("%d segments loaded from .data file" % len(self.segments))
 
-        # Do impulse masking by default
-        if anysound:
-            self.sp.data = self.sp.impMask(engp=70, fp=0.50)
-        else:
-            self.sp.data = self.sp.impMask()
-        self.audiodata = self.sp.data
-        del self.sp
+        if self.method!="Click":
+            # Do impulse masking by default
+            if anysound:
+                self.sp.data = self.sp.impMask(engp=70, fp=0.50)
+            else:
+                self.sp.data = self.sp.impMask()
+            self.audiodata = self.sp.data
+            del self.sp
         gc.collect()
+
+    def ClickSearch(self, imspec, file):
+        """
+        searches for clicks in the provided imspec, saves dataset
+        returns click_label, dataset and count of detections
+
+        The search is made on the spectrogram image that we know to be generated
+        with parameters (1024,512)
+        Click presence is assessed for each spectrogram column: if the mean in the
+        frequency band [f0, f1] (*) is bigger than a treshold we have a click
+        thr=mean(all_spec)+std(all_spec) (*)
+
+        The clicks are discarded if longer than 0.05 sec
+
+        Clicks are stored into featuress using updateDataset
+
+        imspec: unrotated spectrogram (rows=time)
+        file: NOTE originally was basename, now full filename
+        """
+        featuress = []
+        count = 0
+
+        df=self.sampleRate//2 /(np.shape(imspec)[0]+1)  # frequency increment
+        dt=self.sp.incr/self.sampleRate  # self.sp.incr is set to 512 for bats
+        # dt=0.002909090909090909
+        # up_len=math.ceil(0.05/dt) #0.5 second lenth in indices divided by 11
+        up_len=17
+        # up_len=math.ceil((0.5/11)/dt)
+
+        # Frequency band
+        f0=24000
+        index_f0=-1+math.floor(f0/df)  # lower bound needs to be rounded down
+        f1=54000
+        index_f1=-1+math.ceil(f1/df)  # upper bound needs to be rounded up
+
+        # Mean in the frequency band
+        mean_spec=np.mean(imspec[index_f0:index_f1,:], axis=0)
+
+        # Threshold
+        mean_spec_all=np.mean(imspec, axis=0)[2:]
+        thr_spec=(np.mean(mean_spec_all)+np.std(mean_spec_all))*np.ones((np.shape(mean_spec)))
+
+        ## clickfinder
+        # check when the mean is bigger than the threshold
+        # clicks is an array which elements are equal to 1 only where the sum is bigger
+        # than the mean, otherwise are equal to 0
+        clicks = mean_spec>thr_spec
+        clicks_indices = np.nonzero(clicks)
+        # check: if I have found somenthing
+        if np.shape(clicks_indices)[1]==0:
+            click_label='None'
+            return click_label, featuress, count
+            # not saving spectrograms
+
+        # Discarding segments too long or too short and saving spectrogram images
+        click_start=clicks_indices[0][0]
+        click_end=clicks_indices[0][0]
+        for i in range(1,np.shape(clicks_indices)[1]):
+            if clicks_indices[0][i]==click_end+1:
+                click_end=clicks_indices[0][i]
+            else:
+                if click_end-click_start+1>up_len:
+                    clicks[click_start:click_end+1] = False
+                else:
+                    # savedataset
+                    featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt)
+                # update
+                click_start=clicks_indices[0][i]
+                click_end=clicks_indices[0][i]
+
+        # checking last loop with end
+        if click_end-click_start+1>up_len:
+            clicks[click_start:click_end+1] = False
+        else:
+            featuress, count = self.updateDataset(file, featuress, count, imspec, click_start, click_end, dt)
+
+        # Assigning: click label
+        if np.any(clicks):
+            click_label='Click'
+        else:
+            click_label='None'
+
+        return click_label, featuress, count
+
+    def updateDataset(self, file_name, featuress, count, spectrogram, click_start, click_end, dt=None):
+        """
+        Update Dataset with current segment
+        It take a piece of the spectrogram with fixed length centered in the click
+        """
+        win_pixel=1
+        ls = np.shape(spectrogram)[1]-1
+        click_center=int((click_start+click_end)/2)
+
+        start_pixel=click_center-win_pixel
+        if start_pixel<0:
+            win_pixel2=win_pixel+np.abs(start_pixel)
+            start_pixel=0
+        else:
+            win_pixel2=win_pixel
+
+        end_pixel=click_center+win_pixel2
+        if end_pixel>ls:
+            start_pixel-=end_pixel-ls+1
+            end_pixel=ls-1
+            # this code above fails for sg less than 4 pixels wide
+        sgRaw=spectrogram[:,start_pixel:end_pixel+1]  # not I am saving the spectrogram in the right dimension
+        sgRaw=np.repeat(sgRaw,2,axis=1)
+        sgRaw=(np.flipud(sgRaw)).T  # flipped spectrogram to make it consistent with Niro Mewthod
+        featuress.append([sgRaw.tolist(), file_name, count])  # not storing segment and label informations
+
+        count += 1
+
+        return featuress, count
+
+    def File_label(self, predictions, thr1, thr2):
+        """
+        uses the predictions made by the CNN to update the filewise annotations
+        when we have 3 labels: 0 (LT), 1(ST), 2 (Noise)
+
+        METHOD: evaluation of probability over files combining mean of probability
+            + best3mean of probability against thr1 and thr2, respectively
+
+        Returns: species labels (list of dicts), compatible w/ the label format on Segments
+        """
+
+        # Assessing file label
+        # inizialization
+        # vectors storing classes probabilities
+        LT_prob=[]  # class 0
+        ST_prob=[]  # class 1
+        NT_prob=[]  # class 2
+        spec_num=0   # counts number of spectrograms per file
+        # flag: if no click detected no spectrograms
+        click_detected_flag=False
+        # looking for all the spectrogram related to this file
+
+        for k in range(np.shape(predictions)[0]):
+            click_detected_flag=True
+            spec_num+=1
+            LT_prob.append(predictions[k][0])
+            ST_prob.append(predictions[k][1])
+            NT_prob.append(predictions[k][2])
+
+
+        # if no clicks => automatically Noise
+        label = []
+
+        if click_detected_flag:
+            # mean
+            LT_mean=np.mean(LT_prob)*100
+            ST_mean=np.mean(ST_prob)*100
+
+            # best3mean
+            LT_best3mean=0
+            ST_best3mean=0
+
+            # LT
+            ind = np.array(LT_prob).argsort()[-3:][::-1]
+            # adding len ind in order to consider also the cases when we do not have 3 good examples
+            if len(ind)==1:
+                # this means that there is only one prob!
+                LT_best3mean+=LT_prob[0]
+            else:
+                for j in range(len(ind)):
+                    LT_best3mean+=LT_prob[ind[j]]
+            LT_best3mean/= 3
+            LT_best3mean*=100
+
+            # ST
+            ind = np.array(ST_prob).argsort()[-3:][::-1]
+            # adding len ind in order to consider also the cases when we do not have 3 good examples
+            if len(ind)==1:
+                # this means that there is only one prob!
+                ST_best3mean+=ST_prob[0]
+            else:
+                for j in range(len(ind)):
+                    ST_best3mean+=ST_prob[ind[j]]
+            ST_best3mean/= 3
+            ST_best3mean*=100
+
+            # ASSESSING FILE LABEL
+            hasST = ST_mean>=thr1 or ST_best3mean>=thr2
+            hasLT = LT_mean>=thr1 or LT_best3mean>=thr2
+            hasSTlow = ST_mean<thr1 and ST_best3mean<thr2
+            hasLTlow = LT_mean<thr1 and LT_best3mean<thr2
+            reallyHasST = ST_mean>=thr1 and ST_best3mean>=thr2
+            reallyHasLT = LT_mean>=thr1 and LT_best3mean>=thr2
+            HasBat = LT_mean>=thr1 and ST_mean>=thr1
+
+            if reallyHasLT and hasSTlow:
+                label.append({"species": "Long-tailed bat", "certainty": 100})
+            elif reallyHasLT and reallyHasST:
+                label.append({"species": "Long-tailed bat", "certainty": 100})
+            elif hasLT and ST_mean<thr1:
+                label.append({"species": "Long-tailed bat", "certainty": 50})
+            elif HasBat:
+                label.append({"species": "Long-tailed bat", "certainty": 50})
+
+            if reallyHasST and hasLTlow:
+                label.append({"species": "Short-tailed bat", "certainty": 100})
+            elif reallyHasLT and reallyHasST:
+                label.append({"species": "Short-tailed bat", "certainty": 100})
+            elif hasST and LT_mean<thr1:
+                label.append({"species": "Short-tailed bat", "certainty": 50})
+            elif HasBat:
+                label.append({"species": "Short-tailed bat", "certainty": 50})
+
+        return label
 
 
 class AviaNZ_reviewAll(QMainWindow):
@@ -1144,7 +1433,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fHigh = QSlider(Qt.Horizontal)
         self.fHigh.setTickPosition(QSlider.TicksBelow)
         self.fHigh.setTickInterval(1000)
-        self.fHigh.setRange(4000, 32000)
+        self.fHigh.setRange(4000, 88000)
         self.fHigh.setSingleStep(250)
         self.fHigh.setValue(8000)
         self.fHightext = QLabel('Show freq. below (Hz)')
@@ -1339,7 +1628,7 @@ class AviaNZ_reviewAll(QMainWindow):
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
                 filenamef = os.path.join(root, filename)
-                if filename.lower().endswith('.wav') and os.path.isfile(filenamef + '.data'):
+                if (filename.lower().endswith('.wav') or filename.lower().endswith('.bmp')) and os.path.isfile(filenamef + '.data'):
                     allwavs.append(filenamef)
         total = len(allwavs)
         print(total, "files found")
@@ -1370,11 +1659,23 @@ class AviaNZ_reviewAll(QMainWindow):
                 continue
 
             # check if file is formatted correctly
-            with open(filename, 'br') as f:
-                if f.read(4) != b'RIFF':
-                    print("Warning: file %s not formatted correctly, skipping" % filename)
-                    continue
+            if filename.lower().endswith('.wav'):
+                with open(filename, 'br') as f:
+                    if f.read(4) != b'RIFF':
+                        print("Warning: WAV file %s not formatted correctly, skipping" % filename)
+                        continue
+                self.batmode = False
+            elif filename.lower().endswith('.bmp'):
+                with open(filename, 'br') as f:
+                    if f.read(2) != b'BM':
+                        print("Warning: BMP file %s not formatted correctly" % filename)
+                        continue
+                self.batmode = True
+            else:
+                print("Warning: file %s format not recognised " % filename)
+                continue
 
+            # detect timestamp
             DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(filename))
             if DOCRecording:
                 startTime = DOCRecording.group(2)
@@ -1503,7 +1804,6 @@ class AviaNZ_reviewAll(QMainWindow):
         alldatas = []
         for root, dirs, files in os.walk(str(self.dirName)):
             for filename in files:
-                print(filename)
                 if filename.endswith('.data'):
                     print("Appending" ,filename)
                     filenamef = os.path.join(root, filename)
@@ -1564,11 +1864,18 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.loadFile(filename, self.species, chunksize)
 
+        if self.batmode:
+            guides = [20000, 36000, 50000, 60000]
+        else:
+            guides = None
+
         # Initialize the dialog for this file
         self.humanClassifyDialog2 = Dialogs.HumanClassify2(self.sps, self.segments, self.indices2show,
                                                            self.species, self.lut, self.colourStart,
                                                            self.colourEnd, self.config['invertColourMap'],
-                                                           self.config['brightness'], self.config['contrast'], filename=self.filename)
+                                                           self.config['brightness'], self.config['contrast'],
+                                                           guidefreq=guides,
+                                                           filename=self.filename)
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog2.resize(self.dialogSize)
             self.humanClassifyDialog2.move(self.dialogPos)
@@ -1731,9 +2038,11 @@ class AviaNZ_reviewAll(QMainWindow):
             else:
                 self.longBirdList = None
 
+        self.batList = self.ConfigLoader.batl(self.config['BatList'], self.configdir)
+
         self.loadFile(filename)
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.config['MultipleSpecies'], self.sps[0].audioFormat, self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[0].audioFormat, self)
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
@@ -1780,8 +2089,15 @@ class AviaNZ_reviewAll(QMainWindow):
                 dlg.repaint()
                 dlg.show()
 
-                # Determine the sample rate and set some file-level parameters
-                samplerate, duration, _, _ = wavio.readFmt(filename)
+                if self.batmode:
+                    # Not sure how to do an equivalent of readFmt for bmps?
+                    # Maybe easier to just read in the entire bmp here?
+                    samplerate = 176000
+                    duration = self.segments.metadata["Duration"]
+                else:
+                    # Determine the sample rate and set some file-level parameters
+                    samplerate, duration, _, _ = wavio.readFmt(filename)
+
                 minFreq = max(self.fLow.value(), 0)
                 maxFreq = min(self.fHigh.value(), samplerate//2)
                 if maxFreq - minFreq < 100:
@@ -1821,24 +2137,32 @@ class AviaNZ_reviewAll(QMainWindow):
                             x1 = max(x1nob - self.config['reviewSpecBuffer'], 0)
                             x2 = min(x2nob + self.config['reviewSpecBuffer'], duration)
 
-                        # Load. segix>1 to print the format details only once for each file
-                        sp.readWav(filename, off=x1, len=x2-x1, silent=segix>1)
+                        # Actual loading of the wav/bmp/spectrogram
+                        if self.batmode:
+                            sp.readBmp(filename, off=x1, len=x2-x1, silent=segix>1)
+                            # sgRaw was already normalized to 0-1 when loading
+                            # with 1 being loudest
+                            sgRaw = sp.sg
+                            sp.sg = np.abs(np.where(sgRaw == 0, -30, 10*np.log10(sgRaw)))
+                        else:
+                            # segix>1 to print the format details only once for each file
+                            sp.readWav(filename, off=x1, len=x2-x1, silent=segix>1)
 
-                        # Filter the audiodata based on initial sliders
-                        sp.data = sp.ButterworthBandpass(sp.data, sp.sampleRate, minFreq, maxFreq)
+                            # Filter the audiodata based on initial sliders
+                            sp.data = sp.ButterworthBandpass(sp.data, sp.sampleRate, minFreq, maxFreq)
+
+                            # Generate the spectrogram
+                            _ = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
+
+                            # collect min and max values for final colour scale
+                            minsg = min(np.min(sp.sg), minsg)
+                            maxsg = max(np.max(sp.sg), maxsg)
+                            sp.sg = np.abs(np.where(sp.sg==0, 0.0, 10.0 * np.log10(sp.sg/minsg)))
 
                         # need to also store unbuffered limits in spec units
                         # (relative to start of segment)
                         sp.x1nobspec = sp.convertAmpltoSpec(x1nob-x1)
                         sp.x2nobspec = sp.convertAmpltoSpec(x2nob-x1)
-
-                        # Generate the spectrogram
-                        _ = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
-
-                        # collect min and max values for final colour scale
-                        minsg = min(np.min(sp.sg), minsg)
-                        maxsg = max(np.max(sp.sg), maxsg)
-                        sp.sg = np.abs(np.where(sp.sg==0, 0.0, 10.0 * np.log10(sp.sg/minsg)))
 
                         # trim the spectrogram
                         height = sp.sampleRate//2 / np.shape(sp.sg)[1]
@@ -1884,13 +2208,18 @@ class AviaNZ_reviewAll(QMainWindow):
             minFreq = max(self.fLow.value(), 0)
             maxFreq = min(self.fHigh.value(), sp.sampleRate//2)
 
+            if self.batmode:
+                guides = [sp.convertFreqtoY(f) for f in [20000, 36000, 50000, 60000]]
+            else:
+                guides = None
+
             # currLabel, then unbufstart in spec units rel to start, unbufend,
             # then true time to display start, end,
             # NOTE: might be good to pass copy.deepcopy(seg[4])
             # instead of seg[4], if any bugs come up due to Dialog1 changing the label
             self.humanClassifyDialog1.setImage(sp.sg, sp.data, sp.sampleRate, sp.incr,
                                                seg[4], sp.x1nobspec, sp.x2nobspec,
-                                               seg[0], seg[1], minFreq, maxFreq)
+                                               seg[0], seg[1], guides, minFreq, maxFreq)
         else:
             # store dialog properties such as position for the next file
             self.dialogSize = self.humanClassifyDialog1.size()

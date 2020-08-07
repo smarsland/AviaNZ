@@ -48,6 +48,7 @@ import re
 import sys
 import io
 from tensorflow.keras.models import model_from_json
+from tensorflow.keras.models import load_model
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
@@ -182,7 +183,7 @@ class TimeAxisWidget(QAbstractButton):
             # draw tickmarks and numbers
             currTime = 0
             fontOffset = 5+1.5*self.fontsize
-            if self.maxTime>4:
+            if self.maxTime>=10:
                 timeFormat = "%d"
             else:
                 timeFormat = "%.1f"
@@ -199,7 +200,7 @@ class TimeAxisWidget(QAbstractButton):
                 painter.drawText(tickmark.x1()-fontOffset//4, tickmark.y1()+fontOffset, timeFormat % currTime)
             tickmark.translate(event.rect().width()//5-2,0)
             painter.drawLine(tickmark)
-            painter.drawText(tickmark.x2()-fontOffset*0.6, tickmark.y1()+fontOffset, timeFormat % self.maxTime)
+            painter.drawText(tickmark.x2()-fontOffset*0.7, tickmark.y1()+fontOffset, timeFormat % self.maxTime)
 
             painter.save()
             painter.drawText((bottomR.x() - bottomL.x())//2, bottomL.y(), "s")
@@ -375,6 +376,10 @@ class LinearRegionItem2(pg.LinearRegionItem):
 
     def setHoverBrush(self, *br, **kargs):
         self.hoverBrush = fn.mkBrush(*br, **kargs)
+
+    def setPen(self, *pen, **kargs):
+        self.lines[0].setPen(*pen, **kargs)
+        self.lines[1].setPen(*pen, **kargs)
 
     def mouseDragEvent(self, ev):
         if not self.movable or ev.button()==self.parent.MouseDrawingButton:
@@ -955,19 +960,28 @@ class ConfigLoader(object):
             if "CNN" not in filt:
                 continue
             elif filt["CNN"]:
-                try:
-                    json_file = open(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.json', 'r')
-                    loaded_model_json = json_file.read()
-                    json_file.close()
-                    model = model_from_json(loaded_model_json)
-                    model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
-                    print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
-                    model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
-                    targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
-                                             filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
-                except Exception as e:
-                    print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]))
-                    print(e)
+                if species == "NZ Bats":
+                    try:
+                        model = load_model(os.path.join(dircnn, filt["CNN"]["CNN_name"]))
+                        targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
+                                                 filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
+                        print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
+                    except Exception as e:
+                        print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]), e)
+                else:
+                    try:
+                        json_file = open(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.json', 'r')
+                        loaded_model_json = json_file.read()
+                        json_file.close()
+                        model = model_from_json(loaded_model_json)
+                        model.load_weights(os.path.join(dircnn, filt["CNN"]["CNN_name"]) + '.h5')
+                        print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
+                        model.compile(loss=filt["CNN"]["loss"], optimizer=filt["CNN"]["optimizer"], metrics=['accuracy'])
+                        targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
+                                                 filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
+                    except Exception as e:
+                        print("Could not load CNN model from file:", os.path.join(dircnn, filt["CNN"]["CNN_name"]))
+                        print(e)
         print("Loaded CNN models:", list(targetmodels.keys()))
         return targetmodels
 
@@ -1008,7 +1022,6 @@ class ConfigLoader(object):
             return None
 
     def longbl(self, file, configdir):
-
         print("Loading long species list from file %s" % file)
         try:
             if os.path.isabs(file):
@@ -1034,6 +1047,35 @@ class ConfigLoader(object):
         except Exception as e:
             print(e)
             msg = MessagePopup("w", "Bad species list", "Warning: Failed to load long species list from " + file + ". Reverting to default.")
+            msg.exec_()
+            return None
+
+    def batl(self, file, configdir):
+        print("Loading bat list from file %s" % file)
+        try:
+            if os.path.isabs(file):
+                # user-picked files will have absolute paths
+                blfile = file
+            else:
+                # initial file will have relative path,
+                # to allow looking it up in various OSes.
+                blfile = os.path.join(configdir, file)
+            if not os.path.isfile(blfile):
+                print("Warning: file %s not found, falling back to default" % blfile)
+                blfile = os.path.join(configdir, "ListBats.txt")
+
+            try:
+                readlist = json.load(open(blfile))
+                return readlist
+            except ValueError as e:
+                print(e)
+                msg = MessagePopup("w", "Bad species list", "Warning: file " + blfile + " corrupt, delete it to restore default. Reverting to default.")
+                msg.exec_()
+                return None
+
+        except Exception as e:
+            print(e)
+            msg = MessagePopup("w", "Bad species list", "Warning: Failed to load bat list from " + file + ". Reverting to default.")
             msg.exec_()
             return None
 
@@ -1326,7 +1368,7 @@ class ExcelIO():
 class PicButton(QAbstractButton):
     # Class for HumanClassify dialogs to put spectrograms on buttons
     # Also includes playback capability.
-    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, parent=None, cluster=False):
+    def __init__(self, index, spec, audiodata, format, duration, unbufStart, unbufStop, lut, colStart, colEnd, cmapInv, guides=None, parent=None, cluster=False):
         super(PicButton, self).__init__(parent)
         self.index = index
         self.mark = "green"
@@ -1335,6 +1377,21 @@ class PicButton(QAbstractButton):
         self.unbufStop = unbufStop
         self.cluster = cluster
         self.setMouseTracking(True)
+
+        self.playButton = QtGui.QToolButton(self)
+        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
+        self.playButton.hide()
+        # check if playback possible (e.g. batmode)
+        if len(audiodata)>0:
+            self.noaudio = False
+            self.playButton.clicked.connect(self.playImage)
+        else:
+            self.noaudio = True
+            # batmode frequency guides (in Y positions 0-1)
+            if guides is not None:
+                self.guides = guides
+                self.guidelines = [0]*len(self.guides)
+
         # setImage reads some properties from self, to allow easy update
         # when color map changes
         self.setImage(lut, colStart, colEnd, cmapInv)
@@ -1350,12 +1407,7 @@ class PicButton(QAbstractButton):
         self.media_obj = ControllableAudio(format)
         self.media_obj.notify.connect(self.endListener)
         self.audiodata = audiodata
-        self.duration = duration * 1000 # in ms
-
-        self.playButton = QtGui.QToolButton(self)
-        self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.playButton.clicked.connect(self.playImage)
-        self.playButton.hide()
+        self.duration = duration * 1000  # in ms
 
     def setImage(self, lut, colStart, colEnd, cmapInv):
         # takes in a piece of spectrogram and produces a pair of images
@@ -1368,21 +1420,33 @@ class PicButton(QAbstractButton):
             print("ERROR: button not shown, likely bad spectrogram coordinates")
             return
 
+        # Output image width - larger for batmode:
+        if self.noaudio:
+            targwidth = 750
+        else:
+            targwidth = 500
+
         # hardcode all image sizes
         if self.cluster:
             self.im1 = im1.scaled(200, 150)
         else:
-            self.specReductionFact = im1.size().width()/500
+            self.specReductionFact = im1.size().width()/targwidth
             # use original height if it is not extreme
             prefheight = max(192, min(im1.size().height(), 512))
-            self.im1 = im1.scaled(500, prefheight)
+            self.im1 = im1.scaled(targwidth, prefheight)
 
-        # draw lines
-        if not self.cluster:
+            heightRedFact = im1.size().height()/prefheight
+
+            # draw lines marking true segment position
             unbufStartAdj = self.unbufStart / self.specReductionFact
             unbufStopAdj = self.unbufStop / self.specReductionFact
             self.line1 = QLineF(unbufStartAdj, 0, unbufStartAdj, self.im1.size().height())
             self.line2 = QLineF(unbufStopAdj, 0, unbufStopAdj, self.im1.size().height())
+
+            # create guides for batmode
+            if self.noaudio:
+                for i in range(len(self.guides)):
+                    self.guidelines[i] = QLineF(0, self.im1.height() - self.guides[i]/heightRedFact, targwidth, self.im1.height() - self.guides[i]/heightRedFact)
 
     def paintEvent(self, event):
         if type(event) is not bool:
@@ -1404,6 +1468,14 @@ class PicButton(QAbstractButton):
             if not self.cluster:
                 painter.drawLine(self.line1)
                 painter.drawLine(self.line2)
+
+            if self.noaudio:
+                painter.setPen(QPen(QColor(255,232,140), 2))
+                painter.drawLine(self.guidelines[0])
+                painter.drawLine(self.guidelines[3])
+                painter.setPen(QPen(QColor(239,189,124), 2))
+                painter.drawLine(self.guidelines[1])
+                painter.drawLine(self.guidelines[2])
 
             # draw decision mark
             fontsize = int(self.im1.size().height() * 0.65)
@@ -1430,11 +1502,15 @@ class PicButton(QAbstractButton):
 
     def enterEvent(self, QEvent):
         # to reset the icon if it didn't stop cleanly
+        if self.noaudio:
+            return
         if not self.media_obj.isPlaying():
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
         self.playButton.show()
 
     def leaveEvent(self, QEvent):
+        if self.noaudio:
+            return
         if not self.media_obj.isPlaying():
             self.playButton.hide()
 
@@ -1550,7 +1626,7 @@ class LightedFileList(QListWidget):
 
         with pg.BusyCursor():
             # Read contents of current dir
-            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav'],filters=QDir.AllDirs | QDir.NoDot | QDir.Files,sort=QDir.DirsFirst)
+            self.listOfFiles = QDir(soundDir).entryInfoList(['..','*.wav','*.bmp'],filters=QDir.AllDirs | QDir.NoDot | QDir.Files,sort=QDir.DirsFirst)
             self.soundDir = soundDir
 
             for file in self.listOfFiles:
@@ -1558,32 +1634,45 @@ class LightedFileList(QListWidget):
                 item = QListWidgetItem(self)
 
                 if file.isDir():
+                    if file.fileName()=="..":
+                        item.setText(file.fileName() + "/")
+                        continue
+
                     # detailed dir view can be used for non-clickable instances
-                    if addWavNum and file.fileName()!="..":
+                    if addWavNum:
                         # count wavs in this dir:
+                        numbmps = 0
                         numwavs = 0
                         for root, dirs, files in os.walk(file.filePath()):
                             numwavs += sum(f.lower().endswith('.wav') for f in files)
-                        item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
+                            numbmps += sum(f.lower().endswith('.bmp') for f in files)
+                        # keep these strings as short as possible
+                        if numbmps==0:
+                            item.setText("%s/\t\t(%d wav files)" % (file.fileName(), numwavs))
+                        elif numwavs==0:
+                            item.setText("%s/\t\t(%d bmp files)" % (file.fileName(), numbmps))
+                        else:
+                            item.setText("%s/\t\t(%d wav, %d bmp files)" % (file.fileName(), numwavs, numbmps))
                     else:
                         item.setText(file.fileName() + "/")
 
                     # We still might need to walk the subfolders for sp lists and wav formats!
                     if not recursive:
                         continue
-                    if file.fileName()=="..":
-                        continue
                     for root, dirs, files in os.walk(file.filePath()):
                         for filename in files:
                             filenamef = os.path.join(root, filename)
-                            if filename.lower().endswith('.wav'):
-                                if readFmt:
+                            if filename.lower().endswith('.wav') or filename.lower().endswith('.bmp'):
+                                # format collection only implemented for WAVs currently
+                                if readFmt and filename.lower().endswith('.wav'):
                                     try:
                                         samplerate = wavio.readFmt(filenamef)[0]
                                         self.fsList.add(samplerate)
                                     except Exception as e:
                                         print("Warning: could not parse format of WAV file", filenamef)
                                         print(e)
+
+                                # Data files can accompany either wavs or bmps
                                 dataf = filenamef + '.data'
                                 if os.path.isfile(dataf):
                                     try:
@@ -1609,7 +1698,8 @@ class LightedFileList(QListWidget):
                     fullname = os.path.join(soundDir, file.fileName())
                     # (also updates the directory info sets, and minCertainty)
                     self.paintItem(item, fullname+'.data')
-                    if readFmt:
+                    # format collection only implemented for WAVs currently
+                    if readFmt and file.fileName().lower().endswith('.wav'):
                         try:
                             samplerate = wavio.readFmt(fullname)[0]
                             self.fsList.add(samplerate)
@@ -1627,7 +1717,6 @@ class LightedFileList(QListWidget):
                 self.setCurrentItem(index[0])
             else:
                 self.setCurrentRow(0)
-
 
     def refreshFile(self, fileName):
         """ Repaint a single file icon.
