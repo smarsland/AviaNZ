@@ -1663,14 +1663,17 @@ class LightedFileList(QListWidget):
                         for filename in files:
                             filenamef = os.path.join(root, filename)
                             if filename.lower().endswith('.wav') or filename.lower().endswith('.bmp'):
-                                # format collection only implemented for WAVs currently
-                                if readFmt and filename.lower().endswith('.wav'):
-                                    try:
-                                        samplerate = wavio.readFmt(filenamef)[0]
-                                        self.fsList.add(samplerate)
-                                    except Exception as e:
-                                        print("Warning: could not parse format of WAV file", filenamef)
-                                        print(e)
+                                if readFmt:
+                                    if filename.lower().endswith('.wav'):
+                                        try:
+                                            samplerate = wavio.readFmt(filenamef)[0]
+                                            self.fsList.add(samplerate)
+                                        except Exception as e:
+                                            print("Warning: could not parse format of WAV file", filenamef)
+                                            print(e)
+                                    else:
+                                        # For bitmaps, using hardcoded samplerate as there's no readFmt
+                                        self.fsList.add(176000)
 
                                 # Data files can accompany either wavs or bmps
                                 dataf = filenamef + '.data'
@@ -1699,13 +1702,17 @@ class LightedFileList(QListWidget):
                     # (also updates the directory info sets, and minCertainty)
                     self.paintItem(item, fullname+'.data')
                     # format collection only implemented for WAVs currently
-                    if readFmt and file.fileName().lower().endswith('.wav'):
-                        try:
-                            samplerate = wavio.readFmt(fullname)[0]
-                            self.fsList.add(samplerate)
-                        except Exception as e:
-                            print("Warning: could not parse format of WAV file", fullname)
-                            print(e)
+                    if readFmt:
+                        if file.fileName().lower().endswith('.wav'):
+                            try:
+                                samplerate = wavio.readFmt(fullname)[0]
+                                self.fsList.add(samplerate)
+                            except Exception as e:
+                                print("Warning: could not parse format of WAV file", fullname)
+                                print(e)
+                        if file.fileName().lower().endswith('.bmp'):
+                            # For bitmaps, using hardcoded samplerate as there's no readFmt
+                            self.fsList.add(176000)
 
         if readFmt:
             print("Found the following Fs:", self.fsList)

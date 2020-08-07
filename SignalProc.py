@@ -216,8 +216,7 @@ class SignalProc:
         """ Unit conversion """
         sgy = np.shape(self.sg)[1]
         if f>self.maxFreqShow:
-            print(f, "not in", self.minFreqShow, self.maxFreqShow)
-            return -10
+            return -100
         else:
             return (f-self.minFreqShow) * sgy / (self.maxFreqShow - self.minFreqShow)
 
