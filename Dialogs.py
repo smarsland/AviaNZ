@@ -143,7 +143,7 @@ class FileDataDialog(QDialog):
 class Spectrogram(QDialog):
     # Class for the spectrogram dialog box
     # TODO: Steal the graph from Raven (View/Configure Brightness)
-    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, window, parent=None):
+    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, window, batmode=False, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -185,7 +185,6 @@ class Spectrogram(QDialog):
         self.labelMaxF = QLabel()
         self.labelMaxF.setAlignment(Qt.AlignRight)
 
-        print("initing to", maxFreqShow)
         self.setValues(minFreq, maxFreq, minFreqShow, maxFreqShow)
         self.restore = QPushButton("Restore Defaults && Update")
         self.restore.clicked.connect(self.resetValues)
@@ -207,6 +206,11 @@ class Spectrogram(QDialog):
         form.addRow('Window width', self.window_width)
         form.addRow('Hop', self.incr)
         form.setVerticalSpacing(15)
+
+        # Most of the settings can't be changed when using BMPs:
+        if batmode:
+            for i in range(form.count()):
+                form.itemAt(i).widget().setEnabled(False)
 
         form2 = pg.LayoutWidget()
         form2.addWidget(QLabel('Lowest frequency'), row=0, col=0)
@@ -1201,7 +1205,7 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, multipleBirds, audioFormat, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -1211,6 +1215,7 @@ class HumanClassify1(QDialog):
         self.frame = QWidget()
 
         self.parent = parent
+        self.batmode = self.parent.batmode
         self.lut = lut
         self.label = []
         self.colourStart = colourStart
@@ -1218,6 +1223,7 @@ class HumanClassify1(QDialog):
         self.cmapInverted = cmapInverted
         self.shortBirdList = shortBirdList
         self.longBirdList = longBirdList
+        self.batList = batList
         self.multipleBirds = multipleBirds
         self.saveConfig = False
         self.viewingct = False
@@ -1249,6 +1255,15 @@ class HumanClassify1(QDialog):
         self.line2 = pg.InfiniteLine(angle=90, pen={'color': 'g'})
         self.pPlot.addItem(self.line1)
         self.pPlot.addItem(self.line2)
+
+        # prepare guides for marking true segment boundaries
+        self.guidelines = [0]*4
+        self.guidelines[0] = pg.InfiniteLine(angle=0, pen={'color': (255,232,140), 'width': 2})
+        self.guidelines[1] = pg.InfiniteLine(angle=0, pen={'color': (239,189,124), 'width': 2})
+        self.guidelines[2] = pg.InfiniteLine(angle=0, pen={'color': (239,189,124), 'width': 2})
+        self.guidelines[3] = pg.InfiniteLine(angle=0, pen={'color': (255,232,140), 'width': 2})
+        for g in self.guidelines:
+            self.pPlot.addItem(g)
 
         # time texts to go along these two lines
         self.segTimeText1 = pg.TextItem(color=(50,205,50), anchor=(0,1.10))
@@ -1313,25 +1328,38 @@ class HumanClassify1(QDialog):
         self.birdbtns = []
         if self.multipleBirds:
             self.birds.setExclusive(False)
-            for item in self.shortBirdList[:29]:
-                self.birdbtns.append(QCheckBox(item))
+            if self.batmode:
+                for item in self.batList:
+                    self.birdbtns.append(QCheckBox(item))
+                    self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
+                    self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
+            else:
+                for item in self.shortBirdList[:29]:
+                    self.birdbtns.append(QCheckBox(item))
+                    self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
+                    self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
+                self.birdbtns.append(QCheckBox('Other')),
                 self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
                 self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
-            self.birdbtns.append(QCheckBox('Other')),
-            self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
-            self.birdbtns[-1].clicked.connect(self.tickBirdsClicked)
-            self.birds3.setSelectionMode(QAbstractItemView.MultiSelection)
+                self.birds3.setSelectionMode(QAbstractItemView.MultiSelection)
         else:
             self.birds.setExclusive(True)
-            for item in self.shortBirdList[:29]:
-                btn = QRadioButton(item)
-                self.birdbtns.append(btn)
-                self.birds.addButton(btn,len(self.birdbtns)-1)
-                btn.clicked.connect(self.radioBirdsClicked)
-            self.birdbtns.append(QRadioButton('Other')),
-            self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
-            self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
-            self.birds3.setSelectionMode(QAbstractItemView.SingleSelection)
+            if self.batmode:
+                for item in self.batList:
+                    btn = QRadioButton(item)
+                    self.birdbtns.append(btn)
+                    self.birds.addButton(btn,len(self.birdbtns)-1)
+                    btn.clicked.connect(self.radioBirdsClicked)
+            else:
+                for item in self.shortBirdList[:29]:
+                    btn = QRadioButton(item)
+                    self.birdbtns.append(btn)
+                    self.birds.addButton(btn,len(self.birdbtns)-1)
+                    btn.clicked.connect(self.radioBirdsClicked)
+                self.birdbtns.append(QRadioButton('Other')),
+                self.birds.addButton(self.birdbtns[-1],len(self.birdbtns)-1)
+                self.birdbtns[-1].clicked.connect(self.radioBirdsClicked)
+                self.birds3.setSelectionMode(QAbstractItemView.SingleSelection)
 
         self.birds3.setEnabled(False)
 
@@ -1389,21 +1417,28 @@ class HumanClassify1(QDialog):
             btn.hide()
             birds2Layout.addWidget(btn)
 
-        birdListLayout = QGridLayout()
-        birdListLayout.setRowStretch(0, 10)
-        birdListLayout.setRowStretch(1, 0)
-        birdListLayout.setRowStretch(2, 0)
-        birdListLayout.addWidget(self.birds3, 0, 0, 1, 3)
-        birdListLayout.addWidget(self.tboxLabel1, 1, 0, 1, 3)
-        birdListLayout.addWidget(self.tboxLabel2, 2, 0, 1, 3)
-        birdListLayout.addWidget(self.tbox, 3, 0, 1, 2)
-        birdListLayout.addWidget(self.viewSpButton, 3, 2, 1, 1)
-
         hboxBirds = QHBoxLayout()
         hboxBirds.addLayout(birds1Layout)
         hboxBirds.addLayout(birds2Layout)
         hboxBirds.addLayout(birds3Layout)
-        hboxBirds.addLayout(birdListLayout)
+        # this hides the long list and "Add" options in batmode
+        if self.batmode:
+            self.birds3.hide()
+            self.tboxLabel1.hide()
+            self.tboxLabel2.hide()
+            self.tbox.hide()
+            self.viewSpButton.hide()
+        else:
+            birdListLayout = QGridLayout()
+            birdListLayout.setRowStretch(0, 10)
+            birdListLayout.setRowStretch(1, 0)
+            birdListLayout.setRowStretch(2, 0)
+            birdListLayout.addWidget(self.birds3, 0, 0, 1, 3)
+            birdListLayout.addWidget(self.tboxLabel1, 1, 0, 1, 3)
+            birdListLayout.addWidget(self.tboxLabel2, 2, 0, 1, 3)
+            birdListLayout.addWidget(self.tbox, 3, 0, 1, 2)
+            birdListLayout.addWidget(self.viewSpButton, 3, 2, 1, 1)
+            hboxBirds.addLayout(birdListLayout)
 
         # The layouts
         hboxNextPrev = QHBoxLayout()
@@ -1558,9 +1593,14 @@ class HumanClassify1(QDialog):
     def updateButtonList(self):
         # refreshes bird button names
         # to be used when bird list updates
-        for i in range(len(self.birdbtns)-1):
-            self.birdbtns[i].setChecked(False)
-            self.birdbtns[i].setText(self.shortBirdList[i])
+        if self.batmode:
+            for i in range(len(self.birdbtns)):
+                self.birdbtns[i].setChecked(False)
+                self.birdbtns[i].setText(self.batList[i])
+        else:
+            for i in range(len(self.birdbtns)-1):
+                self.birdbtns[i].setChecked(False)
+                self.birdbtns[i].setText(self.shortBirdList[i])
         # "other" button
         self.birdbtns[-1].setChecked(False)
         self.birds3.setEnabled(False)
@@ -1573,7 +1613,7 @@ class HumanClassify1(QDialog):
         # based on these, update "previous" arrow status
         self.buttonPrev.setEnabled(done>0)
 
-    def setImage(self, sg, audiodata, sampleRate, incr, labels, unbufStart, unbufStop, time1, time2, minFreq=0, maxFreq=0):
+    def setImage(self, sg, audiodata, sampleRate, incr, labels, unbufStart, unbufStop, time1, time2, guides=None, minFreq=0, maxFreq=0):
         """ labels - simply seg[4] of the current segment.
             Be careful not to edit it, as it is NOT a deep copy!!
             Used for extracting current species and calltype.
@@ -1586,7 +1626,12 @@ class HumanClassify1(QDialog):
         self.bar.setValue(0)
         if maxFreq==0:
             maxFreq = sampleRate / 2
-        self.duration = len(audiodata) / sampleRate * 1000 # in ms
+        self.duration = len(audiodata) / sampleRate * 1000  # in ms
+
+        # Update UI if no audio (e.g. batmode)
+        self.playButton.setEnabled(len(audiodata))
+        self.volIcon.setEnabled(len(audiodata))
+        self.volSlider.setEnabled(len(audiodata))
 
         # fill up a rectangle with dark grey to act as background if the segment is small
         sg2 = sg
@@ -1639,6 +1684,14 @@ class HumanClassify1(QDialog):
         self.segTimeText1.setPos(startV, SgSize)
         self.segTimeText2.setPos(stopV, SgSize)
 
+        # bat mode freq guides
+        if guides is not None:
+            for i in range(len(self.guidelines)):
+                self.guidelines[i].setPos(guides[i])
+        else:
+            for i in range(len(self.guidelines)):
+                self.guidelines[i].setPos(-100)
+
         if self.cmapInverted:
             self.plot.setLevels([self.colourEnd, self.colourStart])
         else:
@@ -1670,11 +1723,18 @@ class HumanClassify1(QDialog):
                 specnames[lsp_ix] = specnames[lsp_ix][:-1]
             # move the label to the top of the list
             if self.parent.config['ReorderList']:
-                if specnames[lsp_ix] in self.shortBirdList:
-                    self.shortBirdList.remove(specnames[lsp_ix])
+                if self.batmode:
+                    if specnames[lsp_ix] in self.batList:
+                        self.batList.remove(specnames[lsp_ix])
+                    else:
+                        del self.batList[-1]
+                    self.batList.insert(0, specnames[lsp_ix])
                 else:
-                    del self.shortBirdList[-1]
-                self.shortBirdList.insert(0, specnames[lsp_ix])
+                    if specnames[lsp_ix] in self.shortBirdList:
+                        self.shortBirdList.remove(specnames[lsp_ix])
+                    else:
+                        del self.shortBirdList[-1]
+                    self.shortBirdList.insert(0, specnames[lsp_ix])
 
         # clear selection
         self.birds3.clearSelection()
@@ -1682,31 +1742,35 @@ class HumanClassify1(QDialog):
         # Select the right species tickboxes / buttons
         for lsp in specnames:
             # add ticks to the right checkboxes
-            if lsp in self.shortBirdList[:29]:
-                ind = self.shortBirdList.index(lsp)
+            if self.batmode:
+                ind = self.batList.index(lsp)
                 self.birdbtns[ind].setChecked(True)
             else:
-                self.birdbtns[29].setChecked(True)
-                self.birds3.setEnabled(True)
+                if lsp in self.shortBirdList[:29]:
+                    ind = self.shortBirdList.index(lsp)
+                    self.birdbtns[ind].setChecked(True)
+                else:
+                    self.birdbtns[29].setChecked(True)
+                    self.birds3.setEnabled(True)
 
-            # mark this species in the long list box
-            if lsp not in self.longBirdList:
-                # try genus>species instead of genus (species)
-                if '(' in lsp:
-                    ind = lsp.index('(')
-                    lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
-                # add to long bird list then
+                # mark this species in the long list box
                 if lsp not in self.longBirdList:
-                    print("Species", lsp, "not found in long bird list, adding")
-                    self.longBirdList.append(lsp)
-                    cc = self.birds3.count()
-                    self.birds3.insertItem(cc-1, lsp)
-                    self.saveConfig = True
+                    # try genus>species instead of genus (species)
+                    if '(' in lsp:
+                        ind = lsp.index('(')
+                        lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
+                    # add to long bird list then
+                    if lsp not in self.longBirdList:
+                        print("Species", lsp, "not found in long bird list, adding")
+                        self.longBirdList.append(lsp)
+                        cc = self.birds3.count()
+                        self.birds3.insertItem(cc-1, lsp)
+                        self.saveConfig = True
 
-            # all species by now are in the long bird list
-            if self.longBirdList is not None:
-                ind = self.longBirdList.index(lsp)
-                self.birds3.item(ind).setSelected(True)
+                # all species by now are in the long bird list
+                if self.longBirdList is not None:
+                    ind = self.longBirdList.index(lsp)
+                    self.birds3.item(ind).setSelected(True)
 
         self.label = specnames
 
@@ -1785,11 +1849,12 @@ class HumanClassify1(QDialog):
             self.ctLabel.hide()
             for spbtn in self.birdbtns:
                 spbtn.show()
-            self.birds3.show()
-            self.tbox.show()
-            self.tboxLabel1.show()
-            self.tboxLabel2.show()
-            self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
+            if not self.batmode:
+                self.birds3.show()
+                self.tbox.show()
+                self.tboxLabel1.show()
+                self.tboxLabel2.show()
+                self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
 
         self.viewingct = showCt
 
@@ -2054,10 +2119,11 @@ class HumanClassify2(QDialog):
         3. indices of segments to show (i.e. the selected species and current page)
         4. name of the species that we are reviewing
         5-10. spec color parameters
-        11. Filename - just for setting the window title
+        11-12. guide positions for batmode
+        13. Filename - just for setting the window title
     """
 
-    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, filename=None):
+    def __init__(self, sps, segments, indicestoshow, label, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, guidefreq=None, filename=None):
         QDialog.__init__(self)
 
         if len(segments)==0:
@@ -2074,6 +2140,8 @@ class HumanClassify2(QDialog):
         # let the user quit without bothering rest of it
 
         self.sps = sps
+        # Check if playback is possible (e.g. for batmode):
+        haveaudio = all([len(sp.data)>0 for sp in sps if sp is not None])
 
         self.lut = lut
         self.colourStart = colourStart
@@ -2103,6 +2171,12 @@ class HumanClassify2(QDialog):
         self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
         self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
         #self.volIcon.setStyleSheet("padding: 0px 1px 0px 8px")
+
+        # batmode customizations:
+        self.guidefreq = guidefreq
+        if not haveaudio:
+            self.volSlider.setEnabled(False)
+            self.volIcon.setEnabled(False)
 
         # Brightness and contrast sliders - need to pass true (config) values of these as args
         self.brightnessSlider = QSlider(Qt.Horizontal)
@@ -2273,9 +2347,17 @@ class HumanClassify2(QDialog):
             self.minsg = min(self.minsg, np.min(sp.sg))
             self.maxsg = max(self.maxsg, np.max(sp.sg))
 
+            # batmode guides, in y of this particular spectrogram:
+            if self.guidefreq is not None:
+                gy = [0]*len(self.guidefreq)
+                for i in range(len(self.guidefreq)):
+                    gy[i] = sp.convertFreqtoY(self.guidefreq[i])
+            else:
+                gy = None
+
             # create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
-            newButton = SupportClasses.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted)
+            newButton = SupportClasses.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:
@@ -2324,7 +2406,11 @@ class HumanClassify2(QDialog):
             maxFreq = exampleSP.sampleRate // 2
         #SgSize = np.shape(exampleSP.sg)[1]  # in spec units
         SgSize = self.specV
-        duration = len(exampleSP.data)/exampleSP.sampleRate
+        if len(exampleSP.data)>0:
+            duration = len(exampleSP.data)/exampleSP.sampleRate
+        else:
+            duration = exampleSP.convertSpectoAmpl(np.shape(exampleSP.sg)[0])
+        print("Found duration", duration, "px", self.specH)
 
         butNum = 0
         for row in range(self.numPicsV):
