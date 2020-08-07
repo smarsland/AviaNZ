@@ -1428,18 +1428,16 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fLow.setSingleStep(100)
         self.fLowtext = QLabel('Show freq. above (Hz)')
         self.fLowvalue = QLabel('0')
-        receiverL = lambda value: self.fLowvalue.setText(str(value))
-        self.fLow.valueChanged.connect(receiverL)
+        self.fLow.valueChanged.connect(self.fLowChanged)
         self.fHigh = QSlider(Qt.Horizontal)
         self.fHigh.setTickPosition(QSlider.TicksBelow)
         self.fHigh.setTickInterval(1000)
-        self.fHigh.setRange(4000, 88000)
+        self.fHigh.setRange(4000, 32000)
         self.fHigh.setSingleStep(250)
         self.fHigh.setValue(8000)
         self.fHightext = QLabel('Show freq. below (Hz)')
         self.fHighvalue = QLabel('8000')
-        receiverH = lambda value: self.fHighvalue.setText(str(int(value)))
-        self.fHigh.valueChanged.connect(receiverH)
+        self.fHigh.valueChanged.connect(self.fHighChanged)
 
         # FFT parameters
         self.winwidthBox = QSpinBox()
@@ -1527,8 +1525,33 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_files.layout.setSpacing(10)
         self.show()
 
+    def fHighChanged(self, value):
+        self.fHighvalue.setText(str(int(value)))
+        self.validateInputs()
+
+    def fLowChanged(self, value):
+        self.fLowvalue.setText(str(int(value)))
+        self.validateInputs()
+
     def chunkChanged(self):
         self.chunksizeBox.setEnabled(self.chunksizeManual.isChecked())
+
+    def validateInputs(self):
+        """ Checks if review should be allowed based on current settings.
+            Use similarly to QWizardPage's isComplete, i.e. after any changes in GUI.
+        """
+        ready = True
+        print(self.fLow.value(), self.fHigh.value())
+        if self.listFiles.count()==0 or self.dirName=='':
+            ready = False
+            self.statusBar().showMessage("Select a directory to review")
+        elif self.fHigh.value()<self.fLow.value():
+            ready = False
+            self.statusBar().showMessage("Bad frequency bands set")
+        else:
+            self.statusBar().showMessage("Ready to review")
+
+        self.w_processButton.setEnabled(ready)
 
     def createMenu(self):
         """ Create the basic menu.
@@ -1579,13 +1602,13 @@ class AviaNZ_reviewAll(QMainWindow):
             self.w_spe1.setEnabled(False)
             self.w_processButton.setEnabled(False)
             self.w_excelButton.setEnabled(False)
-            self.statusBar().showMessage("Select a directory to process")
+            self.statusBar().showMessage("Select a directory to review")
             return
         else:
             self.w_spe1.setEnabled(True)
-            self.w_processButton.setEnabled(True)
             self.w_excelButton.setEnabled(True)
-            self.statusBar().showMessage("Ready for processing")
+            # this will check if other settings are OK as well
+            self.validateInputs()
 
         # find species names from the annotations
         self.spList = list(self.listFiles.spList)
@@ -1600,7 +1623,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # Also detect samplerates on dir change
         minfs = min(self.listFiles.fsList)
-        self.fHigh.setRange(minfs//16, minfs//2)
+        self.fHigh.setRange(minfs//32, minfs//2)
         self.fLow.setRange(0, minfs//2)
 
     def review(self):
