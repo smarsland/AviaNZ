@@ -1541,7 +1541,6 @@ class AviaNZ_reviewAll(QMainWindow):
             Use similarly to QWizardPage's isComplete, i.e. after any changes in GUI.
         """
         ready = True
-        print(self.fLow.value(), self.fHigh.value())
         if self.listFiles.count()==0 or self.dirName=='':
             ready = False
             self.statusBar().showMessage("Select a directory to review")
