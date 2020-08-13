@@ -1785,9 +1785,9 @@ class TestRecWizard(QWizard):
                 if "CNN" in self.currfilt:
                     cl = SupportClasses.ConfigLoader()
                     filterlist = cl.filters(self.filterdir)
-                    CNNDicts = cl.CNNmodels(filterlist, self.filterdir, [self.species])
-                    if self.species in CNNDicts.keys():
-                        CNNmodel = CNNDicts[self.species]
+                    CNNDicts = cl.CNNmodels(filterlist, self.filterdir, [self.field("species")[:-4]])
+                    if self.field("species")[:-4] in CNNDicts.keys():
+                        CNNmodel = CNNDicts[self.field("species")[:-4]]
                         self.getSummary(avianz_batch, CNN=True, CNNmodel=CNNmodel)
                     else:
                         print("Couldn't find a matching CNN!")

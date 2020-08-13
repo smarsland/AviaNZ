@@ -897,7 +897,6 @@ class AviaNZ_batchProcess(QMainWindow):
                         print('number of detected clicks = ', gen_spec)
                         thisPageSegs = []
 
-
                     # Post-process:
                     # CNN-classify, delete windy, rainy segments, check for FundFreq, merge gaps etc.
                     print("Segments detected (all subfilters): ", thisPageSegs)
@@ -911,9 +910,10 @@ class AviaNZ_batchProcess(QMainWindow):
                             # TODO THIS IS FULL POST-PROC PIPELINE FOR BIRDS AND BATS
                             # -- Need to check how this should interact with the testmode
                             CNNmodel = None
-                            if spInfo['species'] in self.CNNDicts.keys():
-                                # This list contains the model itself, plus parameters for running it
-                                CNNmodel = self.CNNDicts[spInfo['species']]
+                            if 'CNN' in spInfo:
+                                if spInfo['CNN']['CNN_name'] in self.CNNDicts.keys():
+                                    # This list contains the model itself, plus parameters for running it
+                                    CNNmodel = self.CNNDicts[spInfo['CNN']['CNN_name']]
 
                             if self.method=="Click":
                                 # bat-style CNN:
