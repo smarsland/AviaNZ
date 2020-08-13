@@ -4771,7 +4771,7 @@ class AviaNZ(QMainWindow):
         if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
             try:
                 filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
-                print("Saving a new recogniser", self.filename)
+                print("Saving a new recogniser", filename)
                 f = open(filename, 'w')
                 f.write(json.dumps(self.buildCNNWizard.savePage.currfilt))
                 f.close()
