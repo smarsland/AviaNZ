@@ -1611,13 +1611,11 @@ class AviaNZ(QMainWindow):
             if hasattr(self,'spectrogramDialog'):
                 if self.batmode:
                     self.spectrogramDialog.reject()
-                else:
-                    self.spectrogramDialog.setValues(self.sp.minFreq,self.sp.maxFreq,self.sp.minFreqShow,self.sp.maxFreqShow)
+                self.spectrogramDialog.setValues(self.sp.minFreq,self.sp.maxFreq,self.sp.minFreqShow,self.sp.maxFreqShow)
             if hasattr(self,'denoiseDialog'):
                 if self.batmode:
                     self.denoiseDialog.reject()
-                else:
-                    self.denoiseDialog.setValues(self.sp.minFreq,self.sp.maxFreq)
+                self.denoiseDialog.setValues(self.sp.minFreq,self.sp.maxFreq)
 
             # Delete any denoising backups from the previous file
             if hasattr(self,'audiodata_backup'):

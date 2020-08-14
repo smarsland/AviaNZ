@@ -1784,7 +1784,7 @@ class TestRecWizard(QWizard):
                 # 3. Report statistics of WF followed by post-proc steps (wind-CNN-merge neighbours-delete short)
                 if "CNN" in self.currfilt:
                     cl = SupportClasses.ConfigLoader()
-                    filterlist = cl.filters(self.filterdir)
+                    filterlist = cl.filters(self.filterdir, bats=False)
                     CNNDicts = cl.CNNmodels(filterlist, self.filterdir, [self.field("species")[:-4]])
                     if self.field("species")[:-4] in CNNDicts.keys():
                         CNNmodel = CNNDicts[self.field("species")[:-4]]
@@ -1978,7 +1978,7 @@ class TestRecWizard(QWizard):
         self.setOptions(QWizard.NoBackButtonOnStartPage)
 
         cl = SupportClasses.ConfigLoader()
-        self.filterlist = cl.filters(filtdir)
+        self.filterlist = cl.filters(filtdir, bats=False)
         configfile = os.path.join(configdir, "AviaNZconfig.txt")
         ConfigLoader = SupportClasses.ConfigLoader()
         config = ConfigLoader.config(configfile)
@@ -2258,7 +2258,7 @@ class BuildCNNWizard(QWizard):
             self.certainty1 = True
             self.certainty2 = True
             self.ConfigLoader = SupportClasses.ConfigLoader()
-            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir)
+            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir, bats=False)
             self.currfilt = self.FilterDicts[self.field("filter")[:-4]]
             self.fs = self.currfilt["SampleRate"]
             self.species = self.currfilt["species"]
@@ -2577,7 +2577,7 @@ class BuildCNNWizard(QWizard):
         def initializePage(self):
             self.wizard().button(QWizard.NextButton).setDefault(False)
             self.ConfigLoader = SupportClasses.ConfigLoader()
-            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir)
+            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir,bats=False)
             self.currfilt = self.FilterDicts[self.field("filter")[:-4]]
             self.fs = self.currfilt["SampleRate"]
             self.species = self.currfilt["species"]
@@ -3119,7 +3119,7 @@ class BuildCNNWizard(QWizard):
 
         def initializePage(self):
             self.ConfigLoader = SupportClasses.ConfigLoader()
-            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir)
+            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir, bats=False)
             self.currfilt = self.FilterDicts[self.field("filter")[:-4]]
             self.species = self.currfilt["species"]
             self.calltypes = []
@@ -3330,7 +3330,7 @@ class BuildCNNWizard(QWizard):
         self.filtdir = filtdir
         self.config = config
         cl = SupportClasses.ConfigLoader()
-        self.filterlist = cl.filters(filtdir)
+        self.filterlist = cl.filters(filtdir, bats=False)
 
         self.browsedataPage = BuildCNNWizard.WPageData(self.filtdir, self.config)
         self.browsedataPage.registerField("trainDir1*", self.browsedataPage.trainDirName1)
