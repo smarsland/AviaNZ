@@ -1,2 +1,2 @@
-cd AviaNZ-2.0;
+cd AviaNZ-2.2;
 python AviaNZ.py;
