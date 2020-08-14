@@ -914,9 +914,11 @@ class ConfigLoader(object):
             msg.exec_()
             sys.exit()
 
-    def filters(self, dir):
+    def filters(self, dir, bats=True):
         """ Returns a dict of filter JSONs,
-            named after the corresponding file names. """
+            named after the corresponding file names.
+            bats - include bat filters?
+        """
         print("Loading call filters from folder %s" % dir)
         try:
             filters = [f for f in os.listdir(dir) if os.path.isfile(os.path.join(dir, f))]
@@ -927,6 +929,9 @@ class ConfigLoader(object):
         goodfilters = dict()
         for filtfile in filters:
             if not filtfile.endswith("txt"):
+                continue
+            # Very primitive way to recognize bat filters
+            if not bats and filtfile.endswith("Bats.txt"):
                 continue
             try:
                 filt = json.load(open(os.path.join(dir, filtfile)))
