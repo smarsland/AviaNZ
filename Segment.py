@@ -1259,7 +1259,7 @@ class PostProcess:
         sp.data = data
         sp.sampleRate = fs
         _ = sp.spectrogram()
-        f1 = 90 - 50
+        f1 = 90 - 50    # TODO: hardcoded for bittern testing
         f2 = 250 + 100
         # Mask out of band elements
         bin_width = fs / 2 / np.shape(sp.sg)[1]
