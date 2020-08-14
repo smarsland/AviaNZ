@@ -1245,6 +1245,45 @@ class PostProcess:
             featuress.append([np.rot90(sgRaw / maxg).tolist()])
         return featuress
 
+    def generateFeaturesCNN_frqMasked(self, seg, data, fs):
+        '''
+        Prepare a syllable to input to the CNN model
+        Returns the features (currently the spectrogram)
+        '''
+        featuress = []
+        hop = self.CNNhop
+        n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / hop + 1)
+        # n = (seg[1] - seg[0]) // self.CNNwindow
+
+        sp = SignalProc.SignalProc(self.CNNwindowInc[0], self.CNNwindowInc[1])
+        sp.data = data
+        sp.sampleRate = fs
+        _ = sp.spectrogram()
+        f1 = 90 - 50    # TODO: hardcoded for bittern testing
+        f2 = 250 + 100
+        # Mask out of band elements
+        bin_width = fs / 2 / np.shape(sp.sg)[1]
+        lb = int(np.ceil(f1 / bin_width))
+        ub = int(np.floor(f2 / bin_width))
+        sp.sg[:, 0:lb] = 0.0
+        sp.sg[:, ub:] = 0.0
+
+        # spectrograms of pre-cut segs are tiny bit shorter
+        # because spectrogram does not use the last bin:
+        # it uses len(data)-window bins
+        # so when extracting pieces of a premade spec, we need to adjust:
+        specFrameSize = len(range(0, int(self.CNNwindow * fs - sp.window_width), sp.incr))
+
+        for i in range(int(n)):
+            sgstart = int(hop * i * fs / sp.incr)
+            sgend = sgstart + specFrameSize
+            if sgend > np.shape(sp.sg)[0]:
+                continue
+            sgRaw = sp.sg[sgstart:sgend, :]
+            maxg = np.max(sgRaw)
+            featuress.append([np.rot90(sgRaw / maxg).tolist()])
+        return featuress
+
     def generateFeaturesCNN2(self, seg, data, fs):
         '''
         Prepare a syllable to input to the CNN model
