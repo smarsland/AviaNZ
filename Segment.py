@@ -1404,6 +1404,7 @@ class PostProcess:
             if self.sampleRate != self.tgtsampleRate:
                 sp.resample(self.tgtsampleRate)
             featuress = self.generateFeaturesCNN(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            # featuress = self.generateFeaturesCNN_frqMasked(seg=seg[0], data=sp.data, fs=sp.sampleRate)
             # featuress = self.generateFeaturesCNN2(seg=seg[0], data=sp.data, fs=sp.sampleRate)
             featuress = np.array(featuress)
             featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
