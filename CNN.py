@@ -338,31 +338,6 @@ class CNN:
         self.model.add(tf.keras.layers.Dense(len(self.calltypes)+1, activation='softmax'))
         self.model.summary()
 
-    def createArchitecture_bittern(self):
-        '''
-        Sets self.model
-        '''
-        self.model = tf.keras.models.Sequential()
-        self.model.add(tf.keras.layers.Conv2D(32, kernel_size=(7, 7), activation='relu', input_shape=[self.imageheight, self.imagewidth, 1], padding='Same'))
-        self.model.add(tf.keras.layers.Conv2D(64, (7, 7), activation='relu'))
-        self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(3, 3)))
-        self.model.add(tf.keras.layers.Dropout(0.2))
-        self.model.add(tf.keras.layers.Conv2D(64, (5, 5), activation='relu'))
-        self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-        self.model.add(tf.keras.layers.Dropout(0.2))
-        self.model.add(tf.keras.layers.Conv2D(64, (3, 3), activation='relu'))
-        self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
-        self.model.add(tf.keras.layers.Dropout(0.2))
-        # Flatten the results to one dimension for passing into our final layer
-        self.model.add(tf.keras.layers.Flatten())
-        # A hidden layer to learn with
-        self.model.add(tf.keras.layers.Dense(256, activation='relu'))
-        # Another dropout
-        self.model.add(tf.keras.layers.Dropout(0.5))
-        # Final categorization from 0-ct+1 with softmax
-        self.model.add(tf.keras.layers.Dense(len(self.calltypes)+1, activation='softmax'))
-        self.model.summary()
-
     def train2(self, modelsavepath):
         ''' Train the model'''
 
@@ -511,17 +486,18 @@ class GenerateData:
                     segments.parseJSON(wavFile + '.data')
                     sppSegments = segments.getSpecies(self.species)
                 for segAuto in item[1]:
-                    print("segAuto", segAuto)
-                    overlapedwithGT = False
-                    for ind in sppSegments:
-                        segGT = segments[ind]
-                        if self.Overlap(segGT, segAuto):
-                            overlapedwithGT = True
-                            break
-                        else:
-                            continue
-                    if not overlapedwithGT:
-                        noiseSegments.append([wavFile, segAuto, len(self.calltypes)])
+                    for segAutoi in segAuto:
+                        # print("segAuto", segAutoi)
+                        overlapedwithGT = False
+                        for ind in sppSegments:
+                            segGT = segments[ind]
+                            if self.Overlap(segGT, segAutoi):
+                                overlapedwithGT = True
+                                break
+                            else:
+                                continue
+                        if not overlapedwithGT:
+                            noiseSegments.append([wavFile, segAutoi, len(self.calltypes)])
         return noiseSegments
 
     def Overlap(self, segGT, seg):
