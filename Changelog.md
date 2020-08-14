@@ -2,6 +2,83 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ## [Unreleased]
 
+## [2.2] - 2020-04-28
+
+### Fixed
+
+- Empty results in Recogniser testing
+- Cluster button scale
+- Better feedback in Batch Processing and Review
+
+### Added
+
+- CNN training to improve precision
+- Call type review in any sound (all species) mode
+- Call type annotation/correction in manual processing mode
+- Bach mode progress dialog
+- Time axis in single species review
+- Recording information in the manual processing mode
+
+- Bat mode: loading, annotating and batch-processing DoC format bitmaps, with file-level annotations
+- NZ bat list and filter to identify them (click detector and CNN)
+
+### Changed
+
+- Removed user input for number of thresholds in wavelet filter training
+- Filter requirements are more flexible now, to incorporate bat settings
+
+## [2.2] - 2020-04-28
+
+### Fixed
+
+- Empty results in Recogniser testing
+- Cluster button scale
+- Better feedback in Batch Processing and Review
+
+### Added
+
+- CNN training to improve precision
+- Call type review in any sound (all species) mode
+- Call type annotation/correction in manual processing mode
+- Bach mode progress dialog
+- Time axis in single species review
+- Recording information in the manual processing mode
+
+- Bat mode: loading, annotating and batch-processing DoC format bitmaps, with file-level annotations
+- NZ bat list and filter to identify them (click detector and CNN)
+
+### Changed
+
+- Removed user input for number of thresholds in wavelet filter training
+- Filter requirements are more flexible now, to incorporate bat settings
+
+## [2.2] - 2020-04-28
+
+### Fixed
+
+- Empty results in Recogniser testing
+- Cluster button scale
+- Better feedback in Batch Processing and Review
+
+### Added
+
+- CNN training to improve precision
+- Call type review in any sound (all species) mode
+- Call type annotation/correction in manual processing mode
+- Bach mode progress dialog
+- Time axis in single species review
+- Recording information in the manual processing mode
+
+- Bat mode: loading, annotating and batch-processing DoC format bitmaps, with file-level annotations
+- NZ bat list and filter to identify them (click detector and CNN)
+
+### Changed
+
+- Removed user input for number of thresholds in wavelet filter training
+- Filter requirements are more flexible now, to incorporate bat settings
+
+## [2.2] - 2020-04-28
+
 ### Fixed
 
 - Empty results in Recogniser testing

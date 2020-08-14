@@ -1731,6 +1731,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # so call the right dialog:
             # (they will update self.segments and store corrections)
             if self.species == 'Any sound':
+                _ = self.segments.orderTime()
                 filesuccess = self.review_all(filename, sTime)
             else:
                 filesuccess = self.review_single(filename, sTime)

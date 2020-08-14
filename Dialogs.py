@@ -2416,6 +2416,7 @@ class HumanClassify2(QDialog):
         for row in range(self.numPicsV):
             # add a frequency axis
             # args: spectrogram height in spec units, min and max frq in kHz for axis ticks
+            print(self.numPicsV)
             sg_axis = SupportClasses.AxisWidget(SgSize, minFreq/1000, maxFreq/1000)
             self.flowAxes.addWidget(sg_axis, row, 0)
             self.flowAxes.layout.setRowMinimumHeight(row, self.specV+10)
