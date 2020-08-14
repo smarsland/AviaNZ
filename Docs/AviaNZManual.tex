@@ -485,7 +485,7 @@ In addition to the Excel file, for each sound file AviaNZ generates an annotatio
 
 \subsection{Overview}
 
-One of the main features of AviaNZ is that you can train your own species recognisers for use in batch processing. You can also swap them between people. At the moment these recognisers are fairly simple; they are intended to include {\em any} sound that might be a call from the species of interest. However, over time we will be working to improve them so that they are more accurate, while still being easy to train. 
+One of the main features of AviaNZ is that you can train your own species recognisers for use in batch processing. You can also swap them between people.% At the moment these recognisers are fairly simple; they are intended to include {\em any} sound that might be a call from the species of interest. However, over time we will be working to improve them so that they are more accurate, while still being easy to train. 
 
 There are three parts to training a filter:
 
@@ -548,7 +548,7 @@ In order to start the training process, you need to start by performing some man
 \item The sound files can have noise in them, although preferably not too much. 
 \item It is helpful if you have both loud and quiet calls. 
 \item Ideally you should avoid recordings where there are simultaneous calls from other species in the same frequency range. 
-\item It is also a very good idea to have a set of different files for testing. The amount of testing data should be similar to the training data. 
+\item It is also a very good idea to have a set of different files for testing. %\textcolor{red}{The amount of testing data should be similar to the training data.} 
 \item Just like the training data, testing data should represent the real nature of field recordings that you are going to process with this filter, and also include all the call types.
 \end{itemize}
 \item[Labelling] Once you have a few sound files, open each file in the `Manual Processing' interface of AviaNZ and manually label every call from that species with the species name
@@ -564,11 +564,13 @@ In order to start the training process, you need to start by performing some man
 \end{itemize}
 \end{description}
 
-\subsection{The training process}
+\subsection{Training a wavelet recogniser}
+Wavelet recogniser is the initial form of a recogniser in AviaNZ. All automated recognisers should start with training a wavelet recogniser and then later on  it is extendable to have a CNN post processor, particularly to improve the precision of the automated call detection (Section \ref{sec:cnnfilter}).   
 
+Follow the steps below to train a wavelet recogniser:
 \begin{itemize}
 
-\item To begin training a recogniser, select `Train an automated recogniser' from the Recognisers menu. 
+\item To begin training a recogniser, select `Train an automated recogniser' $\rightarrow$ `Train a wavelet recogniser' from the Recognisers menu. 
 \item Then follow the instructions to select the folder, and the name of the species:
 \begin{center}
     \includegraphics[width=.4\textwidth]{Figs/Wizard_start}
@@ -640,6 +642,46 @@ In order to start the training process, you need to start by performing some man
 \item Following this, you should save the recogniser you have trained. It is then a very good idea to test it. 
     
 \end{itemize}
+
+\subsection{Extending a recogniser with CNN}\label{sec:cnnfilter}
+A wavelet recogniser usually has good specificity which means that it can narrow down the search space to a greater extent. However, the common problem is still having to review lots of segments while the maority being represented by false positives. Therefore, we treat the wavelet recogniser as pre-processor and allow you to train an AI model -- a Convolutional Neural Network (CNN) -- on top of the wavelet recogniser. This combination allows you to improve the precision of the automated call detection. 
+
+\begin{description}
+\item[Preparation]Before proceeding to the CNN training, we recomend you to compile a resonable dataset for the CNN training following the steps below:
+\begin{itemize}
+\item Make a new folder, select and copy some field recordings into this folder. The selected recordings should represent the real nature of field recordings that you are going to process with this recogniser, e.g. consider various background noise, call variations etc. If you have lots of recordings it would be a good idea to select a random sample of managable size, instead of picking one recorder/location.
+\item Then Batch Process the selected recordings with the target wavelet recogniser.
+\item Following that you should Batch Review the results in the All Species mode. 
+\item In addition to deleting any false positives as you would do in the normal form of review, here we want you to correct call types where necessary. This is bacause it's important that you show a correct set of examples from each call type of the target species. Use the little \includegraphics[scale=0.5]{Figs/SPCT} button on the right-bottom corner of review page to see the wavelet suggested call type for each segment. If the recogniser suggests a wrong call type make sure you correct it.
+\item It is also important that you don't show unnecesarily long segments to the CNN: when a call only occupys a part of a segment. Instead of confirming such segments you have to mark them with \includegraphics[scale=0.025]{Figs/questionL} and proceed. At the end of the review open the folder in Manual Processing mode and navigate to the files you marked with the question mark. You can easily do that with the help of coloured file list and then use the overview to locate the target segment. Manually adjust the start/end points of the segment and press \includegraphics[scale=0.5]{Figs/confirmlabels} to confirm your choise.
+\item In addition to the batch reviewed recordings, you can also input manually annotated recordings to the CNN training, e.g. the training data set that you used for the wavelet recogniser training. If you plan to use some other manually annotated recordings (not the train data in wavelet training), make sure to annotate both species and call type levels. You can use \includegraphics[scale=0.5]{Figs/SPCT} button from the Controls area in the Manual Processing mode to assign call types.
+\end{itemize}
+\end{description}
+ 
+\begin{description}
+\item[Training] Follow the steps below to train your CNN:
+\begin{itemize}
+\item Select `Train an automated recogniser' $\rightarrow$ `Extend a wavelet recogniser with CNN' from the Recognisers menu. 
+\item Then follow the instructions to select the folder/s with training data: Use appropriate `Browse' buttons to load your manually annotated recordings and Batch Processed and Batch Reviewed recordings. Select the the name of the recogniser to extend with CNN from the list.
+
+\begin{center}
+    \includegraphics[width=.4\textwidth]{Figs/CNNpage1}
+\end{center}
+
+\item AviaNZ will confirm these choices before starting the training process. And also will inform you when it requires more training data.
+\item When you proceed, AviaNZ will suggest a fixed length of a call/segment to feed to the CNN, and you can choose a sensible length for the species. The idea here is that the length should be long enough to see the syllable patterns on the spectrogram to differentiate target calls from noise, but not too long.
+\item At the end of the training, AviaNZ will show you ROC curves for each call type and ask you to hand pick a point that represents your compromise between true positive rate and false positive rate. However, if you want AviaNZ to look after those, remember to tick the box. Then AviaNZ will choose the best point in each ROC curve and show you a summary.
+
+\begin{center}
+    \includegraphics[width=.4\textwidth]{Figs/CNNpage2}
+\end{center}
+
+\item It normally takes a long time to finish the training. Therefore please be aware of this before you hit the button `Generate CNN images and Train'.
+\item Then if you choose to show ROC curves, ROC curves for call types will be displayed and you will be asked to choose a point. Otherwise, AviaNZ will automatically pick the best point on the curve.
+\item Following the summary of the CNN recogniser, save the recogniser you have trained. There are two options: you can choose to update the current recogniser or save it as a new recogniser. E.g. if you already got a CNN module in the current recogniser you may want to keep it and save the new recogniser to a new file. 
+\item It is then a very good idea to test it on a seperate set of recordings.
+\end{itemize}
+\end{description}
 
 \subsection{Testing a recogniser}\label{sec:testfilter}
 

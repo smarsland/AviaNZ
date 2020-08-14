@@ -10,6 +10,7 @@
 "brightness": 50, "contrast": 50, "overlap_allowed": 5, "reviewSpecBuffer": 1,
 "BirdListShort": "ListCommonBirds.txt",
 "BirdListLong": "ListDOCBirds.txt",
+"BatList": "ListBats.txt",
 "RecentFiles": [],
 "ColourList": ["Grey", "Viridis", "Inferno", "Plasma", "Autumn", "Cool", "Bone",
                 "Copper", "Hot", "Jet", "Thermal", "Flame", "Yellowy", "Bipolar", "Spectrum"],

@@ -244,10 +244,10 @@ class WaveletSegment:
 
         return res
 
-    def waveletSegment_test(self, dirName, filter):
-        """ Wrapper for segmentation to be used when testing a new filter.
+    def waveletSegment_cnn(self, dirName, filter):
+        """ Wrapper for segmentation to be used when generating cnn data.
             Should be identical to processing the files in batch mode,
-            + returns annotations and prints performance measures.
+            + returns annotations.
             Does not do any processing besides basic conversion 0/1 -> [s,e].
             Uses 15 min pages, if files are larger than that.
 
@@ -256,18 +256,13 @@ class WaveletSegment:
             2. a filter with a single subfilter.
 
             Return values:
-            1. 0/1 annotations concatenated over all files
-            2. list of ([segments], filename, filelength) over all files and pages
+            1. list of (filename, [segments]) over all files and pages
         """
-        if "Filters" not in filter or len(filter["Filters"])>1:
-            print("ERROR: only 1 subfilter should be included when testing a filter")
-            return
 
         # constant - files longer than this will be processed in pages
         samplesInPage = 900*16000
 
         # clear storage for multifile processing
-        detected_bin_all = np.array([])
         detected_out = []
         filenames = []
         self.annotation = []
@@ -276,10 +271,12 @@ class WaveletSegment:
         resol = 1.0
         for root, dirs, files in os.walk(dirName):
             for file in files:
-                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[:-4] + '-res'+str(float(resol))+'sec.txt' in files:
+                if file.lower().endswith('.wav') and os.stat(os.path.join(root, file)).st_size != 0 and file[
+                                                                                                        :-4] + '-res' + str(
+                        float(resol)) + 'sec.txt' in files:
                     filenames.append(os.path.join(root, file))
-        if len(filenames)<1:
-            print("ERROR: no suitable files found for testing")
+        if len(filenames) < 1:
+            print("ERROR: no suitable files")
             return
 
         for filename in filenames:
@@ -294,7 +291,7 @@ class WaveletSegment:
             numPages = (len(self.sp.data) - 1) // samplesInPage + 1
 
             for page in range(numPages):
-                print("Testing page %d / %d" % (page+1, numPages))
+                print("Processing page %d / %d" % (page+1, numPages))
                 start = page*samplesInPage
                 end = min(start+samplesInPage, len(self.sp.data))
                 filelen = math.ceil((end-start)/self.sp.sampleRate)
@@ -307,42 +304,17 @@ class WaveletSegment:
                 self.readBatch(self.sp.data[start:end], self.sp.sampleRate, d=False, spInfo=[filter], wpmode="new")
 
                 # segmentation, same as in batch mode. returns [[sub-filter1 segments]]
-                detected_segs = self.waveletSegment(0, wpmode="new")[0]
+                detected_segs = self.waveletSegment(0, wpmode="new")
+                if len(filter["Filters"]) > 1:
+                    out = []
+                    for subfilterdet in detected_segs:
+                        for seg in subfilterdet:
+                            out.append(seg)
+                    detected_out.append((filename, out))
+                else:
+                    detected_out.append((filename, detected_segs))
 
-                # for pres/abs, need to convert the segments back to 0/1.
-                # Resolution fixed at 1 s.
-                # (awkward, but ensures that batch and test modes use the same detection)
-                detected_bin = np.zeros(filelen)
-                for seg in detected_segs:
-                    detected_bin[int(seg[0]):int(seg[1])] = 1
-
-                # store presence/absence for fBetaScore
-                detected_bin_all = np.concatenate((detected_bin_all, detected_bin))
-
-                detected_out.append((detected_segs, filename, filelen))
-
-        self.annotation = np.concatenate(self.annotation, axis=0)
-        print("Tested with %s positive and %s negative annotations" % (np.sum(self.annotation == 1),
-                                                                       np.sum(self.annotation == 0)))
-
-        print("final output of testing", detected_out)
-
-        # Generate .data for this file
-        # TODO currently disabled to avoid conflicts with new format
-        # if savedetections:
-        #     for item in detected_c:
-        #         item[0] = int(item[0])
-        #         item[1] = int(item[1])
-        #         item = item.append(self.spInfo['FreqRange'][0])
-        #     for item in detected_c:
-        #         item = item.append(self.spInfo['FreqRange'][1])
-        #     for item in detected_c:
-        #         item = item.append(self.spInfo['Name'])
-        #     file = open(str(self.filenames[fileId]) + '.wav.data', 'w')
-        #     json.dump(detected_c, file)
-
-        return detected_bin_all, detected_out
-
+        return detected_out
 
     def computeWaveletEnergy(self, data, sampleRate, nlevels=5, wpmode="new", window=1, inc=1):
         """ Computes the energy of the nodes in the wavelet packet decomposition

@@ -12,7 +12,7 @@ jsonschema==3.1.1
 librosa==0.6.3
 numpy==1.16.2
 openpyxl==2.5.5
-pyFFTW==0.11.1
+pyFFTW==0.12.0
 PyQt5==5.13.1
 git+git://github.com/pyqtgraph/pyqtgraph@2203933#egg=pyqtgraph
 scikit-image==0.15.0
@@ -36,3 +36,5 @@ tensorflow==2.0.1
 ## to install pyInstaller 3.5.dev0+d74052489 development:
 # pip install https://github.com/pyinstaller/pyinstaller/tarball/develop --user
 
+# For those without AVX2 support:
+# pip install --upgrade https://github.com/fo40225/tensorflow-windows-wheel/blob/master/2.0.0/py37/CPU/sse2/tensorflow-2.0.0-cp37-cp37m-win_amd64.whl
