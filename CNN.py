@@ -486,17 +486,18 @@ class GenerateData:
                     segments.parseJSON(wavFile + '.data')
                     sppSegments = segments.getSpecies(self.species)
                 for segAuto in item[1]:
-                    print("segAuto", segAuto)
-                    overlapedwithGT = False
-                    for ind in sppSegments:
-                        segGT = segments[ind]
-                        if self.Overlap(segGT, segAuto):
-                            overlapedwithGT = True
-                            break
-                        else:
-                            continue
-                    if not overlapedwithGT:
-                        noiseSegments.append([wavFile, segAuto, len(self.calltypes)])
+                    for segAutoi in segAuto:
+                        # print("segAuto", segAutoi)
+                        overlapedwithGT = False
+                        for ind in sppSegments:
+                            segGT = segments[ind]
+                            if self.Overlap(segGT, segAutoi):
+                                overlapedwithGT = True
+                                break
+                            else:
+                                continue
+                        if not overlapedwithGT:
+                            noiseSegments.append([wavFile, segAutoi, len(self.calltypes)])
         return noiseSegments
 
     def Overlap(self, segGT, seg):
