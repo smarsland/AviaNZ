@@ -1531,17 +1531,10 @@ class AviaNZ(QMainWindow):
 
             dlg += 1
             dlg.update()
-<<<<<<< HEAD
 
             self.datalengthSec = self.datalength / self.sampleRate
             print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sampleRate, " Hz.")
 
-=======
-
-            self.datalengthSec = self.datalength / self.sampleRate
-            print("Length of file is ", self.datalengthSec, " seconds (", self.datalength, " samples) loaded from ", self.sp.fileLength / self.sampleRate, "seconds (", self.sp.fileLength, " samples) with sample rate ",self.sampleRate, " Hz.")
-
->>>>>>> devel
             if name is not None:  # i.e. starting a new file, not next section
                 if self.datalength != self.sp.fileLength:
                     self.nFileSections = int(np.ceil(self.sp.fileLength/self.datalength))
@@ -1619,21 +1612,11 @@ class AviaNZ(QMainWindow):
             if hasattr(self,'spectrogramDialog'):
                 if self.batmode:
                     self.spectrogramDialog.reject()
-<<<<<<< HEAD
-                else:
-                    self.spectrogramDialog.setValues(self.sp.minFreq,self.sp.maxFreq,self.sp.minFreqShow,self.sp.maxFreqShow)
-            if hasattr(self,'denoiseDialog'):
-                if self.batmode:
-                    self.denoiseDialog.reject()
-                else:
-                    self.denoiseDialog.setValues(self.sp.minFreq,self.sp.maxFreq)
-=======
                 self.spectrogramDialog.setValues(self.sp.minFreq,self.sp.maxFreq,self.sp.minFreqShow,self.sp.maxFreqShow)
             if hasattr(self,'denoiseDialog'):
                 if self.batmode:
                     self.denoiseDialog.reject()
                 self.denoiseDialog.setValues(self.sp.minFreq,self.sp.maxFreq)
->>>>>>> devel
 
             # Delete any denoising backups from the previous file
             if hasattr(self,'audiodata_backup'):
