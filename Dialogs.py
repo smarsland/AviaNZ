@@ -26,7 +26,6 @@
 import os
 import shutil
 
-from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import QDir, QPointF, QTime, Qt
@@ -36,7 +35,7 @@ from pyqtgraph.Qt import QtCore, QtGui
 
 import numpy as np
 import colourMaps
-import SupportClasses as SupportClasses
+import SupportClasses_GUI
 import SignalProc
 
 
@@ -366,7 +365,7 @@ class Excel2Annotation(QDialog):
         if self.txtSpecies.text() and self.txtExcel.text() and self.txtAudio.text():
             return [self.txtExcel.text(), self.txtAudio.text(), self.txtSpecies.text()]
         else:
-            msg = SupportClasses.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
+            msg = SupportClasses_GUI.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
             msg.exec_()
             return []
 
@@ -1392,7 +1391,7 @@ class HumanClassify1(QDialog):
         self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
         # Audio playback object
-        self.media_obj2 = SupportClasses.ControllableAudio(audioFormat)
+        self.media_obj2 = SupportClasses_GUI.ControllableAudio(audioFormat)
         self.media_obj2.notify.connect(self.endListener)
 
         # The layouts
@@ -2357,7 +2356,7 @@ class HumanClassify2(QDialog):
 
             # create the button:
             # args: index, sp, audio, format, duration, ubstart, ubstop (in spec units)
-            newButton = SupportClasses.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy)
+            newButton = SupportClasses_GUI.PicButton(i, sp.sg, sp.data, sp.audioFormat, duration, sp.x1nobspec, sp.x2nobspec, self.lut, self.colourStart, self.colourEnd, self.cmapInverted, guides=gy)
             if newButton.im1.size().width() > self.specH:
                 self.specH = newButton.im1.size().width()
             if newButton.im1.size().height() > self.specV:
@@ -2417,14 +2416,14 @@ class HumanClassify2(QDialog):
             # add a frequency axis
             # args: spectrogram height in spec units, min and max frq in kHz for axis ticks
             print(self.numPicsV)
-            sg_axis = SupportClasses.AxisWidget(SgSize, minFreq/1000, maxFreq/1000)
+            sg_axis = SupportClasses_GUI.AxisWidget(SgSize, minFreq/1000, maxFreq/1000)
             self.flowAxes.addWidget(sg_axis, row, 0)
             self.flowAxes.layout.setRowMinimumHeight(row, self.specV+10)
 
             # draw a row of buttons
             for col in range(1, self.numPicsH+1):
                 if row==0:
-                    time_axis = SupportClasses.TimeAxisWidget(self.specH, duration)
+                    time_axis = SupportClasses_GUI.TimeAxisWidget(self.specH, duration)
                     self.flowAxesT.addWidget(time_axis, 0, col)
                     self.flowAxesT.layout.setColumnMinimumWidth(col, self.specH+10)
                     time_axis.show()
@@ -2721,7 +2720,7 @@ class FilterManager(QDialog):
         if not os.path.isfile(source):
             print("ERROR: unable to delete, bad source", source)
             return
-        msg = SupportClasses.MessagePopup("w", "Confirm delete", "Warning: you are about to permanently delete recogniser %s.\nAre you sure?" % source)
+        msg = SupportClasses_GUI.MessagePopup("w", "Confirm delete", "Warning: you are about to permanently delete recogniser %s.\nAre you sure?" % source)
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
         reply = msg.exec_()
         if reply != QMessageBox.Yes:
@@ -2742,14 +2741,14 @@ class FilterManager(QDialog):
             print("ERROR: unable to import, bad source %s" % source)
             return
         if os.path.isfile(target):
-            msg = SupportClasses.MessagePopup("t", "Confirm overwrite", "Warning: a recogniser named %s already exists in this software.\nDo you want to overwrite it?" % target)
+            msg = SupportClasses_GUI.MessagePopup("t", "Confirm overwrite", "Warning: a recogniser named %s already exists in this software.\nDo you want to overwrite it?" % target)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             reply = msg.exec_()
             if reply == QMessageBox.No or reply == QMessageBox.Cancel:
                 return
         try:
             shutil.copy2(source, target)
-            msg = SupportClasses.MessagePopup("d", "Successfully imported", "Import successful. Now you can use the recogniser %s" % os.path.basename(target))
+            msg = SupportClasses_GUI.MessagePopup("d", "Successfully imported", "Import successful. Now you can use the recogniser %s" % os.path.basename(target))
             msg.exec_()
             self.readContents()
         except Exception as e:
@@ -2773,7 +2772,7 @@ class FilterManager(QDialog):
                 return
             try:
                 shutil.copy2(source, target)
-                msg = SupportClasses.MessagePopup("d", "Successfully exported", "Export successful. Now you can share the file %s" % target)
+                msg = SupportClasses_GUI.MessagePopup("d", "Successfully exported", "Export successful. Now you can share the file %s" % target)
                 msg.exec_()
             except Exception as e:
                 print("ERROR: failed to export")
@@ -2869,7 +2868,7 @@ class Cluster(QDialog):
 
             sg = self.sg
 
-            newButton = SupportClasses.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1],
+            newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1] - seg[1][0], 0, seg[1][1],
                                           self.lut, self.colourStart, self.colourEnd, False, cluster=True)
             self.picbuttons.append(newButton)
         # (updateButtons will place them in layouts and show them)

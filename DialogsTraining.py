@@ -54,7 +54,7 @@ from sklearn.utils import shuffle
 
 import numpy as np
 import colourMaps
-import SupportClasses
+import SupportClasses, SupportClasses_GUI
 import SignalProc
 import WaveletSegment
 import Segment
@@ -82,7 +82,7 @@ class BuildRecAdvWizard(QWizard):
             colourNone = QColor(config['ColourNone'][0], config['ColourNone'][1], config['ColourNone'][2], config['ColourNone'][3])
             colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
-            self.listFiles = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
+            self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(225)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
@@ -311,7 +311,7 @@ class BuildRecAdvWizard(QWizard):
             vboxTop.addLayout(hboxBtns)
 
             # set up the images
-            self.flowLayout = SupportClasses.Layout()
+            self.flowLayout = SupportClasses_GUI.Layout()
             self.flowLayout.setMinimumSize(380, 247)
             self.flowLayout.buttonDragged.connect(self.moveSelectedSegs)
             self.flowLayout.layout.setSizeConstraint(QLayout.SetMinimumSize)
@@ -644,7 +644,7 @@ class BuildRecAdvWizard(QWizard):
                 #self.cmbUpdateSeg.addItem(newLabel)
                 self.completeChanged.emit()
             else:
-                msg = SupportClasses.MessagePopup("t", "Select", "Select calls to make the new cluster")
+                msg = SupportClasses_GUI.MessagePopup("t", "Select", "Select calls to make the new cluster")
                 msg.exec_()
                 self.completeChanged.emit()
                 return
@@ -721,13 +721,13 @@ class BuildRecAdvWizard(QWizard):
             self.segsChanged = True
             names = [self.tboxes[ID].text() for ID in range(self.nclasses)]
             if len(names) != len(set(names)):
-                msg = SupportClasses.MessagePopup("w", "Name error", "Duplicate cluster names! \nTry again")
+                msg = SupportClasses_GUI.MessagePopup("w", "Name error", "Duplicate cluster names! \nTry again")
                 msg.exec_()
                 self.completeChanged.emit()
                 return
 
             if "(Other)" in names:
-                msg = SupportClasses.MessagePopup("w", "Name error", "Name \"(Other)\" is reserved! \nTry again")
+                msg = SupportClasses_GUI.MessagePopup("w", "Name error", "Name \"(Other)\" is reserved! \nTry again")
                 msg.exec_()
                 self.completeChanged.emit()
                 return
@@ -770,7 +770,7 @@ class BuildRecAdvWizard(QWizard):
                 else:
                     sg = self.sg
 
-                newButton = SupportClasses.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart, self.colourEnd, False, cluster=True)
+                newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart, self.colourEnd, False, cluster=True)
                 self.picbuttons.append(newButton)
             # (updateButtons will place them in layouts and show them)
 
@@ -1657,7 +1657,7 @@ class TestRecWizard(QWizard):
             colourNone = QColor(config['ColourNone'][0], config['ColourNone'][1], config['ColourNone'][2], config['ColourNone'][3])
             colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
-            self.listFiles = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
+            self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(275)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
@@ -2082,15 +2082,15 @@ class BuildCNNWizard(QWizard):
             colourNone = QColor(config['ColourNone'][0], config['ColourNone'][1], config['ColourNone'][2], config['ColourNone'][3])
             colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
-            self.listFilesTrain2 = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
+            self.listFilesTrain2 = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTrain2.setMinimumWidth(350)
             self.listFilesTrain2.setMinimumHeight(275)
             self.listFilesTrain2.setSelectionMode(QAbstractItemView.NoSelection)
-            self.listFilesTrain1 = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
+            self.listFilesTrain1 = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTrain1.setMinimumWidth(350)
             self.listFilesTrain1.setMinimumHeight(275)
             self.listFilesTrain1.setSelectionMode(QAbstractItemView.NoSelection)
-            self.listFilesTest = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
+            self.listFilesTest = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTest.setMinimumWidth(150)
             self.listFilesTest.setMinimumHeight(275)
             self.listFilesTest.setSelectionMode(QAbstractItemView.NoSelection)
@@ -2644,7 +2644,7 @@ class BuildCNNWizard(QWizard):
                 maxsg = np.min(sgRaw)
                 self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
                 self.setColourMap()
-                picbtn = SupportClasses.PicButton(1, np.fliplr(self.sg), sp.data, sp.audioFormat,
+                picbtn = SupportClasses_GUI.PicButton(1, np.fliplr(self.sg), sp.data, sp.audioFormat,
                                                   self.imgsec.value(), 0, 0, self.lut,
                                                   self.colourStart, self.colourEnd, False,
                                                   cluster=True)

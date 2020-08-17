@@ -30,11 +30,16 @@ import copy
 import gc
 
 from PyQt5.QtGui import QImage
-from PyQt5.QtMultimedia import QAudioFormat
+# TODO: global var for this?
+# TODO: Do we use the audioFormat stuff ever if not in pyQT?
+try:
+    from PyQt5.QtMultimedia import QAudioFormat
+except ImportError:
+    print("No QtMM")
 # for multitaper spec:
-from spectrum import dpss, pmtm
+#from spectrum import dpss, pmtm
 # for spec derivs:
-from spectrum import dpss
+#from spectrum import dpss
 # for fund freq
 from scipy.signal import medfilt
 # for impulse masking
@@ -57,10 +62,14 @@ class SignalProc:
         self.data = []
 
         # only accepting wav files of this format
-        self.audioFormat = QAudioFormat()
-        self.audioFormat.setCodec("audio/pcm")
-        self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
-        self.audioFormat.setSampleType(QAudioFormat.SignedInt)
+        self.cli = True
+        if self.cli:
+            self.audioFormat = {}
+        else:
+            self.audioFormat = QAudioFormat()
+            self.audioFormat.setCodec("audio/pcm")
+            self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
+            self.audioFormat.setSampleType(QAudioFormat.SignedInt)
 
     def readWav(self, file, len=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
@@ -70,18 +79,26 @@ class SignalProc:
         # take only left channel
         if np.shape(np.shape(self.data))[0] > 1:
             self.data = self.data[:, 0]
-        self.audioFormat.setChannelCount(1)
+        if self.cli:
+            self.audioFormat['channelCount'] = 1
+        else:
+            self.audioFormat.setChannelCount(1)
 
         # force float type
         if self.data.dtype != 'float':
             self.data = self.data.astype('float')
-        self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
 
         # total file length in s read from header (useful for paging)
         self.fileLength = wavobj.nframes
 
         self.sampleRate = wavobj.rate
-        self.audioFormat.setSampleRate(self.sampleRate)
+
+        if self.cli:
+            self.audioFormat['sampleSize'] = wavobj.sampwidth * 8
+            self.audioFormat['sampleRate'] = self.sampleRate
+        else:
+            self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
+            self.audioFormat.setSampleRate(self.sampleRate)
 
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
@@ -90,7 +107,10 @@ class SignalProc:
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
 
         if not silent:
-            print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
+            if self.cli:
+                print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat['channelCount'], self.audioFormat['sampleRate'], self.audioFormat['sampleSize']))
+            else:
+                print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
 
     def readBmp(self, file, len=None, off=0, silent=False, rotate=True):
         """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
@@ -173,9 +193,14 @@ class SignalProc:
 
         self.sg = img2
 
-        self.audioFormat.setChannelCount(0)
-        self.audioFormat.setSampleSize(0)
-        self.audioFormat.setSampleRate(self.sampleRate)
+        if self.cli:
+            self.audioFormat['channelCount'] = 0
+            self.audioFormat['sampleSize'] = 0
+            self.audioFormat['sampleRate'] = self.sampleRate
+        else:
+            self.audioFormat.setChannelCount(0)
+            self.audioFormat.setSampleSize(0)
+            self.audioFormat.setSampleRate(self.sampleRate)
 
         self.minFreq = 0
         self.maxFreq = self.sampleRate //2
@@ -197,7 +222,10 @@ class SignalProc:
         self.data = librosa.core.audio.resample(self.data, self.sampleRate, target)
 
         self.sampleRate = target
-        self.audioFormat.setSampleRate(target)
+        if self.cli:
+            self.audioFormat['sampleRate'] = target
+        else:
+            self.audioFormat.setSampleRate(target)
 
         self.minFreq = 0
         self.maxFreq = self.sampleRate // 2
@@ -276,6 +304,11 @@ class SignalProc:
         if self.data is None or len(self.data)==0:
             print("ERROR: attempted to calculate spectrogram without audiodata")
             return
+
+        #S = librosa.feature.melspectrogram(self.data, sr=self.sampleRate, power=1)
+        #log_S = librosa.amplitude_to_db(S, ref=np.max)
+        #self.sg = librosa.pcen(S * (2**31))
+        #return self.sg.T
 
         if window_width is None:
             window_width = self.window_width
