@@ -339,7 +339,7 @@ class CNN:
         self.model.summary()
 
     def train2(self, modelsavepath):
-        ''' Train the model'''
+        ''' Train the model - keep all in memory '''
 
         self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
@@ -367,7 +367,7 @@ class CNN:
         print("Saved model to ", modelsavepath)
 
     def train(self, modelsavepath, training_batch_generator, validation_batch_generator, batch_size):
-        ''' Train the model'''
+        ''' Train the model - use image generator '''
 
         self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 

@@ -1672,6 +1672,9 @@ class LightedFileList(QListWidget):
                                     if filename.lower().endswith('.wav'):
                                         try:
                                             samplerate = wavio.readFmt(filenamef)[0]
+                                            # # samplerate = wavio.readFmt(filenamef)[0]      # disabled to make SOIK faster
+                                            # print(filenamef)
+                                            # samplerate = 32000
                                             self.fsList.add(samplerate)
                                         except Exception as e:
                                             print("Warning: could not parse format of WAV file", filenamef)
