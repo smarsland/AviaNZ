@@ -402,6 +402,7 @@ class ExcelIO():
     # segsLL: list of SegmentList with filename attribute
     # startTime: offset from 0, when exporting a single page
     def writeToExcelp1(self, wb, segsLL, currsp, startTime):
+        from PyQt5.QtCore import QTime
         ws = wb['Time Stamps']
         r = ws.max_row + 1
 

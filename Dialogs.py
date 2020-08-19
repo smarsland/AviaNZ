@@ -51,14 +51,19 @@ class StartScreen(QDialog):
 
         btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
         # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
-        b1 = QPushButton("   Manual Processing   ")
-        b2 = QPushButton("     Batch Processing     ")
-        b3 = QPushButton("  Review Batch Results  ")
+        #b1 = QPushButton("   Manual Processing   ")
+        #b2 = QPushButton("     Batch Processing     ")
+        #b3 = QPushButton("  Review Batch Results  ")
+        b1 = QPushButton("Manual Processing")
+        b2 = QPushButton("Batch Processing")
+        b3 = QPushButton("Review Results")
+        #b4 = QPushButton("Utilities")
         l1 = QLabel("------")
         l2 = QLabel("---")
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
         b3.setStyleSheet(btn_style)
+        #b4.setStyleSheet(btn_style)
         l1.setStyleSheet('QLabel {color:transparent}')
         bclose = QtGui.QToolButton()
         bclose.setIcon(QtGui.QIcon('img/close.png'))
@@ -77,6 +82,7 @@ class StartScreen(QDialog):
         hbox.addWidget(l1)
         hbox.addWidget(b3)
         hbox.addWidget(l2)
+        #hbox.addWidget(b4)
 
         vbox = QVBoxLayout()
         vbox.addLayout(hboxclose)
@@ -89,6 +95,7 @@ class StartScreen(QDialog):
         b1.clicked.connect(self.manualSeg)
         b2.clicked.connect(self.findSpecies)
         b3.clicked.connect(self.reviewSeg)
+        #b4.clicked.connect(self.utilities)
 
         self.task = -1
 
@@ -107,6 +114,10 @@ class StartScreen(QDialog):
     def reviewSeg(self):
         self.task = 4
         self.accept()
+
+    #def utilities(self):
+        #self.task = 5
+        #self.accept()
 
     def getValues(self):
         return self.task

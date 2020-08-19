@@ -1,5 +1,3 @@
-
-#
 # This is the main class for the AviaNZ interface
 # Version 2.0 18/11/19
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
@@ -329,10 +327,6 @@ class AviaNZ(QMainWindow):
         specMenu.addAction("Change spectrogram parameters",self.showSpectrogramDialog)
 
         if not self.DOC:
-            self.showInvSpec = specMenu.addAction("Show inverted spectrogram", self.showInvertedSpectrogram)
-            self.showInvSpec.setCheckable(True)
-            self.showInvSpec.setChecked(False)
-
             specMenu.addSeparator()
             self.showDiagnosticTick = specMenu.addAction("Show training diagnostics",self.showDiagnosticDialog)
             self.extraMenu = specMenu.addMenu("Diagnostic plots")
@@ -390,6 +384,8 @@ class AviaNZ(QMainWindow):
 
         if not self.DOC:
             actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
+        actionMenu.addSeparator()
+        self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
         actionMenu.addSeparator()
 
         extraMenu = actionMenu.addMenu("H&uman review")
@@ -978,6 +974,7 @@ class AviaNZ(QMainWindow):
             self.extraMenu.setEnabled(not self.batmode)
             self.setExtraPlot("none")
 
+        self.showInvSpec.setVisible(self.batmode)
         self.showFundamental.setEnabled(not self.batmode)
         self.showSpectral.setEnabled(not self.batmode)
         self.showEnergies.setEnabled(not self.batmode)
@@ -1623,8 +1620,7 @@ class AviaNZ(QMainWindow):
             # Delete any denoising backups from the previous file
             if hasattr(self,'audiodata_backup'):
                 self.audiodata_backup = None
-            if not self.DOC:
-                self.showInvSpec.setChecked(False)
+            #self.showInvSpec.setChecked(False)
 
             self.timeaxis.setOffset(self.startRead+self.startTime)
 
@@ -1859,27 +1855,24 @@ class AviaNZ(QMainWindow):
     #     self.specPlot.setImage(10*np.log10(np.real(cqt*np.conj(cqt))).T)
     #     self.p_spec.setXRange(0, np.shape(cqt)[1], update=True, padding=0)
 
-    def showInvertedSpectrogram(self):
-        """ Listener for the menu item that draws the spectrogram of the waveform of the inverted spectrogram."""
-        # TODO: Make this useful?!
-        # TODO: Save the inverted sgram? Will then need undo? 
+    def invertSpectrogram(self):
+        """ Listener for the menu item that inverts the spectrogram in bat mode"""
+        # TODO: Check this!
         with pg.BusyCursor():
             self.statusLeft.setText("Inverting...")
-            if self.showInvSpec.isChecked():
-                print("Inverting spectrogam with window ", self.config['window_width'], " and increment ",self.config['window_width']//4)
-                sgRaw = self.sp.spectrogram(self.config['window_width'], self.config['window_width']//4, mean_normalise=self.sgMeanNormalise, equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided, multitaper=self.sgMultitaper)
-                invertedSgram = self.sp.invertSpectrogram(sgRaw,self.config['window_width'],self.config['window_width']//4)
-                self.sp.setData(invertedSgram)
-                self.amplPlot.setData(np.linspace(0.0,len(invertedSgram)/self.sampleRate,num=len(invertedSgram),endpoint=True),invertedSgram)
-            else:
-                self.sp.setData(self.audiodata)
-                self.amplPlot.setData(np.linspace(0.0,self.datalengthSec,num=self.datalength,endpoint=True),self.audiodata)
+            print("Inverting spectrogam with window ", self.config['window_width'], " and increment ",self.config['window_width'])
 
-            sgRaw = self.sp.spectrogram(self.config['window_width'], self.config['incr'], mean_normalise=self.sgMeanNormalise, equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided, multitaper=self.sgMultitaper)
-            maxsg = np.min(sgRaw)
-            self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
-            self.overviewImage.setImage(self.sg)
-            self.specPlot.setImage(self.sg)
+            row_dim = 7 * np.shape(self.sg)[0]
+            appo = 254 * np.ones((row_dim, np.shape(self.sg)[1]))
+            spec = np.concatenate((appo, self.sg))
+            samplerate = 16000
+
+            wave = self.sp.invertSpectrogram(spec, 1024, 64)
+            wavFile = str(self.filename + '.wav')
+            wavio.write(wavFile, wave, samplerate, sampwidth=2)
+            print('File written:',wavFile)
+            self.fillFileList(os.path.basename(self.filename))
+
             self.statusLeft.setText("Ready")
 
     def medianFilterSpec(self):
@@ -2862,9 +2855,6 @@ class AviaNZ(QMainWindow):
                             else:
                                 self.fillBirdList()
                             self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                    else:
-                        # TODO: pan the view
-                        pass
 
     def mouseClicked_spec(self,evt):
         """ Listener for if the user clicks on the spectrogram plot.
@@ -3039,9 +3029,6 @@ class AviaNZ(QMainWindow):
                             else:
                                 self.fillBirdList()
                             self.menuBirdList.popup(QPoint(evt.screenPos().x(), evt.screenPos().y()))
-                    else:
-                        # TODO: pan the view
-                        pass
 
     def GrowBox_ampl(self,pos):
         """ Listener for when a segment is being made in the amplitude plot.
@@ -5274,12 +5261,6 @@ class AviaNZ(QMainWindow):
         else:
             print('need segments to cluster!')
             return
-
-    def recognise(self):
-        # This will eventually call methods to do automatic recognition
-        # Actually, will produce a dialog to ask which species, etc.
-        # TODO
-        pass
 
 # ===============
 # Code for playing sounds
