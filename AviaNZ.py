@@ -25,8 +25,9 @@ import click, sys, platform, os, json, shutil
 from jsonschema import validate
 import SupportClasses
 
-# Command line running is something like
+# Command line running to run a filter is something like
 # python AviaNZ.py -c -b -d "/home/marslast/Projects/AviaNZ/Sound Files/train5" -r "Morepork" -w 
+
 @click.command()
 @click.option('-c', '--cli', is_flag=True, help='Run in command-line mode')
 @click.option('-s', '--cheatsheet', is_flag=True, help='Make the cheatsheet images')

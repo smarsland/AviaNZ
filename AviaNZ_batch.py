@@ -212,17 +212,33 @@ class AviaNZ_batchProcess():
 
             self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
 
-        # MAIN PROCESSING starts here
-        processingTime = 0
-        cleanexit = 0
-        cnt = 0
-        #msgtext = ""
         if not self.CLI and not self.testmode:
             # clean up the UI before entering the long loop
             self.ui.clean_UI(total,cnt)
 
-        # TODO: tidy this up, probably by calling this from _GUI more neatly
-        #with pg.BusyCursor():
+        if not self.CLI and not self.testmode:
+            import pyqtgraph as pg
+            with pg.BusyCursor():
+                self.mainloop(allwavs,total,speciesStr,filters)  
+        else:
+            self.mainloop(allwavs,total,speciesStr,filters)  
+
+        # END of processing and exporting. Final cleanup
+        if not self.CLI and not self.testmode:
+            self.ui.endproc(total)
+            self.log.file.close()
+        else:
+            print("Processed all %d files" % total)
+            if not self.testmode:
+                self.log.file.close()
+            return(0)
+
+    def mainloop(self,allwavs,total,speciesStr,filters):
+        # MAIN PROCESSING starts here
+        processingTime = 0
+        cleanexit = 0
+        cnt = 0
+
         for filename in allwavs:
             # get remaining run time in min
             processingTimeStart = time.time()
@@ -288,7 +304,7 @@ class AviaNZ_batchProcess():
                     e = "Encountered error:\n" + traceback.format_exc()
                     print("ERROR: ", e)
                     if not self.CLI:
-                        self.ui.error_fileproc()
+                        self.ui.error_fileproc(total,e)
                     self.log.file.close()
                     return(1)
             else:
@@ -308,7 +324,7 @@ class AviaNZ_batchProcess():
                     e = "Encountered error:\n" + traceback.format_exc()
                     print("ERROR: ", e)
                     if not self.CLI and not self.testmode:
-                        error_fileproc()
+                        self.ui.error_fileproc(total,e)
                     self.log.file.close()
                     return(1)
 
@@ -372,16 +388,6 @@ class AviaNZ_batchProcess():
                 ## in this mode. We only delete old excels, and let
                 ## user generate new ones through Batch Review.
 
-        # END of processing and exporting. Final cleanup
-        if not self.CLI and not self.testmode:
-            self.ui.endproc(total)
-            self.log.file.close()
-        else:
-            print("Processed all %d files" % total)
-            if not self.testmode:
-                self.log.file.close()
-            return(0)
-
     def useWindF(self, flow, fhigh):
         """
         Check if the wind filter is appropriate for this species/call type.
@@ -398,7 +404,7 @@ class AviaNZ_batchProcess():
             Does not return anything - for use with external try/catch
         """
         # Segment over pages separately, to allow dealing with large files smoothly:
-        # page size fixed for now
+        # TODO: page size fixed for now
         samplesInPage = 900*16000
         # (ceil division for large integers)
         numPages = (self.datalength - 1) // samplesInPage + 1

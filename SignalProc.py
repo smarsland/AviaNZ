@@ -164,7 +164,7 @@ class SignalProc:
             print(np.median(img2[-1,:]))
             return(1)
 
-        # Could skip that for visuaal mode - maybe useful for establishing contrast?
+        # Could skip that for visual mode - maybe useful for establishing contrast?
         img2[-1, :] = 254  # lowest freq bin is 0, flip that
         img2 = 255 - img2  # reverse value having the black as the most intense
         img2 = img2/np.max(img2)  # normalization
