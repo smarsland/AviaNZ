@@ -398,6 +398,62 @@ class Excel2Annotation(QDialog):
             print(e)
             return
 
+#======
+class Tag2Annotation(QDialog):
+    # Class for XML Tag to AviaNZ annotation
+    def __init__(self, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Generate annotations from XML (Freebird)')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setMinimumWidth(700)
+
+        self.txtSession = QLineEdit()
+        self.txtSession.setMinimumWidth(400)
+        self.txtSession.setText('')
+        self.btnBrowseSession = QPushButton("&Browse Session")
+        self.btnBrowseSession.setFixedWidth(220)
+        self.btnBrowseSession.clicked.connect(self.browseSession)
+
+        self.txtDuration = QLineEdit()
+        self.txtDuration.setMinimumWidth(400)
+        self.txtDuration.setText('')
+        lblDuration = QLabel("Duration (sec) of a recording")
+        lblDuration.setFixedWidth(220)
+        lblDuration.setAlignment(Qt.AlignCenter)
+
+        self.btnGenerateAnnot = QPushButton("Generate AviaNZ Annotation")
+        self.btnGenerateAnnot.setFixedHeight(50)
+        self.btnGenerateAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+
+        Box = QVBoxLayout()
+        Box.addWidget(QLabel())
+        Box1 = QHBoxLayout()
+        Box1.addWidget(self.btnBrowseSession)
+        Box1.addWidget(self.txtSession)
+        Box2 = QHBoxLayout()
+        Box2.addWidget(lblDuration)
+        Box2.addWidget(self.txtDuration)
+        Box.addLayout(Box1)
+        Box.addLayout(Box2)
+        Box.addWidget(QLabel())
+        Box.addWidget(self.btnGenerateAnnot)
+
+        # Now put everything into the frame
+        self.setLayout(Box)
+
+    def getValues(self):
+        if self.txtDuration.text() and self.txtSession.text():
+            return [self.txtSession.text(), self.txtDuration.text()]
+        else:
+            msg = SupportClasses.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
+            msg.exec_()
+            return []
+
+    def browseSession(self):
+        dirName = QFileDialog.getExistingDirectory(self, 'Choose .session folder with .tag and .setting')
+        self.txtSession.setText(dirName)
+
 class OperatorReviewer(QDialog):
     # Class for the set operator dialog box
     def __init__(self, operator='', reviewer='', parent=None):
