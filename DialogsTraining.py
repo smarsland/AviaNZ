@@ -2582,13 +2582,12 @@ class BuildCNNWizard(QWizard):
             self.fs = self.currfilt["SampleRate"]
             self.species = self.currfilt["species"]
             mincallengths = []
-            maxcallengths = []
+            maxgaps = []
             self.calltypes = []
             for fi in self.currfilt['Filters']:
                 self.calltypes.append(fi['calltype'])
                 mincallengths.append(fi['TimeRange'][0])
-                maxcallengths.append(fi['TimeRange'][1])
-            mincallength = np.max(mincallengths)
+                maxgaps.append(fi['TimeRange'][3])
 
             self.msgspp.setText("<b>Species:</b> %s" % (self.species))
             if self.field("trainDir1"):
@@ -2598,9 +2597,16 @@ class BuildCNNWizard(QWizard):
             if self.field("testDir"):
                 self.msgtest1.setText("<b>Test data (Auto processed and reviewed):</b> %s" % (self.field("testDir")))
 
-            if mincallength < 6:
-                self.imgtext.setText(str(mincallength) + ' sec')
-                self.imgsec.setValue(mincallength * 100)
+            # Ideally, the image length should be bigger than the max gap between syllables
+            if np.max(maxgaps) * 2 <= 6:
+                self.imgtext.setText(str(np.max(maxgaps) * 2) + ' sec')
+                self.imgsec.setValue(np.max(maxgaps) * 2 * 100)
+            elif np.max(maxgaps) * 1.5 <= 6:
+                self.imgtext.setText(str(np.max(maxgaps) * 1.5) + ' sec')
+                self.imgsec.setValue(np.max(maxgaps) * 1.5 * 100)
+            elif np.max(mincallengths) <= 6:
+                self.imgtext.setText(str(np.max(mincallengths)) + ' sec')
+                self.imgsec.setValue(np.max(mincallengths) * 100)
 
             # Check disk usage
             totalbytes, usedbytes, freebytes = disk_usage(os.path.expanduser("~"))
