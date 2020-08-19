@@ -57,6 +57,7 @@ import click, webbrowser, copy, math
 import time
 import openpyxl
 import xml.etree.ElementTree as ET
+import subprocess
 
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
@@ -423,6 +424,7 @@ class AviaNZ(QMainWindow):
         utilMenu = self.menuBar().addMenu("&Utilities")
         utilMenu.addAction("Excel to annotation", self.excel2Annotation)
         utilMenu.addAction("XML to annotation", self.tag2Annotation)
+        utilMenu.addAction("Backup annotations", self.backupAnnotations)
         # utilMenu.addAction("Split long recordings", self.splitter)
 
         helpMenu = self.menuBar().addMenu("&Help")
@@ -4877,6 +4879,14 @@ class AviaNZ(QMainWindow):
         self.tag2AnnotationDialog.activateWindow()
         self.tag2AnnotationDialog.btnGenerateAnnot.clicked.connect(self.genTag2Annot)
 
+    def backupAnnotations(self):
+        """ Utility function dialog: backup annotation files
+        """
+        self.backupAnnotationDialog = Dialogs.BackupAnnotation()
+        self.backupAnnotationDialog.show()
+        self.backupAnnotationDialog.activateWindow()
+        self.backupAnnotationDialog.btnCopyAnnot.clicked.connect(self.backupAnnotation)
+
     def genExcel2Annot(self):
         """ Utility function: Generate AviaNZ style annotations given the start-end of calls in excel format"""
 
@@ -4974,6 +4984,29 @@ class AviaNZ(QMainWindow):
             msg.exec_()
         except Exception as e:
             print("Warning: Generating annotation from %s failed with error:" % (tagFile))
+            print(e)
+            return
+
+    def backupAnnotation(self):
+        """ Utility function: Copy .data files while preserving directory hierarchy"""
+        values = self.backupAnnotationDialog.getValues()
+        if values:
+            [src, dst] = values
+        else:
+            return
+
+        try:
+            if platform.system() == 'Windows':
+                subprocess.call(['xcopy', src+'\*.data', dst, '/s', '/e'])
+            elif platform.system() == 'Linux' or platform.system() == 'Darwin':     # TODO: zero testing!
+                exclude = '*.wav, *.txt'
+                options = '-arvz'
+                exclusions = ['--exclude="%s"' % x.strip() for x in exclude.split(',')]
+                rsync_command = ['rsync'] + options + exclusions + [src + '/', dst]
+                print(rsync_command)
+                return subprocess.check_call(rsync_command)
+        except Exception as e:
+            print("Warning: Coping failed with error:")
             print(e)
             return
 
