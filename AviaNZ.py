@@ -56,6 +56,7 @@ import librosa
 import click, webbrowser, copy, math
 import time
 import openpyxl
+import xml.etree.ElementTree as ET
 
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
@@ -421,6 +422,7 @@ class AviaNZ(QMainWindow):
         # "Utilities" menu
         utilMenu = self.menuBar().addMenu("&Utilities")
         utilMenu.addAction("Excel to annotation", self.excel2Annotation)
+        utilMenu.addAction("XML to annotation", self.tag2Annotation)
         # utilMenu.addAction("Split long recordings", self.splitter)
 
         helpMenu = self.menuBar().addMenu("&Help")
@@ -4867,6 +4869,14 @@ class AviaNZ(QMainWindow):
         self.excel2AnnotationDialog.activateWindow()
         self.excel2AnnotationDialog.btnGenerateAnnot.clicked.connect(self.genExcel2Annot)
 
+    def tag2Annotation(self):
+        """ Utility function dialog: Generate AviaNZ style annotations given freebird style (XML) annotations
+        """
+        self.tag2AnnotationDialog = Dialogs.Tag2Annotation()
+        self.tag2AnnotationDialog.show()
+        self.tag2AnnotationDialog.activateWindow()
+        self.tag2AnnotationDialog.btnGenerateAnnot.clicked.connect(self.genTag2Annot)
+
     def genExcel2Annot(self):
         """ Utility function: Generate AviaNZ style annotations given the start-end of calls in excel format"""
 
@@ -4904,6 +4914,66 @@ class AviaNZ(QMainWindow):
             msg.exec_()
         except Exception as e:
             print("ERROR: Generating annotation failed with error:")
+            print(e)
+            return
+
+    def genTag2Annot(self):
+        """ Utility function: Generate AviaNZ style annotations given the freebird style annotations"""
+
+        values = self.tag2AnnotationDialog.getValues()
+        if values:
+            [sessiondir, duration] = values
+        else:
+            return
+
+        try:
+            # Read freebird bird list
+            spName = []
+            spCode = []
+            book = openpyxl.load_workbook(os.path.join(self.configdir, "Freebird_species_list.xlsx"))
+            sheet = book.active
+            name = sheet['A2': 'A' + str(sheet.max_row)]
+            code = sheet['B2': 'B' + str(sheet.max_row)]
+            for i in range(len(name)):
+                spName.append(str(name[i][0].value))
+            for i in range(len(code)):
+                spCode.append(int(code[i][0].value))
+            spDict = dict(zip(spCode, spName))
+
+            # Generate the .data files from .tag, read operator/reviewer from the corresponding .setting file
+            for root, dirs, files in os.walk(str(sessiondir)):
+                for file in files:
+                    if file.endswith('.tag'):
+                        annotation = []
+                        tagFile = os.path.join(root, file)
+                        tree = ET.parse(tagFile)
+                        troot = tree.getroot()
+
+                        for elem in troot:
+                            species = spDict[int(elem[0].text)]
+                            annotation.append(
+                                [float(elem[1].text), float(elem[1].text) + float(elem[2].text), 0, 0, species])
+
+                        operator = ""
+                        reviewer = ""
+                        stree = ET.parse(tagFile[:-4] + '.setting')
+                        stroot = stree.getroot()
+                        for elem in stroot:
+                            if elem.tag == 'Operator':
+                                operator = elem.text
+                            if elem.tag == 'Reviewer' and elem.text:
+                                reviewer = elem.text
+                        annotation.insert(0, {"Operator": operator, "Reviewer": reviewer, "Duration": duration})
+                        # save .data, possible over-writing
+                        file = open(tagFile[:-4] + '.wav.data', 'w')
+                        json.dump(annotation, file)
+            self.tag2AnnotationDialog.txtDuration.setText('')
+            self.tag2AnnotationDialog.txtSession.setText('')
+            msg = SupportClasses.MessagePopup("d", "Generated annotation",
+                                              "Successfully saved the annotations in: " + '\n' + sessiondir)
+            msg.exec_()
+        except Exception as e:
+            print("Warning: Generating annotation from %s failed with error:" % (tagFile))
             print(e)
             return
 
