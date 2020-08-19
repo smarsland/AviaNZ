@@ -454,6 +454,67 @@ class Tag2Annotation(QDialog):
         dirName = QFileDialog.getExistingDirectory(self, 'Choose .session folder with .tag and .setting')
         self.txtSession.setText(dirName)
 
+#======
+class BackupAnnotation(QDialog):
+    # Class for XML Tag to AviaNZ annotation
+    def __init__(self, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('Backup annotations')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setMinimumWidth(700)
+
+        self.txtSrc = QLineEdit()
+        self.txtSrc.setMinimumWidth(400)
+        self.txtSrc.setText('')
+        self.btnBrowseSrc = QPushButton("&Browse Source Directory")
+        self.btnBrowseSrc.setFixedWidth(220)
+        self.btnBrowseSrc.clicked.connect(self.browseSrc)
+
+        self.txtDst = QLineEdit()
+        self.txtDst.setMinimumWidth(400)
+        self.txtDst.setText('')
+        self.btnBrowseDst = QPushButton("&Browse Destination Directory")
+        self.btnBrowseDst.setFixedWidth(220)
+        self.btnBrowseDst.clicked.connect(self.browseDst)
+
+        self.btnCopyAnnot = QPushButton("Copy Annotations")
+        self.btnCopyAnnot.setFixedHeight(50)
+        self.btnCopyAnnot.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+
+        Box = QVBoxLayout()
+        Box.addWidget(QLabel('This allows you to get a copy of your annotations while preserving the directory hierarchy, only copy the .data files.\nSelect the directory you want to backup the annotations from and create a destination directory to copy the annotations'))
+        Box.addWidget(QLabel())
+        Box1 = QHBoxLayout()
+        Box1.addWidget(self.btnBrowseSrc)
+        Box1.addWidget(self.txtSrc)
+        Box2 = QHBoxLayout()
+        Box2.addWidget(self.btnBrowseDst)
+        Box2.addWidget(self.txtDst)
+        Box.addLayout(Box1)
+        Box.addLayout(Box2)
+        Box.addWidget(QLabel())
+        Box.addWidget(self.btnCopyAnnot)
+
+        # Now put everything into the frame
+        self.setLayout(Box)
+
+    def getValues(self):
+        if self.txtSrc.text() and self.txtDst.text():
+            return [self.txtSrc.text(), self.txtDst.text()]
+        else:
+            msg = SupportClasses.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
+            msg.exec_()
+            return []
+
+    def browseSrc(self):
+        dirName = QFileDialog.getExistingDirectory(self, 'Choose the source folder to backup')
+        self.txtSrc.setText(dirName)
+
+    def browseDst(self):
+        dirName = QFileDialog.getExistingDirectory(self, 'Choose the destination folder')
+        self.txtDst.setText(dirName)
+
 class OperatorReviewer(QDialog):
     # Class for the set operator dialog box
     def __init__(self, operator='', reviewer='', parent=None):
