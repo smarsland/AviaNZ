@@ -642,8 +642,11 @@ class WaveletSegment:
             # nw=int(np.ceil(N / inc_sr))
             # detected = np.zeros(nw)
 
-            # Compute the energy curve (a la Jinnai et al. 2012)
-            E = ce.EnergyCurve(C, M)
+            if len(C) > 2*M+1:
+                # Compute the energy curve (a la Jinnai et al. 2012)
+                E = ce.EnergyCurve(C, M)
+            else:
+                break
             # Compute threshold using mean & sd from non-call sections
             # Virginia: changed the base. I'm using resol_sr as a base. Cause I'm looking for detections on windows.
             #This step is not so clear for me
