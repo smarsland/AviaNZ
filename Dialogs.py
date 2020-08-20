@@ -107,16 +107,12 @@ class StartScreen(QDialog):
         self.task = 2
         self.accept()
 
-    def denoise(self):
+    def reviewSeg(self):
         self.task = 3
         self.accept()
 
-    def reviewSeg(self):
-        self.task = 4
-        self.accept()
-
     #def utilities(self):
-        #self.task = 5
+        #self.task = 4
         #self.accept()
 
     def getValues(self):
