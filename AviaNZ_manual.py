@@ -4749,11 +4749,11 @@ class AviaNZ(QMainWindow):
 
     def saveNotestRecogniserCNN(self):
         # actually write out the filter and CNN model
-        modelsrc = os.path.join(self.buildCNNWizard.parameterPage.tmpdir2.name, 'model.json')
-        CNN_name = self.buildCNNWizard.savePage.species + strftime("_%H-%M-%S", gmtime())
-        self.buildCNNWizard.savePage.currfilt["CNN"]["CNN_name"] = CNN_name
+        modelsrc = os.path.join(self.buildCNNWizard.cnntrain.tmpdir2.name, 'model.json')
+        CNN_name = self.buildCNNWizard.cnntrain.species + strftime("_%H-%M-%S", gmtime())
+        self.buildCNNWizard.cnntrain.currfilt["CNN"]["CNN_name"] = CNN_name
         modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
-        weightsrc = self.buildCNNWizard.parameterPage.bestweight
+        weightsrc = self.buildCNNWizard.cnntrain.bestweight
         weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
 
         if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
@@ -4761,14 +4761,14 @@ class AviaNZ(QMainWindow):
                 filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
                 print("Saving a new recogniser", filename)
                 f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.savePage.currfilt))
+                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
                 f.close()
                 # Actually copy the model
                 copyfile(modelsrc, modelfile)
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
-                self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.parameterPage.tmpdir2.cleanup()
+                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
+                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
                 # prompt the user
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nWe strongly recommend testing the recogniser on a separate dataset before actual use.")
                 msg.exec_()
@@ -4776,17 +4776,17 @@ class AviaNZ(QMainWindow):
                 print("ERROR: could not save recogniser because:", e)
         elif self.buildCNNWizard.savePage.saveoption != 'New':
             try:
-                filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.field("filter"))
+                filename = os.path.join(self.filtersDir, self.buildCNNWizard.cnntrain.filterName)
                 print("Updating the existing recogniser ", filename)
                 f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.savePage.currfilt))
+                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
                 f.close()
                 # Actually copy the model
                 copyfile(modelsrc, modelfile)
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
-                self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.parameterPage.tmpdir2.cleanup()
+                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
+                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
                 # prompt the user
                 # msg = SupportClasses_GUI.MessagePopup("d", "Training complete", "Recogniser is ready to use")
                 # msg.exec_()
@@ -4797,11 +4797,11 @@ class AviaNZ(QMainWindow):
 
     def saveTestRecogniserCNN(self):
         # actually write out the filter and CNN model
-        modelsrc = os.path.join(self.buildCNNWizard.parameterPage.tmpdir2.name, 'model.json')
-        CNN_name = self.buildCNNWizard.savePage.species + strftime("_%H-%M-%S", gmtime())
-        self.buildCNNWizard.savePage.currfilt["CNN"]["CNN_name"] = CNN_name
+        modelsrc = os.path.join(self.buildCNNWizard.cnntrain.tmpdir2.name, 'model.json')
+        CNN_name = self.buildCNNWizard.cnntrain.species + strftime("_%H-%M-%S", gmtime())
+        self.buildCNNWizard.cnntrain.currfilt["CNN"]["CNN_name"] = CNN_name
         modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
-        weightsrc = self.buildCNNWizard.parameterPage.bestweight
+        weightsrc = self.buildCNNWizard.cnntrain.bestweight
         weightfile = os.path.join(self.filtersDir, CNN_name + '.h5')
 
         if self.buildCNNWizard.savePage.saveoption == 'New' and (self.buildCNNWizard.savePage.enterFiltName.text() != '' or self.buildCNNWizard.savePage.enterFiltName.text() != '.txt'):
@@ -4809,14 +4809,14 @@ class AviaNZ(QMainWindow):
                 filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.enterFiltName.text())
                 print("Saving a new recogniser", self.filename)
                 f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.savePage.currfilt))
+                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
                 f.close()
                 # Actually copy the model
                 copyfile(modelsrc, modelfile)
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
-                self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.parameterPage.tmpdir2.cleanup()
+                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
+                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
                 # prompt the user
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!", "Training completed!\nProceeding to testing.")
                 msg.exec_()
@@ -4826,17 +4826,17 @@ class AviaNZ(QMainWindow):
                 print("ERROR: could not save recogniser because:", e)
         elif self.buildCNNWizard.savePage.saveoption != 'New':
             try:
-                filename = os.path.join(self.filtersDir, self.buildCNNWizard.savePage.field("filter"))
+                filename = os.path.join(self.filtersDir, self.buildCNNWizard.cnntrain.filterName)
                 print("Updating the existing recogniser ", self.filename)
                 f = open(filename, 'w')
-                f.write(json.dumps(self.buildCNNWizard.savePage.currfilt))
+                f.write(json.dumps(self.buildCNNWizard.cnntrain.currfilt))
                 f.close()
                 # Actually copy the model
                 copyfile(modelsrc, modelfile)
                 copyfile(weightsrc, weightfile)
                 # And remove temp dirs
-                self.buildCNNWizard.parameterPage.tmpdir1.cleanup()
-                self.buildCNNWizard.parameterPage.tmpdir2.cleanup()
+                self.buildCNNWizard.cnntrain.tmpdir1.cleanup()
+                self.buildCNNWizard.cnntrain.tmpdir2.cleanup()
                 # prompt the user
                 msg = SupportClasses_GUI.MessagePopup("d", "Training completed!",
                                                   "Training completed!\nProceeding to testing.")

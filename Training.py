@@ -69,8 +69,8 @@ class CNNtrain:
         self.folderTrain1 = folderTrain1
         self.folderTrain2 = folderTrain2
         self.filterName = recogniser
-        self.annotatedAll = (annotationLevel=='All')
-        print(annotationLevel,self.annotatedAll)
+        self.annotatedAll = annotationLevel
+        print('All ',self.annotatedAll)
 
     #def setP2(self,conf1,conf2):
         #self.userConfident = conf1
@@ -387,9 +387,9 @@ class CNNtrain:
             for ct in range(len(self.calltypes) + 1):
                 # Get min distance to ROC from (0 FPR, 1 TPR)
                 distarr = (np.float64(1) - self.TPRs[ct]) ** 2 + (np.float64(0) - self.FPRs[ct]) ** 2
-                thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)[0]
-                self.bestThr[ct][0] = self.Thrs[thr_min_ind]
-                self.bestThrInd[ct] = thr_min_ind
+                self.thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)[0]
+                self.bestThr[ct][0] = self.Thrs[self.thr_min_ind]
+                self.bestThrInd[ct] = self.thr_min_ind
         return True
 
     def testCT(self, ct, testimages, targets):
@@ -398,11 +398,11 @@ class CNNtrain:
         :return: [thrlist, TPs, FPs, TNs, FNs], ctprob
         '''
 
-        thrs = []
-        TPs = []
-        FPs = []
-        TNs = []
-        FNs = []
+        self.thrs = []
+        self.TPs = []
+        self.FPs = []
+        self.TNs = []
+        self.FNs = []
 
         # Find best weights
         weights = []
@@ -446,13 +446,13 @@ class CNNtrain:
             FN = colct - TP
             TN = np.sum(CM) - FP - FN - TP
 
-            thrs.append(thr)
-            TPs.append(TP)
-            FPs.append(FP)
-            TNs.append(TN)
-            FNs.append(FN)
+            self.thrs.append(thr)
+            self.TPs.append(TP)
+            self.FPs.append(FP)
+            self.TNs.append(TN)
+            self.FNs.append(FN)
 
-        return [thrs, TPs, FPs, TNs, FNs], ctprob
+        return [self.thrs, self.TPs, self.FPs, self.TNs, self.FNs], ctprob
 
     def pred(self, p, thr, ct):
         if p[ct] > thr:
@@ -471,7 +471,7 @@ class CNNtrain:
         CNNdic["optimizer"] = "adam"
         CNNdic["windowInc"] = [self.windowWidth,self.windowInc] #[self.wizard().parameterPage.windowidth, self.wizard().parameterPage.incwidth]
         CNNdic["win"] = [self.imgWidth,self.imgWidth/5] #[self.wizard().parameterPage.imgsec.value() / 100, self.wizard().parameterPage.imgsec.value() / 500]
-        CNNdic["inputdim"] = self.imgSize #self.wizard().parameterPage.imgsize
+        CNNdic["inputdim"] = self.imgsize #self.wizard().parameterPage.imgsize
         output = {}
         thr = []
         for ct in range(len(self.calltypes)):
