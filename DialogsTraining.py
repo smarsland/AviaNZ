@@ -2649,6 +2649,8 @@ class BuildCNNWizard(QWizard):
 
         def validatePage(self):
             self.cnntrain.train()
+            print("Done!!!")
+            return True
 
         def isComplete(self):
             if self.img1.text() == '<no image to show>':

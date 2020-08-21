@@ -427,7 +427,7 @@ class CNNtrain:
         model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
         # Predict and temp plot (just for me)
-        pre = model.predict_proba(testimages)
+        pre = model.predict(testimages)
         ctprob = []
         for i in range(len(targets)):
             if targets[i] == ct:
