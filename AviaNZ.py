@@ -422,8 +422,8 @@ class AviaNZ(QMainWindow):
 
         # "Utilities" menu
         utilMenu = self.menuBar().addMenu("&Utilities")
-        utilMenu.addAction("Excel to annotation", self.excel2Annotation)
-        utilMenu.addAction("XML to annotation", self.tag2Annotation)
+        utilMenu.addAction("Import from Excel", self.excel2Annotation)
+        utilMenu.addAction("Import from Freebird", self.tag2Annotation)
         utilMenu.addAction("Backup annotations", self.backupAnnotations)
         # utilMenu.addAction("Split long recordings", self.splitter)
 
@@ -4992,23 +4992,27 @@ class AviaNZ(QMainWindow):
         values = self.backupAnnotationDialog.getValues()
         if values:
             [src, dst] = values
+            print(src,dst)
         else:
             return
 
-        try:
-            if platform.system() == 'Windows':
-                subprocess.call(['xcopy', src+'\*.data', dst, '/s', '/e'])
-            elif platform.system() == 'Linux' or platform.system() == 'Darwin':     # TODO: zero testing!
-                exclude = '*.wav, *.txt'
-                options = '-arvz'
-                exclusions = ['--exclude="%s"' % x.strip() for x in exclude.split(',')]
-                rsync_command = ['rsync'] + options + exclusions + [src + '/', dst]
-                print(rsync_command)
-                return subprocess.check_call(rsync_command)
-        except Exception as e:
-            print("Warning: Coping failed with error:")
-            print(e)
-            return
+        l = len(src)
+        for root, dirs, files in os.walk(src):
+            for d in dirs:
+                os.mkdir(os.path.join(dst,d))
+            for f in files:
+                if f[-5:].lower() == '.data' or 'corrections' in f:
+                    shutil.copy2(os.path.join(root, f),os.path.join(dst,root[l+1:]))
+        self.backupAnnotationDialog.close()
+        
+        #try:
+            #if platform.system() == 'Windows':
+                #subprocess.call(['xcopy', src+'\*.data', dst, '/s', '/e'])
+            #elif platform.system() == 'Linux' or platform.system() == 'Darwin':     # TODO: zero testing!
+        #except Exception as e:
+            #print("Warning: Coping failed with error:")
+            #print(e)
+            #return
 
     def segmentationDialog(self):
         """ Create the segmentation dialog when the relevant button is pressed.
