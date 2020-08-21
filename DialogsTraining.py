@@ -2133,13 +2133,13 @@ class BuildCNNWizard(QWizard):
             self.speciesCombo = QComboBox()  # fill during browse
             self.speciesCombo.addItems(['Choose recogniser...'])
 
-            rbtn1 = QRadioButton('Annotated some calls')
-            rbtn1.setChecked(True)
-            rbtn1.annt = "Some"
-            rbtn1.toggled.connect(self.onClicked)
-            rbtn2 = QRadioButton('Annotated all calls')
-            rbtn2.annt = "All"
-            rbtn2.toggled.connect(self.onClicked)
+            self.rbtn1 = QRadioButton('Annotated some calls')
+            self.rbtn1.setChecked(True)
+            self.rbtn1.annt = "Some"
+            self.rbtn1.toggled.connect(self.onClicked)
+            self.rbtn2 = QRadioButton('Annotated all calls')
+            self.rbtn2.annt = "All"
+            self.rbtn2.toggled.connect(self.onClicked)
 
             space = QLabel()
             space.setFixedHeight(10)
@@ -2161,8 +2161,8 @@ class BuildCNNWizard(QWizard):
             layout.addWidget(self.trainDirName2, 6, 1)
             layout.addWidget(self.listFilesTrain2, 7, 1)
             layout.addWidget(QLabel('How is your manual annotation?'), 8, 0)
-            layout.addWidget(rbtn1, 9, 0)
-            layout.addWidget(rbtn2, 10, 0)
+            layout.addWidget(self.rbtn1, 9, 0)
+            layout.addWidget(self.rbtn2, 10, 0)
             layout.addWidget(space, 3, 2)
             self.setLayout(layout)
 
@@ -2200,7 +2200,7 @@ class BuildCNNWizard(QWizard):
 
         def isComplete(self):
             if self.speciesCombo.currentText() != "Choose recogniser..." and (self.trainDirName1.text() or self.trainDirName2.text()):
-                self.cnntrain.setP1(self.trainDirName1.text(),self.trainDirName2.text(),self.speciesCombo.currentText(),self.anntlevel)
+                self.cnntrain.setP1(self.trainDirName1.text(),self.trainDirName2.text(),self.speciesCombo.currentText(),self.rbtn2.isChecked())
                 return True
             else:
                 return False
@@ -2734,8 +2734,8 @@ class BuildCNNWizard(QWizard):
                         self.TPR[thr_min_ind], self.FPR[thr_min_ind], self.Precision[thr_min_ind], self.Acc[thr_min_ind]))
 
                 # This will save the best thr
-                self.wizard().parameterPage.bestThr[self.ct][0] = self.thrs[thr_min_ind]
-                self.wizard().parameterPage.bestThrInd[self.ct] = thr_min_ind
+                #self.wizard().parameterPage.bestThr[self.ct][0] = self.cnntrain.thrs[thr_min_ind]
+                #self.wizard().parameterPage.bestThrInd[self.ct] = self.cnntrain.thr_min_ind
 
                 self.completeChanged.emit()
 
@@ -2902,12 +2902,10 @@ class BuildCNNWizard(QWizard):
 
         def initializePage(self):
             self.msgfilter.setText("<b>Current recogniser:</b> %s" % (self.field("filter")))
-            if "CNN" in self.currfilt:
+            if "CNN" in self.cnntrain.currfilt:
                 self.warnfilter.setText("Warning: The recogniser already has a CNN.")
             self.msgspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
             self.rbtn2.setText('Update existing (' + self.field("filter") + ')')
-
-            # TODO: SM: save filter here
 
             self.wizard().saveTestBtn.setVisible(True)
             self.wizard().saveTestBtn.setEnabled(False)
@@ -2930,6 +2928,10 @@ class BuildCNNWizard(QWizard):
         def textChanged(self, text):
             self.refreshCustomBtn()
             self.completeChanged.emit()
+
+        def validatePage(self):
+            self.cnntrain.saveFilter()
+            return True
 
         def cleanupPage(self):
             self.wizard().saveTestBtn.setEnabled(False)
