@@ -51,6 +51,7 @@ import WaveletFunctions
 import AviaNZ_batch
 import Clustering
 import colourMaps
+import SplitAnnotations
 
 import librosa
 import click, webbrowser, copy, math
@@ -425,7 +426,7 @@ class AviaNZ(QMainWindow):
         utilMenu.addAction("Import from Excel", self.excel2Annotation)
         utilMenu.addAction("Import from Freebird", self.tag2Annotation)
         utilMenu.addAction("Backup annotations", self.backupAnnotations)
-        # utilMenu.addAction("Split long recordings", self.splitter)
+        utilMenu.addAction("Split WAV/DATA files", self.launchSplitter)
 
         helpMenu = self.menuBar().addMenu("&Help")
         helpMenu.addAction("Help", self.showHelp, "Ctrl+H")
@@ -449,6 +450,11 @@ class AviaNZ(QMainWindow):
     def showCheatSheet(self):
         """ Show the cheatsheet of sample spectrograms (a pdf file)"""
         webbrowser.open_new(r'http://www.avianz.net/index.php/resources/cheat-sheet/about-cheat-sheet')
+
+    def launchSplitter(self):
+        """ Close the main window, start splitter QMainWindow """
+        print("Switching to AviaNZ Splitter")
+        QApplication.exit(2)
 
     def createFrame(self):
         """ Creates the main window.
@@ -6307,6 +6313,15 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, sdir
         # restart requested:
         if out == 1:
             mainlauncher()
+        # splitter requested:
+        elif out == 2:
+            avianz = SplitAnnotations.SplitData()
+            avianz.show()
+            app.exec_()
+            print("Processing complete, returning to AviaNZ")
+            QApplication.closeAllWindows()
+            # Uncomment this if you want to return to main mode after splitting
+            # mainlauncher()
 
 
 app = QApplication(sys.argv)
