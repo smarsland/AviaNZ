@@ -3,21 +3,18 @@
 # Wrapper script to SplitWav audio splitter.
 # Splits wavs, and AviaNZ-format annotation files.
 
-#### CLEAN IMPORTS
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QMessageBox, QStyle
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QFileDialog, QPushButton, QPlainTextEdit, QWidget, QGridLayout, QSpinBox, QGroupBox, QSizePolicy, QSpacerItem, QLayout, QProgressDialog, QStyle
 from PyQt5.QtCore import QDir, Qt
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtGui import QIcon
 import sys
 import os
 import datetime as dt
 
-sys.path.append('..')
-#import SupportClasses
+# sys.path.append('..')
 from ext import SplitLauncher
 import Segment
+import SupportClasses
 
-## Don't forget to compile the C file beforehand:
-# gcc -fPIC -shared SplitWav.c -o SplitWav.so
 
 class SplitData(QMainWindow):
     def __init__(self):
@@ -33,7 +30,7 @@ class SplitData(QMainWindow):
 
         # menu bar
         fileMenu = self.menuBar()#.addMenu("&File")
-        fileMenu.addAction("About", lambda: MessagePopup("a", "About", ".").exec_())
+        fileMenu.addAction("About", lambda: SupportClasses.MessagePopup("a", "About", ".").exec_())
         fileMenu.addAction("Quit", lambda: QApplication.quit())
         # do we need this?
         # if platform.system() == 'Darwin':
@@ -354,7 +351,7 @@ class SplitData(QMainWindow):
         print("processed %d files" % donefiles)
         QApplication.restoreOverrideCursor()
         if donefiles==totalfiles:
-            msg = MessagePopup("d", "Finished", "Folder processed successfully!")
+            msg = SupportClasses.MessagePopup("d", "Finished", "Folder processed successfully!")
             msg.exec_()
 
 
@@ -433,48 +430,12 @@ class SplitData(QMainWindow):
             all[a].saveJSON(f2)
 
 
-class MessagePopup(QMessageBox):
-    """ Convenience wrapper around QMessageBox.
-        TYPES, based on main icon:
-        w - warning
-        d - done (successful completion)
-        t - thinking (questions)
-        o - other
-        a - about
-    """
-    def __init__(self, type, title, text):
-        super(QMessageBox, self).__init__()
+#### MAIN LAUNCHER, for standalone exe version:
 
-        self.setText(text)
-        self.setWindowTitle(title)
-        if (type=="w"):
-            self.setIconPixmap(QPixmap("img/Owl_warning.png"))
-        elif (type=="d"):
-            self.setIcon(QMessageBox.Information)
-            self.setIconPixmap(QPixmap("img/Owl_done.png"))
-        elif (type=="t"):
-            self.setIcon(QMessageBox.Information)
-            self.setIconPixmap(QPixmap("img/Owl_thinking.png"))
-        elif (type=="a"):
-            # Easy way to set ABOUT text here:
-            self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v2.0.1 (November 2019)")
-            self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
-        elif (type=="o"):
-            self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-
-        self.setWindowIcon(QIcon("img/Avianz.ico"))
-
-        # by default, adding OK button. Can easily be overwritten after creating
-        self.setStandardButtons(QMessageBox.Ok)
-
-
-#### MAIN LAUNCHER
-
-print("Starting AviaNZ WAV splitter")
-app = QApplication(sys.argv)
-splitter = SplitData()
-splitter.show()
-app.exec_()
-print("Processing complete, closing AviaNZ WAV splitter")
-QApplication.closeAllWindows()
+# print("Starting AviaNZ WAV splitter")
+# app = QApplication(sys.argv)
+# splitter = SplitData()
+# splitter.show()
+# app.exec_()
+# print("Processing complete, closing AviaNZ WAV splitter")
+# QApplication.closeAllWindows()
