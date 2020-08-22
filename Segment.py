@@ -192,8 +192,8 @@ class Segment(list):
                     text += str(e)
                     text += "\nWhile trying to remove key "+str(species)+"-"+str(certainty) + " from "+ str(self[4])
                     text += "\nWhich had keys" + str(self.keys)
-                    import SupportClasses
-                    msg = SupportClasses.MessagePopup("w", "ERROR - please report", text)
+                    import SupportClasses_GUI
+                    msg = SupportClasses_GUI.MessagePopup("w", "ERROR - please report", text)
                     msg.exec_()
                 # if that was the last label, flip to Don't Know
                 if len(self[4])==0:

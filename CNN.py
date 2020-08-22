@@ -379,8 +379,9 @@ class CNN:
             save_freq='epoch')
         early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=3, verbose=1, mode='auto')
 
+        # SRM: TODO:!! 50 epochs
         self.history = self.model.fit(training_batch_generator,
-                                      epochs=50,
+                                      epochs=1,
                                       verbose=1,
                                       validation_data=validation_batch_generator,
                                       callbacks=[checkpoint, early])
@@ -487,16 +488,17 @@ class GenerateData:
                     sppSegments = segments.getSpecies(self.species)
                 for segAuto in item[1]:
                     for segAutoi in segAuto:
-                        # print("segAuto", segAutoi)
-                        overlapedwithGT = False
+                        #print("segAuto", segAutoi)
+                        overlappedwithGT = False
                         for ind in sppSegments:
                             segGT = segments[ind]
+                            #print(segGT)
                             if self.Overlap(segGT, segAutoi):
-                                overlapedwithGT = True
+                                overlappedwithGT = True
                                 break
                             else:
                                 continue
-                        if not overlapedwithGT:
+                        if not overlappedwithGT:
                             noiseSegments.append([wavFile, segAutoi, len(self.calltypes)])
         return noiseSegments
 
