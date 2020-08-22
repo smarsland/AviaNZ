@@ -2196,7 +2196,7 @@ class BuildCNNWizard(QWizard):
             radioBtn = self.sender()
             if radioBtn.isChecked():
                 self.anntlevel = radioBtn.annt
-                print("pressed ",self.anntlevel)
+            self.completeChanged.emit()
 
         def isComplete(self):
             if self.speciesCombo.currentText() != "Choose recogniser..." and (self.trainDirName1.text() or self.trainDirName2.text()):
@@ -2287,7 +2287,8 @@ class BuildCNNWizard(QWizard):
             self.certainty1 = True
             self.certainty2 = True
 
-            self.cnntrain.loadData()
+            with pg.BusyCursor():
+                self.cnntrain.readFilter()
 
             # Error checking
 
@@ -2337,7 +2338,13 @@ class BuildCNNWizard(QWizard):
             #     self.msgtdir.setText("\n<b>Manually annotated:</b> %s" % (self.field("testDir")))
 
             # Get training data 
-            self.cnntrain.loadData(self.hasant1)
+            with pg.BusyCursor():
+                self.cnntrain.genSegmentDataset(self.hasant1)
+
+            # TODO: param
+            # We need at least some number of segments from each class to proceed
+            if min(self.cnntrain.trainN) < 5:    
+                print('Warning: Need at least 5 segments from each class to train CNN')
 
             self.msgrecfilter.setText("<b>Recogniser:</b> %s" % (self.field("filter")))
             self.msgrecspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
@@ -2362,23 +2369,24 @@ class BuildCNNWizard(QWizard):
                 self.imgDirwarn.setText('Warning: Free space in the user directory is %.2f GB/ %.2f GB, you may run out of space' % (freeGB, totalbytes))
 
         def cleanupPage(self):
-            self.msgmdir.setText('')
-            self.msgadir.setText('')
-            # self.msgtdir.setText('')
-            # self.msgrec.setText('')
+            pass
+            #self.msgmdir.setText('')
+            #self.msgadir.setText('')
+            ## self.msgtdir.setText('')
+            ## self.msgrec.setText('')
             self.warnnoannt1.setText('')
             self.warnLabel.setText('')
             self.warnnoannt2.setText('')
             # self.warnnoannt3.setText('')
             self.warnoise.setText('')
-            self.msgseg.setText('')
-            self.warnseg.setText('')
-            # self.msgsegtest.setText('')
-            self.msgrecfilter.setText('')
-            self.msgrecspp.setText('')
-            self.msgreccts.setText('')
-            self.msgrecclens.setText('')
-            self.msgrecfs.setText('')
+            #self.msgseg.setText('')
+            #self.warnseg.setText('')
+            ## self.msgsegtest.setText('')
+            #self.msgrecfilter.setText('')
+            #self.msgrecspp.setText('')
+            #self.msgreccts.setText('')
+            #self.msgrecclens.setText('')
+            #self.msgrecfs.setText('')
 
         def isComplete(self):
             # TODO: hard param unclear
@@ -2513,11 +2521,22 @@ class BuildCNNWizard(QWizard):
             #if self.field("testDir"):
                 #self.msgtest1.setText("<b>Test data (Auto processed and reviewed):</b> %s" % (self.field("testDir")))
 
-            if self.cnntrain.mincallength < 6:
-                self.imgtext.setText(str(self.cnntrain.mincallength) + ' sec')
-                self.imgsec.setValue(self.cnntrain.mincallength * 100)
+            #if self.cnntrain.mincallength < 6:
+                #self.imgtext.setText(str(self.cnntrain.mincallength) + ' sec')
+                #self.imgsec.setValue(self.cnntrain.mincallength * 100)
 
+            # Ideally, the image length should be bigger than the max gap between syllables
+            if np.max(self.cnntrain.maxgaps) * 2 <= 6:
+                self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 2) + ' sec')
+                self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 2 * 100)
+            elif np.max(self.cnntrain.maxgaps) * 1.5 <= 6:
+                self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 1.5) + ' sec')
+                self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 1.5 * 100)
+            elif np.max(mincallengths) <= 6:
+                self.imgtext.setText(str(np.max(mincallengths)) + ' sec')
+                self.imgsec.setValue(np.max(mincallengths) * 100)
 
+            self.setWindowInc()
             self.showimg()
             self.completeChanged.emit()
 
@@ -2648,8 +2667,8 @@ class BuildCNNWizard(QWizard):
             # self.imgDir.setText('')
 
         def validatePage(self):
-            self.cnntrain.train()
-            print("Done!!!")
+            with pg.BusyCursor():
+                self.cnntrain.train()
             return True
 
         def isComplete(self):
@@ -2930,7 +2949,8 @@ class BuildCNNWizard(QWizard):
             self.completeChanged.emit()
 
         def validatePage(self):
-            self.cnntrain.saveFilter()
+            with pg.BusyCursor():
+                self.cnntrain.saveFilter()
             return True
 
         def cleanupPage(self):

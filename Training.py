@@ -34,6 +34,7 @@ from sklearn.utils import shuffle
 
 import numpy as np
 import matplotlib.pyplot as plt
+from time import strftime
 
 import SupportClasses
 import SignalProc
@@ -55,12 +56,13 @@ class CNNtrain:
 
         self.CLI = CLI
         if CLI:
-            self.species = recogniser
+            self.filterName = recogniser
             self.folderTrain1 = folderTrain1
             self.folderTrain2 = folderTrain2
             self.imgWidth = imgWidth
             self.autoThr = True
             self.correction = True
+            self.annotatedAll = True
         else:
             self.autoThr = False
             self.correction = False
@@ -70,43 +72,44 @@ class CNNtrain:
         self.folderTrain2 = folderTrain2
         self.filterName = recogniser
         self.annotatedAll = annotationLevel
-        print('All ',self.annotatedAll)
-
-    #def setP2(self,conf1,conf2):
-        #self.userConfident = conf1
-        #self.userAnnotated = conf2
 
     def setP3(self,imgWidth,windowWidth,windowInc):
         self.imgWidth = imgWidth
         self.windowWidth = windowWidth
         self.windowInc = windowInc
 
-    #def setP4(self,thr1,thr2):
-        #self.
     def setP6(self,recogniser):
         self.newFilterName = recogniser
             
-    #def setWidth(self,value):
-        #imgWidth = value
-
     def cliTrain(self):
         # This proceeds very much like the wizard 
             
+        self.readFilter()
         # Load data
-        self.loadData()
+        # Note: no error checking in the CLI version
+        # Find segments belong to each class in the training data
+        self.genSegmentDataset(hasAnnotation=True)
+
+        # TODO: param
+        # We need at least some number of segments from each class to proceed
+        #if min(self.trainN) < 5:    
+            #print('Warning: Need at least 5 segments from each class to train CNN')
 
         # Parameters
         self.checkDisk()
-        self.windowWidth = self.cnntrain.imgsize[0] * 2
-        self.windowInc = int(np.ceil(self.imgsec.value() * self.cnntrain.fs / (self.cnntrain.imgsize[1] - 1)) / 100)
+        self.windowWidth = self.imgsize[0] * 2
+        self.windowInc = int(np.ceil(self.imgWidth * self.fs / (self.imgsize[1] - 1)) )
 
         # Train
         self.train()
 
         self.saveFilter()
 
-    def loadData(self,hasAnnotation=True):
-        self.currfilt = self.FilterDict[self.filterName[:-4]]
+    def readFilter(self):
+        if self.filterName[-4:] is '.txt':
+            self.currfilt = self.FilterDict[self.filterName[:-4]]
+        else:
+            self.currfilt = self.FilterDict[self.filterName]
         #self.currfilt = self.FilterDicts[self.field("filter")[:-4]]
 
         self.fs = self.currfilt["SampleRate"]
@@ -114,15 +117,15 @@ class CNNtrain:
 
         mincallengths = []
         maxcallengths = []
+        self.maxgaps = []
         self.calltypes = []
         for fi in self.currfilt['Filters']:
             self.calltypes.append(fi['calltype'])
             mincallengths.append(fi['TimeRange'][0])
             maxcallengths.append(fi['TimeRange'][1])
+            self.maxgaps.append(fi['TimeRange'][3])
         self.mincallength = np.max(mincallengths)
         self.maxcallength = np.max(maxcallengths)
-
-        # Note: no error checking in the CLI version
 
         print("Manually annotated: %s" % self.folderTrain1)
         print("Auto processed and reviewed: %s" % self.folderTrain2)
@@ -131,14 +134,6 @@ class CNNtrain:
         print("Call types: %s" % self.calltypes)
         print("Call length: %.2f - %.2f sec" % (self.mincallength, self.maxcallength))
         print("Sample rate: %d Hz" % self.fs)
-
-        # Find segments belong to each class - Train data
-        self.genSegmentDataset(hasAnnotation)
-
-        # TODO: param
-        # We need at least some number of segments from each class to proceed
-        if min(self.trainN) < 5:    
-            print('Warning: Need at least 5 segments from each class to train CNN')
 
     def checkDisk(self):
         # Check disk usage
@@ -484,7 +479,27 @@ class CNNtrain:
         print(CNNdic)
         self.currfilt["CNN"] = CNNdic
 
-        # TODO: save it!
+        # write out the filter and CNN model
+        modelsrc = os.path.join(self.tmpdir2.name, 'model.json')
+        CNN_name = self.species + strftime("_%H-%M-%S", gmtime())
+        self.currfilt["CNN"]["CNN_name"] = CNN_name
+        #*
+        modelfile = os.path.join(self.filterdir, CNN_name + '.json')
+        weightsrc = self.bestweight
+        weightfile = os.path.join(self.filterdir, CNN_name + '.h5')
+
+        filename = os.path.join(self.filterdir, self.filterName)
+        print("Updating the existing recogniser ", filename)
+        f = open(filename, 'w')
+        f.write(json.dumps(self.currfilt))
+        f.close()
+        # Actually copy the model
+        copyfile(modelsrc, modelfile)
+        copyfile(weightsrc, weightfile)
+        # And remove temp dirs
+        self.tmpdir1.cleanup()
+        self.tmpdir2.cleanup()
+        print("Recogniser saved, don't forget to test it!")
 
     def cleanSpecies(self, species):
         """ Returns cleaned species name"""
