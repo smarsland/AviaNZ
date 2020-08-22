@@ -219,7 +219,7 @@ class AviaNZ_batchWindow(QMainWindow):
         aboutMenu.addAction("Quit", self.quitPro,"Ctrl+Q")
 
     def showAbout(self):
-        """ Create the About Message Box. Text is set in SupportClasses.MessagePopup"""
+        """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
         msg = SupportClasses_GUI.MessagePopup("a", "About", ".")
         msg.exec_()
         return
@@ -717,7 +717,7 @@ class AviaNZ_reviewAll(QMainWindow):
         aboutMenu.addAction("Quit", self.quitPro,"Ctrl+Q")
 
     def showAbout(self):
-        """ Create the About Message Box. Text is set in SupportClasses.MessagePopup"""
+        """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
         msg = SupportClasses_GUI.MessagePopup("a", "About", ".")
         msg.exec_()
         return

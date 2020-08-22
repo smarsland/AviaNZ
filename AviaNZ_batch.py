@@ -219,9 +219,9 @@ class AviaNZ_batchProcess():
         if not self.CLI and not self.testmode:
             import pyqtgraph as pg
             with pg.BusyCursor():
-                self.mainloop(allwavs,total,speciesStr,filters)  
+                self.mainloop(allwavs,total,speciesStr,filters,settings)  
         else:
-            self.mainloop(allwavs,total,speciesStr,filters)  
+            self.mainloop(allwavs,total,speciesStr,filters,settings)  
 
         # END of processing and exporting. Final cleanup
         if not self.CLI and not self.testmode:
@@ -233,11 +233,14 @@ class AviaNZ_batchProcess():
                 self.log.file.close()
             return(0)
 
-    def mainloop(self,allwavs,total,speciesStr,filters):
+    def mainloop(self,allwavs,total,speciesStr,filters,settings):
         # MAIN PROCESSING starts here
         processingTime = 0
         cleanexit = 0
         cnt = 0
+
+        timeWindow_s = settings[1]
+        timeWindow_e = settings[2]
 
         for filename in allwavs:
             # get remaining run time in min
