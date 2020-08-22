@@ -127,7 +127,8 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         elif training:
             import Training
             if os.path.isdir(sdir1) and os.path.isdir(sdir2) and recogniser in confloader.filters(filterdir).keys() and width>0:
-                training = Training.CNNtrain(configdir,filterdir,sdir1,sdir2,recogniser,width,CLI=true)
+                training = Training.CNNtrain(filterdir,sdir1,sdir2,recogniser,width,CLI=True)
+                training.cliTrain()
                 print("Training complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dirs (-d and -e) and recogniser name (-r) are essential for training")
