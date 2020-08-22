@@ -452,7 +452,7 @@ class Tag2Annotation(QDialog):
         if self.txtDuration.text() and self.txtSession.text():
             return [self.txtSession.text(), self.txtDuration.text()]
         else:
-            msg = SupportClasses.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
+            msg = SupportClasses_GUI.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
             msg.exec_()
             return []
 
@@ -509,7 +509,7 @@ class BackupAnnotation(QDialog):
         if self.txtSrc.text() and self.txtDst.text():
             return [self.txtSrc.text(), self.txtDst.text()]
         else:
-            msg = SupportClasses.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
+            msg = SupportClasses_GUI.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
             msg.exec_()
             return []
 
