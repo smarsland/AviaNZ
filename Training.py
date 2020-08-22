@@ -34,7 +34,7 @@ from sklearn.utils import shuffle
 
 import numpy as np
 import matplotlib.pyplot as plt
-from time import strftime
+from time import strftime, gmtime
 
 import SupportClasses
 import SignalProc
