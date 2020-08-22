@@ -180,5 +180,14 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         # restart requested:
         if out == 1:
             mainlauncher()
+        elif out == 2:
+            import SplitAnnotations
+            avianz = SplitAnnotations.SplitData()
+            avianz.show()
+            app.exec_()
+            print("Processing complete, returning to AviaNZ")
+            QApplication.closeAllWindows()
+            # Uncomment this if you want to return to main mode after splitting
+            # mainlauncher()
 
 mainlauncher()

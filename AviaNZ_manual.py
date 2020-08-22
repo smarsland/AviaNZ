@@ -419,7 +419,7 @@ class AviaNZ(QMainWindow):
         # "Utilities" menu
         utilMenu = self.menuBar().addMenu("&Utilities")
         utilMenu.addAction("Excel to annotation", self.excel2Annotation)
-        # utilMenu.addAction("Split long recordings", self.splitter)
+        utilMenu.addAction("Split WAV/DATA files", self.launchSplitter)
 
         helpMenu = self.menuBar().addMenu("&Help")
         helpMenu.addAction("Help", self.showHelp, "Ctrl+H")
@@ -443,6 +443,11 @@ class AviaNZ(QMainWindow):
     def showCheatSheet(self):
         """ Show the cheatsheet of sample spectrograms (a pdf file)"""
         webbrowser.open_new(r'http://www.avianz.net/index.php/resources/cheat-sheet/about-cheat-sheet')
+
+    def launchSplitter(self):
+        """ Close the main window, start splitter QMainWindow """
+        print("Switching to AviaNZ Splitter")
+        QApplication.exit(2)
 
     def createFrame(self):
         """ Creates the main window.
