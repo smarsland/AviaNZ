@@ -1,5 +1,4 @@
 
-#
 # This is part of the AviaNZ interface
 # Holds most of the code for the various dialog boxes
 # Version 2.0 18/11/19
@@ -29,7 +28,6 @@ import time
 import platform
 import copy
 from shutil import copyfile
-from shutil import disk_usage
 import re
 import json
 import tempfile
@@ -54,11 +52,12 @@ from sklearn.utils import shuffle
 
 import numpy as np
 import colourMaps
-import SupportClasses
+import SupportClasses, SupportClasses_GUI
 import SignalProc
 import WaveletSegment
 import Segment
 import Clustering
+import Training
 import CNN
 import AviaNZ_batch
 
@@ -82,7 +81,7 @@ class BuildRecAdvWizard(QWizard):
             colourNone = QColor(config['ColourNone'][0], config['ColourNone'][1], config['ColourNone'][2], config['ColourNone'][3])
             colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
-            self.listFiles = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
+            self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(225)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
@@ -311,7 +310,7 @@ class BuildRecAdvWizard(QWizard):
             vboxTop.addLayout(hboxBtns)
 
             # set up the images
-            self.flowLayout = SupportClasses.Layout()
+            self.flowLayout = SupportClasses_GUI.Layout()
             self.flowLayout.setMinimumSize(380, 247)
             self.flowLayout.buttonDragged.connect(self.moveSelectedSegs)
             self.flowLayout.layout.setSizeConstraint(QLayout.SetMinimumSize)
@@ -341,9 +340,7 @@ class BuildRecAdvWizard(QWizard):
                 # fs: sampling freq
                 # self.nclasses: number of class_labels
                 self.cluster = Clustering.Clustering([], [], 5)
-                self.segments, fs, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"),
-                                                                                       self.field("species"),
-                                                                                       feature=self.feature)
+                self.segments, fs, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("species"), feature=self.feature)
                 # segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
                 # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
                 #                                                                              self.field("species"),
@@ -644,7 +641,7 @@ class BuildRecAdvWizard(QWizard):
                 #self.cmbUpdateSeg.addItem(newLabel)
                 self.completeChanged.emit()
             else:
-                msg = SupportClasses.MessagePopup("t", "Select", "Select calls to make the new cluster")
+                msg = SupportClasses_GUI.MessagePopup("t", "Select", "Select calls to make the new cluster")
                 msg.exec_()
                 self.completeChanged.emit()
                 return
@@ -721,13 +718,13 @@ class BuildRecAdvWizard(QWizard):
             self.segsChanged = True
             names = [self.tboxes[ID].text() for ID in range(self.nclasses)]
             if len(names) != len(set(names)):
-                msg = SupportClasses.MessagePopup("w", "Name error", "Duplicate cluster names! \nTry again")
+                msg = SupportClasses_GUI.MessagePopup("w", "Name error", "Duplicate cluster names! \nTry again")
                 msg.exec_()
                 self.completeChanged.emit()
                 return
 
             if "(Other)" in names:
-                msg = SupportClasses.MessagePopup("w", "Name error", "Name \"(Other)\" is reserved! \nTry again")
+                msg = SupportClasses_GUI.MessagePopup("w", "Name error", "Name \"(Other)\" is reserved! \nTry again")
                 msg.exec_()
                 self.completeChanged.emit()
                 return
@@ -770,7 +767,7 @@ class BuildRecAdvWizard(QWizard):
                 else:
                     sg = self.sg
 
-                newButton = SupportClasses.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart, self.colourEnd, False, cluster=True)
+                newButton = SupportClasses_GUI.PicButton(1, np.fliplr(sg), sp.data, sp.audioFormat, seg[1][1]-seg[1][0], 0, seg[1][1], self.lut, self.colourStart, self.colourEnd, False, cluster=True)
                 self.picbuttons.append(newButton)
             # (updateButtons will place them in layouts and show them)
 
@@ -1657,7 +1654,7 @@ class TestRecWizard(QWizard):
             colourNone = QColor(config['ColourNone'][0], config['ColourNone'][1], config['ColourNone'][2], config['ColourNone'][3])
             colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
-            self.listFiles = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
+            self.listFiles = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(275)
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
@@ -1742,7 +1739,6 @@ class TestRecWizard(QWizard):
                 self.currfilt = self.wizard().filterlist[self.field("species")[:-4]]
                 self.species = self.currfilt['species']
                 self.sampleRate = self.currfilt['SampleRate']
-                self.calltypes = []
                 for fi in self.currfilt['Filters']:
                     self.calltypes.append(fi['calltype'])
 
@@ -2049,9 +2045,48 @@ class ROCCanvas(FigureCanvas):
         self.figure.canvas.flush_events()
 
 class BuildCNNWizard(QWizard):
+    # Main init of the CNN training wizard
+    def __init__(self, filtdir, config, parent=None):
+        super(BuildCNNWizard, self).__init__()
+        self.setWindowTitle("Train CNN")
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        if platform.system() == 'Linux':
+            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
+        else:
+            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+        self.setWizardStyle(QWizard.ModernStyle)
+        self.setOptions(QWizard.NoBackButtonOnStartPage)
+
+        self.rocpages = []
+
+        self.cnntrain = Training.CNNtrain(filtdir)
+
+        # P1
+        self.browsedataPage = BuildCNNWizard.WPageData(self.cnntrain,config)
+        self.browsedataPage.registerField("trainDir1*", self.browsedataPage.trainDirName1)
+        self.browsedataPage.registerField("trainDir2*", self.browsedataPage.trainDirName2)
+        self.browsedataPage.registerField("filter*", self.browsedataPage.speciesCombo, "currentText", self.browsedataPage.speciesCombo.currentTextChanged)
+        self.addPage(self.browsedataPage)
+
+        # P2
+        self.confirminputPage = BuildCNNWizard.WPageConfirminput(self.cnntrain)
+        self.addPage(self.confirminputPage)
+
+        # P3
+        self.parameterPage = BuildCNNWizard.WPageParameters(self.cnntrain,config)
+        self.addPage(self.parameterPage)
+
+        # add the Save & Test button
+        self.saveTestBtn = QPushButton("Save and Test")
+        self.setButton(QWizard.CustomButton1, self.saveTestBtn)
+        self.setButtonLayout( [QWizard.Stretch, QWizard.BackButton, QWizard.NextButton, QWizard.CustomButton1, QWizard.FinishButton, QWizard.CancelButton])
+        self.setOptions(QWizard.NoBackButtonOnStartPage | QWizard.HaveCustomButton1)
+        self.saveTestBtn.setVisible(False)
+
     # page 1 - select train data
     class WPageData(QWizardPage):
-        def __init__(self, filtdir, config, parent=None):
+        def __init__(self, cnntrain, config, parent=None):
             super(BuildCNNWizard.WPageData, self).__init__(parent)
             self.setTitle('Select data')
             self.setSubTitle('Choose the recogniser that you want to extend with CNN, then select training data.')
@@ -2060,6 +2095,8 @@ class BuildCNNWizard(QWizard):
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
+            self.cnntrain = cnntrain
+
             self.cert1 = 100
             self.cert2 = 100
             self.cert3 = 100
@@ -2067,8 +2104,6 @@ class BuildCNNWizard(QWizard):
             self.splist2 = []
             self.splist3 = []
             self.anntlevel = "Some"
-            self.config = config
-            self.filtdir = filtdir
 
             self.trainDirName1 = QLineEdit()
             self.trainDirName1.setReadOnly(True)
@@ -2082,29 +2117,29 @@ class BuildCNNWizard(QWizard):
             colourNone = QColor(config['ColourNone'][0], config['ColourNone'][1], config['ColourNone'][2], config['ColourNone'][3])
             colourPossibleDark = QColor(config['ColourPossible'][0], config['ColourPossible'][1], config['ColourPossible'][2], 255)
             colourNamed = QColor(config['ColourNamed'][0], config['ColourNamed'][1], config['ColourNamed'][2], config['ColourNamed'][3])
-            self.listFilesTrain2 = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
+            self.listFilesTrain2 = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTrain2.setMinimumWidth(350)
             self.listFilesTrain2.setMinimumHeight(275)
             self.listFilesTrain2.setSelectionMode(QAbstractItemView.NoSelection)
-            self.listFilesTrain1 = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
+            self.listFilesTrain1 = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTrain1.setMinimumWidth(350)
             self.listFilesTrain1.setMinimumHeight(275)
             self.listFilesTrain1.setSelectionMode(QAbstractItemView.NoSelection)
-            self.listFilesTest = SupportClasses.LightedFileList(colourNone, colourPossibleDark, colourNamed)
+            self.listFilesTest = SupportClasses_GUI.LightedFileList(colourNone, colourPossibleDark, colourNamed)
             self.listFilesTest.setMinimumWidth(150)
             self.listFilesTest.setMinimumHeight(275)
             self.listFilesTest.setSelectionMode(QAbstractItemView.NoSelection)
 
-            self.species = QComboBox()  # fill during browse
-            self.species.addItems(['Choose recogniser...'])
+            self.speciesCombo = QComboBox()  # fill during browse
+            self.speciesCombo.addItems(['Choose recogniser...'])
 
-            rbtn1 = QRadioButton('Annotated some calls')
-            rbtn1.setChecked(True)
-            rbtn1.annt = "Some"
-            rbtn1.toggled.connect(self.onClicked)
-            rbtn2 = QRadioButton('Annotated all calls')
-            rbtn2.annt = "All"
-            rbtn2.toggled.connect(self.onClicked)
+            self.rbtn1 = QRadioButton('Annotated some calls')
+            self.rbtn1.setChecked(True)
+            self.rbtn1.annt = "Some"
+            self.rbtn1.toggled.connect(self.onClicked)
+            self.rbtn2 = QRadioButton('Annotated all calls')
+            self.rbtn2.annt = "All"
+            self.rbtn2.toggled.connect(self.onClicked)
 
             space = QLabel()
             space.setFixedHeight(10)
@@ -2113,8 +2148,8 @@ class BuildCNNWizard(QWizard):
             # page layout
             layout = QGridLayout()
             layout.addWidget(QLabel('<b>Recogniser</b>'), 0, 0)
-            layout.addWidget(QLabel("Recogniser that you want to train CNN"), 1, 0)
-            layout.addWidget(self.species, 1, 1)
+            layout.addWidget(QLabel("Recogniser that you want to train CNN for"), 1, 0)
+            layout.addWidget(self.speciesCombo, 1, 1)
             layout.addWidget(space, 2, 0)
             layout.addWidget(QLabel('<b>TRAINING data</b>'), 3, 0)
             layout.addWidget(QLabel('<i>Manually annotated</i>'), 4, 0)
@@ -2126,17 +2161,17 @@ class BuildCNNWizard(QWizard):
             layout.addWidget(self.trainDirName2, 6, 1)
             layout.addWidget(self.listFilesTrain2, 7, 1)
             layout.addWidget(QLabel('How is your manual annotation?'), 8, 0)
-            layout.addWidget(rbtn1, 9, 0)
-            layout.addWidget(rbtn2, 10, 0)
+            layout.addWidget(self.rbtn1, 9, 0)
+            layout.addWidget(self.rbtn2, 10, 0)
             layout.addWidget(space, 3, 2)
             self.setLayout(layout)
 
         def initializePage(self):
-            filternames = [key + ".txt" for key in self.wizard().filterlist.keys()]
-            self.species.addItems(filternames)
+            filternames = [key + ".txt" for key in self.cnntrain.FilterDict.keys()]
+            self.speciesCombo.addItems(filternames)
 
         def browseTrainData2(self):
-            dirName = QFileDialog.getExistingDirectory(self, 'Choose folder with auto-processed and reviewed train data')
+            dirName = QFileDialog.getExistingDirectory(self, 'Choose folder with auto-processed and reviewed training data')
             self.trainDirName2.setText(dirName)
 
             self.listFilesTrain2.fill(dirName, fileName=None, readFmt=False, addWavNum=True, recursive=True)
@@ -2147,7 +2182,7 @@ class BuildCNNWizard(QWizard):
             self.completeChanged.emit()
 
         def browseTrainData1(self):
-            dirName = QFileDialog.getExistingDirectory(self, 'Choose folder with manually annotated train data')
+            dirName = QFileDialog.getExistingDirectory(self, 'Choose folder with manually annotated training data')
             self.trainDirName1.setText(dirName)
 
             self.listFilesTrain1.fill(dirName, fileName=None, readFmt=False, addWavNum=True, recursive=True)
@@ -2161,36 +2196,30 @@ class BuildCNNWizard(QWizard):
             radioBtn = self.sender()
             if radioBtn.isChecked():
                 self.anntlevel = radioBtn.annt
+            self.completeChanged.emit()
 
         def isComplete(self):
-            if self.species.currentText() != "Choose recogniser..." and (self.trainDirName1.text() or self.trainDirName2.text()):
+            if self.speciesCombo.currentText() != "Choose recogniser..." and (self.trainDirName1.text() or self.trainDirName2.text()):
+                self.cnntrain.setP1(self.trainDirName1.text(),self.trainDirName2.text(),self.speciesCombo.currentText(),self.rbtn2.isChecked())
                 return True
             else:
                 return False
 
     # page 2 - data confirm page
     class WPageConfirminput(QWizardPage):
-        def __init__(self, filterdir, config, parent=None):
+        def __init__(self, cnntrain, parent=None):
             super(BuildCNNWizard.WPageConfirminput, self).__init__(parent)
-            self.filtersDir = filterdir
             self.setTitle('Confirm data input')
             self.setSubTitle('When ready, press \"Next\" to start preparing images and train the CNN.')
             self.setMinimumSize(350, 275)
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
-            self.config = config
+            self.cnntrain = cnntrain
             self.certainty1 = True
             self.certainty2 = True
-            self.certainty3 = True
             self.hasant1 = False
             self.hasant2 = False
-            self.hasant3 = False
-            self.correction = False
-            self.trainsegments = []
-            self.trainN = []
-            self.testsegments = []
-            self.testN = []
 
             self.msgmdir = QLabel("")
             self.msgmdir.setFixedWidth(600)
@@ -2257,23 +2286,14 @@ class BuildCNNWizard(QWizard):
         def initializePage(self):
             self.certainty1 = True
             self.certainty2 = True
-            self.ConfigLoader = SupportClasses.ConfigLoader()
-            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir, bats=False)
-            self.currfilt = self.FilterDicts[self.field("filter")[:-4]]
-            self.fs = self.currfilt["SampleRate"]
-            self.species = self.currfilt["species"]
-            mincallengths = []
-            maxcallengths = []
-            self.calltypes = []
-            for fi in self.currfilt['Filters']:
-                self.calltypes.append(fi['calltype'])
-                mincallengths.append(fi['TimeRange'][0])
-                maxcallengths.append(fi['TimeRange'][1])
-            mincallength = np.max(mincallengths)
-            maxcallength = np.max(maxcallengths)
+
+            with pg.BusyCursor():
+                self.cnntrain.readFilter()
+
+            # Error checking
 
             # Check if it already got a CNN model
-            if "CNN" in self.currfilt:
+            if "CNN" in self.cnntrain.currfilt:
                 self.warnLabel.setText("Warning: This recogniser already has a CNN.")
             else:
                 self.warnLabel.setText("")
@@ -2286,8 +2306,8 @@ class BuildCNNWizard(QWizard):
 
             # Check if there are annotations from the target species at all
             if self.field("trainDir1"):
-                if self.species not in self.wizard().browsedataPage.splist1:
-                    warn += "Warning: No annotations of " + self.species + " detected\n"
+                if self.cnntrain.species not in self.wizard().browsedataPage.splist1:
+                    warn += "Warning: No annotations of " + self.cnntrain.species + " detected\n"
                     self.hasant1 = False
                 else:
                     self.hasant1 = True
@@ -2302,8 +2322,8 @@ class BuildCNNWizard(QWizard):
 
             # Check if there are annotations from the target species at all
             if self.field("trainDir2"):
-                if self.species not in self.wizard().browsedataPage.splist2:
-                    warn += "Warning: No annotations of " + self.species + " detected\n"
+                if self.cnntrain.species not in self.wizard().browsedataPage.splist2:
+                    warn += "Warning: No annotations of " + self.cnntrain.species + " detected\n"
                     self.hasant2 = False
                 else:
                     self.hasant2 = True
@@ -2316,147 +2336,69 @@ class BuildCNNWizard(QWizard):
                 self.msgadir.setText("\n<b>Auto processed and reviewed:</b> %s" % (self.field("trainDir2")))
             # if self.field("testDir"):
             #     self.msgtdir.setText("\n<b>Manually annotated:</b> %s" % (self.field("testDir")))
-            self.msgrecfilter.setText("<b>Recogniser:</b> %s" % (self.field("filter")))
-            self.msgrecspp.setText("<b>Species:</b> %s" % (self.species))
-            self.msgreccts.setText("<b>Call types:</b> %s" % (self.calltypes))
-            self.msgrecclens.setText("<b>Call length:</b> %.2f - %.2f sec" % (mincallength, maxcallength))
-            self.msgrecfs.setText("<b>Sample rate:</b> %d Hz" % (self.fs))
 
-            # Find segments belong to each class - Train data
-            self.trainsegments, self.trainN = self.genSegmentDataset()
-            for i in range(len(self.calltypes)):
-                self.msgseg.setText("%s:\t%d\t" % (self.msgseg.text() + self.calltypes[i], self.trainN[i]))
-            self.msgseg.setText("%s:\t%d" % (self.msgseg.text() + "Noise", self.trainN[-1]))
+            # Get training data 
+            with pg.BusyCursor():
+                self.cnntrain.genSegmentDataset(self.hasant1)
+
+            # TODO: param
+            # We need at least some number of segments from each class to proceed
+            if min(self.cnntrain.trainN) < 5:    
+                print('Warning: Need at least 5 segments from each class to train CNN')
+
+            self.msgrecfilter.setText("<b>Recogniser:</b> %s" % (self.field("filter")))
+            self.msgrecspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
+            self.msgreccts.setText("<b>Call types:</b> %s" % (self.cnntrain.calltypes))
+            self.msgrecclens.setText("<b>Call length:</b> %.2f - %.2f sec" % (self.cnntrain.mincallength, self.cnntrain.maxcallength))
+            self.msgrecfs.setText("<b>Sample rate:</b> %d Hz" % (self.cnntrain.fs))
+
+            for i in range(len(self.cnntrain.calltypes)):
+                self.msgseg.setText("%s:\t%d\t" % (self.msgseg.text() + self.cnntrain.calltypes[i], self.cnntrain.trainN[i]))
+            self.msgseg.setText("%s:\t%d" % (self.msgseg.text() + "Noise", self.cnntrain.trainN[-1]))
 
             # We need at least some number of segments from each class to proceed
-            if min(self.trainN) < 5:    # TODO
+            if min(self.cnntrain.trainN) < 5:    # TODO
                 self.warnseg.setText('<b>Warning: Need at least 5 segments from each class to train CNN\n\n</b>')
 
-            if not self.correction and self.wizard().browsedataPage.anntlevel == 'Some':
+            if not self.cnntrain.correction and self.wizard().browsedataPage.anntlevel == 'Some':
                 self.warnoise.setText('Warning: No segments found for Noise class\n(no correction segments/fully (manual) annotations)')
+            
+            freeGB,totalbytes = self.cnntrain.checkDisk()
 
-        def cleanSpecies(self, species):
-            """ Returns cleaned species name"""
-            return re.sub(r'[^A-Za-z0-9()-]', "_", species)
-
-        def genSegmentDataset(self):
-            data = []
-            self.DataGen = CNN.GenerateData(self.currfilt, 0, 0, 0, 0, 0)
-            # Dir1 - manually annotated
-            # Find noise segments if the user is confident about full annotation
-            if self.wizard().browsedataPage.anntlevel == 'All':
-                self.noisedata1 = self.DataGen.findNoisesegments(self.field("trainDir1"))
-                print('----noise data1:')
-                for x in self.noisedata1:
-                    data.append(x)
-            # Call type segments
-            print('----CT data1:')
-            if self.wizard().confirminputPage.hasant1:
-                for i in range(len(self.calltypes)):
-                    ctdata = self.DataGen.findCTsegments(self.field("trainDir1"), i)
-                    print(self.calltypes[i])
-                    for x in ctdata:
-                        data.append(x)
-
-            # Dir2 - auto reviewed
-            # Get noise segments from .corrections
-            if self.field("trainDir2") and os.path.isdir(self.field("trainDir2")) :
-                for root, dirs, files in os.walk(str(self.field("trainDir2"))):
-                    for file in files:
-                        if file.lower().endswith('.wav') and file + '.corrections' in files:
-                            # Read the .correction (from allspecies review)
-                            cfile = os.path.join(root, file + '.corrections')
-                            wavfile = os.path.join(root, file)
-                            try:
-                                f = open(cfile, 'r')
-                                annots = json.load(f)
-                                f.close()
-                            except Exception as e:
-                                print("ERROR: file %s failed to load with error:" % file)
-                                print(e)
-                                return
-                            for seg in annots:
-                                if isinstance(seg, dict):
-                                    continue
-                                if len(seg)!=2:
-                                    print("Warning: old format corrections detected")
-                                    continue
-                                oldlabel = seg[0][4]
-                                # check in cases like: [kiwi] -> [kiwi, morepork]
-                                # (these will be stored in .corrections, but aren't incorrect detections)
-                                newsp = [lab["species"] for lab in seg[1]]
-                                if len(oldlabel)!=1:
-                                    # this was made manually
-                                    print("Warning: ignoring labels with multiple species")
-                                    continue
-                                if oldlabel[0]['species'] == self.species and self.species not in newsp:
-                                    # store this as "noise" calltype
-                                    data.append([wavfile, seg[0][:2], len(self.calltypes)])
-                                    self.correction = True
-
-                        elif file.lower().endswith('.wav') and file + '.corrections_' + self.cleanSpecies(
-                                self.species) in files:
-                            # Read the .correction (from single sp review)
-                            cfile = os.path.join(root, file + '.corrections_' + self.cleanSpecies(self.species))
-                            wavfile = os.path.join(root, file)
-                            try:
-                                f = open(cfile, 'r')
-                                annots = json.load(f)
-                                f.close()
-                            except Exception as e:
-                                print("ERROR: file %s failed to load with error:" % file)
-                                print(e)
-                                return
-                            for seg in annots:
-                                if isinstance(seg, dict):
-                                    continue
-                                else:
-                                    # store this as "noise" calltype
-                                    data.append([wavfile, seg[:2], len(self.calltypes)])
-                                    self.correction = True
-
-            # Call type segments
-            print('----CT data2:')
-            for i in range(len(self.calltypes)):
-                ctdata = self.DataGen.findCTsegments(self.field("trainDir2"), i)
-                print(self.calltypes[i])
-                for x in ctdata:
-                    data.append(x)
-
-            # How many of each class
-            target = np.array([rec[-1] for rec in data])
-            N = [np.sum(target == i) for i in range(len(self.calltypes) + 1)]
-
-            return data, N
+            if freeGB < 10:
+                self.imgDirwarn.setText('Warning: Free space in the user directory is %.2f GB/ %.2f GB, you may run out of space' % (freeGB, totalbytes))
 
         def cleanupPage(self):
-            self.msgmdir.setText('')
-            self.msgadir.setText('')
-            # self.msgtdir.setText('')
-            # self.msgrec.setText('')
+            pass
+            #self.msgmdir.setText('')
+            #self.msgadir.setText('')
+            ## self.msgtdir.setText('')
+            ## self.msgrec.setText('')
             self.warnnoannt1.setText('')
             self.warnLabel.setText('')
             self.warnnoannt2.setText('')
             # self.warnnoannt3.setText('')
             self.warnoise.setText('')
-            self.msgseg.setText('')
-            self.warnseg.setText('')
-            # self.msgsegtest.setText('')
-            self.msgrecfilter.setText('')
-            self.msgrecspp.setText('')
-            self.msgreccts.setText('')
-            self.msgrecclens.setText('')
-            self.msgrecfs.setText('')
+            #self.msgseg.setText('')
+            #self.warnseg.setText('')
+            ## self.msgsegtest.setText('')
+            #self.msgrecfilter.setText('')
+            #self.msgrecspp.setText('')
+            #self.msgreccts.setText('')
+            #self.msgrecclens.setText('')
+            #self.msgrecfs.setText('')
 
         def isComplete(self):
-            if (self.hasant1 or self.hasant2) and self.certainty1 and self.certainty2 and min(self.trainN) >= 10:
+            # TODO: hard param unclear
+            if (self.hasant1 or self.hasant2) and self.certainty1 and self.certainty2 and min(self.cnntrain.trainN) >= 10:
+                #self.cnntrain.setP2((self.hasant1 or self.hasant2) and self.certainty1, self.certainty2 and min(self.cnntrain.trainN) >= 10)
                 return True
             else:
                 return False
 
     # page 3 - set parameters, generate data and train
     class WPageParameters(QWizardPage):
-        def __init__(self, filterdir, config, parent=None):
+        def __init__(self, cnntrain, config,parent=None):
             super(BuildCNNWizard.WPageParameters, self).__init__(parent)
             self.setTitle('Choose call length')
             self.setSubTitle('When ready, press \"Generate CNN images and Train\" to start preparing data for CNN and training.\nThe process may take a long time.')
@@ -2465,16 +2407,10 @@ class BuildCNNWizard(QWizard):
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
+            self.cnntrain = cnntrain
             self.config = config
-            self.filtersDir = filterdir
-            self.imgsize = [256, 256]       # [height, width]
-            self.windowidth = 0
-            self.incwidth = 0
             self.indx = np.ndarray(0)
-            self.tmpdir1 = None
-            self.tmpdir2 = None
-            self.calltypes = []
-            self.species = None
+
             # Make pages to plot ROC for each call type OR automatically select thresholds
             self.redopages = True
 
@@ -2576,45 +2512,23 @@ class BuildCNNWizard(QWizard):
 
         def initializePage(self):
             self.wizard().button(QWizard.NextButton).setDefault(False)
-            self.ConfigLoader = SupportClasses.ConfigLoader()
-            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir,bats=False)
-            self.currfilt = self.FilterDicts[self.field("filter")[:-4]]
-            self.fs = self.currfilt["SampleRate"]
-            self.species = self.currfilt["species"]
-            mincallengths = []
-            maxgaps = []
-            self.calltypes = []
-            for fi in self.currfilt['Filters']:
-                self.calltypes.append(fi['calltype'])
-                mincallengths.append(fi['TimeRange'][0])
-                maxgaps.append(fi['TimeRange'][3])
+            self.msgspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
 
-            self.msgspp.setText("<b>Species:</b> %s" % (self.species))
             if self.field("trainDir1"):
-                self.msgtrain1.setText("<b>Train data (Manually annotated):</b> %s" % (self.field("trainDir1")))
+                self.msgtrain1.setText("<b>Training data (Manually annotated):</b> %s" % (self.field("trainDir1")))
             if self.field("trainDir2"):
-                self.msgtrain2.setText("<b>Train data (Auto processed and reviewed):</b> %s" % (self.field("trainDir2")))
-            if self.field("testDir"):
-                self.msgtest1.setText("<b>Test data (Auto processed and reviewed):</b> %s" % (self.field("testDir")))
+                self.msgtrain2.setText("<b>Training data (Auto processed and reviewed):</b> %s" % (self.field("trainDir2")))
 
             # Ideally, the image length should be bigger than the max gap between syllables
-            if np.max(maxgaps) * 2 <= 6:
-                self.imgtext.setText(str(np.max(maxgaps) * 2) + ' sec')
-                self.imgsec.setValue(np.max(maxgaps) * 2 * 100)
-            elif np.max(maxgaps) * 1.5 <= 6:
-                self.imgtext.setText(str(np.max(maxgaps) * 1.5) + ' sec')
-                self.imgsec.setValue(np.max(maxgaps) * 1.5 * 100)
+            if np.max(self.cnntrain.maxgaps) * 2 <= 6:
+                self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 2) + ' sec')
+                self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 2 * 100)
+            elif np.max(self.cnntrain.maxgaps) * 1.5 <= 6:
+                self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 1.5) + ' sec')
+                self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 1.5 * 100)
             elif np.max(mincallengths) <= 6:
                 self.imgtext.setText(str(np.max(mincallengths)) + ' sec')
                 self.imgsec.setValue(np.max(mincallengths) * 100)
-
-            # Check disk usage
-            totalbytes, usedbytes, freebytes = disk_usage(os.path.expanduser("~"))
-            freeGB = freebytes/1024/1024/1024
-            print('\nFree space in the user directory: %.2f GB/ %.2f GB\n' % (freeGB, totalbytes/1024/1024/2014))
-            if freeGB < 10:
-                print('Warning: You may run out of space in the user directory!')
-                self.imgDirwarn.setText('Warning: Free space in the user directory is %.2f GB/ %.2f GB, you may run out of space' % (freeGB, totalbytes/1024/1024/2014))
 
             self.setWindowInc()
             self.showimg()
@@ -2623,36 +2537,46 @@ class BuildCNNWizard(QWizard):
         def onClicked(self):
             cbutton = self.sender()
             if cbutton.isChecked():
-                self.wizard().autoThr = True
+                self.cnntrain.autoThr = True
             else:
-                self.wizard().autoThr = False
+                self.cnntrain.autoThr = False
             self.redopages = True
             self.completeChanged.emit()
+
+        def loadFile(self, filename, duration=0, offset=0, fs=0):
+            """
+            Read audio file.
+            """
+            if duration == 0:
+                duration = None
+
+            self.cnntrain.sp.readWav(filename, duration, offset)
+            self.cnntrain.sp.resample(fs)
+
+            return self.cnntrain.sp.data
 
         def showimg(self, indices=[]):
             ''' Show example spectrogram (random ct segments from train dataset)
             '''
             i = 0
-            trainsegments = self.wizard().confirminputPage.trainsegments
+            # SM
+            #trainsegments = self.cnntrain.trainsegments
             if len(indices) == 0:
-                target = [rec[-1] for rec in trainsegments]
-                indxs = [list(np.where(np.array(target) == i)[0]) for i in range(len(self.calltypes))]
+                target = [rec[-1] for rec in self.cnntrain.traindata]
+                indxs = [list(np.where(np.array(target) == i)[0]) for i in range(len(self.cnntrain.calltypes))]
                 indxs = [i for sublist in indxs for i in sublist]
                 self.indx = np.random.choice(indxs, 3, replace=False)
             else:
                 self.indx = indices
             for ind in self.indx:
-                audiodata = self.loadFile(filename=trainsegments[ind][0], duration=self.imgsec.value() / 100, offset=trainsegments[ind][1][0], fs=self.fs)
-                sp = SignalProc.SignalProc(window_width=self.windowidth, incr=self.incwidth)
-                sp.data = audiodata
-                sp.sampleRate = self.fs
-                sgRaw = sp.spectrogram(window_width=self.windowidth, incr=self.incwidth)
+                audiodata = self.loadFile(filename=self.cnntrain.traindata[ind][0], duration=self.imgsec.value()/100, offset=self.cnntrain.traindata[ind][1][0], fs=self.cnntrain.fs)
+                self.cnntrain.sp.data = audiodata
+                self.cnntrain.sp.sampleRate = self.cnntrain.fs
+                sgRaw = self.cnntrain.sp.spectrogram(window_width=self.windowidth, incr=self.incwidth)
                 maxsg = np.min(sgRaw)
                 self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
                 self.setColourMap()
-                picbtn = SupportClasses.PicButton(1, np.fliplr(self.sg), sp.data, sp.audioFormat,
-                                                  self.imgsec.value(), 0, 0, self.lut,
-                                                  self.colourStart, self.colourEnd, False,
+                picbtn = SupportClasses_GUI.PicButton(1, np.fliplr(self.sg), self.cnntrain.sp.data, self.cnntrain.sp.audioFormat, self.imgsec.value(), 0, 0, self.lut, self.colourStart, self.colourEnd, False,
                                                   cluster=True)
                 if i == 0:
                     pic = QPixmap.fromImage(picbtn.im1)
@@ -2693,18 +2617,10 @@ class BuildCNNWizard(QWizard):
                         maxsg - minsg) + minsg
             self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
-        def loadFile(self, filename, duration=0, offset=0, fs=0):
-            """
-            Read audio file.
-            """
-            if duration == 0:
-                duration = None
-
-            sp = SignalProc.SignalProc(256, 128)
-            sp.readWav(filename, duration, offset)
-            sp.resample(fs)
-
-            return sp.data
+        def setWindowInc(self):
+            self.windowidth = self.cnntrain.imgsize[0] * 2
+            self.incwidth = int(np.ceil(self.imgsec.value() * self.cnntrain.fs / (self.cnntrain.imgsize[1] - 1)) / 100)
+            print('window and increment set: ', self.windowidth, self.incwidth)
 
         def imglenChange(self, value):
             if value < 10:
@@ -2729,11 +2645,6 @@ class BuildCNNWizard(QWizard):
         #     else:
         #         self.inctext.setText(str(value))
 
-        def setWindowInc(self):
-            self.windowidth = self.imgsize[0] * 2
-            self.incwidth = int(np.ceil(self.imgsec.value() * self.fs / (self.imgsize[1] - 1)) / 100)
-            print('window and increment set: ', self.windowidth, self.incwidth)
-
         # def selectFolder(self):
         #     self.tempdir = QFileDialog.getExistingDirectory(self, 'Select/make an empty folder to hold image data to generate')
         #     self.imgDir.setText(self.tempdir)
@@ -2742,244 +2653,6 @@ class BuildCNNWizard(QWizard):
         #         self.imgDirwarn.setText('<b>Warning: selected folder is not empty, content will be deleted when you proceed</b>')
         #     self.completeChanged.emit()
 
-        # DO ACTUAL TRAINING
-        def validatePage(self):
-            with pg.BusyCursor():
-                # Create temp dir to hold img data and model
-                if self.tmpdir1:
-                    self.tmpdir1.cleanup()
-                if self.tmpdir2:
-                    self.tmpdir2.cleanup()
-                self.tmpdir1 = tempfile.TemporaryDirectory(prefix='CNN_')
-                print('Temporary img dir:', self.tmpdir1.name)
-                self.tmpdir2 = tempfile.TemporaryDirectory(prefix='CNN_')
-                print('Temporary model dir:', self.tmpdir2.name)
-
-                # Find train segments belong to each class
-                self.DataGen = CNN.GenerateData(self.currfilt, self.imgsec.value() / 100,
-                                                self.windowidth,
-                                                self.incwidth,
-                                                self.imgsize[0],
-                                                self.imgsize[1])
-                self.segments = self.wizard().confirminputPage.trainsegments
-
-                print('Generating CNN images...')
-                Nimg = self.genImgDataset(self.segments)
-                print('\nGenerated images:\n')
-                for i in range(len(self.calltypes)):
-                    print("\t%s:\t%d\n" % (self.calltypes[i], Nimg[i]))
-                print("\t%s:\t%d\n" % ("Noise", Nimg[-1]))
-
-                # CNN training
-                cnn = CNN.CNN(self.species, self.calltypes, self.fs, self.imgsec.value() / 100,
-                              self.windowidth, self.incwidth,
-                              self.imgsize[0], self.imgsize[1])
-                batchsize = 32
-
-                # 1. Data augmentation
-                filenames, labels = cnn.getImglist(self.tmpdir1.name)
-                labels = np.argmax(labels, axis=1)
-                ns = [np.shape(np.where(labels == i)[0])[0] for i in range(len(self.calltypes) + 1)]
-                # create image data augmentation generator in-build
-                datagen = ImageDataGenerator(width_shift_range=0.3, fill_mode='nearest')
-                t = 1000
-                # Data augmentation for each call type
-                for ct in range(len(self.calltypes) + 1):
-                    if t - ns[ct] > batchsize:
-                        # load this ct images
-                        samples = cnn.loadCTImg(os.path.join(self.tmpdir1.name, str(ct)))
-                        # prepare iterator
-                        it = datagen.flow(samples, batch_size=batchsize)
-                        # generate samples
-                        batch = it.next()
-                        for j in range(int((t - ns[ct]) / batchsize)):
-                            newbatch = it.next()
-                            batch = np.vstack((batch, newbatch))
-                        # Save augmented data
-                        k = 0
-                        for sgRaw in batch:
-                            np.save(os.path.join(self.tmpdir1.name, str(ct), str(ct) + '_aug' + "%06d" % k + '.npy'),
-                                    sgRaw)
-                            k += 1
-
-                # 2. TRAIN - use custom image generator
-                filenamesall, labelsall = cnn.getImglist(self.tmpdir1.name)
-                filenamesall, labelsall = shuffle(filenamesall, labelsall)
-                X_train_filenames, X_val_filenames, y_train, y_val = train_test_split(filenamesall,
-                                                                                      labelsall, test_size=0.10,
-                                                                                      random_state=1)
-                training_batch_generator = CNN.CustomGenerator(X_train_filenames, y_train, batchsize,
-                                                               self.tmpdir1.name, cnn.imageheight,
-                                                               cnn.imagewidth, 1)
-                validation_batch_generator = CNN.CustomGenerator(X_val_filenames, y_val, batchsize,
-                                                                 self.tmpdir1.name, cnn.imageheight,
-                                                                 cnn.imagewidth, 1)
-                print('Creating CNN architecture...')
-                cnn.createArchitecture()
-
-                print('Training...')
-                cnn.train(modelsavepath=self.tmpdir2.name,
-                          training_batch_generator=training_batch_generator,
-                          validation_batch_generator=validation_batch_generator, batch_size=batchsize)
-                print('Training complete!')
-
-                self.bestThr = [[0, 0] for i in range(len(self.calltypes) + 1)]
-                self.bestThrInd = [0 for i in range(len(self.calltypes) + 1)]
-
-                # 3. Prepare ROC plots
-                print('Generating ROC statistics...')
-                TPs = [0 for i in range(len(self.calltypes) + 1)]
-                FPs = [0 for i in range(len(self.calltypes) + 1)]
-                TNs = [0 for i in range(len(self.calltypes) + 1)]
-                FNs = [0 for i in range(len(self.calltypes) + 1)]
-                CTps = [[] for i in range(len(self.calltypes) + 1)]
-                N = len(filenames)
-                batchsize = 100
-                for i in range(int(np.ceil(N / batchsize))):
-                    imagesb = cnn.loadImgBatch(filenames[i * batchsize:min((i + 1) * batchsize, N)])
-                    labelsb = labels[i * batchsize:min((i + 1) * batchsize, N)]
-                    for ct in range(len(self.calltypes) + 1):
-                        res, ctp = self.testCT(ct, imagesb, labelsb)  # res=[thrlist, TPs, FPs, TNs, FNs]
-                        CTps[ct] += ctp
-                        if TPs[ct] == 0:
-                            TPs[ct] = res[1]
-                            FPs[ct] = res[2]
-                            TNs[ct] = res[3]
-                            FNs[ct] = res[4]
-                        else:
-                            TPs[ct] = [TPs[ct][i] + res[1][i] for i in range(len(TPs[ct]))]
-                            FPs[ct] = [FPs[ct][i] + res[2][i] for i in range(len(FPs[ct]))]
-                            TNs[ct] = [TNs[ct][i] + res[3][i] for i in range(len(TNs[ct]))]
-                            FNs[ct] = [FNs[ct][i] + res[4][i] for i in range(len(FNs[ct]))]
-                self.Thrs = res[0]
-
-                self.TPRs = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
-                self.FPRs = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
-                self.Precisions = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
-                self.Accs = [[0.0 for i in range(len(self.Thrs))] for j in range(len(self.calltypes) + 1)]
-
-                for ct in range(len(self.calltypes) + 1):
-                    self.TPRs[ct] = [TPs[ct][i] / (TPs[ct][i] + FNs[ct][i]) for i in range(len(self.Thrs))]
-                    self.FPRs[ct] = [FPs[ct][i] / (TNs[ct][i] + FPs[ct][i]) for i in range(len(self.Thrs))]
-                    self.Precisions[ct] = [0.0 if (TPs[ct][i] + FPs[ct][i]) == 0 else TPs[ct][i] / (TPs[ct][i] + FPs[ct][i]) for i in range(len(self.Thrs))]
-                    self.Accs[ct] = [(TPs[ct][i] + TNs[ct][i]) / (TPs[ct][i] + TNs[ct][i] + FPs[ct][i] + FNs[ct][i]) for
-                                     i in range(len(self.Thrs))]
-
-                    # Temp plot is saved in train data directory - prediction probabilities for instances of current ct
-                    CTps[ct] = sorted(CTps[ct], key=float)
-                    fig = plt.figure()
-                    ax = plt.axes()
-                    ax.plot(CTps[ct], 'k')
-                    ax.plot(CTps[ct], 'bo')
-                    plt.xlabel('Number of samples')
-                    plt.ylabel('Probability')
-                    if ct == len(self.calltypes):
-                        plt.title('Class: Noise')
-                    else:
-                        plt.title('Class: ' + str(self.calltypes[ct]))
-                    if self.field("trainDir1"):
-                        fig.savefig(os.path.join(self.field("trainDir1"), str(ct) + '.png'))
-                    else:
-                        fig.savefig(os.path.join(self.field("trainDir2"), str(ct) + '.png'))
-                    plt.close()
-
-                # 4. Auto select the upper threshold (fpr = 0)
-                for ct in range(len(self.calltypes) + 1):
-                    try:
-                        self.bestThr[ct][1] = self.Thrs[self.FPRs[ct].index(0.0)]
-                    except:
-                        self.bestThr[ct][1] = self.Thrs[len(self.FPRs) - 1]
-
-                # 5. Auto select lower threshold IF the user asked so
-                if self.wizard().autoThr:
-                    for ct in range(len(self.calltypes) + 1):
-                        # Get min distance to ROC from (0 FPR, 1 TPR)
-                        distarr = (np.float64(1) - self.TPRs[ct]) ** 2 + (np.float64(0) - self.FPRs[ct]) ** 2
-                        thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)[0]
-                        self.bestThr[ct][0] = self.Thrs[thr_min_ind]
-                        self.bestThrInd[ct] = thr_min_ind
-                return True
-
-        def genImgDataset(self, segments):
-            ''' Generate train images'''
-            for ct in range(len(self.calltypes) + 1):
-                os.makedirs(os.path.join(self.tmpdir1.name, str(ct)))
-            self.wizard().parameterPage.imgsize[1], N = self.DataGen.generateFeatures(dirName=self.tmpdir1.name,
-                                                                                      dataset=segments,
-                                                                                      hop=self.imgsec.value() / 500)
-            return N
-
-        def testCT(self, ct, testimages, targets):
-            '''
-            :param ct: integer relevant to call type
-            :return: [thrlist, TPs, FPs, TNs, FNs], ctprob
-            '''
-
-            thrs = []
-            TPs = []
-            FPs = []
-            TNs = []
-            FNs = []
-
-            # Find best weights
-            weights = []
-            epoch = []
-            for r, d, files in os.walk(self.tmpdir2.name):
-                for f in files:
-                    if f.endswith('.h5') and 'weights' in f:
-                        epoch.append(int(f.split('weights.')[-1][:2]))
-                        weights.append(f)
-                j = np.argmax(epoch)
-                weightfile = weights[j]
-            model = os.path.join(self.tmpdir2.name, 'model.json')
-            self.bestweight = os.path.join(self.tmpdir2.name, weightfile)
-            # Load the model and prepare
-            jsonfile = open(model, 'r')
-            loadedmodeljson = jsonfile.read()
-            jsonfile.close()
-            model = model_from_json(loadedmodeljson)
-            # Load weights into new model
-            model.load_weights(self.bestweight)
-            # Compile the model
-            model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-
-            # Predict and temp plot (just for me)
-            pre = model.predict_proba(testimages)
-            ctprob = []
-            for i in range(len(targets)):
-                if targets[i] == ct:
-                    ctprob.append(pre[i][ct])
-
-            # Get the stats over different thr
-            labels = [i for i in range(len(self.calltypes) + 1)]
-            for thr in np.linspace(0.00001, 1, 100):
-                predictions = [self.pred(p, thr=thr, ct=ct) for p in pre]
-                CM = confusion_matrix(predictions, targets, labels=labels)
-                TP = CM[ct][ct]
-                FP = np.sum(CM[ct][:]) - TP
-                colct = 0
-                for i in range(len(self.calltypes) + 1):
-                    colct += CM[i][ct]
-                FN = colct - TP
-                TN = np.sum(CM) - FP - FN - TP
-
-                thrs.append(thr)
-                TPs.append(TP)
-                FPs.append(FP)
-                TNs.append(TN)
-                FNs.append(FN)
-
-            return [thrs, TPs, FPs, TNs, FNs], ctprob
-
-        def pred(self, p, thr, ct):
-            if p[ct] > thr:
-                prediction = ct
-            elif ct == len(self.calltypes):
-                prediction = 0
-            else:
-                prediction = len(self.calltypes)
-            return prediction
-
         def cleanupPage(self):
             self.imgDirwarn.setText('')
             self.img1.setText('')
@@ -2987,17 +2660,23 @@ class BuildCNNWizard(QWizard):
             self.img3.setText('')
             # self.imgDir.setText('')
 
+        def validatePage(self):
+            with pg.BusyCursor():
+                self.cnntrain.train()
+            return True
+
         def isComplete(self):
             if self.img1.text() == '<no image to show>':
                 return False
             if self.redopages:
                 self.redopages = False
                 self.wizard().redoROCPages()
+            self.cnntrain.setP3(self.imgsec.value()/100,self.windowidth,self.incwidth)
             return True
 
     # page 4 - ROC curve
     class WPageROC(QWizardPage):
-        def __init__(self, ct, parent=None):
+        def __init__(self, cnntrain, ct, parent=None):
             super(BuildCNNWizard.WPageROC, self).__init__(parent)
             self.setTitle('Training results')
             self.setSubTitle('Click on the graph at the point where you would like the classifier to trade-off false positives with false negatives. Points closest to the top-left are best.')
@@ -3005,12 +2684,8 @@ class BuildCNNWizard(QWizard):
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
+            self.cnntrain = cnntrain
             self.ct = ct
-            self.thrs = []
-            self.TPR = []
-            self.FPR = []
-            self.Precision = []
-            self.Acc = []
 
             self.lblSpecies = QLabel()
             self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
@@ -3024,11 +2699,11 @@ class BuildCNNWizard(QWizard):
             self.setLayout(self.layout)
 
         def initializePage(self):
-            self.thrs = self.wizard().parameterPage.Thrs
-            self.TPR = self.wizard().parameterPage.TPRs[self.ct]
-            self.FPR = self.wizard().parameterPage.FPRs[self.ct]
-            self.Precision = self.wizard().parameterPage.Precisions[self.ct]
-            self.Acc = self.wizard().parameterPage.Accs[self.ct]
+            self.thrs = self.cnntrain.Thrs
+            self.TPR = self.cnntrain.TPRs[self.ct]
+            self.FPR = self.cnntrain.FPRs[self.ct]
+            self.Precision = self.cnntrain.Precisions[self.ct]
+            self.Acc = self.cnntrain.Accs[self.ct]
 
             # This is the Canvas Widget that displays the plot
             self.figCanvas = ROCCanvas(self)
@@ -3038,11 +2713,11 @@ class BuildCNNWizard(QWizard):
             # self.marker.set_visible(False)
             self.figCanvas.plotmeagain(self.TPR, self.FPR, CNN=True)
 
-            if self.ct == len(self.wizard().parameterPage.calltypes):
+            if self.ct == len(self.cnntrain.calltypes):
                 self.lblCalltype.setText('Noise (treat same as call types)')
             else:
-                self.lblCalltype.setText('Call type: ' + self.wizard().parameterPage.calltypes[self.ct])
-            self.lblSpecies.setText('Species: ' + self.wizard().parameterPage.species)
+                self.lblCalltype.setText('Call type: ' + self.cnntrain.calltypes[self.ct])
+            self.lblSpecies.setText('Species: ' + self.cnntrain.species)
 
             # Figure click handler
             def onclick(event):
@@ -3072,8 +2747,8 @@ class BuildCNNWizard(QWizard):
                         self.TPR[thr_min_ind], self.FPR[thr_min_ind], self.Precision[thr_min_ind], self.Acc[thr_min_ind]))
 
                 # This will save the best thr
-                self.wizard().parameterPage.bestThr[self.ct][0] = self.thrs[thr_min_ind]
-                self.wizard().parameterPage.bestThrInd[self.ct] = thr_min_ind
+                #self.wizard().parameterPage.bestThr[self.ct][0] = self.cnntrain.thrs[thr_min_ind]
+                #self.wizard().parameterPage.bestThrInd[self.ct] = self.cnntrain.thr_min_ind
 
                 self.completeChanged.emit()
 
@@ -3083,21 +2758,23 @@ class BuildCNNWizard(QWizard):
             self.layout.addWidget(self.lblUpdate, 2, 1)
 
         def cleanupPage(self):
-            try:
-                self.wizard().parameterPage.tmpdir1.cleanup()
-                self.wizard().parameterPage.tmpdir2.cleanup()
-            except:
-                pass
+            pass
+            #try:
+                #self.wizard().parameterPage.tmpdir1.cleanup()
+                #self.wizard().parameterPage.tmpdir2.cleanup()
+            #except:
+                #pass
 
         def isComplete(self):
             if self.lblUpdate.text() == '':
                 return False
             else:
+                #self.cnntrain.setP4(self.wizard().parameterPage.bestThr[self.ct][0],self.wizard().parameterPage.bestThrInd[self.ct])
                 return True
 
     # page 5 - Summary
     class WPageSummary(QWizardPage):
-        def __init__(self, filterdir, config, parent=None):
+        def __init__(self, cnntrain, parent=None):
             super(BuildCNNWizard.WPageSummary, self).__init__(parent)
             self.setTitle('Training Summary')
             self.setSubTitle('If you are happy with the CNN performance, press \"Save the Recogniser.\"')
@@ -3105,8 +2782,7 @@ class BuildCNNWizard(QWizard):
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
-            self.config = config
-            self.filtersDir = filterdir
+            self.cnntrain = cnntrain
 
             self.space = QLabel('').setFixedSize(20, 20)
             self.msgfilter = QLabel('')
@@ -3124,27 +2800,19 @@ class BuildCNNWizard(QWizard):
             self.setLayout(self.layout)
 
         def initializePage(self):
-            self.ConfigLoader = SupportClasses.ConfigLoader()
-            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir, bats=False)
-            self.currfilt = self.FilterDicts[self.field("filter")[:-4]]
-            self.species = self.currfilt["species"]
-            self.calltypes = []
-            for fi in self.currfilt['Filters']:
-                self.calltypes.append(fi['calltype'])
-
             self.msgfilter.setText("<b>Current recogniser:</b> %s" % (self.field("filter")))
-            self.msgspp.setText("<b>Species:</b> %s" % (self.species))
+            self.msgspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
 
             row = 3
-            for ct in range(len(self.calltypes)):
-                lblct = QLabel('Call type: ' + self.calltypes[ct])
+            for ct in range(len(self.cnntrain.calltypes)):
+                lblct = QLabel('Call type: ' + self.cnntrain.calltypes[ct])
                 lblct.setStyleSheet("QLabel { color : #808080; font-weight: bold; }")
                 self.layout.addWidget(lblct, row, 0, alignment=Qt.AlignTop)
                 lblctsumy = QLabel('True Positive Rate: %.2f\nFalse Positive Rate: %.2f\nPrecision: %.2f\nAccuracy: %.2f'
-                                   % (self.wizard().parameterPage.TPRs[ct][self.wizard().parameterPage.bestThrInd[ct]],
-                                      self.wizard().parameterPage.FPRs[ct][self.wizard().parameterPage.bestThrInd[ct]],
-                                      self.wizard().parameterPage.Precisions[ct][self.wizard().parameterPage.bestThrInd[ct]],
-                                      self.wizard().parameterPage.Accs[ct][self.wizard().parameterPage.bestThrInd[ct]]))
+                                   % (self.cnntrain.TPRs[ct][self.cnntrain.bestThrInd[ct]],
+                                      self.cnntrain.FPRs[ct][self.cnntrain.bestThrInd[ct]],
+                                      self.cnntrain.Precisions[ct][self.cnntrain.bestThrInd[ct]],
+                                      self.cnntrain.Accs[ct][self.cnntrain.bestThrInd[ct]]))
                 lblctsumy.setStyleSheet("QLabel { color : #808080; }")
                 self.layout.addWidget(self.space, row, 1)
                 self.layout.addWidget(lblctsumy, row, 2)
@@ -3153,7 +2821,7 @@ class BuildCNNWizard(QWizard):
 
         def cleanupPage(self):
             wgts = []
-            for ct in range(len(self.calltypes) ):
+            for ct in range(len(self.cnntrain.calltypes) ):
                 if self.layout.itemAtPosition(ct+3, 0):
                     wgts.append(self.layout.itemAtPosition(ct+3, 0).widget())
                 if self.layout.itemAtPosition(ct+3, 1):
@@ -3168,7 +2836,7 @@ class BuildCNNWizard(QWizard):
 
     # page 6 - Save Filter
     class WPageSave(QWizardPage):
-        def __init__(self, filterdir, config, parent=None):
+        def __init__(self, cnntrain, parent=None):
             super(BuildCNNWizard.WPageSave, self).__init__(parent)
             self.setTitle('Save Recogniser')
             self.setSubTitle('If you are happy with the CNN performance, save the recogniser.')
@@ -3176,8 +2844,7 @@ class BuildCNNWizard(QWizard):
             self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
             self.adjustSize()
 
-            self.config = config
-            self.filtersDir = filterdir
+            self.cnntrain = cnntrain
             self.filterfile = ''
             self.saveoption = 'New'
 
@@ -3186,7 +2853,7 @@ class BuildCNNWizard(QWizard):
             self.listFiles.setSelectionMode(QAbstractItemView.NoSelection)
             self.listFiles.setMinimumWidth(150)
             self.listFiles.setMinimumHeight(200)
-            filtdir = QDir(self.filtersDir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
+            filtdir = QDir(self.cnntrain.filterdir).entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
             for file in filtdir:
                 item = QListWidgetItem(self.listFiles)
                 item.setText(file)
@@ -3219,7 +2886,7 @@ class BuildCNNWizard(QWizard):
             self.msgspp = QLabel('')
             self.msgspp.setStyleSheet("QLabel { color : #808080; }")
 
-            self.rbtn1 = QRadioButton('New recogniser (enter name bellow)')
+            self.rbtn1 = QRadioButton('New recogniser (enter name below)')
             self.rbtn1.setChecked(True)
             self.rbtn1.val = "New"
             self.rbtn1.toggled.connect(self.onClicked)
@@ -3247,40 +2914,11 @@ class BuildCNNWizard(QWizard):
             self.setLayout(layout)
 
         def initializePage(self):
-            self.ConfigLoader = SupportClasses.ConfigLoader()
-            self.FilterDicts = self.ConfigLoader.filters(dir=self.filtersDir)
-            self.currfilt = self.FilterDicts[self.field("filter")[:-4]]
-            self.fs = self.currfilt["SampleRate"]
-            self.species = self.currfilt["species"]
-            self.calltypes = []
-            for fi in self.currfilt['Filters']:
-                self.calltypes.append(fi['calltype'])
-
             self.msgfilter.setText("<b>Current recogniser:</b> %s" % (self.field("filter")))
-            if "CNN" in self.currfilt:
+            if "CNN" in self.cnntrain.currfilt:
                 self.warnfilter.setText("Warning: The recogniser already has a CNN.")
-            self.msgspp.setText("<b>Species:</b> %s" % (self.species))
+            self.msgspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
             self.rbtn2.setText('Update existing (' + self.field("filter") + ')')
-
-            # Add CNN component to the current filter
-            CNNdic = {}
-            CNNdic["CNN_name"] = "CNN_name"
-            CNNdic["loss"] = "binary_crossentropy"
-            CNNdic["optimizer"] = "adam"
-            CNNdic["windowInc"] = [self.wizard().parameterPage.windowidth, self.wizard().parameterPage.incwidth]
-            CNNdic["win"] = [self.wizard().parameterPage.imgsec.value() / 100, self.wizard().parameterPage.imgsec.value() / 500]
-            CNNdic["inputdim"] = self.wizard().parameterPage.imgsize
-            output = {}
-            thr = []
-            for ct in range(len(self.calltypes)):
-                output[str(ct)] = self.calltypes[ct]
-                thr.append(self.wizard().parameterPage.bestThr[ct])
-            output[str(len(self.calltypes))] = "Noise"
-            # thr.append(self.wizard().parameterPage.bestThr[len(self.calltypes)])
-            CNNdic["output"] = output
-            CNNdic["thr"] = thr
-            print(CNNdic)
-            self.currfilt["CNN"] = CNNdic
 
             self.wizard().saveTestBtn.setVisible(True)
             self.wizard().saveTestBtn.setEnabled(False)
@@ -3304,6 +2942,11 @@ class BuildCNNWizard(QWizard):
             self.refreshCustomBtn()
             self.completeChanged.emit()
 
+        def validatePage(self):
+            with pg.BusyCursor():
+                self.cnntrain.saveFilter()
+            return True
+
         def cleanupPage(self):
             self.wizard().saveTestBtn.setEnabled(False)
             self.enterFiltName.setText('')
@@ -3313,54 +2956,14 @@ class BuildCNNWizard(QWizard):
 
         def isComplete(self):
             if self.saveoption == 'New' and self.enterFiltName.text() != '' and self.enterFiltName.text() != '.txt':
+                self.cnntrain.setP6(self.enterFiltName.text())
                 return True
             elif self.saveoption == "Update":
+                # SM
+                self.cnntrain.setP6(self.enterFiltName.text())
                 return True
             else:
                 return False
-
-
-    # Main init of the CNN training wizard
-    def __init__(self, filtdir, config, parent=None):
-        super(BuildCNNWizard, self).__init__()
-        self.setWindowTitle("Train CNN")
-        self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
-        if platform.system() == 'Linux':
-            self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
-        else:
-            self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
-        self.setWizardStyle(QWizard.ModernStyle)
-        self.setOptions(QWizard.NoBackButtonOnStartPage)
-
-        self.filtdir = filtdir
-        self.config = config
-        cl = SupportClasses.ConfigLoader()
-        self.filterlist = cl.filters(filtdir, bats=False)
-
-        self.browsedataPage = BuildCNNWizard.WPageData(self.filtdir, self.config)
-        self.browsedataPage.registerField("trainDir1*", self.browsedataPage.trainDirName1)
-        self.browsedataPage.registerField("trainDir2*", self.browsedataPage.trainDirName2)
-        self.browsedataPage.registerField("filter*", self.browsedataPage.species, "currentText", self.browsedataPage.species.currentTextChanged)
-        self.addPage(self.browsedataPage)
-
-        self.confirminputPage = BuildCNNWizard.WPageConfirminput(self.filtdir, self.config)
-        self.addPage(self.confirminputPage)
-
-        self.parameterPage = BuildCNNWizard.WPageParameters(self.filtdir, self.config)
-        self.addPage(self.parameterPage)
-
-        # add the Save & Test button
-        self.saveTestBtn = QPushButton("Save and Test")
-        self.setButton(QWizard.CustomButton1, self.saveTestBtn)
-        self.setButtonLayout(
-            [QWizard.Stretch, QWizard.BackButton, QWizard.NextButton, QWizard.CustomButton1, QWizard.FinishButton,
-             QWizard.CancelButton])
-        self.setOptions(QWizard.NoBackButtonOnStartPage | QWizard.HaveCustomButton1)
-        self.saveTestBtn.setVisible(False)
-
-        self.rocpages = []
-        self.autoThr = False
 
     def redoROCPages(self):
         # clean any existing pages
@@ -3369,19 +2972,18 @@ class BuildCNNWizard(QWizard):
             self.removePage(page)
         self.rocpages = []
 
-        if not self.autoThr:
-            for i in range(len(self.parameterPage.calltypes)):
-                print("adding ROC page for class:", self.parameterPage.calltypes[i])
-                page4 = BuildCNNWizard.WPageROC(i)
+        if not self.cnntrain.autoThr:
+            for i in range(len(self.cnntrain.calltypes)):
+                print("adding ROC page for class:", self.cnntrain.calltypes[i])
+                page4 = BuildCNNWizard.WPageROC(self.cnntrain,i)
                 pageid = self.addPage(page4)
                 self.rocpages.append(pageid)
-                # self.addPage(page4)
 
-        self.summaryPage = BuildCNNWizard.WPageSummary(self.filtdir, self.config)
+        self.summaryPage = BuildCNNWizard.WPageSummary(self.cnntrain)
         pageid = self.addPage(self.summaryPage)
         self.rocpages.append(pageid)
 
-        self.savePage = BuildCNNWizard.WPageSave(self.filtdir, self.config)
+        self.savePage = BuildCNNWizard.WPageSave(self.cnntrain)
         pageid = self.addPage(self.savePage)
         self.rocpages.append(pageid)
 
@@ -3395,11 +2997,12 @@ class BuildCNNWizard(QWizard):
             self.removePage(page)
         self.rocpages = []
 
-        self.summaryPage = BuildCNNWizard.WPageSummary(self.filtdir, self.config)
+        self.summaryPage = BuildCNNWizard.WPageSummary(self.cnntrain)
         self.addPage(self.summaryPage)
 
-        self.savePage = BuildCNNWizard.WPageSave(self.filtdir, self.config)
+        self.savePage = BuildCNNWizard.WPageSave(self.cnntrain)
         self.addPage(self.savePage)
 
         self.parameterPage.setFinalPage(False)
         self.parameterPage.completeChanged.emit()
+

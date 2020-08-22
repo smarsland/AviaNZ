@@ -30,16 +30,25 @@ import copy
 import gc
 
 from PyQt5.QtGui import QImage
-from PyQt5.QtMultimedia import QAudioFormat
+
+QtMM = True
+try:
+    from PyQt5.QtMultimedia import QAudioFormat
+except ImportError:
+    print("No QtMM")
+    QtMM = False
+
 # for multitaper spec:
-from spectrum import dpss, pmtm
-# for spec derivs:
-from spectrum import dpss
+specExtra = True
+try:
+    from spectrum import dpss, pmtm
+except ImportError:
+    specExtra = False
+    
 # for fund freq
 from scipy.signal import medfilt
 # for impulse masking
 from itertools import chain, repeat
-
 
 class SignalProc:
     """ This class reads and holds the audiodata and spectrogram, to be used in the main interface.
@@ -57,10 +66,13 @@ class SignalProc:
         self.data = []
 
         # only accepting wav files of this format
-        self.audioFormat = QAudioFormat()
-        self.audioFormat.setCodec("audio/pcm")
-        self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
-        self.audioFormat.setSampleType(QAudioFormat.SignedInt)
+        if QtMM:
+            self.audioFormat = QAudioFormat()
+            self.audioFormat.setCodec("audio/pcm")
+            self.audioFormat.setByteOrder(QAudioFormat.LittleEndian)
+            self.audioFormat.setSampleType(QAudioFormat.SignedInt)
+        #else:
+            #self.audioFormat = {}
 
     def readWav(self, file, len=None, off=0, silent=False):
         """ Args the same as for wavio.read: filename, length in seconds, offset in seconds. """
@@ -70,18 +82,26 @@ class SignalProc:
         # take only left channel
         if np.shape(np.shape(self.data))[0] > 1:
             self.data = self.data[:, 0]
-        self.audioFormat.setChannelCount(1)
+        if QtMM:
+            self.audioFormat.setChannelCount(1)
+        #else:
+            #self.audioFormat['channelCount'] = 1
 
         # force float type
         if self.data.dtype != 'float':
             self.data = self.data.astype('float')
-        self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
 
         # total file length in s read from header (useful for paging)
         self.fileLength = wavobj.nframes
 
         self.sampleRate = wavobj.rate
-        self.audioFormat.setSampleRate(self.sampleRate)
+
+        if QtMM:
+            self.audioFormat.setSampleSize(wavobj.sampwidth * 8)
+            self.audioFormat.setSampleRate(self.sampleRate)
+        #else:
+            #self.audioFormat['sampleSize'] = wavobj.sampwidth * 8
+            #self.audioFormat['sampleRate'] = self.sampleRate
 
         # *Freq sets hard bounds, *Show can limit the spec display
         self.minFreq = 0
@@ -90,7 +110,10 @@ class SignalProc:
         self.maxFreqShow = min(self.maxFreq, self.maxFreqShow)
 
         if not silent:
-            print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
+            if QtMM:
+                print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat.channelCount(), self.audioFormat.sampleRate(), self.audioFormat.sampleSize()))
+            #else:
+                #print("Detected format: %d channels, %d Hz, %d bit samples" % (self.audioFormat['channelCount'], self.audioFormat['sampleRate'], self.audioFormat['sampleSize']))
 
     def readBmp(self, file, len=None, off=0, silent=False, rotate=True):
         """ Reads DOC-standard bat recordings in 8x row-compressed BMP format.
@@ -141,7 +164,7 @@ class SignalProc:
             print(np.median(img2[-1,:]))
             return(1)
 
-        # Could skip that for visuaal mode - maybe useful for establishing contrast?
+        # Could skip that for visual mode - maybe useful for establishing contrast?
         img2[-1, :] = 254  # lowest freq bin is 0, flip that
         img2 = 255 - img2  # reverse value having the black as the most intense
         img2 = img2/np.max(img2)  # normalization
@@ -173,9 +196,14 @@ class SignalProc:
 
         self.sg = img2
 
-        self.audioFormat.setChannelCount(0)
-        self.audioFormat.setSampleSize(0)
-        self.audioFormat.setSampleRate(self.sampleRate)
+        if QtMM:
+            self.audioFormat.setChannelCount(0)
+            self.audioFormat.setSampleSize(0)
+            self.audioFormat.setSampleRate(self.sampleRate)
+        #else:
+            #self.audioFormat['channelCount'] = 0
+            #self.audioFormat['sampleSize'] = 0
+            #self.audioFormat['sampleRate'] = self.sampleRate
 
         self.minFreq = 0
         self.maxFreq = self.sampleRate //2
@@ -197,7 +225,10 @@ class SignalProc:
         self.data = librosa.core.audio.resample(self.data, self.sampleRate, target)
 
         self.sampleRate = target
-        self.audioFormat.setSampleRate(target)
+        if QtMM:
+            self.audioFormat.setSampleRate(target)
+        #else:
+            #self.audioFormat['sampleRate'] = target
 
         self.minFreq = 0
         self.maxFreq = self.sampleRate // 2
@@ -277,6 +308,11 @@ class SignalProc:
             print("ERROR: attempted to calculate spectrogram without audiodata")
             return
 
+        #S = librosa.feature.melspectrogram(self.data, sr=self.sampleRate, power=1)
+        #log_S = librosa.amplitude_to_db(S, ref=np.max)
+        #self.sg = librosa.pcen(S * (2**31))
+        #return self.sg.T
+
         if window_width is None:
             window_width = self.window_width
         if incr is None:
@@ -334,16 +370,19 @@ class SignalProc:
 
         starts = range(0, len(self.sg) - window_width, incr)
         if multitaper:
-            [tapers, eigen] = dpss(window_width, 2.5, 4)
-            counter = 0
-            out = np.zeros((len(starts),window_width // 2))
-            for start in starts:
-                Sk, weights, eigen = pmtm(self.sg[start:start + window_width], v=tapers, e=eigen, show=False)
-                Sk = abs(Sk)**2
-                Sk = np.mean(Sk.T * weights, axis=1)
-                out[counter:counter + 1,:] = Sk[window_width // 2:].T
-                counter += 1
-            self.sg = np.fliplr(out)
+            if specExtra:
+                [tapers, eigen] = dpss(window_width, 2.5, 4)
+                counter = 0
+                out = np.zeros((len(starts),window_width // 2))
+                for start in starts:
+                    Sk, weights, eigen = pmtm(self.sg[start:start + window_width], v=tapers, e=eigen, show=False)
+                    Sk = abs(Sk)**2
+                    Sk = np.mean(Sk.T * weights, axis=1)
+                    out[counter:counter + 1,:] = Sk[window_width // 2:].T
+                    counter += 1
+                self.sg = np.fliplr(out)
+            else:
+                print("Option not available")
         else:
             if need_even:
                 starts = np.hstack((starts, np.zeros((window_width - len(self.sg) % window_width),dtype=int)))
@@ -672,6 +711,9 @@ class SignalProc:
         """ Compute the spectral derivative """
         if self.data is None or len(self.data)==0:
             print("ERROR: attempted to calculate spectrogram without audiodata")
+            return
+        if not selfExtra:
+            print("Option not available")
             return
 
         # Compute the set of multi-tapered spectrograms
