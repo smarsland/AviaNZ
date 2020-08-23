@@ -348,6 +348,18 @@ class ConfigLoader(object):
             msg.exec_()
             return None
 
+    def learningParams(self, file):
+        print("Loading software settings from file %s" % file)
+        try:
+            config = json.load(open(file))
+            return config
+        except ValueError as e:
+            # if JSON looks corrupt, quit:
+            print(e)
+            msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
+            msg.exec_()
+            sys.exit()
+
     # Dumps the provided JSON array to the corresponding bird file.
     def blwrite(self, content, file, configdir):
         print("Updating species list in file %s" % file)

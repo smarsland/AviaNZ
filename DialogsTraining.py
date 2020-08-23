@@ -2046,7 +2046,7 @@ class ROCCanvas(FigureCanvas):
 
 class BuildCNNWizard(QWizard):
     # Main init of the CNN training wizard
-    def __init__(self, filtdir, config, parent=None):
+    def __init__(self, filtdir, config, configdir, parent=None):
         super(BuildCNNWizard, self).__init__()
         self.setWindowTitle("Train CNN")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -2060,7 +2060,7 @@ class BuildCNNWizard(QWizard):
 
         self.rocpages = []
 
-        self.cnntrain = Training.CNNtrain(filtdir)
+        self.cnntrain = Training.CNNtrain(configdir,filtdir)
 
         # P1
         self.browsedataPage = BuildCNNWizard.WPageData(self.cnntrain,config)
@@ -2070,7 +2070,7 @@ class BuildCNNWizard(QWizard):
         self.addPage(self.browsedataPage)
 
         # P2
-        self.confirminputPage = BuildCNNWizard.WPageConfirminput(self.cnntrain)
+        self.confirminputPage = BuildCNNWizard.WPageConfirminput(self.cnntrain,configdir)
         self.addPage(self.confirminputPage)
 
         # P3
@@ -2207,7 +2207,7 @@ class BuildCNNWizard(QWizard):
 
     # page 2 - data confirm page
     class WPageConfirminput(QWizardPage):
-        def __init__(self, cnntrain, parent=None):
+        def __init__(self, cnntrain, configdir, parent=None):
             super(BuildCNNWizard.WPageConfirminput, self).__init__(parent)
             self.setTitle('Confirm data input')
             self.setSubTitle('When ready, press \"Next\" to start preparing images and train the CNN.')
@@ -2220,6 +2220,8 @@ class BuildCNNWizard(QWizard):
             self.certainty2 = True
             self.hasant1 = False
             self.hasant2 = False
+            cl = SupportClasses.ConfigLoader()
+            self.LearningDict = cl.learningParams(os.path.join(configdir,"LearningParams.txt"))
 
             self.msgmdir = QLabel("")
             self.msgmdir.setFixedWidth(600)
@@ -2341,11 +2343,6 @@ class BuildCNNWizard(QWizard):
             with pg.BusyCursor():
                 self.cnntrain.genSegmentDataset(self.hasant1)
 
-            # TODO: param
-            # We need at least some number of segments from each class to proceed
-            if min(self.cnntrain.trainN) < 5:    
-                print('Warning: Need at least 5 segments from each class to train CNN')
-
             self.msgrecfilter.setText("<b>Recogniser:</b> %s" % (self.field("filter")))
             self.msgrecspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
             self.msgreccts.setText("<b>Call types:</b> %s" % (self.cnntrain.calltypes))
@@ -2357,8 +2354,9 @@ class BuildCNNWizard(QWizard):
             self.msgseg.setText("%s:\t%d" % (self.msgseg.text() + "Noise", self.cnntrain.trainN[-1]))
 
             # We need at least some number of segments from each class to proceed
-            if min(self.cnntrain.trainN) < 5:    # TODO
-                self.warnseg.setText('<b>Warning: Need at least 5 segments from each class to train CNN\n\n</b>')
+            if min(self.cnntrain.trainN) < self.LearningDict['minPerClass']:    
+                print('Warning: Need at least %d segments from each class to train CNN' % self.LearningDict['minPerClass'])
+                self.warnseg.setText('<b>Warning: Need at least %d segments from each class to train CNN\n\n</b>' % self.LearningDict['minPerClass'])
 
             if not self.cnntrain.correction and self.wizard().browsedataPage.anntlevel == 'Some':
                 self.warnoise.setText('Warning: No segments found for Noise class\n(no correction segments/fully (manual) annotations)')
@@ -2389,8 +2387,7 @@ class BuildCNNWizard(QWizard):
             #self.msgrecfs.setText('')
 
         def isComplete(self):
-            # TODO: hard param unclear
-            if (self.hasant1 or self.hasant2) and self.certainty1 and self.certainty2 and min(self.cnntrain.trainN) >= 10:
+            if (self.hasant1 or self.hasant2) and self.certainty1 and self.certainty2 and min(self.cnntrain.trainN) >= self.LearningDict['minPerClass']:
                 #self.cnntrain.setP2((self.hasant1 or self.hasant2) and self.certainty1, self.certainty2 and min(self.cnntrain.trainN) >= 10)
                 return True
             else:

@@ -86,7 +86,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             sys.exit()
 
     # check and if needed copy any other necessary files
-    necessaryFiles = ["ListCommonBirds.txt", "ListDOCBirds.txt", "ListBats.txt"]
+    necessaryFiles = ["ListCommonBirds.txt", "ListDOCBirds.txt", "ListBats.txt", "LearningParams.txt"]
     for f in necessaryFiles:
         if not os.path.isfile(os.path.join(configdir, f)):
             print("File %s not found in config dir, providing default" % f)
@@ -126,7 +126,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         elif training:
             import Training
             if os.path.isdir(sdir1) and os.path.isdir(sdir2) and recogniser in confloader.filters(filterdir).keys() and width>0:
-                training = Training.CNNtrain(filterdir,sdir1,sdir2,recogniser,width,CLI=True)
+                training = Training.CNNtrain(configdir,filterdir,sdir1,sdir2,recogniser,width,CLI=True)
                 training.cliTrain()
                 print("Training complete, closing AviaNZ")
             else:
