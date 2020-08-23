@@ -17,7 +17,7 @@ Windows binaries are available at http://www.avianz.net.
 To install from source, follow the Linux instructions.
 
 ## macOS
-An installer script is availabe at http://www.avianz.net.
+An installer script is available at http://www.avianz.net.
 To install from source, follow the Linux instructions.
 
 ## Linux
