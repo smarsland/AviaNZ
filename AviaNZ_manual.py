@@ -4712,7 +4712,7 @@ class AviaNZ(QMainWindow):
         """Listener for 'Build a CNN'
         """
         self.saveSegments()
-        self.buildCNNWizard = DialogsTraining.BuildCNNWizard(self.filtersDir, self.config)
+        self.buildCNNWizard = DialogsTraining.BuildCNNWizard(self.filtersDir, self.config, self.configdir)
         self.buildCNNWizard.button(3).clicked.connect(self.saveNotestRecogniserCNN)
         self.buildCNNWizard.saveTestBtn.clicked.connect(self.saveTestRecogniserCNN)
         self.buildCNNWizard.activateWindow()

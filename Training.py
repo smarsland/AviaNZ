@@ -42,15 +42,15 @@ import CNN
 
 class CNNtrain:
 
-    def __init__(self,filterdir,folderTrain1=None,folderTrain2=None,recogniser=None,imgWidth=0,CLI=False):
+    def __init__(self,configdir,filterdir,folderTrain1=None,folderTrain2=None,recogniser=None,imgWidth=0,CLI=False):
 
         self.filterdir = filterdir
         cl = SupportClasses.ConfigLoader()
         self.FilterDict = cl.filters(filterdir, bats=False)
-        # TODO: hard-coded params
-        self.sp = SignalProc.SignalProc(256, 128)
+        self.LearningDict = cl.learningParams(os.path.join(configdir,"LearningParams.txt"))
+        self.sp = SignalProc.SignalProc(self.LearningDict['sgramWindowWidth'], self.LearningDict['sgramHop'])
 
-        self.imgsize = [256, 256]
+        self.imgsize = [self.LearningDict['imgX'], self.LearningDict['imgY']]
         self.tmpdir1 = False
         self.tmpdir2 = False
 
@@ -90,14 +90,8 @@ class CNNtrain:
         # Find segments belong to each class in the training data
         self.genSegmentDataset(hasAnnotation=True)
 
-        # TODO: param
-        # We need at least some number of segments from each class to proceed
-        #if min(self.trainN) < 5:    
-            #print('Warning: Need at least 5 segments from each class to train CNN')
-
-        # Parameters
         self.checkDisk()
-        self.windowWidth = self.imgsize[0] * 2
+        self.windowWidth = self.imgsize[0] * self.LearningDict['windowScaling']
         self.windowInc = int(np.ceil(self.imgWidth * self.fs / (self.imgsize[1] - 1)) )
 
         # Train
@@ -106,11 +100,10 @@ class CNNtrain:
         self.saveFilter()
 
     def readFilter(self):
-        if self.filterName[-4:] is '.txt':
+        if self.filterName.lower().endswith('.txt'):
             self.currfilt = self.FilterDict[self.filterName[:-4]]
         else:
             self.currfilt = self.FilterDict[self.filterName]
-        #self.currfilt = self.FilterDicts[self.field("filter")[:-4]]
 
         self.fs = self.currfilt["SampleRate"]
         self.species = self.currfilt["species"]
@@ -230,13 +223,11 @@ class CNNtrain:
         target = np.array([rec[-1] for rec in self.traindata])
         self.trainN = [np.sum(target == i) for i in range(len(self.calltypes) + 1)]
 
-    # TODO: hop param
     def genImgDataset(self):
         ''' Generate training images'''
         for ct in range(len(self.calltypes) + 1):
             os.makedirs(os.path.join(self.tmpdir1.name, str(ct)))
-        self.imgsize[1], self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=self.imgWidth/5)
-        #self.wizard().parameterPage.imgsize[1], N = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=segments, hop=self.imgsec.value() / 500)
+        self.imgsize[1], self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=self.imgWidth/self.LearningDict['hopScaling'])
 
     def train(self):
         # Create temp dir to hold img data and model
@@ -250,10 +241,7 @@ class CNNtrain:
         print('Temporary model dir:', self.tmpdir2.name)
 
         # Find train segments belong to each class
-        # TODO: params here!
         self.DataGen = CNN.GenerateData(self.currfilt, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1])
-        # TODO
-        #self.segments = self.wizard().confirminputPage.trainsegments
 
         print('Generating CNN images...')
         self.genImgDataset()
@@ -265,8 +253,6 @@ class CNNtrain:
         # CNN training
         cnn = CNN.CNN(self.species, self.calltypes, self.fs, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1])
         #cnn = CNN.CNN(self.species, self.calltypes, self.fs, self.imgsec.value() / 100, self.windowidth, self.incwidth, self.imgsize[0], self.imgsize[1])
-        # TODO: hard-coded parameters?
-        batchsize = 32
 
         # 1. Data augmentation
         filenames, labels = cnn.getImglist(self.tmpdir1.name)
@@ -274,18 +260,16 @@ class CNNtrain:
         ns = [np.shape(np.where(labels == i)[0])[0] for i in range(len(self.calltypes) + 1)]
         # create image data augmentation generator in-build
         datagen = ImageDataGenerator(width_shift_range=0.3, fill_mode='nearest')
-        # TODO
-        t = 1000
         # Data augmentation for each call type
         for ct in range(len(self.calltypes) + 1):
-            if t - ns[ct] > batchsize:
+            if self.LearningDict['t'] - ns[ct] > self.LearningDict['batchsize']:
                 # load this ct images
                 samples = cnn.loadCTImg(os.path.join(self.tmpdir1.name, str(ct)))
                 # prepare iterator
-                it = datagen.flow(samples, batch_size=batchsize)
+                it = datagen.flow(samples, batch_size=self.LearningDict['batchsize'])
                 # generate samples
                 batch = it.next()
-                for j in range(int((t - ns[ct]) / batchsize)):
+                for j in range(int((self.LearningDict['t'] - ns[ct]) / self.LearningDict['batchsize'])):
                     newbatch = it.next()
                     batch = np.vstack((batch, newbatch))
                 # Save augmented data
@@ -298,16 +282,16 @@ class CNNtrain:
         # 2. TRAIN - use custom image generator
         filenamesall, labelsall = cnn.getImglist(self.tmpdir1.name)
         filenamesall, labelsall = shuffle(filenamesall, labelsall)
-        # TODO: params?
-        X_train_filenames, X_val_filenames, y_train, y_val = train_test_split(filenamesall, labelsall, test_size=0.10, random_state=1)
-        training_batch_generator = CNN.CustomGenerator(X_train_filenames, y_train, batchsize, self.tmpdir1.name, cnn.imageheight, cnn.imagewidth, 1)
-        validation_batch_generator = CNN.CustomGenerator(X_val_filenames, y_val, batchsize, self.tmpdir1.name, cnn.imageheight, cnn.imagewidth, 1)
+        
+        X_train_filenames, X_val_filenames, y_train, y_val = train_test_split(filenamesall, labelsall, test_size=self.LearningDict['test_size'], random_state=1)
+        training_batch_generator = CNN.CustomGenerator(X_train_filenames, y_train, self.LearningDict['batchsize'], self.tmpdir1.name, cnn.imageheight, cnn.imagewidth, 1)
+        validation_batch_generator = CNN.CustomGenerator(X_val_filenames, y_val, self.LearningDict['batchsize'], self.tmpdir1.name, cnn.imageheight, cnn.imagewidth, 1)
 
         print('Creating CNN architecture...')
         cnn.createArchitecture()
 
         print('Training...')
-        cnn.train(modelsavepath=self.tmpdir2.name, training_batch_generator=training_batch_generator, validation_batch_generator=validation_batch_generator, batch_size=batchsize)
+        cnn.train(modelsavepath=self.tmpdir2.name, training_batch_generator=training_batch_generator, validation_batch_generator=validation_batch_generator, batch_size=self.LearningDict['batchsize'])
         print('Training complete!')
 
         self.bestThr = [[0, 0] for i in range(len(self.calltypes) + 1)]
@@ -321,10 +305,10 @@ class CNNtrain:
         FNs = [0 for i in range(len(self.calltypes) + 1)]
         CTps = [[] for i in range(len(self.calltypes) + 1)]
         N = len(filenames)
-        batchsize = 100
-        for i in range(int(np.ceil(N / batchsize))):
-            imagesb = cnn.loadImgBatch(filenames[i * batchsize:min((i + 1) * batchsize, N)])
-            labelsb = labels[i * batchsize:min((i + 1) * batchsize, N)]
+        
+        for i in range(int(np.ceil(N / self.LearningDict['batchsize_ROC']))):
+            imagesb = cnn.loadImgBatch(filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)])
+            labelsb = labels[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)]
             for ct in range(len(self.calltypes) + 1):
                 res, ctp = self.testCT(ct, imagesb, labelsb)  # res=[thrlist, TPs, FPs, TNs, FNs]
                 CTps[ct] += ctp
@@ -419,7 +403,8 @@ class CNNtrain:
         # Load weights into new model
         model.load_weights(self.bestweight)
         # Compile the model
-        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+        model.compile(loss=self.LearningDict['loss'], optimizer=self.LearningDict['optimizer'], metrics=self.LearningDict['metrics'])
+        #model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
         # Predict and temp plot (just for me)
         pre = model.predict(testimages)
@@ -462,8 +447,8 @@ class CNNtrain:
         # Add CNN component to the current filter
         CNNdic = {}
         CNNdic["CNN_name"] = "CNN_name"
-        CNNdic["loss"] = "binary_crossentropy"
-        CNNdic["optimizer"] = "adam"
+        CNNdic["loss"] = self.LearningDict['loss']
+        CNNdic["optimizer"] = self.LearningDict['optimizer']
         CNNdic["windowInc"] = [self.windowWidth,self.windowInc] #[self.wizard().parameterPage.windowidth, self.wizard().parameterPage.incwidth]
         CNNdic["win"] = [self.imgWidth,self.imgWidth/5] #[self.wizard().parameterPage.imgsec.value() / 100, self.wizard().parameterPage.imgsec.value() / 500]
         CNNdic["inputdim"] = self.imgsize #self.wizard().parameterPage.imgsize
@@ -479,27 +464,30 @@ class CNNtrain:
         print(CNNdic)
         self.currfilt["CNN"] = CNNdic
 
-        # write out the filter and CNN model
-        modelsrc = os.path.join(self.tmpdir2.name, 'model.json')
-        CNN_name = self.species + strftime("_%H-%M-%S", gmtime())
-        self.currfilt["CNN"]["CNN_name"] = CNN_name
-        #*
-        modelfile = os.path.join(self.filterdir, CNN_name + '.json')
-        weightsrc = self.bestweight
-        weightfile = os.path.join(self.filterdir, CNN_name + '.h5')
+        if self.CLI:
+            # write out the filter and CNN model
+            modelsrc = os.path.join(self.tmpdir2.name, 'model.json')
+            CNN_name = self.species + strftime("_%H-%M-%S", gmtime())
+            self.currfilt["CNN"]["CNN_name"] = CNN_name
 
-        filename = os.path.join(self.filterdir, self.filterName)
-        print("Updating the existing recogniser ", filename)
-        f = open(filename, 'w')
-        f.write(json.dumps(self.currfilt))
-        f.close()
-        # Actually copy the model
-        copyfile(modelsrc, modelfile)
-        copyfile(weightsrc, weightfile)
-        # And remove temp dirs
-        self.tmpdir1.cleanup()
-        self.tmpdir2.cleanup()
-        print("Recogniser saved, don't forget to test it!")
+            modelfile = os.path.join(self.filterdir, CNN_name + '.json')
+            weightsrc = self.bestweight
+            weightfile = os.path.join(self.filterdir, CNN_name + '.h5')
+
+            filename = os.path.join(self.filterdir, self.filterName)
+            if not filename.lower().endswith('.txt'):
+                filename = filename + '.txt'
+            print("Updating the existing recogniser ", filename)
+            f = open(filename, 'w')
+            f.write(json.dumps(self.currfilt))
+            f.close()
+            # Actually copy the model
+            copyfile(modelsrc, modelfile)
+            copyfile(weightsrc, weightfile)
+            # And remove temp dirs
+            self.tmpdir1.cleanup()
+            self.tmpdir2.cleanup()
+            print("Recogniser saved, don't forget to test it!")
 
     def cleanSpecies(self, species):
         """ Returns cleaned species name"""
