@@ -36,7 +36,12 @@ from openpyxl.styles import colors
 from openpyxl.styles import Font
 
 import Segment
-import SupportClasses_GUI
+QtMM = True
+try:
+    import SupportClasses_GUI
+except ImportError:
+    print("No GUI")
+    QtMM = False
 
 import wavio
 from time import sleep
