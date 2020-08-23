@@ -1,0 +1,16 @@
+{
+"minPerClass": 5,
+"sgramWindowWidth": 256,
+"sgramHop": 128,
+"imgX": 256,
+"imgY": 256,
+"windowScaling": 2,
+"hopScaling": 5,
+"batchsize": 32,
+"batchsize_ROC":100,
+"t": 1000,
+"test_size": 0.1,
+"loss": "binary_crossentropy",
+"optimizer": "adam",
+"metrics": ["accuracy"]
+}
