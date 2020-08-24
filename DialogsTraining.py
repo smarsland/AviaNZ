@@ -28,14 +28,11 @@ import time
 import platform
 import copy
 from shutil import copyfile
-import re
-import json
-import tempfile
 import csv
 
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor, QFileDialog, QScrollArea
 from PyQt5.QtCore import QDir, Qt, QEvent, QSize
-from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QTextEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout, QWidget
+from PyQt5.QtWidgets import QLabel, QSlider, QPushButton, QListWidget, QListWidgetItem, QComboBox, QWizard, QWizardPage, QLineEdit, QTextEdit, QSizePolicy, QFormLayout, QVBoxLayout, QHBoxLayout, QCheckBox, QLayout, QApplication, QRadioButton, QGridLayout
 
 import matplotlib.markers as mks
 import matplotlib.pyplot as plt
@@ -43,12 +40,6 @@ import matplotlib.ticker as mtick
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import pyqtgraph as pg
-
-from keras_preprocessing.image import ImageDataGenerator
-from tensorflow.keras.models import model_from_json
-from sklearn.metrics import confusion_matrix
-from sklearn.model_selection import train_test_split
-from sklearn.utils import shuffle
 
 import numpy as np
 import colourMaps
@@ -58,7 +49,6 @@ import WaveletSegment
 import Segment
 import Clustering
 import Training
-import CNN
 import AviaNZ_batch
 
 class BuildRecAdvWizard(QWizard):
@@ -1770,9 +1760,8 @@ class TestRecWizard(QWizard):
                     return
 
                 # 1. Run Batch Processing upto WF and generate .tempdata files (no post-proc)
-                avianz_batch = AviaNZ_batch.AviaNZ_batchProcess(root=None, configdir=self.configdir, minSegment=50, CLI=False,
-                                                               sdir=self.field("testDir"), recogniser=self.field("species")[:-4], wind=True,
-                                                               testmode=True)
+                avianz_batch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, configdir=self.configdir, mode="test",
+                                                               sdir=self.field("testDir"), recogniser=self.field("species")[:-4], wind=True)
 
                 # 2. Report statistics of WF followed by general post-proc steps (no CNN but wind-merge neighbours-delete short)
                 self.getSummary(avianz_batch, CNN=False)

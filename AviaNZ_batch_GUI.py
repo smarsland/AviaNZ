@@ -15,24 +15,20 @@ import pyqtgraph as pg
 import AviaNZ_batch
 import SignalProc
 import Segment
-import WaveletSegment
 import SupportClasses, SupportClasses_GUI
 import Dialogs
 import colourMaps
-
-import traceback
-import time
 
 import webbrowser, copy, math
 
 class AviaNZ_batchWindow(QMainWindow):
 
-    def __init__(self, root=None, configdir='', minSegment=50, CLI=False, sdir='', recogniser=None, wind=False, testmode=False):
+    def __init__(self, configdir=''):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
-        QMainWindow.__init__(self, root)
+        QMainWindow.__init__(self)
 
-        self.batchProc = AviaNZ_batch.AviaNZ_batchProcess(self,configdir,minSegment,CLI,sdir,recogniser,wind,testmode)
+        self.batchProc = AviaNZ_batch.AviaNZ_batchProcess(self,mode="GUI",configdir=configdir,sdir='',recogniser=None,wind=False)
 
         self.FilterDicts = self.batchProc.FilterDicts
 
@@ -435,23 +431,6 @@ class AviaNZ_batchWindow(QMainWindow):
 
             box.addItems(spp)
 
-    def addRegularSegments(self, wav):
-        """ Perform the Hartley bodge: add 10s segments every minute. """
-        # if wav.data exists get the duration
-        (rate, nseconds, nchannels, sampwidth) = wavio.readFmt(self.filename)
-        self.segments.metadata = dict()
-        self.segments.metadata["Operator"] = "Auto"
-        self.segments.metadata["Reviewer"] = ""
-        self.segments.metadata["Duration"] = nseconds
-        i = 0
-        segments = []
-        print("Adding segments (%d s every %d s) to %s" %(self.batchProc.config['protocolSize'], self.batchProc.config['protocolInterval'], str(self.filename)))
-        while i < nseconds:
-            segments.append([i, i + self.batchProc.config['protocolSize']])
-            i += self.batchProc.config['protocolInterval']
-        post = Segment.PostProcess(audioData=None, sampleRate=0, segments=segments, subfilter={}, cert=0)
-        self.makeSegments(post.segments)
-
     def fillFileList(self, fileName=None):
         """ Populates the list of files for the file listbox.
             Returns an error code if the specified directory is bad.
@@ -499,7 +478,7 @@ class AviaNZ_reviewAll(QMainWindow):
     # Main class for reviewing batch processing results
     # Should call HumanClassify1 somehow
 
-    def __init__(self,root=None,configdir='',minSegment=50):
+    def __init__(self,root=None,configdir=''):
         # Allow the user to browse a folder and push a button to process that folder to find a target species
         # and sets up the window.
         super(AviaNZ_reviewAll, self).__init__()

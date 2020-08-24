@@ -23,18 +23,14 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QWidget, QListWidget, QListWidgetItem
-from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QEvent, QLineF, QLine, QPoint, QSize, QDir
-from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem
+from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir
+from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
-
-from openpyxl import load_workbook, Workbook
-from openpyxl.styles import colors
-from openpyxl.styles import Font
 
 import Segment
 
@@ -43,12 +39,8 @@ from time import sleep
 import time
 import math
 import numpy as np
-import os, json
-import re
-import sys
+import os
 import io
-from tensorflow.keras.models import model_from_json
-from tensorflow.keras.models import load_model
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
