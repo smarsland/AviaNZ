@@ -23,18 +23,14 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QWidget, QListWidget, QListWidgetItem
-from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QEvent, QLineF, QLine, QPoint, QSize, QDir
-from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
+from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QListWidget, QListWidgetItem
+from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QLineF, QLine, QPoint, QSize, QDir
+from PyQt5.QtMultimedia import QAudio, QAudioOutput
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
 import pyqtgraph.functions as fn
-
-from openpyxl import load_workbook, Workbook
-from openpyxl.styles import colors
-from openpyxl.styles import Font
 
 import Segment
 
@@ -43,12 +39,8 @@ from time import sleep
 import time
 import math
 import numpy as np
-import os, json
-import re
-import sys
+import os
 import io
-from tensorflow.keras.models import model_from_json
-from tensorflow.keras.models import load_model
 
 class TimeAxisHour(pg.AxisItem):
     # Time axis (at bottom of spectrogram)
@@ -90,12 +82,28 @@ class TimeAxisMin(pg.AxisItem):
 
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
+        # First, get absolute time ('values' are relative to page start)
+        vs = [value + self.offset for value in values]
         if self.showMS:
             self.setLabel('Time', units='mm:ss.ms')
-            return [QTime(0,0,0).addMSecs((value+self.offset)*1000).toString('mm:ss.z') for value in values]
+            vstr1 = [QTime(0,0,0).addMSecs(value*1000).toString('mm:ss.z') for value in vs]
+            # check if we need to add hours:
+            if vs[-1]>=3600:
+                self.setLabel('Time', units='h:mm:ss.ms')
+                for i in range(len(vs)):
+                    if vs[i]>=3600:
+                        vstr1[i] = QTime(0,0,0).addMSecs(vs[i]*1000).toString('h:mm:ss.z')
+            return vstr1
         else:
             self.setLabel('Time', units='mm:ss')
-            return [QTime(0,0,0).addSecs(value+self.offset).toString('mm:ss') for value in values]
+            vstr1 = [QTime(0,0,0).addSecs(value).toString('mm:ss') for value in vs]
+            # check if we need to add hours:
+            if vs[-1]>=3600:
+                self.setLabel('Time', units='h:mm:ss')
+                for i in range(len(vs)):
+                    if vs[i]>=3600:
+                        vstr1[i] = QTime(0,0,0).addSecs(vs[i]).toString('h:mm:ss')
+            return vstr1
 
     def setOffset(self,offset):
         self.offset = offset

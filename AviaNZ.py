@@ -25,7 +25,7 @@ from jsonschema import validate
 import SupportClasses
 
 # Command line running to run a filter is something like
-# python AviaNZ.py -c -b -d "/home/marslast/Projects/AviaNZ/Sound Files/train5" -r "Morepork" -w 
+# python AviaNZ.py -c -b -d "/home/marslast/Projects/AviaNZ/Sound Files/train5" -r "Morepork" -w
 
 # For training
 # python AviaNZ.py -c -t -d "/home/marslast/Projects/AviaNZ/Sound Files/train5" -e "/home/marslast/Projects/AviaNZ/Sound Files/train6" -r "Morepork" -x 2
@@ -118,7 +118,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         if batchmode:
             import AviaNZ_batch
             if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
-                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(root=None, configdir=configdir, minSegment=50, CLI=True, sdir=sdir1, recogniser=recogniser, wind=wind)
+                avianzbatch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, mode="CLI", configdir=configdir, sdir=sdir1, recogniser=recogniser, wind=wind)
                 print("Analysis complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for batch processing")
@@ -146,11 +146,8 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         # This screen asks what you want to do, then processes the response
         import Dialogs
         from PyQt5.QtWidgets import QApplication
-        #from PyQt5.QtGui import QIcon
-        from pyqtgraph.Qt import QtGui
         app = QApplication(sys.argv)
         first = Dialogs.StartScreen()
-        first.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         first.show()
         app.exec_()
 
@@ -160,11 +157,9 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         if task == 1:
             import AviaNZ_manual
             avianz = AviaNZ_manual.AviaNZ(configdir=configdir)
-            avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==2:
             import AviaNZ_batch_GUI
             avianz = AviaNZ_batch_GUI.AviaNZ_batchWindow(configdir=configdir)
-            #avianz.setWindowIcon(QtGui.QIcon('img/AviaNZ.ico'))
         elif task==3:
             import AviaNZ_batch_GUI
             avianz = AviaNZ_batch_GUI.AviaNZ_reviewAll(configdir=configdir)
