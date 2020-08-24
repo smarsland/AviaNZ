@@ -253,25 +253,22 @@ class CNNtrain:
             fillratio2 = imgN[i] / self.LearningDict['t']
             if fillratio1 < 0.75:   # too less, decrease hop
                 if i == len(self.calltypes):
-                    print('Noise: only %d images, adjusting hop from %.2f to %.2f' % (imgN[i], hop[i], self.imgWidth / 10))
+                    print('Noise: only %d images, adjusting hop from %.2f to %.2f' % (imgN[i], hop[i], self.imgWidth / self.LearningDict['hopScaling']*2))
                 else:
-                    print('%s: only %d images, adjusting hop from %.2f to %.2f' % (self.calltypes[i], imgN[i], hop[i], self.imgWidth/10))
-                hop[i] = self.imgWidth/10
+                    print('%s: only %d images, adjusting hop from %.2f to %.2f' % (self.calltypes[i], imgN[i], hop[i], self.imgWidth/self.LearningDict['hopScaling']*2))
+                hop[i] = self.imgWidth/self.LearningDict['hopScaling']*2
             elif fillratio1 > 1 and fillratio2 > 0.75:  # increase hop and make room for augmenting
                 if i == len(self.calltypes):
-                    print('Noise: %d images, adjusting hop from %.2f to %.2f' % (
-                    imgN[i], hop[i], self.imgWidth / 2))
+                    print('Noise: %d images, adjusting hop from %.2f to %.2f' % (imgN[i], hop[i], self.imgWidth / self.LearningDict['hopScaling']*0.5))
                 else:
                     print('%s: %d images, adjusting hop from %.2f to %.2f' % (
-                    self.calltypes[i], imgN[i], hop[i], self.imgWidth / 2))
-                hop[i] = self.imgWidth/2
+                    self.calltypes[i], imgN[i], hop[i], self.imgWidth / self.LearningDict['hopScaling']*0.5))
+                hop[i] = self.imgWidth/self.LearningDict['hopScaling']*0.5
             elif fillratio2 > 1:    # too many, avoid hop
                 if i == len(self.calltypes):
-                    print('Noise: %d images, adjusting hop from %.2f to %.2f' % (
-                    imgN[i], hop[i], self.imgWidth))
+                    print('Noise: %d images, adjusting hop from %.2f to %.2f' % (imgN[i], hop[i], self.imgWidth))
                 else:
-                    print('%s: %d images, adjusting hop from %.2f to %.2f' % (
-                    self.calltypes[i], imgN[i], hop[i], self.imgWidth))
+                    print('%s: %d images, adjusting hop from %.2f to %.2f' % (self.calltypes[i], imgN[i], hop[i], self.imgWidth))
                 hop[i] = self.imgWidth
 
         print('Generating CNN images...')
