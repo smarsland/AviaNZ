@@ -42,6 +42,7 @@ import SignalProc
 class StartScreen(QDialog):
     def __init__(self, parent=None):
         QDialog.__init__(self, parent)
+        self.setWindowIcon(QIcon('img/AviaNZ.ico'))
         self.setWindowTitle('AviaNZ - Choose Task')
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.FramelessWindowHint | Qt.WindowCloseButtonHint)
         self.setAutoFillBackground(False)
@@ -51,13 +52,9 @@ class StartScreen(QDialog):
 
         btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
         # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
-        #b1 = QPushButton("   Manual Processing   ")
-        #b2 = QPushButton("     Batch Processing     ")
-        #b3 = QPushButton("  Review Batch Results  ")
-        b1 = QPushButton("Manual Processing")
-        b2 = QPushButton("Batch Processing")
-        b3 = QPushButton("Review Results")
-        #b4 = QPushButton("Utilities")
+        b1 = QPushButton("   Manual Processing   ")
+        b2 = QPushButton("     Batch Processing     ")
+        b3 = QPushButton("  Review Batch Results  ")
         l1 = QLabel("------")
         l2 = QLabel("---")
         b1.setStyleSheet(btn_style)
@@ -2473,8 +2470,8 @@ class HumanClassify2(QDialog):
             # batmode guides, in y of this particular spectrogram:
             if self.guidefreq is not None:
                 gy = [0]*len(self.guidefreq)
-                for i in range(len(self.guidefreq)):
-                    gy[i] = sp.convertFreqtoY(self.guidefreq[i])
+                for gix in range(len(self.guidefreq)):
+                    gy[gix] = sp.convertFreqtoY(self.guidefreq[gix])
             else:
                 gy = None
 
@@ -2539,7 +2536,7 @@ class HumanClassify2(QDialog):
         for row in range(self.numPicsV):
             # add a frequency axis
             # args: spectrogram height in spec units, min and max frq in kHz for axis ticks
-            print(self.numPicsV)
+            # print(self.numPicsV)
             sg_axis = SupportClasses_GUI.AxisWidget(SgSize, minFreq/1000, maxFreq/1000)
             self.flowAxes.addWidget(sg_axis, row, 0)
             self.flowAxes.layout.setRowMinimumHeight(row, self.specV+10)
