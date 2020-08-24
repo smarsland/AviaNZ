@@ -37,6 +37,7 @@ import WaveletSegment
 import Segment
 import  WaveletFunctions
 import librosa
+import wavio
 
 # from sklearn.metrics import confusion_matrix
 # from numpy import expand_dims
@@ -513,6 +514,39 @@ class GenerateData:
         else:
             return False
 
+    def getImgCount(self, dirName, dataset, hop):
+        '''
+        Read the segment library and estimate the number of CNN images per class
+        :param dataset: segments in the form of [[file, [segment], label], ..]
+        :param hop: list of hops for different classes
+        :return: a list
+        '''
+        dhop = hop
+        eps = 0.0005
+        N = [0 for i in range(len(self.calltypes) + 1)]
+
+        for record in dataset:
+            # Compute number of images, also consider tiny segments because this would be the case for song birds.
+            duration = record[1][1] - record[1][0]
+            hop = dhop[record[-1]]
+            if duration < self.length:
+                fileduration = wavio.readFmt(record[0])[1]
+                record[1][0] = record[1][0] - (self.length - duration)/2 - eps
+                record[1][1] = record[1][1] + (self.length - duration)/2 + eps
+                if record[1][0] < 0:
+                    record[1][0] = 0
+                    record[1][1] = self.length + eps
+                elif record[1][1] > fileduration:
+                    record[1][1] = fileduration
+                    record[1][0] = fileduration - duration - eps
+                if record[1][0] <= 0 and record[1][1] <= fileduration:
+                    n = 1
+            else:
+                n = math.ceil((record[1][1] - record[1][0] - self.length) / hop + 1)
+            N[record[-1]] += n
+
+        return N
+
     def generateFeatures(self, dirName, dataset, hop):
         '''
         Read the segment library and generate features
@@ -522,26 +556,32 @@ class GenerateData:
         '''
         count = 0
         dhop = hop
+        eps = 0.0005
         specFrameSize = len(range(0, int(self.length * self.fs - self.windowwidth), self.inc))
         N = [0 for i in range(len(self.calltypes) + 1)]
 
         for record in dataset:
-            # Compute features, ignore tiny segments
+            # Compute features, also consider tiny segments because this would be the case for song birds.
             duration = record[1][1] - record[1][0]
-            hop = dhop
-            if duration < self.length/10:
-                continue
-            elif duration < self.length:
-                record[1][0] = record[1][0] - (self.length - duration)/2 - 0.0005
-                record[1][1] = record[1][1] + (self.length - duration)/2 + 0.0005
-                n = 1
-                hop = self.length
-                duration = self.length + 0.001
-            elif record[-1] < len(self.calltypes) and duration >= self.length + hop:
-                n = math.ceil((record[1][1]-record[1][0]-self.length) / hop + 1)
+            hop = dhop[record[-1]]
+            if duration < self.length:
+                fileduration = wavio.readFmt(record[0])[1]
+                record[1][0] = record[1][0] - (self.length - duration) / 2 - eps
+                record[1][1] = record[1][1] + (self.length - duration) / 2 + eps
+                if record[1][0] < 0:
+                    record[1][0] = 0
+                    record[1][1] = self.length + eps
+                elif record[1][1] > fileduration:
+                    record[1][1] = fileduration
+                    record[1][0] = fileduration - duration - eps
+                if record[1][0] <= 0 and record[1][1] <= fileduration:
+                    n = 1
+                    hop = self.length
+                    duration = self.length + eps
+                else:
+                    continue
             else:
-                hop = self.length
-                n = math.ceil((record[1][1] - record[1][0]) / hop)
+                n = math.ceil((record[1][1]-record[1][0]-self.length) / hop + 1)
             print('* hop:', hop, 'n:', n, 'syl:', record[2], 'label:', record[-1])
             try:
                 audiodata = self.loadFile(filename=record[0], duration=duration, offset=record[1][0], fs=self.fs, denoise=False)
