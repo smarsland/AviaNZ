@@ -2060,21 +2060,21 @@ class BuildCNNWizard(QWizard):
 
         self.rocpages = []
 
-        self.cnntrain = Training.CNNtrain(configdir,filtdir)
+        self.cnntrain = Training.CNNtrain(configdir, filtdir)
 
         # P1
-        self.browsedataPage = BuildCNNWizard.WPageData(self.cnntrain,config)
+        self.browsedataPage = BuildCNNWizard.WPageData(self.cnntrain, config)
         self.browsedataPage.registerField("trainDir1*", self.browsedataPage.trainDirName1)
         self.browsedataPage.registerField("trainDir2*", self.browsedataPage.trainDirName2)
         self.browsedataPage.registerField("filter*", self.browsedataPage.speciesCombo, "currentText", self.browsedataPage.speciesCombo.currentTextChanged)
         self.addPage(self.browsedataPage)
 
         # P2
-        self.confirminputPage = BuildCNNWizard.WPageConfirminput(self.cnntrain,configdir)
+        self.confirminputPage = BuildCNNWizard.WPageConfirminput(self.cnntrain, configdir)
         self.addPage(self.confirminputPage)
 
         # P3
-        self.parameterPage = BuildCNNWizard.WPageParameters(self.cnntrain,config)
+        self.parameterPage = BuildCNNWizard.WPageParameters(self.cnntrain, config)
         self.addPage(self.parameterPage)
 
         # add the Save & Test button
@@ -2523,9 +2523,10 @@ class BuildCNNWizard(QWizard):
             elif np.max(self.cnntrain.maxgaps) * 1.5 <= 6:
                 self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 1.5) + ' sec')
                 self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 1.5 * 100)
-            elif np.max(mincallengths) <= 6:
-                self.imgtext.setText(str(np.max(mincallengths)) + ' sec')
-                self.imgsec.setValue(np.max(mincallengths) * 100)
+            # elif np.max(mincallengths) <= 6:
+            #     self.imgtext.setText(str(np.max(mincallengths)) + ' sec')
+            #     self.imgsec.setValue(np.max(mincallengths) * 100)
+            self.cnntrain.imgWidth = self.imgsec.value() / 100
 
             self.setWindowInc()
             self.showimg()
@@ -2625,6 +2626,7 @@ class BuildCNNWizard(QWizard):
                 self.imgtext.setText('0.1 sec')
             else:
                 self.imgtext.setText(str(value / 100) + ' sec')
+            self.cnntrain.imgWidth = self.imgsec.value()/100
             self.setWindowInc()
             self.showimg(self.indx)
 

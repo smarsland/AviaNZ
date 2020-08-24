@@ -42,12 +42,12 @@ import CNN
 
 class CNNtrain:
 
-    def __init__(self,configdir,filterdir,folderTrain1=None,folderTrain2=None,recogniser=None,imgWidth=0,CLI=False):
+    def __init__(self, configdir, filterdir, folderTrain1=None, folderTrain2=None, recogniser=None, imgWidth=0, CLI=False):
 
         self.filterdir = filterdir
         cl = SupportClasses.ConfigLoader()
         self.FilterDict = cl.filters(filterdir, bats=False)
-        self.LearningDict = cl.learningParams(os.path.join(configdir,"LearningParams.txt"))
+        self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
         self.sp = SignalProc.SignalProc(self.LearningDict['sgramWindowWidth'], self.LearningDict['sgramHop'])
 
         self.imgsize = [self.LearningDict['imgX'], self.LearningDict['imgY']]
@@ -66,19 +66,20 @@ class CNNtrain:
         else:
             self.autoThr = False
             self.correction = False
+            self.imgWidth = imgWidth
 
-    def setP1(self,folderTrain1,folderTrain2,recogniser,annotationLevel):
+    def setP1(self, folderTrain1, folderTrain2, recogniser, annotationLevel):
         self.folderTrain1 = folderTrain1
         self.folderTrain2 = folderTrain2
         self.filterName = recogniser
         self.annotatedAll = annotationLevel
 
-    def setP3(self,imgWidth,windowWidth,windowInc):
+    def setP3(self, imgWidth, windowWidth, windowInc):
         self.imgWidth = imgWidth
         self.windowWidth = windowWidth
         self.windowInc = windowInc
 
-    def setP6(self,recogniser):
+    def setP6(self, recogniser):
         self.newFilterName = recogniser
             
     def cliTrain(self):
@@ -176,20 +177,20 @@ class CNNtrain:
                         for seg in annots:
                             if isinstance(seg, dict):
                                 continue
-                            if len(seg)!=2:
+                            if len(seg) != 2:
                                 print("Warning: old format corrections detected")
                                 continue
                             oldlabel = seg[0][4]
                             # check in cases like: [kiwi] -> [kiwi, morepork]
                             # (these will be stored in .corrections, but aren't incorrect detections)
                             newsp = [lab["species"] for lab in seg[1]]
-                            if len(oldlabel)!=1:
+                            if len(oldlabel) != 1:
                                 # this was made manually
                                 print("Warning: ignoring labels with multiple species")
                                 continue
                             if oldlabel[0]['species'] == self.species and self.species not in newsp:
                                 # store this as "noise" calltype
-                                data.append([wavfile, seg[0][:2], len(self.calltypes)])
+                                self.traindata.append([wavfile, seg[0][:2], len(self.calltypes)])
                                 self.correction = True
                     elif file.lower().endswith('.wav') and file + '.corrections_' + self.cleanSpecies(self.species) in files:
                         # Read the .correction (from single sp review)
@@ -223,11 +224,11 @@ class CNNtrain:
         target = np.array([rec[-1] for rec in self.traindata])
         self.trainN = [np.sum(target == i) for i in range(len(self.calltypes) + 1)]
 
-    def genImgDataset(self):
+    def genImgDataset(self, hop):
         ''' Generate training images'''
         for ct in range(len(self.calltypes) + 1):
             os.makedirs(os.path.join(self.tmpdir1.name, str(ct)))
-        self.imgsize[1], self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=self.imgWidth/self.LearningDict['hopScaling'])
+        self.imgsize[1], self.Nimg = self.DataGen.generateFeatures(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop)
 
     def train(self):
         # Create temp dir to hold img data and model
@@ -243,8 +244,38 @@ class CNNtrain:
         # Find train segments belong to each class
         self.DataGen = CNN.GenerateData(self.currfilt, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1])
 
+        # Find how many images with default hop, adjust hop to make a good number of images also keep space for some augmenting
+        hop = [self.imgWidth / self.LearningDict['hopScaling'] for i in range(len(self.calltypes)+1)]
+        imgN = self.DataGen.getImgCount(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop)
+        # Compare against the expected number of total images per class (t)
+        for i in range(len(self.calltypes) + 1):
+            fillratio1 = imgN[i] / (self.LearningDict['t'] - 2000)
+            fillratio2 = imgN[i] / self.LearningDict['t']
+            if fillratio1 < 0.75:   # too less, decrease hop
+                if i == len(self.calltypes):
+                    print('Noise: only %d images, adjusting hop from %.2f to %.2f' % (imgN[i], hop[i], self.imgWidth / 10))
+                else:
+                    print('%s: only %d images, adjusting hop from %.2f to %.2f' % (self.calltypes[i], imgN[i], hop[i], self.imgWidth/10))
+                hop[i] = self.imgWidth/10
+            elif fillratio1 > 1 and fillratio2 > 0.75:  # increase hop and make room for augmenting
+                if i == len(self.calltypes):
+                    print('Noise: %d images, adjusting hop from %.2f to %.2f' % (
+                    imgN[i], hop[i], self.imgWidth / 2))
+                else:
+                    print('%s: %d images, adjusting hop from %.2f to %.2f' % (
+                    self.calltypes[i], imgN[i], hop[i], self.imgWidth / 2))
+                hop[i] = self.imgWidth/2
+            elif fillratio2 > 1:    # too many, avoid hop
+                if i == len(self.calltypes):
+                    print('Noise: %d images, adjusting hop from %.2f to %.2f' % (
+                    imgN[i], hop[i], self.imgWidth))
+                else:
+                    print('%s: %d images, adjusting hop from %.2f to %.2f' % (
+                    self.calltypes[i], imgN[i], hop[i], self.imgWidth))
+                hop[i] = self.imgWidth
+
         print('Generating CNN images...')
-        self.genImgDataset()
+        self.genImgDataset(hop)
         print('\nGenerated images:\n')
         for i in range(len(self.calltypes)):
             print("\t%s:\t%d\n" % (self.calltypes[i], self.Nimg[i]))
