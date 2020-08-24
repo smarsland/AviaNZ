@@ -82,12 +82,28 @@ class TimeAxisMin(pg.AxisItem):
 
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
+        # First, get absolute time ('values' are relative to page start)
+        vs = [value + self.offset for value in values]
         if self.showMS:
             self.setLabel('Time', units='mm:ss.ms')
-            return [QTime(0,0,0).addMSecs((value+self.offset)*1000).toString('mm:ss.z') for value in values]
+            vstr1 = [QTime(0,0,0).addMSecs(value*1000).toString('mm:ss.z') for value in vs]
+            # check if we need to add hours:
+            if vs[-1]>=3600:
+                self.setLabel('Time', units='h:mm:ss.ms')
+                for i in range(len(vs)):
+                    if vs[i]>=3600:
+                        vstr1[i] = QTime(0,0,0).addMSecs(vs[i]*1000).toString('h:mm:ss.z')
+            return vstr1
         else:
             self.setLabel('Time', units='mm:ss')
-            return [QTime(0,0,0).addSecs(value+self.offset).toString('mm:ss') for value in values]
+            vstr1 = [QTime(0,0,0).addSecs(value).toString('mm:ss') for value in vs]
+            # check if we need to add hours:
+            if vs[-1]>=3600:
+                self.setLabel('Time', units='h:mm:ss')
+                for i in range(len(vs)):
+                    if vs[i]>=3600:
+                        vstr1[i] = QTime(0,0,0).addSecs(vs[i]).toString('h:mm:ss')
+            return vstr1
 
     def setOffset(self,offset):
         self.offset = offset
