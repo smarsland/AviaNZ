@@ -4969,6 +4969,7 @@ class AviaNZ(QMainWindow):
                         # save .data, possible over-writing
                         file = open(tagFile[:-4] + '.wav.data', 'w')
                         json.dump(annotation, file)
+                        file.close()
             self.tag2AnnotationDialog.txtDuration.setText('')
             self.tag2AnnotationDialog.txtSession.setText('')
             msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation",

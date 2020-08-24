@@ -22,20 +22,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#from PyQt5.QtWidgets import QMessageBox, QAbstractButton, QWidget, QListWidget, QListWidgetItem
-#from PyQt5.QtCore import Qt, QTime, QIODevice, QBuffer, QByteArray, QMimeData, QEvent, QLineF, QLine, QPoint, QSize, QDir
-#from PyQt5.QtMultimedia import QAudio, QAudioOutput, QAudioFormat
-#from PyQt5.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QFont, QDrag
-
-#import pyqtgraph as pg
-#from pyqtgraph.Qt import QtCore, QtGui
-#import pyqtgraph.functions as fn
-
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import colors
 from openpyxl.styles import Font
 
-import Segment
 QtMM = True
 try:
     import SupportClasses_GUI
@@ -43,15 +33,12 @@ except ImportError:
     print("No GUI")
     QtMM = False
 
-import wavio
-from time import sleep
 import time
 import math
 import numpy as np
 import os, json
 import re
 import sys
-import io
 from tensorflow.keras.models import model_from_json
 from tensorflow.keras.models import load_model
 
@@ -174,7 +161,9 @@ class ConfigLoader(object):
         # It will always be in user configdir, otherwise it would be impossible to find.
         print("Loading software settings from file %s" % file)
         try:
-            config = json.load(open(file))
+            f = open(file)
+            config = json.load(f)
+            f.close()
             return config
         except ValueError as e:
             # if JSON looks corrupt, quit:
@@ -203,7 +192,9 @@ class ConfigLoader(object):
             if not bats and filtfile.endswith("Bats.txt"):
                 continue
             try:
-                filt = json.load(open(os.path.join(dir, filtfile)))
+                ff = open(os.path.join(dir, filtfile))
+                filt = json.load(ff)
+                ff.close()
 
                 # skip this filter if it looks fishy:
                 if not isinstance(filt, dict) or "species" not in filt or "SampleRate" not in filt or "Filters" not in filt or len(filt["Filters"])<1:
@@ -276,7 +267,9 @@ class ConfigLoader(object):
                 shortblfile = os.path.join(configdir, "ListCommonBirds.txt")
 
             try:
-                readlist = json.load(open(shortblfile))
+                json_file = open(shortblfile)
+                readlist = json.load(json_file)
+                json_file.close()
                 if len(readlist)>29:
                     print("Warning: short species list has %s entries, truncating to 30" % len(readlist))
                     readlist = readlist[:29]
@@ -310,7 +303,9 @@ class ConfigLoader(object):
                 longblfile = os.path.join(configdir, "ListDOCBirds.txt")
 
             try:
-                readlist = json.load(open(longblfile))
+                json_file = open(longblfile)
+                readlist = json.load(json_file)
+                json_file.close()
                 return readlist
             except ValueError as e:
                 print(e)
@@ -339,7 +334,9 @@ class ConfigLoader(object):
                 blfile = os.path.join(configdir, "ListBats.txt")
 
             try:
-                readlist = json.load(open(blfile))
+                json_file = open(blfile)
+                readlist = json.load(json_file)
+                json_file.close()
                 return readlist
             except ValueError as e:
                 print(e)
@@ -356,7 +353,9 @@ class ConfigLoader(object):
     def learningParams(self, file):
         print("Loading software settings from file %s" % file)
         try:
-            config = json.load(open(file))
+            configfile = open(file)
+            config = json.load(configfile)
+            configfile.close()
             return config
         except ValueError as e:
             # if JSON looks corrupt, quit:
@@ -378,7 +377,8 @@ class ConfigLoader(object):
                 file = os.path.join(configdir, file)
 
             # no fallback in case file not found - don't want to write to random places.
-            json.dump(content, open(file, 'w'), indent=1)
+            with open(file, 'w') as f:
+                json.dump(content, f, indent=1)
 
         except Exception as e:
             print(e)
@@ -390,7 +390,8 @@ class ConfigLoader(object):
         print("Saving config to file %s" % file)
         try:
             # will always be an absolute path to the user configdir.
-            json.dump(content, open(file, 'w'), indent=1)
+            with open(file, 'w') as f:
+                json.dump(content, f, indent=1)
 
         except Exception as e:
             print("ERROR while saving config file:")
