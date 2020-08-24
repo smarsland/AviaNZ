@@ -23,18 +23,11 @@
 import gc, os, re, fnmatch
 
 import numpy as np
-import wavio
-
-#from pyqtgraph.Qt import QtGui
-#from pyqtgraph.dockarea import *
-#import pyqtgraph as pg
 
 import SignalProc
 import Segment
 import WaveletSegment
 import SupportClasses
-#import Dialogs
-#import colourMaps
 
 import traceback
 import time
@@ -46,9 +39,9 @@ class AviaNZ_batchProcess():
     # Main class for batch processing
     # Contains the algorithms, not the GUI, so that it can be run from commandline
     # Also called by the GUI
-    def __init__(self, root, configdir='', minSegment=50, CLI=False, sdir='', recogniser=None, wind=False, testmode=False):
-        #super(AviaNZ_batchProcess, self).__init__()
-
+    # Parent: AviaNZ_batchWindow
+    # mode: "GUI/CLI/test". If GUI, must provide the parent
+    def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=False):
         # read config and filters from user location
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
         self.ConfigLoader = SupportClasses.ConfigLoader()
@@ -58,10 +51,26 @@ class AviaNZ_batchProcess():
         self.filtersDir = os.path.join(configdir, self.config['FiltersDir'])
         self.FilterDicts = self.ConfigLoader.filters(self.filtersDir)
 
-        self.CLI = CLI
-        self.testmode = testmode
+        if mode=="GUI":
+            self.CLI = False
+            self.testmode = False
+            if parent is None:
+                print("ERROR: must provide a parent UI or specify CLI/testmode")
+                return
+            self.ui = parent
+        elif mode=="CLI":
+            self.CLI = True
+            self.testmode = False
+        elif mode=="test":
+            self.CLI = False
+            self.testmode = True
+        else:
+            print("ERROR: unrecognized mode ", mode)
+            return
+
         self.dirName = []
 
+        # In CLI/test modes, immediately run detection on init
         if self.CLI:
             self.dirName = sdir
             self.species = [recogniser]
@@ -73,16 +82,13 @@ class AviaNZ_batchProcess():
             self.wind = wind
             self.filesDone = []
             self.detect()
-        else:
-            # Use the UI
-            self.ui = root
 
     # from memory_profiler import profile
     # fp = open('memory_profiler_batch.log', 'w+')
     # @profile(stream=fp)
     def detect(self):
-        # This is the function that does the work. 
-        # Chooses the filters and sampling regime to use. 
+        # This is the function that does the work.
+        # Chooses the filters and sampling regime to use.
         # Then works through the directory list, and processes each file.
         if hasattr(self,'ui'):
             self.species = self.ui.species
@@ -104,8 +110,7 @@ class AviaNZ_batchProcess():
             else:
                 self.method = "Wavelets"
 
-            # double-check that all Fs are equal
-            # TODO: this is asking for trouble at the moment wrt error messages!
+            # double-check that all Fs are equal (should already be prevented by UI)
             filters = [self.FilterDicts[name] for name in self.species]
             samplerate = set([filt["SampleRate"] for filt in filters])
             if len(samplerate)>1:
@@ -216,22 +221,44 @@ class AviaNZ_batchProcess():
             # clean up the UI before entering the long loop
             self.ui.clean_UI(total,cnt)
 
-        if not self.CLI and not self.testmode:
             import pyqtgraph as pg
             with pg.BusyCursor():
-                self.mainloop(allwavs,total,speciesStr,filters,settings)  
+                self.mainloop(allwavs,total,speciesStr,filters,settings)
         else:
-            self.mainloop(allwavs,total,speciesStr,filters,settings)  
+            self.mainloop(allwavs,total,speciesStr,filters,settings)
 
-        # END of processing and exporting. Final cleanup
-        if not self.CLI and not self.testmode:
-            self.ui.endproc(total)
+        if not self.testmode:
+            # delete old results (xlsx)
+            # ! WARNING: any Detection...xlsx files will be DELETED,
+            # ! ANYWHERE INSIDE the specified dir, recursively
+
+            # We currently do not export any excels automatically in this mode,
+            # the user must do that manually (through Batch Review).
+
+            print("Removing old Excel files...")
+            if not self.CLI:
+                self.ui.statusBar().showMessage("Removing old Excel files, almost done...")
+                self.ui.dlg.setLabelText("Removing old Excel files...")
+                self.ui.update()
+                self.ui.repaint()
+
+            for root, dirs, files in os.walk(str(self.dirName)):
+                for filename in files:
+                    filenamef = os.path.join(root, filename)
+                    if fnmatch.fnmatch(filenamef, '*DetectionSummary_*.xlsx'):
+                        print("Removing excel file %s" % filenamef)
+                        os.remove(filenamef)
+
+            if not self.CLI:
+                self.ui.dlg.setValue(total+1)
+
+            # END of processing and exporting. Final cleanup
             self.log.file.close()
-        else:
-            print("Processed all %d files" % total)
-            if not self.testmode:
-                self.log.file.close()
-            return(0)
+            if not self.CLI:
+                self.ui.endproc(total)
+
+        print("Processed all %d files" % total)
+        return(0)
 
     def mainloop(self,allwavs,total,speciesStr,filters,settings):
         # MAIN PROCESSING starts here
@@ -352,45 +379,6 @@ class AviaNZ_batchProcess():
             print("File processed in", processingTime)
             # END of audio batch processing
 
-            if not self.CLI and not self.testmode:
-                if self.method!="Intermittent sampling":
-                    # delete old results (xlsx)
-                    # ! WARNING: any Detection...xlsx files will be DELETED,
-                    # ! ANYWHERE INSIDE the specified dir, recursively
-                    self.ui.statusBar().showMessage("Removing old Excel files, almost done...")
-                    self.ui.dlg.setLabelText("Removing old Excel files...")
-                    self.ui.update()
-                    self.ui.repaint()
-                    for root, dirs, files in os.walk(str(self.dirName)):
-                        for filename in files:
-                            filenamef = os.path.join(root, filename)
-                            if fnmatch.fnmatch(filenamef, '*DetectionSummary_*.xlsx'):
-                                print("Removing excel file %s" % filenamef)
-                                os.remove(filenamef)
-                    # We currently do not export any excels automatically
-                    # in this mode. We only delete old excels, and let
-                    # user generate new ones through Batch Review.
-                self.ui.dlg.setValue(total+1)
-            # TODO: should this be here?
-            #elif self.method!="Intermittent sampling":
-                # delete old results (xlsx)
-                # ! WARNING: any Detection...xlsx files will be DELETED,
-                # ! ANYWHERE INSIDE the specified dir, recursively
-                #self.ui.statusBar().showMessage("Removing old Excel files, almost done...")
-                #self.dlg.setLabelText("Removing old Excel files...")
-                #self.ui.update()
-                #self.ui.repaint()
-                #print("Removing old Excel files...")
-                #for root, dirs, files in os.walk(str(self.dirName)):
-                    #for filename in files:
-                        #filenamef = os.path.join(root, filename)
-                        #if fnmatch.fnmatch(filenamef, '*DetectionSummary_*.xlsx'):
-                            #print("Removing excel file %s" % filenamef)
-                            #os.remove(filenamef)
-                ## We currently do not export any excels automatically
-                ## in this mode. We only delete old excels, and let
-                ## user generate new ones through Batch Review.
-
     def useWindF(self, flow, fhigh):
         """
         Check if the wind filter is appropriate for this species/call type.
@@ -465,7 +453,6 @@ class AviaNZ_batchProcess():
                     # read in the page and resample as needed
                     self.ws.readBatch(self.audiodata[start:end], self.sampleRate, d=False, spInfo=filters, wpmode="new")
 
-                allCtSegs = []
                 data_test = []
                 click_label = 'None'
                 for speciesix in range(len(filters)):
@@ -536,7 +523,7 @@ class AviaNZ_batchProcess():
                                 post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
                                 print("Segments detected after WF: ", len(thisPageSegs[filtix]))
                                 if self.wind and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0],spInfo['Filters'][filtix]['FreqRange'][1]):
-                                        post.wind()
+                                    post.wind()
 
                                 if CNNmodel:
                                     print('Post-processing with CNN')

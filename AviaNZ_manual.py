@@ -21,7 +21,6 @@
 # ? click, shutil
 
 import sys, os, json, platform, re, shutil
-from jsonschema import validate
 from shutil import copyfile
 from time import gmtime, strftime
 
@@ -48,12 +47,11 @@ import SignalProc
 import Segment
 import WaveletSegment
 import WaveletFunctions
-import AviaNZ_batch
 import Clustering
 import colourMaps
 
 import librosa
-import click, webbrowser, copy, math
+import webbrowser, copy, math
 import time
 import openpyxl
 import xml.etree.ElementTree as ET
@@ -208,7 +206,7 @@ class AviaNZ(QMainWindow):
         # Boxes with area smaller than this will be ignored -
         # to avoid accidentally creating little boxes
         self.minboxsize = 0.1
-        
+
         # a hack to fix default font size (Win 10 suggests 7 pt for QLabels for some reason)
         QApplication.setFont(QApplication.font("QMenu"))
         self.createMenu()
@@ -217,7 +215,7 @@ class AviaNZ(QMainWindow):
         self.resetStorageArrays()
         if self.CLI:
             if cheatsheet or zooniverse:
-                # use infile and imagefile as directories 
+                # use infile and imagefile as directories
                 print(firstFile)
                 self.SoundFileDir = firstFile
                 # Read folders and sub-folders
@@ -252,6 +250,7 @@ class AviaNZ(QMainWindow):
         else:
             # Make the window and associated widgets
             self.setWindowTitle('AviaNZ')
+            self.setWindowIcon(QIcon('img/AviaNZ.ico'))
             # Make the window full screen
             if self.config['StartMaximized']:
                 self.showMaximized()
@@ -4970,6 +4969,7 @@ class AviaNZ(QMainWindow):
                         # save .data, possible over-writing
                         file = open(tagFile[:-4] + '.wav.data', 'w')
                         json.dump(annotation, file)
+                        file.close()
             self.tag2AnnotationDialog.txtDuration.setText('')
             self.tag2AnnotationDialog.txtSession.setText('')
             msg = SupportClasses_GUI.MessagePopup("d", "Generated annotation",
@@ -5168,8 +5168,6 @@ class AviaNZ(QMainWindow):
                     post.joinGaps(maxgap=speciesData['Filters'][filtix]['TimeRange'][3])
                     post.deleteShort(minlength=speciesData['Filters'][filtix]['TimeRange'][0])
                     newSegments[filtix] = post.segments
-                # Merge sub-filter results
-                # TODO: Merge subfilter results
             print("After post processing: ", newSegments)
 
             # Generate Segment-type output.
