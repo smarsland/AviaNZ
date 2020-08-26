@@ -1729,6 +1729,7 @@ class TestRecWizard(QWizard):
                 self.currfilt = self.wizard().filterlist[self.field("species")[:-4]]
                 self.species = self.currfilt['species']
                 self.sampleRate = self.currfilt['SampleRate']
+                self.calltypes = []
                 for fi in self.currfilt['Filters']:
                     self.calltypes.append(fi['calltype'])
 
@@ -1761,7 +1762,9 @@ class TestRecWizard(QWizard):
 
                 # 1. Run Batch Processing upto WF and generate .tempdata files (no post-proc)
                 avianz_batch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, configdir=self.configdir, mode="test",
-                                                               sdir=self.field("testDir"), recogniser=self.field("species")[:-4], wind=True)
+                                                                sdir=self.field("testDir"),
+                                                                recogniser=self.field("species")[:-4],
+                                                                wind=True)
 
                 # 2. Report statistics of WF followed by general post-proc steps (no CNN but wind-merge neighbours-delete short)
                 self.getSummary(avianz_batch, CNN=False)
