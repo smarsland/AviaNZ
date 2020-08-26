@@ -216,6 +216,8 @@ class AviaNZ_batchProcess():
                 # else single-sp runs should be deleted anyway
 
             self.log.appendHeader(header=None, species=self.log.species, settings=self.log.settings)
+        else:
+            settings = [self.method, timeWindow_s, timeWindow_e, self.wind]
 
         if not self.CLI and not self.testmode:
             # clean up the UI before entering the long loop
