@@ -312,7 +312,7 @@ class WaveletSegment:
                             out.append(seg)
                     detected_out.append((filename, out))
                 else:
-                    detected_out.append((filename, detected_segs))
+                    detected_out.append((filename, detected_segs[0]))
 
         return detected_out
 
