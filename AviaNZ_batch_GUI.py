@@ -510,13 +510,13 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setFixedSize(900, 600)
+        self.setFixedSize(900, 700)
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
-        self.d_detection = Dock("Review",size=(600, 600))
+        self.d_detection = Dock("Review",size=(600, 700))
         # self.d_detection.hideTitleBar()
-        self.d_files = Dock("File list", size=(300, 600))
+        self.d_files = Dock("File list", size=(300, 700))
 
         self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
