@@ -537,8 +537,10 @@ class GenerateData:
                 elif record[1][1] > fileduration:
                     record[1][1] = fileduration
                     record[1][0] = fileduration - duration - eps
-                if record[1][0] <= 0 and record[1][1] <= fileduration:
+                if 0 <= record[1][0] and record[1][1] <= fileduration:
                     n = 1
+                else:
+                    n = 0
             else:
                 n = math.ceil((record[1][1] - record[1][0] - self.length) / hop + 1)
             N[record[-1]] += n
