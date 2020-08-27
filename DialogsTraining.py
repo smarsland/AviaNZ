@@ -2379,7 +2379,7 @@ class BuildCNNWizard(QWizard):
             #self.msgrecfs.setText('')
 
         def isComplete(self):
-            if (self.hasant1 or self.hasant2) and self.certainty1 and self.certainty2 and min(self.cnntrain.trainN) >= self.LearningDict['minPerClass']:
+            if (self.hasant1 or self.hasant2) and min(self.cnntrain.trainN) >= self.LearningDict['minPerClass']:
                 #self.cnntrain.setP2((self.hasant1 or self.hasant2) and self.certainty1, self.certainty2 and min(self.cnntrain.trainN) >= 10)
                 return True
             else:
