@@ -1244,18 +1244,16 @@ class AviaNZ(QMainWindow):
                 self.menuBird2.addAction(self.showFullbirdlist)
                 self.fullbirdlist.activated.connect(self.birdSelectedList)
 
-    def fillFileList(self,fileName):
+    def fillFileList(self,dir,fileName):
         """ Generates the list of files for the file listbox.
-        fileName - currently opened file (marks it in the list).
-        Most of the work is to deal with directories in that list.
-        It only sees *.wav files. Picks up *.data to make the filenames
-        red in the list."""
-
-        if not os.path.isdir(self.SoundFileDir):
-            print("ERROR: directory %s doesn't exist" % self.soundFileDir)
+            dir - directory to use.
+            fileName - currently opened file (marks it in the list).
+        """
+        if not os.path.isdir(dir):
+            print("ERROR: directory %s doesn't exist" % dir)
             return
 
-        self.listFiles.fill(self.SoundFileDir, fileName)
+        self.listFiles.fill(dir, fileName)
 
     def resetStorageArrays(self):
         """ Called when new files are loaded.
@@ -1417,7 +1415,7 @@ class AviaNZ(QMainWindow):
                 self.SoundFileDir=str(dir.absolutePath())
 
         # Now repopulate the listbox
-        self.fillFileList(current)
+        self.fillFileList(self.SoundFileDir, current)
 
         # if a file was clicked, open it
         if not os.path.isdir(fullcurrent):
@@ -1680,6 +1678,12 @@ class AviaNZ(QMainWindow):
     def openNextFile(self):
         """ Listener for next file >> button.
         Get the next file in the list and call the loader. """
+
+        # If the user has navigated away from the dir with currently open file, return:
+        if self.listFiles.soundDir != os.path.dirname(self.filename):
+            self.SoundFileDir = os.path.dirname(self.filename)
+            self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
+
         i=self.listFiles.currentRow()
         if i+1<len(self.listFiles):
             self.listFiles.setCurrentRow(i+1)
@@ -1878,7 +1882,7 @@ class AviaNZ(QMainWindow):
             wavFile = str(self.filename + '.wav')
             wavio.write(wavFile, wave, samplerate, sampwidth=2)
             print('File written:',wavFile)
-            self.fillFileList(os.path.basename(self.filename))
+            self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
 
             self.statusLeft.setText("Ready")
 
@@ -4633,7 +4637,7 @@ class AviaNZ(QMainWindow):
                 tosave = self.sp.bandpassFilter(self.audiodata[int(x1):int(x2)], start=y1, end=y2)
                 wavio.write(filename, tosave.astype('int16'), self.sampleRate, scale='dtype-limits', sampwidth=2)
             # update the file list box
-            self.fillFileList(os.path.basename(self.filename))
+            self.fillFileList(self.SoundFileDir, os.path.basename(self.filename))
 
     def redoFreqAxis(self,start,end, store=True):
         """ This is the listener for the menu option to make the frequency axis tight (after bandpass filtering or just spectrogram changes)
