@@ -83,6 +83,8 @@ class TimeAxisMin(pg.AxisItem):
     def tickStrings(self, values, scale, spacing):
         # Overwrite the axis tick code
         # First, get absolute time ('values' are relative to page start)
+        if len(values)==0:
+            return []
         vs = [value + self.offset for value in values]
         if self.showMS:
             self.setLabel('Time', units='mm:ss.ms')
