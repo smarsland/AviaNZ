@@ -227,7 +227,7 @@ class ConfigLoader(object):
             elif filt["CNN"]:
                 if species == "NZ Bats":
                     try:
-                        model = load_model(os.path.join(dircnn, filt["CNN"]["CNN_name"]))
+                        model = load_model(os.path.join(dircnn, filt["CNN"]["CNN_name"]+'.h5'))
                         targetmodels[species] = [model, filt["CNN"]["win"], filt["CNN"]["inputdim"], filt["CNN"]["output"],
                                                  filt["CNN"]["windowInc"], filt["CNN"]["thr"]]
                         print('Loaded model:', os.path.join(dircnn, filt["CNN"]["CNN_name"]))
