@@ -23,6 +23,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import SignalProc
 import WaveletFunctions
+import SupportClasses
 
 import numpy as np
 import scipy.ndimage as spi
@@ -1173,7 +1174,8 @@ class PostProcess:
     cert:       Default certainty to attach to the segments
     """
 
-    def __init__(self, audioData=None, sampleRate=0, tgtsampleRate=0, segments=[], subfilter={}, CNNmodel=None, cert=0):
+    def __init__(self, configdir, audioData=None, sampleRate=0, tgtsampleRate=0, segments=[], subfilter={}, CNNmodel=None, cert=0):
+        self.configdir = configdir
         self.audioData = audioData
         self.sampleRate = sampleRate
         self.subfilter = subfilter
@@ -1188,9 +1190,13 @@ class PostProcess:
             self.segments.append([seg, cert])
 
         if CNNmodel:
+            cl = SupportClasses.ConfigLoader()
+            self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
+
             self.CNNmodel = CNNmodel[0]    # CNNmodel is a list [model, win, inputdim, outputdict, windowInc, thrs]
             self.CNNwindow = CNNmodel[1][0]
-            self.CNNhop = CNNmodel[1][1]
+            # self.CNNhop = CNNmodel[1][1]
+            self.CNNhop = self.LearningDict['hopScaling']*self.CNNwindow
             self.CNNinputdim = CNNmodel[2]
             self.CNNoutputs = CNNmodel[3]
             self.CNNwindowInc = CNNmodel[4]
@@ -1220,8 +1226,7 @@ class PostProcess:
         Returns the features (currently the spectrogram)
         '''
         featuress = []
-        hop = self.CNNhop
-        n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / hop + 1)
+        n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / self.CNNhop + 1)
         # n = (seg[1] - seg[0]) // self.CNNwindow
 
         sp = SignalProc.SignalProc(self.CNNwindowInc[0], self.CNNwindowInc[1])
@@ -1236,7 +1241,7 @@ class PostProcess:
         specFrameSize = len(range(0, int(self.CNNwindow * fs - sp.window_width), sp.incr))
 
         for i in range(int(n)):
-            sgstart = int(hop * i * fs / sp.incr)
+            sgstart = int(self.CNNhop * i * fs / sp.incr)
             sgend = sgstart + specFrameSize
             if sgend > np.shape(sp.sg)[0]:
                 continue
@@ -1251,8 +1256,7 @@ class PostProcess:
         Returns the features (currently the spectrogram)
         '''
         featuress = []
-        hop = self.CNNhop
-        n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / hop + 1)
+        n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / self.CNNhop + 1)
         # n = (seg[1] - seg[0]) // self.CNNwindow
 
         sp = SignalProc.SignalProc(self.CNNwindowInc[0], self.CNNwindowInc[1])
@@ -1275,7 +1279,7 @@ class PostProcess:
         specFrameSize = len(range(0, int(self.CNNwindow * fs - sp.window_width), sp.incr))
 
         for i in range(int(n)):
-            sgstart = int(hop * i * fs / sp.incr)
+            sgstart = int(self.CNNhop * i * fs / sp.incr)
             sgend = sgstart + specFrameSize
             if sgend > np.shape(sp.sg)[0]:
                 continue
@@ -1290,8 +1294,7 @@ class PostProcess:
         Returns the features (currently the spectrogram)
         '''
         featuress = []
-        hop = self.CNNhop
-        n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / hop + 1)
+        n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / self.CNNhop + 1)
         # n = (seg[1] - seg[0]) // self.CNNwindow
 
         sp = SignalProc.SignalProc(self.CNNwindowInc[0], self.CNNwindowInc[1])
@@ -1308,7 +1311,7 @@ class PostProcess:
         specFrameSize = len(range(0, int(self.CNNwindow * fs - sp.window_width), sp.incr))
 
         for i in range(int(n)):
-            sgstart = int(hop * i * fs / sp.incr)
+            sgstart = int(self.CNNhop * i * fs / sp.incr)
             sgend = sgstart + specFrameSize
             if sgend > np.shape(sp.sg)[0]:
                 continue

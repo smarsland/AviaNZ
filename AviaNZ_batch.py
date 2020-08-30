@@ -43,6 +43,7 @@ class AviaNZ_batchProcess():
     # mode: "GUI/CLI/test". If GUI, must provide the parent
     def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=False):
         # read config and filters from user location
+        self.configdir = configdir
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
         self.ConfigLoader = SupportClasses.ConfigLoader()
         self.config = self.ConfigLoader.config(self.configfile)
@@ -433,7 +434,7 @@ class AviaNZ_batchProcess():
                 maxgap = int(self.maxgap.value())/1000
                 minlen = int(self.minlen.value())/1000
                 maxlen = int(self.maxlen.value())/1000
-                post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
+                post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sampleRate, segments=thisPageSegs, subfilter={}, cert=0)
                 if self.wind:
                     post.wind()
                 post.joinGaps(maxgap)
@@ -522,7 +523,7 @@ class AviaNZ_batchProcess():
                                     print("Nothing detected")
                             else:
                                 # bird-style CNN and other processing:
-                                post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
+                                post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sampleRate, tgtsampleRate=spInfo["SampleRate"], segments=thisPageSegs[filtix], subfilter=spInfo['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
                                 print("Segments detected after WF: ", len(thisPageSegs[filtix]))
                                 if self.wind and self.useWindF(spInfo['Filters'][filtix]['FreqRange'][0],spInfo['Filters'][filtix]['FreqRange'][1]):
                                     post.wind()
@@ -548,7 +549,7 @@ class AviaNZ_batchProcess():
                         else:
                             # TODO: THIS IS testmode. NOT USING ANY BAT STUFF THEN
                             # I.E. testmode not adapted to bats
-                            post = Segment.PostProcess(audioData=self.audiodata[start:end], sampleRate=self.sampleRate,
+                            post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata[start:end], sampleRate=self.sampleRate,
                                                        tgtsampleRate=spInfo["SampleRate"],
                                                        segments=thisPageSegs[filtix],
                                                        subfilter=spInfo['Filters'][filtix], CNNmodel=None, cert=50)

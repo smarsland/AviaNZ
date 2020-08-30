@@ -2224,7 +2224,7 @@ class AviaNZ(QMainWindow):
             we_std = np.zeros(int(np.ceil(self.datalengthSec)))
             for w in range(int(np.ceil(self.datalengthSec))):
                 data = self.audiodata[int(w*self.sampleRate):int((w+1)*self.sampleRate)]
-                post = Segment.PostProcess(audioData=data, sampleRate=self.sampleRate, segments=[], subfilter={})
+                post = Segment.PostProcess(configdir=self.configdir, audioData=data, sampleRate=self.sampleRate, segments=[], subfilter={})
                 m, std, _ = post.wind_cal(data, self.sampleRate)
                 we_mean[w] = m
                 we_std[w] = std
@@ -5129,7 +5129,7 @@ class AviaNZ(QMainWindow):
             if str(alg) != 'Wavelets':
                 print('Segments detected: ', len(newSegments))
                 print('Post-processing...')
-                post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                            segments=newSegments, subfilter={})
                 if wind:
                     post.wind()
@@ -5151,7 +5151,7 @@ class AviaNZ(QMainWindow):
                     CNNmodel = None
                     if filtname in self.CNNDicts.keys():
                         CNNmodel = self.CNNDicts[filtname]
-                    post = Segment.PostProcess(audioData=self.audiodata, sampleRate=self.sampleRate,
+                    post = Segment.PostProcess(configdir=self.configfile, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=speciesData['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
                     if wind and self.useWindF(speciesData['Filters'][filtix]['FreqRange'][0], speciesData['Filters'][filtix]['FreqRange'][1]):

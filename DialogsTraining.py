@@ -1816,7 +1816,7 @@ class TestRecWizard(QWizard):
                         duration = int(np.ceil(len(avianz_batch.audiodata) / avianz_batch.sampleRate))
                         for i in range(len(self.calltypes)):
                             ctsegments = self.findCTsegments(avianz_batch.filename, i)
-                            post = Segment.PostProcess(audioData=avianz_batch.audiodata,
+                            post = Segment.PostProcess(configdir=self.configdir, audioData=avianz_batch.audiodata,
                                                        sampleRate=avianz_batch.sampleRate,
                                                        tgtsampleRate=self.sampleRate, segments=ctsegments,
                                                        subfilter=self.currfilt['Filters'][i], CNNmodel=CNNmodel, cert=50)
@@ -2089,12 +2089,8 @@ class BuildCNNWizard(QWizard):
 
             self.cnntrain = cnntrain
 
-            self.cert1 = 100
-            self.cert2 = 100
-            self.cert3 = 100
             self.splist1 = []
             self.splist2 = []
-            self.splist3 = []
             self.anntlevel = "Some"
 
             self.trainDirName1 = QLineEdit()
@@ -2169,8 +2165,6 @@ class BuildCNNWizard(QWizard):
             self.listFilesTrain2.fill(dirName, fileName=None, readFmt=False, addWavNum=True, recursive=True)
             # while reading the file, we also collected a list of species present there
             self.splist2 = list(self.listFilesTrain2.spList)
-            # also min certainty
-            self.cert2 = self.listFilesTrain2.minCertainty
             self.completeChanged.emit()
 
         def browseTrainData1(self):
@@ -2180,8 +2174,6 @@ class BuildCNNWizard(QWizard):
             self.listFilesTrain1.fill(dirName, fileName=None, readFmt=False, addWavNum=True, recursive=True)
             # while reading the file, we also collected a list of species present there
             self.splist1 = list(self.listFilesTrain1.spList)
-            # also min certainty
-            self.cert1 = self.listFilesTrain1.minCertainty
             self.completeChanged.emit()
 
         def onClicked(self):
@@ -2294,9 +2286,10 @@ class BuildCNNWizard(QWizard):
 
             warn = ""
             # Check the annotation certainty
-            if self.field("trainDir1") and self.wizard().browsedataPage.cert1 < 100:
-                warn += "Warning: Detected uncertain segments\n"
-                self.certainty1 = False
+            if self.field("trainDir1"):
+                self.certainty1 = self.getCertainty(self.field("trainDir1"))
+                if not self.certainty1:
+                    warn += "Warning: Detected uncertain segments\n"
 
             # Check if there are annotations from the target species at all
             if self.field("trainDir1"):
@@ -2310,9 +2303,10 @@ class BuildCNNWizard(QWizard):
 
             warn = ""
             # Check the annotation certainty
-            if self.field("trainDir2") and self.wizard().browsedataPage.cert2 < 100:
-                warn += "Warning: Detected uncertain segments\n"
-                self.certainty2 = False
+            if self.field("trainDir2"):
+                self.certainty2 = self.getCertainty(self.field("trainDir2"))
+                if not self.certainty2:
+                    warn += "Warning: Detected uncertain segments\n"
 
             # Check if there are annotations from the target species at all
             if self.field("trainDir2"):
@@ -2328,8 +2322,6 @@ class BuildCNNWizard(QWizard):
                 self.msgmdir.setText("<b>Manually annotated:</b> %s" % (self.field("trainDir1")))
             if self.field("trainDir2"):
                 self.msgadir.setText("\n<b>Auto processed and reviewed:</b> %s" % (self.field("trainDir2")))
-            # if self.field("testDir"):
-            #     self.msgtdir.setText("\n<b>Manually annotated:</b> %s" % (self.field("testDir")))
 
             # Get training data 
             with pg.BusyCursor():
@@ -2358,29 +2350,42 @@ class BuildCNNWizard(QWizard):
             if freeGB < 10:
                 self.imgDirwarn.setText('Warning: Free space in the user directory is %.2f GB/ %.2f GB, you may run out of space' % (freeGB, totalbytes))
 
+        def getCertainty(self, dirname):
+            minCertainty = 100
+            for root, dirs, files in os.walk(dirname):
+                for file in files:
+                    wavFile = os.path.join(root, file)
+                    if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                        segments = Segment.SegmentList()
+                        segments.parseJSON(wavFile + '.data')
+                        cert = [lab["certainty"] if lab["species"] == self.cnntrain.species else 100 for seg in segments for lab in seg[4]]
+                        if cert:
+                            mincert = min(cert)
+                            if minCertainty > mincert:
+                                minCertainty = mincert
+            if minCertainty < 100:
+                return False
+            else:
+                return True
+
         def cleanupPage(self):
             pass
-            #self.msgmdir.setText('')
-            #self.msgadir.setText('')
-            ## self.msgtdir.setText('')
-            ## self.msgrec.setText('')
+            self.msgmdir.setText('')
+            self.msgadir.setText('')
             self.warnnoannt1.setText('')
             self.warnLabel.setText('')
             self.warnnoannt2.setText('')
-            # self.warnnoannt3.setText('')
             self.warnoise.setText('')
-            #self.msgseg.setText('')
-            #self.warnseg.setText('')
-            ## self.msgsegtest.setText('')
-            #self.msgrecfilter.setText('')
-            #self.msgrecspp.setText('')
-            #self.msgreccts.setText('')
-            #self.msgrecclens.setText('')
-            #self.msgrecfs.setText('')
+            self.msgseg.setText('')
+            self.warnseg.setText('')
+            self.msgrecfilter.setText('')
+            self.msgrecspp.setText('')
+            self.msgreccts.setText('')
+            self.msgrecclens.setText('')
+            self.msgrecfs.setText('')
 
         def isComplete(self):
             if (self.hasant1 or self.hasant2) and min(self.cnntrain.trainN) >= self.LearningDict['minPerClass']:
-                #self.cnntrain.setP2((self.hasant1 or self.hasant2) and self.certainty1, self.certainty2 and min(self.cnntrain.trainN) >= 10)
                 return True
             else:
                 return False
@@ -2437,26 +2442,6 @@ class BuildCNNWizard(QWizard):
             layout0.addWidget(self.imgtext)
             layout0.addWidget(self.imgsec)
 
-            # self.win = QSlider(Qt.Horizontal)
-            # self.win.setTickPosition(QSlider.TicksBelow)
-            # self.win.setTickInterval(128)
-            # self.win.setRange(0, 2048)
-            # self.win.setValue(512)
-            # self.win.valueChanged.connect(self.winChange)
-            # self.wintext = QLabel('512')
-            # form1.addRow('', self.wintext)
-            # form1.addRow('Spectrogram window size', self.win)
-            #
-            # self.inc = QSlider(Qt.Horizontal)
-            # self.inc.setTickPosition(QSlider.TicksBelow)
-            # self.inc.setTickInterval(128)
-            # self.inc.setRange(0, 2048)
-            # self.inc.setValue(256)
-            # self.inc.valueChanged.connect(self.incChange)
-            # self.inctext = QLabel('256')
-            # form1.addRow('', self.inctext)
-            # form1.addRow('Spectrogram increment', self.inc)
-
             layout2 = QVBoxLayout()
             layout2.addWidget(QLabel('<i>Example images from your dataset</i>'))
             self.flowLayout = QHBoxLayout()
@@ -2471,29 +2456,16 @@ class BuildCNNWizard(QWizard):
             self.flowLayout.addWidget(self.img3)
             layout2.addLayout(self.flowLayout)
 
-            # self.imgDir = QLineEdit('')
-            # self.imgDir.setReadOnly(True)
             self.imgDirwarn = QLabel('')
             self.imgDirwarn.setStyleSheet("QLabel { color : #800000; }")
-            # self.modelDir = QLineEdit('')
-            # self.modelDir.setReadOnly(True)
 
             self.cbAutoThr = QCheckBox("Tick if you want AviaNZ to decide threshold/s")
             self.cbAutoThr.setStyleSheet("QCheckBox { font-weight: bold; }")
             self.cbAutoThr.toggled.connect(self.onClicked)
 
-            # btnBrowse = QPushButton('Browse')
-            # btnBrowse.clicked.connect(self.selectFolder)
-            # layout3 = QHBoxLayout()
-            # layout3.addWidget(self.imgDir)
-            # layout3.addWidget(btnBrowse)
-
             layout1 = QVBoxLayout()
             layout1.addLayout(layout0)
             layout1.addLayout(layout2)
-            # layout1.addWidget(QLabel('<b>Select/make an empty folder to hold image data about to generate</b>'))
-            # layout1.addWidget(space)
-            # layout1. addLayout(layout3)
             layout1.addWidget(self.imgDirwarn)
             layout1.addWidget(self.cbAutoThr)
             self.setLayout(layout1)
@@ -2515,9 +2487,9 @@ class BuildCNNWizard(QWizard):
             elif np.max(self.cnntrain.maxgaps) * 1.5 <= 6:
                 self.imgtext.setText(str(np.max(self.cnntrain.maxgaps) * 1.5) + ' sec')
                 self.imgsec.setValue(np.max(self.cnntrain.maxgaps) * 1.5 * 100)
-            # elif np.max(mincallengths) <= 6:
-            #     self.imgtext.setText(str(np.max(mincallengths)) + ' sec')
-            #     self.imgsec.setValue(np.max(mincallengths) * 100)
+            elif np.max(self.cnntrain.mincallength) <= 6:
+                self.imgtext.setText(str(np.max(self.cnntrain.mincallength)) + ' sec')
+                self.imgsec.setValue(np.max(self.cnntrain.mincallength) * 100)
             self.cnntrain.imgWidth = self.imgsec.value() / 100
 
             self.setWindowInc()
@@ -2562,7 +2534,7 @@ class BuildCNNWizard(QWizard):
                 audiodata = self.loadFile(filename=self.cnntrain.traindata[ind][0], duration=self.imgsec.value()/100, offset=self.cnntrain.traindata[ind][1][0], fs=self.cnntrain.fs)
                 self.cnntrain.sp.data = audiodata
                 self.cnntrain.sp.sampleRate = self.cnntrain.fs
-                sgRaw = self.cnntrain.sp.spectrogram(window_width=self.windowidth, incr=self.incwidth)
+                sgRaw = self.cnntrain.sp.spectrogram(window_width=self.cnntrain.windowWidth, incr=self.cnntrain.windowInc)
                 maxsg = np.min(sgRaw)
                 self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
                 self.setColourMap()
@@ -2608,9 +2580,9 @@ class BuildCNNWizard(QWizard):
             self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
         def setWindowInc(self):
-            self.windowidth = self.cnntrain.imgsize[0] * 2
-            self.incwidth = int(np.ceil(self.imgsec.value() * self.cnntrain.fs / (self.cnntrain.imgsize[1] - 1)) / 100)
-            print('window and increment set: ', self.windowidth, self.incwidth)
+            self.cnntrain.windowWidth = self.cnntrain.imgsize[0] * 2
+            self.cnntrain.windowInc = int(np.ceil(self.imgsec.value() * self.cnntrain.fs / (self.cnntrain.imgsize[1] - 1)) / 100)
+            print('window and increment set: ', self.cnntrain.windowWidth, self.cnntrain.windowInc)
 
         def imglenChange(self, value):
             if value < 10:
@@ -2622,34 +2594,11 @@ class BuildCNNWizard(QWizard):
             self.setWindowInc()
             self.showimg(self.indx)
 
-        # def winChange(self, value):
-        #     if value < 32:
-        #         self.win.setValue(32)
-        #         self.wintext.setText('32')
-        #     else:
-        #         self.wintext.setText(str(value))
-        #
-        # def incChange(self, value):
-        #     if value < 8:
-        #         self.inc.setValue(8)
-        #         self.inctext.setText('8')
-        #     else:
-        #         self.inctext.setText(str(value))
-
-        # def selectFolder(self):
-        #     self.tempdir = QFileDialog.getExistingDirectory(self, 'Select/make an empty folder to hold image data to generate')
-        #     self.imgDir.setText(self.tempdir)
-        #     if any(os.scandir(self.tempdir)):
-        #         print('Please select an empty folder')
-        #         self.imgDirwarn.setText('<b>Warning: selected folder is not empty, content will be deleted when you proceed</b>')
-        #     self.completeChanged.emit()
-
         def cleanupPage(self):
             self.imgDirwarn.setText('')
             self.img1.setText('')
             self.img2.setText('')
             self.img3.setText('')
-            # self.imgDir.setText('')
 
         def validatePage(self):
             with pg.BusyCursor():
@@ -2662,7 +2611,6 @@ class BuildCNNWizard(QWizard):
             if self.redopages:
                 self.redopages = False
                 self.wizard().redoROCPages()
-            self.cnntrain.setP3(self.imgsec.value()/100,self.windowidth,self.incwidth)
             return True
 
     # page 4 - ROC curve
@@ -2737,9 +2685,9 @@ class BuildCNNWizard(QWizard):
                     '\tTrue Positive Rate: %.2f\n\tFalse Positive Rate: %.2f\n\tPrecision: %.2f\n\tAccuracy: %.2f' % (
                         self.TPR[thr_min_ind], self.FPR[thr_min_ind], self.Precision[thr_min_ind], self.Acc[thr_min_ind]))
 
-                # This will save the best thr
-                #self.wizard().parameterPage.bestThr[self.ct][0] = self.cnntrain.thrs[thr_min_ind]
-                #self.wizard().parameterPage.bestThrInd[self.ct] = self.cnntrain.thr_min_ind
+                # This will save the best lower thr
+                self.cnntrain.bestThr[self.ct][0] = self.cnntrain.thrs[thr_min_ind]
+                self.cnntrain.bestThrInd[self.ct] = thr_min_ind
 
                 self.completeChanged.emit()
 
@@ -2760,7 +2708,6 @@ class BuildCNNWizard(QWizard):
             if self.lblUpdate.text() == '':
                 return False
             else:
-                #self.cnntrain.setP4(self.wizard().parameterPage.bestThr[self.ct][0],self.wizard().parameterPage.bestThrInd[self.ct])
                 return True
 
     # page 5 - Summary
@@ -2911,6 +2858,8 @@ class BuildCNNWizard(QWizard):
             self.msgspp.setText("<b>Species:</b> %s" % (self.cnntrain.species))
             self.rbtn2.setText('Update existing (' + self.field("filter") + ')')
 
+            self.cnntrain.addCNNFilter()
+
             self.wizard().saveTestBtn.setVisible(True)
             self.wizard().saveTestBtn.setEnabled(False)
             self.completeChanged.emit()
@@ -2933,10 +2882,10 @@ class BuildCNNWizard(QWizard):
             self.refreshCustomBtn()
             self.completeChanged.emit()
 
-        def validatePage(self):
-            with pg.BusyCursor():
-                self.cnntrain.saveFilter()
-            return True
+        # def validatePage(self):
+        #     with pg.BusyCursor():
+        #         self.cnntrain.saveFilter()
+        #     return True
 
         def cleanupPage(self):
             self.wizard().saveTestBtn.setEnabled(False)

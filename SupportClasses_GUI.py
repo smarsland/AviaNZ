@@ -1050,7 +1050,7 @@ class LightedFileList(QListWidget):
         self.spList = set()
         self.fsList = set()
         self.listOfFiles = []
-        self.minCertainty = 100
+        self.minCertainty = 100     # TODO: not used in training, can remove?
 
         with pg.BusyCursor():
             # Read contents of current dir
