@@ -159,7 +159,7 @@ class AviaNZ(QMainWindow):
             print("Directory doesn't exist: making it")
             os.makedirs(self.SoundFileDir)
 
-        self.backupDatafiles()
+        #self.backupDatafiles()
 
         # INPUT FILE LOADING
         # search order: infile -> firstFile -> dialog
@@ -6139,6 +6139,7 @@ class AviaNZ(QMainWindow):
         QApplication.exit(0)
 
     def backupDatafiles(self):
+        # TODO: Can probably be removed
         print("Backing up files in ", self.SoundFileDir)
         listOfDataFiles = QDir(self.SoundFileDir).entryList(['*.data'])
         for file in listOfDataFiles:

@@ -249,9 +249,12 @@ class Spectrogram(QDialog):
             print("ERROR: bad window parameters specified, overriding")
             self.incr.setText('128')
             self.window_width.setText('256')
-        return [self.windowType.currentText(),self.mean_normalise.checkState(),self.equal_loudness.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text(),self.low.value(),self.high.value()]
+        low = int(self.low.value() // 100 *100)
+        high = int(self.high.value() // 100 *100)
+        return [self.windowType.currentText(),self.mean_normalise.checkState(),self.equal_loudness.checkState(),self.multitaper.checkState(),self.window_width.text(),self.incr.text(),low,high]
 
     def lowChange(self,value):
+        # NOTE returned values should also use this rounding
         value = value // 100 * 100
         self.lowtext.setText(str(value)+' Hz')
 
