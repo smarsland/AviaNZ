@@ -5,12 +5,14 @@
 "imgX": 256,
 "imgY": 256,
 "windowScaling": 2,
-"hopScaling": 5,
 "batchsize": 32,
-"batchsize_ROC":100,
-"t": 5000,
+"batchsize_ROC":8,
+"t": 3000,
+"tWidthShift": 1000,
 "test_size": 0.1,
 "loss": "binary_crossentropy",
 "optimizer": "adam",
-"metrics": ["accuracy"]
+"metrics": ["accuracy"],
+"epochs": 1,
+"hopScaling": 0.5
 }
