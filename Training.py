@@ -22,7 +22,7 @@
 
 # The separated code for CNN training
 
-import os, time, platform, copy, re, json, tempfile, csv
+import os, gc, re, json, tempfile
 from shutil import copyfile
 from shutil import disk_usage
 
@@ -73,11 +73,6 @@ class CNNtrain:
         self.folderTrain2 = folderTrain2
         self.filterName = recogniser
         self.annotatedAll = annotationLevel
-
-    def setP3(self, imgWidth, windowWidth, windowInc):
-        self.imgWidth = imgWidth
-        self.windowWidth = windowWidth
-        self.windowInc = windowInc
 
     def setP6(self, recogniser):
         self.newFilterName = recogniser
@@ -138,7 +133,7 @@ class CNNtrain:
             print('Warning: You may run out of space in the user directory!')
         return freeGB, totalbytes/1024/1024/1024
 
-    def genSegmentDataset(self,hasAnnotation):
+    def genSegmentDataset(self, hasAnnotation):
         self.traindata = []
         self.DataGen = CNN.GenerateData(self.currfilt, 0, 0, 0, 0, 0)
         # Dir1 - manually annotated
@@ -232,10 +227,13 @@ class CNNtrain:
 
     def train(self):
         # Create temp dir to hold img data and model
-        if self.tmpdir1:
-            self.tmpdir1.cleanup()
-        if self.tmpdir2:
-            self.tmpdir2.cleanup()
+        try:
+            if self.tmpdir1:
+                self.tmpdir1.cleanup()
+            if self.tmpdir2:
+                self.tmpdir2.cleanup()
+        except:
+            pass
         self.tmpdir1 = tempfile.TemporaryDirectory(prefix='CNN_')
         print('Temporary img dir:', self.tmpdir1.name)
         self.tmpdir2 = tempfile.TemporaryDirectory(prefix='CNN_')
@@ -244,32 +242,15 @@ class CNNtrain:
         # Find train segments belong to each class
         self.DataGen = CNN.GenerateData(self.currfilt, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1])
 
-        # Find how many images with default hop, adjust hop to make a good number of images also keep space for some augmenting
-        hop = [self.imgWidth / self.LearningDict['hopScaling'] for i in range(len(self.calltypes)+1)]
+        # Find how many images with default hop (=imgWidth), adjust hop to make a good number of images also keep space
+        # for some in-built augmenting (width-shift)
+        hop = [self.imgWidth for i in range(len(self.calltypes)+1)]
         imgN = self.DataGen.getImgCount(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop)
-        # Compare against the expected number of total images per class (t)
-        for i in range(len(self.calltypes) + 1):
-            fillratio1 = imgN[i] / (self.LearningDict['t'] - 2000)
-            fillratio2 = imgN[i] / self.LearningDict['t']
-            if fillratio1 < 0.75:   # too less, decrease hop
-                if i == len(self.calltypes):
-                    print('Noise: only %d images, adjusting hop from %.2f to %.2f' % (imgN[i], hop[i], self.imgWidth / (self.LearningDict['hopScaling']*2)))
-                else:
-                    print('%s: only %d images, adjusting hop from %.2f to %.2f' % (self.calltypes[i], imgN[i], hop[i], self.imgWidth/(self.LearningDict['hopScaling']*2)))
-                hop[i] = self.imgWidth/(self.LearningDict['hopScaling']*2)
-            elif fillratio1 > 1 and fillratio2 > 0.75:  # increase hop and make room for augmenting
-                if i == len(self.calltypes):
-                    print('Noise: %d images, adjusting hop from %.2f to %.2f' % (imgN[i], hop[i], self.imgWidth / (self.LearningDict['hopScaling']*0.5)))
-                else:
-                    print('%s: %d images, adjusting hop from %.2f to %.2f' % (
-                    self.calltypes[i], imgN[i], hop[i], self.imgWidth / (self.LearningDict['hopScaling']*0.5)))
-                hop[i] = self.imgWidth/(self.LearningDict['hopScaling']*0.5)
-            elif fillratio2 > 1:    # too many, avoid hop
-                if i == len(self.calltypes):
-                    print('Noise: %d images, adjusting hop from %.2f to %.2f' % (imgN[i], hop[i], self.imgWidth))
-                else:
-                    print('%s: %d images, adjusting hop from %.2f to %.2f' % (self.calltypes[i], imgN[i], hop[i], self.imgWidth))
-                hop[i] = self.imgWidth
+        print('Expected number of images when no overlap: ', imgN)
+        print('Updating hop...')
+        hop = self.updateHop(imgN, hop)
+        imgN = self.DataGen.getImgCount(dirName=self.tmpdir1.name, dataset=self.traindata, hop=hop)
+        print('Expected number of images with updated hop: ', imgN)
 
         print('Generating CNN images...')
         self.genImgDataset(hop)
@@ -280,9 +261,9 @@ class CNNtrain:
 
         # CNN training
         cnn = CNN.CNN(self.species, self.calltypes, self.fs, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1])
-        #cnn = CNN.CNN(self.species, self.calltypes, self.fs, self.imgsec.value() / 100, self.windowidth, self.incwidth, self.imgsize[0], self.imgsize[1])
 
         # 1. Data augmentation
+        print('Data augmenting...')
         filenames, labels = cnn.getImglist(self.tmpdir1.name)
         labels = np.argmax(labels, axis=1)
         ns = [np.shape(np.where(labels == i)[0])[0] for i in range(len(self.calltypes) + 1)]
@@ -306,9 +287,23 @@ class CNNtrain:
                     np.save(os.path.join(self.tmpdir1.name, str(ct), str(ct) + '_aug' + "%06d" % k + '.npy'),
                             sgRaw)
                     k += 1
+                try:
+                    del batch
+                    del samples
+                    del newbatch
+                except:
+                    pass
+                gc.collect()
 
         # 2. TRAIN - use custom image generator
         filenamesall, labelsall = cnn.getImglist(self.tmpdir1.name)
+        print('Final CNN images...')
+        labelsalld = np.argmax(labelsall, axis=1)
+        ns = [np.shape(np.where(labelsalld == i)[0])[0] for i in range(len(self.calltypes) + 1)]
+        for i in range(len(self.calltypes)):
+            print("\t%s:\t%d\n" % (self.calltypes[i], ns[i]))
+        print("\t%s:\t%d\n" % ("Noise", ns[-1]))
+
         filenamesall, labelsall = shuffle(filenamesall, labelsall)
         
         X_train_filenames, X_val_filenames, y_train, y_val = train_test_split(filenamesall, labelsall, test_size=self.LearningDict['test_size'], random_state=1)
@@ -319,27 +314,53 @@ class CNNtrain:
         cnn.createArchitecture()
 
         print('Training...')
-        cnn.train(modelsavepath=self.tmpdir2.name, training_batch_generator=training_batch_generator, validation_batch_generator=validation_batch_generator, batch_size=self.LearningDict['batchsize'])
+        cnn.train(modelsavepath=self.tmpdir2.name, training_batch_generator=training_batch_generator, validation_batch_generator=validation_batch_generator, epochs=self.LearningDict['epochs'])
         print('Training complete!')
 
-        self.bestThr = [[0, 0] for i in range(len(self.calltypes) + 1)]
-        self.bestThrInd = [0 for i in range(len(self.calltypes) + 1)]
+        self.bestThr = [[0, 0] for i in range(len(self.calltypes))]
+        self.bestThrInd = [0 for i in range(len(self.calltypes))]
 
         # 3. Prepare ROC plots
         print('Generating ROC statistics...')
+        # Load the model
+        # Find best weights
+        weights = []
+        epoch = []
+        for r, d, files in os.walk(self.tmpdir2.name):
+            for f in files:
+                if f.endswith('.h5') and 'weights' in f:
+                    epoch.append(int(f.split('weights.')[-1][:2]))
+                    weights.append(f)
+            j = np.argmax(epoch)
+            weightfile = weights[j]
+        model = os.path.join(self.tmpdir2.name, 'model.json')
+        self.bestweight = os.path.join(self.tmpdir2.name, weightfile)
+        # Load the model and prepare
+        jsonfile = open(model, 'r')
+        loadedmodeljson = jsonfile.read()
+        jsonfile.close()
+        model = model_from_json(loadedmodeljson)
+        # Load weights into new model
+        model.load_weights(self.bestweight)
+        # Compile the model
+        model.compile(loss=self.LearningDict['loss'], optimizer=self.LearningDict['optimizer'],
+                      metrics=self.LearningDict['metrics'])
+        # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+
         TPs = [0 for i in range(len(self.calltypes) + 1)]
         FPs = [0 for i in range(len(self.calltypes) + 1)]
         TNs = [0 for i in range(len(self.calltypes) + 1)]
         FNs = [0 for i in range(len(self.calltypes) + 1)]
-        CTps = [[] for i in range(len(self.calltypes) + 1)]
+        CTps = [[[] for i in range(len(self.calltypes) + 1)] for j in range(len(self.calltypes) + 1)]
         N = len(filenames)
         
         for i in range(int(np.ceil(N / self.LearningDict['batchsize_ROC']))):
             imagesb = cnn.loadImgBatch(filenames[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)])
             labelsb = labels[i * self.LearningDict['batchsize_ROC']:min((i + 1) * self.LearningDict['batchsize_ROC'], N)]
             for ct in range(len(self.calltypes) + 1):
-                res, ctp = self.testCT(ct, imagesb, labelsb)  # res=[thrlist, TPs, FPs, TNs, FNs]
-                CTps[ct] += ctp
+                res, ctp = self.testCT(ct, imagesb, labelsb, model)  # res=[thrlist, TPs, FPs, TNs, FNs], ctp=[[0to0 probs], [0to1 probs], [0to2 probs]]
+                for j in range(len(self.calltypes) + 1):
+                    CTps[ct][j] += ctp[j]
                 if TPs[ct] == 0:
                     TPs[ct] = res[1]
                     FPs[ct] = res[2]
@@ -365,33 +386,34 @@ class CNNtrain:
                              i in range(len(self.Thrs))]
 
             # Temp plot is saved in train data directory - prediction probabilities for instances of current ct
-            CTps[ct] = sorted(CTps[ct], key=float)
-            fig = plt.figure()
-            ax = plt.axes()
-            ax.plot(CTps[ct], 'k')
-            ax.plot(CTps[ct], 'bo')
-            plt.xlabel('Number of samples')
-            plt.ylabel('Probability')
-            if ct == len(self.calltypes):
-                plt.title('Class: Noise')
-            else:
-                plt.title('Class: ' + str(self.calltypes[ct]))
-            if self.folderTrain1:
-                fig.savefig(os.path.join(self.folderTrain1, str(ct) + '.png'))
-            else:
-                fig.savefig(os.path.join(self.folderTrain2, str(ct) + '.png'))
-            plt.close()
+            for i in range(len(self.calltypes) + 1):
+                CTps[ct][i] = sorted(CTps[ct][i], key=float)
+                fig = plt.figure()
+                ax = plt.axes()
+                ax.plot(CTps[ct][i], 'k')
+                ax.plot(CTps[ct][i], 'bo')
+                plt.xlabel('Number of samples')
+                plt.ylabel('Probability')
+                if ct == len(self.calltypes):
+                    plt.title('Class: Noise')
+                else:
+                    plt.title('Class: ' + str(self.calltypes[ct]))
+                if self.folderTrain1:
+                    fig.savefig(os.path.join(self.folderTrain1, str(ct) + '-' + str(i) + '.png'))
+                else:
+                    fig.savefig(os.path.join(self.folderTrain2, str(ct) + '-' + str(i) + '.png'))
+                plt.close()
 
         # 4. Auto select the upper threshold (fpr = 0)
-        for ct in range(len(self.calltypes) + 1):
+        for ct in range(len(self.calltypes)):
             try:
                 self.bestThr[ct][1] = self.Thrs[self.FPRs[ct].index(0.0)]
             except:
-                self.bestThr[ct][1] = self.Thrs[len(self.FPRs) - 1]
+                self.bestThr[ct][1] = self.Thrs[len(self.FPRs[ct]) - 1]
 
         # 5. Auto select lower threshold IF the user asked so
         if self.autoThr:
-            for ct in range(len(self.calltypes) + 1):
+            for ct in range(len(self.calltypes)):
                 # Get min distance to ROC from (0 FPR, 1 TPR)
                 distarr = (np.float64(1) - self.TPRs[ct]) ** 2 + (np.float64(0) - self.FPRs[ct]) ** 2
                 self.thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)[0]
@@ -399,7 +421,33 @@ class CNNtrain:
                 self.bestThrInd[ct] = self.thr_min_ind
         return True
 
-    def testCT(self, ct, testimages, targets):
+    def updateHop(self, imgN, hop):
+        ''' Update hop'''
+        # Compare against the expected number of total images per class (t)
+        for i in range(len(self.calltypes) + 1):
+            fillratio1 = imgN[i] / (self.LearningDict['t'] - self.LearningDict['tWidthShift'])
+            fillratio2 = imgN[i] / self.LearningDict['t']
+            if fillratio1 < 0.75:   # too less, decrease hop
+                if i == len(self.calltypes):
+                    print('Noise: only %d images, adjusting hop from %.2f to %.2f' % (imgN[i], hop[i], hop[i]*fillratio1))
+                else:
+                    print('%s: only %d images, adjusting hop from %.2f to %.2f' % (self.calltypes[i], imgN[i], hop[i], hop[i]*fillratio1))
+                hop[i] = hop[i]*fillratio1
+            elif fillratio1 > 1 and fillratio2 > 0.75:  # increase hop and make room for augmenting
+                if i == len(self.calltypes):
+                    print('Noise: %d images, adjusting hop from %.2f to %.2f' % (imgN[i], hop[i], hop[i]*fillratio1))
+                else:
+                    print('%s: %d images, adjusting hop from %.2f to %.2f' % (self.calltypes[i], imgN[i], hop[i], hop[i]*fillratio1))
+                hop[i] = hop[i]*fillratio1
+            elif fillratio2 > 1:    # too many, avoid hop
+                if i == len(self.calltypes):
+                    print('Noise: %d images, adjusting hop from %.2f to %.2f' % (imgN[i], hop[i], hop[i]*fillratio2))
+                else:
+                    print('%s: %d images, adjusting hop from %.2f to %.2f' % (self.calltypes[i], imgN[i], hop[i], hop[i]*fillratio2))
+                hop[i] = hop[i]*fillratio2
+        return hop
+
+    def testCT(self, ct, testimages, targets, model):
         '''
         :param ct: integer relevant to call type
         :return: [thrlist, TPs, FPs, TNs, FNs], ctprob
@@ -411,35 +459,13 @@ class CNNtrain:
         self.TNs = []
         self.FNs = []
 
-        # Find best weights
-        weights = []
-        epoch = []
-        for r, d, files in os.walk(self.tmpdir2.name):
-            for f in files:
-                if f.endswith('.h5') and 'weights' in f:
-                    epoch.append(int(f.split('weights.')[-1][:2]))
-                    weights.append(f)
-            j = np.argmax(epoch)
-            weightfile = weights[j]
-        model = os.path.join(self.tmpdir2.name, 'model.json')
-        self.bestweight = os.path.join(self.tmpdir2.name, weightfile)
-        # Load the model and prepare
-        jsonfile = open(model, 'r')
-        loadedmodeljson = jsonfile.read()
-        jsonfile.close()
-        model = model_from_json(loadedmodeljson)
-        # Load weights into new model
-        model.load_weights(self.bestweight)
-        # Compile the model
-        model.compile(loss=self.LearningDict['loss'], optimizer=self.LearningDict['optimizer'], metrics=self.LearningDict['metrics'])
-        #model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-
         # Predict and temp plot (just for me)
         pre = model.predict(testimages)
-        ctprob = []
+        ctprob = [[] for i in range(len(self.calltypes) + 1)]
         for i in range(len(targets)):
             if targets[i] == ct:
-                ctprob.append(pre[i][ct])
+                for ind in range(len(self.calltypes) + 1):
+                    ctprob[ind].append(pre[i][ind])
 
         # Get the stats over different thr
         labels = [i for i in range(len(self.calltypes) + 1)]
@@ -473,24 +499,25 @@ class CNNtrain:
 
     def saveFilter(self):
         # Add CNN component to the current filter
-        CNNdic = {}
-        CNNdic["CNN_name"] = "CNN_name"
-        CNNdic["loss"] = self.LearningDict['loss']
-        CNNdic["optimizer"] = self.LearningDict['optimizer']
-        CNNdic["windowInc"] = [self.windowWidth,self.windowInc] #[self.wizard().parameterPage.windowidth, self.wizard().parameterPage.incwidth]
-        CNNdic["win"] = [self.imgWidth,self.imgWidth/5] #[self.wizard().parameterPage.imgsec.value() / 100, self.wizard().parameterPage.imgsec.value() / 500]
-        CNNdic["inputdim"] = self.imgsize #self.wizard().parameterPage.imgsize
-        output = {}
-        thr = []
-        for ct in range(len(self.calltypes)):
-            output[str(ct)] = self.calltypes[ct]
-            thr.append(self.bestThr[ct])
-        output[str(len(self.calltypes))] = "Noise"
-        # thr.append(self.wizard().parameterPage.bestThr[len(self.calltypes)])
-        CNNdic["output"] = output
-        CNNdic["thr"] = thr
-        print(CNNdic)
-        self.currfilt["CNN"] = CNNdic
+        self.addCNNFilter()
+        # CNNdic = {}
+        # CNNdic["CNN_name"] = "CNN_name"
+        # CNNdic["loss"] = self.LearningDict['loss']
+        # CNNdic["optimizer"] = self.LearningDict['optimizer']
+        # CNNdic["windowInc"] = [self.windowWidth,self.windowInc]
+        # CNNdic["win"] = [self.imgWidth,self.imgWidth/5]     # TODO: remove hop
+        # CNNdic["inputdim"] = self.imgsize
+        # output = {}
+        # thr = []
+        # for ct in range(len(self.calltypes)):
+        #     output[str(ct)] = self.calltypes[ct]
+        #     thr.append(self.bestThr[ct])
+        # output[str(len(self.calltypes))] = "Noise"
+        # # thr.append(self.wizard().parameterPage.bestThr[len(self.calltypes)])
+        # CNNdic["output"] = output
+        # CNNdic["thr"] = thr
+        # print(CNNdic)
+        # self.currfilt["CNN"] = CNNdic
 
         if self.CLI:
             # write out the filter and CNN model
@@ -517,7 +544,27 @@ class CNNtrain:
             self.tmpdir2.cleanup()
             print("Recogniser saved, don't forget to test it!")
 
+    def addCNNFilter(self):
+        # Add CNN component to the current filter
+        CNNdic = {}
+        CNNdic["CNN_name"] = "CNN_name"
+        CNNdic["loss"] = self.LearningDict['loss']
+        CNNdic["optimizer"] = self.LearningDict['optimizer']
+        CNNdic["windowInc"] = [self.windowWidth,self.windowInc]
+        CNNdic["win"] = [self.imgWidth,self.imgWidth/5]     # TODO: remove hop
+        CNNdic["inputdim"] = self.imgsize
+        output = {}
+        thr = []
+        for ct in range(len(self.calltypes)):
+            output[str(ct)] = self.calltypes[ct]
+            thr.append(self.bestThr[ct])
+        output[str(len(self.calltypes))] = "Noise"
+        # thr.append(self.wizard().parameterPage.bestThr[len(self.calltypes)])
+        CNNdic["output"] = output
+        CNNdic["thr"] = thr
+        print(CNNdic)
+        self.currfilt["CNN"] = CNNdic
+
     def cleanSpecies(self, species):
         """ Returns cleaned species name"""
         return re.sub(r'[^A-Za-z0-9()-]', "_", species)
-

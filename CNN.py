@@ -367,7 +367,7 @@ class CNN:
         # self.model.save_weights(modelsavepath + "/weights.h5")
         print("Saved model to ", modelsavepath)
 
-    def train(self, modelsavepath, training_batch_generator, validation_batch_generator, batch_size):
+    def train(self, modelsavepath, training_batch_generator, validation_batch_generator, epochs):
         ''' Train the model - use image generator '''
 
         self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -382,7 +382,7 @@ class CNN:
 
         # SRM: TODO:!! 50 epochs
         self.history = self.model.fit(training_batch_generator,
-                                      epochs=1,
+                                      epochs=epochs,
                                       verbose=1,
                                       validation_data=validation_batch_generator,
                                       callbacks=[checkpoint, early])
@@ -442,7 +442,12 @@ class GenerateData:
                         ctSegments = segments.getCalltype(self.species, self.calltypes[calltypei])
                     for indx in ctSegments:
                         seg = segments[indx]
-                        calltypeSegments.append([wavFile, seg[:2], calltypei])
+                        # skip uncertain segments
+                        cert = [lab["certainty"] if lab["species"] == self.species else 100 for lab in seg[4]]
+                        if cert:
+                            mincert = min(cert)
+                            if mincert == 100:
+                                calltypeSegments.append([wavFile, seg[:2], calltypei])
 
         return calltypeSegments
 
