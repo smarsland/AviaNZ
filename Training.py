@@ -39,6 +39,8 @@ from time import strftime, gmtime
 import SupportClasses
 import SignalProc
 import CNN
+import Segment, WaveletSegment
+import AviaNZ_batch
 
 class CNNtrain:
 
@@ -568,3 +570,216 @@ class CNNtrain:
     def cleanSpecies(self, species):
         """ Returns cleaned species name"""
         return re.sub(r'[^A-Za-z0-9()-]', "_", species)
+
+
+class CNNtest:
+
+    def __init__(self,testDir,currfilt,configdir,filterdir,CLI=False):
+        self.testDir = testDir
+        self.outfile = open(os.path.join(self.testDir, "test-results.txt"),"w")
+
+        if CLI:
+            cl = SupportClasses.ConfigLoader()
+            self.FilterDict = cl.filters(filterdir, bats=False)
+            if currfilt.lower().endswith('.txt'):
+                self.currfilt = self.FilterDict[currfilt[:-4]]
+            else:
+                self.currfilt = self.FilterDict[currfilt]
+        else:
+            self.currfilt = currfilt
+        
+        self.configdir = configdir
+        self.filterdir = filterdir
+        self.species = self.currfilt['species']
+        self.sampleRate = self.currfilt['SampleRate']
+        self.calltypes = []
+        for fi in self.currfilt['Filters']:
+            self.calltypes.append(fi['calltype'])
+
+        self.outfile.write("Recogniser name: %s\n" %(self.currfilt))
+        self.outfile.write("Species name: %s\n" % (self.species))
+        self.outfile.write("Using data: %s\n" % (self.testDir))
+
+        # 0. Generate GT files from annotations in test folder
+        self.manSegNum = 0
+        self.window = 1
+        inc = None
+        print('Generating GT...')
+        for root, dirs, files in os.walk(self.testDir):
+            for file in files:
+                wavFile = os.path.join(root, file)
+                if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and file + '.data' in files:
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(wavFile + '.data')
+                    self.manSegNum += len(segments.getSpecies(self.species))
+                    # Currently, we ignore call types here and just
+                    # look for all calls for the target species.
+                    segments.exportGT(wavFile, self.species, window=self.window, inc=inc)
+
+        if self.manSegNum == 0:
+            print("ERROR: no segments for species %s found" % self.species)
+            self.flag = False
+            self.text = 0
+            return
+
+        # 1. Run Batch Processing upto WF and generate .tempdata files (no post-proc)
+        avianz_batch = AviaNZ_batch.AviaNZ_batchProcess(parent=None, configdir=self.configdir, mode="test",
+                                                        sdir=self.testDir, recogniser=self.species, wind=True)
+
+        # 2. Report statistics of WF followed by general post-proc steps (no CNN but wind-merge neighbours-delete short)
+        self.flag, self.text = self.getSummary(avianz_batch, CNN=False)
+
+        # 3. Report statistics of WF followed by post-proc steps (wind-CNN-merge neighbours-delete short)
+        if "CNN" in self.currfilt:
+            cl = SupportClasses.ConfigLoader()
+            filterlist = cl.filters(self.filterdir, bats=False)
+            CNNDicts = cl.CNNmodels(filterlist, self.filterdir, [self.species])
+            if self.species in CNNDicts.keys():
+                CNNmodel = CNNDicts[self.species]
+                flag, text = self.getSummary(avianz_batch, CNN=True, CNNmodel=CNNmodel)
+            else:
+                print("Couldn't find a matching CNN!")
+                self.outfile.write("-- End of testing --\n")
+                self.outfile.close()
+                return
+        self.outfile.write("-- End of testing --\n")
+        self.outfile.close()
+
+        # Tidy up
+        for root, dirs, files in os.walk(self.testDir):
+            for file in files:
+                if file.endswith('.tmpdata'):
+                    os.remove(os.path.join(root, file))
+
+        if CLI:
+            print("Output written to " + os.path.join(self.testDir, "test-results.txt"))
+
+    def getOutput(self):
+        return self.flag, self.text
+
+    def findCTsegments(self, file, calltypei):
+        calltypeSegments = []
+        if file.lower().endswith('.wav') and os.path.isfile(file + '.tmpdata'):
+            segments = Segment.SegmentList()
+            segments.parseJSON(file + '.tmpdata')
+            if len(self.calltypes) == 1:
+                ctSegments = segments.getSpecies(self.species)
+            else:
+                ctSegments = segments.getCalltype(self.species, self.calltypes[calltypei])
+            for indx in ctSegments:
+                seg = segments[indx]
+                calltypeSegments.append(seg[:2])
+
+        return calltypeSegments
+
+    def getSummary(self, avianz_batch, CNN=False, CNNmodel=None):
+        autoSegNum = 0
+        autoSegCT = [[] for i in range(len(self.calltypes))]
+        ws = WaveletSegment.WaveletSegment()
+        TP = FP = TN = FN = 0
+        for root, dirs, files in os.walk(self.testDir):
+            for file in files:
+                wavFile = os.path.join(root, file)
+                if file.lower().endswith('.wav') and os.stat(wavFile).st_size != 0 and \
+                        file + '.tmpdata' in files and file[:-4] + '-res' + str(float(self.window)) + 'sec.txt' in files:
+                    autoSegCTCurrent = [[] for i in range(len(self.calltypes))]
+                    avianz_batch.filename = os.path.join(root, file)
+                    avianz_batch.loadFile(self.species, anysound=False)
+                    duration = int(np.ceil(len(avianz_batch.audiodata) / avianz_batch.sampleRate))
+                    for i in range(len(self.calltypes)):
+                        ctsegments = self.findCTsegments(avianz_batch.filename, i)
+                        post = Segment.PostProcess(configdir=self.configdir, audioData=avianz_batch.audiodata,
+                                                   sampleRate=avianz_batch.sampleRate,
+                                                   tgtsampleRate=self.sampleRate, segments=ctsegments,
+                                                   subfilter=self.currfilt['Filters'][i], CNNmodel=CNNmodel, cert=50)
+                        post.wind()
+                        if CNN and CNNmodel:
+                            post.CNN()
+                        if 'F0' in self.currfilt['Filters'][i] and 'F0Range' in self.currfilt['Filters'][i]:
+                            if self.currfilt['Filters'][i]["F0"]:
+                                print("Checking for fundamental frequency...")
+                                post.fundamentalFrq()
+                        post.joinGaps(maxgap=self.currfilt['Filters'][i]['TimeRange'][3])
+                        post.deleteShort(minlength=self.currfilt['Filters'][i]['TimeRange'][0])
+                        if post.segments:
+                            for seg in post.segments:
+                                autoSegCTCurrent[i].append(seg[0])
+                                autoSegCT[i].append(seg[0])
+                                autoSegNum += 1
+                    # back-convert to 0/1:
+                    det01 = np.zeros(duration)
+                    for i in range(len(self.calltypes)):
+                        for seg in autoSegCTCurrent[i]:
+                            det01[int(seg[0]):int(seg[1])] = 1
+                    # get and parse the agreement metrics
+                    GT = self.loadGT(os.path.join(root, file[:-4] + '-res' + str(float(self.window)) + 'sec.txt'),
+                                     duration)
+                    _, _, tp, fp, tn, fn = ws.fBetaScore(GT, det01)
+                    TP += tp
+                    FP += fp
+                    TN += tn
+                    FN += fn
+        # Summary
+        total = TP + FP + TN + FN
+        if total == 0:
+            print("ERROR: failed to find any testing data")
+            return
+
+        if TP + FN != 0:
+            recall = TP / (TP + FN)
+        else:
+            recall = 0
+        if TP + FP != 0:
+            precision = TP / (TP + FP)
+        else:
+            precision = 0
+        if TN + FP != 0:
+            specificity = TN / (TN + FP)
+        else:
+            specificity = 0
+        accuracy = (TP + TN) / (TP + FP + TN + FN)
+
+        if CNN:
+            self.outfile.write("\n\n-- Wavelet Pre-Processor + CNN detection summary --\n")
+        else:
+            self.outfile.write("\n-- Wavelet Pre-Processor detection summary --\n")
+        self.outfile.write("TP | FP | TN | FN seconds:\t %.2f | %.2f | %.2f | %.2f\n" % (TP, FP, TN, FN))
+        self.outfile.write("Specificity:\t\t%.2f %%\n" % (specificity * 100))
+        self.outfile.write("Recall (sensitivity):\t%.2f %%\n" % (recall * 100))
+        self.outfile.write("Precision (PPV):\t%.2f %%\n" % (precision * 100))
+        self.outfile.write("Accuracy:\t\t%.2f %%\n\n" % (accuracy * 100))
+        self.outfile.write("Manually labelled segments:\t%d\n" % (self.manSegNum))
+        for i in range(len(self.calltypes)):
+            self.outfile.write("Auto suggested \'%s\' segments:\t%d\n" % (self.calltypes[i], len(autoSegCT[i])))
+        self.outfile.write("Total auto suggested segments:\t%d\n\n" % (autoSegNum))
+
+        if CNN:
+            text = "Wavelet Pre-Processor + CNN detection summary\n\n\tTrue Positives:\t%d seconds (%.2f %%)\n\tFalse Positives:\t%d seconds (%.2f %%)\n\tTrue Negatives:\t%d seconds (%.2f %%)\n\tFalse Negatives:\t%d seconds (%.2f %%)\n\n\tSpecificity:\t %.2f %%\n\tRecall:\t\t%.2f %%\n\tPrecision:\t%.2f %%\n\tAccuracy:\t%.2f %%\n" \
+                   % (TP, TP * 100 / total, FP, FP * 100 / total, TN, TN * 100 / total, FN, FN * 100 / total,
+                      specificity * 100, recall * 100, precision * 100, accuracy * 100)
+        else:
+            text = "Wavelet Pre-Processor detection summary\n\n\tTrue Positives:\t%d seconds (%.2f %%)\n\tFalse Positives:\t%d seconds (%.2f %%)\n\tTrue Negatives:\t%d seconds (%.2f %%)\n\tFalse Negatives:\t%d seconds (%.2f %%)\n\n\tSpecificity:\t %.2f %%\n\tRecall:\t\t%.2f %%\n\tPrecision:\t%.2f %%\n\tAccuracy:\t%.2f %%\n" \
+                   % (TP, TP * 100 / total, FP, FP * 100 / total, TN, TN * 100 / total, FN, FN * 100 / total,
+                      specificity * 100, recall * 100, precision * 100, accuracy * 100)
+        return CNN, text
+
+    def loadGT(self, filename, length):
+        import csv
+        annotation = []
+        # Get the segmentation from the txt file
+        with open(filename) as f:
+            reader = csv.reader(f, delimiter="\t")
+            d = list(reader)
+        if d[-1] == []:
+            d = d[:-1]
+        if len(d) != length:
+            print("ERROR: annotation length %d does not match file duration %d!" % (len(d), n))
+            self.annotation = []
+            return False
+
+        # for each second, store 0/1 presence:
+        for row in d:
+            annotation.append(int(row[1]))
+
+        return annotation
+
