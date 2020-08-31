@@ -29,6 +29,9 @@ import SupportClasses
 
 # For training
 # python AviaNZ.py -c -t -d "/home/marslast/Projects/AviaNZ/Sound Files/train5" -e "/home/marslast/Projects/AviaNZ/Sound Files/train6" -r "Morepork" -x 2
+
+# For testing 
+# python AviaNZ.py -c -u -d "/home/marslast/Projects/AviaNZ/Sound Files/test1" -r "Kiwi (Tokoeka Rakiura)"
 @click.command()
 @click.option('-c', '--cli', is_flag=True, help='Run in command-line mode')
 @click.option('-s', '--cheatsheet', is_flag=True, help='Make the cheatsheet images')
@@ -37,6 +40,7 @@ import SupportClasses
 @click.option('-o', '--imagefile', type=click.Path(), help='If specified, a spectrogram will be saved to this file')
 @click.option('-b', '--batchmode', is_flag=True, help='Batch processing')
 @click.option('-t', '--training', is_flag=True, help='Train a CNN recogniser')
+@click.option('-u', '--testing', is_flag=True, help='Train a recogniser')
 @click.option('-d', '--sdir1', type=click.Path(), help='Input sound directory, training or batch processing')
 @click.option('-e', '--sdir2', type=click.Path(), help='Second input sound directory, training')
 @click.option('-r', '--recogniser', type=str, help='Recogniser name, batch processing')
@@ -44,7 +48,7 @@ import SupportClasses
 @click.option('-x', '--width', type=int, help='Width of windows for CNN')
 @click.argument('command', nargs=-1)
 
-def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, sdir1, sdir2, recogniser, wind, width, command):
+def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command):
     # determine location of config file and bird lists
     if platform.system() == 'Windows':
         # Win
@@ -131,6 +135,14 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 print("Training complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dirs (-d and -e) and recogniser name (-r) are essential for training")
+                sys.exit()
+        elif testing:
+            import Training
+            if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
+                testing = Training.CNNtest(sdir1,recogniser,configdir,filterdir,CLI=True)
+                print("Testing complete, closing AviaNZ")
+            else:
+                print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for training")
                 sys.exit()
         else:
             if (cheatsheet or zooniverse) and isinstance(infile, str):
