@@ -5151,7 +5151,7 @@ class AviaNZ(QMainWindow):
                     CNNmodel = None
                     if filtname in self.CNNDicts.keys():
                         CNNmodel = self.CNNDicts[filtname]
-                    post = Segment.PostProcess(configdir=self.configfile, audioData=self.audiodata, sampleRate=self.sampleRate,
+                    post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=speciesData['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
                     if wind and self.useWindF(speciesData['Filters'][filtix]['FreqRange'][0], speciesData['Filters'][filtix]['FreqRange'][1]):
