@@ -1,7 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
-#include "ce_detect.h"
+#include "detector.h"
 
 struct ChpList {
     // size_t prev;
@@ -65,7 +65,7 @@ int alg1(double xs[], const size_t n, const double sd, const double penalty){
     size_t bgsizes[n];
     bgsizes[0] = 1;
     for(size_t t=1; t<n; t++){
-        printf("Cycle %zu/%zu\n", t+1, n);
+        // printf("Cycle %zu/%zu\n", t+1, n);
         // F_B = F(t-1) + C0(t)
         bgcost = F[t-1] + cost0sq(xs[t], wts[t-1]);
 
@@ -109,7 +109,7 @@ int alg1(double xs[], const size_t n, const double sd, const double penalty){
             // attach the new chp pair
             chps[t].start = bestsegstart+1;
             chps[t].end = t;
-            printf("! Ch.p. detected at %zu-%zu\n", bestsegstart+1, t);
+            // printf("! Ch.p. detected at %zu-%zu\n", bestsegstart+1, t);
         }
 
         // update and prune possible segment starts
@@ -120,7 +120,7 @@ int alg1(double xs[], const size_t n, const double sd, const double penalty){
             }
         }
         possiblestarts[numpossiblestarts++] = t;
-        printf("Current wt: %f, F(t): %.2f\n", wts[t], F[t]);
+        // printf("Current wt: %f, F(t): %.2f\n", wts[t], F[t]);
     }
 
     // extract changepoints
@@ -158,7 +158,7 @@ int main(int argc, char *argv[]){
     fclose(fp);
 
     double sd = 1;
-    double penalty = 3*log(pow(n, 1.1))*0.1;
+    double penalty = 3*1.1*log(n);
     printf("Detected settings: %zu datapoints, SD=%f, beta=%f\n", n, sd, penalty);
 
     alg1(xs, n, sd, penalty);
