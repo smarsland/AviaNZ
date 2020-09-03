@@ -16,7 +16,7 @@ ext/ce_wvd.c
 ext/ce_wvd_functions.c
 ext/ce_wvd_functions.h
 ext/SplitLauncher.c
-ext/SplitLauncher.c
+ext/ce_detect.c
 ext/build/
 
 # Latex
