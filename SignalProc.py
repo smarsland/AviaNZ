@@ -296,7 +296,7 @@ class SignalProc:
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
     # @profile(stream=fp)
-    def spectrogram(self, window_width=None,incr=None,window='Hann',equal_loudness=False,mean_normalise=True,onesided=True,multitaper=False,need_even=False):
+    def spectrogram(self, window_width=None,incr=None,window='Hann',equal_loudness=False,mean_normalise=True,onesided=True,multitaper=False,reassigned=False,need_even=False):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
@@ -383,10 +383,31 @@ class SignalProc:
                 self.sg = np.fliplr(out)
             else:
                 print("Option not available")
+        elif reassigned:
+            ft = np.zeros((len(starts), window_width),dtype='complex')
+            ft2 = np.zeros((len(starts), window_width),dtype='complex')
+            for i in starts:
+                winddata = window * self.sg[i:i + window_width]
+                ft[i // incr, :] = fft.fft(winddata)[:window_width]
+                winddata = window * np.roll(self.sg[i:i + window_width],1)
+                ft2[i // incr, :] = fft.fft(winddata)[:window_width]
+
+            # Approximate the derivative by finite differences and get the angle of the complex number
+            CIF = np.mod(np.angle(ft*np.conj(ft2))/(2*np.pi),1.0)
+            delay = (0.5 - np.mod(np.angle(ft*np.conj(np.roll(ft,1,axis=1)))/(2*np.pi),1.0))
+
+            # Messiness. Need to work out where to put each pixel
+            # I wish I could think of a way that didn't need a histogram
+            times = np.tile(np.arange(0, (len(self.data) - window_width)/self.sampleRate, incr/self.sampleRate) + window_width/self.sampleRate/2,(np.shape(delay)[1],1)).T + delay*window_width/self.sampleRate
+            self.sg,_,_ = np.histogram2d(times.flatten(),CIF.flatten(),weights=np.abs(ft).flatten(),bins=np.shape(ft))
+
+            self.sg = np.absolute(self.sg[:, :window_width //2]) + 0.1
+            
+            print(np.min(self.sg),np.max(self.sg))
+
         else:
             if need_even:
                 starts = np.hstack((starts, np.zeros((window_width - len(self.sg) % window_width),dtype=int)))
-
 
             # this mode is optimized for speed, but reportedly sometimes
             # results in crashes when lots of large files are batch processed.
@@ -416,6 +437,7 @@ class SignalProc:
                         winddata = window * self.sg[i:i + window_width]
                         ft[i // incr, :] = fft.fft(winddata)
                 self.sg = np.absolute(ft)
+            print(np.min(self.sg),np.max(self.sg))
 
             del ft
             gc.collect()
