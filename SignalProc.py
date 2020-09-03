@@ -712,7 +712,7 @@ class SignalProc:
         if self.data is None or len(self.data)==0:
             print("ERROR: attempted to calculate spectrogram without audiodata")
             return
-        if not selfExtra:
+        if not specExtra:
             print("Option not available")
             return
 
