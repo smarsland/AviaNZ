@@ -17,18 +17,17 @@ double cost0sq(const double x, const double wt){
 
 // cost of points from segment, non-recursive:
 double cost1sq(const double xs[], const size_t len){
-    // get the average
+    // get E(X)*n and E(X^2)*n
     double m=0;
+    double m2=0;
     for(size_t i=0; i<len; i++){
         m += xs[i];
+        m2 += xs[i]*xs[i];
     }
-    m = m/len;
     
-    // get the cost
+    // get the cost (variance*n)
     double cost=0;
-    for(size_t i=0; i<len; i++){
-        cost += pow(xs[i] - m, 2);
-    }
+    cost = (m2 - m*m/len);
     return cost;
 }
 
@@ -39,6 +38,20 @@ int alg1(double xs[], const size_t n, const double sd, const double penalty){
     for(size_t i=0; i<n; i++){
         xs[i] = xs[i]/sd;
     }
+    // precompute segment costs
+    double cs[n][n];
+    for(size_t start=1; start<n; start++){
+        double m = 0;
+        double m2 = 0;
+        size_t len;
+        for(size_t end=start; end<n; end++){
+            m += xs[end];
+            m2 += xs[end]*xs[end];
+            len = end-start+1;
+            cs[start][end] = (m2 - m*m/len);
+        }
+    }
+
     // output: estimate sequence
     double wts[n];
     wts[0] = xs[0];
@@ -74,7 +87,9 @@ int alg1(double xs[], const size_t n, const double sd, const double penalty){
         size_t bestsegstart = -1;
         for(size_t i=0; i<numpossiblestarts; i++){
             int t2 = possiblestarts[i];
-            segcosts[t2] = F[t2] + cost1sq(xs + t2 + 1, t-t2);
+            segcosts[t2] = F[t2] + cs[t2+1][t];
+            // or, without precomputing:
+            // segcosts[t2] = F[t2] + cost1sq(xs + t2 + 1, t-t2);
             // printf("--parts: F(i)=%.3f, cost1=%.3f\n", F[t2], cost1sq(xs+t2+1, t-t2));
             // keep track of min and argmin F_S
             if(segcosts[t2]<bestsegcost){
