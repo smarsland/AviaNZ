@@ -449,18 +449,31 @@ class ExcelIO():
                     ws.cell(row=r, column=4, value=int(seg[2]))
                     ws.cell(row=r, column=5, value=int(seg[3]))
                 if currsp=="Any sound":
-                    # print species and certainty
+                    # print species and certainty and call type
                     text = [lab["species"] for lab in seg[4]]
                     ws.cell(row=r, column=6, value=", ".join(text))
                     text = [str(lab["certainty"]) for lab in seg[4]]
                     ws.cell(row=r, column=7, value=", ".join(text))
+                    strct = []
+                    for lab in seg[4]:
+                        if "calltype" in lab:
+                            strct.append(str(lab["calltype"]))
+                        else:
+                            strct.append("-")
+                    ws.cell(row=r, column=8, value=", ".join(strct))
                 else:
-                    # only print certainty
-                    text = []
+                    # only print certainty and call type
+                    strcert = []
+                    strct = []
                     for lab in seg[4]:
                         if lab["species"]==currsp:
-                            text.append(str(lab["certainty"]))
-                    ws.cell(row=r, column=6, value=", ".join(text))
+                            strcert.append(str(lab["certainty"]))
+                            if "calltype" in lab:
+                                strct.append(str(lab["calltype"]))
+                            else:
+                                strct.append("-")
+                    ws.cell(row=r, column=6, value=", ".join(strcert))
+                    ws.cell(row=r, column=7, value=", ".join(strct))
                 r += 1
 
     # This stores pres/abs and max certainty for the species in each file
@@ -583,8 +596,10 @@ class ExcelIO():
                 if species=="Any sound":
                     ws.cell(row=1, column=6, value="species")
                     ws.cell(row=1, column=7, value="certainty")
+                    ws.cell(row=1, column=8, value="call type")
                 else:
                     ws.cell(row=1, column=6, value="certainty")
+                    ws.cell(row=1, column=7, value="call type")
 
                     # Second sheet
                     wb.create_sheet(title='Presence Absence', index=2)

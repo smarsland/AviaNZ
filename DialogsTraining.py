@@ -28,7 +28,6 @@ import time
 import platform
 import copy
 from shutil import copyfile
-import csv
 
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor, QFileDialog, QScrollArea
 from PyQt5.QtCore import QDir, Qt, QEvent, QSize
@@ -49,7 +48,6 @@ import WaveletSegment
 import Segment
 import Clustering
 import Training
-import AviaNZ_batch
 
 class BuildRecAdvWizard(QWizard):
     # page 1 - select training data
