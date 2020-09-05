@@ -2,7 +2,9 @@ cimport numpy as np
 import numpy as np
 
 cdef extern from "detector.h":
-    int alg1(double xs[], size_t n, double sd, double penalty);
+    int alg1_mean(double xs[], size_t n, double sd, double penalty);
+cdef extern from "detector.h":
+    int alg1_var(double xs[], size_t n, double mu0, double penalty);
 
 def launchDetector(infile):
     xl = []
@@ -15,4 +17,5 @@ def launchDetector(infile):
     cdef double sd = 1
     cdef int n = len(xs)
     cdef double penalty = 1.1*3*np.log(n)
-    return alg1(<double*> np.PyArray_DATA(xs), n, sd, penalty)
+    cdef double mu0 = 0
+    return alg1_var(<double*> np.PyArray_DATA(xs), n, mu0, penalty)
