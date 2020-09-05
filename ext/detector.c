@@ -1,6 +1,6 @@
 #include <math.h>
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
 #include "detector.h"
 
 struct ChpList {
@@ -38,19 +38,17 @@ int alg1(double xs[], const size_t n, const double sd, const double penalty){
     for(size_t i=0; i<n; i++){
         xs[i] = xs[i]/sd;
     }
-    // precompute segment costs
-    double cs[n][n];
-    for(size_t start=1; start<n; start++){
-        double m = 0;
-        double m2 = 0;
-        size_t len;
-        for(size_t end=start; end<n; end++){
-            m += xs[end];
-            m2 += xs[end]*xs[end];
-            len = end-start+1;
-            cs[start][end] = (m2 - m*m/len);
-        }
+    // precomputed segment costs
+    // TODO add an initialization marker to spot cache misses
+    // TODO move this back to stack?
+    double *cs = malloc(n*sizeof(double));
+    if(!cs){
+        printf("ERROR: failed to allocate %ld bytes of memory\n", n*sizeof(double));
+        return 1;
     }
+    double len;
+    double m;
+    double m2;
 
     // output: estimate sequence
     double wts[n];
@@ -71,6 +69,7 @@ int alg1(double xs[], const size_t n, const double sd, const double penalty){
         possiblestarts[i] = 0;
     }
     size_t numpossiblestarts = 1;
+    size_t minstart = 0;
 
     // main DP loop:
     double bgcost;
@@ -79,6 +78,16 @@ int alg1(double xs[], const size_t n, const double sd, const double penalty){
     bgsizes[0] = 1;
     for(size_t t=1; t<n; t++){
         // printf("Cycle %zu/%zu\n", t+1, n);
+        // precompute costs for all possible segments ending here at t
+        m = 0;
+        m2 = 0;
+        for(size_t start=t; start>minstart; start--){
+            m += xs[start];
+            m2 += xs[start]*xs[start];
+            len = t-start+1;
+            cs[start] = (m2 - m*m/len);
+        }
+
         // F_B = F(t-1) + C0(t)
         bgcost = F[t-1] + cost0sq(xs[t], wts[t-1]);
 
@@ -87,9 +96,7 @@ int alg1(double xs[], const size_t n, const double sd, const double penalty){
         size_t bestsegstart = -1;
         for(size_t i=0; i<numpossiblestarts; i++){
             int t2 = possiblestarts[i];
-            segcosts[t2] = F[t2] + cs[t2+1][t];
-            // or, without precomputing:
-            // segcosts[t2] = F[t2] + cost1sq(xs + t2 + 1, t-t2);
+            segcosts[t2] = F[t2] + cs[t2+1];
             // printf("--parts: F(i)=%.3f, cost1=%.3f\n", F[t2], cost1sq(xs+t2+1, t-t2));
             // keep track of min and argmin F_S
             if(segcosts[t2]<bestsegcost){
@@ -128,15 +135,21 @@ int alg1(double xs[], const size_t n, const double sd, const double penalty){
         }
 
         // update and prune possible segment starts
+        minstart = t; // useful for reducing the set for cost precomputing
         for(size_t i=0; i<numpossiblestarts; i++){
             if(F[t] <= segcosts[possiblestarts[i]]){
                 // prune out this start time
                 possiblestarts[i] = possiblestarts[--numpossiblestarts];
             }
+            if(possiblestarts[i]<minstart){
+                minstart = possiblestarts[i];
+            }
         }
         possiblestarts[numpossiblestarts++] = t;
         // printf("Current wt: %f, F(t): %.2f\n", wts[t], F[t]);
     }
+    free(cs);
+    printf("Final cost: %.3f\n", F[n-1]);
 
     // extract changepoints
     size_t i = n-1;
