@@ -573,7 +573,12 @@ class SignalProc:
             b, a = signal.butter(7, [lowPass, highPass], btype='bandpass')
 
         # check if filter is stable
-        filterUnstable = np.any(np.abs(np.roots(a))>1)
+        filterUnstable = True
+        try:
+            filterUnstable = np.any(np.abs(np.roots(a))>1)
+        except Exception as e:
+            print("Warning:", e)
+            filterUnstable = True
         if filterUnstable:
             # redesign to SOS and filter.
             # uses order=30 because why not
