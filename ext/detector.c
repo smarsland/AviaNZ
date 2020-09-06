@@ -45,7 +45,7 @@ double cost0var(const double x2, const double s2t){
 
 void findmincost(const double cs[], const double Fs[], const size_t starts[], const size_t stlen, double *outcost, size_t *outstart, double segcosts[]){
     for(size_t i=0; i<stlen; i++){
-        int t2 = starts[i];
+        size_t t2 = starts[i];
         segcosts[t2] = Fs[t2] + cs[t2+1];
         // printf("--parts: F(i)=%.3f, cost1=%.3f\n", F[t2], cost1sq(xs+t2+1, t-t2));
         // keep track of min and argmin F_S
@@ -67,12 +67,7 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
     }
     // precomputed segment costs
     // TODO add an initialization marker to spot cache misses
-    // TODO move this back to stack?
-    double *cs = malloc(n*sizeof(double));
-    if(!cs){
-        printf("ERROR: failed to allocate %ld bytes of memory\n", n*sizeof(double));
-        return 1;
-    }
+    double cs[n];
     double len;
     double m2;
 
@@ -164,7 +159,6 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
         possiblestarts[numpossiblestarts++] = t;
         // printf("Current wt: %f, F(t): %.2f\n", wts[t], F[t]);
     }
-    free(cs);
     printf("Final cost: %.3f\n", F[n-1]);
 
     // extract changepoints
@@ -218,7 +212,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
     F[0] = 0;
 
     // acceptable start positions to keep track of pruning
-    int possiblestarts[n];
+    size_t possiblestarts[n];
     possiblestarts[0] = 0;
     for(size_t i=1; i<n-1; i++){
         possiblestarts[i] = 0;
@@ -249,16 +243,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
         // F_S = min F(t-k) + C(t-k+1:t) + beta
         double bestsegcost = INFINITY;
         size_t bestsegstart = -1;
-        for(size_t i=0; i<numpossiblestarts; i++){
-            int t2 = possiblestarts[i];
-            segcosts[t2] = F[t2] + cs[t2+1];
-            // printf("--parts: F(i)=%.3f, cost1=%.3f\n", F[t2], cost1sq(xs+t2+1, t-t2));
-            // keep track of min and argmin F_S
-            if(segcosts[t2]<bestsegcost){
-                bestsegcost = segcosts[t2];
-                bestsegstart = t2;
-            }
-        }
+        findmincost(cs, F, possiblestarts, numpossiblestarts, &bestsegcost, &bestsegstart, segcosts);
         // printf("bgcost: %.2f, segcost: %.2f + %.2f at t=%zu\n", bgcost, bestsegcost, penalty, bestsegstart+1);
 
         // determine best F = min(F_B, F_S)
