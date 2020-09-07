@@ -959,7 +959,10 @@ class AviaNZ(QMainWindow):
 
         # Plot everything
         if not self.CLI:
-            self.show()
+            # extra toggle because otherwise Windows starts at a non-maximized size
+            self.showMaximized()
+            self.setWindowState(self.windowState() ^ Qt.WindowMaximized)
+            self.setWindowState(self.windowState() | Qt.WindowMaximized)
 
     def toggleBatMode(self):
         """ Enables/disables GUI elements when bat mode is entered/left.

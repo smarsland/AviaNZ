@@ -177,7 +177,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             avianz = AviaNZ_batch_GUI.AviaNZ_reviewAll(configdir=configdir)
 
         if avianz:
-            avianz.show()
+            avianz.activateWindow()
         else:
             return
         out = app.exec_()
