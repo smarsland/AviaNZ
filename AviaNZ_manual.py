@@ -1355,7 +1355,6 @@ class AviaNZ(QMainWindow):
             self.filename = os.path.join(self.SoundFileDir, fileNameOld)
             self.listLoadFile(fileNameOld)
 
-        # SRM:
         self.fillFileList(self.SoundFileDir, current)
         self.listFiles.setCurrentItem(current)
 
