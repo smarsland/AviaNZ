@@ -251,9 +251,15 @@ class AviaNZ(QMainWindow):
             # Make the window and associated widgets
             self.setWindowTitle('AviaNZ')
             self.setWindowIcon(QIcon('img/AviaNZ.ico'))
-            # Make the window full screen
+            # Show the window 
             if self.config['StartMaximized']:
                 self.showMaximized()
+                # extra toggle because otherwise Windows starts at a non-maximized size
+                self.setWindowState(self.windowState() ^ Qt.WindowMaximized)
+                self.setWindowState(self.windowState() | Qt.WindowMaximized)
+            else:
+                self.show()
+
             keyPressed = QtCore.Signal(int)
 
             # Save the segments every minute
@@ -956,13 +962,6 @@ class AviaNZ(QMainWindow):
         self.showOverviewSegsCheck()
         self.dragRectsTransparent()
         self.showPointerDetailsCheck()
-
-        # Plot everything
-        if not self.CLI:
-            # extra toggle because otherwise Windows starts at a non-maximized size
-            self.showMaximized()
-            self.setWindowState(self.windowState() ^ Qt.WindowMaximized)
-            self.setWindowState(self.windowState() | Qt.WindowMaximized)
 
     def toggleBatMode(self):
         """ Enables/disables GUI elements when bat mode is entered/left.
@@ -2119,10 +2118,7 @@ class AviaNZ(QMainWindow):
         # If there are segments, show them
         if not self.cheatsheet and not self.zooniverse:
             for count in range(len(self.segments)):
-                if self.segments[count][2] == 0 and self.segments[count][3] == 0:
-                    self.addSegment(self.segments[count][0], self.segments[count][1], 0, 0, self.segments[count][4], False, count, remaking)
-                else:
-                    self.addSegment(self.segments[count][0], self.segments[count][1], self.segments[count][2], self.segments[count][3], self.segments[count][4], False, count, remaking)
+                self.addSegment(self.segments[count][0], self.segments[count][1], self.segments[count][2], self.segments[count][3], self.segments[count][4], False, count, remaking, coordsAbsolute=True)
 
             # This is the moving bar for the playback
             if not hasattr(self,'bar'):
@@ -2433,7 +2429,7 @@ class AviaNZ(QMainWindow):
             if len(segtimes)>0 and (i, i+self.config['protocolSize']) in segtimes:
                 print("segment already exists, skipping")
             else:
-                self.addSegment(i, i + self.config['protocolSize'])
+                self.addSegment(i, i + self.config['protocolSize'], coordsAbsolute=True)
             i += self.config['protocolInterval']
         self.segmentsToSave = True
 
@@ -2510,17 +2506,17 @@ class AviaNZ(QMainWindow):
                 self.SegmentRects[box].setBrush(pg.mkBrush('w'))
             self.SegmentRects[box].update()
 
-    def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=[],saveSeg=True,index=-1,remaking=False):
+    def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=[],saveSeg=True,index=-1,remaking=False,coordsAbsolute=False):
         """ When a new segment is created, does the work of creating it and connecting its
         listeners. Also updates the relevant overview segment.
         If a segment is too long for the current section, truncates it.
         Args:
-        startpoint, endpoint are in amplitude coordinates
+        startpoint, endpoint - in secs, either from page start, or absolute (then set coordsAbsolute=True)
         y1, y2 should be the frequencies (between 0 and Fs//2)
         species - list of labels (including certainties, .data format)
-        saveSeg means that we are drawing the saved ones. Need to check that those ones fit into
-          the current window, can assume the other do, but have to save their times correctly.
-        remaking - can be turned to True to reuse some existing objects
+        saveSeg - store the created segment on self.segments. Set to False when drawing the saved ones.
+        remaking - can be turned to True to reuse existing graphics objects
+        coordsAbsolute - set to True to accept start,end in absolute coords (from file start)
         """
         print("Segment added at %d-%d, %d-%d" % (startpoint, endpoint, y1, y2))
 
@@ -2538,24 +2534,33 @@ class AviaNZ(QMainWindow):
         if len(species) == 0:
             species = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
 
-        if not saveSeg:
-            timeRangeStart = self.startRead
-            timeRangeEnd = self.startRead + self.datalengthSec
+        if coordsAbsolute:
+            # convert from absolute times to relative-to-page times
+            startpoint = startpoint - self.startRead
+            endpoint = endpoint - self.startRead
 
+        if not saveSeg:
             # check if this segment fits in the current spectrogram page
-            if endpoint < timeRangeStart or startpoint > timeRangeEnd:
+            if endpoint < 0 or startpoint > self.datalengthSec:
                 print("Warning: a segment was not shown")
                 show = False
             elif y1!=0 and y2!=0 and (y1 > self.sp.maxFreqShow or y2 < self.sp.minFreqShow):
                 print("Warning: a segment was not shown")
                 show = False
             else:
-                startpoint = startpoint - timeRangeStart
-                endpoint = endpoint - timeRangeStart
                 show = True
         else:
             self.segmentsToSave = True
             show = True
+
+        if saveSeg or show:
+            # create a Segment. this will check for errors and standardize the labels
+            # Note - we convert time from _relative to page_ to _relative to file start_
+            newSegment = Segment.Segment([startpoint+self.startRead, endpoint+self.startRead, y1, y2, species])
+
+            # Add the segment to the data
+            if saveSeg:
+                self.segments.append(newSegment)
 
         if not show:
             # Add a None element into the array so that the correct boxids work
@@ -2568,15 +2573,7 @@ class AviaNZ(QMainWindow):
                 self.listRectanglesa2.append(None)
                 self.listLabels.append(None)
             return
-
         # otherwise, this is a visible segment.
-        # create a Segment. this will check for errors and standardize the labels
-        # Note - we convert time from _relative to page_ to _relative to file start_
-        newSegment = Segment.Segment([startpoint+self.startRead, endpoint+self.startRead, y1, y2, species])
-
-        # Add the segment to the data
-        if saveSeg:
-            self.segments.append(newSegment)
 
         # --- rest of this function only does the graphics ---
         cert = min([lab["certainty"] for lab in species])
@@ -5069,8 +5066,15 @@ class AviaNZ(QMainWindow):
 
                 filtspecies = self.FilterDicts[filtname]["species"]
                 oldsegs = self.segments.getSpecies(filtspecies)
+                # Only show segments which are at least partly visible in this page:
+                for ix in reversed(oldsegs):
+                    seg = self.segments[ix]
+                    if seg[0] > self.startRead + self.datalengthSec or seg[1] < self.startRead:
+                        oldsegs.remove(ix)
+
+                todelete = []
                 # deleting from the end, because deleteSegments shifts IDs:
-                for si in reversed(oldsegs):
+                for si in oldsegs:
                     # clear these species from overview colors
                     self.refreshOverviewWith(self.segments[si], delete=True)
                     # remove all labels for the current species
@@ -5078,10 +5082,13 @@ class AviaNZ(QMainWindow):
                     self.refreshOverviewWith(self.segments[si])
                     # drop the segment if it's the only species, or just update the graphics
                     if wipedAll:
-                        self.deleteSegment(si)
+                        todelete.append(si)
                     else:
                         self.updateText(si)
                         self.updateColour(si)
+                # reverse loop to allow deleting segments
+                for dl in reversed(todelete):
+                    self.deleteSegment(dl)
             else:
                 self.removeSegments()
 
@@ -5220,7 +5227,7 @@ class AviaNZ(QMainWindow):
 
         self.removeSegments()
         for seg in self.prevSegments:
-            self.addSegment(seg[0], seg[1], seg[2], seg[3], seg[4], index=-1)
+            self.addSegment(seg[0], seg[1], seg[2], seg[3], seg[4], index=-1, coordsAbsolute=True)
             self.segmentsToSave = True
 
     def exportSeg(self):
@@ -5238,7 +5245,7 @@ class AviaNZ(QMainWindow):
             msg.addButton("Append", QMessageBox.YesRole)
             # cancelBtn = msg.addButton(QMessageBox.Cancel)
             reply = msg.exec_()
-            print(reply)
+            # print(reply)
             if reply == 4194304:  # weird const for Cancel
                 return
             elif reply == 1:
