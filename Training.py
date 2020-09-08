@@ -47,6 +47,7 @@ class CNNtrain:
     def __init__(self, configdir, filterdir, folderTrain1=None, folderTrain2=None, recogniser=None, imgWidth=0, CLI=False):
 
         self.filterdir = filterdir
+        self.configdir =configdir
         cl = SupportClasses.ConfigLoader()
         self.FilterDict = cl.filters(filterdir, bats=False)
         self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
@@ -262,7 +263,7 @@ class CNNtrain:
         print("\t%s:\t%d\n" % ("Noise", self.Nimg[-1]))
 
         # CNN training
-        cnn = CNN.CNN(self.species, self.calltypes, self.fs, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1])
+        cnn = CNN.CNN(self.configdir, self.species, self.calltypes, self.fs, self.imgWidth, self.windowWidth, self.windowInc, self.imgsize[0], self.imgsize[1])
 
         # 1. Data augmentation
         print('Data augmenting...')
@@ -316,7 +317,7 @@ class CNNtrain:
         cnn.createArchitecture()
 
         print('Training...')
-        cnn.train(modelsavepath=self.tmpdir2.name, training_batch_generator=training_batch_generator, validation_batch_generator=validation_batch_generator, epochs=self.LearningDict['epochs'])
+        cnn.train(modelsavepath=self.tmpdir2.name, training_batch_generator=training_batch_generator, validation_batch_generator=validation_batch_generator)
         print('Training complete!')
 
         self.bestThr = [[0, 0] for i in range(len(self.calltypes))]

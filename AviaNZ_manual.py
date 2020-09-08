@@ -4891,7 +4891,7 @@ class AviaNZ(QMainWindow):
 
         values = self.excel2AnnotationDialog.getValues()
         if values:
-            [excelfile, audiofile, species] = values
+            [excelfile, audiofile, species, colstart, colend, collow, colhigh] = values
         else:
             return
 
@@ -4899,10 +4899,10 @@ class AviaNZ(QMainWindow):
             # Read excel file
             book = openpyxl.load_workbook(excelfile)
             sheet = book.active
-            starttime = sheet['A2': 'A' + str(sheet.max_row)]
-            endtime = sheet['B2': 'B' + str(sheet.max_row)]
-            flow = sheet['C2': 'C' + str(sheet.max_row)]
-            fhigh = sheet['D2': 'D' + str(sheet.max_row)]
+            starttime = sheet[colstart+'2': colstart + str(sheet.max_row)]
+            endtime = sheet[colend+'2': colend + str(sheet.max_row)]
+            flow = sheet[collow+'2': collow + str(sheet.max_row)]
+            fhigh = sheet[colhigh+'2': colhigh + str(sheet.max_row)]
 
             _, duration, _, _ = wavio.readFmt(audiofile)
 
