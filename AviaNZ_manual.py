@@ -1879,13 +1879,14 @@ class AviaNZ(QMainWindow):
         with pg.BusyCursor():
             if self.showFormant.isChecked():
                 self.statusLeft.setText("Drawing formants...")
-                formants = self.sp.formants()
+                x, y = self.sp.drawFormants()
                 self.formantPlot = pg.ScatterPlotItem()
-                step = self.config['window_width'] // self.config['incr']
-                starts = np.arange(0,np.shape(self.sg)[0],step)
-                for i in range(len(starts)):
-                    for j in range(len(formants[i])):
-                        self.formantPlot.addPoints(starts[i], formants[i][j], pen=pg.mkPen('b', width=5))
+                #step = self.config['window_width'] // self.config['incr']
+                #starts = np.arange(0,np.shape(self.sg)[0],step)
+                #for i in range(len(starts)):
+                    #for j in range(len(formants[i])):
+                        #self.formantPlot.addPoints(starts[i], formants[i][j], pen=pg.mkPen('b', width=5))
+                self.formantPlot.setData(x, y, pen=pg.mkPen('b', width=5))
                 self.p_spec.addItem(self.formantPlot)
             else:
                 self.statusLeft.setText("Removing formants...")
