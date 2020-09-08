@@ -801,7 +801,7 @@ class SignalProc:
         # helper function to parse output for plotting spectral derivs.
         sd = self.spectral_derivative(self.window_width, self.incr, 2, 5.0)
         x, y = np.where(sd > 0)
-        print(y)
+        #print(y)
 
         # remove points beyond frq range to show
         y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
@@ -862,6 +862,27 @@ class SignalProc:
             out.append((starts[i], y))
         return out
 
+    def drawFormants(self,ncoeff=None):
+
+        ys = self.formants(ncoeff)
+        x = []
+        y = []
+
+        step = self.window_width // self.incr
+        starts = np.arange(0,np.shape(self.sg)[0],step)
+
+        # remove points beyond frq range to show
+        for t in range(len(ys)):
+            for f in range(len(ys[t])):
+                if (ys[t][f] >= self.minFreqShow) & (ys[t][f] <= self.maxFreqShow):
+                    x.append(starts[t])
+                    y.append(ys[t][f]/self.sampleRate*2*np.shape(self.sg)[1])
+
+        valminfrq = self.minFreqShow/(self.sampleRate//2/np.shape(self.sg)[1])
+        y = [i - valminfrq for i in y]
+
+        return x, y
+
     def max_energy(self, sg,thr=1.2):
         # Remember that spectrogram is actually rotated!
 
@@ -902,6 +923,7 @@ class SignalProc:
         from LevinsonDurbanRecursion import LPC
 
         if ncoeff is None:
+            # TODO
             ncoeff = 2 + self.sampleRate // 1000
 
         window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)))
@@ -921,7 +943,8 @@ class SignalProc:
             roots = [r for r in roots if np.imag(r) >= 0]
             angles = np.arctan2(np.imag(roots), np.real(roots))
 
-            freqs.append([sorted(angles / np.pi * np.shape(self.sg)[1])])
+            # TODO: Possible factor of 2 error here?
+            freqs.append(sorted(angles / 2 / np.pi * self.sampleRate / 2))
 
         return freqs
 
