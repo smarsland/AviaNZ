@@ -404,7 +404,6 @@ class SignalProc:
             self.sg = np.absolute(self.sg[:, :window_width //2]) + 0.1
             
             print(np.min(self.sg),np.max(self.sg))
-
         else:
             if need_even:
                 starts = np.hstack((starts, np.zeros((window_width - len(self.sg) % window_width),dtype=int)))
@@ -734,7 +733,7 @@ class SignalProc:
         if self.data is None or len(self.data)==0:
             print("ERROR: attempted to calculate spectrogram without audiodata")
             return
-        if not selfExtra:
+        if not specExtra:
             print("Option not available")
             return
 
@@ -802,6 +801,7 @@ class SignalProc:
         # helper function to parse output for plotting spectral derivs.
         sd = self.spectral_derivative(self.window_width, self.incr, 2, 5.0)
         x, y = np.where(sd > 0)
+        print(y)
 
         # remove points beyond frq range to show
         y1 = [i * self.sampleRate//2/np.shape(self.sg)[1] for i in y]
@@ -896,6 +896,34 @@ class SignalProc:
         y = [i - specstarty for i in y]
 
         return x, y
+
+    def formants(self,ncoeff=None):
+        # First look at formants. Snell and Milinazzo '93 method
+        from LevinsonDurbanRecursion import LPC
+
+        if ncoeff is None:
+            ncoeff = 2 + self.sampleRate // 1000
+
+        window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(self.window_width) / (self.window_width - 1)))
+        starts = range(0, len(self.data) - self.window_width, self.window_width)
+        freqs = []
+        for start in starts:
+            x = self.data[start:start + self.window_width]*window
+            # High-pass filter
+            x = signal.lfilter([1], [1., 0.63], x)
+
+            # LPC
+            A, e, k = LPC(x, ncoeff)
+            A = np.squeeze(A)
+
+            # Extract roots, turn into angles
+            roots = np.roots(A)
+            roots = [r for r in roots if np.imag(r) >= 0]
+            angles = np.arctan2(np.imag(roots), np.real(roots))
+
+            freqs.append([sorted(angles / np.pi * np.shape(self.sg)[1])])
+
+        return freqs
 
     def denoiseImage(self,sg,thr=1.2):
         from skimage.restoration import (denoise_tv_chambolle, denoise_bilateral, denoise_wavelet, estimate_sigma)

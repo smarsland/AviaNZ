@@ -349,6 +349,9 @@ class AviaNZ(QMainWindow):
         self.showSpectral = markMenu.addAction("Spectral derivative", self.showSpectralDeriv)
         self.showSpectral.setCheckable(True)
         self.showSpectral.setChecked(False)
+        self.showFormant = markMenu.addAction("Formants", self.showFormants)
+        self.showFormant.setCheckable(True)
+        self.showFormant.setChecked(False)
         self.showEnergies = markMenu.addAction("Maximum energies", self.showMaxEnergy)
         self.showEnergies.setCheckable(True)
         self.showEnergies.setChecked(False)
@@ -1319,6 +1322,13 @@ class AviaNZ(QMainWindow):
         except Exception:
             pass
 
+        # Remove formants
+        self.showFormant.setChecked(False)
+        try:
+            self.p_spec.removeItem(self.formantPlot)
+        except Exception:
+            pass
+
         # remove max energies
         self.showEnergies.setChecked(False)
         try:
@@ -1355,7 +1365,7 @@ class AviaNZ(QMainWindow):
             self.filename = os.path.join(self.SoundFileDir, fileNameOld)
             self.listLoadFile(fileNameOld)
 
-        self.fillFileList(self.SoundFileDir, current)
+        #self.fillFileList(self.SoundFileDir, current)
         self.listFiles.setCurrentItem(current)
 
     def listLoadFile(self,current):
@@ -1814,6 +1824,7 @@ class AviaNZ(QMainWindow):
     def showFundamentalFreq(self):
         """ Calls the SignalProc class to compute, and then draws the fundamental frequency.
         Uses the yin algorithm. """
+
         with pg.BusyCursor():
             if self.showFundamental.isChecked():
                 self.statusLeft.setText("Drawing fundamental frequency...")
@@ -1862,6 +1873,23 @@ class AviaNZ(QMainWindow):
             else:
                 self.statusLeft.setText("Removing spectral derivative...")
                 self.p_spec.removeItem(self.derivPlot)
+            self.statusLeft.setText("Ready")
+
+    def showFormants(self):
+        with pg.BusyCursor():
+            if self.showFormant.isChecked():
+                self.statusLeft.setText("Drawing formants...")
+                formants = self.sp.formants()
+                self.formantPlot = pg.ScatterPlotItem()
+                step = self.config['window_width'] // self.config['incr']
+                starts = np.arange(0,np.shape(self.sg)[0],step)
+                for i in range(len(starts)):
+                    for j in range(len(formants[i])):
+                        self.formantPlot.addPoints(starts[i], formants[i][j], pen=pg.mkPen('b', width=5))
+                self.p_spec.addItem(self.formantPlot)
+            else:
+                self.statusLeft.setText("Removing formants...")
+                self.p_spec.removeItem(self.formantPlot)
             self.statusLeft.setText("Ready")
 
     # def showCQT(self):
@@ -4689,6 +4717,13 @@ class AviaNZ(QMainWindow):
                 pass
             else:
                 self.showSpectralDeriv()
+
+            try:
+                self.p_spec.removeItem(self.formantPlot)
+            except Exception:
+                pass
+            else:
+                self.showFormants()
 
             try:
                 self.p_spec.removeItem(self.energyPlot)
