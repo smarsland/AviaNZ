@@ -13,6 +13,8 @@
 "loss": "binary_crossentropy",
 "optimizer": "adam",
 "metrics": ["accuracy"],
-"epochs": 1,
+"epochs": 50,
+"monitor": "val_accuracy",
+"patience": 3,
 "hopScaling": 0.5
 }

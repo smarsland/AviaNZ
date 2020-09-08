@@ -37,6 +37,7 @@ import numpy as np
 import colourMaps
 import SupportClasses_GUI
 import SignalProc
+import openpyxl
 
 
 class StartScreen(QDialog):
@@ -302,6 +303,14 @@ class Excel2Annotation(QDialog):
         self.btnBrowseExcel.setFixedWidth(220)
         self.btnBrowseExcel.clicked.connect(self.browseExcel)
 
+        lblHeader = QLabel('Choose Columns')
+        lblHeader.setFixedWidth(220)
+        lblHeader.setAlignment(Qt.AlignCenter)
+        self.comboStart = QComboBox()
+        self.comboEnd = QComboBox()
+        self.comboLow = QComboBox()
+        self.comboHigh = QComboBox()
+
         self.txtAudio = QLineEdit()
         self.txtAudio.setMinimumWidth(400)
         self.txtAudio.setText('')
@@ -345,14 +354,34 @@ class Excel2Annotation(QDialog):
         tableWidget.setItem(3, 3, QTableWidgetItem("8000.30"))
         tableWidget.setMinimumWidth(700)
         tableWidget.setStyleSheet("QTableWidget { color : #808080; }")
+        tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         Box = QVBoxLayout()
-        Box.addWidget(QLabel('Required Excel Format:'))
+        Box.addWidget(QLabel('Sample Excel:'))
         Box.addWidget(tableWidget)
         Box.addWidget(QLabel())
         Box1 = QHBoxLayout()
         Box1.addWidget(self.btnBrowseExcel)
         Box1.addWidget(self.txtExcel)
+        Box10 = QHBoxLayout()
+        Box11 = QVBoxLayout()
+        Box11.addWidget(QLabel('Start time'))
+        Box11.addWidget(self.comboStart)
+        Box12 = QVBoxLayout()
+        Box12.addWidget(QLabel('End time'))
+        Box12.addWidget(self.comboEnd)
+        Box13 = QVBoxLayout()
+        Box13.addWidget(QLabel('Lower frequency'))
+        Box13.addWidget(self.comboLow)
+        Box14 = QVBoxLayout()
+        Box14.addWidget(QLabel('Higher frequency'))
+        Box14.addWidget(self.comboHigh)
+        Box10.addWidget(lblHeader)
+        Box10.addLayout(Box11)
+        Box10.addLayout(Box12)
+        Box10.addLayout(Box13)
+        Box10.addLayout(Box14)
+
         Box2 = QHBoxLayout()
         Box2.addWidget(self.btnBrowseAudio)
         Box2.addWidget(self.txtAudio)
@@ -360,6 +389,7 @@ class Excel2Annotation(QDialog):
         Box3.addWidget(lblSpecies)
         Box3.addWidget(self.txtSpecies)
         Box.addLayout(Box1)
+        Box.addLayout(Box10)
         Box.addLayout(Box2)
         Box.addLayout(Box3)
         Box.addWidget(QLabel())
@@ -370,7 +400,7 @@ class Excel2Annotation(QDialog):
 
     def getValues(self):
         if self.txtSpecies.text() and self.txtExcel.text() and self.txtAudio.text():
-            return [self.txtExcel.text(), self.txtAudio.text(), self.txtSpecies.text()]
+            return [self.txtExcel.text(), self.txtAudio.text(), self.txtSpecies.text(), self.headers[self.comboStart.currentIndex()], self.headers[self.comboEnd.currentIndex()], self.headers[self.comboLow.currentIndex()], self.headers[self.comboHigh.currentIndex()]]
         else:
             msg = SupportClasses_GUI.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
             msg.exec_()
@@ -385,6 +415,21 @@ class Excel2Annotation(QDialog):
             excelfile, _ = QtGui.QFileDialog.getOpenFileName(self, 'Open file', userDir, "Excel (*.xlsx *.xls)")
             self.txtExcel.setText(excelfile)
             self.txtExcel.setReadOnly(True)
+            # Read the excel to get the headers
+            book = openpyxl.load_workbook(excelfile)
+            sheet = book.active
+            headers = [value for value in sheet.iter_rows(min_row=1, max_row=1)]
+            headers = [h for h in headers[0]]
+            self.headers = [h.column for h in headers]
+            values = [h.value for h in headers]
+            self.comboStart.addItems(values)
+            self.comboStart.setCurrentText(values[0])
+            self.comboEnd.addItems(values)
+            self.comboEnd.setCurrentText(values[1])
+            self.comboLow.addItems(values)
+            self.comboLow.setCurrentText(values[2])
+            self.comboHigh.addItems(values)
+            self.comboHigh.setCurrentText(values[3])
         except Exception as e:
             print("ERROR: failed with error:")
             print(e)
