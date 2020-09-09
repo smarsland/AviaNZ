@@ -43,6 +43,7 @@ class AviaNZ_batchProcess():
     # mode: "GUI/CLI/test". If GUI, must provide the parent
     def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=False):
         # read config and filters from user location
+        # recogniser - filter file name without ".txt"
         self.configdir = configdir
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
         self.ConfigLoader = SupportClasses.ConfigLoader()
