@@ -1148,8 +1148,10 @@ class LightedFileList(QListWidget):
             print("Found the following Fs:", self.fsList)
 
         # mark the current file or first row (..), if not found
+        #print(fileName)
         if fileName:
             index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+            #print(index)
             if len(index)>0:
                 self.setCurrentItem(index[0])
             else:

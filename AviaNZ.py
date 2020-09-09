@@ -45,7 +45,7 @@ import SupportClasses
 @click.option('-e', '--sdir2', type=click.Path(), help='Second input sound directory, training')
 @click.option('-r', '--recogniser', type=str, help='Recogniser name, batch processing')
 @click.option('-w', '--wind', is_flag=True, help='Apply wind filter')
-@click.option('-x', '--width', type=int, help='Width of windows for CNN')
+@click.option('-x', '--width', type=float, help='Width of windows for CNN')
 @click.argument('command', nargs=-1)
 
 def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command):
