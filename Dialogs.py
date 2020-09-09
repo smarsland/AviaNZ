@@ -1774,7 +1774,7 @@ class HumanClassify1(QDialog):
         self.birds3.setEnabled(False)
 
     def setSegNumbers(self, done, total):
-        text1 = "calls reviewed: " + str(done)
+        text1 = "calls accepted: " + str(done)
         text2 = str(total - done) + " to go"
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)

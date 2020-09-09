@@ -742,6 +742,21 @@ class AviaNZ_reviewAll(QMainWindow):
             # this will check if other settings are OK as well
             self.validateInputs()
 
+    def fillFileList(self,fileName=None):
+        """ Generates the list of files for the file listbox.
+            Updates species lists and other properties of the current dir.
+            fileName - currently opened file (marks it in the list).
+        """
+        if not os.path.isdir(self.dirName):
+            print("ERROR: directory %s doesn't exist" % self.dirName)
+            self.listFiles.clear()
+            return(1)
+
+        self.listFiles.fill(self.dirName, fileName, recursive=True, readFmt=True)
+
+        # update the "Browse" field text
+        self.w_dir.setPlainText(self.dirName)
+
         # find species names from the annotations
         self.spList = list(self.listFiles.spList)
         # Can't review only "Don't Knows". Ideally this should call AllSpecies dialog tho
@@ -757,6 +772,34 @@ class AviaNZ_reviewAll(QMainWindow):
         minfs = min(self.listFiles.fsList)
         self.fHigh.setRange(minfs//32, minfs//2)
         self.fLow.setRange(0, minfs//2)
+
+    def listLoadFile(self,current):
+        """ Listener for when the user clicks on an item in filelist """
+
+        # Need name of file
+        if type(current) is QListWidgetItem:
+            current = current.text()
+            current = re.sub('\/.*', '', current)
+
+        self.previousFile = current
+
+        # Update the file list to show the right one
+        i=0
+        lof = self.listFiles.listOfFiles
+        while i<len(lof)-1 and lof[i].fileName() != current:
+            i+=1
+        if lof[i].isDir() or (i == len(lof)-1 and lof[i].fileName() != current):
+            dir = QDir(self.dirName)
+            dir.cd(lof[i].fileName())
+            # Now repopulate the listbox
+            self.dirName=str(dir.absolutePath())
+            self.previousFile = None
+            self.fillFileList(current)
+            # Show the selected file
+            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
+            if len(index) > 0:
+                self.listFiles.setCurrentItem(index[0])
+        return(0)
 
     def review(self):
         self.species = self.w_spe1.currentText()
@@ -1580,45 +1623,3 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # actually update the segment info
         self.segments[boxid][4][0]["calltype"] = calltype
-
-    def fillFileList(self,fileName=None):
-        """ Generates the list of files for the file listbox.
-            fileName - currently opened file (marks it in the list).
-        """
-        if not os.path.isdir(self.dirName):
-            print("ERROR: directory %s doesn't exist" % self.dirName)
-            self.listFiles.clear()
-            return(1)
-
-        self.listFiles.fill(self.dirName, fileName, recursive=True, readFmt=True)
-
-        # update the "Browse" field text
-        self.w_dir.setPlainText(self.dirName)
-
-    def listLoadFile(self,current):
-        """ Listener for when the user clicks on an item in filelist """
-
-        # Need name of file
-        if type(current) is QListWidgetItem:
-            current = current.text()
-            current = re.sub('\/.*', '', current)
-
-        self.previousFile = current
-
-        # Update the file list to show the right one
-        i=0
-        lof = self.listFiles.listOfFiles
-        while i<len(lof)-1 and lof[i].fileName() != current:
-            i+=1
-        if lof[i].isDir() or (i == len(lof)-1 and lof[i].fileName() != current):
-            dir = QDir(self.dirName)
-            dir.cd(lof[i].fileName())
-            # Now repopulate the listbox
-            self.dirName=str(dir.absolutePath())
-            self.previousFile = None
-            self.fillFileList(current)
-            # Show the selected file
-            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
-            if len(index) > 0:
-                self.listFiles.setCurrentItem(index[0])
-        return(0)

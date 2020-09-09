@@ -606,6 +606,8 @@ class AviaNZ_batchProcess():
         return 1
 
     def loadFile(self, species, anysound=False):
+        """ species: list of recognizer names, or ["Any sound"].
+            Species names will be wiped based on these. """
         print(self.filename)
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):

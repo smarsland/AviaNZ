@@ -386,33 +386,22 @@ class AviaNZ(QMainWindow):
 
         actionMenu.addSeparator()
         self.segmentAction = actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
-        actionMenu.addAction("Export segments to Excel",self.exportSeg)
 
         if not self.DOC:
             actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
+            actionMenu.addAction("Export segments to Excel",self.exportSeg)
+            actionMenu.addSeparator()
+
+            extraMenu = actionMenu.addMenu("H&uman review")
+            extraMenu.addAction("All segments",self.humanClassifyDialog1,"Ctrl+1")
+            extraMenu.addAction("Choose species",self.humanRevDialog2,"Ctrl+2")
+
         actionMenu.addSeparator()
         self.showInvSpec = actionMenu.addAction("Save sound file", self.invertSpectrogram)
-        actionMenu.addSeparator()
-
-        extraMenu = actionMenu.addMenu("H&uman review")
-        extraMenu.addAction("All segments",self.humanClassifyDialog1,"Ctrl+1")
-        extraMenu.addAction("Choose species",self.humanRevDialog2,"Ctrl+2")
 
         actionMenu.addSeparator()
 
         actionMenu.addAction("Export current view as image",self.saveImage,"Ctrl+I")
-
-        #actionMenu.addSeparator()
-        #extraMenu = actionMenu.addMenu("Playback speed")
-        #extraGroup = QActionGroup(self)
-        #for ename in ["2","0.5","0.25"]:
-            #em = extraMenu.addAction(ename)
-            #em.setCheckable(True)
-            #if ename == "0.5":
-                #em.setChecked(True)
-            #receiver = lambda checked, ename=ename: self.setSpeed(ename)
-            #em.triggered.connect(receiver)
-            #extraGroup.addAction(em)
 
         # "Recognisers" menu
         recMenu = self.menuBar().addMenu("&Recognisers")

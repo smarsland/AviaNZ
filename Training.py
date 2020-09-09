@@ -584,7 +584,7 @@ class CNNtest:
 
         self.currfilt = currfilt
         self.filtname = filtname
-        
+
         self.configdir = configdir
         self.filterdir = filterdir
         # Note: this is just the species name, unlike the self.species in Batch mode
@@ -616,7 +616,6 @@ class CNNtest:
 
         if self.manSegNum == 0:
             print("ERROR: no segments for species %s found" % species)
-            self.flag = False
             self.text = 0
             return
 
@@ -625,7 +624,7 @@ class CNNtest:
                                                         sdir=self.testDir, recogniser=filtname, wind=True)
 
         # 2. Report statistics of WF followed by general post-proc steps (no CNN but wind-merge neighbours-delete short)
-        self.flag, self.text = self.getSummary(avianz_batch, CNN=False)
+        self.text = self.getSummary(avianz_batch, CNN=False)
 
         # 3. Report statistics of WF followed by post-proc steps (wind-CNN-merge neighbours-delete short)
         if "CNN" in self.currfilt:
@@ -634,7 +633,7 @@ class CNNtest:
             CNNDicts = cl.CNNmodels(filterlist, self.filterdir, [filtname])
             if filtname in CNNDicts.keys():
                 CNNmodel = CNNDicts[filtname]
-                flag, text = self.getSummary(avianz_batch, CNN=True, CNNmodel=CNNmodel)
+                self.text = self.getSummary(avianz_batch, CNN=True, CNNmodel=CNNmodel)
             else:
                 print("ERROR: Couldn't find a matching CNN!")
                 self.outfile.write("No matching CNN found!\n")
@@ -644,17 +643,16 @@ class CNNtest:
         self.outfile.write("-- End of testing --\n")
         self.outfile.close()
 
+        print("Testing output written to " + os.path.join(self.testDir, "test-results.txt"))
+
         # Tidy up
         for root, dirs, files in os.walk(self.testDir):
             for file in files:
                 if file.endswith('.tmpdata'):
                     os.remove(os.path.join(root, file))
 
-        if CLI:
-            print("Output written to " + os.path.join(self.testDir, "test-results.txt"))
-
     def getOutput(self):
-        return self.flag, self.text
+        return self.text
 
     def findCTsegments(self, file, calltypei):
         calltypeSegments = []
@@ -754,14 +752,14 @@ class CNNtest:
         self.outfile.write("Total auto suggested segments:\t%d\n\n" % (autoSegNum))
 
         if CNN:
-            text = "Wavelet Pre-Processor + CNN detection summary\n\n\tTrue Positives:\t%d seconds (%.2f %%)\n\tFalse Positives:\t%d seconds (%.2f %%)\n\tTrue Negatives:\t%d seconds (%.2f %%)\n\tFalse Negatives:\t%d seconds (%.2f %%)\n\n\tSpecificity:\t %.2f %%\n\tRecall:\t\t%.2f %%\n\tPrecision:\t%.2f %%\n\tAccuracy:\t%.2f %%\n" \
+            text = "Wavelet Pre-Processor + CNN detection summary\n\n\tTrue Positives:\t%d seconds (%.2f %%)\n\tFalse Positives:\t%d seconds (%.2f %%)\n\tTrue Negatives:\t%d seconds (%.2f %%)\n\tFalse Negatives:\t%d seconds (%.2f %%)\n\n\tSpecificity:\t%.2f %%\n\tRecall:\t\t%.2f %%\n\tPrecision:\t%.2f %%\n\tAccuracy:\t%.2f %%\n" \
                    % (TP, TP * 100 / total, FP, FP * 100 / total, TN, TN * 100 / total, FN, FN * 100 / total,
                       specificity * 100, recall * 100, precision * 100, accuracy * 100)
         else:
-            text = "Wavelet Pre-Processor detection summary\n\n\tTrue Positives:\t%d seconds (%.2f %%)\n\tFalse Positives:\t%d seconds (%.2f %%)\n\tTrue Negatives:\t%d seconds (%.2f %%)\n\tFalse Negatives:\t%d seconds (%.2f %%)\n\n\tSpecificity:\t %.2f %%\n\tRecall:\t\t%.2f %%\n\tPrecision:\t%.2f %%\n\tAccuracy:\t%.2f %%\n" \
+            text = "Wavelet Pre-Processor detection summary\n\n\tTrue Positives:\t%d seconds (%.2f %%)\n\tFalse Positives:\t%d seconds (%.2f %%)\n\tTrue Negatives:\t%d seconds (%.2f %%)\n\tFalse Negatives:\t%d seconds (%.2f %%)\n\n\tSpecificity:\t%.2f %%\n\tRecall:\t\t%.2f %%\n\tPrecision:\t%.2f %%\n\tAccuracy:\t%.2f %%\n" \
                    % (TP, TP * 100 / total, FP, FP * 100 / total, TN, TN * 100 / total, FN, FN * 100 / total,
                       specificity * 100, recall * 100, precision * 100, accuracy * 100)
-        return CNN, text
+        return text
 
     def loadGT(self, filename, length):
         import csv
