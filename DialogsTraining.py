@@ -1729,7 +1729,7 @@ class TestRecWizard(QWizard):
                 self.lblTestFilter.setText(self.field("species"))
                 self.lblSpecies.setText(self.currfilt['species'])
 
-                test = Training.CNNtest(self.field("testDir"), self.currfilt,self.configdir,self.filterdir)
+                test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("species")[:-4], self.configdir,self.filterdir)
                 flag, text = test.getOutput()
 
             if text == 0:
@@ -2035,7 +2035,7 @@ class BuildCNNWizard(QWizard):
             self.hasant1 = False
             self.hasant2 = False
             cl = SupportClasses.ConfigLoader()
-            self.LearningDict = cl.learningParams(os.path.join(configdir,"LearningParams.txt"))
+            self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
 
             self.msgmdir = QLabel("")
             self.msgmdir.setFixedWidth(600)
