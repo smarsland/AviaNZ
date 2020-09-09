@@ -1729,7 +1729,7 @@ class TestRecWizard(QWizard):
                 self.lblTestFilter.setText(self.field("species"))
                 self.lblSpecies.setText(self.currfilt['species'])
 
-                test = Training.CNNtest(self.field("testDir"), self.currfilt,self.configdir,self.filterdir)
+                test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("species")[:-4], self.configdir,self.filterdir)
                 flag, text = test.getOutput()
 
             if text == 0:

@@ -43,7 +43,7 @@ import SupportClasses
 @click.option('-u', '--testing', is_flag=True, help='Train a recogniser')
 @click.option('-d', '--sdir1', type=click.Path(), help='Input sound directory, training or batch processing')
 @click.option('-e', '--sdir2', type=click.Path(), help='Second input sound directory, training')
-@click.option('-r', '--recogniser', type=str, help='Recogniser name, batch processing')
+@click.option('-r', '--recogniser', type=str, help='Recogniser name (without ".txt"), batch processing')
 @click.option('-w', '--wind', is_flag=True, help='Apply wind filter')
 @click.option('-x', '--width', type=int, help='Width of windows for CNN')
 @click.argument('command', nargs=-1)
@@ -138,8 +138,9 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 sys.exit()
         elif testing:
             import Training
-            if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
-                testing = Training.CNNtest(sdir1,recogniser,configdir,filterdir,CLI=True)
+            filts = confloader.filters(filterdir)
+            if os.path.isdir(sdir1) and recogniser in filts:
+                testing = Training.CNNtest(sdir1, filts[recogniser], recogniser, configdir,filterdir,CLI=True)
                 print("Testing complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for training")
