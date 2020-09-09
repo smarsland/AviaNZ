@@ -1356,9 +1356,6 @@ class AviaNZ(QMainWindow):
             self.filename = os.path.join(self.SoundFileDir, fileNameOld)
             self.listLoadFile(fileNameOld)
 
-        #self.fillFileList(self.SoundFileDir, current)
-        self.listFiles.setCurrentItem(current)
-
     def listLoadFile(self,current):
         """ Listener for when the user clicks on a filename (also called by openFile() )
         Does the safety checks for file existence etc.
