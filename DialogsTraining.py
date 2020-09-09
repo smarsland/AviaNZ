@@ -1702,9 +1702,10 @@ class TestRecWizard(QWizard):
             space.setFixedHeight(25)
 
             self.lblWFsummary = QLabel()
-            self.lblWFCNNsummary = QLabel()
-            self.lblWFsummary.setStyleSheet("QLabel { color : #808080; }")
-            self.lblWFCNNsummary.setStyleSheet("QLabel { color : #808080; }")
+            # self.lblWFCNNsummary = QLabel()
+            # self.lblWFsummary.setStyleSheet("QLabel { color : #808080; }")
+            # self.lblWFCNNsummary.setStyleSheet("QLabel { color : #808080; }")
+            self.lblOutfile = QLabel()
 
             # page layout
             vboxHead = QFormLayout()
@@ -1715,7 +1716,8 @@ class TestRecWizard(QWizard):
             vbox = QVBoxLayout()
             vbox.addLayout(vboxHead)
             vbox.addWidget(self.lblWFsummary)
-            vbox.addWidget(self.lblWFCNNsummary)
+            # vbox.addWidget(self.lblWFCNNsummary)
+            vbox.addWidget(self.lblOutfile)
             self.setLayout(vbox)
 
         def initializePage(self):
@@ -1730,16 +1732,15 @@ class TestRecWizard(QWizard):
                 self.lblSpecies.setText(self.currfilt['species'])
 
                 test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("species")[:-4], self.configdir,self.filterdir)
-                flag, text = test.getOutput()
+                text = test.getOutput()
 
             if text == 0:
                 self.lblWFsummary.setText("No segments for species \'%s\' found!" % self.field("species")[:-4])
                 return
 
-            if flag:
-                self.lblWFCNNsummary.setText(text)
-            else:
-                self.lblWFsummary.setText(text)
+            self.lblWFsummary.setText(text)
+            resfile = os.path.join(self.field("testDir"), "test-results.txt")
+            self.lblOutfile.setText("The detailed results have been saved in file\n%s" % resfile)
 
         def cleanupPage(self):
             self.lblWFsummary.setText('')
@@ -1756,31 +1757,31 @@ class TestRecWizard(QWizard):
                         os.remove(os.path.join(root, file))
             return True
 
-    class WPageFull(QWizardPage):
-        def __init__(self, parent=None):
-            super(TestRecWizard.WPageFull, self).__init__(parent)
-            self.setTitle('Detailed testing results')
+    # extra page to display the full results?
+    # class WPageFull(QWizardPage):
+    #     def __init__(self, parent=None):
+    #         super(TestRecWizard.WPageFull, self).__init__(parent)
+    #         self.setTitle('Detailed testing results')
 
-            self.setMinimumSize(300, 300)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
-            self.adjustSize()
+    #         self.setMinimumSize(300, 300)
+    #         self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+    #         self.adjustSize()
 
-            self.results = QTextEdit()
-            self.results.setReadOnly(True)
+    #         self.results = QTextEdit()
+    #         self.results.setReadOnly(True)
 
-            vbox = QVBoxLayout()
-            vbox.addWidget(self.results)
-            self.setLayout(vbox)
+    #         vbox = QVBoxLayout()
+    #         vbox.addWidget(self.results)
+    #         self.setLayout(vbox)
 
-        def initializePage(self):
-            resfile = os.path.join(self.field("testDir"), "test-results.txt")
-            resstream = open(resfile, 'r')
-            self.setSubTitle("The detailed results (shown below) have been saved in file %s" % resfile)
-            self.results.setPlainText(resstream.read())
-            resstream.close()
+    #     def initializePage(self):
+    #         resfile = os.path.join(self.field("testDir"), "test-results.txt")
+    #         resstream = open(resfile, 'r')
+    #         self.results.setPlainText(resstream.read())
+    #         resstream.close()
 
-        def cleanupPage(self):
-            self.results.setPlainText('')
+    #     def cleanupPage(self):
+    #         self.results.setPlainText('')
 
     # Main init of the testing wizard
     def __init__(self, filtdir, configdir, filter=None, parent=None):
@@ -1808,8 +1809,8 @@ class TestRecWizard(QWizard):
         pageMain = TestRecWizard.WPageMain(configdir, filtdir)
         self.addPage(pageMain)
 
-        # extra page to show more
-        self.addPage(TestRecWizard.WPageFull())
+        # extra page to show more details
+        # self.addPage(TestRecWizard.WPageFull())
 
 class ROCCanvas(FigureCanvas):
     def __init__(self, parent=None, width=5, height=6, dpi=100):
