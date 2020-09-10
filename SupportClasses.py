@@ -165,12 +165,11 @@ class ConfigLoader(object):
             config = json.load(f)
             f.close()
             return config
-        except ValueError as e:
+        except ValueError:
             # if JSON looks corrupt, quit:
-            print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             msg.exec_()
-            sys.exit()
+            raise
 
     def filters(self, dir, bats=True):
         """ Returns a dict of filter JSONs,
@@ -357,12 +356,11 @@ class ConfigLoader(object):
             config = json.load(configfile)
             configfile.close()
             return config
-        except ValueError as e:
+        except ValueError:
             # if JSON looks corrupt, quit:
-            print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             msg.exec_()
-            sys.exit()
+            raise
 
     # Dumps the provided JSON array to the corresponding bird file.
     def blwrite(self, content, file, configdir):
@@ -392,9 +390,8 @@ class ConfigLoader(object):
             # will always be an absolute path to the user configdir.
             with open(file, 'w') as f:
                 json.dump(content, f, indent=1)
-
         except Exception as e:
-            print("ERROR while saving config file:")
+            print("Warning: could not save config file:")
             print(e)
 
 

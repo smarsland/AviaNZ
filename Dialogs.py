@@ -39,6 +39,9 @@ import SupportClasses_GUI
 import SignalProc
 import openpyxl
 
+pg.setConfigOption('background','w')
+pg.setConfigOption('foreground','k')
+pg.setConfigOption('antialias',True)
 
 class StartScreen(QDialog):
     def __init__(self, parent=None):
