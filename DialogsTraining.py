@@ -209,6 +209,7 @@ class BuildRecAdvWizard(QWizard):
             self.nclasses = 0
             self.config = config
             self.segsChanged = False
+            self.hasCTannotations = True
 
             self.lblSpecies = QLabel()
             self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
@@ -243,12 +244,6 @@ class BuildRecAdvWizard(QWizard):
             self.contrastSlider.setTickInterval(1)
             self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
-            #lb = QLabel('Move Selected Segment/s to Cluster')
-            #self.cmbUpdateSeg = QComboBox()
-            #self.cmbUpdateSeg.setFixedWidth(200)
-            #self.btnUpdateSeg = QPushButton('Apply')
-            #self.btnUpdateSeg.setFixedWidth(130)
-            #self.btnUpdateSeg.clicked.connect(self.moveSelectedSegs)
             self.btnCreateNewCluster = QPushButton('Create cluster')
             self.btnCreateNewCluster.setFixedWidth(150)
             self.btnCreateNewCluster.clicked.connect(self.createNewcluster)
@@ -277,19 +272,12 @@ class BuildRecAdvWizard(QWizard):
             hboxSpecContr.setStretch(5, 3)
             hboxSpecContr.addStretch(2)
 
-            #hboxBtns1 = QHBoxLayout()
-            #hboxBtns1.addWidget(lb)
-            #hboxBtns1.addWidget(self.cmbUpdateSeg)
-            #hboxBtns1.addWidget(self.btnUpdateSeg)
-            #hboxBtns1.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
             hboxBtns2 = QHBoxLayout()
             hboxBtns2.addWidget(self.btnCreateNewCluster)
             hboxBtns2.addWidget(self.btnDeleteSeg)
             hboxBtns2.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
             hboxBtns = QHBoxLayout()
-            #hboxBtns.addLayout(hboxBtns1)
             hboxBtns.addLayout(hboxBtns2)
 
             # top part
@@ -323,22 +311,31 @@ class BuildRecAdvWizard(QWizard):
 
             with pg.BusyCursor():
                 print("Processing. Please wait...")
-                # return format:
-                # self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
-                # fs: sampling freq
-                # self.nclasses: number of class_labels
-                self.cluster = Clustering.Clustering([], [], 5)
-                self.segments, fs, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("species"), feature=self.feature)
-                # segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
-                # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
-                #                                                                              self.field("species"),
-                #                                                                              feature=self.feature,
-                #                                                                              max_clusters=5,
-                #                                                                              single=True)
+                # Check if the annotations come with call type labels, if so skip auto clustering
+                self.CTannotations()
+                if self.hasCTannotations:
+                    # self.segments: [parent_audio_file, [segment], class_label]
+                    self.segments, self.nclasses, self.duration = self.getClustersGT()
+                    self.setSubTitle('AviaNZ found call type annotations in your dataset. You can still make corrections by moving calls as appropriate.')
+                else:
+                    # return format:
+                    # self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
+                    # fs: sampling freq
+                    # self.nclasses: number of class_labels
+                    # duration: median length of segments
+                    self.cluster = Clustering.Clustering([], [], 5)
+                    self.segments, _, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("species"), feature=self.feature)
+                    # segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
+                    # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
+                    #                                                                              self.field("species"),
+                    #                                                                              feature=self.feature,
+                    #                                                                              max_clusters=5,
+                    #                                                                              single=True)
+                    self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
 
                 # Create and show the buttons
                 self.clearButtons()
-                self.addButtons(fs)
+                self.addButtons()
                 self.updateButtons()
                 print("buttons added")
                 self.segsChanged = True
@@ -368,7 +365,72 @@ class BuildRecAdvWizard(QWizard):
             self.updateAnnotations()
             return True
 
+        def cleanupPage(self):
+            self.clusters = {}
+
+        def CTannotations(self):
+            """ Check if all the segments from target species has call type annotations"""
+            self.hasCTannotations = True
+            listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
+            for file in listOfDataFiles:
+                # Read the annotation
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(self.field("trainDir"), file))
+                SpSegs = segments.getSpecies(self.field("species"))
+                for segix in SpSegs:
+                    seg = segments[segix]
+                    for label in seg[4]:
+                        if label["species"] == self.field("species") and "calltype" not in label:
+                            self.hasCTannotations = False
+                            break
+
+        def getClustersGT(self):
+            """ Get call type clusters from annotations
+            :returns
+            [parent_audio_file, [segment], [syllables], [features], class_label]
+                    # fs: sampling freq
+                    # self.nclasses: number of class_labels
+                    # duration: median length of segments
+                    call types
+            """
+            ctTexts = []
+            CTsegments = []
+            duration = []
+
+            listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
+            listOfWavFiles = QDir(self.field("trainDir")).entryList(['*.wav'])
+            for file in listOfDataFiles:
+                if file[:-5] in listOfWavFiles:
+                    # Read the annotation
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(os.path.join(self.field("trainDir"), file))
+                    SpSegs = segments.getSpecies(self.field("species"))
+                    for segix in SpSegs:
+                        seg = segments[segix]
+                        for label in seg[4]:
+                            if label["species"] == self.field("species") and "calltype" in label:
+                                if label["calltype"] not in ctTexts:
+                                    ctTexts.append(label["calltype"])
+            for i in range(len(ctTexts)):
+                self.clusters[i] = ctTexts[i]
+
+            for file in listOfDataFiles:
+                if file[:-5] in listOfWavFiles:
+                    # Read the annotation
+                    segments = Segment.SegmentList()
+                    wavfile = os.path.join(self.field("trainDir"), file[:-5])
+                    segments.parseJSON(os.path.join(self.field("trainDir"), file))
+                    SpSegs = segments.getSpecies(self.field("species"))
+                    for segix in SpSegs:
+                        seg = segments[segix]
+                        for label in seg[4]:
+                            if label["species"] == self.field("species") and "calltype" in label:
+                                CTsegments.append([wavfile, seg, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
+                                duration.append(seg[1]-seg[0])
+            return CTsegments, len(self.clusters), np.median(duration)
+
         def backupDatafiles(self):
+            # Let's backup original data fiels before updating them
             print("Backing up files ", self.field("trainDir"))
             listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
             for file in listOfDataFiles:
@@ -723,17 +785,18 @@ class BuildRecAdvWizard(QWizard):
             self.completeChanged.emit()
             print('updated clusters: ', self.clusters)
 
-        def addButtons(self, tgtsamplerate):
+        def addButtons(self):
             """ Only makes the PicButtons and self.clusters dict
             """
-            self.clusters = []
             self.picbuttons = []
-            for i in range(self.nclasses):
-                self.clusters.append((i, 'Cluster_' + str(i)))
-            self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
+            if not self.hasCTannotations:
+                self.clusters = []
+                for i in range(self.nclasses):
+                    self.clusters.append((i, 'Cluster_' + str(i)))
+                self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
 
             # largest spec will be this wide
-            maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * tgtsamplerate // 256
+            maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
 
             # Create the buttons for each segment
             for seg in self.segments:
@@ -741,7 +804,7 @@ class BuildRecAdvWizard(QWizard):
                 sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
 
                 # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
-                incr = 256 * sp.sampleRate // tgtsamplerate
+                incr = 256 * sp.sampleRate // self.field("fs")
                 sgRaw = sp.spectrogram(window='Hann', incr=incr, mean_normalise=True, onesided=True,
                                               multitaper=False, need_even=False)
                 maxsg = np.min(sgRaw)
@@ -969,32 +1032,34 @@ class BuildRecAdvWizard(QWizard):
                 pageSegs.addSegment(longseg[1])
             len_min, len_max, f_low, f_high = pageSegs.getSummaries()
             # Get max inter syllable gap
-            gaps = []
-            maxgap = 0
-            syllen = []
-            for longseg in self.segments:
-                if len(longseg[2]) > 1:
-                    for i in range(len(longseg[2]) - 1):
-                        gaps.append(longseg[2][i + 1][0] - longseg[2][i][1])
-            if len(gaps) > 0:
-                maxgap = max(gaps)
+            if not self.wizard().clusterPage.hasCTannotations:
+                gaps = []
+                syllen = []
+                for longseg in self.segments:
+                    if len(longseg[2]) > 1:
+                        for i in range(len(longseg[2]) - 1):
+                            gaps.append(longseg[2][i + 1][0] - longseg[2][i][1])
+                if len(gaps) > 0:
+                    maxgap = max(gaps)
+                else:
+                    maxgap = 0
+
+                for longseg in self.segments:
+                    for i in range(len(longseg[2])):
+                        syllen.append(longseg[2][i][1] - longseg[2][i][0])
+                avgslen = np.mean(syllen)
             else:
-                maxgap = 0
+                maxgap = 0.5    # TODO
+                avgslen = 0.5
 
-            for longseg in self.segments:
-                for i in range(len(longseg[2])):
-                    syllen.append(longseg[2][i][1] - longseg[2][i][0])
-
-            avgslen = np.mean(syllen)
-
-            self.minlen.setText(str(round(np.min(len_min),2)))
-            self.maxlen.setText(str(round(np.max(len_max),2)))
-            self.maxgap.setText(str(round(maxgap,2)))
-            self.avgslen.setText(str(round(avgslen,2)))
+            self.minlen.setText(str(round(np.min(len_min), 2)))
+            self.maxlen.setText(str(round(np.max(len_max), 2)))
+            self.maxgap.setText(str(round(maxgap, 2)))
+            self.avgslen.setText(str(round(avgslen, 2)))
             self.fLow.setRange(0, fs/2)
-            self.fLow.setValue(max(0,int(np.min(f_low))))
+            self.fLow.setValue(max(0, int(np.min(f_low))))
             self.fHigh.setRange(0, fs/2)
-            if np.max(f_high)==0:
+            if np.max(f_high) == 0:
                 # happens when no segments have y limits
                 f_high = fs/2
             self.fHigh.setValue(min(fs/2,int(np.max(f_high))))
@@ -1142,11 +1207,12 @@ class BuildRecAdvWizard(QWizard):
                             # exports 0/1 annotations and retrieves segment time, freq bounds
                             pageSegs.exportGT(wavFile, self.field("species"), window=window, inc=inc)
 
-            # calculate cluster centres
-            # (self.segments is already selected to be this cluster only)
-            with pg.BusyCursor():
-                cl = Clustering.Clustering([], [], 5)
-                self.clustercentre = cl.getClusterCenter(self.segments, self.field("fs"), fLow, fHigh, self.wizard().clusterPage.feature, self.wizard().clusterPage.duration)
+            # TODO: Check this later - I'm disabling cluster centre (it's not used currently).
+            # # calculate cluster centres
+            # # (self.segments is already selected to be this cluster only)
+            # with pg.BusyCursor():
+            #     cl = Clustering.Clustering([], [], 5)
+            #     self.clustercentre = cl.getClusterCenter(self.segments, self.field("fs"), fLow, fHigh, self.wizard().clusterPage.feature, self.wizard().clusterPage.duration)
 
             # Get detection measures over all M,thr combinations
             print("starting wavelet training")
@@ -1269,14 +1335,15 @@ class BuildRecAdvWizard(QWizard):
                 M = float(self.field("bestM"+str(pageId)))
                 nodes = eval(self.field("bestNodes"+str(pageId)))
 
-                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
+                # newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
+                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}}
 
                 print(newSubfilt)
                 self.wizard().speciesData["Filters"].append(newSubfilt)
 
             speciesDataText = copy.deepcopy(self.wizard().speciesData)
             for f in speciesDataText["Filters"]:
-                f["ClusterCentre"] = "(...)"
+                # f["ClusterCentre"] = "(...)"
                 f["WaveletParams"] = "(...)"
 
             self.lblFilter.setText(str(speciesDataText))
