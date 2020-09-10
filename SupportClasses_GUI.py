@@ -123,16 +123,16 @@ class AxisWidget(QAbstractButton):
         # fixed size
         self.setSizePolicy(0,0)
         self.setMinimumSize(70, sgsize)
-        self.fontsize = min(max(int(math.sqrt(sgsize-30)*0.8), 9), 14)
+        self.fontsize = min(max(int(math.sqrt(sgsize-30)*0.8), 9), 13)
 
     def paintEvent(self, event):
         if type(event) is not bool:
             painter = QPainter(self)
             # actual axis line painting
             bottomR = event.rect().bottomRight()
-            bottomR.setX(bottomR.x()-6)
+            bottomR.setX(bottomR.x()-12)
             topR = event.rect().topRight()
-            topR.setX(topR.x()-6)
+            topR.setX(topR.x()-12)
             painter.setPen(QPen(QColor(20,20,20), 1))
             painter.drawLine(bottomR, topR)
 
@@ -1148,10 +1148,10 @@ class LightedFileList(QListWidget):
             print("Found the following Fs:", self.fsList)
 
         # mark the current file or first row (..), if not found
-        #print(fileName)
         if fileName:
-            index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
-            #print(index)
+            # for matching dirs:
+            # index = self.findItems(fileName+"\/",Qt.MatchExactly)
+            index = self.findItems(fileName,Qt.MatchExactly)
             if len(index)>0:
                 self.setCurrentItem(index[0])
             else:
@@ -1161,7 +1161,9 @@ class LightedFileList(QListWidget):
         """ Repaint a single file icon.
             fileName: file stem (dir will be read from self)
         """
-        index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+        # for matching dirs - not sure if needed:
+        # index = self.findItems(fileName+"\/",Qt.MatchExactly)
+        index = self.findItems(fileName,Qt.MatchExactly)
         if len(index)==0:
             return
 
