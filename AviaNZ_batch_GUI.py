@@ -534,24 +534,19 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_dir.setFixedHeight(50)
         self.w_dir.setPlainText('')
         self.w_dir.setToolTip("The folder being processed")
-        self.d_detection.addWidget(self.w_dir, row=1,col=1,colspan=2)
-        self.d_detection.addWidget(self.w_browse, row=1,col=0)
 
-        self.w_speLabel1 = QLabel("Select Species")
-        self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
+        self.w_speLabel1 = QLabel("Quick review a single species:")
+        allsplabel = QLabel("Or review all species/calltypes:")
         self.w_spe1 = QComboBox()
-        self.spList = ['Any sound']
+        self.spList = []
         self.w_spe1.addItems(self.spList)
         self.w_spe1.setEnabled(False)
-        self.d_detection.addWidget(self.w_spe1,row=2,col=1,colspan=2)
 
         minCertLab = QLabel("Skip if certainty above:")
-        self.d_detection.addWidget(minCertLab, row=3, col=0)
         self.certBox = QSpinBox()
         self.certBox.setRange(0,100)
         self.certBox.setSingleStep(10)
         self.certBox.setValue(90)
-        self.d_detection.addWidget(self.certBox, row=3, col=1)
 
         # sliders to select min/max frequencies for ALL SPECIES only
         self.fLow = QSlider(Qt.Horizontal)
@@ -590,36 +585,62 @@ class AviaNZ_reviewAll(QMainWindow):
         self.chunksizeBox.setValue(10)
         self.chunksizeBox.setEnabled(False)
 
-        # add sliders to dock
-        self.d_detection.addWidget(self.fLowtext, row=4, col=0)
-        self.d_detection.addWidget(self.fLow, row=4, col=1)
-        self.d_detection.addWidget(self.fLowvalue, row=4, col=2)
-        self.d_detection.addWidget(self.fHightext, row=5, col=0)
-        self.d_detection.addWidget(self.fHigh, row=5, col=1)
-        self.d_detection.addWidget(self.fHighvalue, row=5, col=2)
-        self.d_detection.addWidget(QLabel("FFT window size"), row=6, col=0)
-        self.d_detection.addWidget(self.winwidthBox, row=6, col=1)
-        self.d_detection.addWidget(QLabel("FFT hop size"), row=7, col=0)
-        self.d_detection.addWidget(self.incrBox, row=7, col=1)
+        # add controls to dock
+        self.d_detection.addWidget(self.w_dir, row=1,col=1,colspan=2)
+        self.d_detection.addWidget(self.w_browse, row=1,col=0)
 
-        self.d_detection.addWidget(self.chunksizeAuto, row=8, col=0)
-        self.d_detection.addWidget(self.chunksizeManual, row=8, col=1)
-        self.d_detection.addWidget(self.chunksizeBox, row=8, col=2)
+        linesep = QFrame()
+        linesep.setFrameShape(QFrame.HLine)
+        linesep.setFrameShadow(QFrame.Sunken)
+        settingsLabel = QLabel("Advanced settings")
+        settingsLabel.setStyleSheet("QLabel {color: #505050; font-weight: 75}")
+        settingsLabel.setAlignment(Qt.AlignCenter)
 
-        self.w_processButton = QPushButton(" &Review Folder")
+        self.d_detection.addWidget(linesep, row=4, col=0, colspan=3)
+        self.d_detection.addWidget(settingsLabel, row=5, col=0, colspan=3)
+        self.d_detection.addWidget(minCertLab, row=6, col=0)
+        self.d_detection.addWidget(self.certBox, row=6, col=1)
+        self.d_detection.addWidget(self.fLowtext, row=7, col=0)
+        self.d_detection.addWidget(self.fLow, row=7, col=1)
+        self.d_detection.addWidget(self.fLowvalue, row=7, col=2)
+        self.d_detection.addWidget(self.fHightext, row=8, col=0)
+        self.d_detection.addWidget(self.fHigh, row=8, col=1)
+        self.d_detection.addWidget(self.fHighvalue, row=8, col=2)
+        self.d_detection.addWidget(QLabel("FFT window size"), row=9, col=0)
+        self.d_detection.addWidget(self.winwidthBox, row=9, col=1)
+        self.d_detection.addWidget(QLabel("FFT hop size"), row=10, col=0)
+        self.d_detection.addWidget(self.incrBox, row=10, col=1)
+
+        self.d_detection.addWidget(self.chunksizeAuto, row=11, col=0)
+        self.d_detection.addWidget(self.chunksizeManual, row=11, col=1)
+        self.d_detection.addWidget(self.chunksizeBox, row=11, col=2)
+
+        self.w_processButton = QPushButton(" Review All")
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
         self.w_processButton.setFixedHeight(45)
         self.w_processButton.setFixedHeight(45)
         self.w_processButton.setIcon(QIcon(QPixmap('img/review.png')))
-        self.w_processButton.clicked.connect(self.review)
+        self.w_processButton.clicked.connect(self.reviewClickedAll)
         self.w_processButton.setEnabled(False)
-        self.d_detection.addWidget(self.w_processButton, row=10, col=2)
+        self.w_processButton1 = QPushButton(" Review Quick")
+        self.w_processButton1.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.w_processButton1.setFixedHeight(45)
+        self.w_processButton1.setFixedHeight(45)
+        self.w_processButton1.setIcon(QIcon(QPixmap('img/tile1.png')))
+        self.w_processButton1.clicked.connect(self.reviewClickedSingle)
+        self.w_processButton1.setEnabled(False)
+
+        self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
+        self.d_detection.addWidget(self.w_spe1,row=2,col=1)
+        self.d_detection.addWidget(self.w_processButton1, row=2, col=2)
+        self.d_detection.addWidget(allsplabel, row=3, col=0, colspan=2)
+        self.d_detection.addWidget(self.w_processButton, row=3, col=2)
 
         # Excel export section
-        linesep = QFrame()
-        linesep.setFrameShape(QFrame.HLine)
-        linesep.setFrameShadow(QFrame.Sunken)
-        self.d_detection.addWidget(linesep, row=11, col=0, colspan=3)
+        linesep2 = QFrame()
+        linesep2.setFrameShape(QFrame.HLine)
+        linesep2.setFrameShadow(QFrame.Sunken)
+        self.d_detection.addWidget(linesep2, row=12, col=0, colspan=3)
         self.w_resLabel = QLabel("Size (s) of presence/absence\nwindows in the output")
         self.d_detection.addWidget(self.w_resLabel, row=13, col=0)
         self.w_res = QSpinBox()
@@ -684,6 +705,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.statusBar().showMessage("Ready to review")
 
         self.w_processButton.setEnabled(ready)
+        self.w_processButton1.setEnabled(ready)
 
     def createMenu(self):
         """ Create the basic menu.
@@ -733,6 +755,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if self.fillFileList()==1:
             self.w_spe1.setEnabled(False)
             self.w_processButton.setEnabled(False)
+            self.w_processButton1.setEnabled(False)
             self.w_excelButton.setEnabled(False)
             self.statusBar().showMessage("Select a directory to review")
             return
@@ -764,7 +787,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.spList.remove("Don't Know")
         except Exception:
             pass
-        self.spList.insert(0, 'Any sound')
+        # self.spList.insert(0, 'Any sound')
         self.w_spe1.clear()
         self.w_spe1.addItems(self.spList)
 
@@ -801,9 +824,15 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.listFiles.setCurrentItem(index[0])
         return(0)
 
-    def review(self):
-        self.species = self.w_spe1.currentText()
+    def reviewClickedAll(self):
+        self.species = "Any sound"
+        self.review()
 
+    def reviewClickedSingle(self):
+        self.species = self.w_spe1.currentText()
+        self.review()
+
+    def review(self):
         self.reviewer = self.w_reviewer.text()
         print("Reviewer: ", self.reviewer)
         if self.reviewer == '':
