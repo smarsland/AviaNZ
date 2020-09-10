@@ -102,13 +102,13 @@ class AviaNZ(QMainWindow):
         # Load the birdlists - both are now necessary:
         self.shortBirdList = self.ConfigLoader.shortbl(self.config['BirdListShort'], configdir)
         if self.shortBirdList is None:
-            sys.exit()
+            raise OSError("Short bird list missing, cannot continue")
         self.longBirdList = self.ConfigLoader.longbl(self.config['BirdListLong'], configdir)
         if self.longBirdList is None:
-            sys.exit()
+            raise OSError("Long bird list missing, cannot continue")
         self.batList = self.ConfigLoader.batl(self.config['BatList'], configdir)
         if self.batList is None:
-            sys.exit()
+            raise OSError("Bat list missing, cannot continue")
 
         # avoid comma/point problem in number parsing
         QLocale.setDefault(QLocale(QLocale.English, QLocale.NewZealand))
@@ -173,7 +173,7 @@ class AviaNZ(QMainWindow):
         if not os.path.isfile(firstFile) and not cheatsheet and not zooniverse:
             if self.CLI:
                 print("file %s not found, exiting" % firstFile)
-                sys.exit()
+                raise OSError("No input file, cannot continue")
             else:
                 # pop up a dialog to select file
                 firstFile, drop = QFileDialog.getOpenFileName(self, 'Choose File', self.SoundFileDir, "WAV or BMP files (*.wav *.bmp);; Only WAV files (*.wav);; Only BMP files (*.bmp)")
@@ -240,7 +240,7 @@ class AviaNZ(QMainWindow):
                         self.segment()
                     else:
                         print("ERROR: %s is not a valid command" % c)
-                        sys.exit()
+                        raise ValueError("CLI command not recognized")
                 if imageFile!='':
                     # reset images to show full width if in CLI:
                     self.widthWindow.setValue(self.datalengthSec)
