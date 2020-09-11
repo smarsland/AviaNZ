@@ -5,10 +5,16 @@
 
 #define LOG2PI 1.8378770664093453
 
+typedef enum {
+    NUIS,
+    SIG
+} chptype;
+
 struct ChpList {
     // size_t prev;
     size_t start;
     size_t end;
+    chptype type;
 };
 
 // Square cost functions (for use w/ change in mean)
@@ -34,9 +40,9 @@ double cost1sq(const double xs[], const size_t len){
 }
 
 // Cost functions for use w/ change in variance of N
-// (these are -2 log L)
+// (these are -2 log L - LOG2PI)
 double cost0var(const double x2, const double s2t){
-    return LOG2PI + log(s2t) + x2/s2t;
+    return log(s2t) + x2/s2t;
 }
 
 // double cost1var(const double x2s[], const size_t len){
@@ -47,7 +53,7 @@ void findmincost(const double cs[], const double Fs[], const size_t starts[], co
     for(size_t i=0; i<stlen; i++){
         size_t t2 = starts[i];
         segcosts[t2] = Fs[t2] + cs[t2+1];
-        // printf("--parts: F(i)=%.3f, cost1=%.3f\n", F[t2], cost1sq(xs+t2+1, t-t2));
+        // printf("--parts: F(i)=%.3f, cost1=%.3f\n", Fs[t2], cs[t2+1]);
         // keep track of min and argmin F_S
         if(segcosts[t2]<*outcost){
             *outcost = segcosts[t2];
@@ -65,7 +71,7 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
         xs[i] = (xs[i]-mu0);
         x2s[i] = xs[i]*xs[i];
     }
-    // precomputed segment costs
+    // precompute segment costs
     // TODO add an initialization marker to spot cache misses
     double cs[n];
     double len;
@@ -98,7 +104,7 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
     size_t bgsizes[n];
     bgsizes[0] = 1;
     for(size_t t=1; t<n; t++){
-        // printf("Cycle %zu/%zu\n", t+1, n);
+        printf("Cycle %zu/%zu\n", t+1, n);
         // precompute costs for all possible segments ending here at t
         m2 = 0;
         for(size_t start=t; start>minstart; start--){
@@ -106,7 +112,7 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
             m2 += x2s[start];
             len = t-start+1;
             // SSE = Var(x_i) * n
-            cs[start] = len*(LOG2PI + 1 + log(m2/len));
+            cs[start] = len*(1 + log(m2/len));
         }
         // Could be good to check if any of the costs are -Inf given that logs are involved.
 
@@ -115,7 +121,7 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
 
         // F_S = min F(t-k) + C(t-k+1:t) + beta
         double bestsegcost = INFINITY;
-        size_t bestsegstart = -1;
+        size_t bestsegstart;
         findmincost(cs, F, possiblestarts, numpossiblestarts, &bestsegcost, &bestsegstart, segcosts);
         // printf("bgcost: %.2f, segcost: %.2f + %.2f at t=%zu\n", bgcost, bestsegcost, penalty, bestsegstart+1);
 
@@ -180,7 +186,6 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
 }
 
 
-
 // main loop over data - for change in MEAN
 int alg1_mean(double xs[], const size_t n, const double sd, const double penalty){
     // standardize x
@@ -189,12 +194,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
     }
     // precomputed segment costs
     // TODO add an initialization marker to spot cache misses
-    // TODO move this back to stack?
-    double *cs = malloc(n*sizeof(double));
-    if(!cs){
-        printf("ERROR: failed to allocate %ld bytes of memory\n", n*sizeof(double));
-        return 1;
-    }
+    double cs[n];
     double len;
     double m;
     double m2;
@@ -242,7 +242,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
 
         // F_S = min F(t-k) + C(t-k+1:t) + beta
         double bestsegcost = INFINITY;
-        size_t bestsegstart = -1;
+        size_t bestsegstart;
         findmincost(cs, F, possiblestarts, numpossiblestarts, &bestsegcost, &bestsegstart, segcosts);
         // printf("bgcost: %.2f, segcost: %.2f + %.2f at t=%zu\n", bgcost, bestsegcost, penalty, bestsegstart+1);
 
@@ -288,7 +288,6 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
         possiblestarts[numpossiblestarts++] = t;
         // printf("Current wt: %f, F(t): %.2f\n", wts[t], F[t]);
     }
-    free(cs);
     printf("Final cost: %.3f\n", F[n-1]);
 
     // extract changepoints
@@ -296,7 +295,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
     printf("Detected segments:\n");
     while(i>0){
         if(chps[i].start>0){
-            printf("* %zu-%zu\n", chps[i].start, chps[i].end);
+            printf("* %zu-%zu \n", chps[i].start, chps[i].end);
             if(chps[i].start - 1 >= i){
                 printf("ERROR: potential infinite recursion in changepoints\n");
                 return 1;
@@ -309,6 +308,252 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
     return 0;
 }
 
+
+int alg2_var(double xs[], const size_t nn, const double sigma0, const double penalty_s, const double penalty_n){
+    // sigma0: sigma^2_0, given
+    // output: segments (list of starts and ends and types)
+    struct ChpList chps[nn];
+
+    // square x
+    double x2s[nn];
+    for(size_t i=0; i<nn; i++){
+        x2s[i] = xs[i]*xs[i];
+    }
+
+    double F[nn];
+    F[0] = 0;
+
+    // arrays of outputs and parameters for each detector
+    double *detwts = malloc(nn * nn * sizeof(double));
+    double *detFs = malloc(nn * nn * sizeof(double));
+    double *detsegcosts = malloc(nn * nn * sizeof(double));
+    size_t *detbgsizes = malloc(nn * nn * sizeof(size_t));
+    size_t *detpostarts = malloc(nn * nn * sizeof(size_t));
+    for(size_t i=0; i<nn*nn; i++){
+        detpostarts[i] = 0;
+        detwts[i] = -99;
+        detFs[i] = -99;
+    }
+    for(size_t i=0; i<nn; i++){
+        detwts[i*nn + i] = x2s[i];
+        detFs[i*nn + i] = 1 + log(x2s[i]);
+        detbgsizes[i*nn + i] = 1;
+    }
+    struct ChpList *detchps = malloc(nn * nn * sizeof(struct ChpList));
+    // each detector gets a slice of nn elements starting from i*nn
+
+    // other detector-specific values
+    size_t detnumpostarts[nn];
+    for(size_t i=0; i<nn; i++){
+        detnumpostarts[i] = 1;
+    }
+    double detbestsegcost[nn];
+    size_t detbeststart[nn];
+
+    // for precomputing costs
+    double m2;
+    double len;
+    double cs[nn];
+
+    // acceptable start positions (for S) to keep track of pruning
+    size_t possiblestarts[nn];
+    possiblestarts[0] = 0;
+    for(size_t i=1; i<nn-1; i++){
+        possiblestarts[i] = 0;
+    }
+    size_t numpossiblestarts = 1;
+    // TODO figure out how to use this without cache misses size_t minstart = 0;
+
+    // acceptable start positions (for N)
+    size_t possiblestarts_n[nn];
+    possiblestarts_n[0] = 0;
+    for(size_t i=1; i<nn-1; i++){
+        possiblestarts_n[i] = 0;
+    }
+    size_t numpossiblestarts_n = 1;
+
+    // minstart only tracks nuis starts as they are longer anyway
+    size_t minstart = 0;
+
+    // main DP loop
+    double bgcost;
+    double segcosts[nn];
+    for(size_t tt=1; tt<nn; tt++){
+        printf("----Cycle %zu/%zu----\n", tt+1, nn);
+        // precompute costs for all possible segments ending here at t
+        m2 = 0;
+        for(size_t start=tt; start>minstart; start--){
+            m2 += x2s[start];
+            len = tt-start+1;
+            cs[start] = len*(1 + log(m2/len));
+        }
+
+        // F_B = F(t-1) + C0(t)
+        bgcost = F[tt-1] + cost0var(x2s[tt], sigma0);
+
+        // F_S = min F(t-k) + C(t-k+1:t) + beta
+        // this will loop over all possible sig. segment starts:
+        double bestsegcost = INFINITY;
+        size_t bestsegstart;
+        findmincost(cs, F, possiblestarts, numpossiblestarts, &bestsegcost, &bestsegstart, segcosts);
+        // printf("bgcost: %.2f, segcost: %.2f + %.2f at t=%zu\n", bgcost, bestsegcost, penalty_s, bestsegstart+1);
+
+        // loop over all possible nuis. segment starts:
+        double bestnuiscost = INFINITY;
+        size_t bestnuisstart = 0;
+        for(size_t i=0; i<numpossiblestarts_n; i++){
+            double detbgcost;
+            size_t t2 = possiblestarts_n[i];
+            printf("Working on potential nuisance at %zu : %zu\n", t2+1, tt);
+            // start of the nn-size block alloc'd for this detector
+            // (in row-column notation, 0-based indices on the matrices are:
+            //  row=first element in the detector
+            //  column=last element in the detector
+            // So it is upper triangular.
+            size_t t2det = (t2+1)*nn;
+
+            // if tested seg l=1, don't test segments etc.
+            // (detector F, wt values are already initialized with 0)
+            if(t2+1 < tt){
+                detbgcost = detFs[t2det + tt-1] + cost0var(x2s[tt], detwts[t2det + tt-1]);
+
+                // step the detector (which now contains points t2-tt),
+                // i.e. loop over last (S) segment starts for that detector
+                double detbestsegcost = INFINITY;
+                size_t detbestsegstart;
+                /* for(size_t j=0; j<detnumpostarts[t2+1]; j++){
+                    size_t t3 = detpostarts[t2det + j];
+                    // cs: precomputed cost for segs ending at tt
+                    detsegcosts[t2det + t3] = detFs[t2det + t3] + cs[t3+1];
+                    // keep track to get min and argmin F_S for that detector
+                    if(detsegcosts[t2det + t3] < detbestsegcost){
+                        detbestsegcost = detsegcosts[t2det + t3];
+                        detbestsegstart = t3;
+                    }
+                } */
+
+                // determine best F = min(F_B, F_S)
+                detbestsegcost += penalty_s;
+                if(detbgcost < detbestsegcost){
+                    // update cost
+                    detFs[t2det + tt] = detbgcost;
+                    // update wt
+                    detbgsizes[t2det + tt] = detbgsizes[t2det + tt-1]+1;
+                    detwts[t2det + tt] = detwts[t2det+tt-1] - (detwts[t2det+tt-1] - x2s[tt])/detbgsizes[t2det + tt];
+                    // using 0 to indicate "not a chp", as the 0-th point is auto-set to background
+                    detchps[t2det + tt].start = 0;
+                    detchps[t2det + tt].end = 0;
+                } else {
+                    // update cost
+                    detFs[t2det + tt] = detbestsegcost;
+                    // reset wt to wt[beststart]
+                    detbgsizes[t2det + tt] = detbgsizes[t2det + detbestsegstart];
+                    detwts[t2det + tt] = detwts[t2det + detbestsegstart];
+                    // attach the new chp pair
+                    detchps[t2det + tt].start = detbestsegstart+1;
+                    detchps[t2det + tt].end = tt;
+                    printf("! Ch.p. detected at %zu-%zu\n", detbestsegstart+1, tt);
+                }
+            }
+
+            // update and prune possible segment starts
+            for(size_t j=0; j<detnumpostarts[t2+1]; j++){
+                if(detFs[t2det + tt] <= detsegcosts[t2det + detpostarts[j]]){
+                    // prune out this start time
+                    detpostarts[i] = detpostarts[--detnumpostarts[t2+1]];
+                }
+            }
+            detpostarts[detnumpostarts[t2+1]++] = tt;
+            printf("- Current wt: %f, F(t): %.2f\n", detwts[t2det + tt], detFs[t2det + tt]);
+
+            // check if this detector is the best nuisance
+            if(F[t2] + detFs[t2det + tt] < bestnuiscost){
+                bestnuiscost = F[t2] + detFs[t2det + tt];
+                bestnuisstart = t2;
+            }
+        }
+            
+        printf("bgcost: %.2f, segcost: %.2f + %.2f at t=%zu, nuiscost: %.2f + %.2f at t=%zu\n", bgcost, bestsegcost, penalty_s, bestsegstart+1, bestnuiscost, penalty_n, bestnuisstart+1);
+
+        // determine best F = min(F_B, F_S)
+        bestsegcost += penalty_s;
+        bestnuiscost += penalty_n;
+
+        if(bgcost < bestsegcost && bgcost < bestnuiscost){
+            // update cost
+            F[tt] = bgcost;
+            // using 0 to indicate "not a chp", as the 0-th point is auto-set to background
+            chps[tt].start = 0;
+            chps[tt].end = 0;
+        } else if (bestsegcost<bestnuiscost){
+            // update cost
+            F[tt] = bestsegcost;
+            // attach the new chp pair
+            chps[tt].start = bestsegstart+1;
+            chps[tt].end = tt;
+            chps[tt].type = SIG;
+            printf("! Ch.p. detected at %zu-%zu, type SIGNAL\n", bestsegstart+1, tt);
+        } else {
+            // update cost
+            F[tt] = bestnuiscost;
+            // attach the new chp pair
+            chps[tt].start = bestnuisstart+1;
+            chps[tt].end = tt;
+            chps[tt].type = NUIS;
+            printf("! Ch.p. detected at %zu-%zu, type NUIS\n", bestnuisstart+1, tt);
+        }
+
+        // update and prune possible segment starts
+        for(size_t i=0; i<numpossiblestarts; i++){
+            if(F[tt] <= segcosts[possiblestarts[i]]){
+                // prune out this start time
+                possiblestarts[i] = possiblestarts[--numpossiblestarts];
+            }
+        }
+        possiblestarts[numpossiblestarts++] = tt;
+
+        // update and prune possible nuisance starts
+        size_t maxlb = 100;
+        minstart = tt>maxlb ? tt-maxlb : 0; // useful for reducing the set for cost precomputing
+        printf("minstart: %zu \n", minstart);
+        for(size_t i=0; i<numpossiblestarts_n; i++){
+            size_t t2 = possiblestarts_n[i];
+            if(F[tt] <= F[t2] + detFs[(t2+1)*nn + tt]){
+                // prune out this start time
+                possiblestarts_n[i] = possiblestarts_n[--numpossiblestarts_n];
+            }
+            if(possiblestarts_n[i]<minstart){
+                minstart = possiblestarts_n[i];
+            }
+        }
+        possiblestarts_n[numpossiblestarts_n++] = tt;
+    }
+    printf("Final cost: %.3f\n", F[nn-1]);
+
+    free(detwts);
+    free(detFs);
+    free(detsegcosts);
+    free(detbgsizes);
+    free(detpostarts);
+    free(detchps);
+
+    // extract changepoints
+    size_t i = nn-1;
+    printf("Detected segments:\n");
+    while(i>0){
+        if(chps[i].start>0){
+            printf("* %zu-%zu %s \n", chps[i].start, chps[i].end, chps[i].type==SIG?"SIG":"NUIS");
+            if(chps[i].start - 1 >= i){
+                printf("ERROR: potential infinite recursion in changepoints\n");
+                return 1;
+            }
+            i = chps[i].start - 1;
+        } else {
+            i--;
+        }
+    }
+    return 0;
+}
 
 // for testing separately:
 // int main(int argc, char *argv[]){
