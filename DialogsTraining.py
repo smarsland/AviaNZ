@@ -320,11 +320,10 @@ class BuildRecAdvWizard(QWizard):
                 else:
                     # return format:
                     # self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
-                    # fs: sampling freq
                     # self.nclasses: number of class_labels
                     # duration: median length of segments
                     self.cluster = Clustering.Clustering([], [], 5)
-                    self.segments, _, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("species"), feature=self.feature)
+                    self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
                     # segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
                     # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
                     #                                                                              self.field("species"),
@@ -385,17 +384,13 @@ class BuildRecAdvWizard(QWizard):
                             break
 
         def getClustersGT(self):
-            """ Get call type clusters from annotations
-            :returns
-            [parent_audio_file, [segment], [syllables], [features], class_label]
-                    # fs: sampling freq
-                    # self.nclasses: number of class_labels
-                    # duration: median length of segments
-                    call types
+            """ Gets call type clusters from annotations
+             returns [parent_audio_file, [segment], [syllables], class_label], number of clusters, median duration
             """
             ctTexts = []
             CTsegments = []
             duration = []
+            cl = Clustering.Clustering([], [], 5)
 
             listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
             listOfWavFiles = QDir(self.field("trainDir")).entryList(['*.wav'])
@@ -425,12 +420,18 @@ class BuildRecAdvWizard(QWizard):
                         seg = segments[segix]
                         for label in seg[4]:
                             if label["species"] == self.field("species") and "calltype" in label:
-                                CTsegments.append([wavfile, seg, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
+                                # Find the syllables inside this segment
+                                # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
+                                if seg[2] == seg[3] == 0:
+                                    syls = cl.findSyllablesSeg(file=wavfile, seg=seg, fs=self.field("fs"), f1=seg[2], f2=seg[3], denoise=False, minlen=0.2)
+                                else:
+                                    syls = cl.findSyllablesSeg(file=wavfile, seg=seg, fs=self.field("fs"), f1=0, f2=0, denoise=False, minlen=0.2)
+                                CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
                                 duration.append(seg[1]-seg[0])
             return CTsegments, len(self.clusters), np.median(duration)
 
         def backupDatafiles(self):
-            # Let's backup original data fiels before updating them
+            # Backup original data fiels before updating them
             print("Backing up files ", self.field("trainDir"))
             listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
             for file in listOfDataFiles:
@@ -1208,11 +1209,11 @@ class BuildRecAdvWizard(QWizard):
                             pageSegs.exportGT(wavFile, self.field("species"), window=window, inc=inc)
 
             # TODO: Check this later - I'm disabling cluster centre (it's not used currently).
-            # # calculate cluster centres
-            # # (self.segments is already selected to be this cluster only)
-            # with pg.BusyCursor():
-            #     cl = Clustering.Clustering([], [], 5)
-            #     self.clustercentre = cl.getClusterCenter(self.segments, self.field("fs"), fLow, fHigh, self.wizard().clusterPage.feature, self.wizard().clusterPage.duration)
+            # calculate cluster centres
+            # (self.segments is already selected to be this cluster only)
+            with pg.BusyCursor():
+                cl = Clustering.Clustering([], [], 5)
+                self.clustercentre = cl.getClusterCenter(self.segments, self.field("fs"), fLow, fHigh, self.wizard().clusterPage.feature, self.wizard().clusterPage.duration)
 
             # Get detection measures over all M,thr combinations
             print("starting wavelet training")
@@ -1335,15 +1336,14 @@ class BuildRecAdvWizard(QWizard):
                 M = float(self.field("bestM"+str(pageId)))
                 nodes = eval(self.field("bestNodes"+str(pageId)))
 
-                # newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
-                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}}
+                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
 
                 print(newSubfilt)
                 self.wizard().speciesData["Filters"].append(newSubfilt)
 
             speciesDataText = copy.deepcopy(self.wizard().speciesData)
             for f in speciesDataText["Filters"]:
-                # f["ClusterCentre"] = "(...)"
+                f["ClusterCentre"] = "(...)"
                 f["WaveletParams"] = "(...)"
 
             self.lblFilter.setText(str(speciesDataText))

@@ -5367,8 +5367,8 @@ class AviaNZ(QMainWindow):
         """
         if len(self.segments) > 1:
             cl = Clustering.Clustering([], [], 5)
-            segments, fs, nclasses, duration = cl.cluster(self.filename, None, feature='we')
-            self.clusterD = Dialogs.Cluster(segments, fs, nclasses, self.config)
+            segments, nclasses, duration = cl.cluster(self.filename, self.sampleRate, None, feature='we')
+            self.clusterD = Dialogs.Cluster(segments, self.sampleRate, nclasses, self.config)
             self.clusterD.show()
         else:
             print('need segments to cluster!')
