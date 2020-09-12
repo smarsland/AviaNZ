@@ -164,13 +164,15 @@ class SignalProc:
             print(np.median(img2[-1,:]))
             return(1)
 
+        print(np.shape(img2))
         # Could skip that for visual mode - maybe useful for establishing contrast?
         img2[-1, :] = 254  # lowest freq bin is 0, flip that
         img2 = 255 - img2  # reverse value having the black as the most intense
         img2 = img2/np.max(img2)  # normalization
         img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
         img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
-
+        print(np.shape(img2))
+       
         self.data = []
         self.fileLength = (w-2)*self.incr + self.window_width  # in samples
         # Alternatively:
@@ -598,19 +600,19 @@ class SignalProc:
         return data
 
     # The next functions perform spectrogram inversion
-    def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10):
+    def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10, window='Hann'):
         # Assumes that this is the plain (not power) spectrogram
         # Make the spectrogram two-sided and make the values small
         sg = np.concatenate([sg, sg[:, ::-1]], axis=1)
 
         sg_best = copy.deepcopy(sg)
         for i in range(nits):
-            invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0))
+            invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0), window=window)
             self.setData(invertedSgram)
-            est = self.spectrogram(window_width, incr, onesided=False,need_even=True)
+            est = self.spectrogram(window_width, incr, onesided=False,need_even=True, window=window)
             phase = est / np.maximum(np.max(sg)/1E8, np.abs(est))
             sg_best = sg * phase[:len(sg)]
-        invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=False)
+        invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=False, window=window)
         return np.real(invertedSgram)
 
     def inversion_iteration(self,sg, incr, calculate_offset=True, set_zero_phase=True, window='Hann'):
@@ -663,7 +665,7 @@ class SignalProc:
             if calculate_offset and i > 0:
                 offset_size = size - incr
                 if offset_size <= 0:
-                    print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
+                    #print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
                     offset_size = incr
                 offset = self.xcorr_offset(wave[wave_start:wave_start + offset_size], wave_est[est_start:est_start + offset_size])
             else:
