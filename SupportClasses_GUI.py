@@ -375,6 +375,87 @@ pg.graphicsItems.ROI.Handle.mouseDragEvent = mouseDragEventFlexible
 pg.graphicsItems.InfiniteLine.InfiniteLine.mouseDragEvent = mouseDragEventFlexibleLine
 
 
+# Two subclasses of LinearRegionItem, that account for spectrogram bounds when resizing
+class LinearRegionItemO(pg.LinearRegionItem):
+    def __init__(self, *args, **kwds):
+        pg.LinearRegionItem.__init__(self, *args, **kwds)
+        self.bounds = [None,None]
+
+    def setRegion(self, rgn):
+        """Set the values for the edges of the region.
+        ==============   ==============================================
+        **Arguments:**
+        rgn              A list or tuple of the lower and upper values.
+        bounds           A tuple indicating allowed x range
+        ==============   ==============================================
+        """
+        if self.lines[0].value() == rgn[0] and self.lines[1].value() == rgn[1]:
+            return
+        # shift the requested length to fit within bounds:
+        if self.bounds[0] is not None:
+            if rgn[0]<self.bounds[0]:
+                ll = rgn[1]-rgn[0]
+                rgn[0] = self.bounds[0]
+                rgn[1] = rgn[0]+ll
+        if self.bounds[1] is not None:
+            if rgn[1]>self.bounds[1]:
+                ll = rgn[1]-rgn[0]
+                rgn[1] = self.bounds[1]
+                rgn[0] = max(0, rgn[1]-ll)
+        self.blockLineSignal = True
+        self.lines[0].setValue(rgn[0])
+        self.lines[1].setValue(rgn[1])
+        self.blockLineSignal = False
+        # self.lineMoved(0)
+        # self.lineMoved(1)
+        self.lineMoveFinished()
+
+    def setBounds(self, bounds):
+        self.bounds = bounds
+        super(LinearRegionItemO, self).setBounds(bounds)
+
+    def mouseDragEvent(self, ev):
+        if not self.movable or int(ev.button() & Qt.LeftButton)==0:
+            return
+        ev.accept()
+
+        if ev.isStart():
+            bdp = ev.buttonDownPos()
+            self.cursorOffsets = [l.pos() - bdp for l in self.lines]
+            self.startPositions = [l.pos() for l in self.lines]
+            self.moving = True
+
+        if not self.moving:
+            return
+
+        self.lines[0].blockSignals(True)  # only want to update once
+        newcenter = ev.pos()
+        # added this to bound its dragging, as in ROI.
+        # first, adjust center position to avoid dragging too far:
+        for i, l in enumerate(self.lines):
+            tomove = self.cursorOffsets[i] + newcenter
+            if self.bounds is not None:
+                # stop center from moving too far left
+                if tomove.x() < self.bounds[0]:
+                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[0])
+                # stop center from moving too far right
+                if tomove.x() > self.bounds[1]:
+                    newcenter.setX(-self.cursorOffsets[i].x() + self.bounds[1])
+
+        # update lines based on adjusted center
+        for i, l in enumerate(self.lines):
+            tomove = self.cursorOffsets[i] + newcenter
+            l.setPos(tomove)
+
+        self.lines[0].blockSignals(False)
+        self.prepareGeometryChange()
+
+        if ev.isFinish():
+            self.moving = False
+            self.sigRegionChangeFinished.emit(self)
+        else:
+            self.sigRegionChanged.emit(self)
+
 class LinearRegionItem2(pg.LinearRegionItem):
     def __init__(self, parent, bounds=None, *args, **kwds):
         pg.LinearRegionItem.__init__(self, bounds, *args, **kwds)

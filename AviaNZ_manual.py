@@ -148,6 +148,9 @@ class AviaNZ(QMainWindow):
         self.operator = self.config['operator']
         self.reviewer = self.config['reviewer']
 
+        # For preventing callbacks involving overview panel
+        self.updateRequestedByOverview = False
+
         # Spectrogram
         self.sgOneSided = True
         self.sgMeanNormalise = True
@@ -586,6 +589,7 @@ class AviaNZ(QMainWindow):
         # AMPLITUDE dock
         self.w_ampl = pg.GraphicsLayoutWidget()
         self.p_ampl = SupportClasses_GUI.DragViewBox(self, enableMouse=False,enableMenu=False,enableDrag=False, thisIsAmpl=True)
+        self.p_ampl.setAutoVisible(False, True)
         self.w_ampl.addItem(self.p_ampl,row=0,col=1)
         self.d_ampl.addWidget(self.w_ampl)
 
@@ -650,7 +654,7 @@ class AviaNZ(QMainWindow):
         # The various plots
         self.overviewImage = pg.ImageItem(enableMouse=False)
         self.p_overview.addItem(self.overviewImage)
-        self.overviewImageRegion = pg.LinearRegionItem(pen=pg.mkPen(120,80,200, width=2),
+        self.overviewImageRegion = SupportClasses_GUI.LinearRegionItemO(pen=pg.mkPen(120,80,200, width=2),
                 hoverPen=pg.mkPen(60, 40, 230, width=3.5))
         # this is needed for compatibility with other shaded rectangles:
         self.overviewImageRegion.lines[0].btn = QtCore.Qt.RightButton
@@ -1973,15 +1977,15 @@ class AviaNZ(QMainWindow):
 
     def drawOverview(self):
         """ On loading a new file, update the overview figure to show where you are up to in the file.
-        Also, compute the new segments for the overview, and make sure that the listeners are connected
-        for clicks on them. """
+        Also, compute the new segments for the overview, make sure that the listeners are connected
+        for clicks on them, and disconnect old listeners. """
         self.overviewImage.setImage(self.sg)
-        #self.overviewImageRegion = pg.LinearRegionItem()
-        # this is needed for compatibility with other shaded rectangles:
-        #self.overviewImageRegion.lines[0].btn = QtCore.Qt.RightButton
-        #self.overviewImageRegion.lines[1].btn = QtCore.Qt.RightButton
-        #self.p_overview.addItem(self.overviewImageRegion, ignoreBounds=True)
+        self.overviewImageRegion.setBounds([0, len(self.sg)])
         self.overviewImageRegion.setRegion([0, self.convertAmpltoSpec(self.widthWindow.value())])
+        try:
+            self.overviewImageRegion.sigRegionChangeFinished.disconnect()
+        except Exception:
+            pass
         self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
 
         # Three y values are No. not known, No. known, No. possible
@@ -2003,6 +2007,10 @@ class AviaNZ(QMainWindow):
             r.setBrush(pg.mkBrush('w'))
             self.SegmentRects.append(r)
             self.p_overview2.addItem(r)
+        try:
+            self.p_overview2.sigChildMessage.disconnect()
+        except Exception:
+            pass
         self.p_overview2.sigChildMessage.connect(self.overviewSegmentClicked)
         self.p_overview2.setYRange(-0.2, 1, padding=0.02)
 
@@ -2022,35 +2030,18 @@ class AviaNZ(QMainWindow):
             if self.media_obj.state() == QAudio.ActiveState or self.media_obj.state() == QAudio.SuspendedState or self.media_slow.state() == QAudio.ActiveState:
                 self.stopPlayback()
 
-        # Need to disconnect the listener and reconnect it to avoid a recursive call
         minX, maxX = self.overviewImageRegion.getRegion()
-        if minX<0:
-            l = maxX-minX
-            minX=0.0
-            maxX=minX+l
-            try:
-                self.overviewImageRegion.sigRegionChangeFinished.disconnect()
-            except:
-                pass
-            self.overviewImageRegion.setRegion([minX,maxX])
-            self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
-        if maxX>len(self.sg):
-            l = maxX-minX
-            maxX=float(len(self.sg))
-            minX=max(0, maxX-l)
-            try:
-                self.overviewImageRegion.sigRegionChangeFinished.disconnect()
-            except:
-                pass
-            self.overviewImageRegion.setRegion([minX,maxX])
-            self.overviewImageRegion.sigRegionChangeFinished.connect(self.updateOverview)
 
+        # (the region bounds are checked against spec size in our subclass)
+
+        # Temporarily block callback, and update window size (b/c setRegion may have changed it to fit bounds)
+        self.updateRequestedByOverview = True
         self.widthWindow.setValue(self.convertSpectoAmpl(maxX-minX))
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), update=True, padding=0)
         self.p_spec.setXRange(minX, maxX, update=True, padding=0)
         self.p_plot.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), update=True, padding=0)
 
-        # I know the next two lines SHOULD be unnecessary. But they aren't!
+        # # # I know the next two lines SHOULD be unnecessary. But they aren't!
         self.p_ampl.setXRange(self.convertSpectoAmpl(minX), self.convertSpectoAmpl(maxX), padding=0)
         self.p_spec.setXRange(minX, maxX, padding=0)
 
@@ -2066,6 +2057,7 @@ class AviaNZ(QMainWindow):
         # self.saveConfig = True
         self.timeaxis.update()
         QApplication.processEvents()
+        self.updateRequestedByOverview = False
 
     def drawfigMain(self,remaking=False):
         """ Draws the main amplitude and spectrogram plots and any segments on them.
@@ -2081,6 +2073,7 @@ class AviaNZ(QMainWindow):
         pixelend = int(self.sp.maxFreqShow/height)
 
         self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
+        self.overviewImageRegion.setBounds([0, len(self.sg)])
         self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
         self.setExtraPlot(self.extra)
 
@@ -2154,8 +2147,8 @@ class AviaNZ(QMainWindow):
             # This is the moving bar for the playback
             if not hasattr(self,'bar'):
                 self.bar = pg.InfiniteLine(angle=90, movable=True, pen={'color': 'c', 'width': 3})
-            self.p_spec.addItem(self.bar, ignoreBounds=True)
-            self.bar.sigPositionChangeFinished.connect(self.barMoved)
+                self.p_spec.addItem(self.bar, ignoreBounds=True)
+                self.bar.sigPositionChangeFinished.connect(self.barMoved)
 
         QApplication.processEvents()
 
@@ -2174,6 +2167,10 @@ class AviaNZ(QMainWindow):
         self.media_slow = SupportClasses_GUI.ControllableAudio(self.sp.audioFormat)
         print("modified playback speed set to Fs =", self.sp.audioFormat.sampleRate())
         self.sp.audioFormat.setSampleRate(oldSR)
+        try:
+            self.media_slow.notify.disconnect()
+        except Exception:
+            pass
         self.media_slow.notify.connect(self.movePlaySlowSlider)
 
     def setExtraPlot(self, plotname):
@@ -3489,8 +3486,9 @@ class AviaNZ(QMainWindow):
     def scroll(self):
         """ When the slider at the bottom of the screen is moved, move everything along. """
         newminX = self.scrollSlider.value()
-        minX, maxX = self.overviewImageRegion.getRegion()
-        self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
+        if not self.updateRequestedByOverview:
+            minX, maxX = self.overviewImageRegion.getRegion()
+            self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
         self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
 
     def changeWidth(self, value):
@@ -3501,10 +3499,12 @@ class AviaNZ(QMainWindow):
             return
         self.windowSize = value
 
-        # Redraw the highlight in the overview figure appropriately
-        minX, maxX = self.overviewImageRegion.getRegion()
-        newmaxX = self.convertAmpltoSpec(value)+minX
-        self.overviewImageRegion.setRegion([minX, newmaxX])
+        if not self.updateRequestedByOverview:
+            # Redraw the highlight in the overview figure appropriately
+            minX, maxX = self.overviewImageRegion.getRegion()
+            newmaxX = self.convertAmpltoSpec(value)+minX
+            self.overviewImageRegion.setRegion([minX, newmaxX])
+
         self.scrollSlider.setMaximum(np.shape(self.sg)[0]-self.convertAmpltoSpec(self.widthWindow.value()))
 
         # Decide whether or not to show milliseconds
@@ -3512,7 +3512,7 @@ class AviaNZ(QMainWindow):
             self.timeaxis.setShowMS(False)
         else:
             self.timeaxis.setShowMS(True)
-              
+
 
 # ===============
 # Generate the various dialogs that match the menu items
@@ -4335,11 +4335,11 @@ class AviaNZ(QMainWindow):
         """
         if not hasattr(self,'spectrogramDialog'):
             self.spectrogramDialog = Dialogs.Spectrogram(self.config['window_width'],self.config['incr'],self.sp.minFreq,self.sp.maxFreq, self.sp.minFreqShow,self.sp.maxFreqShow, self.config['window'], self.batmode)
+            self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
         # first save the annotations
         self.saveSegments()
         self.spectrogramDialog.show()
         self.spectrogramDialog.activateWindow()
-        self.spectrogramDialog.activate.clicked.connect(self.spectrogram)
 
     def spectrogram(self):
         """ Listener for the spectrogram dialog.
@@ -4694,6 +4694,7 @@ class AviaNZ(QMainWindow):
         pixelend = int(self.sp.maxFreqShow/height)
 
         self.overviewImage.setImage(self.sg[:,pixelstart:pixelend])
+        self.overviewImageRegion.setBounds([0, len(self.sg)])
         self.specPlot.setImage(self.sg[:,pixelstart:pixelend])
 
         # if Y freqs changed, some segments may appear/be dropped:
