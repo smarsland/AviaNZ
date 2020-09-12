@@ -639,16 +639,42 @@ class SignalProc:
         total_windowing_sum = np.zeros((np.shape(sg)[0] * incr + size))
         #Virginia: adding different windows
 
-        if window == 'Hann':
-            # Hann window
+        
+       # Set of window options
+        if window=='Hann':
+            # This is the Hann window
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
-        elif window == 'Blackman':
+        elif window=='Parzen':
+            # Parzen (window_width even)
+            n = np.arange(size) - 0.5*size
+            window = np.where(np.abs(n)<0.25*size,1 - 6*(n/(0.5*size))**2*(1-np.abs(n)/(0.5*size)), 2*(1-np.abs(n)/(0.5*size))**3)
+        elif window=='Welch':
+            # Welch
+            window = 1.0 - ((np.arange(size) - 0.5*(size-1))/(0.5*(size-1)))**2
+        elif window=='Hamming':
+            # Hamming
+            alpha = 0.54
+            beta = 1.-alpha
+            window = alpha - beta*np.cos(2 * np.pi * np.arange(size) / (size - 1))
+        elif window=='Blackman':
             # Blackman
             alpha = 0.16
-            a0 = 0.5 * (1 - alpha)
+            a0 = 0.5*(1-alpha)
             a1 = 0.5
-            a2 = 0.5 * alpha
-            window = a0 - a1 * np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2 * np.cos(4 * np.pi * np.arange(size) / (size - 1))
+            a2 = 0.5*alpha
+            window = a0 - a1*np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2*np.cos(4 * np.pi * np.arange(size) / (size - 1))
+        elif window=='BlackmanHarris':
+            # Blackman-Harris
+            a0 = 0.358375
+            a1 = 0.48829
+            a2 = 0.14128
+            a3 = 0.01168
+            window = a0 - a1*np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2*np.cos(4 * np.pi * np.arange(size) / (size - 1)) - a3*np.cos(6 * np.pi * np.arange(size) / (size - 1))
+        elif window=='Ones':
+            window = np.ones(size)
+        else:
+            print("Unknown window, using Hann")
+            window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
 
         est_start = int(size // 2) - 1
         est_end = est_start + size
