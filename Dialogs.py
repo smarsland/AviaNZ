@@ -1558,7 +1558,7 @@ class HumanClassify1(QDialog):
         # button to switch to call type view
         self.viewSpButton = QtGui.QToolButton()
         self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
-        self.viewSpButton.setIconSize(QtCore.QSize(35, 20))
+        self.viewSpButton.setIconSize(QtCore.QSize(42, 25))
         self.viewSpButton.setToolTip("Toggle between species/calltype views")
         self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
