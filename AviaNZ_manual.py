@@ -823,7 +823,8 @@ class AviaNZ(QMainWindow):
         if not self.DOC:
             self.w_controls.addWidget(self.quickDenButton,row=1,col=2)
             # self.w_controls.addWidget(self.quickDenNButton,row=1,col=1)
-            self.w_controls.addWidget(self.viewSpButton,row=1,col=3)
+
+        self.w_controls.addWidget(self.viewSpButton,row=1,col=3)
 
         self.w_controls.addWidget(self.volIcon, row=2, col=0)
         self.w_controls.addWidget(self.volSlider, row=2, col=1, colspan=3)
