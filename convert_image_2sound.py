@@ -41,7 +41,8 @@ NOTE: we need appropriate number of frequency bins in order to make invertSpectr
 
 #dirName='/home/listanvirg/Data/Bat/BAT/TEST_DATA/'
 #dirName='D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\TRAIN_DATA\\NONE'
-dirName='D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN4'
+#dirName='D:\\Desktop\\Documents\\Work\\Data\\Bat\\BAT\\CNN experiment\\TRAIN4'
+dirName="C:\\Users\\Virginia\\Documents\\GitHub\\AviaNZ\\Sound Files"
 
 for root, dirs, files in os.walk(str(dirName)):
     for file in files:
@@ -57,7 +58,7 @@ for root, dirs, files in os.walk(str(dirName)):
             row_dim = 7 * np.shape(img2)[0]
             appo = 254 * np.ones((row_dim, np.shape(img2)[1]))
             spec = np.concatenate((appo, img2))
-            samplerate = 16000
+            samplerate = 176000
 
             #OPTION 2: same frequency band
             #spec=np.repeat(img2,8, axis=0) #repeat rows 7 times to fit invertspectrogram
