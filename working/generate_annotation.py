@@ -3,6 +3,11 @@
 # Script to generate annotations for sliding windows.
 # To use for filter training
 
+<<<<<<< HEAD
+=======
+#Reviewed on 18/08/2020 for Zohara
+
+>>>>>>> bats
 # Version 1.3 23/10/18
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
 
@@ -48,10 +53,10 @@ def genGT(dirName,species='Kiwi',duration=0,window=1, inc=None):
     print ("Generated GT")
 
 def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notargetsp=False):
-<<<<<<< Updated upstream
+<<<<<<< HEAD
+
 =======
-#def annotation2GT_OvWin(datFile, species, duration=0,window=1, inc=None, notargetsp=False):
->>>>>>> Stashed changes
+>>>>>>> bats
     """
     This generates the ground truth for a given sound file
     Given the AviaNZ annotation, returns the ground truth as a txt file
@@ -97,7 +102,14 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
         with open(datFile) as f:
             segments = json.load(f)
         for seg in segments:
+<<<<<<< HEAD
             if seg[0] == -1:
+=======
+            print(seg)
+            # if seg[0] == -1:
+            #     continue
+            if 'Operator' in seg:
+>>>>>>> bats
                 continue
             #ORIGINAL Version
             #virginia: changed because I had problem on this
@@ -149,6 +161,7 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
                     type = 'C'
                 elif species == 'Bittern':
                     type = 'Bittern'
+<<<<<<< HEAD
                 # Record call quality for evaluation purpose
                 if re.search('1', seg[4][0]):
                     quality = '1'  # v close
@@ -160,6 +173,27 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
                     quality = '4'  # v fade
                 elif re.search('5', seg[4][0]):
                     quality = '5'  # v v fade
+=======
+                else:
+                    type=''
+                    
+                # Record call quality for evaluation purpose
+                # if re.search('1', seg[4][0]):
+                #     quality = '1'  # v close
+                # elif re.search('2', seg[4][0]):
+                #     quality = '2'  # close
+                # elif re.search('3', seg[4][0]):
+                #     quality = '3'  # fade
+                # elif re.search('4', seg[4][0]):
+                #     quality = '4'  # v fade
+                # elif re.search('5', seg[4][0]):
+                #     quality = '5'  # v v fade
+                # else:
+                #     quality = ''
+                
+                quality=''
+                
+>>>>>>> bats
                 #Virginia: start and end must be read in resol base
                 s=int(math.floor(seg[0]/resol))
                 e=int(math.ceil(seg[1]/resol))
@@ -187,7 +221,11 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
             line[3] = ''
     # now save GT as a .txt file
     # Virginia: from index reconstruct time
+<<<<<<< HEAD
     for i in range(1, duration + 1):
+=======
+    for i in range(1, duration+1): #durantion with np.ceil +1 not needed
+>>>>>>> bats
         GT[i - 1][0] = str(i*resol)  # add time as the first column to make GT readable
     # strings = (str(item) for item in GT)
     with open(eFile, "w") as f:
@@ -201,6 +239,7 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
     print(lenMin, lenMax, fLow, fHigh, sampleRate)
     #return [lenMin, lenMax, fLow, fHigh, sampleRate]
 
+<<<<<<< HEAD
 <<<<<<< Updated upstream
 #Virginia:change directory name
 # genGT('D:\AviaNZ\Sound Files\Fiordland kiwi\Dataset\\Negative',species='Kiwi(Tokoeka Fiordland)',window=1, inc=1)
@@ -264,4 +303,9 @@ genGT('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui',species='Kiwi',windo
 #splitGT('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru GT\Test',window=0.5, inc=0.25)
 
 >>>>>>> Stashed changes
+=======
+
+#Virginia:change directory name
+genGT("C:\\Users\\Virginia\\Documents\\Work\\Data\\Zohara files\\TEST\\Annotation_reviewed",species='Bigeye',window=0.1)
+>>>>>>> bats
 

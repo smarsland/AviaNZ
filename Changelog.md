@@ -2,6 +2,7 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ## [Unreleased]
 
+<<<<<<< HEAD
 ## [2.2] - 2020-04-28
 
 ### Fixed
@@ -104,6 +105,8 @@ All notable changes to AviaNZ program will be documented in this file.
 
 ## [2.2] - 2020-04-28
 
+=======
+>>>>>>> bats
 ### Fixed
 
 - Recogniser testing summary
@@ -111,26 +114,42 @@ All notable changes to AviaNZ program will be documented in this file.
 - Better zoom and scaling in review dialogs
 - Faster and safer Excel export
 - Splitter outputs duration of existing .data files properly
+<<<<<<< HEAD
 - Dialogs adapted to low screen resolutions
 - Various minor bug fixes
+=======
+>>>>>>> bats
 
 ### Added
 
 - CNN layer after wavelet filter in the processing pipeline to improve the precision
 - Certainty improved after CNN post-proc
+<<<<<<< HEAD
 - Trained CNN models for NI brown kiwi, ready to use
+=======
+- Trained CNN models for kiwi, ready to use
+>>>>>>> bats
 - Separate excel export in Batch Review
 - Intermittent sampling
 - Single Species review now has a frequency axis
 - All Species review now has a "Question" button to mark segments that need editing
+<<<<<<< HEAD
 - File list in Manual mode now has colored icons to identify what level of annotations is present in each file
+=======
+>>>>>>> bats
 
 ### Changed
 
 - Human review made faster by loading the segments rather than reading whole file
+<<<<<<< HEAD
 - Single Species review now displays every piece of long segments individually, rather than just showing the center
 - Lots of visual updates
 
+=======
+- Lots of visual updates
+
+
+>>>>>>> bats
 ## [2.1] - 2020-02-12
 
 ### Added
@@ -291,8 +310,12 @@ Initial Release (for the Acoustic Workshop at Massey University 2017-06-09)
 - Spectrogram CheatSheet (pdf format)
 
 
+<<<<<<< HEAD
 [unreleased]: https://github.com/smarsland/AviaNZ/compare/v2.2...HEAD
 [2.2]: https://github.com/smarsland/AviaNZ/compare/v2.1...v2.2
+=======
+[unreleased]: https://github.com/smarsland/AviaNZ/compare/v2.0...HEAD
+>>>>>>> bats
 [2.1]: https://github.com/smarsland/AviaNZ/compare/v2.0.2...v2.1
 [2.0]: https://github.com/smarsland/AviaNZ/compare/v1.5.1...v2.0
 [1.5.1]: https://github.com/smarsland/AviaNZ/compare/v1.5...v1.5.1

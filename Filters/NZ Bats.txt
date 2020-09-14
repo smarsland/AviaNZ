@@ -8,7 +8,11 @@
         "WaveletParams": {"thr": 0.0, "M": 0.0, "nodes": []},
         "Feature": ""
         }],
+<<<<<<< HEAD
 "CNN": {"CNN_name": "NZ Bats",
+=======
+"CNN": {"CNN_name": "NZ Bats.h5",
+>>>>>>> bats
         "loss": "categorical_crossentropy",
         "optimizer": "adam",
         "win": [0, 0],

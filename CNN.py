@@ -24,19 +24,33 @@
 #     from PyQt5.QtGui import QIcon, QPixmap
 
 import tensorflow as tf
+<<<<<<< HEAD
 from skimage.transform import resize
+=======
+from sklearn.metrics import confusion_matrix
+
+from numpy import expand_dims
+from keras_preprocessing.image import ImageDataGenerator
+>>>>>>> bats
 
 import json, os
 import numpy as np
 import math
 import gc
 from time import gmtime, strftime
+<<<<<<< HEAD
 
+=======
+import pyqtgraph as pg
+
+import SupportClasses
+>>>>>>> bats
 import SignalProc
 import WaveletSegment
 import Segment
 import  WaveletFunctions
 import librosa
+<<<<<<< HEAD
 import wavio
 
 # from sklearn.metrics import confusion_matrix
@@ -44,6 +58,8 @@ import wavio
 # from keras_preprocessing.image import ImageDataGenerator
 # import pyqtgraph as pg
 # import SupportClasses
+=======
+>>>>>>> bats
 
 class CNN:
     """ This class implements CNN training and data augmentation in AviaNZ.
@@ -171,6 +187,7 @@ class CNN:
             new_images[i][:] = self.pitchShift(audios[np.random.randint(0, np.shape(audios)[0])])
         return new_images
 
+<<<<<<< HEAD
     def loadCTImg(self, dirName):
         ''' Returns images of the call type subdirectory dirName'''
         filenames, labels = self.getImglist(dirName)
@@ -183,11 +200,15 @@ class CNN:
         return np.array([resize(np.load(file_name), (self.imageheight, self.imagewidth, 1)) for file_name in
                          filenames])
 
+=======
+    # Load train data
+>>>>>>> bats
     def loadImageData(self, file, noisepool=False):
         '''
         :param file: JSON file with extracted features and labels
         :return:
         '''
+<<<<<<< HEAD
         npzfile = file
         dataz = np.load(npzfile)
         numarrays = len(dataz)
@@ -224,6 +245,28 @@ class CNN:
                 except Exception as e:
                     print("Error: failed to load image because:", e)
 
+=======
+        with open(file) as f:
+            data = json.load(f)
+        features = np.ndarray(shape=(np.shape(data)[0], self.imageheight, self.imagewidth), dtype=float)
+        badind = []
+        if noisepool:
+            for i in range(0, np.shape(data)[0]):
+                if np.shape(data[i][0]) == (self.imageheight, self.imagewidth):
+                    features[i][:] = data[i][0][:]
+                else:
+                    badind.append(i)
+            features = np.delete(features, badind, 0)
+            return features
+        else:
+            targets = np.zeros((np.shape(data)[0], 1))
+            for i in range(0, np.shape(data)[0]):
+                if np.shape(data[i][0]) == (self.imageheight, self.imagewidth):
+                    features[i][:] = data[i][0][:]
+                    targets[i][0] = data[i][-1]
+                else:
+                    badind.append(i)
+>>>>>>> bats
             features = np.delete(features, badind, 0)
             targets = np.delete(targets, badind, 0)
             return features, targets
@@ -270,12 +313,17 @@ class CNN:
         pos = 0
         for root, dirs, files in os.walk(str(dirName)):
             for file in files:
+<<<<<<< HEAD
                 if file.endswith('.npz'):
                     print('reading ', file)
+=======
+                if file.endswith('.json'):
+>>>>>>> bats
                     sg1, target1 = self.loadImageData(os.path.join(dirName, file))
                     if not pos:
                         sg = sg1
                         target = target1
+<<<<<<< HEAD
                         pos += np.shape(target1)[0]
                     else:
                         sg = np.vstack((sg, sg1))
@@ -283,6 +331,14 @@ class CNN:
                         pos += np.shape(target1)[0]
 
         # Separate into classes
+=======
+                        pos += 1
+                    else:
+                        sg = np.vstack((sg, sg1))
+                        target = np.vstack((target, target1))
+
+        # separate into classes
+>>>>>>> bats
         ns = [np.shape(np.where(target == i)[0])[0] for i in range(len(self.calltypes) + 1)]
         sgCT = [np.empty((n, self.imageheight, self.imagewidth), dtype=float) for n in ns]
         idxs = [np.random.permutation(np.where(target == i)[0]).tolist() for i in range(len(self.calltypes) + 1)]
@@ -293,6 +349,7 @@ class CNN:
                 i += 1
         return sgCT, ns
 
+<<<<<<< HEAD
     def getImglist(self, dirName):
         ''' Returns the image filenames and labels in dirName:
         '''
@@ -314,6 +371,12 @@ class CNN:
     def createArchitecture(self):
         '''
         Sets self.model
+=======
+    def createArchitecture(self):
+        '''
+        Sets self.model
+        :return:
+>>>>>>> bats
         '''
         self.model = tf.keras.models.Sequential()
         self.model.add(tf.keras.layers.Conv2D(32, kernel_size=(7, 7), activation='relu', input_shape=[self.imageheight, self.imagewidth, 1], padding='Same'))
@@ -339,8 +402,13 @@ class CNN:
         self.model.add(tf.keras.layers.Dense(len(self.calltypes)+1, activation='softmax'))
         self.model.summary()
 
+<<<<<<< HEAD
     def train2(self, modelsavepath):
         ''' Train the model - keep all in memory '''
+=======
+    def train(self, modelsavepath):
+        ''' Train the model'''
+>>>>>>> bats
 
         self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
@@ -367,6 +435,7 @@ class CNN:
         # self.model.save_weights(modelsavepath + "/weights.h5")
         print("Saved model to ", modelsavepath)
 
+<<<<<<< HEAD
     def train(self, modelsavepath, training_batch_generator, validation_batch_generator, epochs):
         ''' Train the model - use image generator '''
 
@@ -396,6 +465,8 @@ class CNN:
         # self.model.save_weights(modelsavepath + "/weights.h5")
         print("Saved model to ", modelsavepath)
 
+=======
+>>>>>>> bats
 class GenerateData:
     """ This class implements CNN data preparation. There are different ways:
     1. when manually annotated recordings are presented (.wav and GT.data along with call type info). In this case run
@@ -442,12 +513,16 @@ class GenerateData:
                         ctSegments = segments.getCalltype(self.species, self.calltypes[calltypei])
                     for indx in ctSegments:
                         seg = segments[indx]
+<<<<<<< HEAD
                         # skip uncertain segments
                         cert = [lab["certainty"] if lab["species"] == self.species else 100 for lab in seg[4]]
                         if cert:
                             mincert = min(cert)
                             if mincert == 100:
                                 calltypeSegments.append([wavFile, seg[:2], calltypei])
+=======
+                        calltypeSegments.append([wavFile, seg[:2], calltypei])
+>>>>>>> bats
 
         return calltypeSegments
 
@@ -483,9 +558,13 @@ class GenerateData:
         autoSegments = ws.waveletSegment_cnn(dirName, self.filter)  # [(filename, [segments]), ...]
 
         #  now the diff between segment and autoSegments
+<<<<<<< HEAD
         print("autoSeg", autoSegments)
         for item in autoSegments:
             print(item[0])
+=======
+        for item in autoSegments:
+>>>>>>> bats
             wavFile = item[0]
             if os.stat(wavFile).st_size != 0:
                 sppSegments = []
@@ -494,6 +573,7 @@ class GenerateData:
                     segments.parseJSON(wavFile + '.data')
                     sppSegments = segments.getSpecies(self.species)
                 for segAuto in item[1]:
+<<<<<<< HEAD
                     overlappedwithGT = False
                     for ind in sppSegments:
                         segGT = segments[ind]
@@ -503,6 +583,17 @@ class GenerateData:
                         else:
                             continue
                     if not overlappedwithGT:
+=======
+                    overlapedwithGT = False
+                    for ind in sppSegments:
+                        segGT = segments[ind]
+                        if self.Overlap(segGT, segAuto):
+                            overlapedwithGT = True
+                            break
+                        else:
+                            continue
+                    if not overlapedwithGT:
+>>>>>>> bats
                         noiseSegments.append([wavFile, segAuto, len(self.calltypes)])
         return noiseSegments
 
@@ -517,6 +608,7 @@ class GenerateData:
         else:
             return False
 
+<<<<<<< HEAD
     def getImgCount(self, dirName, dataset, hop):
         '''
         Read the segment library and estimate the number of CNN images per class
@@ -552,6 +644,8 @@ class GenerateData:
 
         return N
 
+=======
+>>>>>>> bats
     def generateFeatures(self, dirName, dataset, hop):
         '''
         Read the segment library and generate features
@@ -559,13 +653,21 @@ class GenerateData:
         :param hop:
         :return: save the preferred features into JSON files + save images. Currently the spectrogram images.
         '''
+<<<<<<< HEAD
         count = 0
         dhop = hop
         eps = 0.0005
+=======
+
+        featuress = []
+        count = 0
+        dhop = hop
+>>>>>>> bats
         specFrameSize = len(range(0, int(self.length * self.fs - self.windowwidth), self.inc))
         N = [0 for i in range(len(self.calltypes) + 1)]
 
         for record in dataset:
+<<<<<<< HEAD
             # Compute features, also consider tiny segments because this would be the case for song birds.
             duration = record[1][1] - record[1][0]
             hop = dhop[record[-1]]
@@ -594,11 +696,44 @@ class GenerateData:
                 print("Warning: failed to load audio because:", e)
                 continue
             N[record[-1]] += n
+=======
+            # Compute features, ignore tiny segments
+            duration = record[1][1] - record[1][0]
+            hop = dhop
+            if duration < self.length/10:
+                continue
+            elif duration < self.length:
+                record[1][0] = record[1][0] - (self.length - duration)/2 - 0.0005
+                record[1][1] = record[1][1] + (self.length - duration)/2 + 0.0005
+                n = 1
+                hop = self.length
+                duration = self.length + 0.001
+            elif record[-1] < len(self.calltypes) and duration >= self.length + hop:
+                n = math.ceil((record[1][1]-record[1][0]-self.length) / hop + 1)
+            else:
+                hop = self.length
+                n = math.ceil((record[1][1] - record[1][0]) / hop)
+            N[record[-1]] += n
+            print('* hop:', hop, 'n:', n, 'syl:', record[2], 'label:', record[-1])
+            try:
+                audiodata = self.loadFile(filename=record[0], duration=duration, offset=record[1][0], fs=self.fs, denoise=False)
+            except:
+                print('failed to load')
+                continue
+>>>>>>> bats
             sp = SignalProc.SignalProc(self.windowwidth, self.inc)
             sp.data = audiodata
             sp.sampleRate = self.fs
             sgRaw = sp.spectrogram(self.windowwidth, self.inc)
+<<<<<<< HEAD
 
+=======
+            # spectrograms of pre-cut segs are tiny bit shorter
+            # because spectrogram does not use the last bin:
+            # it uses len(data)-window bins
+            # so when extracting pieces of a premade spec, we need to adjust:
+            # specFrameSize = len(range(0, int(self.length * self.fs - sp.window_width), sp.incr))
+>>>>>>> bats
             for i in range(int(n)):
                 print('**', record[0], self.length, record[1][0]+hop*i, self.fs, '************************************')
                 # start = int(hop * i * fs)
@@ -620,6 +755,7 @@ class GenerateData:
                     continue
                 sgRaw_i = sgRaw[sgstart:sgend, :]
                 maxg = np.max(sgRaw_i)
+<<<<<<< HEAD
                 # Normalize and rotate
                 sgRaw_i = np.rot90(sgRaw_i / maxg)
                 print(np.shape(sgRaw_i))
@@ -631,6 +767,32 @@ class GenerateData:
                 count += 1
 
         print('\n\nCompleted feature extraction')
+=======
+                featuress.append([np.rot90(sgRaw_i / maxg).tolist(), record[-1]])   # [spectrogram, label]
+                print(np.shape(sgRaw_i))
+                # Save as image
+                # sgRaw_i = np.flip(sgRaw_i, 1)  # along y-axis
+                # # print(np.shape(sgRaw_i))
+                # maxsg = np.min(sgRaw_i)
+                # sg = np.abs(np.where(sgRaw_i == 0, 0.0, 10.0 * np.log10(sgRaw_i / maxsg)))
+                # img_sg = pg.ImageItem(sg)
+                # img_sg.save(os.path.join(dirName, 'img_sg', str(record[-1]) + '_' + "%05d" % count + '_' + record[0].split('\\')[-1][:-4] + '.png'))
+                count += 1
+            if np.shape(featuress)[0] >= 1000:
+                with open(os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime())) + '.json', 'w') as outfile:
+                    json.dump(featuress, outfile)
+                del featuress
+                gc.collect()
+                featuress = []
+
+        with open(os.path.join(dirName, 'sgramdata' + strftime("_%H-%M-%S", gmtime())) + '.json', 'w') as outfile:
+            json.dump(featuress, outfile)
+        # with open(os.path.join(dirName, 'melsgdata.json'), 'w') as outfile:
+        #     json.dump(featuresmel, outfile)
+        # with open(os.path.join(dirName, 'audiodata.json'), 'w') as outfile:
+        #     json.dump(featuresa, outfile)
+        print('completed feature extraction.\n ', specFrameSize)
+>>>>>>> bats
         return specFrameSize, N
 
     def loadFile(self, filename, duration=0.0, offset=0, fs=0, denoise=False, f1=0, f2=0):
@@ -655,6 +817,7 @@ class GenerateData:
             # audiodata = sp.ButterworthBandpass(audiodata, sampleRate, f1, f2)
             audiodata = sp.bandpassFilter(audiodata, sampleRate, f1, f2)
 
+<<<<<<< HEAD
         return audiodata
 
 
@@ -678,3 +841,6 @@ class CustomGenerator(tf.keras.utils.Sequence):
 
         # return np.array([resize(imread(os.path.join(self.train_dir , str(file_name))), (self.imgheight, self.imgwidth, self.channels)) for file_name in batch_x]) / 255.0, np.array(batch_y)
         return np.array([resize(np.load(file_name), (self.imgheight, self.imgwidth, self.channels)) for file_name in batch_x]), np.array(batch_y)
+=======
+        return audiodata
+>>>>>>> bats

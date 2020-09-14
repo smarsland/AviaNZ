@@ -22,6 +22,10 @@ void PyInit_SplitWav() {}
 int strptime2(char *s, char *format, struct tm *temp){
 	char *ptr;
 	
+<<<<<<< HEAD
+=======
+	// TODO : figure out if this treats DST correctly (now off)
+>>>>>>> bats
 	temp->tm_isdst = 0;
 	// hopefully these don't matter
 	// temp->tm_wday = 0;
