@@ -1,9 +1,10 @@
-# This is the main class for the AviaNZ interface
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
+
+# This is the main class for the AviaNZ interface. 
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -1862,14 +1863,26 @@ class AviaNZ(QMainWindow):
         # TODO: Check this!
         with pg.BusyCursor():
             self.statusLeft.setText("Inverting...")
-            print("Inverting spectrogam with window ", self.config['window_width'], " and increment ",self.config['window_width'])
+            print("Inverting spectrogam with window ", 1024, " and increment ",512)
 
-            row_dim = 7 * np.shape(self.sg)[0]
-            appo = 254 * np.ones((row_dim, np.shape(self.sg)[1]))
-            spec = np.concatenate((appo, self.sg))
-            samplerate = 16000
+            spec=self.sp.sg
+            print(spec)
+            spec = np.rot90(spec, -1, (1,0)) #undo rotation
+            spec=spec[::8,:] #undo row repetition
+            
+            #adding blanck rows on top
+            row_dim = 7 * np.shape(spec)[0]
+            appo = np.zeros((row_dim, np.shape(spec)[1]))
+            spec = np.concatenate((appo, spec))
+            
+            #put in  shape invert spectrogram likes
+            spec=np.flipud(spec)
+            spec = spec.T
+            print(spec)
 
-            wave = self.sp.invertSpectrogram(spec, 1024, 64)
+            samplerate = 176000
+
+            wave = self.sp.invertSpectrogram(spec, 1024, 512, window='Blackman')
             wavFile = str(self.filename + '.wav')
             wavio.write(wavFile, wave, samplerate, sampwidth=2)
             print('File written:',wavFile)
