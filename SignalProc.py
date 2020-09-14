@@ -1,13 +1,12 @@
 
 # SignalProc.py
-#
 # A variety of signal processing algorithms for AviaNZ.
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -164,13 +163,15 @@ class SignalProc:
             print(np.median(img2[-1,:]))
             return(1)
 
+        print(np.shape(img2))
         # Could skip that for visual mode - maybe useful for establishing contrast?
         img2[-1, :] = 254  # lowest freq bin is 0, flip that
         img2 = 255 - img2  # reverse value having the black as the most intense
         img2 = img2/np.max(img2)  # normalization
         img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
         img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
-
+        print(np.shape(img2))
+       
         self.data = []
         self.fileLength = (w-2)*self.incr + self.window_width  # in samples
         # Alternatively:
@@ -598,19 +599,19 @@ class SignalProc:
         return data
 
     # The next functions perform spectrogram inversion
-    def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10):
+    def invertSpectrogram(self,sg,window_width=256,incr=64,nits=10, window='Hann'):
         # Assumes that this is the plain (not power) spectrogram
         # Make the spectrogram two-sided and make the values small
         sg = np.concatenate([sg, sg[:, ::-1]], axis=1)
 
         sg_best = copy.deepcopy(sg)
         for i in range(nits):
-            invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0))
+            invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=(i==0), window=window)
             self.setData(invertedSgram)
-            est = self.spectrogram(window_width, incr, onesided=False,need_even=True)
+            est = self.spectrogram(window_width, incr, onesided=False,need_even=True, window=window)
             phase = est / np.maximum(np.max(sg)/1E8, np.abs(est))
             sg_best = sg * phase[:len(sg)]
-        invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=False)
+        invertedSgram = self.inversion_iteration(sg_best, incr, calculate_offset=True,set_zero_phase=False, window=window)
         return np.real(invertedSgram)
 
     def inversion_iteration(self,sg, incr, calculate_offset=True, set_zero_phase=True, window='Hann'):
@@ -637,16 +638,42 @@ class SignalProc:
         total_windowing_sum = np.zeros((np.shape(sg)[0] * incr + size))
         #Virginia: adding different windows
 
-        if window == 'Hann':
-            # Hann window
+        
+       # Set of window options
+        if window=='Hann':
+            # This is the Hann window
             window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
-        elif window == 'Blackman':
+        elif window=='Parzen':
+            # Parzen (window_width even)
+            n = np.arange(size) - 0.5*size
+            window = np.where(np.abs(n)<0.25*size,1 - 6*(n/(0.5*size))**2*(1-np.abs(n)/(0.5*size)), 2*(1-np.abs(n)/(0.5*size))**3)
+        elif window=='Welch':
+            # Welch
+            window = 1.0 - ((np.arange(size) - 0.5*(size-1))/(0.5*(size-1)))**2
+        elif window=='Hamming':
+            # Hamming
+            alpha = 0.54
+            beta = 1.-alpha
+            window = alpha - beta*np.cos(2 * np.pi * np.arange(size) / (size - 1))
+        elif window=='Blackman':
             # Blackman
             alpha = 0.16
-            a0 = 0.5 * (1 - alpha)
+            a0 = 0.5*(1-alpha)
             a1 = 0.5
-            a2 = 0.5 * alpha
-            window = a0 - a1 * np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2 * np.cos(4 * np.pi * np.arange(size) / (size - 1))
+            a2 = 0.5*alpha
+            window = a0 - a1*np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2*np.cos(4 * np.pi * np.arange(size) / (size - 1))
+        elif window=='BlackmanHarris':
+            # Blackman-Harris
+            a0 = 0.358375
+            a1 = 0.48829
+            a2 = 0.14128
+            a3 = 0.01168
+            window = a0 - a1*np.cos(2 * np.pi * np.arange(size) / (size - 1)) + a2*np.cos(4 * np.pi * np.arange(size) / (size - 1)) - a3*np.cos(6 * np.pi * np.arange(size) / (size - 1))
+        elif window=='Ones':
+            window = np.ones(size)
+        else:
+            print("Unknown window, using Hann")
+            window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(size) / (size - 1)))
 
         est_start = int(size // 2) - 1
         est_end = est_start + size
@@ -663,7 +690,7 @@ class SignalProc:
             if calculate_offset and i > 0:
                 offset_size = size - incr
                 if offset_size <= 0:
-                    print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
+                    #print("WARNING: Large step size >50\% detected! " "This code works best with high overlap - try " "with 75% or greater")
                     offset_size = incr
                 offset = self.xcorr_offset(wave[wave_start:wave_start + offset_size], wave_est[est_start:est_start + offset_size])
             else:
