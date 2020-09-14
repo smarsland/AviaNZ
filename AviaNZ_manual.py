@@ -1565,7 +1565,7 @@ class AviaNZ(QMainWindow):
                 # Get the data for the main spectrogram
                 sgRaw = self.sp.spectrogram(self.config['window_width'], self.config['incr'], mean_normalise=self.sgMeanNormalise,
                                             equal_loudness=self.sgEqualLoudness, onesided=self.sgOneSided, multitaper=self.sgMultitaper)
-                maxsg = np.min(sgRaw)
+                maxsg = max(np.min(sgRaw), 1e-9)
                 self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
             # ANNOTATIONS: init empty list
@@ -2314,7 +2314,7 @@ class AviaNZ(QMainWindow):
             sgRaw = tempsp.spectrogram()
             sgHeightReduction = np.shape(sgRaw)[1]*16000//self.sampleRate
             sgRaw = sgRaw[:, :sgHeightReduction]
-            maxsg = np.min(sgRaw)
+            maxsg = max(np.min(sgRaw), 1e-9)
             tempsp = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
 
             pos, colour, mode = colourMaps.colourMaps("Inferno")
@@ -4325,7 +4325,7 @@ class AviaNZ(QMainWindow):
             else:
                 self.sp.setWidth(int(str(window_width)), int(str(incr)))
                 sgRaw = self.sp.spectrogram(window=str(windowType),mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided,multitaper=self.sgMultitaper)
-                maxsg = np.min(sgRaw)
+                maxsg = max(np.min(sgRaw), 1e-9)
                 self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
 
                 # If the size of the spectrogram has changed, need to update the positions of things
@@ -4432,7 +4432,7 @@ class AviaNZ(QMainWindow):
 
             # recalculate spectrogram
             sgRaw = self.sp.spectrogram(mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided,multitaper=self.sgMultitaper)
-            maxsg = np.min(sgRaw)
+            maxsg = max(np.min(sgRaw), 1e-9)
             self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
 
             # Update the ampl image
@@ -4496,7 +4496,7 @@ class AviaNZ(QMainWindow):
 
             # recalculate spectrogram
             sgRaw = self.sp.spectrogram(mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided,multitaper=self.sgMultitaper)
-            maxsg = np.min(sgRaw)
+            maxsg = max(np.min(sgRaw), 1e-9)
             self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
 
             # Update the ampl image
@@ -4557,7 +4557,7 @@ class AviaNZ(QMainWindow):
             print("Denoising calculations completed in %.4f seconds" % (time.time() - opstartingtime))
 
             sgRaw = self.sp.spectrogram(mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided,multitaper=self.sgMultitaper)
-            maxsg = np.min(sgRaw)
+            maxsg = max(np.min(sgRaw), 1e-9)
             self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
 
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
@@ -4584,7 +4584,7 @@ class AviaNZ(QMainWindow):
                     self.audiodata_backup = self.audiodata_backup[:,:-1]
                     self.sp.data = self.audiodata
                     sgRaw = self.sp.spectrogram(mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided,multitaper=self.sgMultitaper)
-                    maxsg = np.min(sgRaw)
+                    maxsg = max(np.min(sgRaw), 1e-9)
                     self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
                     self.amplPlot.setData(
                         np.linspace(0.0, self.datalengthSec, num=self.datalength, endpoint=True),

@@ -20,6 +20,9 @@ ext/ce_wvd_functions.h
 ext/SplitLauncher.c
 ext/ce_detect.c
 ext/build/
+ext/*pyd
+
+.vs/
 
 # Latex
 Docs/AviaNZManual.aux
