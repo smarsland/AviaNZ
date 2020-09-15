@@ -1,7 +1,7 @@
 # Version 3.0 14/09/20
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
-# This is the main class for the AviaNZ interface. 
+# This is the main class for the AviaNZ interface.
 
 #    AviaNZ bioacoustic analysis program
 #    Copyright (C) 2017--2020
@@ -434,12 +434,12 @@ class AviaNZ(QMainWindow):
         return
 
     def showHelp(self):
-        """ Show the user manual (a pdf file)"""
-        # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
+        """ Show the user manual (a pdf file), make it offline for easy access"""
+        webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
+        # webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
     def showCheatSheet(self):
-        """ Show the cheatsheet of sample spectrograms (a pdf file)"""
+        """ Show the cheatsheet of sample spectrograms"""
         webbrowser.open_new(r'http://www.avianz.net/index.php/resources/cheat-sheet/about-cheat-sheet')
 
     def launchSplitter(self):
@@ -1869,12 +1869,12 @@ class AviaNZ(QMainWindow):
             print(spec)
             spec = np.rot90(spec, -1, (1,0)) #undo rotation
             spec=spec[::8,:] #undo row repetition
-            
+
             #adding blanck rows on top
             row_dim = 7 * np.shape(spec)[0]
             appo = np.zeros((row_dim, np.shape(spec)[1]))
             spec = np.concatenate((appo, spec))
-            
+
             #put in  shape invert spectrogram likes
             spec=np.flipud(spec)
             spec = spec.T

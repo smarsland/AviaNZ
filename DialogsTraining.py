@@ -1104,6 +1104,10 @@ class BuildRecAdvWizard(QWizard):
             self.bestM.setReadOnly(True)
             self.bestThr.setReadOnly(True)
             self.bestNodes.setReadOnly(True)
+            self.filtSummary = QFormLayout()
+            self.filtSummary.addRow("Current M:", self.bestM)
+            self.filtSummary.addRow("Current thr:", self.bestThr)
+            self.filtSummary.addRow("Current nodes:", self.bestNodes)
 
             # this is the Canvas Widget that displays the plot
             self.figCanvas = ROCCanvas(self)
@@ -1133,8 +1137,8 @@ class BuildRecAdvWizard(QWizard):
                 print("fpr_cl, tpr_cl: ", fpr_near, tpr_near)
 
                 # update sidebar
-                self.lblUpdate.setText('Detection Summary\n\n\tTrue Positive Rate:\t' + str(round(tpr_near * 100, 2)) +
-                                       '%\n\tFalse Positive Rate:\t' + str(round(fpr_near * 100, 2)) + '%')
+                self.lblUpdate.setText('Detection Summary\n\nTPR:\t' + str(round(tpr_near * 100, 2)) +
+                                       '%\nFPR:\t' + str(round(fpr_near * 100, 2)) + '%')
 
                 # this will save the best parameters to the global fields
                 self.bestM.setText("%.4f" % self.MList[M_min_ind])
@@ -1142,6 +1146,8 @@ class BuildRecAdvWizard(QWizard):
                 # Get nodes for closest point
                 optimumNodesSel = self.nodes[M_min_ind][thr_min_ind]
                 self.bestNodes.setText(str(optimumNodesSel))
+                for itemnum in range(self.filtSummary.count()):
+                    self.filtSummary.itemAt(itemnum).widget().show()
 
             self.figCanvas.figure.canvas.mpl_connect('button_press_event', onclick)
 
@@ -1155,6 +1161,8 @@ class BuildRecAdvWizard(QWizard):
             hbox2.addWidget(self.figCanvas)
 
             hbox3 = QHBoxLayout()
+            hbox3.addLayout(self.filtSummary)
+            hbox3.addWidget(spaceH)
             hbox3.addWidget(self.lblUpdate)
 
             vbox = QVBoxLayout()
@@ -1171,6 +1179,8 @@ class BuildRecAdvWizard(QWizard):
             self.lblSpecies.setText(self.field("species"))
             self.wizard().saveTestBtn.setVisible(False)
             self.lblCluster.setText(self.clust)
+            for itemnum in range(self.filtSummary.count()):
+                self.filtSummary.itemAt(itemnum).widget().hide()
 
             # parse fields specific to this subfilter
             minlen = float(self.field("minlen"+str(self.pageId)))
@@ -1209,7 +1219,6 @@ class BuildRecAdvWizard(QWizard):
                             # exports 0/1 annotations and retrieves segment time, freq bounds
                             pageSegs.exportGT(wavFile, self.field("species"), window=window, inc=inc)
 
-            # TODO: Check this later - I'm disabling cluster centre (it's not used currently).
             # calculate cluster centres
             # (self.segments is already selected to be this cluster only)
             with pg.BusyCursor():
