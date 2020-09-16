@@ -6112,7 +6112,7 @@ class AviaNZ(QMainWindow):
             self.segmentsToSave = False
         else:
             self.segmentsToSave = True
-            print("Nothing to save")
+            # print("Nothing to save")
 
     def closeFile(self):
         """ Calls the appropriate functions when a file is gently closed (on quit or change of file). """
