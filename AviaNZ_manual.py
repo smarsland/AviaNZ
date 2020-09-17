@@ -435,8 +435,8 @@ class AviaNZ(QMainWindow):
 
     def showHelp(self):
         """ Show the user manual (a pdf file), make it offline for easy access"""
-        webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        # webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
+        # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
     def showCheatSheet(self):
         """ Show the cheatsheet of sample spectrograms"""
