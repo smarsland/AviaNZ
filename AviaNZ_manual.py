@@ -388,6 +388,7 @@ class AviaNZ(QMainWindow):
         actionMenu.addSeparator()
         self.segmentAction = actionMenu.addAction("Segment",self.segmentationDialog,"Ctrl+S")
         actionMenu.addAction("Export segments to Excel",self.exportSeg)
+        actionMenu.addAction("Calculate segment statistics", self.calculateStats)
 
         if not self.DOC:
             actionMenu.addAction("Cluster segments", self.classifySegments,"Ctrl+C")
@@ -4376,6 +4377,45 @@ class AviaNZ(QMainWindow):
             self.redoFreqAxis(minFreq,maxFreq)
 
             self.statusLeft.setText("Ready")
+
+    def calculateStats(self):
+        """ Calculate and export summary statistics for the currently marked segments """
+
+        # these are all segments in file
+        print("segs", self.segments)
+        outarray = []
+
+        for seg in self.segments:
+            # Important because all manual mode functions should operate on the current page only:
+            # skip segments that are not visible in this page
+            if seg[1]<=self.startRead or seg[0]>=self.startRead + self.datalengthSec:
+                continue
+
+            # coordinates in seconds from current page start, bounded at page borders:
+            starttime = max(0, seg[0]-self.startRead)
+            endtime = min(seg[1]-self.startRead, self.datalengthSec)
+            print(starttime, endtime)
+
+            # piece of audio/waveform corresponding to this segment
+            # self.audiodata[starttime:endtime]
+
+            # piece of spectrogram corresponding to this segment
+            startInSpecPixels = self.convertAmpltoSpec(starttime)
+            endInSpecPixels = self.convertAmpltoSpec(endtime)
+            print(startInSpecPixels, endInSpecPixels)
+            # self.sg[startInSpecPixels:endInSpecPixels, ]
+
+            # if needed, there's already a SignalProc instance self.sp with the full data on it,
+            # so can also do something like:
+            # self.sp.calculateMagicStatistic(starttime, endtime)
+
+            # do something with this segment now...
+            print("Calculating statistics on this segment...")
+            # fill outarray...
+
+        # save as text file for now:
+        # np.savetxt("~/path/to/file.csv", np.array(outarray), delimiter=" ")
+        # (should switch this to excel sometime in the future)
 
     def showDenoiseDialog(self):
         """ Create the denoising dialog when the relevant button is pressed.
