@@ -4397,7 +4397,8 @@ class AviaNZ(QMainWindow):
             print(starttime, endtime)
 
             # piece of audio/waveform corresponding to this segment
-            # self.audiodata[starttime:endtime]
+            # (note: coordinates in wav samples)
+            # self.audiodata[int(starttime*self.sampleRate):int(endtime*self.sampleRate)]
 
             # piece of spectrogram corresponding to this segment
             startInSpecPixels = self.convertAmpltoSpec(starttime)
