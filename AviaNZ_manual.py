@@ -4383,18 +4383,23 @@ class AviaNZ(QMainWindow):
 
         # these are all segments in file
         print("segs", self.segments)
-        outarray = []
-
+        
+        q=0
+        qs=0
+        for seg in self.segments:
+            qs+=1
+        outarray = np.array(np.repeat(0.0,qs))
         for seg in self.segments:
             # Important because all manual mode functions should operate on the current page only:
             # skip segments that are not visible in this page
             if seg[1]<=self.startRead or seg[0]>=self.startRead + self.datalengthSec:
+                print("yay")
                 continue
 
             # coordinates in seconds from current page start, bounded at page borders:
             starttime = max(0, seg[0]-self.startRead)
             endtime = min(seg[1]-self.startRead, self.datalengthSec)
-            print(starttime, endtime)
+            print("Start: ",starttime,"--- End: ", endtime)
 
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)
@@ -4403,19 +4408,24 @@ class AviaNZ(QMainWindow):
             # piece of spectrogram corresponding to this segment
             startInSpecPixels = self.convertAmpltoSpec(starttime)
             endInSpecPixels = self.convertAmpltoSpec(endtime)
-            print(startInSpecPixels, endInSpecPixels)
-            # self.sg[startInSpecPixels:endInSpecPixels, ]
-
+            print("PX",startInSpecPixels, endInSpecPixels)
+            #self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
+            #self.sg[startInSpecPixels:endInSpecPixels, ]
+            
             # if needed, there's already a SignalProc instance self.sp with the full data on it,
             # so can also do something like:
-            # self.sp.calculateMagicStatistic(starttime, endtime)
-
+            #self.sp.calculateMagicStatistic(starttime, endtime)
+            
             # do something with this segment now...
             print("Calculating statistics on this segment...")
+            outarray[q]=starttime
+            q+=1
             # fill outarray...
 
         # save as text file for now:
-        # np.savetxt("~/path/to/file.csv", np.array(outarray), delimiter=" ")
+        print("Salvero': ",q,"     ",np.array(outarray))
+        np.savetxt("./file.csv", np.array(outarray), delimiter=" ")
+        print("SAVED!")
         # (should switch this to excel sometime in the future)
 
     def showDenoiseDialog(self):
@@ -4506,7 +4516,7 @@ class AviaNZ(QMainWindow):
             sgRaw = self.sp.spectrogram(mean_normalise=self.sgMeanNormalise,equal_loudness=self.sgEqualLoudness,onesided=self.sgOneSided,multitaper=self.sgMultitaper,reassigned=self.sgReassigned)
             maxsg = np.min(sgRaw)
             self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
-
+            
             # Update the ampl image
             self.amplPlot.setData(np.linspace(0.0,self.datalength/self.sampleRate,num=self.datalength,endpoint=True),self.audiodata)
 
