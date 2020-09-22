@@ -50,46 +50,49 @@ class StartScreen(QDialog):
         self.setWindowTitle('AviaNZ - Choose Task')
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.FramelessWindowHint | Qt.WindowCloseButtonHint)
         self.setAutoFillBackground(False)
-        self.setFixedSize(860, 350)
-        self.setStyleSheet("background-image: url(img/AviaNZ_SW_V2.jpg);")
+        self.setMinimumSize(860, 350)
+        self.setStyleSheet("QDialog {background-image: url(img/AviaNZ_SW_V2.jpg); background-repeat: no-repeat; background-color: #242021; background-position: top center;}")
         self.activateWindow()
 
-        btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
-        # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
+        # #242021 for the bgcolor of that image
+        # btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
+        btn_style=""" QAbstractButton {background-color: #242021;
+                    border-color: #b2c8da; border-width:2px; border-style: outset;
+                    color: white; font-size:21px; font-weight: bold; font-family: "Arial"; padding: 3px;}
+                    QAbstractButton:pressed {border-style: inset;}
+                    """
         b1 = QPushButton("   Manual Processing   ")
         b2 = QPushButton("     Batch Processing     ")
         b3 = QPushButton("  Review Batch Results  ")
-        l1 = QLabel("------")
-        l2 = QLabel("---")
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
         b3.setStyleSheet(btn_style)
-        #b4.setStyleSheet(btn_style)
-        l1.setStyleSheet('QLabel {color:transparent}')
         bclose = QtGui.QToolButton()
         bclose.setIcon(QtGui.QIcon('img/close.png'))
         bclose.setIconSize(QtCore.QSize(40, 40))
         bclose.setToolTip("Close")
+        bclose.setStyleSheet(btn_style)
         bclose.clicked.connect(self.reject)
-        
+
         hboxclose = QHBoxLayout()
-        hboxclose.addWidget(bclose, alignment=Qt.AlignRight)        
+        hboxclose.addWidget(bclose, alignment=Qt.AlignRight)
 
         hbox = QHBoxLayout()
-        hbox.addWidget(l1)
+        hbox.addStretch(5)
         hbox.addWidget(b1)
-        hbox.addWidget(l1)
+        hbox.addStretch(4)
         hbox.addWidget(b2)
-        hbox.addWidget(l1)
+        hbox.addStretch(4)
         hbox.addWidget(b3)
-        hbox.addWidget(l2)
+        hbox.addStretch(5)
         #hbox.addWidget(b4)
 
         vbox = QVBoxLayout()
         vbox.addLayout(hboxclose)
+        vbox.addSpacing(180)
         vbox.addStretch(1)
         vbox.addLayout(hbox)
-        vbox.addWidget(l1)
+        vbox.addStretch(1)
 
         self.setLayout(vbox)
 
