@@ -531,7 +531,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setFixedSize(900, 700)
+        self.setMinimumSize(900, 700)
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
