@@ -4999,7 +4999,8 @@ class AviaNZ(QMainWindow):
         l = len(src)
         for root, dirs, files in os.walk(src):
             for d in dirs:
-                os.mkdir(os.path.join(dst,d))
+                #print(dst,root,dirs)
+                os.mkdir(os.path.join(dst,root[l+1:],d))
             for f in files:
                 if f[-5:].lower() == '.data' or 'corrections' in f:
                     shutil.copy2(os.path.join(root, f),os.path.join(dst,root[l+1:]))
