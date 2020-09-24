@@ -4381,7 +4381,7 @@ class AviaNZ(QMainWindow):
       
     def calculateStats(self):
         """ Calculate and export summary statistics for the currently marked segments """
-        import SignalProc.py as sp
+        
         print(self.filename)
         csvf=self.filename[:-4]+'.csv'
         print("csv ",csvf)
@@ -4410,10 +4410,10 @@ class AviaNZ(QMainWindow):
             #syllable-by-syllable snnr
             #use the noise following the sillable instead of that preceeding it if first syllable
             if q==0:
-                outarray[0]=sp.SylNR(self,starttime,endtime,endtime,max(0,self.segments[1][0]-self.startRead))
+                outarray[0]=SignalProc.SylNR(self,starttime,endtime,endtime,max(0,self.segments[1][0]-self.startRead))
                 startnoise=endtime
             else:
-                outarray[q]=sp.SylNR(self,starttime,endtime,startnoise,starttime)
+                outarray[q]=SignalProc.SylNR(self,starttime,endtime,startnoise,starttime)
                 startnoise=endtime
             
             
