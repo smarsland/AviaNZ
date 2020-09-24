@@ -48,6 +48,7 @@ import Segment
 import WaveletSegment
 import WaveletFunctions
 import Clustering
+import Features
 import colourMaps
 
 import librosa
@@ -4383,7 +4384,9 @@ class AviaNZ(QMainWindow):
 
         # these are all segments in file
         print("segs", self.segments)
-        outarray = []
+
+        csv = open(self.filename[:-4] + '_features.csv', "w")
+        csv.write("Start Time (sec),End Time (sec),Avg Power,Delta Power,Energy,Agg Entropy,Avg Entropy,Max Power,Max Freq\n")
 
         for seg in self.segments:
             # Important because all manual mode functions should operate on the current page only:
@@ -4398,7 +4401,7 @@ class AviaNZ(QMainWindow):
 
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)
-            # self.audiodata[int(starttime*self.sampleRate):int(endtime*self.sampleRate)]
+            data = self.audiodata[int(starttime*self.sampleRate):int(endtime*self.sampleRate)]
 
             # piece of spectrogram corresponding to this segment
             startInSpecPixels = self.convertAmpltoSpec(starttime)
@@ -4412,11 +4415,19 @@ class AviaNZ(QMainWindow):
 
             # do something with this segment now...
             print("Calculating statistics on this segment...")
-            # fill outarray...
 
-        # save as text file for now:
-        # np.savetxt("~/path/to/file.csv", np.array(outarray), delimiter=" ")
-        # (should switch this to excel sometime in the future)
+            # TODO: Hardcoded for now - add a dialog to read parameters?
+            # TODO: Workout the units
+            f = Features.Features(data=data, sampleRate=self.sampleRate, window_width=256, incr=128)
+            avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq = f.get_Raven_spectrogram_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
+            # quartile1, quartile2, quartile3, f5, f95, interquartileRange = f.get_Raven_robust_measurements(f1=int(self.convertFreqtoY(500)), f2=int(self.convertFreqtoY(8000)))
+            print(avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq)
+            # print(quartile1, quartile2, quartile3, f5, f95, interquartileRange)
+            # csv.write("%s\t%.4f\t%.4f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n" % (self.filename, starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq, quartile1, quartile2, quartile3, f5, f95, interquartileRange))
+            # csv.write("%s,%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n" % (self.filename, starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq))
+            csv.write("%.4f,%.4f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n" % (starttime, endtime, avgPower, deltaPower, energy, aggEntropy, avgEntropy, maxPower, maxFreq))
+
+        csv.close()
 
     def showDenoiseDialog(self):
         """ Create the denoising dialog when the relevant button is pressed.
