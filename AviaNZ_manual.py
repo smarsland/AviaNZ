@@ -4385,12 +4385,6 @@ class AviaNZ(QMainWindow):
         print("csv ",csvf)
         # these are all segments in file
         print("segs", self.segments)
-<<<<<<< HEAD
-       
-      
-=======
-        
->>>>>>> 065299a187905bbaa6b0d81b29ea796d3f5c6a36
         q=0
         qs=0
         for seg in self.segments:
@@ -4428,30 +4422,16 @@ class AviaNZ(QMainWindow):
             
             # do something with this segment now...
             print("Calculating statistics on this segment...")
-<<<<<<< HEAD
             pS=np.sum(seg.data[seg.startRead:seg.startRead+seg.length]**2)/seg.length
             snnr=10.*np.log10(pS/pN)
-             
             outarray[q]=snnr
-            
-=======
-            outarray[q]=starttime
->>>>>>> 065299a187905bbaa6b0d81b29ea796d3f5c6a36
             q+=1
             # fill outarray...
 
         # save as text file for now:
-<<<<<<< HEAD
         print("Salverò informazioni riguardo ",q-1," sillabe",outarray)
-       
         np.savetxt(csvf, np.array(outarray), delimiter=",")
         print("SAVED!")
-        
-=======
-        print("Salvero': ",q,"     ",np.array(outarray))
-        np.savetxt("./file.csv", np.array(outarray), delimiter=" ")
-        print("SAVED!")
->>>>>>> 065299a187905bbaa6b0d81b29ea796d3f5c6a36
         # (should switch this to excel sometime in the future)
 
     def showDenoiseDialog(self):
