@@ -267,6 +267,12 @@ class SignalProc:
         pN = np.sum(self.data[startNoise:startNoise+self.length]**2)/self.length
         return 10.*np.log10(pS/pN)
 
+    def SylNR(self,startSignal,endSignal,startNoise,endNoise):
+        # Compute the estimated signal-to-noise ratio for syllable-by-syllable segmented file
+        pS = np.sum(self.data[startSignal:endSignal]**2)/(startSignal-endSignal)
+        pN = np.sum(self.data[startNoise:endNoise]**2)/(startNoise-endNoise)
+        return 10.*np.log10(pS/pN)
+
     def equalLoudness(self,data):
         # TODO: Assumes 16000 sampling rate, fix!
         # Basically, save a few more sets of filter coefficients...

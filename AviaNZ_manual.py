@@ -4377,9 +4377,11 @@ class AviaNZ(QMainWindow):
             self.redoFreqAxis(minFreq,maxFreq)
 
             self.statusLeft.setText("Ready")
-
+            
+      
     def calculateStats(self):
         """ Calculate and export summary statistics for the currently marked segments """
+        import SignalProc.py as sp
         print(self.filename)
         csvf=self.filename[:-4]+'.csv'
         print("csv ",csvf)
@@ -4387,24 +4389,36 @@ class AviaNZ(QMainWindow):
         print("segs", self.segments)
         q=0
         qs=0
+        print("uno",self.segments[1])
+        print("zero",self.segments[0])
         for seg in self.segments:
             qs+=1
         outarray = np.array(np.repeat(0.0,qs))
+        
         for seg in self.segments:
             # Important because all manual mode functions should operate on the current page only:
             # skip segments that are not visible in this page
             if seg[1]<=self.startRead or seg[0]>=self.startRead + self.datalengthSec:
                 print("yay")
                 continue
-            if q==0:
-                pN=np.sum(seg.data[seg.startRead:seg.startRead+seg.length]**2)/seg.length
-                pS=pN
             
             # coordinates in seconds from current page start, bounded at page borders:
             starttime = max(0, seg[0]-self.startRead)
             endtime = min(seg[1]-self.startRead, self.datalengthSec)
             print("Start: ",starttime,"--- End: ", endtime)
-
+            
+            #syllable-by-syllable snnr
+            #use the noise following the sillable instead of that preceeding it if first syllable
+            if q==0:
+                outarray[0]=sp.SylNR(self,starttime,endtime,endtime,max(0,self.segments[1][0]-self.startRead))
+                startnoise=endtime
+            else:
+                outarray[q]=sp.SylNR(self,starttime,endtime,startnoise,starttime)
+                startnoise=endtime
+            
+            
+            
+            
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)
             # self.audiodata[int(starttime*self.sampleRate):int(endtime*self.sampleRate)]
@@ -4412,7 +4426,7 @@ class AviaNZ(QMainWindow):
             # piece of spectrogram corresponding to this segment
             startInSpecPixels = self.convertAmpltoSpec(starttime)
             endInSpecPixels = self.convertAmpltoSpec(endtime)
-            print("PX",startInSpecPixels, endInSpecPixels)
+            #print("PX",startInSpecPixels, endInSpecPixels)
             #self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
             #self.sg[startInSpecPixels:endInSpecPixels, ]
             
@@ -4422,15 +4436,14 @@ class AviaNZ(QMainWindow):
             
             # do something with this segment now...
             print("Calculating statistics on this segment...")
-            pS=np.sum(seg.data[seg.startRead:seg.startRead+seg.length]**2)/seg.length
-            snnr=10.*np.log10(pS/pN)
-            outarray[q]=snnr
+                     
+            
             q+=1
             # fill outarray...
 
         # save as text file for now:
         print("Salverò informazioni riguardo ",q-1," sillabe",outarray)
-        np.savetxt(csvf, np.array(outarray), delimiter=",")
+        #np.savetxt(csvf, np.array(outarray), delimiter=",")
         print("SAVED!")
         # (should switch this to excel sometime in the future)
 
