@@ -4380,10 +4380,13 @@ class AviaNZ(QMainWindow):
 
     def calculateStats(self):
         """ Calculate and export summary statistics for the currently marked segments """
-
+        print(self.filename)
+        csvf=self.filename[:-4]+'.csv'
+        print("csv ",csvf)
         # these are all segments in file
         print("segs", self.segments)
-        
+       
+      
         q=0
         qs=0
         for seg in self.segments:
@@ -4395,7 +4398,10 @@ class AviaNZ(QMainWindow):
             if seg[1]<=self.startRead or seg[0]>=self.startRead + self.datalengthSec:
                 print("yay")
                 continue
-
+            if q==0:
+                pN=np.sum(seg.data[seg.startRead:seg.startRead+seg.length]**2)/seg.length
+                pS=pN
+            
             # coordinates in seconds from current page start, bounded at page borders:
             starttime = max(0, seg[0]-self.startRead)
             endtime = min(seg[1]-self.startRead, self.datalengthSec)
@@ -4418,14 +4424,20 @@ class AviaNZ(QMainWindow):
             
             # do something with this segment now...
             print("Calculating statistics on this segment...")
-            outarray[q]=starttime
+            pS=np.sum(seg.data[seg.startRead:seg.startRead+seg.length]**2)/seg.length
+            snnr=10.*np.log10(pS/pN)
+             
+            outarray[q]=snnr
+            
             q+=1
             # fill outarray...
 
         # save as text file for now:
-        print("Salvero': ",q,"     ",np.array(outarray))
-        np.savetxt("./file.csv", np.array(outarray), delimiter=" ")
+        print("Salverò informazioni riguardo ",q-1," sillabe",outarray)
+       
+        np.savetxt(csvf, np.array(outarray), delimiter=",")
         print("SAVED!")
+        
         # (should switch this to excel sometime in the future)
 
     def showDenoiseDialog(self):
