@@ -4385,11 +4385,11 @@ class AviaNZ(QMainWindow):
         print(self.filename)
         
         # these are all segments in file
-        print("segs", self.segments)
+        #print("segs", self.segments)
         q=4
         qs=0
-        print("uno",self.segments[1])
-        print("zero",self.segments[0])
+        #print("uno",self.segments[1])
+        #print("zero",self.segments[0])
         for seg in self.segments:
             qs+=1
         outarray = np.array(np.repeat(0.0,qs+4))
@@ -4404,8 +4404,8 @@ class AviaNZ(QMainWindow):
                 continue
             
             # coordinates in seconds from current page start, bounded at page borders:
-            starttime = int(np.round(max(0, seg[0]-self.startRead)*self.sampleRate,0))
-            endtime = int(np.round(min(seg[1]-self.startRead, self.datalengthSec)*self.sampleRate,0))
+            starttime = int(np.floor(max(0, seg[0]-self.startRead)*self.sampleRate))
+            endtime = int(np.ceil(min(seg[1]-self.startRead, self.datalengthSec)*self.sampleRate))
             print("Start: ",starttime,"--- End: ", endtime)
             
             #syllable-by-syllable snnr
@@ -4418,8 +4418,6 @@ class AviaNZ(QMainWindow):
                 outarray[q]=np.round(self.sp.SylNR(starttime,endtime,startnoise,starttime),2)
                 startnoise=endtime
             
-            
-            print("lunghezza di ",q," =",endtime-starttime)
             
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)
@@ -4440,17 +4438,16 @@ class AviaNZ(QMainWindow):
             # do something with this segment now...
             print("Calculating statistics on this segment...")
                      
-            
             q+=1
             # fill outarray...
         # save as text file for now:
-        print("Salverò informazioni riguardo ",q-5," sillabe",outarray)
+        print("Saving information regarding ",q-5," sillables\n",outarray)
         csvf=self.filename[:-19]+'mr_snnr.csv'
         print("csv ",csvf)
         with open(csvf,'a') as csvfile:
             csvfile.write(",".join(outarray.astype(str)))
             csvfile.write("\n")
-        print("SAVED!")
+            print("Saved in ",csvf)
         # (should switch this to excel sometime in the future)
 
     def showDenoiseDialog(self):
