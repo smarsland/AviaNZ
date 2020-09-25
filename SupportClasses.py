@@ -22,7 +22,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from openpyxl import load_workbook, Workbook
-from openpyxl.styles import colors
 from openpyxl.styles import Font
 
 QtMM = True
@@ -505,7 +504,7 @@ class ExcelIO():
 
         # print resolution "header"
         ws.cell(row=r, column=1, value=str(resolution) + ' secs resolution')
-        ft = Font(color=colors.DARKYELLOW)
+        ft = Font(color="808000")
         ws.cell(row=r, column=1).font=ft
 
         # print file name and page number
