@@ -172,7 +172,7 @@ def annotation2GT_OvWin(wavFile, species, duration=0,window=1, inc=None, notarge
                 #Virginia: start and end must be read in resol base
                 s=int(math.floor(seg[0]/resol))
                 e=int(math.ceil(seg[1]/resol))
-                print("start and end: ", s, e)
+                #print("start and end: ", s, e)
                 for i in range(s, e):
                     # when there are overlapping calls priority for good quality one
                     if GT[i][1] == '1' and GT[i][3] >= quality:
@@ -264,11 +264,11 @@ def splitGT(dirName, window=1, inc=None):
 
 #Virginia:change directory name 
 #genGT('/home/listanvirg/Data/Filter experiment/Ruru',species='Morepork',window=1)
-genGT('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui',species='Kiwi',window=4, inc=3)
+#genGT('/home/listanvirg/Data/Filter experiment/BKiwi/Ponui',species='Kiwi',window=4, inc=3)
 #genGT('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru GT\Test',species='Morepork',window=0.5, inc=0.25)
 #splitGT('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru GT\Test',window=0.5, inc=0.25)
 
 #Virginia:change directory name
-genGT("C:\\Users\\Virginia\\Documents\\Work\\Data\\Zohara files\\TEST\\Annotation_reviewed",species='Bigeye',window=0.1)
+genGT("C:\\Users\\Virginia\\Documents\\Work\\Data\\Zohara files\\TEST\\Annotation_reviewed",species='Bigeye',window=0.005)
 
 

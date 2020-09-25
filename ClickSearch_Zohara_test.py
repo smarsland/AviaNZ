@@ -94,7 +94,7 @@ def ClickSearch(dirName, file, resol, window=None):
             print('we entered when i=', i)
             detections[-1]=0
             break
-        sgraw= sp.spectrogram(256, 128, 'Blackman')
+        sgraw= sp.spectrogram(512, 32, 'Blackman')
         #print('check index ', i)
         imspec=(10.*np.log10(sgraw)).T #transpose 
         imspec=np.flipud(imspec) #updown 
@@ -104,8 +104,9 @@ def ClickSearch(dirName, file, resol, window=None):
         df=sampleRate/(np.shape(imspec)[0]+1) #frequency increment 
         dt= window/(np.shape(imspec)[1]+1) #timeincrement
         # print("file ", file, "dt " , dt)
-        up_len=math.ceil(0.2/dt) #maxlength acceptable
-        min_len=math.ceil(0.01/dt) #minimum length acceptable
+        up_len=math.ceil(0.5/dt) #maxlength acceptable
+        min_len=math.ceil(0/dt) #minimum length acceptable
+        #print('up_len= ', up_len, 'min_len= ', min_len)
     
         #Frequency band
         f0=300
@@ -143,11 +144,13 @@ def ClickSearch(dirName, file, resol, window=None):
             else:
                 if click_end-click_start+1>up_len or click_end-click_start+1<min_len:
                     clicks[click_start:click_end+1]=0
+                    print('delete control')
                 else:
                     #update detections
                     click_start_res=int(np.floor((click_start*dt +i*window)/resol))
                     click_end_res=int(np.ceil((click_end*dt +i*window)/resol))
                     detections[0][click_start_res:click_end_res]=1
+                    #print('check')
                     detected_annotation.append([float(click_start*dt +i*window), float(click_end*dt +i*window), float(f0), float(f1), [{"species": "Bigeye", "certainty": 50.0, "filter": "ClickSearch", "calltype": "Pop"}]])
 
                     
@@ -158,11 +161,13 @@ def ClickSearch(dirName, file, resol, window=None):
         #checking last loop with end
         if click_end-click_start+1>up_len or click_end-click_start+1<min_len:
             clicks[click_start:click_end+1]=0
+            print('delete control')
         else:
             click_start_res=int(np.floor((click_start*dt +i*window)/resol))
             click_end_res=np.minimum(int(np.ceil((click_end*dt +i*window)/resol)),int(det_length))
             detections[0][click_start_res:click_end_res]=1
             #add segment
+            #print('check')
             detected_annotation.append([float(click_start*dt +i*window), float(click_end*dt +i*window), float(f0), float(f1), [{"species": "Bigeye", "certainty": 50.0, "filter": "ClickSearch", "calltype": "Pop"}]])
             
     detected_annotation.insert(0,{"Operator": "Zohara", "Reviewer": "", "Duration": datalengthSec})
@@ -201,7 +206,7 @@ def comparison(det, ann):
             else:
                 TP+=1
 
-    print('len(det) =',len(det))
+    print('np.shape(det)[1]=',np.shape(det)[1])
     print('TP =', TP)
     print('TN =', TN)
     print('FP =', FP)
@@ -241,10 +246,10 @@ Work flow:
 
 dirname="C:\\Users\\Virginia\\Documents\\Work\\Data\\Zohara files\\TEST\\Annotation_reviewed\\Downsampled4000"
 filename = '67375127.140303193211_downsampled4000.wav'
-test_fold='TEST_30'
+test_fold='TEST_40'
 os.mkdir(dirname+ '\\' + test_fold)
-window = 20 #length in sec. of window used for click search
-res = 0.1 #annotation resolution
+window = 2 #length in sec. of window used for click search
+res = 0.01 #annotation resolution
 
 #    #Read audiodata
 #just for duration: think something more intelligent
@@ -312,13 +317,13 @@ Recall, Precision, Accuracy = metrics(TP, TN, FP, FN)
 #print metrics
 print("-------------------------------------------")
 print('Classification performance on ', filename)
-TP_rate= (TP/(totalblocks))*100
+TP_rate= (TP/(presblocks))*100
 print('True Positive rate', TP_rate)
-FP_rate= (FP/(totalblocks))*100
+FP_rate= (FP/(TP+FP))*100
 print('False Positive rate', FP_rate)
-FN_rate= (FN/(totalblocks))*100
+FN_rate= (FN/(presblocks))*100
 print('False Negative rate', FN_rate)
-TN_rate= (TN/(totalblocks))*100
+TN_rate= (TN/(totalblocks-presblocks))*100
 print('True Negative rate', TN_rate)
 print('\n Metrics:')
 print('Recall = ', Recall)
