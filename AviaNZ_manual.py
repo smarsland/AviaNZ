@@ -4383,41 +4383,43 @@ class AviaNZ(QMainWindow):
         """ Calculate and export summary statistics for the currently marked segments """
         
         print(self.filename)
-        csvf=self.filename[:-4]+'.csv'
-        print("csv ",csvf)
+        
         # these are all segments in file
         print("segs", self.segments)
-        q=0
+        q=4
         qs=0
         print("uno",self.segments[1])
         print("zero",self.segments[0])
         for seg in self.segments:
             qs+=1
-        outarray = np.array(np.repeat(0.0,qs))
-        
+        outarray = np.array(np.repeat(0.0,qs+4))
+        outarray[0]=int(self.filename[-19:-17])
+        outarray[1]=int(self.filename[-12:-10])
+        outarray[2]=int(self.filename[-9:-7])
+        outarray[3]=int(self.filename[-6:-4])
         for seg in self.segments:
             # Important because all manual mode functions should operate on the current page only:
             # skip segments that are not visible in this page
             if seg[1]<=self.startRead or seg[0]>=self.startRead + self.datalengthSec:
-                print("yay")
                 continue
             
             # coordinates in seconds from current page start, bounded at page borders:
-            starttime = max(0, seg[0]-self.startRead)
-            endtime = min(seg[1]-self.startRead, self.datalengthSec)
+            starttime = int(np.round(max(0, seg[0]-self.startRead)*self.sampleRate,0))
+            endtime = int(np.round(min(seg[1]-self.startRead, self.datalengthSec)*self.sampleRate,0))
             print("Start: ",starttime,"--- End: ", endtime)
             
             #syllable-by-syllable snnr
             #use the noise following the sillable instead of that preceeding it if first syllable
-            if q==0:
-                outarray[0]=SignalProc.SylNR(self,starttime,endtime,endtime,max(0,self.segments[1][0]-self.startRead))
+            if q==4:
+                startnoise=int(np.round(max(0,self.segments[1][0]-self.startRead)*self.sampleRate,0))
+                outarray[4]=np.round(self.sp.SylNR(starttime,endtime,endtime,startnoise),2)
                 startnoise=endtime
             else:
-                outarray[q]=SignalProc.SylNR(self,starttime,endtime,startnoise,starttime)
+                outarray[q]=np.round(self.sp.SylNR(starttime,endtime,startnoise,starttime),2)
                 startnoise=endtime
             
             
-            
+            print("lunghezza di ",q," =",endtime-starttime)
             
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)
@@ -4426,6 +4428,7 @@ class AviaNZ(QMainWindow):
             # piece of spectrogram corresponding to this segment
             startInSpecPixels = self.convertAmpltoSpec(starttime)
             endInSpecPixels = self.convertAmpltoSpec(endtime)
+            print("lunghezza in pixels di ",q," = ",endInSpecPixels-startInSpecPixels)
             #print("PX",startInSpecPixels, endInSpecPixels)
             #self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
             #self.sg[startInSpecPixels:endInSpecPixels, ]
@@ -4440,10 +4443,13 @@ class AviaNZ(QMainWindow):
             
             q+=1
             # fill outarray...
-
         # save as text file for now:
-        print("Salverò informazioni riguardo ",q-1," sillabe",outarray)
-        #np.savetxt(csvf, np.array(outarray), delimiter=",")
+        print("Salverò informazioni riguardo ",q-5," sillabe",outarray)
+        csvf=self.filename[:-19]+'mr_snnr.csv'
+        print("csv ",csvf)
+        with open(csvf,'a') as csvfile:
+            csvfile.write(",".join(outarray.astype(str)))
+            csvfile.write("\n")
         print("SAVED!")
         # (should switch this to excel sometime in the future)
 
