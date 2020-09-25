@@ -1498,6 +1498,8 @@ class AviaNZ(QMainWindow):
 
             # main read-in:
             if self.batmode:
+                self.sp.minFreqShow = self.config['minFreqBats']
+                self.sp.maxFreqShow = self.config['maxFreqBats']
                 successread = self.sp.readBmp(name)
                 if successread>0:
                     print("ERROR: file not loaded")
@@ -1505,6 +1507,8 @@ class AviaNZ(QMainWindow):
                 # this assumes that the entire file is always loaded in BMP mode
                 self.datalength = self.sp.fileLength
             else:
+                self.sp.minFreqShow = self.config['minFreq']
+                self.sp.maxFreqShow = self.config['maxFreq']
                 if self.startRead == 0:
                     lenRead = self.config['maxFileShow'] + self.config['fileOverlap']
                 else:
@@ -4655,8 +4659,12 @@ class AviaNZ(QMainWindow):
             changedY = True
 
             if store:
-                self.config['minFreq'] = start
-                self.config['maxFreq'] = end
+                if self.batmode:
+                    self.config['minFreqBats'] = start
+                    self.config['maxFreqBats'] = end
+                else:
+                    self.config['minFreq'] = start
+                    self.config['maxFreq'] = end
 
         # draw a spectrogram of proper height:
         height = self.sampleRate // 2 / np.shape(self.sg)[1]

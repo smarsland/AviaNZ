@@ -43,7 +43,7 @@ try:
     from spectrum import dpss, pmtm
 except ImportError:
     specExtra = False
-    
+
 # for fund freq
 from scipy.signal import medfilt
 # for impulse masking
@@ -171,7 +171,7 @@ class SignalProc:
         img2 = img2[:, 1:]  # Cutting first time bin because it only contains the scale and cutting last columns
         img2 = np.repeat(img2, 8, axis=0)  # repeat freq bins 7 times to fit invertspectrogram
         print(np.shape(img2))
-       
+
         self.data = []
         self.fileLength = (w-2)*self.incr + self.window_width  # in samples
         # Alternatively:
