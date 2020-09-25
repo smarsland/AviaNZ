@@ -1498,6 +1498,8 @@ class AviaNZ(QMainWindow):
 
             # main read-in:
             if self.batmode:
+                self.sp.minFreqShow = self.config['minFreqBats']
+                self.sp.maxFreqShow = self.config['maxFreqBats']
                 successread = self.sp.readBmp(name)
                 if successread>0:
                     print("ERROR: file not loaded")
@@ -1505,6 +1507,8 @@ class AviaNZ(QMainWindow):
                 # this assumes that the entire file is always loaded in BMP mode
                 self.datalength = self.sp.fileLength
             else:
+                self.sp.minFreqShow = self.config['minFreq']
+                self.sp.maxFreqShow = self.config['maxFreq']
                 if self.startRead == 0:
                     lenRead = self.config['maxFileShow'] + self.config['fileOverlap']
                 else:
@@ -4655,8 +4659,12 @@ class AviaNZ(QMainWindow):
             changedY = True
 
             if store:
-                self.config['minFreq'] = start
-                self.config['maxFreq'] = end
+                if self.batmode:
+                    self.config['minFreqBats'] = start
+                    self.config['maxFreqBats'] = end
+                else:
+                    self.config['minFreq'] = start
+                    self.config['maxFreq'] = end
 
         # draw a spectrogram of proper height:
         height = self.sampleRate // 2 / np.shape(self.sg)[1]
@@ -4999,7 +5007,8 @@ class AviaNZ(QMainWindow):
         l = len(src)
         for root, dirs, files in os.walk(src):
             for d in dirs:
-                os.mkdir(os.path.join(dst,d))
+                #print(dst,root,dirs)
+                os.mkdir(os.path.join(dst,root[l+1:],d))
             for f in files:
                 if f[-5:].lower() == '.data' or 'corrections' in f:
                     shutil.copy2(os.path.join(root, f),os.path.join(dst,root[l+1:]))
