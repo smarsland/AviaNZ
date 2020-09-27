@@ -943,8 +943,7 @@ class SignalProc:
             roots = [r for r in roots if np.imag(r) >= 0]
             angles = np.arctan2(np.imag(roots), np.real(roots))
 
-            # TODO: Possible factor of 2 error here?
-            freqs.append(sorted(angles / 2 / np.pi * self.sampleRate / 2))
+            freqs.append(sorted(angles / 2 / np.pi * self.sampleRate))
 
         return freqs
 
