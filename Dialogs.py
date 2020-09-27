@@ -907,9 +907,9 @@ class Segmentation(QDialog):
         self.minlen.setTickInterval(0.25*1000)
         self.minlen.setRange(0.1*1000, 3*1000)
         self.minlen.setSingleStep(0.25*1000)
-        self.minlen.setValue(0.5*1000)
+        self.minlen.setValue(0.2*1000)
         self.minlen.valueChanged.connect(self.minLenChange)
-        self.minlenlbl = QLabel("Minimum segment length: 0.5 sec")
+        self.minlenlbl = QLabel("Minimum segment length: 0.2 sec")
 
         self.maxgap = QSlider(Qt.Horizontal)
         self.maxgap.setTickPosition(QSlider.TicksBelow)
@@ -918,7 +918,7 @@ class Segmentation(QDialog):
         self.maxgap.setSingleStep(0.1*1000)
         self.maxgap.setValue(0.1*1000)
         self.maxgap.valueChanged.connect(self.maxGapChange)
-        self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
+        self.maxgaplbl = QLabel("Maximum gap between syllables: 0.1 sec")
 
         self.wind = QCheckBox("Remove wind")
         self.rain = QCheckBox("Remove rain")

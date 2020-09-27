@@ -4386,13 +4386,13 @@ class AviaNZ(QMainWindow):
         
         # these are all segments in file
         #print("segs", self.segments)
-        q=4
+        q=5
         qs=0
         #print("uno",self.segments[1])
         #print("zero",self.segments[0])
         for seg in self.segments:
             qs+=1
-        outarray = np.array(np.repeat(0.0,qs+4))
+        outarray = np.array(np.repeat(0.0,qs+5))
         outarray[0]=int(self.filename[-19:-17])
         outarray[1]=int(self.filename[-12:-10])
         outarray[2]=int(self.filename[-9:-7])
@@ -4410,9 +4410,9 @@ class AviaNZ(QMainWindow):
             
             #syllable-by-syllable snnr
             #use the noise following the sillable instead of that preceeding it if first syllable
-            if q==4:
+            if q==5:
                 startnoise=int(np.round(max(0,self.segments[1][0]-self.startRead)*self.sampleRate,0))
-                outarray[4]=np.round(self.sp.SylNR(starttime,endtime,endtime,startnoise),2)
+                outarray[5]=np.round(self.sp.SylNR(starttime,endtime,endtime,startnoise),2)
                 startnoise=endtime
             else:
                 outarray[q]=np.round(self.sp.SylNR(starttime,endtime,startnoise,starttime),2)
@@ -4426,7 +4426,7 @@ class AviaNZ(QMainWindow):
             # piece of spectrogram corresponding to this segment
             startInSpecPixels = self.convertAmpltoSpec(starttime)
             endInSpecPixels = self.convertAmpltoSpec(endtime)
-            print("lunghezza in pixels di ",q," = ",endInSpecPixels-startInSpecPixels)
+            #print("lunghezza in pixels di ",q-4," = ",endInSpecPixels-startInSpecPixels)
             #print("PX",startInSpecPixels, endInSpecPixels)
             #self.sg = np.abs(np.where(sgRaw==0,0.0,10.0 * np.log10(sgRaw/maxsg)))
             #self.sg[startInSpecPixels:endInSpecPixels, ]
@@ -4441,6 +4441,7 @@ class AviaNZ(QMainWindow):
             q+=1
             # fill outarray...
         # save as text file for now:
+        outarray[4]=q-5
         print("Saving information regarding ",q-5," sillables\n",outarray)
         csvf=self.filename[:-19]+'mr_snnr.csv'
         print("csv ",csvf)
