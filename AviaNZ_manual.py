@@ -1892,7 +1892,7 @@ class AviaNZ(QMainWindow):
                 #for i in range(len(starts)):
                     #for j in range(len(formants[i])):
                         #self.formantPlot.addPoints(starts[i], formants[i][j], pen=pg.mkPen('b', width=5))
-                self.formantPlot.setData(x, y, pen=pg.mkPen('b', width=5))
+                self.formantPlot.setData(x, y, pen=pg.mkPen('b', width=0.05))
                 self.p_spec.addItem(self.formantPlot)
             else:
                 self.statusLeft.setText("Removing formants...")
