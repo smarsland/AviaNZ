@@ -396,6 +396,10 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
         printf("----Cycle %zu/%zu----\n", tt+1, nn);
         // precompute costs for all possible segments ending here at t
         m2 = 0;
+        // Note: minstart fixed for now. Cannot really prune this,
+        // b/c burnin iterations do not prune possible S starts.
+        minstart = tt>maxlb ? tt-maxlb : 0;
+        // printf("DEBUG will precompute C down to %zu\n", minstart);
         for(size_t start=tt; start>minstart; start--){
             m2 += x2s[start];
             len = tt-start+1;
@@ -439,6 +443,10 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
                 size_t detbestsegstart = 0;
                 for(size_t j=0; j<detnumpostarts[t2+1]; j++){
                     size_t t3 = detpostarts[t2det + j];
+                    if(t3<minstart){
+                        printf("ERROR: fatal cache miss for precomputed cost at %zu\n", minstart);
+                        return(1);
+                    }
                     // printf("- possible start: %zu (%zu total)\n", t3, detnumpostarts[t2+1]);
                     // cs: precomputed cost for segs ending at tt
                     detsegcosts[t2det + t3] = detFs[t2det + t3] + cs[t3+1];
@@ -504,7 +512,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
             }
         }
             
-        printf("bgcost: %.2f, segcost: %.2f + %.2f at t=%zu, nuiscost: %.2f + %.2f at t=%zu\n", bgcost, bestsegcost, penalty_s, bestsegstart+1, bestnuiscost, penalty_n, bestnuisstart+1);
+        // printf("bgcost: %.2f, segcost: %.2f + %.2f at t=%zu, nuiscost: %.2f + %.2f at t=%zu\n", bgcost, bestsegcost, penalty_s, bestsegstart+1, bestnuiscost, penalty_n, bestnuisstart+1);
 
         // determine best F = min(F_B, F_S, F_N)
         bestsegcost += penalty_s;
@@ -535,7 +543,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
         }
 
         // update and prune possible segment starts
-        minstart = tt; // useful for reducing the set for cost precomputing
+        // minstart = tt; // useful for reducing the set for cost precomputing
         // minstart = tt>maxlb ? tt-maxlb : 0;
         for(size_t i=0; i<numpossiblestarts; i++){
             if(F[tt] <= segcosts[possiblestarts[i]]){
@@ -546,9 +554,9 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
                 // (not super efficient but can't do better w/o sorting)
                 possiblestarts[i] = possiblestarts[--numpossiblestarts];
             }
-            if(possiblestarts[i]<minstart){
-                minstart = possiblestarts[i];
-            }
+            // if(possiblestarts[i]<minstart){
+            //     minstart = possiblestarts[i];
+            // }
         }
         // printf("After pruning signal starts, %zu remain, starting at %zu\n", numpossiblestarts, minstart);
 
