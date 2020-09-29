@@ -663,12 +663,17 @@ class AviaNZ_reviewAll(QMainWindow):
         linesep2.setFrameShadow(QFrame.Sunken)
         self.d_detection.addWidget(linesep2, row=12, col=0, colspan=3)
         self.w_resLabel = QLabel("Size (s) of presence/absence\nwindows in the output")
-        self.d_detection.addWidget(self.w_resLabel, row=13, col=0)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
         self.w_res.setSingleStep(5)
         self.w_res.setValue(60)
+        timePrecisionLabel = QLabel("Output timestamp precision")
+        self.timePrecisionBox = QComboBox()
+        self.timePrecisionBox.addItems(["Down to seconds", "Down to milliseconds"])
+        self.d_detection.addWidget(self.w_resLabel, row=13, col=0)
         self.d_detection.addWidget(self.w_res, row=13, col=1)
+        self.d_detection.addWidget(timePrecisionLabel, row=14, col=0)
+        self.d_detection.addWidget(self.timePrecisionBox, row=14, col=1)
 
         self.w_excelButton = QPushButton(" Generate Excel  ")
         self.w_excelButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
@@ -1079,7 +1084,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
             # Export the actual Excel
             excel = SupportClasses.ExcelIO()
-            excsuccess = excel.export(allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList))
+            excsuccess = excel.export(allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList), precisionMS=self.timePrecisionBox.currentIndex()==1)
 
         if excsuccess!=1:
             # if any file wasn't exported well, overwrite the message
