@@ -269,6 +269,6 @@ def splitGT(dirName, window=1, inc=None):
 #splitGT('D:\Desktop\Documents\Work\Data\Filter experiment\Ruru GT\Test',window=0.5, inc=0.25)
 
 #Virginia:change directory name
-genGT("C:\\Users\\Virginia\\Documents\\Work\\Data\\Zohara files\\TEST\\Annotation_reviewed",species='Bigeye',window=0.005)
+genGT("C:\\Users\\Virginia\\Documents\\Work\\Data\\Zohara files\\TEST\\Annotation_reviewed",species='Bigeye',window=0.1)
 
 
