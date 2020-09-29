@@ -3,11 +3,11 @@
 #
 # CNN for the AviaNZ program
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -35,7 +35,8 @@ from time import gmtime, strftime
 import SignalProc
 import WaveletSegment
 import Segment
-import  WaveletFunctions
+import WaveletFunctions
+import SupportClasses
 import librosa
 import wavio
 
@@ -49,7 +50,7 @@ class CNN:
     """ This class implements CNN training and data augmentation in AviaNZ.
     """
 
-    def __init__(self, species, calltypes, fs, length, windowwidth, inc, imageheight, imagewidth):
+    def __init__(self, configdir, species, calltypes, fs, length, windowwidth, inc, imageheight, imagewidth):
         self.species = species
         self.length = length
         self.windowwidth = windowwidth
@@ -58,6 +59,9 @@ class CNN:
         self.imagewidth = imagewidth
         self.calltypes = calltypes
         self.fs = fs
+
+        cl = SupportClasses.ConfigLoader()
+        self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
 
     # Custom data augmentation
     def addNoise(self, image, noise_image):
@@ -367,20 +371,20 @@ class CNN:
         # self.model.save_weights(modelsavepath + "/weights.h5")
         print("Saved model to ", modelsavepath)
 
-    def train(self, modelsavepath, training_batch_generator, validation_batch_generator, epochs):
+    def train(self, modelsavepath, training_batch_generator, validation_batch_generator):
         ''' Train the model - use image generator '''
 
-        self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+        # self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+        self.model.compile(loss=self.LearningDict['loss'], optimizer=self.LearningDict['optimizer'], metrics=self.LearningDict['metrics'])
 
         if not os.path.exists(modelsavepath):
             os.makedirs(modelsavepath)
-        checkpoint = tf.keras.callbacks.ModelCheckpoint(
-            modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5",
-            monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
-            save_freq='epoch')
-        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=3, verbose=1, mode='auto')
+        # checkpoint = tf.keras.callbacks.ModelCheckpoint(modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5", monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch')
+        # early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=3, verbose=1, mode='auto')
+        checkpoint = tf.keras.callbacks.ModelCheckpoint(modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5", monitor=self.LearningDict['monitor'], verbose=1, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch')
+        early = tf.keras.callbacks.EarlyStopping(monitor=self.LearningDict['monitor'], min_delta=0, patience=self.LearningDict['patience'], verbose=1, mode='auto')
 
-        # SRM: TODO:!! 50 epochs
+        epochs = self.LearningDict['epochs']
         self.history = self.model.fit(training_batch_generator,
                                       epochs=epochs,
                                       verbose=1,
@@ -392,8 +396,6 @@ class CNN:
         model_json = self.model.to_json()
         with open(modelsavepath + "/model.json", "w") as json_file:
             json_file.write(model_json)
-        # # just serialize final weights to H5, not necessary
-        # self.model.save_weights(modelsavepath + "/weights.h5")
         print("Saved model to ", modelsavepath)
 
 class GenerateData:
@@ -578,7 +580,7 @@ class GenerateData:
                     record[1][1] = self.length + eps
                 elif record[1][1] > fileduration:
                     record[1][1] = fileduration
-                    record[1][0] = fileduration - duration - eps
+                    record[1][0] = fileduration - self.length - eps
                 if record[1][0] <= 0 and record[1][1] <= fileduration:
                     n = 1
                     hop = self.length
@@ -587,7 +589,7 @@ class GenerateData:
                     continue
             else:
                 n = math.ceil((record[1][1]-record[1][0]-self.length) / hop + 1)
-            print('* hop:', hop, 'n:', n, 'syl:', record[2], 'label:', record[-1])
+            print('* hop:', hop, 'n:', n, 'label:', record[-1])
             try:
                 audiodata = self.loadFile(filename=record[0], duration=duration, offset=record[1][0], fs=self.fs, denoise=False)
             except Exception as e:

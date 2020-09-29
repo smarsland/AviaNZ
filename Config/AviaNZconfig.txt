@@ -1,4 +1,6 @@
-{"window_width": 256, "incr": 128, "minFreq": 0, "maxFreq": 24000, "maxSearchDepth": 20, "minSegment": 50,
+{"window_width": 256, "incr": 128, "minFreq": 0, "maxFreq": 24000,
+"minFreqBats": 0, "maxFreqBats": 88000,
+"maxSearchDepth": 20, "minSegment": 50,
 "drawingRightBtn": false, "specMouseAction": 3,
 "StartMaximized": true,
 "MultipleSpecies": true,
