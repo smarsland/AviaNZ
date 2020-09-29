@@ -431,14 +431,27 @@ class ExcelIO():
             if len(speciesSegs)==0:
                 continue
 
+            if startTime is None:
+                # if no startTime was provided, try to figure it out based on the filename
+                DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(segsl.filename)[:-8])
+
+                if DOCRecording:
+                    print("time stamp found", DOCRecording)
+                    startTimeFile = DOCRecording.group(2)
+                    startTimeFile = int(startTimeFile[:2]) * 3600 + int(startTimeFile[2:4]) * 60 + int(startTimeFile[4:6])
+                else:
+                    startTimeFile = 0
+            else:
+                startTimeFile = startTime
+
             # Loop over the segments
             for seg in speciesSegs:
                 # Print the filename
                 ws.cell(row=r, column=1, value=segsl.filename)
 
                 # Time limits
-                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTime).toString('hh:mm:ss')))
-                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTime).toString('hh:mm:ss')))
+                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTimeFile).toString('hh:mm:ss')))
+                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTimeFile).toString('hh:mm:ss')))
                 # Freq limits
                 if seg[3]!=0:
                     ws.cell(row=r, column=4, value=int(seg[2]))
@@ -546,7 +559,7 @@ class ExcelIO():
             ws.cell(row=r+1, column=c, value=detected[t])
             c += 1
 
-    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=0, resolution=10):
+    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=None, resolution=10):
         # will export species present in self, + passed as arg, + "all species" excel
         speciesList = set(speciesList)
         for segl in segments:
