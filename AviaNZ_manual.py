@@ -26,7 +26,7 @@ from shutil import copyfile
 from time import gmtime, strftime
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
-from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt5.QtMultimedia import QAudio
 
@@ -558,8 +558,14 @@ class AviaNZ(QMainWindow):
         self.next5mins.setMinimumSize(35, 25)
         self.next5mins.setToolTip("Next page")
         self.next5mins.clicked.connect(self.moveNext5mins)
+        self.placeInFileLabel2 = QLabel('Page')
         self.placeInFileLabel = QLabel('')
         self.placeInFileLabel.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+        self.placeInFileSelector = QSpinBox()
+        self.placeInFileSelector.setRange(1,1)
+        self.placeInFileSelector.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.placeInFileSelector.editingFinished.connect(self.moveTo5mins)
+        self.placeInFileSelector.setMinimumHeight(25)
 
         # position everything in the dock
         self.w_overview.layout.addLayout(fileInfo, 0, 0, 1, 3)
@@ -569,9 +575,11 @@ class AviaNZ(QMainWindow):
         self.w_overview.addWidget(self.rightBtn,row=2,col=2)
         placeInFileBox = QHBoxLayout()
         placeInFileBox.addStretch(10)
+        placeInFileBox.addWidget(self.placeInFileLabel2)
         placeInFileBox.addWidget(self.prev5mins)
-        placeInFileBox.addWidget(self.placeInFileLabel)
+        placeInFileBox.addWidget(self.placeInFileSelector)
         placeInFileBox.addWidget(self.next5mins)
+        placeInFileBox.addWidget(self.placeInFileLabel)
         placeInFileBox.addStretch(10)
         self.w_overview.layout.addLayout(placeInFileBox, 3, 1)
 
@@ -1575,8 +1583,14 @@ class AviaNZ(QMainWindow):
             # Update overview info
             if self.nFileSections == 1:
                 self.placeInFileLabel.setText("(%d s in 1 page)" % self.datalengthSec)
+                self.placeInFileSelector.setVisible(False)
+                self.placeInFileLabel2.setVisible(False)
             else:
-                self.placeInFileLabel.setText("Page %d of %d (%d s in page)" % (self.currentFileSection+1, self.nFileSections, self.datalengthSec))
+                self.placeInFileLabel2.setVisible(True)
+                self.placeInFileSelector.setVisible(True)
+                self.placeInFileSelector.setValue(self.currentFileSection+1)
+                self.placeInFileSelector.setMaximum(self.nFileSections)
+                self.placeInFileLabel.setText("of %d (%d s in page)" % (self.nFileSections, self.datalengthSec))
             self.fileInfoSR.setText("<b>Sampling rate:</b> %d Hz" % self.sampleRate)
             self.fileInfoNCh.setText("<b>Channels:</b> %d" % self.sp.audioFormat.channelCount())
             self.fileInfoSS.setText("<b>Bit depth:</b> %d" % self.sp.audioFormat.sampleSize())
@@ -1619,6 +1633,7 @@ class AviaNZ(QMainWindow):
                 newSegment = Segment.Segment([0, self.sp.fileLength / self.sampleRate, 0, 0, species])
                 self.segments.append(newSegment)
                 self.segmentsToSave = True
+                self.refreshFileColor()
 
             self.drawProtocolMarks()
 
@@ -2542,6 +2557,9 @@ class AviaNZ(QMainWindow):
                 # boxes w/o segments
                 self.SegmentRects[box].setBrush(pg.mkBrush('w'))
             self.SegmentRects[box].update()
+        # deleting is almost always paired with redoing, so no need to refresh twice
+        if not delete:
+            self.refreshFileColor()
 
     def addSegment(self,startpoint,endpoint,y1=0,y2=0,species=[],saveSeg=True,index=-1,remaking=False,coordsAbsolute=False):
         """ When a new segment is created, does the work of creating it and connecting its
@@ -2598,6 +2616,8 @@ class AviaNZ(QMainWindow):
             # Add the segment to the data
             if saveSeg:
                 self.segments.append(newSegment)
+
+            self.refreshFileColor()
 
         if not show:
             # Add a None element into the array so that the correct boxids work
@@ -3491,6 +3511,30 @@ class AviaNZ(QMainWindow):
         if self.currentFileSection >= self.nFileSections-1:
             self.next5mins.setEnabled(False)
             self.moveNext5minsKey.setEnabled(False)
+        self.prepare5minMove()
+
+    def moveTo5mins(self):
+        """ Jumps to the requested 5 min page. """
+        pagenum = self.placeInFileSelector.value()
+        self.placeInFileSelector.findChild(QLineEdit).deselect()
+        self.placeInFileSelector.clearFocus()
+        if self.currentFileSection==pagenum-1:
+            # no jump needed
+            return
+        self.currentFileSection = pagenum-1
+        if self.currentFileSection >= self.nFileSections-1:
+            self.next5mins.setEnabled(False)
+            self.moveNext5minsKey.setEnabled(False)
+        else:
+            self.next5mins.setEnabled(True)
+            self.moveNext5minsKey.setEnabled(True)
+
+        if self.currentFileSection <= 0:
+            self.prev5mins.setEnabled(False)
+            self.movePrev5minsKey.setEnabled(False)
+        else:
+            self.prev5mins.setEnabled(True)
+            self.movePrev5minsKey.setEnabled(True)
         self.prepare5minMove()
 
     def scroll(self):
@@ -5381,7 +5425,7 @@ class AviaNZ(QMainWindow):
         datalen = self.config['maxFileShow'] if self.nFileSections>1 else self.datalengthSec
         excel = SupportClasses.ExcelIO()
         self.segments.filename = self.filename
-        success = excel.export([self.segments], self.SoundFileDir, action=action, pagelenarg=datalen, numpages=self.nFileSections, startTime=self.startTime)
+        success = excel.export([self.segments], self.SoundFileDir, action=action, pagelenarg=datalen, numpages=self.nFileSections, startTime=self.startTime, precisionMS=self.batmode)
         # add user notification
         if success==0:
             print("Warning: Excel output was not saved")
@@ -6126,6 +6170,7 @@ class AviaNZ(QMainWindow):
             del self.listRectanglesa1[id]
             del self.listRectanglesa2[id]
             self.segmentsToSave = True
+            self.refreshFileColor()
 
             self.box1id = -1
             self.segInfo.setText("")
@@ -6186,6 +6231,15 @@ class AviaNZ(QMainWindow):
             self.listLabels = []
             self.box1id = -1
 
+    def refreshFileColor(self):
+        """ Extracts the minimum certainty and updates the color
+            of this file in the file list. """
+        if len(self.segments)==0:
+            mincert = -1
+        else:
+            mincert = min([lab["certainty"] for seg in self.segments for lab in seg[4]])
+        self.listFiles.refreshFile(os.path.basename(self.filename), mincert)
+
     def saveSegments(self):
         """ Save the segmentation data as a json file.
         Name of the file is the name of the wave file + .data"""
@@ -6210,8 +6264,7 @@ class AviaNZ(QMainWindow):
             self.segments.saveJSON(str(self.filename) + '.data')
 
             # refresh this file's icon in file list dock
-            self.listFiles.refreshFile(os.path.basename(self.filename))
-
+            self.refreshFileColor()
             self.segmentsToSave = False
         else:
             self.segmentsToSave = True

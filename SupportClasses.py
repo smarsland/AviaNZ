@@ -408,14 +408,19 @@ class ExcelIO():
         pagelen:    page length, seconds (for filling out absence)
         numpages:   number of pages in this file (of size pagelen)
         speciesList:    list of species that are currently processed -- will force an xlsx output even if none were detected
-        startTime:  timestamp for cell names
-        resolution: output resolution on excel (sheet 3) in seconds. Default is 1
+        startTime:  timestamp for page start, or None to autodetect from file name
+        precisionMS:  timestamp resolution for sheet 1: False=in s, True=in ms
+        resolution: output resolution (sheet 3) in seconds
     """
     # functions for filling out the excel sheets:
     # First page lists all segments (of a species, if specified)
     # segsLL: list of SegmentList with filename attribute
     # startTime: offset from 0, when exporting a single page
-    def writeToExcelp1(self, wb, segsLL, currsp, startTime):
+    def writeToExcelp1(self, wb, segsLL, currsp, startTime, precisionMS):
+        if precisionMS:
+            timeStrFormat = "hh:mm:ss.zzz"
+        else:
+            timeStrFormat = "hh:mm:ss"
         from PyQt5.QtCore import QTime
         ws = wb['Time Stamps']
         r = ws.max_row + 1
@@ -438,11 +443,11 @@ class ExcelIO():
                 if DOCRecording:
                     print("time stamp found", DOCRecording)
                     startTimeFile = DOCRecording.group(2)
-                    startTimeFile = int(startTimeFile[:2]) * 3600 + int(startTimeFile[2:4]) * 60 + int(startTimeFile[4:6])
+                    startTimeFile = QTime(int(startTimeFile[:2]), int(startTimeFile[2:4]), int(startTimeFile[4:6]))
                 else:
-                    startTimeFile = 0
+                    startTimeFile = QTime(0,0,0)
             else:
-                startTimeFile = startTime
+                startTimeFile = QTime(0,0,0).addSecs(startTime)
 
             # Loop over the segments
             for seg in speciesSegs:
@@ -450,8 +455,8 @@ class ExcelIO():
                 ws.cell(row=r, column=1, value=segsl.filename)
 
                 # Time limits
-                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTimeFile).toString('hh:mm:ss')))
-                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTimeFile).toString('hh:mm:ss')))
+                ws.cell(row=r, column=2, value=str(startTimeFile.addMSecs(seg[0]*1000).toString(timeStrFormat)))
+                ws.cell(row=r, column=3, value=str(startTimeFile.addMSecs(seg[1]*1000).toString(timeStrFormat)))
                 # Freq limits
                 if seg[3]!=0:
                     ws.cell(row=r, column=4, value=int(seg[2]))
@@ -559,7 +564,7 @@ class ExcelIO():
             ws.cell(row=r+1, column=c, value=detected[t])
             c += 1
 
-    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=None, resolution=10):
+    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=None, precisionMS=False, resolution=10):
         # will export species present in self, + passed as arg, + "all species" excel
         speciesList = set(speciesList)
         for segl in segments:
@@ -597,8 +602,12 @@ class ExcelIO():
                 wb.create_sheet(title='Time Stamps', index=1)
                 ws = wb['Time Stamps']
                 ws.cell(row=1, column=1, value="File Name")
-                ws.cell(row=1, column=2, value="start (hh:mm:ss)")
-                ws.cell(row=1, column=3, value="end (hh:mm:ss)")
+                if precisionMS:
+                    ws.cell(row=1, column=2, value="start (hh:mm:ss.ms)")
+                    ws.cell(row=1, column=3, value="end (hh:mm:ss.ms)")
+                else:
+                    ws.cell(row=1, column=2, value="start (hh:mm:ss)")
+                    ws.cell(row=1, column=3, value="end (hh:mm:ss)")
                 ws.cell(row=1, column=4, value="min freq. (Hz)")
                 ws.cell(row=1, column=5, value="max freq. (Hz)")
                 if species=="Any sound":
@@ -637,7 +646,7 @@ class ExcelIO():
                 return 0
 
             # export segments
-            self.writeToExcelp1(wb, segments, species, startTime)
+            self.writeToExcelp1(wb, segments, species, startTime, precisionMS)
 
             if species!="Any sound":
                 # loop over all SegmentLists, i.e. for each wav file:

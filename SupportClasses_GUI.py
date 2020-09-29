@@ -1237,9 +1237,10 @@ class LightedFileList(QListWidget):
             else:
                 self.setCurrentRow(0)
 
-    def refreshFile(self, fileName):
-        """ Repaint a single file icon.
+    def refreshFile(self, fileName, cert):
+        """ Repaint a single file icon with the provided certainty.
             fileName: file stem (dir will be read from self)
+            cert:     0-100, or -1 if no annotations
         """
         # for matching dirs - not sure if needed:
         # index = self.findItems(fileName+"\/",Qt.MatchExactly)
@@ -1247,14 +1248,29 @@ class LightedFileList(QListWidget):
         if len(index)==0:
             return
 
-        if self.soundDir is None:
-            # something bad happened
-            print("Warning: soundDir not set, cannot find .data files")
-            return
-
         curritem = index[0]
-        datafile = os.path.join(self.soundDir, fileName)+'.data'
-        self.paintItem(curritem, datafile)
+        # Repainting identical to paintItem
+        if cert == -1:
+            # .data exists, but no annotations
+            self.pixmap.fill(QColor(255,255,255,0))
+            painter = QPainter(self.pixmap)
+            painter.setPen(self.blackpen)
+            painter.drawRect(self.pixmap.rect())
+            painter.end()
+            curritem.setIcon(QIcon(self.pixmap))
+            # no change to self.minCertainty
+        elif cert == 0:
+            self.pixmap.fill(self.ColourNone)
+            curritem.setIcon(QIcon(self.pixmap))
+            self.minCertainty = 0
+        elif cert < 100:
+            self.pixmap.fill(self.ColourPossibleDark)
+            curritem.setIcon(QIcon(self.pixmap))
+            self.minCertainty = min(self.minCertainty, cert)
+        else:
+            self.pixmap.fill(self.ColourNamed)
+            curritem.setIcon(QIcon(self.pixmap))
+            # self.minCertainty cannot be changed by a cert=100 segment
 
     def paintItem(self, item, datafile):
         """ Read the JSON and draw the traffic light for a single item """
@@ -1303,7 +1319,7 @@ class LightedFileList(QListWidget):
                 item.setIcon(QIcon(self.pixmap))
                 # self.minCertainty cannot be changed by a cert=100 segment
         else:
-            # it is a file, but no .data
+            # no .data for this sound file
             self.pixmap.fill(QColor(255,255,255,0))
             item.setIcon(QIcon(self.pixmap))
 
