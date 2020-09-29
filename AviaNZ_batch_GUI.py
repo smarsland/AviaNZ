@@ -1,4 +1,25 @@
 
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
+
+# This contains all the GUI parts for batch running of AviaNZ.
+
+#    AviaNZ bioacoustic analysis program
+#    Copyright (C) 2017--2020
+
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 from PyQt5.QtGui import QIcon, QPixmap, QColor
 from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QProgressDialog
 from PyQt5.QtCore import Qt, QDir
@@ -510,7 +531,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # Make the window and set its size
         self.area = DockArea()
         self.setCentralWidget(self.area)
-        self.setFixedSize(900, 700)
+        self.setMinimumSize(900, 700)
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
@@ -534,24 +555,19 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_dir.setFixedHeight(50)
         self.w_dir.setPlainText('')
         self.w_dir.setToolTip("The folder being processed")
-        self.d_detection.addWidget(self.w_dir, row=1,col=1,colspan=2)
-        self.d_detection.addWidget(self.w_browse, row=1,col=0)
 
-        self.w_speLabel1 = QLabel("Select Species")
-        self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
+        self.w_speLabel1 = QLabel("Quick review a single species:")
+        allsplabel = QLabel("Or review all species/calltypes:")
         self.w_spe1 = QComboBox()
-        self.spList = ['Any sound']
+        self.spList = []
         self.w_spe1.addItems(self.spList)
         self.w_spe1.setEnabled(False)
-        self.d_detection.addWidget(self.w_spe1,row=2,col=1,colspan=2)
 
         minCertLab = QLabel("Skip if certainty above:")
-        self.d_detection.addWidget(minCertLab, row=3, col=0)
         self.certBox = QSpinBox()
         self.certBox.setRange(0,100)
         self.certBox.setSingleStep(10)
         self.certBox.setValue(90)
-        self.d_detection.addWidget(self.certBox, row=3, col=1)
 
         # sliders to select min/max frequencies for ALL SPECIES only
         self.fLow = QSlider(Qt.Horizontal)
@@ -590,43 +606,74 @@ class AviaNZ_reviewAll(QMainWindow):
         self.chunksizeBox.setValue(10)
         self.chunksizeBox.setEnabled(False)
 
-        # add sliders to dock
-        self.d_detection.addWidget(self.fLowtext, row=4, col=0)
-        self.d_detection.addWidget(self.fLow, row=4, col=1)
-        self.d_detection.addWidget(self.fLowvalue, row=4, col=2)
-        self.d_detection.addWidget(self.fHightext, row=5, col=0)
-        self.d_detection.addWidget(self.fHigh, row=5, col=1)
-        self.d_detection.addWidget(self.fHighvalue, row=5, col=2)
-        self.d_detection.addWidget(QLabel("FFT window size"), row=6, col=0)
-        self.d_detection.addWidget(self.winwidthBox, row=6, col=1)
-        self.d_detection.addWidget(QLabel("FFT hop size"), row=7, col=0)
-        self.d_detection.addWidget(self.incrBox, row=7, col=1)
+        # add controls to dock
+        self.d_detection.addWidget(self.w_dir, row=1,col=1,colspan=2)
+        self.d_detection.addWidget(self.w_browse, row=1,col=0)
 
-        self.d_detection.addWidget(self.chunksizeAuto, row=8, col=0)
-        self.d_detection.addWidget(self.chunksizeManual, row=8, col=1)
-        self.d_detection.addWidget(self.chunksizeBox, row=8, col=2)
+        linesep = QFrame()
+        linesep.setFrameShape(QFrame.HLine)
+        linesep.setFrameShadow(QFrame.Sunken)
+        settingsLabel = QLabel("Advanced settings")
+        settingsLabel.setStyleSheet("QLabel {color: #505050; font-weight: 75}")
+        settingsLabel.setAlignment(Qt.AlignCenter)
 
-        self.w_processButton = QPushButton(" &Review Folder")
+        self.d_detection.addWidget(linesep, row=4, col=0, colspan=3)
+        self.d_detection.addWidget(settingsLabel, row=5, col=0, colspan=3)
+        self.d_detection.addWidget(minCertLab, row=6, col=0)
+        self.d_detection.addWidget(self.certBox, row=6, col=1)
+        self.d_detection.addWidget(self.fLowtext, row=7, col=0)
+        self.d_detection.addWidget(self.fLow, row=7, col=1)
+        self.d_detection.addWidget(self.fLowvalue, row=7, col=2)
+        self.d_detection.addWidget(self.fHightext, row=8, col=0)
+        self.d_detection.addWidget(self.fHigh, row=8, col=1)
+        self.d_detection.addWidget(self.fHighvalue, row=8, col=2)
+        self.d_detection.addWidget(QLabel("FFT window size"), row=9, col=0)
+        self.d_detection.addWidget(self.winwidthBox, row=9, col=1)
+        self.d_detection.addWidget(QLabel("FFT hop size"), row=10, col=0)
+        self.d_detection.addWidget(self.incrBox, row=10, col=1)
+
+        self.d_detection.addWidget(self.chunksizeAuto, row=11, col=0)
+        self.d_detection.addWidget(self.chunksizeManual, row=11, col=1)
+        self.d_detection.addWidget(self.chunksizeBox, row=11, col=2)
+
+        self.w_processButton = QPushButton(" Review All")
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
         self.w_processButton.setFixedHeight(45)
         self.w_processButton.setFixedHeight(45)
         self.w_processButton.setIcon(QIcon(QPixmap('img/review.png')))
-        self.w_processButton.clicked.connect(self.review)
+        self.w_processButton.clicked.connect(self.reviewClickedAll)
         self.w_processButton.setEnabled(False)
-        self.d_detection.addWidget(self.w_processButton, row=10, col=2)
+        self.w_processButton1 = QPushButton(" Review Quick")
+        self.w_processButton1.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.w_processButton1.setFixedHeight(45)
+        self.w_processButton1.setFixedHeight(45)
+        self.w_processButton1.setIcon(QIcon(QPixmap('img/tile1.png')))
+        self.w_processButton1.clicked.connect(self.reviewClickedSingle)
+        self.w_processButton1.setEnabled(False)
+
+        self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
+        self.d_detection.addWidget(self.w_spe1,row=2,col=1)
+        self.d_detection.addWidget(self.w_processButton1, row=2, col=2)
+        self.d_detection.addWidget(allsplabel, row=3, col=0, colspan=2)
+        self.d_detection.addWidget(self.w_processButton, row=3, col=2)
 
         # Excel export section
-        linesep = QFrame()
-        linesep.setFrameShape(QFrame.HLine)
-        linesep.setFrameShadow(QFrame.Sunken)
-        self.d_detection.addWidget(linesep, row=11, col=0, colspan=3)
+        linesep2 = QFrame()
+        linesep2.setFrameShape(QFrame.HLine)
+        linesep2.setFrameShadow(QFrame.Sunken)
+        self.d_detection.addWidget(linesep2, row=12, col=0, colspan=3)
         self.w_resLabel = QLabel("Size (s) of presence/absence\nwindows in the output")
-        self.d_detection.addWidget(self.w_resLabel, row=13, col=0)
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
         self.w_res.setSingleStep(5)
         self.w_res.setValue(60)
+        timePrecisionLabel = QLabel("Output timestamp precision")
+        self.timePrecisionBox = QComboBox()
+        self.timePrecisionBox.addItems(["Down to seconds", "Down to milliseconds"])
+        self.d_detection.addWidget(self.w_resLabel, row=13, col=0)
         self.d_detection.addWidget(self.w_res, row=13, col=1)
+        self.d_detection.addWidget(timePrecisionLabel, row=14, col=0)
+        self.d_detection.addWidget(self.timePrecisionBox, row=14, col=1)
 
         self.w_excelButton = QPushButton(" Generate Excel  ")
         self.w_excelButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
@@ -684,6 +731,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.statusBar().showMessage("Ready to review")
 
         self.w_processButton.setEnabled(ready)
+        self.w_processButton1.setEnabled(ready)
 
     def createMenu(self):
         """ Create the basic menu.
@@ -733,6 +781,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if self.fillFileList()==1:
             self.w_spe1.setEnabled(False)
             self.w_processButton.setEnabled(False)
+            self.w_processButton1.setEnabled(False)
             self.w_excelButton.setEnabled(False)
             self.statusBar().showMessage("Select a directory to review")
             return
@@ -742,6 +791,21 @@ class AviaNZ_reviewAll(QMainWindow):
             # this will check if other settings are OK as well
             self.validateInputs()
 
+    def fillFileList(self,fileName=None):
+        """ Generates the list of files for the file listbox.
+            Updates species lists and other properties of the current dir.
+            fileName - currently opened file (marks it in the list).
+        """
+        if not os.path.isdir(self.dirName):
+            print("ERROR: directory %s doesn't exist" % self.dirName)
+            self.listFiles.clear()
+            return(1)
+
+        self.listFiles.fill(self.dirName, fileName, recursive=True, readFmt=True)
+
+        # update the "Browse" field text
+        self.w_dir.setPlainText(self.dirName)
+
         # find species names from the annotations
         self.spList = list(self.listFiles.spList)
         # Can't review only "Don't Knows". Ideally this should call AllSpecies dialog tho
@@ -749,7 +813,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.spList.remove("Don't Know")
         except Exception:
             pass
-        self.spList.insert(0, 'Any sound')
+        # self.spList.insert(0, 'Any sound')
         self.w_spe1.clear()
         self.w_spe1.addItems(self.spList)
 
@@ -758,9 +822,43 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fHigh.setRange(minfs//32, minfs//2)
         self.fLow.setRange(0, minfs//2)
 
-    def review(self):
-        self.species = self.w_spe1.currentText()
+    def listLoadFile(self,current):
+        """ Listener for when the user clicks on an item in filelist """
 
+        # Need name of file
+        if type(current) is QListWidgetItem:
+            current = current.text()
+            current = re.sub('\/.*', '', current)
+
+        self.previousFile = current
+
+        # Update the file list to show the right one
+        i=0
+        lof = self.listFiles.listOfFiles
+        while i<len(lof)-1 and lof[i].fileName() != current:
+            i+=1
+        if lof[i].isDir() or (i == len(lof)-1 and lof[i].fileName() != current):
+            dir = QDir(self.dirName)
+            dir.cd(lof[i].fileName())
+            # Now repopulate the listbox
+            self.dirName=str(dir.absolutePath())
+            self.previousFile = None
+            self.fillFileList(current)
+            # Show the selected file
+            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
+            if len(index) > 0:
+                self.listFiles.setCurrentItem(index[0])
+        return(0)
+
+    def reviewClickedAll(self):
+        self.species = "Any sound"
+        self.review()
+
+    def reviewClickedSingle(self):
+        self.species = self.w_spe1.currentText()
+        self.review()
+
+    def review(self):
         self.reviewer = self.w_reviewer.text()
         print("Reviewer: ", self.reviewer)
         if self.reviewer == '':
@@ -986,7 +1084,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
             # Export the actual Excel
             excel = SupportClasses.ExcelIO()
-            excsuccess = excel.export(allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList))
+            excsuccess = excel.export(allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList), precisionMS=self.timePrecisionBox.currentIndex()==1)
 
         if excsuccess!=1:
             # if any file wasn't exported well, overwrite the message
@@ -1580,45 +1678,3 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # actually update the segment info
         self.segments[boxid][4][0]["calltype"] = calltype
-
-    def fillFileList(self,fileName=None):
-        """ Generates the list of files for the file listbox.
-            fileName - currently opened file (marks it in the list).
-        """
-        if not os.path.isdir(self.dirName):
-            print("ERROR: directory %s doesn't exist" % self.dirName)
-            self.listFiles.clear()
-            return(1)
-
-        self.listFiles.fill(self.dirName, fileName, recursive=True, readFmt=True)
-
-        # update the "Browse" field text
-        self.w_dir.setPlainText(self.dirName)
-
-    def listLoadFile(self,current):
-        """ Listener for when the user clicks on an item in filelist """
-
-        # Need name of file
-        if type(current) is QListWidgetItem:
-            current = current.text()
-            current = re.sub('\/.*', '', current)
-
-        self.previousFile = current
-
-        # Update the file list to show the right one
-        i=0
-        lof = self.listFiles.listOfFiles
-        while i<len(lof)-1 and lof[i].fileName() != current:
-            i+=1
-        if lof[i].isDir() or (i == len(lof)-1 and lof[i].fileName() != current):
-            dir = QDir(self.dirName)
-            dir.cd(lof[i].fileName())
-            # Now repopulate the listbox
-            self.dirName=str(dir.absolutePath())
-            self.previousFile = None
-            self.fillFileList(current)
-            # Show the selected file
-            index = self.listFiles.findItems(os.path.basename(current), Qt.MatchExactly)
-            if len(index) > 0:
-                self.listFiles.setCurrentItem(index[0])
-        return(0)

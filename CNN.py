@@ -3,11 +3,11 @@
 #
 # CNN for the AviaNZ program
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -26,20 +26,18 @@
 import tensorflow as tf
 from skimage.transform import resize
 
-
 import json, os
 import numpy as np
 import math
 import gc
 from time import gmtime, strftime
 
-
 import SignalProc
 import WaveletSegment
 import Segment
-import  WaveletFunctions
+import WaveletFunctions
+import SupportClasses
 import librosa
-
 import wavio
 
 # from sklearn.metrics import confusion_matrix
@@ -48,12 +46,11 @@ import wavio
 # import pyqtgraph as pg
 # import SupportClasses
 
-
 class CNN:
     """ This class implements CNN training and data augmentation in AviaNZ.
     """
 
-    def __init__(self, species, calltypes, fs, length, windowwidth, inc, imageheight, imagewidth):
+    def __init__(self, configdir, species, calltypes, fs, length, windowwidth, inc, imageheight, imagewidth):
         self.species = species
         self.length = length
         self.windowwidth = windowwidth
@@ -62,6 +59,9 @@ class CNN:
         self.imagewidth = imagewidth
         self.calltypes = calltypes
         self.fs = fs
+
+        cl = SupportClasses.ConfigLoader()
+        self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
 
     # Custom data augmentation
     def addNoise(self, image, noise_image):
@@ -187,13 +187,11 @@ class CNN:
         return np.array([resize(np.load(file_name), (self.imageheight, self.imagewidth, 1)) for file_name in
                          filenames])
 
-
     def loadImageData(self, file, noisepool=False):
         '''
         :param file: JSON file with extracted features and labels
         :return:
         '''
-
         npzfile = file
         dataz = np.load(npzfile)
         numarrays = len(dataz)
@@ -278,7 +276,6 @@ class CNN:
             for file in files:
                 if file.endswith('.npz'):
                     print('reading ', file)
-
                     sg1, target1 = self.loadImageData(os.path.join(dirName, file))
                     if not pos:
                         sg = sg1
@@ -290,7 +287,6 @@ class CNN:
                         pos += np.shape(target1)[0]
 
         # Separate into classes
-
         ns = [np.shape(np.where(target == i)[0])[0] for i in range(len(self.calltypes) + 1)]
         sgCT = [np.empty((n, self.imageheight, self.imagewidth), dtype=float) for n in ns]
         idxs = [np.random.permutation(np.where(target == i)[0]).tolist() for i in range(len(self.calltypes) + 1)]
@@ -300,7 +296,6 @@ class CNN:
                 sgCT[ct][i][:] = sg[j][:]
                 i += 1
         return sgCT, ns
-
 
     def getImglist(self, dirName):
         ''' Returns the image filenames and labels in dirName:
@@ -324,7 +319,6 @@ class CNN:
         '''
         Sets self.model
         '''
-
         self.model = tf.keras.models.Sequential()
         self.model.add(tf.keras.layers.Conv2D(32, kernel_size=(7, 7), activation='relu', input_shape=[self.imageheight, self.imagewidth, 1], padding='Same'))
         self.model.add(tf.keras.layers.Conv2D(64, (7, 7), activation='relu'))
@@ -339,55 +333,18 @@ class CNN:
         self.model.add(tf.keras.layers.Conv2D(64, (3, 3), activation='relu'))
         self.model.add(tf.keras.layers.MaxPooling2D(pool_size=(2, 2)))
         self.model.add(tf.keras.layers.Dropout(0.2))
-
         # Flatten the results to one dimension for passing into our final layer
         self.model.add(tf.keras.layers.Flatten())
-
         # A hidden layer to learn with
         self.model.add(tf.keras.layers.Dense(256, activation='relu'))
-
         # Another dropout
         self.model.add(tf.keras.layers.Dropout(0.5))
-
         # Final categorization from 0-ct+1 with softmax
         self.model.add(tf.keras.layers.Dense(len(self.calltypes)+1, activation='softmax'))
         self.model.summary()
 
-
     def train2(self, modelsavepath):
-        ''' 
-        Train the model - keep all in memory 
-        '''
-
-        self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-
-        if not os.path.exists(modelsavepath):
-            os.makedirs(modelsavepath)
-        checkpoint = tf.keras.callbacks.ModelCheckpoint(modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5",
-            monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
-            save_freq='epoch')
-
-        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=5, verbose=1, mode='auto')
-        self.history = self.model.fit(self.train_images, self.train_labels,
-                                      batch_size=32,
-                                      epochs=50,
-                                      verbose=2,
-                                      validation_data=(self.val_images, self.val_labels),
-                                      callbacks=[checkpoint, early],
-                                      shuffle=True)
-
-        # Save the model
-        # Serialize model to JSON
-        model_json = self.model.to_json()
-        with open(modelsavepath + "/model.json", "w") as json_file:
-            json_file.write(model_json)
-        # # just serialize final weights to H5, not necessary
-        # self.model.save_weights(modelsavepath + "/weights.h5")
-        print("Saved model to ", modelsavepath)
-
-
-    def train(self, modelsavepath, training_batch_generator, validation_batch_generator, epochs):
-        ''' Train the model - use image generator '''
+        ''' Train the model - keep all in memory '''
 
         self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
@@ -397,9 +354,37 @@ class CNN:
             modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5",
             monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto',
             save_freq='epoch')
-        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=3, verbose=1, mode='auto')
+        early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=5, verbose=1, mode='auto')
+        self.history = self.model.fit(self.train_images, self.train_labels,
+                                      batch_size=32,
+                                      epochs=50,
+                                      verbose=2,
+                                      validation_data=(self.val_images, self.val_labels),
+                                      callbacks=[checkpoint, early],
+                                      shuffle=True)
+        # Save the model
+        # Serialize model to JSON
+        model_json = self.model.to_json()
+        with open(modelsavepath + "/model.json", "w") as json_file:
+            json_file.write(model_json)
+        # # just serialize final weights to H5, not necessary
+        # self.model.save_weights(modelsavepath + "/weights.h5")
+        print("Saved model to ", modelsavepath)
 
-        # SRM: TODO:!! 50 epochs
+    def train(self, modelsavepath, training_batch_generator, validation_batch_generator):
+        ''' Train the model - use image generator '''
+
+        # self.model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+        self.model.compile(loss=self.LearningDict['loss'], optimizer=self.LearningDict['optimizer'], metrics=self.LearningDict['metrics'])
+
+        if not os.path.exists(modelsavepath):
+            os.makedirs(modelsavepath)
+        # checkpoint = tf.keras.callbacks.ModelCheckpoint(modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5", monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch')
+        # early = tf.keras.callbacks.EarlyStopping(monitor='val_accuracy', min_delta=0, patience=3, verbose=1, mode='auto')
+        checkpoint = tf.keras.callbacks.ModelCheckpoint(modelsavepath + "/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.h5", monitor=self.LearningDict['monitor'], verbose=1, save_best_only=True, save_weights_only=True, mode='auto', save_freq='epoch')
+        early = tf.keras.callbacks.EarlyStopping(monitor=self.LearningDict['monitor'], min_delta=0, patience=self.LearningDict['patience'], verbose=1, mode='auto')
+
+        epochs = self.LearningDict['epochs']
         self.history = self.model.fit(training_batch_generator,
                                       epochs=epochs,
                                       verbose=1,
@@ -411,10 +396,7 @@ class CNN:
         model_json = self.model.to_json()
         with open(modelsavepath + "/model.json", "w") as json_file:
             json_file.write(model_json)
-        # # just serialize final weights to H5, not necessary
-        # self.model.save_weights(modelsavepath + "/weights.h5")
         print("Saved model to ", modelsavepath)
-
 
 class GenerateData:
     """ This class implements CNN data preparation. There are different ways:
@@ -469,7 +451,6 @@ class GenerateData:
                             if mincert == 100:
                                 calltypeSegments.append([wavFile, seg[:2], calltypei])
 
-
         return calltypeSegments
 
     def findNoisesegments(self, dirName):
@@ -507,7 +488,6 @@ class GenerateData:
         print("autoSeg", autoSegments)
         for item in autoSegments:
             print(item[0])
-
             wavFile = item[0]
             if os.stat(wavFile).st_size != 0:
                 sppSegments = []
@@ -574,7 +554,6 @@ class GenerateData:
 
         return N
 
-
     def generateFeatures(self, dirName, dataset, hop):
         '''
         Read the segment library and generate features
@@ -585,7 +564,6 @@ class GenerateData:
         count = 0
         dhop = hop
         eps = 0.0005
-
         specFrameSize = len(range(0, int(self.length * self.fs - self.windowwidth), self.inc))
         N = [0 for i in range(len(self.calltypes) + 1)]
 
@@ -602,7 +580,7 @@ class GenerateData:
                     record[1][1] = self.length + eps
                 elif record[1][1] > fileduration:
                     record[1][1] = fileduration
-                    record[1][0] = fileduration - duration - eps
+                    record[1][0] = fileduration - self.length - eps
                 if record[1][0] <= 0 and record[1][1] <= fileduration:
                     n = 1
                     hop = self.length
@@ -611,7 +589,7 @@ class GenerateData:
                     continue
             else:
                 n = math.ceil((record[1][1]-record[1][0]-self.length) / hop + 1)
-            print('* hop:', hop, 'n:', n, 'syl:', record[2], 'label:', record[-1])
+            print('* hop:', hop, 'n:', n, 'label:', record[-1])
             try:
                 audiodata = self.loadFile(filename=record[0], duration=duration, offset=record[1][0], fs=self.fs, denoise=False)
             except Exception as e:
@@ -622,7 +600,6 @@ class GenerateData:
             sp.data = audiodata
             sp.sampleRate = self.fs
             sgRaw = sp.spectrogram(self.windowwidth, self.inc)
-
 
             for i in range(int(n)):
                 print('**', record[0], self.length, record[1][0]+hop*i, self.fs, '************************************')
@@ -703,4 +680,3 @@ class CustomGenerator(tf.keras.utils.Sequence):
 
         # return np.array([resize(imread(os.path.join(self.train_dir , str(file_name))), (self.imgheight, self.imgwidth, self.channels)) for file_name in batch_x]) / 255.0, np.array(batch_y)
         return np.array([resize(np.load(file_name), (self.imgheight, self.imgwidth, self.channels)) for file_name in batch_x]), np.array(batch_y)
-

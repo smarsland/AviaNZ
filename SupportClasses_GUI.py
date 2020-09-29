@@ -1,14 +1,13 @@
 
 # SupportClasses_GUI.py
-
 # Support classes for the AviaNZ program
 # Mostly subclassed from pyqtgraph
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -123,16 +122,16 @@ class AxisWidget(QAbstractButton):
         # fixed size
         self.setSizePolicy(0,0)
         self.setMinimumSize(70, sgsize)
-        self.fontsize = min(max(int(math.sqrt(sgsize-30)*0.8), 9), 14)
+        self.fontsize = min(max(int(math.sqrt(sgsize-30)*0.8), 9), 13)
 
     def paintEvent(self, event):
         if type(event) is not bool:
             painter = QPainter(self)
             # actual axis line painting
             bottomR = event.rect().bottomRight()
-            bottomR.setX(bottomR.x()-6)
+            bottomR.setX(bottomR.x()-12)
             topR = event.rect().topRight()
-            topR.setX(topR.x()-6)
+            topR.setX(topR.x()-12)
             painter.setPen(QPen(QColor(20,20,20), 1))
             painter.drawLine(bottomR, topR)
 
@@ -866,8 +865,8 @@ class MessagePopup(QMessageBox):
         elif (type=="a"):
             # Easy way to set ABOUT text here:
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
-            self.setText("The AviaNZ Program, v2.2 (April 2020)")
-            self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani and Julius Juodakis, and input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, Virginia Listanti, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
+            self.setText("The AviaNZ Program, v3.0 (September 2020)")
+            self.setInformativeText("By Stephen Marsland, Victoria University of Wellington. With code by Nirosha Priyadarshani, Julius Juodakis, and Virginia Listanti. Input from Isabel Castro, Moira Pryde, Stuart Cockburn, Rebecca Stirnemann, Sumudu Purage, and Rebecca Huistra. \n stephen.marsland@vuw.ac.nz")
         elif (type=="o"):
             self.setIconPixmap(QPixmap("img/AviaNZ.png"))
 
@@ -1230,28 +1229,48 @@ class LightedFileList(QListWidget):
 
         # mark the current file or first row (..), if not found
         if fileName:
-            index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+            # for matching dirs:
+            # index = self.findItems(fileName+"\/",Qt.MatchExactly)
+            index = self.findItems(fileName,Qt.MatchExactly)
             if len(index)>0:
                 self.setCurrentItem(index[0])
             else:
                 self.setCurrentRow(0)
 
-    def refreshFile(self, fileName):
-        """ Repaint a single file icon.
+    def refreshFile(self, fileName, cert):
+        """ Repaint a single file icon with the provided certainty.
             fileName: file stem (dir will be read from self)
+            cert:     0-100, or -1 if no annotations
         """
-        index = self.findItems(fileName+"\/?",Qt.MatchRegExp)
+        # for matching dirs - not sure if needed:
+        # index = self.findItems(fileName+"\/",Qt.MatchExactly)
+        index = self.findItems(fileName,Qt.MatchExactly)
         if len(index)==0:
             return
 
-        if self.soundDir is None:
-            # something bad happened
-            print("Warning: soundDir not set, cannot find .data files")
-            return
-
         curritem = index[0]
-        datafile = os.path.join(self.soundDir, fileName)+'.data'
-        self.paintItem(curritem, datafile)
+        # Repainting identical to paintItem
+        if cert == -1:
+            # .data exists, but no annotations
+            self.pixmap.fill(QColor(255,255,255,0))
+            painter = QPainter(self.pixmap)
+            painter.setPen(self.blackpen)
+            painter.drawRect(self.pixmap.rect())
+            painter.end()
+            curritem.setIcon(QIcon(self.pixmap))
+            # no change to self.minCertainty
+        elif cert == 0:
+            self.pixmap.fill(self.ColourNone)
+            curritem.setIcon(QIcon(self.pixmap))
+            self.minCertainty = 0
+        elif cert < 100:
+            self.pixmap.fill(self.ColourPossibleDark)
+            curritem.setIcon(QIcon(self.pixmap))
+            self.minCertainty = min(self.minCertainty, cert)
+        else:
+            self.pixmap.fill(self.ColourNamed)
+            curritem.setIcon(QIcon(self.pixmap))
+            # self.minCertainty cannot be changed by a cert=100 segment
 
     def paintItem(self, item, datafile):
         """ Read the JSON and draw the traffic light for a single item """
@@ -1300,7 +1319,7 @@ class LightedFileList(QListWidget):
                 item.setIcon(QIcon(self.pixmap))
                 # self.minCertainty cannot be changed by a cert=100 segment
         else:
-            # it is a file, but no .data
+            # no .data for this sound file
             self.pixmap.fill(QColor(255,255,255,0))
             item.setIcon(QIcon(self.pixmap))
 
