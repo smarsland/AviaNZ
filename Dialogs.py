@@ -28,7 +28,7 @@ import shutil
 
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import QDir, QPointF, QTime, Qt
+from PyQt5.QtCore import QDir, QPointF, QTime, Qt, QCoreApplication, QSize
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -1384,7 +1384,8 @@ class HumanClassify1(QDialog):
     # This dialog allows the checking of classifications for segments.
     # It shows a single segment at a time, working through all the segments.
 
-    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, parent=None):
+    def __init__(self, lut, colourStart, colourEnd, cmapInverted, brightness, contrast, shortBirdList, longBirdList, batList, multipleBirds, audioFormat, plotAspect=2, parent=None):
+        # plotAspect: initial stretch factor in the X direction
         QDialog.__init__(self, parent)
         self.setWindowTitle('Check Classifications')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -1410,16 +1411,15 @@ class HumanClassify1(QDialog):
 
         # Set up the plot window, then the right and wrong buttons, and a close button
         # wPlot: white area around the spectrogram
-        self.wPlot = pg.GraphicsLayoutWidget()
+        self.wPlot = SupportClasses_GUI.PartlyResizableGLW()
         self.pPlot = self.wPlot.addViewBox(enableMouse=False, row=0, col=1)
         self.plot = pg.ImageItem()
         self.pPlot.addItem(self.plot)
         # Fix the aspect ratio to a preset number. Initial view box
         # will be about 2:1, so aspect ratio of 2 means
         # that a square spectrogram (e.g. 512x512) will fill it
-        self.plotAspect = 2
-        self.pPlot.setAspectLocked(ratio=self.plotAspect)
-        self.pPlot.disableAutoRange()
+        self.plotAspect = plotAspect
+        self.wPlot.setMinimumHeight(250)
         self.pPlot.setLimits(xMin=0, yMin=-5)
         self.sg_axis = pg.AxisItem(orientation='left')
         #self.sg_axis2 = pg.AxisItem(orientation='right')
@@ -1636,6 +1636,7 @@ class HumanClassify1(QDialog):
         self.scroll = QtGui.QScrollArea()
         self.scroll.setWidget(self.wPlot)
         self.scroll.setWidgetResizable(True)
+        self.scroll.setMinimumHeight(270)
 
         # Volume control
         self.volSlider = QSlider(Qt.Horizontal)
@@ -1754,20 +1755,23 @@ class HumanClassify1(QDialog):
     def zoomIn(self):
         # resize the ViewBox with spec, lines, axis
         self.plotAspect = self.plotAspect * 1.5
-        self.pPlot.setAspectLocked(ratio=self.plotAspect)
+        # self.pPlot.setAspectLocked(ratio=self.plotAspect)
         xyratio = np.shape(self.sg)
+        # self.pPlot.setYRange(0, xyratio[1], padding=0.02)
         xyratio = xyratio[0] / xyratio[1]
         # resize the white area around the spectrogram if it's under 500
-        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
-        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        self.wPlot.plotAspect = self.plotAspect * xyratio
+        self.wPlot.forceResize()
 
     def zoomOut(self):
         self.plotAspect = self.plotAspect / 1.5
-        self.pPlot.setAspectLocked(ratio=self.plotAspect)
+        # self.pPlot.setAspectLocked(ratio=self.plotAspect)
         xyratio = np.shape(self.sg)
+        # self.pPlot.setYRange(0, xyratio[1], padding=0.02)
         xyratio = xyratio[0] / xyratio[1]
-        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
-        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        # resize the white area around the spectrogram if it's under 500
+        self.wPlot.plotAspect = self.plotAspect * xyratio
+        self.wPlot.forceResize()
 
     def updateButtonList(self):
         # refreshes bird button names
@@ -1834,15 +1838,13 @@ class HumanClassify1(QDialog):
 
         self.show()
 
-        self.pPlot.setYRange(0, SgSize, padding=0.02)
+        # self.pPlot.setYRange(0, SgSize, padding=0.02)
         self.pPlot.setRange(xRange=(0, np.shape(sg2)[0]), yRange=(0, SgSize))
         xyratio = np.shape(sg2)
         xyratio = xyratio[0] / xyratio[1]
-        # self.plotAspect = 0.2 for x/y pixel aspect ratio
-        # 0.9 for padding
-        # TODO: ***Issues here
-        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
-        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        # self.plotAspect = 2 for x/y pixel aspect ratio
+        self.wPlot.plotAspect = self.plotAspect * xyratio
+        self.wPlot.forceResize()
 
         # add marks to separate actual segment from buffer zone
         # Note: need to use view coordinates to add items to pPlot
