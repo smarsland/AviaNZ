@@ -1,11 +1,11 @@
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 # This is the script that starts AviaNZ. It processes command line options
 # and then calls either part of the GUI, or runs on the command line directly.
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -20,9 +20,8 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import click, sys, platform, os, json, shutil
-from jsonschema import validate
-import SupportClasses
+import click
+import sys
 
 # Command line running to run a filter is something like
 # python AviaNZ.py -c -b -d "/home/marslast/Projects/AviaNZ/Sound Files/train5" -r "Morepork" -w
@@ -30,7 +29,7 @@ import SupportClasses
 # For training
 # python AviaNZ.py -c -t -d "/home/marslast/Projects/AviaNZ/Sound Files/train5" -e "/home/marslast/Projects/AviaNZ/Sound Files/train6" -r "Morepork" -x 2
 
-# For testing 
+# For testing
 # python AviaNZ.py -c -u -d "/home/marslast/Projects/AviaNZ/Sound Files/test1" -r "Kiwi (Tokoeka Rakiura)"
 @click.command()
 @click.option('-c', '--cli', is_flag=True, help='Run in command-line mode')
@@ -43,12 +42,19 @@ import SupportClasses
 @click.option('-u', '--testing', is_flag=True, help='Train a recogniser')
 @click.option('-d', '--sdir1', type=click.Path(), help='Input sound directory, training or batch processing')
 @click.option('-e', '--sdir2', type=click.Path(), help='Second input sound directory, training')
-@click.option('-r', '--recogniser', type=str, help='Recogniser name, batch processing')
+@click.option('-r', '--recogniser', type=str, help='Recogniser name (without ".txt"), batch processing')
 @click.option('-w', '--wind', is_flag=True, help='Apply wind filter')
-@click.option('-x', '--width', type=int, help='Width of windows for CNN')
+@click.option('-x', '--width', type=float, help='Width of windows for CNN')
 @click.argument('command', nargs=-1)
-
 def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, training, testing, sdir1, sdir2, recogniser, wind, width, command):
+    try:
+        import platform, os, json, shutil
+        from jsonschema import validate
+        import SupportClasses
+    except Exception as e:
+        print("ERROR: could not import packages")
+        raise
+
     # determine location of config file and bird lists
     if platform.system() == 'Windows':
         # Win
@@ -58,7 +64,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         configdir = os.path.expanduser("~/.avianz/")
     else:
         print("ERROR: what OS is this? %s" % platform.system())
-        sys.exit()
+        raise
 
     # if config and bird files not found, copy from distributed backups.
     # so these files will always exist on load (although they could be corrupt)
@@ -70,7 +76,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         except Exception as e:
             print("ERROR: failed to make config dir")
             print(e)
-            sys.exit()
+            raise
 
     # pre-run check of config file validity
     confloader = SupportClasses.ConfigLoader()
@@ -87,7 +93,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         except Exception as e:
             print("ERROR: failed to copy essential config files")
             print(e)
-            sys.exit()
+            raise
 
     # check and if needed copy any other necessary files
     necessaryFiles = ["ListCommonBirds.txt", "ListDOCBirds.txt", "ListBats.txt", "LearningParams.txt"]
@@ -99,7 +105,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             except Exception as e:
                 print("ERROR: failed to copy essential config files")
                 print(e)
-                sys.exit()
+                raise
 
     # copy over filters to ~/.avianz/Filters/:
     filterdir = os.path.join(configdir, "Filters/")
@@ -126,7 +132,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 print("Analysis complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for batch processing")
-                sys.exit()
+                raise
         elif training:
             import Training
             if os.path.isdir(sdir1) and os.path.isdir(sdir2) and recogniser in confloader.filters(filterdir).keys() and width>0:
@@ -135,15 +141,16 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 print("Training complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dirs (-d and -e) and recogniser name (-r) are essential for training")
-                sys.exit()
+                raise
         elif testing:
             import Training
-            if os.path.isdir(sdir1) and recogniser in confloader.filters(filterdir).keys():
-                testing = Training.CNNtest(sdir1,recogniser,configdir,filterdir,CLI=True)
+            filts = confloader.filters(filterdir)
+            if os.path.isdir(sdir1) and recogniser in filts:
+                testing = Training.CNNtest(sdir1, filts[recogniser], recogniser, configdir,filterdir,CLI=True)
                 print("Testing complete, closing AviaNZ")
             else:
                 print("ERROR: valid input dir (-d) and recogniser name (-r) are essential for training")
-                sys.exit()
+                raise
         else:
             if (cheatsheet or zooniverse) and isinstance(infile, str):
                 import AviaNZ
@@ -152,7 +159,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 print("Analysis complete, closing AviaNZ")
             else:
                 print("ERROR: valid input file (-f) is needed")
-                sys.exit()
+                raise
     else:
         print("Starting AviaNZ in GUI mode")
         # This screen asks what you want to do, then processes the response
@@ -177,7 +184,7 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             avianz = AviaNZ_batch_GUI.AviaNZ_reviewAll(configdir=configdir)
 
         if avianz:
-            avianz.show()
+            avianz.activateWindow()
         else:
             return
         out = app.exec_()
@@ -196,4 +203,11 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
             # Uncomment this if you want to return to main mode after splitting
             # mainlauncher()
 
-mainlauncher()
+
+try:
+    mainlauncher()
+except Exception:
+    import traceback
+    print(traceback.format_exc())
+    input("Encountered error. Report it with the text above to AviaNZ team at www.avianz.net.\nPress ENTER to exit")
+    raise

@@ -1,11 +1,12 @@
 
 # This is part of the AviaNZ interface
 # Holds most of the code for the various dialog boxes
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -28,7 +29,6 @@ import time
 import platform
 import copy
 from shutil import copyfile
-import csv
 
 from PyQt5.QtGui import QIcon, QValidator, QAbstractItemView, QPixmap, QColor, QFileDialog, QScrollArea
 from PyQt5.QtCore import QDir, Qt, QEvent, QSize
@@ -49,7 +49,6 @@ import WaveletSegment
 import Segment
 import Clustering
 import Training
-import AviaNZ_batch
 
 class BuildRecAdvWizard(QWizard):
     # page 1 - select training data
@@ -211,6 +210,7 @@ class BuildRecAdvWizard(QWizard):
             self.nclasses = 0
             self.config = config
             self.segsChanged = False
+            self.hasCTannotations = True
 
             self.lblSpecies = QLabel()
             self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
@@ -245,12 +245,6 @@ class BuildRecAdvWizard(QWizard):
             self.contrastSlider.setTickInterval(1)
             self.contrastSlider.valueChanged.connect(self.setColourLevels)
 
-            #lb = QLabel('Move Selected Segment/s to Cluster')
-            #self.cmbUpdateSeg = QComboBox()
-            #self.cmbUpdateSeg.setFixedWidth(200)
-            #self.btnUpdateSeg = QPushButton('Apply')
-            #self.btnUpdateSeg.setFixedWidth(130)
-            #self.btnUpdateSeg.clicked.connect(self.moveSelectedSegs)
             self.btnCreateNewCluster = QPushButton('Create cluster')
             self.btnCreateNewCluster.setFixedWidth(150)
             self.btnCreateNewCluster.clicked.connect(self.createNewcluster)
@@ -279,19 +273,12 @@ class BuildRecAdvWizard(QWizard):
             hboxSpecContr.setStretch(5, 3)
             hboxSpecContr.addStretch(2)
 
-            #hboxBtns1 = QHBoxLayout()
-            #hboxBtns1.addWidget(lb)
-            #hboxBtns1.addWidget(self.cmbUpdateSeg)
-            #hboxBtns1.addWidget(self.btnUpdateSeg)
-            #hboxBtns1.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
             hboxBtns2 = QHBoxLayout()
             hboxBtns2.addWidget(self.btnCreateNewCluster)
             hboxBtns2.addWidget(self.btnDeleteSeg)
             hboxBtns2.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
             hboxBtns = QHBoxLayout()
-            #hboxBtns.addLayout(hboxBtns1)
             hboxBtns.addLayout(hboxBtns2)
 
             # top part
@@ -325,22 +312,30 @@ class BuildRecAdvWizard(QWizard):
 
             with pg.BusyCursor():
                 print("Processing. Please wait...")
-                # return format:
-                # self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
-                # fs: sampling freq
-                # self.nclasses: number of class_labels
-                self.cluster = Clustering.Clustering([], [], 5)
-                self.segments, fs, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("species"), feature=self.feature)
-                # segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
-                # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
-                #                                                                              self.field("species"),
-                #                                                                              feature=self.feature,
-                #                                                                              max_clusters=5,
-                #                                                                              single=True)
+                # Check if the annotations come with call type labels, if so skip auto clustering
+                self.CTannotations()
+                if self.hasCTannotations:
+                    # self.segments: [parent_audio_file, [segment], class_label]
+                    self.segments, self.nclasses, self.duration = self.getClustersGT()
+                    self.setSubTitle('AviaNZ found call type annotations in your dataset. You can still make corrections by moving calls as appropriate.')
+                else:
+                    # return format:
+                    # self.segments: [parent_audio_file, [segment], [syllables], [features], class_label]
+                    # self.nclasses: number of class_labels
+                    # duration: median length of segments
+                    self.cluster = Clustering.Clustering([], [], 5)
+                    self.segments, self.nclasses, self.duration = self.cluster.cluster(self.field("trainDir"), self.field("fs"), self.field("species"), feature=self.feature)
+                    # segments format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
+                    # self.segments, fs, self.nclasses, self.duration = self.cluster.cluster_by_dist(self.field("trainDir"),
+                    #                                                                              self.field("species"),
+                    #                                                                              feature=self.feature,
+                    #                                                                              max_clusters=5,
+                    #                                                                              single=True)
+                    self.setSubTitle('AviaNZ has tried to identify similar calls in your dataset. Please check the output, and move calls as appropriate.')
 
                 # Create and show the buttons
                 self.clearButtons()
-                self.addButtons(fs)
+                self.addButtons()
                 self.updateButtons()
                 print("buttons added")
                 self.segsChanged = True
@@ -370,7 +365,74 @@ class BuildRecAdvWizard(QWizard):
             self.updateAnnotations()
             return True
 
+        def cleanupPage(self):
+            self.clusters = {}
+
+        def CTannotations(self):
+            """ Check if all the segments from target species has call type annotations"""
+            self.hasCTannotations = True
+            listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
+            for file in listOfDataFiles:
+                # Read the annotation
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(self.field("trainDir"), file))
+                SpSegs = segments.getSpecies(self.field("species"))
+                for segix in SpSegs:
+                    seg = segments[segix]
+                    for label in seg[4]:
+                        if label["species"] == self.field("species") and "calltype" not in label:
+                            self.hasCTannotations = False
+                            break
+
+        def getClustersGT(self):
+            """ Gets call type clusters from annotations
+             returns [parent_audio_file, [segment], [syllables], class_label], number of clusters, median duration
+            """
+            ctTexts = []
+            CTsegments = []
+            duration = []
+            cl = Clustering.Clustering([], [], 5)
+
+            listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
+            listOfWavFiles = QDir(self.field("trainDir")).entryList(['*.wav'])
+            for file in listOfDataFiles:
+                if file[:-5] in listOfWavFiles:
+                    # Read the annotation
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(os.path.join(self.field("trainDir"), file))
+                    SpSegs = segments.getSpecies(self.field("species"))
+                    for segix in SpSegs:
+                        seg = segments[segix]
+                        for label in seg[4]:
+                            if label["species"] == self.field("species") and "calltype" in label:
+                                if label["calltype"] not in ctTexts:
+                                    ctTexts.append(label["calltype"])
+            for i in range(len(ctTexts)):
+                self.clusters[i] = ctTexts[i]
+
+            for file in listOfDataFiles:
+                if file[:-5] in listOfWavFiles:
+                    # Read the annotation
+                    segments = Segment.SegmentList()
+                    wavfile = os.path.join(self.field("trainDir"), file[:-5])
+                    segments.parseJSON(os.path.join(self.field("trainDir"), file))
+                    SpSegs = segments.getSpecies(self.field("species"))
+                    for segix in SpSegs:
+                        seg = segments[segix]
+                        for label in seg[4]:
+                            if label["species"] == self.field("species") and "calltype" in label:
+                                # Find the syllables inside this segment
+                                # TODO: Filter all the hardcoded parameters into a .txt in config (minlen=0.2, denoise=False)
+                                if seg[2] == seg[3] == 0:
+                                    syls = cl.findSyllablesSeg(file=wavfile, seg=seg, fs=self.field("fs"), f1=seg[2], f2=seg[3], denoise=False, minlen=0.2)
+                                else:
+                                    syls = cl.findSyllablesSeg(file=wavfile, seg=seg, fs=self.field("fs"), f1=0, f2=0, denoise=False, minlen=0.2)
+                                CTsegments.append([wavfile, seg, syls, list(self.clusters.keys())[list(self.clusters.values()).index(label["calltype"])]])
+                                duration.append(seg[1]-seg[0])
+            return CTsegments, len(self.clusters), np.median(duration)
+
         def backupDatafiles(self):
+            # Backup original data fiels before updating them
             print("Backing up files ", self.field("trainDir"))
             listOfDataFiles = QDir(self.field("trainDir")).entryList(['*.data'])
             for file in listOfDataFiles:
@@ -725,17 +787,18 @@ class BuildRecAdvWizard(QWizard):
             self.completeChanged.emit()
             print('updated clusters: ', self.clusters)
 
-        def addButtons(self, tgtsamplerate):
+        def addButtons(self):
             """ Only makes the PicButtons and self.clusters dict
             """
-            self.clusters = []
             self.picbuttons = []
-            for i in range(self.nclasses):
-                self.clusters.append((i, 'Cluster_' + str(i)))
-            self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
+            if not self.hasCTannotations:
+                self.clusters = []
+                for i in range(self.nclasses):
+                    self.clusters.append((i, 'Cluster_' + str(i)))
+                self.clusters = dict(self.clusters)     # Dictionary of {ID: cluster_name}
 
             # largest spec will be this wide
-            maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * tgtsamplerate // 256
+            maxspecsize = max([seg[1][1]-seg[1][0] for seg in self.segments]) * self.field("fs") // 256
 
             # Create the buttons for each segment
             for seg in self.segments:
@@ -743,7 +806,7 @@ class BuildRecAdvWizard(QWizard):
                 sp.readWav(seg[0], seg[1][1]-seg[1][0], seg[1][0], silent=True)
 
                 # set increment to depend on Fs to have a constant scale of 256/tgt seconds/px of spec
-                incr = 256 * sp.sampleRate // tgtsamplerate
+                incr = 256 * sp.sampleRate // self.field("fs")
                 sgRaw = sp.spectrogram(window='Hann', incr=incr, mean_normalise=True, onesided=True,
                                               multitaper=False, need_even=False)
                 maxsg = np.min(sgRaw)
@@ -971,32 +1034,34 @@ class BuildRecAdvWizard(QWizard):
                 pageSegs.addSegment(longseg[1])
             len_min, len_max, f_low, f_high = pageSegs.getSummaries()
             # Get max inter syllable gap
-            gaps = []
-            maxgap = 0
-            syllen = []
-            for longseg in self.segments:
-                if len(longseg[2]) > 1:
-                    for i in range(len(longseg[2]) - 1):
-                        gaps.append(longseg[2][i + 1][0] - longseg[2][i][1])
-            if len(gaps) > 0:
-                maxgap = max(gaps)
+            if not self.wizard().clusterPage.hasCTannotations:
+                gaps = []
+                syllen = []
+                for longseg in self.segments:
+                    if len(longseg[2]) > 1:
+                        for i in range(len(longseg[2]) - 1):
+                            gaps.append(longseg[2][i + 1][0] - longseg[2][i][1])
+                if len(gaps) > 0:
+                    maxgap = max(gaps)
+                else:
+                    maxgap = 0
+
+                for longseg in self.segments:
+                    for i in range(len(longseg[2])):
+                        syllen.append(longseg[2][i][1] - longseg[2][i][0])
+                avgslen = np.mean(syllen)
             else:
-                maxgap = 0
+                maxgap = 0.5    # TODO
+                avgslen = 0.5
 
-            for longseg in self.segments:
-                for i in range(len(longseg[2])):
-                    syllen.append(longseg[2][i][1] - longseg[2][i][0])
-
-            avgslen = np.mean(syllen)
-
-            self.minlen.setText(str(round(np.min(len_min),2)))
-            self.maxlen.setText(str(round(np.max(len_max),2)))
-            self.maxgap.setText(str(round(maxgap,2)))
-            self.avgslen.setText(str(round(avgslen,2)))
+            self.minlen.setText(str(round(np.min(len_min), 2)))
+            self.maxlen.setText(str(round(np.max(len_max), 2)))
+            self.maxgap.setText(str(round(maxgap, 2)))
+            self.avgslen.setText(str(round(avgslen, 2)))
             self.fLow.setRange(0, fs/2)
-            self.fLow.setValue(max(0,int(np.min(f_low))))
+            self.fLow.setValue(max(0, int(np.min(f_low))))
             self.fHigh.setRange(0, fs/2)
-            if np.max(f_high)==0:
+            if np.max(f_high) == 0:
                 # happens when no segments have y limits
                 f_high = fs/2
             self.fHigh.setValue(min(fs/2,int(np.max(f_high))))
@@ -1030,6 +1095,7 @@ class BuildRecAdvWizard(QWizard):
             spaceH.setFixedWidth(30)
 
             self.lblUpdate = QLabel()
+            self.lblUpdate.setStyleSheet("QLabel { font-weight: bold; }")
 
             # These are connected to fields and actually control the wizard's flow
             self.bestM = QLineEdit()
@@ -1071,8 +1137,8 @@ class BuildRecAdvWizard(QWizard):
                 print("fpr_cl, tpr_cl: ", fpr_near, tpr_near)
 
                 # update sidebar
-                self.lblUpdate.setText('DETECTION SUMMARY\n\nTPR:\t' + str(round(tpr_near * 100, 2)) + '%'
-                                              '\nFPR:\t' + str(round(fpr_near * 100, 2)) + '%\n\nClick "Next" to proceed.')
+                self.lblUpdate.setText('Detection Summary\n\nTPR:\t' + str(round(tpr_near * 100, 2)) +
+                                       '%\nFPR:\t' + str(round(fpr_near * 100, 2)) + '%')
 
                 # this will save the best parameters to the global fields
                 self.bestM.setText("%.4f" % self.MList[M_min_ind])
@@ -1124,8 +1190,6 @@ class BuildRecAdvWizard(QWizard):
             fLow = int(self.field("fLow"+str(self.pageId)))
             fHigh = int(self.field("fHigh"+str(self.pageId)))
             numthr = 50
-            # numthr = int(self.field("thr"+str(self.pageId)))
-            # numM = int(self.field("M"+str(self.pageId)))
             # note: for each page we reset the filter to contain 1 calltype
             self.wizard().speciesData["Filters"] = [{'calltype': self.clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh]}]
 
@@ -1189,168 +1253,10 @@ class BuildRecAdvWizard(QWizard):
                 self.marker.set_visible(False)
                 self.figCanvas.plotmeagain(self.TPR, self.FPR)
 
-    # page 6 - fundamental frequency calculation
-    class WFFPage(QWizardPage):
-        def __init__(self, clust, picbuttons, parent=None):
-            super(BuildRecAdvWizard.WFFPage, self).__init__(parent)
-            self.setTitle('Post-processing')
-            self.setSubTitle('Set the post-processing options available below.')
-            self.setMinimumSize(250, 300)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
-            self.adjustSize()
+        def cleanupPage(self):
+            self.lblUpdate.setText('')
 
-            self.picbuttons = picbuttons
-            self.clust = clust
-
-            self.lblTrainDir = QLabel()
-            self.lblTrainDir.setStyleSheet("QLabel { color : #808080; }")
-            self.lblSpecies = QLabel()
-            self.lblSpecies.setStyleSheet("QLabel { color : #808080; }")
-            self.lblCluster = QLabel()
-            self.lblCluster.setStyleSheet("QLabel { color : #808080; }")
-
-            # fund freq checkbox
-            self.hadF0label = QLabel("")
-            self.hadNoF0label = QLabel("")
-            self.f0_label = QLabel('Fundamental frequency')
-            self.ckbF0 = QCheckBox()
-            self.ckbF0.setChecked(False)
-            self.ckbF0.toggled.connect(self.toggleF0)
-            formFFinfo = QFormLayout()
-            formFFinfo.addRow("Training segments with detected fund. freq.:", self.hadF0label)
-            formFFinfo.addRow("Training segments without fund. freq.:", self.hadNoF0label)
-
-            # fund freq range
-            # FreqRange parameters
-            form1_step6 = QFormLayout()
-            self.F0low = QSlider(Qt.Horizontal)
-            self.F0low.setTickPosition(QSlider.TicksBelow)
-            self.F0low.setTickInterval(2000)
-            self.F0low.setRange(0, 16000)
-            self.F0low.setSingleStep(100)
-            self.F0low.valueChanged.connect(self.F0lowChange)
-            self.F0lowtext = QLabel('')
-            form1_step6.addRow('', self.F0lowtext)
-            form1_step6.addRow('Lower F0 limit (Hz)    ', self.F0low)
-            self.F0high = QSlider(Qt.Horizontal)
-            self.F0high.setTickPosition(QSlider.TicksBelow)
-            self.F0high.setTickInterval(2000)
-            self.F0high.setRange(0, 16000)
-            self.F0high.setSingleStep(100)
-            self.F0high.valueChanged.connect(self.F0highChange)
-            self.F0hightext = QLabel('')
-            form1_step6.addRow('', self.F0hightext)
-            form1_step6.addRow('Upper F0 limit (Hz)    ', self.F0high)
-
-            # post-proc page layout
-            vboxHead = QFormLayout()
-            vboxHead.addRow("Training data:", self.lblTrainDir)
-            vboxHead.addRow("Target species:", self.lblSpecies)
-            vboxHead.addRow("Target calltype:", self.lblCluster)
-
-            hBox = QHBoxLayout()
-            hBox.addWidget(self.f0_label)
-            hBox.addWidget(self.ckbF0)
-
-            vbox = QVBoxLayout()
-            vbox.addLayout(vboxHead)
-            vbox.addLayout(formFFinfo)
-            vbox.addLayout(hBox)
-            vbox.addSpacing(20)
-            vbox.addLayout(form1_step6)
-
-            self.setLayout(vbox)
-
-        def F0lowChange(self, value):
-            value = value - (value % 10)
-            if value < 50:
-                value = 50
-            self.F0lowtext.setText(str(value))
-
-        def F0highChange(self, value):
-            value = value - (value % 10)
-            if value < 100:
-                value = 100
-            self.F0hightext.setText(str(value))
-
-        def toggleF0(self, checked):
-            if checked:
-                self.F0low.setEnabled(True)
-                self.F0lowtext.setEnabled(True)
-                self.F0high.setEnabled(True)
-                self.F0hightext.setEnabled(True)
-            else:
-                self.F0low.setEnabled(False)
-                self.F0lowtext.setEnabled(False)
-                self.F0high.setEnabled(False)
-                self.F0hightext.setEnabled(False)
-
-        def initializePage(self):
-            self.lblTrainDir.setText(self.field("trainDir"))
-            self.lblSpecies.setText(self.field("species"))
-            self.lblCluster.setText(self.clust)
-            self.wizard().saveTestBtn.setVisible(False)
-            # obtain fundamental frequency from each segment
-            with pg.BusyCursor():
-                print("measuring fundamental frequency range...")
-                f0_low = []  # could add a field to input these
-                f0_high = []
-                # for each segment:
-                for picbtn in self.picbuttons:
-                    f0_l, f0_h = self.getFundFreq(picbtn.audiodata, picbtn.media_obj.format().sampleRate())
-                    # we use NaNs to represent "no F0 found"
-                    f0_low.append(f0_l)
-                    f0_high.append(f0_h)
-
-            # how many had F0?
-            hadNoF0 = sum(np.isnan(f0_low))
-            hadF0 = sum(np.invert(np.isnan(f0_high)))
-            self.hadF0label.setText("%d (%d %%)" % (hadF0, hadF0/len(f0_low)*100))
-            self.hadNoF0label.setText("%d (%d %%)" % (hadNoF0, hadNoF0/len(f0_low)*100))
-
-            self.F0low.setRange(0, int(self.field("fs"))/2)
-            self.F0high.setRange(0, int(self.field("fs"))/2)
-            # this is to ensure that the checkbox toggled signal gets called
-            self.ckbF0.setChecked(True)
-            if hadF0 == 0:
-                print("Warning: no F0 found in the training segments")
-                self.ckbF0.setChecked(False)
-                self.F0low.setValue(0)
-                self.F0high.setValue(int(self.field("fs"))/2)
-            else:
-                f0_low = round(np.nanmin(f0_low))
-                f0_high = round(np.nanmax(f0_high))
-
-                # update the actual fields
-                self.F0low.setValue(f0_low)
-                self.F0high.setValue(f0_high)
-
-                # NOTE: currently, F0 is disabled by default, to save faint calls -
-                # enable this when the F0 detection is improved
-                self.ckbF0.setChecked(False)
-                print("Determined ff bounds:", f0_low, f0_high)
-
-        def getFundFreq(self, data, sampleRate):
-            """ Extracts fund freq range from audiodata """
-            sp = SignalProc.SignalProc(256, 128)
-            sp.data = data
-            sp.sampleRate = sampleRate
-            # spectrogram is not necessary if we're not returning segments
-            segment = Segment.Segmenter(sp, sampleRate)
-            pitch, y, minfreq, W = segment.yin(minfreq=100, returnSegs=False)
-            # we use NaNs to represent "no F0 found"
-            if pitch.size == 0:
-                return float("nan"), float("nan")
-
-            segs = segment.convert01(pitch > minfreq)
-            segs = segment.deleteShort(segs, 5)
-            if len(segs) == 0:
-                return float("nan"), float("nan")
-            else:
-                pitch = pitch[np.where(pitch>minfreq)]
-                return round(np.min(pitch)), round(np.max(pitch))
-
-    # page 7 - save the filter
+    # page 6 - save the filter
     class WLastPage(QWizardPage):
         def __init__(self, filtdir, parent=None):
             super(BuildRecAdvWizard.WLastPage, self).__init__(parent)
@@ -1440,18 +1346,7 @@ class BuildRecAdvWizard(QWizard):
                 M = float(self.field("bestM"+str(pageId)))
                 nodes = eval(self.field("bestNodes"+str(pageId)))
 
-                # post parameters
-                F0 = self.field("F0"+str(pageId))
-                F0low = int(self.field("F0low"+str(pageId)))
-                F0high = int(self.field("F0high"+str(pageId)))
-
                 newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
-
-                if F0:
-                    newSubfilt["F0"] = True
-                    newSubfilt["F0Range"] = [F0low, F0high]
-                else:
-                    newSubfilt["F0"] = False
 
                 print(newSubfilt)
                 self.wizard().speciesData["Filters"].append(newSubfilt)
@@ -1532,7 +1427,6 @@ class BuildRecAdvWizard(QWizard):
             # for each calltype, remove params, ROC, FF pages
             self.removePage(page)
             self.removePage(page+1)
-            self.removePage(page+2)
         self.trainpages = []
 
         for key, value in self.clusterPage.clusters.items():
@@ -1562,8 +1456,6 @@ class BuildRecAdvWizard(QWizard):
             page4.registerField("avgslen" + str(pageid), page4.avgslen)
             page4.registerField("fLow"+str(pageid), page4.fLow)
             page4.registerField("fHigh"+str(pageid), page4.fHigh)
-            # page4.registerField("thr"+str(pageid), page4.cbxThr, "currentText", page4.cbxThr.currentTextChanged)
-            # page4.registerField("M"+str(pageid), page4.cbxM, "currentText", page4.cbxM.currentTextChanged)
 
             # page 5: get training results
             page5 = BuildRecAdvWizard.WPageTrain(pageid, key, value, newsegs)
@@ -1574,20 +1466,12 @@ class BuildRecAdvWizard(QWizard):
             page5.registerField("bestM"+str(pageid)+"*", page5.bestM)
             page5.registerField("bestNodes"+str(pageid)+"*", page5.bestNodes)
 
-            # page 6: post process
-            page6 = BuildRecAdvWizard.WFFPage(value, newbtns)
-            self.addPage(page6)
-
-            page6.registerField("F0low"+str(pageid), page6.F0low)
-            page6.registerField("F0high"+str(pageid), page6.F0high)
-            page6.registerField("F0"+str(pageid), page6.ckbF0)
-
-        # page 7: confirm the results & save
-        page7 = BuildRecAdvWizard.WLastPage(self.filtersDir)
-        pageid = self.addPage(page7)
+        # page 6: confirm the results & save
+        page6 = BuildRecAdvWizard.WLastPage(self.filtersDir)
+        pageid = self.addPage(page6)
         # (store this as well, so that we could wipe it without worrying about page order)
         self.trainpages.append(pageid)
-        page7.registerField("filtfile*", page7.enterFiltName)
+        page6.registerField("filtfile*", page6.enterFiltName)
 
         self.clusterPage.setFinalPage(False)
         self.clusterPage.completeChanged.emit()
@@ -1704,9 +1588,10 @@ class TestRecWizard(QWizard):
             space.setFixedHeight(25)
 
             self.lblWFsummary = QLabel()
-            self.lblWFCNNsummary = QLabel()
-            self.lblWFsummary.setStyleSheet("QLabel { color : #808080; }")
-            self.lblWFCNNsummary.setStyleSheet("QLabel { color : #808080; }")
+            # self.lblWFCNNsummary = QLabel()
+            # self.lblWFsummary.setStyleSheet("QLabel { color : #808080; }")
+            # self.lblWFCNNsummary.setStyleSheet("QLabel { color : #808080; }")
+            self.lblOutfile = QLabel()
 
             # page layout
             vboxHead = QFormLayout()
@@ -1717,7 +1602,8 @@ class TestRecWizard(QWizard):
             vbox = QVBoxLayout()
             vbox.addLayout(vboxHead)
             vbox.addWidget(self.lblWFsummary)
-            vbox.addWidget(self.lblWFCNNsummary)
+            # vbox.addWidget(self.lblWFCNNsummary)
+            vbox.addWidget(self.lblOutfile)
             self.setLayout(vbox)
 
         def initializePage(self):
@@ -1731,17 +1617,16 @@ class TestRecWizard(QWizard):
                 self.lblTestFilter.setText(self.field("species"))
                 self.lblSpecies.setText(self.currfilt['species'])
 
-                test = Training.CNNtest(self.field("testDir"), self.currfilt,self.configdir,self.filterdir)
-                flag, text = test.getOutput()
+                test = Training.CNNtest(self.field("testDir"), self.currfilt, self.field("species")[:-4], self.configdir,self.filterdir)
+                text = test.getOutput()
 
             if text == 0:
                 self.lblWFsummary.setText("No segments for species \'%s\' found!" % self.field("species")[:-4])
                 return
 
-            if flag:
-                self.lblWFCNNsummary.setText(text)
-            else:
-                self.lblWFsummary.setText(text)
+            self.lblWFsummary.setText(text)
+            resfile = os.path.join(self.field("testDir"), "test-results.txt")
+            self.lblOutfile.setText("The detailed results have been saved in file\n%s" % resfile)
 
         def cleanupPage(self):
             self.lblWFsummary.setText('')
@@ -1758,31 +1643,31 @@ class TestRecWizard(QWizard):
                         os.remove(os.path.join(root, file))
             return True
 
-    class WPageFull(QWizardPage):
-        def __init__(self, parent=None):
-            super(TestRecWizard.WPageFull, self).__init__(parent)
-            self.setTitle('Detailed testing results')
+    # extra page to display the full results?
+    # class WPageFull(QWizardPage):
+    #     def __init__(self, parent=None):
+    #         super(TestRecWizard.WPageFull, self).__init__(parent)
+    #         self.setTitle('Detailed testing results')
 
-            self.setMinimumSize(300, 300)
-            self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
-            self.adjustSize()
+    #         self.setMinimumSize(300, 300)
+    #         self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+    #         self.adjustSize()
 
-            self.results = QTextEdit()
-            self.results.setReadOnly(True)
+    #         self.results = QTextEdit()
+    #         self.results.setReadOnly(True)
 
-            vbox = QVBoxLayout()
-            vbox.addWidget(self.results)
-            self.setLayout(vbox)
+    #         vbox = QVBoxLayout()
+    #         vbox.addWidget(self.results)
+    #         self.setLayout(vbox)
 
-        def initializePage(self):
-            resfile = os.path.join(self.field("testDir"), "test-results.txt")
-            resstream = open(resfile, 'r')
-            self.setSubTitle("The detailed results (shown below) have been saved in file %s" % resfile)
-            self.results.setPlainText(resstream.read())
-            resstream.close()
+    #     def initializePage(self):
+    #         resfile = os.path.join(self.field("testDir"), "test-results.txt")
+    #         resstream = open(resfile, 'r')
+    #         self.results.setPlainText(resstream.read())
+    #         resstream.close()
 
-        def cleanupPage(self):
-            self.results.setPlainText('')
+    #     def cleanupPage(self):
+    #         self.results.setPlainText('')
 
     # Main init of the testing wizard
     def __init__(self, filtdir, configdir, filter=None, parent=None):
@@ -1810,8 +1695,8 @@ class TestRecWizard(QWizard):
         pageMain = TestRecWizard.WPageMain(configdir, filtdir)
         self.addPage(pageMain)
 
-        # extra page to show more
-        self.addPage(TestRecWizard.WPageFull())
+        # extra page to show more details
+        # self.addPage(TestRecWizard.WPageFull())
 
 class ROCCanvas(FigureCanvas):
     def __init__(self, parent=None, width=5, height=6, dpi=100):
@@ -2037,7 +1922,7 @@ class BuildCNNWizard(QWizard):
             self.hasant1 = False
             self.hasant2 = False
             cl = SupportClasses.ConfigLoader()
-            self.LearningDict = cl.learningParams(os.path.join(configdir,"LearningParams.txt"))
+            self.LearningDict = cl.learningParams(os.path.join(configdir, "LearningParams.txt"))
 
             self.msgmdir = QLabel("")
             self.msgmdir.setFixedWidth(600)
