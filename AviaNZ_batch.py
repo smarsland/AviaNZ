@@ -867,3 +867,53 @@ class AviaNZ_batchProcess():
 
         return label
 
+def exportCSV(dirName):
+    # This produces a csv file that looks like the one from Bat Search. 
+
+    writefile = "BatResults.csv"
+    f = open(os.path.join(dirName,writefile),'w')
+    f.write('Date,Time,AssignedSite,Category,Foldername,Filename,Observer\n')
+    for root, dirs, files in os.walk(dirName):
+        dirs.sort()
+        files.sort()
+        for filename in files:
+            if filename.endswith('.data'):
+                #print("Appending" ,filename)
+                segments = Segment.SegmentList()
+                segments.parseJSON(os.path.join(root, filename))
+                if len(segments)>0:
+                    seg = segments[0]
+                    c = [lab["certainty"] for lab in seg[4]]
+                    if c[0]==100:
+                        s = [lab["species"] for lab in seg[4]]
+                        # TODO: what if both?
+                        if s[0] == 'Long-tailed bat':
+                            s = 'Long tail,'
+                        elif s[0] == 'Short-tailed bat':
+                            s = 'Short tail,'
+                    else:
+                        s = ''
+                else:
+                    s = ''
+                # Assumes DOC format
+                d = filename[6:8]+'/'+filename[4:6]+'/'+filename[:4]+','
+                if d[0] == '0':
+                    d = d[1:]
+                if int(filename[9:11]) < 13:
+                    if filename[9:11] == '00':
+                        t = str(int(filename[9:11])+12)+':'+filename[11:13]+':'+filename[13:15]+' a.m.,'
+                    else:
+                        t = filename[9:11]+':'+filename[11:13]+':'+filename[13:15]+' a.m.,'
+                else:
+                    t = str(int(filename[9:11])-12)+':'+filename[11:13]+':'+filename[13:15]+' p.m.,'
+                if t[0] == '0':
+                    t = t[1:]
+                # Assume that directory structure is recorder - date
+                if s == '':
+                    rec = ',Unassigned'
+                    op = ''
+                else:
+                    rec = root.split('/')[-3]
+                    op = 'Moira Pryde'
+                date = '.\\'+root.split('/')[-1]
+                #dd/mm/yyyy,(h)h:mm:ss a.m.,R?,Long tail,.\20191110,.\file.bmp,Moira Pryde
