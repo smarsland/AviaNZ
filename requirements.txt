@@ -19,7 +19,7 @@ scikit-image==0.15.0
 scipy==1.4.1
 setuptools==41.0.1
 spectrum==0.7.5
-tensorflow==2.1
+tensorflow==2.1.2
 
 ## These dependencies are important, but should be installed by the main packages:
 # joblib==0.13.2
