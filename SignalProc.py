@@ -443,6 +443,29 @@ class SignalProc:
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T
         return self.sg
 
+    def scalogram(self,wavelet='morl'):
+        # Compute the wavelet scalogram
+        import pywt
+        scalogram, freqs = pywt.cwt(self.audiodata, widths, wavelet)
+
+    def Stockwell(self):
+        # Stockwell transform (Brown et al. version)
+        # Need to get the starts etc. sorted
+
+        width = len(self.audiodata) // 2
+
+        # Gaussian window for frequencies
+        f_half = np.arange(0, width + 1) / (2 * width)
+        f = np.concatenate((f_half, np.flipud(-f_half[1:-1])))
+        p = 2 * np.pi * np.outer(f, 1 / f_half[1:])
+        window = np.exp(-p ** 2 / 2).T
+
+        f_tran = fft.fft(self.audiodata, 2*width, overwrite_x=True)
+        diag_con = np.linalg.toeplitz(np.conj(f_tran[:width + 1]), f_tran)
+        # Remove zero freq line
+        diag_con = diag_con[1:width + 1, :]  
+        return np.flipud(fft.ifft(diag_con * window, axis=1))
+
     def bandpassFilter(self,data=None,sampleRate=None,start=0,end=None):
         """ FIR bandpass filter
         128 taps, Hamming window, very basic.
