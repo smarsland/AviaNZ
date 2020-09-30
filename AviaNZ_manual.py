@@ -3631,15 +3631,14 @@ class AviaNZ(QMainWindow):
                             self.shortBirdList.insert(0,str(bird))
                             del self.shortBirdList[-1]
 
-            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.multipleBirds, self.sp.audioFormat, self)
+            if not hasattr(self, 'dialogPlotAspect'):
+                self.dialogPlotAspect = 2
+            self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.multipleBirds, self.sp.audioFormat, self.dialogPlotAspect, self)
 
             # load the first image:
             self.box1id = -1
             if hasattr(self, 'humanClassifyDialogSize'):
                 self.humanClassifyDialog1.resize(self.humanClassifyDialogSize)
-            if hasattr(self, 'dialogPlotAspect'):
-                self.humanClassifyDialog1.plotAspect = self.dialogPlotAspect
-                self.humanClassifyDialog1.pPlot.setAspectLocked(ratio=self.dialogPlotAspect)
 
             self.humanClassifyNextImage1()
             #self.humanClassifyDialog1.activateWindow()

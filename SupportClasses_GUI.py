@@ -599,6 +599,40 @@ class ClickableRectItem(QtGui.QGraphicsRectItem):
         self.parentWidget().resend(x)
 
 
+class PartlyResizableGLW(pg.GraphicsLayoutWidget):
+    # a widget which has a fixed aspect ratio, set by height.
+    # useful for horizontal scroll areas.
+    def __init__(self):
+        self.plotAspect = 5
+        # to prevent infinite loops:
+        self.alreadyResizing = False
+        super(PartlyResizableGLW, self).__init__()
+
+    def forceResize(self):
+        # this should be doable by postEvent(QResizeEvent),
+        # but somehow doesn't always work.
+        self.alreadyResizing = False
+        self.setMinimumWidth(self.height()*self.plotAspect-10)
+        self.setMaximumWidth(self.height()*self.plotAspect+10)
+        self.adjustSize()
+
+    def resizeEvent(self, e):
+        if e is not None:
+            # break any infinite loops,
+            # and also processes every second event:
+            if self.alreadyResizing:
+                self.alreadyResizing = False
+                return
+
+            self.alreadyResizing = True
+            # Some buffer for flexibility, so that it could adjust itself
+            # and avoid infinite loops
+            self.setMinimumWidth(e.size().height()*self.plotAspect-10)
+            self.setMaximumWidth(e.size().height()*self.plotAspect+10)
+
+            pg.GraphicsLayoutWidget.resizeEvent(self, e)
+
+
 class ControllableAudio(QAudioOutput):
     # This links all the PyQt5 audio playback things -
     # QAudioOutput, QFile, and input from main interfaces

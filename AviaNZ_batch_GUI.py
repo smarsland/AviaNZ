@@ -1295,16 +1295,16 @@ class AviaNZ_reviewAll(QMainWindow):
         self.batList = self.ConfigLoader.batl(self.config['BatList'], self.configdir)
 
         self.loadFile(filename)
+
+        if not hasattr(self, 'dialogPlotAspect'):
+            self.dialogPlotAspect = 2
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[0].audioFormat, self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[0].audioFormat, self.dialogPlotAspect, self)
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
             self.humanClassifyDialog1.move(self.dialogPos)
-        if hasattr(self, 'dialogPlotAspect'):
-            self.humanClassifyDialog1.plotAspect = self.dialogPlotAspect
-            self.humanClassifyDialog1.pPlot.setAspectLocked(ratio=self.dialogPlotAspect)
         self.humanClassifyDialog1.setWindowTitle("AviaNZ - reviewing " + self.filename)
         self.humanClassifyNextImage1()
         # connect listeners
