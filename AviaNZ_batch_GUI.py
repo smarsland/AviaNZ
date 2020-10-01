@@ -243,8 +243,8 @@ class AviaNZ_batchWindow(QMainWindow):
 
     def showHelp(self):
         """ Show the user manual (a pdf file)"""
-        # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
+        webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
+        # webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
     def quitPro(self):
         """ quit program
@@ -746,8 +746,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def showHelp(self):
         """ Show the user manual (a pdf file)"""
-        # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
+        webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
+        # webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
     def quitPro(self):
         """ quit program
