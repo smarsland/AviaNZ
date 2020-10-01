@@ -1015,7 +1015,7 @@ class AviaNZ(QMainWindow):
         # But it is a costly operation, so check if needed:
         if self.batmode and not self.readonly.isChecked():
             self.readonly.setChecked(True)
-            self.makeReadOnly()
+            #self.makeReadOnly()
         elif self.batmode and self.readonly.isChecked():
             pass
         elif self.readonly.isChecked() and not self.batmode:

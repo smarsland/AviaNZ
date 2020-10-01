@@ -1758,16 +1758,16 @@ class HumanClassify1(QDialog):
         xyratio = np.shape(self.sg)
         xyratio = xyratio[0] / xyratio[1]
         # resize the white area around the spectrogram if it's under 500
-        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
-        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)#original 250
+        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)#original 250
 
     def zoomOut(self):
         self.plotAspect = self.plotAspect / 1.5
         self.pPlot.setAspectLocked(ratio=self.plotAspect)
         xyratio = np.shape(self.sg)
         xyratio = xyratio[0] / xyratio[1]
-        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
-        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)#original 250
+        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)#original 250
 
     def updateButtonList(self):
         # refreshes bird button names
@@ -1841,8 +1841,8 @@ class HumanClassify1(QDialog):
         # self.plotAspect = 0.2 for x/y pixel aspect ratio
         # 0.9 for padding
         # TODO: ***Issues here
-        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
-        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)
+        self.wPlot.setMaximumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)#original 250
+        self.wPlot.setMinimumSize(max(500, xyratio*250*self.plotAspect*0.9), 250)#original 250
 
         # add marks to separate actual segment from buffer zone
         # Note: need to use view coordinates to add items to pPlot
