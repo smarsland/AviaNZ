@@ -588,8 +588,8 @@ In order to start the training process, you need to start by performing some man
 \item Ideally you will need a few (5--30) examples of each type of call that the species makes. 
 \item The sound files can have noise in them, although preferably not too much. 
 \item It is helpful if you have both loud and quiet calls. 
-\item Ideally you should avoid recordings where there are simultaneous calls from other species in the same frequency range. 
-\item It is also a very good idea to have a set of different files for testing. %\textcolor{red}{The amount of testing data should be similar to the training data.} 
+\item Ideally you should avoid recordings where there are simultaneous calls from other species. 
+\item It is also a very good idea to have a set of different files for testing.
 \item Just like the training data, testing data should represent the real nature of field recordings that you are going to process with this filter, and also include all the call types.
 \end{itemize}
 \item[Labelling] Once you have a few sound files, open each file in the `Manual Processing' interface of AviaNZ and manually label every call from that species with the species name.
@@ -618,7 +618,7 @@ Follow the steps below to train a wavelet recogniser:
 
 \item AviaNZ will confirm these choices before starting the training process. 
 \item There are a few places during the process where you can modify choices that AviaNZ has made. 
-\item One is on the first page, where it says `Preferred sampling rate (Hz)'. If you don't know what these things mean, you can ignore them, but for experienced users, they are places where choices that AviaNZ has made might be improved upon. 
+\item One is on the first page, where it says `Preferred sampling rate (Hz)'. If you don't know what these things mean, you can ignore them, but for experienced users, there are places where choices that AviaNZ has made might be improved upon. 
 \item Once the initial choices have been made, press the `Cluster' button, and AviaNZ will try to cluster your labelled training segments into groups of similar sounds (call types, such as male and female kiwi, or `more-pork' and `cree' ruru calls). It will show the outputs of this in this interface:
 \begin{center}
     \includegraphics[width=.6\textwidth]{Figs/Wizard_cluster}
@@ -652,7 +652,7 @@ Follow the steps below to train a wavelet recogniser:
 
 \item If you don't know what they are, just ignore them. 
 \item The program will then search for good ways to represent those calls, which can take a while, and then show a plot of error rates for different parameter settings. 
-\item This is known as an ROC curve, and it is a plot of the recall (True Positive Rate) against the False Positive Rate for different parameter settings. It looks like these examples:
+\item This is known as an ROC curve, and it is a plot of the recall (True Positive Rate) against the False Positive Rate for different parameter settings:
 \begin{center}
     \includegraphics[width=.4\textwidth]{Figs/Wizard_ROC}
 \end{center}
@@ -696,9 +696,9 @@ A wavelet recogniser will usually find most of your bird calls (it has good reca
     \item[Remove false positives] Using either of the batch review options, delete any segments that do not contain your target bird call. 
     \item[Correct the segments] Using manual mode, correct the size and location of each segment box so that it covers the call, but only the call. Also check that the call type was labelled correctly and correct any errors. You can swap between seeing the species label and the call type label using the \includegraphics[scale=0.5]{Figs/SPCT} button on the right of the Controls panel. You can also do this second part in the Batch Review *** mode. 
 
-    Once you are sure that each label is correct, use the `Confirm labels' (\includegraphics[scale=0.5]{Figs/confirmlabels}) button so that the segment turns green.
+    Once you are sure that each label is correct, use the `Confirm labels' (\includegraphics[scale=0.5]{Figs/confirmlabels}) button so that the segment turns green. Or at the end of manual correction of the box sizes, you can review the folder in Batch Review and confirm them to make it faster. 
     \end{description}
-\item In addition to the batch reviewed recordings, you can also input manually annotated recordings to the CNN training, such as the training data set that you used for the wavelet recogniser training. If you plan to use some other manually annotated recordings (not the train data in wavelet training), make sure to annotate it to include both species and call type. You can use \includegraphics[scale=0.5]{Figs/SPCT} button from the Controls area in the Manual Interface to assign call types.
+\item In addition to the batch reviewed recordings, you can also input manually annotated recordings to the CNN training, such as the training data set that you used for the wavelet recogniser training. If you plan to use some other manually annotated recordings (not the train data in wavelet training), make sure to annotate it to include both species and call type. You can use \includegraphics[scale=0.5]{Figs/SPCT} button from the Controls area in the Manual Interface to assign call types. Alternatively you can annotate the calls to the species level and assign the call type during the review of the folder in the Batch Review *** mode.
 \end{itemize}
 \end{description}
  
@@ -714,7 +714,7 @@ A wavelet recogniser will usually find most of your bird calls (it has good reca
 
 \item AviaNZ will confirm these choices before starting the training process. It will also warn you if it cannot find enough data. 
 \item AviaNZ will then suggest an appropriate length of call/segment to feed into the CNN. If the number looks wrong for your species, you can correct it. Ideally this length should be a bit longer than both a syllable of the call, and the gap between syllables. 
-\item At the end of the training, AviaNZ will show you ROC curves for each call type and ask you to select a point that represents your compromise between true positive rate and false positive rate. If you select the relevant option then AviaNZ can do this automatically instead. 
+\item At the end of the training, AviaNZ will show you ROC curves for each call type and ask you to select a point that represents your compromise between True Positive Rate and False Positive Rate. If you select the relevant option then AviaNZ can do this automatically instead. 
 
 \begin{center}
     \includegraphics[width=.4\textwidth]{Figs/CNNpage2}
@@ -733,7 +733,6 @@ A wavelet recogniser will usually find most of your bird calls (it has good reca
 \item If you have prepared testing data already, you can do this straight away. 
 \item Otherwise save the recogniser and then test at a later date by using `Test a recogniser' in the Recognisers menu of the Manual interface.
 \item You should also test a recogniser that you receive from somebody else (for example, from our webpage) before relying on it.
-\item Testing should use different sound files to the ones used for training. 
 \item It runs the recogniser over the files, and compares the results to the human annotations using the same error metrics that were defined in Section~\ref{sec:metrics}. It gives a better indication of how well the recogniser will work in practice. %If you look at the testing files after using this feature in the `Manual Processing' interface, you can see the annotations from both the human and machine in order to compare them. 
 \end{itemize}
 
