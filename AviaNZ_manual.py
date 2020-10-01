@@ -525,7 +525,8 @@ class AviaNZ(QMainWindow):
 
         # annotInfo = QLabel("<b>Annotations present</b> (details go here)")
 
-        self.p_overview = self.w_overview1.addViewBox(enableMouse=False,enableMenu=False,row=0,col=0)
+        self.p_overview = SupportClasses_GUI.DemousedViewBox()
+        self.w_overview1.addItem(self.p_overview,row=0,col=0)
         self.p_overview2 = SupportClasses_GUI.ChildInfoViewBox(enableMouse=False, enableMenu=False)
         self.w_overview1.addItem(self.p_overview2,row=1,col=0)
         self.p_overview2.setXLink(self.p_overview)
