@@ -51,7 +51,7 @@ def ClickSearch(imspec, label):
     detected_clicks=[{"Operator": "Auto", "Reviewer": "", "Duration": duration, "noiseLevel": [], "noiseTypes": []}]
 
     #check this
-    up_len=math.ceil(0.05/dt) #max length in columns
+    up_len=math.ceil(0.075/dt) #max length in columns
     print('check up_len= ', up_len)
     #up_len=17
     # up_len=math.ceil((0.5/11)/dt)
