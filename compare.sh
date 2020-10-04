@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for dir in /media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Virginia (From Moira 2020)/Raw \ files/R*     # list directories in the form "/tmp/dirname/"
+for dir in /media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Virginia (From Moira 2020)/Raw  files/R*     # list directories in the form "/tmp/dirname/"
 do
     cd ${dir%*}      # remove the trailing "/"
     diff BatSearch.csv Results.csv > out
