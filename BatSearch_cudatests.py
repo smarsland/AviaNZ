@@ -335,11 +335,11 @@ def File_label(predictions, thr1, thr2):
 
     return label
 
-def exportCSV(dirName, Dataset_dir):
+def exportCSV(dirName, Dataset_dir, writefile):
     #from PyQt5.QtCore import QTime
 
     # list all DATA files that can be processed
-    writefile = "Results.csv"
+    #writefile = "Results.csv"
     f = open(os.path.join(dirName,writefile),'w')
     f.write('Date,Time,AssignedSite,Category,Foldername,Filename,Observer\n')
     for root, dirs, files in os.walk(Dataset_dir):
@@ -396,8 +396,9 @@ def exportCSV(dirName, Dataset_dir):
 
 train_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Train_Datasets" #directory with train files
 CNN_test_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Virginia (From Moira 2020)/Raw files" #directory with test files
-test_count=0 #counter for test number
-test_dir = "/am/state-opera/home1/listanvirg/Documents/Bat_TESTS" #directory to store test result
+test_count=1 #counter for test number
+test_dir = "/am/state-opera/home1/listanvirg/Documents/Bat_TESTS"
+#test_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Experiments_Results" #directory to store test result
 test_fold= "Test_"+str(test_count) #Test folder where to save all the stats
 os.mkdir(test_dir+ '/' + test_fold)
 
@@ -466,8 +467,8 @@ for i in range(3):
                 print('Clicks detected in ', file)
 
         #saving dataset
-        with open(test_dir+'/'+test_fold +'/sgramdata_train.json', 'w') as outfile:
-            json.dump(train_featuress, outfile)
+        #with open(test_dir+'/'+test_fold +'/sgramdata_train.json', 'w') as outfile:
+        #    json.dump(train_featuress, outfile)
 
         #check
         print(np.shape(train_featuress))
@@ -475,321 +476,337 @@ for i in range(3):
         #Train CNN
         # with and without agumentation
         
-        for ag in range(2):
-            data_train=train_featuress
-            if ag%2==1:
-                #### DATA AGUMENTATION ######################
-                # create image data augmentation generator for in-build
-                ag_flag=True
-                sg_train_0=[]
-                sg_train_1=[]
-                sg_train_2=[]
-                for k in range(np.shape(data_train)[0]):
-                    maxg = np.max(data_train[k][0][:])
-                    if data_train[k][-1]==0:
-                        sg_train_0.apped(data_train[k][0][:]/maxg)
-                    elif data_train[k][-1]==1:
-                        sg_train_1.append(data_train[k][0][:]/maxg)
-                    elif data_train[k][-1]==2:
-                        sg_train_2.append(data_train[k][0][:]/maxg)
-                datagen1 = ImageDataGenerator(width_shift_range=0.5, fill_mode='nearest')
-                batch_size = 32
+        #for ag in range(2):
+        #    if test_count==1:
+        #        ag=1
+        #    data_train=train_featuress
+        #    if ag%2==1:
+        #        #### DATA AGUMENTATION ######################
+        #        # create image data augmentation generator for in-build
+        #        ag_flag=True
+        #        sg_train_0=[]
+        #        sg_train_1=[]
+        #        sg_train_2=[]
+        #        print('check shape',np.shape(data_train)[0])
+        #        for k in range(np.shape(data_train)[0]):
+        #            maxg = np.max(data_train[k][0][:])
+        #            if data_train[k][-1]==0:
+        #                sg_train_0.append(data_train[k][0][:]/maxg)
+        #            elif data_train[k][-1]==1:
+        #                sg_train_1.append(data_train[k][0][:]/maxg)
+        #            elif data_train[k][-1]==2:
+        #                sg_train_2.append(data_train[k][0][:]/maxg)
+        #        datagen1 = ImageDataGenerator(width_shift_range=0.5, fill_mode='nearest')
+        #        batch_size = 32
 
-                # class_0
-                samples = expand_dims(sg_train_0, np.shape(sg_train_0)[0])
-                # prepare iterator
-                it1 = datagen1.flow(samples, batch_size=batch_size)
-                # generate samples
-                batch_train_0 = it1.next()
-                for k in range(int(np.round((1500-np.shape(sg_train_0)[0])/batch_size))):
-                    batch = it1.next()
-                    batch_train_0 = np.vstack((batch_train_0, batch))
+        #        # class_0
+        #        print('check shape',np.shape(sg_train_0)[0])
+        #        samples = expand_dims(sg_train_0, np.shape(sg_train_0)[0])
+        #        # prepare iterator
+        #        it1 = datagen1.flow(samples, batch_size=batch_size)
+        #        # generate samples
+        #        batch_train_0 = it1.next()
+        #        for k in range(int(np.round((1500-np.shape(sg_train_0)[0])/batch_size))):
+        #            batch = it1.next()
+        #            batch_train_0 = np.vstack((batch_train_0, batch))
     
-                print('sg_train_0 shape', np.shape(sg_train_0))
+        #        print('sg_train_0 shape', np.shape(sg_train_0))
     
-                print('batch_train_0 shape', np.shape(batch_train_0))
-                #add to original ones
-                batch_train_0=np.reshape(batch_train_0,np.shape(batch_train_0)[0:3])
-                print('batch_train_0 shape after reshape', np.shape(batch_train_0))
-                sg_train_0_ag=np.concatenate((sg_train_0,batch_train_0), axis=0)
-                #label
-                target_train_0=np.zeros(np.shape(sg_train_0_ag)[0])
+        #        print('batch_train_0 shape', np.shape(batch_train_0))
+        #        #add to original ones
+        #        batch_train_0=np.reshape(batch_train_0,np.shape(batch_train_0)[0:3])
+        #        print('batch_train_0 shape after reshape', np.shape(batch_train_0))
+        #        sg_train_0_ag=np.concatenate((sg_train_0,batch_train_0), axis=0)
+        #        #label
+        #        target_train_0=np.zeros(np.shape(sg_train_0_ag)[0])
 
-                # class_1
-                samples = expand_dims(sg_train_1, np.shape(sg_train_1)[0])
-                # prepare iterator
-                it1 = datagen1.flow(samples, batch_size=batch_size)
-                # generate samples
-                batch_train_1 = it1.next()
-                for k in range(int(np.round((1500-np.shape(sg_train_1)[0])/batch_size))):
-                    batch = it1.next()
-                    batch_train_1 = np.vstack((batch_train_1, batch))
+        #        # class_1
+        #        samples = expand_dims(sg_train_1, np.shape(sg_train_1)[0])
+        #        # prepare iterator
+        #        it1 = datagen1.flow(samples, batch_size=batch_size)
+        #        # generate samples
+        #        batch_train_1 = it1.next()
+        #        for k in range(int(np.round((1500-np.shape(sg_train_1)[0])/batch_size))):
+        #            batch = it1.next()
+        #            batch_train_1 = np.vstack((batch_train_1, batch))
 
-                print('sg_train_1 shape', np.shape(sg_train_1))
+        #        print('sg_train_1 shape', np.shape(sg_train_1))
     
-                print('batch_train_1 shape', np.shape(batch_train_1))
-                #add to original ones
-                batch_train_1=np.reshape(batch_train_1,np.shape(batch_train_1)[0:3])
-                print('batch_train_1 shape after reshape', np.shape(batch_train_1))
-                #add to original ones
-                sg_train_1_ag=np.concatenate((sg_train_1,batch_train_1), axis=0)
-                #label
-                target_train_1=np.ones(np.shape(sg_train_1_ag)[0])
-                # class_2
-                samples = expand_dims(sg_train_2, np.shape(sg_train_2)[0])
-                # prepare iterator
-                it1 = datagen1.flow(samples, batch_size=batch_size)
-                # generate samples
-                batch_train_2 = it1.next()
-                for k in range(int(np.round((9000-np.shape(sg_train_2)[0])/batch_size))):
-                    batch = it1.next()
-                    batch_train_2 = np.vstack((batch_train_2, batch))
+        #        print('batch_train_1 shape', np.shape(batch_train_1))
+        #        #add to original ones
+        #        batch_train_1=np.reshape(batch_train_1,np.shape(batch_train_1)[0:3])
+        #        print('batch_train_1 shape after reshape', np.shape(batch_train_1))
+        #        #add to original ones
+        #        sg_train_1_ag=np.concatenate((sg_train_1,batch_train_1), axis=0)
+        #        #label
+        #        target_train_1=np.ones(np.shape(sg_train_1_ag)[0])
+        #        # class_2
+        #        samples = expand_dims(sg_train_2, np.shape(sg_train_2)[0])
+        #        # prepare iterator
+        #        it1 = datagen1.flow(samples, batch_size=batch_size)
+        #        # generate samples
+        #        batch_train_2 = it1.next()
+        #        for k in range(int(np.round((9000-np.shape(sg_train_2)[0])/batch_size))):
+        #            batch = it1.next()
+        #            batch_train_2 = np.vstack((batch_train_2, batch))
     
-                print('sg_train_2 shape', np.shape(sg_train_2))
+        #        print('sg_train_2 shape', np.shape(sg_train_2))
     
-                print('batch_train_2 shape', np.shape(batch_train_2))
-                #add to original ones
-                batch_train_2=np.reshape(batch_train_2,np.shape(batch_train_2)[0:3])
-                print('batch_train_2 shape after reshape', np.shape(batch_train_2))
-                #add to original ones
-                sg_train_2_ag=np.concatenate((sg_train_2,batch_train_2), axis=0)
-                #label
-                target_train_2=2*np.ones(np.shape(sg_train_2_ag)[0])
+        #        print('batch_train_2 shape', np.shape(batch_train_2))
+        #        #add to original ones
+        #        batch_train_2=np.reshape(batch_train_2,np.shape(batch_train_2)[0:3])
+        #        print('batch_train_2 shape after reshape', np.shape(batch_train_2))
+        #        #add to original ones
+        #        sg_train_2_ag=np.concatenate((sg_train_2,batch_train_2), axis=0)
+        #        #label
+        #        target_train_2=2*np.ones(np.shape(sg_train_2_ag)[0])
 
-                #unify train dataset
-                sg_train=np.concatenate((sg_train_0_ag, sg_train_1_ag, sg_train_2_ag), axis=0)
-                sg_train=np.asarray(sg_train, dtype=float)
-                print('check sg_train shape', np.shape(sg_train))
-                #unify labels
-                target_train=np.concatenate((target_train_0, target_train_1, target_train_2), axis=0)
-                print('check target_train shape', np.shape(target_train))
-            else:
-                ag_flag=False
-                sg_train=np.ndarray(shape=(np.shape(data_train)[0],np.shape(data_train[0][0])[0], np.shape(data_train[0][0])[1]), dtype=float) #check
-                target_train = np.zeros((np.shape(data_train)[0], 1)) #label train
-                for k in range(np.shape(data_train)[0]):
-                    maxg = np.max(data_train[k][0][:])
-                    sg_train[k][:] = data_train[k][0][:]/maxg
-                    target_train[k][0] = data_train[k][-1]
+        #        #unify train dataset
+        #        sg_train=np.concatenate((sg_train_0_ag, sg_train_1_ag, sg_train_2_ag), axis=0)
+        #        sg_train=np.asarray(sg_train, dtype=float)
+        #        print('check sg_train shape', np.shape(sg_train))
+        #        #unify labels
+        #        target_train=np.concatenate((target_train_0, target_train_1, target_train_2), axis=0)
+        #        print('check target_train shape', np.shape(target_train))
+        #    else:
+        ag_flag=False
+        data_train=train_featuress
+        sg_train=np.ndarray(shape=(np.shape(data_train)[0],np.shape(data_train[0][0])[0], np.shape(data_train[0][0])[1]), dtype=float) #check
+        target_train = np.zeros((np.shape(data_train)[0], 1)) #label train
+        for k in range(np.shape(data_train)[0]):
+            maxg = np.max(data_train[k][0][:])
+            sg_train[k][:] = data_train[k][0][:]/maxg
+            target_train[k][0] = data_train[k][-1]
 
-            #validation data
-            # randomly choose 75% train data and keep the rest as validation data
-            idxs = np.random.permutation(np.shape(sg_train)[0])
-            x_train = sg_train[idxs[0:int(len(idxs)*0.75)]]
-            y_train = target_train[idxs[0:int(len(idxs)*0.75)]]
-            x_validation = sg_train[idxs[int(len(idxs)*0.75):]]
-            y_validation = target_train[idxs[int(len(idxs)*0.75):]]
+        #validation data
+        # randomly choose 75% train data and keep the rest as validation data
+        idxs = np.random.permutation(np.shape(sg_train)[0])
+        x_train = sg_train[idxs[0:int(len(idxs)*0.75)]]
+        y_train = target_train[idxs[0:int(len(idxs)*0.75)]]
+        x_validation = sg_train[idxs[int(len(idxs)*0.75):]]
+        y_validation = target_train[idxs[int(len(idxs)*0.75):]]
  
-            #Check: how many files I am using for training
-            print("-------------------------------------------")
-            print("Training model n ", test_count)
-            if ag_flag:
-                print('Agumentation used')
-            else:
-                print('Agumentation NOT used')
-            if window==3:
-                print('window used 3x2')
-            else:
-                print('window used ', window)
-            print('Number of spectrograms', np.shape(target_train)[0]) 
-            print('Spectrograms used for training ',np.shape(y_train)[0])
-            print("Spectrograms for LT: ", np.shape(np.nonzero(y_train==0))[1])
-            print("Spectrograms for ST: ", np.shape(np.nonzero(y_train==1))[1])
-            print("Spectrograms for Noise: ", np.shape(np.nonzero(y_train==2))[1])
-            print('\n Spectrograms used for validation ',np.shape(y_validation)[0])
-            print("Spectrograms for LT: ", np.shape(np.nonzero(y_validation==0))[1])
-            print("Spectrograms for ST: ", np.shape(np.nonzero(y_validation==1))[1])
-            print("Spectrograms for Noise: ", np.shape(np.nonzero(y_validation==2))[1])
+        #Check: how many files I am using for training
+        print("-------------------------------------------")
+        print("Training model n ", test_count)
+        if ag_flag:
+            print('Agumentation used')
+        else:
+            print('Agumentation NOT used')
+        if window==3:
+            print('window used 3x2')
+        else:
+            print('window used ', window)
+        print('Number of spectrograms', np.shape(target_train)[0]) 
+        print('Spectrograms used for training ',np.shape(y_train)[0])
+        print("Spectrograms for LT: ", np.shape(np.nonzero(y_train==0))[1])
+        print("Spectrograms for ST: ", np.shape(np.nonzero(y_train==1))[1])
+        print("Spectrograms for Noise: ", np.shape(np.nonzero(y_train==2))[1])
+        print('\n Spectrograms used for validation ',np.shape(y_validation)[0])
+        print("Spectrograms for LT: ", np.shape(np.nonzero(y_validation==0))[1])
+        print("Spectrograms for ST: ", np.shape(np.nonzero(y_validation==1))[1])
+        print("Spectrograms for Noise: ", np.shape(np.nonzero(y_validation==2))[1])
 
-            if window==3:
-                first_dim=6
-            else:
-                first_dim=window
-            train_images = x_train.reshape(x_train.shape[0],first_dim, 512, 1) #changed image dimensions
-            validation_images = x_validation.reshape(x_validation.shape[0],first_dim, 512, 1)
-            input_shape = (first_dim, 512, 1)
+        if window==3:
+            first_dim=6
+        else:
+            first_dim=window
+        train_images = x_train.reshape(x_train.shape[0],first_dim, 512, 1) #changed image dimensions
+        validation_images = x_validation.reshape(x_validation.shape[0],first_dim, 512, 1)
+        input_shape = (first_dim, 512, 1)
 
-            train_images = train_images.astype('float32')
-            validation_images = validation_images.astype('float32')
+        train_images = train_images.astype('float32')
+        validation_images = validation_images.astype('float32')
 
-            # CNN Training
-            num_labels=3 #change this variable, when changing number of labels
-            train_labels = tensorflow.keras.utils.to_categorical(y_train, num_labels)
-            validation_labels = tensorflow.keras.utils.to_categorical(y_validation, num_labels)
-            #test_labels = tensorflow.keras.utils.to_categorical(y_test, 8)   #change this to set labels  
+        # CNN Training
+        num_labels=3 #change this variable, when changing number of labels
+        train_labels = tensorflow.keras.utils.to_categorical(y_train, num_labels)
+        validation_labels = tensorflow.keras.utils.to_categorical(y_validation, num_labels)
+        #test_labels = tensorflow.keras.utils.to_categorical(y_test, 8)   #change this to set labels  
 
-            accuracies=np.zeros((10,1)) #initializing accuracies array
-            model_paths=[] #initializing list where to stor model path
-            #repeat training 10 times and take the best one on validation accuracy
-            for k in range(10):
-                #Build CNN architecture
-                model = Sequential()
-                model.add(Conv2D(32, kernel_size=(3,3), #I don't think this nees to be changed
-                                 activation='relu',
-                                 input_shape=input_shape))
-                # 64 3x3 kernels
-                model.add(Conv2D(64, (3, 3), activation='relu')) #I don't think this nees to be changed
-                # Reduce by taking the max of each 2x2 block
-                model.add(MaxPooling2D(pool_size=(2, 2)))
-                # Dropout to avoid overfitting
-                model.add(Dropout(0.25))
-                # Flatten the results to one dimension for passing into our final layer
-                model.add(Flatten())
-                # A hidden layer to learn with
-                model.add(Dense(128, activation='relu'))
-                # Another dropout
-                model.add(Dropout(0.5))
-                # Final categorization from 0-9 with softmax
-                #Virginia: changed 8->3 because I have 3 classes (????)
-                model.add(Dense(num_labels, activation='softmax')) #this needs to be changed if I have only 2 labeles
+        accuracies=np.zeros((10,1)) #initializing accuracies array
+        model_paths=[] #initializing list where to stor model path
+        #repeat training 10 times and take the best one on validation accuracy
+        for k in range(10):
+            #Build CNN architecture
+            model = Sequential()
+            model.add(Conv2D(32, kernel_size=(3,3), #I don't think this nees to be changed
+                                activation='relu',
+                                input_shape=input_shape))
+            # 64 3x3 kernels
+            model.add(Conv2D(64, (3, 3), activation='relu')) #I don't think this nees to be changed
+            # Reduce by taking the max of each 2x2 block
+            model.add(MaxPooling2D(pool_size=(2, 2)))
+            # Dropout to avoid overfitting
+            model.add(Dropout(0.25))
+            # Flatten the results to one dimension for passing into our final layer
+            model.add(Flatten())
+            # A hidden layer to learn with
+            model.add(Dense(128, activation='relu'))
+            # Another dropout
+            model.add(Dropout(0.5))
+            # Final categorization from 0-9 with softmax
+            #Virginia: changed 8->3 because I have 3 classes (????)
+            model.add(Dense(num_labels, activation='softmax')) #this needs to be changed if I have only 2 labeles
     
-                model.summary()
+            model.summary()
     
-                #set the model
-                model.compile(loss='categorical_crossentropy',
-                              optimizer='adam',
-                              metrics=['accuracy'])
+            #set the model
+            model.compile(loss='categorical_crossentropy',
+                            optimizer='adam',
+                            metrics=['accuracy'])
     
-                #train the model
-                #I am not giving validation_data
-                print('Training n', k)
+            #train the model
+            #I am not giving validation_data
+            print('Training n', k)
     
-                #adding early stopping
-                checkpoint = ModelCheckpoint(test_dir+ '/' + test_fold+"/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.hdf5", monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', save_freq='epoch')
-                early = EarlyStopping(monitor='val_accuracy', min_delta=0, patience=3, verbose=1, mode='auto')
-                history = model.fit(train_images, train_labels,
-                                batch_size=32,
-                                epochs=35,
-                                verbose=2,
-                                validation_data=(validation_images, validation_labels),
-                                callbacks=[checkpoint, early],
-                                shuffle=True)
+            #adding early stopping
+            checkpoint = ModelCheckpoint(test_dir+ '/' + test_fold+"/weights.{epoch:02d}-{val_loss:.2f}-{val_accuracy:.2f}.hdf5", monitor='val_accuracy', verbose=1, save_best_only=True, save_weights_only=False, mode='auto', save_freq='epoch')
+            early = EarlyStopping(monitor='val_accuracy', min_delta=0, patience=3, verbose=1, mode='auto')
+            history = model.fit(train_images, train_labels,
+                            batch_size=32,
+                            epochs=35,
+                            verbose=2,
+                            validation_data=(validation_images, validation_labels),
+                            callbacks=[checkpoint, early],
+                            shuffle=True)
 
-                accuracies[k]=history.history['val_accuracy'][-1]
-                print('Accuracy reached',accuracies[k])
-                #save model
-                modelpath=test_dir+ '/' + test_fold + '/model_'+str(k)+'.h5' #aid variable
-                model.save(modelpath)
-                model_paths.append(modelpath)
+            accuracies[k]=history.history['val_accuracy'][-1]
+            print('Accuracy reached',accuracies[k])
+            #save model
+            modelpath=test_dir+ '/' + test_fold + '/model_'+str(k)+'.h5' #aid variable
+            model.save(modelpath)
+            model_paths.append(modelpath)
+            #erasewigths
+            for filelist in os.listdir(test_dir+ '/' + test_fold):
+                if filelist.endswith('hdf5'):
+                    erase_path=test_dir+ '/' + test_fold+ '/'+filelist
+                    if erase_path!=modelpath:
+                        os.remove(erase_path)
 
-            #check what modelgave us better accuracy
-            index_best_model=np.argmax(accuracies) 
-            print('Training ended')
-            print('Best CNN is ', index_best_model)
-            print('Best accuracy reached ',accuracies[index_best_model])
-            modelpath=model_paths[index_best_model] 
+        #check what modelgave us better accuracy
+        index_best_model=np.argmax(accuracies) 
+        print('Training ended')
+        print('Best CNN is ', index_best_model)
+        print('Best accuracy reached ',accuracies[index_best_model])
+        modelpath=model_paths[index_best_model] 
+
+        #erase models
+        for k in range(10):
+            if k!=index_best_model:
+                os.remove(model_paths[k])
    
-            #recover model
-            model=load_model(modelpath)
+        #recover model
+        model=load_model(modelpath)
 
-            #Saving Training info 
-            #Save training info into a file
-            cnn_train_info_file=test_dir+'/'+test_fold+'/CNN_train_data_info.txt'
-            file1=open(cnn_train_info_file,'w')
-            if ag_flag:
-                L0=['Agumentation used \n']
-            else:
-                L0=['Agumentation NOT used\n']
-            if window==3:
-                L1=['window used 3x2 \n']
-            else:
-                L1=['window used %2d %5d \n' %window]
-            L=['Number of spectrograms =  %5d \n' %np.shape(target_train)[0], 
-            "Spectrograms used for training = %5d \n" %np.shape(y_train)[0],
-            "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_train==0))[1],
-            "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_train==1))[1],
-            "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_train==2))[1],
-            "\n Spectrograms used for validation = %5d \n" %np.shape(y_validation)[0],
-            "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_validation==0))[1],
-            "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_validation==1))[1],
-            "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_validation==2))[1]]
-            L2=['\n Model used %5d \n' %index_best_model]
-            L3=['Training accuracy for the model %3.7f \n' %accuracies[index_best_model]]
-            L4=['Path best model '+ model_paths[index_best_model]]
-            file1.writelines(np.concatenate((L0,L1,L, L2, L3, L4)))
-            file1.close()
+        #Saving Training info 
+        #Save training info into a file
+        cnn_train_info_file=test_dir+'/'+test_fold+'/CNN_train_data_info.txt'
+        file1=open(cnn_train_info_file,'w')
+        if ag_flag:
+            L0=['Agumentation used \n']
+        else:
+            L0=['Agumentation NOT used\n']
+        if window==3:
+            L1=['window used 3x2 \n']
+        else:
+            L1=['window used %2d %5d \n' %window]
+        L=['Number of spectrograms =  %5d \n' %np.shape(target_train)[0], 
+        "Spectrograms used for training = %5d \n" %np.shape(y_train)[0],
+        "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_train==0))[1],
+        "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_train==1))[1],
+        "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_train==2))[1],
+        "\n Spectrograms used for validation = %5d \n" %np.shape(y_validation)[0],
+        "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_validation==0))[1],
+        "Spectrograms for ST: %5d \n" %np.shape(np.nonzero(y_validation==1))[1],
+        "Spectrograms for Noise: %5d \n" %np.shape(np.nonzero(y_validation==2))[1]]
+        L2=['\n Model used %5d \n' %index_best_model]
+        L3=['Training accuracy for the model %3.7f \n' %accuracies[index_best_model]]
+        L4=['Path best model '+ model_paths[index_best_model]]
+        file1.writelines(np.concatenate((L0,L1,L, L2, L3, L4)))
+        file1.close()
 
-            ########## TEST TRAINED MODEL ###########################
-            print('\n ----------------------------------------------- \n')
-            print('Starting test')
-            for root, dirs, files in os.walk(CNN_test_dir):
-                for dir in dirs:
-                    print('Analising dir ', dir)
-                    for file in files:
-                        if file.endswith('.bmp'):
-                            bat_dir=root
-                            bat_file=file
-                            data_test=[]
-                            print('Analising file ', file, ' in dir ', bat_dir)
-                            filepath=bat_dir+'/'+file
-                            try:
-                                #read image
-                                sp.readBmp(filepath, rotate=False)
-                            except OSError:
-                                print('Error loading file ', file) 
-                                print('File classification = Corrupted file')
-                                continue
-                            except:
-                                print('Error loading file ', file)
-                                print('File classification = Corrupted file')
+        ########## TEST TRAINED MODEL ###########################
+        print('\n ----------------------------------------------- \n')
+        print('Starting test')
+        for root, dirs, files in os.walk(CNN_test_dir):
+            for dir in dirs:
+                print('Analising dir ', dir)
+                for file in files:
+                    if file.endswith('.bmp'):
+                        bat_dir=root
+                        bat_file=file
+                        data_test=[]
+                        print('Analising file ', file, ' in dir ', bat_dir)
+                        filepath=bat_dir+'/'+file
+                        try:
+                            #read image
+                            sp.readBmp(filepath, rotate=False)
+                        except OSError:
+                            print('Error loading file ', file) 
+                            print('File classification = Corrupted file')
+                            continue
+                        except:
+                            print('Error loading file ', file)
+                            print('File classification = Corrupted file')
                     
                 
-                            #inizialization
-                            segments=[]
-                            thisSpSegs=[]
-                            #CLickSearch
-                            print('Click Search')
-                            click_label, data_test=ClickSearch(sp.sg, window, segments, thisSpSegs, data_test, Train=False)
-                            #initialize annotations
-                            dt=sp.incr/sp.sampleRate  # self.sp.incr is set to 512 for bats dt=temporal increment in samples
-                            duration=dt*np.shape(sp.sg)[1] #duration=dt*num_columns
-                            generated_annotation=[{"Operator": "Auto", "Reviewer": "", "Duration": duration, "noiseLevel": [], "noiseTypes": []}]
-                            if click_label=='Click':
-                                #we enter in the cnn only if we got a click
-                        #            print('check data_test shape ', np.shape(data_test))
-                                sg_test=np.ndarray(shape=(np.shape(data_test)[0],np.shape(data_test[0][0])[0], np.shape(data_test[0][0])[1]), dtype=float)
-                                print('Number of file spectrograms', np.shape(data_test)[0])
-                                for k in range(np.shape(data_test)[0]):
-                                    maxg = np.max(data_test[k][0][:])
-                                    sg_test[k][:] = data_test[k][0][:]/maxg
+                        #inizialization
+                        segments=[]
+                        thisSpSegs=[]
+                        #CLickSearch
+                        print('Click Search')
+                        click_label, data_test=ClickSearch(sp.sg, window, segments, thisSpSegs, data_test, Train=False)
+                        #initialize annotations
+                        dt=sp.incr/sp.sampleRate  # self.sp.incr is set to 512 for bats dt=temporal increment in samples
+                        duration=dt*np.shape(sp.sg)[1] #duration=dt*num_columns
+                        generated_annotation=[{"Operator": "Auto", "Reviewer": "", "Duration": duration, "noiseLevel": [], "noiseTypes": []}]
+                        if click_label=='Click':
+                            #we enter in the cnn only if we got a click
+                    #            print('check data_test shape ', np.shape(data_test))
+                            sg_test=np.ndarray(shape=(np.shape(data_test)[0],np.shape(data_test[0][0])[0], np.shape(data_test[0][0])[1]), dtype=float)
+                            print('Number of file spectrograms', np.shape(data_test)[0])
+                            for k in range(np.shape(data_test)[0]):
+                                maxg = np.max(data_test[k][0][:])
+                                sg_test[k][:] = data_test[k][0][:]/maxg
             
-                                #CNN classification of clicks
-                                x_test = sg_test
-                                test_images = x_test.reshape(x_test.shape[0],first_dim, 512, 1)
-                                input_shape = (first_dim, 512, 1)
-                                test_images = test_images.astype('float32')
-                                #recovering labels
-                                predictions =model.predict(test_images)
-                                #predictions is an array #imagesX #of classes which entries are the probabilities
-                                #for each classes
-                                label=File_label(predictions)
-                                print('CNN detected: ', label)
-                                if len(label)>0:
-                                    #update annotations
-                                    generated_annotation.append([0, duration, 0, 0, label])
+                            #CNN classification of clicks
+                            x_test = sg_test
+                            test_images = x_test.reshape(x_test.shape[0],first_dim, 512, 1)
+                            input_shape = (first_dim, 512, 1)
+                            test_images = test_images.astype('float32')
+                            #recovering labels
+                            predictions =model.predict(test_images)
+                            #predictions is an array #imagesX #of classes which entries are the probabilities
+                            #for each classes
+                            label=File_label(predictions)
+                            print('CNN detected: ', label)
+                            if len(label)>0:
+                                #update annotations
+                                generated_annotation.append([0, duration, 0, 0, label])
                                      
-                            else:
-                                # do not create any segments
-                                print("Nothing detected")
-                            #save segments in datafile
-                            annotation_file=filepath + '.data'
-                            print('Storing annotation in ', annotation_file)
-                            f = open(annotation_file, 'w')
-                            json.dump(generated_annotation, f)
-                            f.close()
+                        else:
+                            # do not create any segments
+                            print("Nothing detected")
+                        #save segments in datafile
+                        annotation_file=filepath + '.data'
+                        print('Storing annotation in ', annotation_file)
+                        f = open(annotation_file, 'w')
+                        json.dump(generated_annotation, f)
+                        f.close()
             
-            #savecsvs
-            print('\n Saving cvs files with results')
-            for k in range(1,22):
-                MoiraDir = CNN_test_dir+'/R'+str(k)
-                print('Generating .cvs for ', MoiraDir)
-                exportCSV(test_dir+ '/' + test_fold, MoiraDir)
+        #savecsvs
+        print('\n Saving cvs files with results')
+        for k in range(1,22):
+            MoiraDir = CNN_test_dir+'/R'+str(k)
+            print('Generating .cvs for ', MoiraDir)
+            exportCSV(test_dir+ '/' + test_fold, MoiraDir, 'R'+str(k)+'_Results.csv')
             #update here
-            if test_count<17:
-                test_count+=1
-                test_fold= "Test_"+str(test_cont) #Test folder where to save all the stats
-                os.mkdir(test_dir+ '/' + test_fold)
-                print('\n\n Starting test ', test_count)
+        if test_count<17:
+            test_count+=1
+            test_fold= "Test_"+str(test_count) #Test folder where to save all the stats
+            os.mkdir(test_dir+ '/' + test_fold)
+            print('\n\n Starting test ', test_count)
                 
 
     
