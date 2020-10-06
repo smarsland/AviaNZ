@@ -165,6 +165,8 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
         print("Starting AviaNZ in GUI mode")
         from PyQt5.QtWidgets import QApplication
         app = QApplication(sys.argv)
+        # a hack to fix default font size (Win 10 suggests 7 pt for QLabels for some reason)
+        QApplication.setFont(QApplication.font("QMenu"))
 
         while True:
             # splash screen?
