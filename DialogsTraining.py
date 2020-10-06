@@ -46,6 +46,7 @@ import colourMaps
 import SupportClasses, SupportClasses_GUI
 import SignalProc
 import WaveletSegment
+import WaveletFunctions
 import Segment
 import Clustering
 import Training
@@ -1101,13 +1102,25 @@ class BuildRecAdvWizard(QWizard):
             self.bestM = QLineEdit()
             self.bestThr = QLineEdit()
             self.bestNodes = QLineEdit()
+            self.bestFrqBands = QLineEdit()
             self.bestM.setReadOnly(True)
             self.bestThr.setReadOnly(True)
             self.bestNodes.setReadOnly(True)
+            self.bestFrqBands.setReadOnly(True)
+            self.bestM.setStyleSheet("QLineEdit { color : #808080; }")
+            self.bestThr.setStyleSheet("QLineEdit { color : #808080; }")
+            self.bestNodes.setStyleSheet("QLineEdit { color : #808080; }")
+            self.bestFrqBands.setStyleSheet("QLineEdit { color : #808080; }")
             self.filtSummary = QFormLayout()
             self.filtSummary.addRow("Current M:", self.bestM)
-            self.filtSummary.addRow("Current thr:", self.bestThr)
-            self.filtSummary.addRow("Current nodes:", self.bestNodes)
+            self.filtSummary.addRow("Threshold:", self.bestThr)
+            self.filtSummary.addRow("Wavelet nodes:", self.bestNodes)
+            self.filtSummary.addRow("Frquency bands (Hz):", self.bestFrqBands)
+
+            self.selectedTPR = QLineEdit()
+            self.selectedFPR = QLineEdit()
+            self.saveStat = QCheckBox("Save TPR, FPR to the recogniser")
+            self.saveStat.setVisible(False)
 
             # this is the Canvas Widget that displays the plot
             self.figCanvas = ROCCanvas(self)
@@ -1124,21 +1137,21 @@ class BuildRecAdvWizard(QWizard):
                 # get M and thr for closest point
                 distarr = (tpr_cl - self.TPR) ** 2 + (fpr_cl - self.FPR) ** 2
                 M_min_ind, thr_min_ind = np.unravel_index(np.argmin(distarr), distarr.shape)
-                tpr_near = self.TPR[M_min_ind, thr_min_ind]
-                fpr_near = self.FPR[M_min_ind, thr_min_ind]
+                self.tpr_near = self.TPR[M_min_ind, thr_min_ind]
+                self.fpr_near = self.FPR[M_min_ind, thr_min_ind]
                 self.marker.set_visible(False)
                 self.figCanvas.draw()
-                self.marker.set_xdata([fpr_cl, fpr_near])
-                self.marker.set_ydata([tpr_cl, tpr_near])
+                self.marker.set_xdata([fpr_cl, self.fpr_near])
+                self.marker.set_ydata([tpr_cl, self.tpr_near])
                 self.marker.set_visible(True)
                 self.figCanvas.ax.draw_artist(self.marker)
                 self.figCanvas.update()
 
-                print("fpr_cl, tpr_cl: ", fpr_near, tpr_near)
+                print("fpr_cl, tpr_cl: ", self.fpr_near, self.tpr_near)
 
                 # update sidebar
-                self.lblUpdate.setText('Detection Summary\n\nTPR:\t' + str(round(tpr_near * 100, 2)) +
-                                       '%\nFPR:\t' + str(round(fpr_near * 100, 2)) + '%')
+                self.lblUpdate.setText('Detection Summary\n\nTPR:\t' + str(round(self.tpr_near * 100, 2)) +
+                                       '%\nFPR:\t' + str(round(self.fpr_near * 100, 2)) + '%')
 
                 # this will save the best parameters to the global fields
                 self.bestM.setText("%.4f" % self.MList[M_min_ind])
@@ -1146,6 +1159,10 @@ class BuildRecAdvWizard(QWizard):
                 # Get nodes for closest point
                 optimumNodesSel = self.nodes[M_min_ind][thr_min_ind]
                 self.bestNodes.setText(str(optimumNodesSel))
+                # corresponding frequency bands
+                optimumNodesBand = self.getFrqBands(optimumNodesSel)
+                self.bestFrqBands.setText(str(optimumNodesBand))
+                self.saveStat.setVisible(True)
                 for itemnum in range(self.filtSummary.count()):
                     self.filtSummary.itemAt(itemnum).widget().show()
 
@@ -1160,10 +1177,14 @@ class BuildRecAdvWizard(QWizard):
             hbox2 = QHBoxLayout()
             hbox2.addWidget(self.figCanvas)
 
+            vboxStats = QVBoxLayout()
+            vboxStats.addWidget(self.lblUpdate)
+            vboxStats.addWidget(self.saveStat)
+
             hbox3 = QHBoxLayout()
             hbox3.addLayout(self.filtSummary)
             hbox3.addWidget(spaceH)
-            hbox3.addWidget(self.lblUpdate)
+            hbox3.addLayout(vboxStats)
 
             vbox = QVBoxLayout()
             vbox.addLayout(vboxHead)
@@ -1181,6 +1202,8 @@ class BuildRecAdvWizard(QWizard):
             self.lblCluster.setText(self.clust)
             for itemnum in range(self.filtSummary.count()):
                 self.filtSummary.itemAt(itemnum).widget().hide()
+            self.tpr_near = -1
+            self.fpr_near = -1
 
             # parse fields specific to this subfilter
             minlen = float(self.field("minlen"+str(self.pageId)))
@@ -1253,8 +1276,32 @@ class BuildRecAdvWizard(QWizard):
                 self.marker.set_visible(False)
                 self.figCanvas.plotmeagain(self.TPR, self.FPR)
 
+        def getFrqBands(self, nodes):
+            WF = WaveletFunctions.WaveletFunctions(data=[], wavelet='dmey2', maxLevel=1, samplerate=self.field("fs"))
+            fRanges = []
+            for node in nodes:
+                f1, f2 = WF.getWCFreq(node, self.field("fs"))
+                print(node, f1, f2)
+                fRanges.append([f1, f2])
+            return fRanges
+
         def cleanupPage(self):
             self.lblUpdate.setText('')
+
+        def isComplete(self):
+            if self.tpr_near == self.fpr_near == -1:
+                return False
+            else:
+                return True
+
+        def validatePage(self):
+            if self.saveStat.isChecked():
+                self.selectedTPR.setText(str(round(self.tpr_near * 100, 2)))
+                self.selectedFPR.setText(str(round(self.fpr_near * 100, 2)))
+            else:
+                self.selectedTPR.setText(str(-1))
+                self.selectedFPR.setText(str(-1))
+            return True
 
     # page 6 - save the filter
     class WLastPage(QWizardPage):
@@ -1345,8 +1392,22 @@ class BuildRecAdvWizard(QWizard):
                 thr = float(self.field("bestThr"+str(pageId)))
                 M = float(self.field("bestM"+str(pageId)))
                 nodes = eval(self.field("bestNodes"+str(pageId)))
+                tpr = float(self.field("TPR" + str(pageId)))
+                fpr = float(self.field("FPR" + str(pageId)))
 
-                newSubfilt = {'calltype': self.wizard().page(pageId+1).clust, 'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh], 'WaveletParams': {"thr": thr, "M": M, "nodes": nodes}, 'ClusterCentre': list(self.wizard().page(pageId+1).clustercentre), 'Feature': self.wizard().clusterPage.feature}
+                if tpr != -1:
+                    newSubfilt = {'calltype': self.wizard().page(pageId + 1).clust,
+                                  'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh],
+                                  'WaveletParams': {"thr": thr, "M": M, "nodes": nodes},
+                                  'ClusterCentre': list(self.wizard().page(pageId + 1).clustercentre),
+                                  'Feature': self.wizard().clusterPage.feature, 'TPR, FPR': [tpr, fpr]}
+
+                else:
+                    newSubfilt = {'calltype': self.wizard().page(pageId + 1).clust,
+                                  'TimeRange': [minlen, maxlen, avgslen, maxgap], 'FreqRange': [fLow, fHigh],
+                                  'WaveletParams': {"thr": thr, "M": M, "nodes": nodes},
+                                  'ClusterCentre': list(self.wizard().page(pageId + 1).clustercentre),
+                                  'Feature': self.wizard().clusterPage.feature}
 
                 print(newSubfilt)
                 self.wizard().speciesData["Filters"].append(newSubfilt)
@@ -1465,6 +1526,8 @@ class BuildRecAdvWizard(QWizard):
             page5.registerField("bestThr"+str(pageid)+"*", page5.bestThr)
             page5.registerField("bestM"+str(pageid)+"*", page5.bestM)
             page5.registerField("bestNodes"+str(pageid)+"*", page5.bestNodes)
+            page5.registerField("TPR" + str(pageid) + "*", page5.selectedTPR)
+            page5.registerField("FPR" + str(pageid) + "*", page5.selectedFPR)
 
         # page 6: confirm the results & save
         page6 = BuildRecAdvWizard.WLastPage(self.filtersDir)
