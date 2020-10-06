@@ -232,8 +232,9 @@ class AviaNZ_batchWindow(QMainWindow):
         helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
         aboutMenu = self.menuBar().addMenu("&About")
         aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
-        aboutMenu = self.menuBar().addMenu("&Quit")
-        aboutMenu.addAction("Quit", self.quitPro,"Ctrl+Q")
+        quitMenu = self.menuBar().addMenu("&Quit")
+        quitMenu.addAction("Restart program", self.restart)
+        quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
 
     def showAbout(self):
         """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
@@ -246,10 +247,9 @@ class AviaNZ_batchWindow(QMainWindow):
         webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
         # webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
-    def quitPro(self):
-        """ quit program
-        """
-        QApplication.quit()
+    def restart(self):
+        print("Restarting")
+        QApplication.exit(1)
 
     def detect(self):
         if not self.dirName:
@@ -735,8 +735,13 @@ class AviaNZ_reviewAll(QMainWindow):
         helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
         aboutMenu = self.menuBar().addMenu("&About")
         aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
-        aboutMenu = self.menuBar().addMenu("&Quit")
-        aboutMenu.addAction("Quit", self.quitPro,"Ctrl+Q")
+        quitMenu = self.menuBar().addMenu("&Quit")
+        quitMenu.addAction("Restart program", self.restart)
+        quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
+
+    def restart(self):
+        print("Restarting")
+        QApplication.exit(1)
 
     def showAbout(self):
         """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
@@ -748,11 +753,6 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Show the user manual (a pdf file)"""
         webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
         # webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
-
-    def quitPro(self):
-        """ quit program
-        """
-        QApplication.quit()
 
     def center(self):
         # geometry of the main window

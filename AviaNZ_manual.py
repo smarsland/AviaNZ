@@ -6178,8 +6178,8 @@ class AviaNZ(QMainWindow):
     def eventFilter(self, obj, event):
         # This is an event filter for the context menu. It allows the user to select
         # multiple birds by stopping the menu being closed on first click
-        if isinstance(obj, QtGui.QMenu):
-            if self.multipleBirds and event.type() in [QtCore.QEvent.MouseButtonRelease]:
+        if isinstance(obj, QtGui.QMenu) and event.type() in [QtCore.QEvent.MouseButtonRelease]:
+            if hasattr(self, 'multipleBirds') and self.multipleBirds:
                 if obj.activeAction():
                     if not obj.activeAction().menu(): 
                         #if the selected action does not have a submenu
