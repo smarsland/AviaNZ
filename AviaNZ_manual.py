@@ -4412,24 +4412,11 @@ class AviaNZ(QMainWindow):
             #syllable-by-syllable snnr
             #use the noise following the sillable instead of that preceeding it if first syllable
             if q==5:
-                endnoise=int(np.round(max(0,self.segments[1][0]-self.startRead)*self.sampleRate,0))
-                s0=s1=endtime
-                e0=e1=endnoise
-                outarray[q]=np.round(self.sp.SylNR(starttime,endtime,endtime,endnoise,s1,e1,s0,e0),2)
-                startnoise=endtime
-                s0=s1
-                e0=e1
-                s1=endtime
-                e1=startnoise
-                print(q," - ",endtime," - ",s1," - ",s0)
+                startnoise=int(np.floor(max(0, seg[0]-self.startRead)*self.sampleRate))
+                endnoise=int(np.ceil(min(seg[1]-self.startRead, self.datalengthSec)*self.sampleRate))
             else:
-                outarray[q]=np.round(self.sp.SylNR(starttime,endtime,startnoise,starttime,s1,e1,s0,e0),2)
-                s0=s1
-                e0=e1
-                s1=startnoise
-                e1=starttime
-                startnoise=endtime
-                print(q," - ",startnoise," - ",s1," - ",s0)
+                outarray[q]=np.round(self.sp.SylNR(starttime,endtime,startnoise,endnoise),2)
+                
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)
             # self.audiodata[int(starttime*self.sampleRate):int(endtime*self.sampleRate)]
@@ -4447,14 +4434,14 @@ class AviaNZ(QMainWindow):
             #self.sp.calculateMagicStatistic(starttime, endtime)
             
             # do something with this segment now...
-            print("Calculating statistics on syllable #",q-4,": it starts at ",starttime,"and ends at ", endtime)
+            print("Calculating statistics on syllable #",q-6,": it starts at ",starttime,"and ends at ", endtime)
                      
             q+=1
             # fill outarray...
         # save as text file for now:
-        outarray[4]=q-5
-        print("Saving information regarding ",q-5," sillables\n",outarray)
-        csvf=self.filename[:-19]+'mr__snnr.csv'
+        outarray[4]=q-6
+        print("Saving information regarding ",q-6," sillables\n",outarray)
+        csvf=self.filename[:-19]+'frontfirstnr.csv'
         print("csv ",csvf)
         with open(csvf,'a') as csvfile:
             csvfile.write(",".join(outarray.astype(str)))
