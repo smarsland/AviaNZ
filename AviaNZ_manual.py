@@ -208,8 +208,6 @@ class AviaNZ(QMainWindow):
         # to avoid accidentally creating little boxes
         self.minboxsize = 0.1
 
-        # a hack to fix default font size (Win 10 suggests 7 pt for QLabels for some reason)
-        QApplication.setFont(QApplication.font("QMenu"))
         self.createMenu()
         self.createFrame()
 
