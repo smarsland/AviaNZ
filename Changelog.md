@@ -1,6 +1,6 @@
 All notable changes to AviaNZ program will be documented in this file.
 
-## Unreleased
+## [3.1] - 2020-10-09
 
 ### Added
 
@@ -16,6 +16,7 @@ All notable changes to AviaNZ program will be documented in this file.
 ### Fixed
 
 - Graphical problems on high resolution displays
+- Safer restarting
 
 ## [3.0] - 2020-09-17
 
