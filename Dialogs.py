@@ -2939,7 +2939,7 @@ class FilterManager(QDialog):
                 if "thr" not in subfilt["WaveletParams"] or "nodes" not in subfilt["WaveletParams"] or len(
                         subfilt["TimeRange"]) < 4:
                     raise ValueError("Subfilter JSON format wrong (details), skipping")
-            if "CNN" in filt:
+            if  "CNN" in filt:
                 sources.append(os.path.join(os.path.dirname(source), filt["CNN"]["CNN_name"] + ".h5"))
                 targets.append(os.path.join(self.filtdir, filt["CNN"]["CNN_name"] + ".h5"))
                 # bat filters do not have jsons:
@@ -2952,18 +2952,28 @@ class FilterManager(QDialog):
             return
 
         try:
+
             for i in range(len(sources)):
                 if not os.path.isfile(sources[i]):
                     print("ERROR: unable to import, bad source %s" % sources[i])
                     return
                 # Don't risk replacing NN files (i.e. no overwriting)
+                reply = 0
                 if os.path.isfile(targets[i]):
-                    print("ERROR: target file %s exists" % targets[i])
-                    msg = SupportClasses_GUI.MessagePopup("w", "Import error","Could not import recogniser: target file %s exists" % targets[i])
-                    msg.exec_()
+                    print("Warning: target file %s exists" % targets[i])
+                    msg = SupportClasses_GUI.MessagePopup("t", "Import error"," A file %s already exists. Overwrite or skip?" % targets[i])
+                    msg.setStandardButtons(QMessageBox.NoButton)
+                    msg.addButton("Overwrite", QMessageBox.YesRole)
+                    msg.addButton("Skip", QMessageBox.RejectRole)
+                    reply = msg.exec_()
+                if reply==0:
+                    # no problems, or chose to overwrite
+                    print("Copying", sources[i], "->", targets[i])
+                    shutil.copy2(sources[i], targets[i])
+                elif reply==4194304:
+                    # cancelled the entire copy
                     return
-                shutil.copy2(sources[i], targets[i])
-            msg = SupportClasses_GUI.MessagePopup("d", "Successfully imported","Import successful. Now you can use the recogniser %s" % os.path.basename(targets[0]))
+            msg = SupportClasses_GUI.MessagePopup("d", "Successfully imported","Import complete. Now you can use the recogniser %s" % os.path.basename(targets[0]))
             msg.exec_()
             self.readContents()
         except Exception as e:
