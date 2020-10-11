@@ -1788,13 +1788,13 @@ class HumanClassify1(QDialog):
         self.birdbtns[-1].setChecked(False)
         self.birds3.setEnabled(False)
 
-    def setSegNumbers(self, done, total):
-        text1 = "calls accepted: " + str(done)
-        text2 = str(total - done) + " to go"
+    def setSegNumbers(self, accepted, deleted, total):
+        text1 = "calls accepted: " + str(accepted)
+        text2 = str(total - accepted - deleted) + " to go"
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
         # based on these, update "previous" arrow status
-        self.buttonPrev.setEnabled(done>0)
+        self.buttonPrev.setEnabled((accepted+deleted)>0)
 
     def setImage(self, sg, audiodata, sampleRate, incr, labels, unbufStart, unbufStop, time1, time2, guides=None, minFreq=0, maxFreq=0):
         """ labels - simply seg[4] of the current segment.
@@ -1900,54 +1900,56 @@ class HumanClassify1(QDialog):
         # question marks are displayed on the first pass,
         # but any clicking sets certainty to 100 in effect.
         for lsp_ix in range(len(specnames)):
-            if specnames[lsp_ix].endswith('?'):
-                specnames[lsp_ix] = specnames[lsp_ix][:-1]
-            # move the label to the top of the list
-            if self.parent.config['ReorderList']:
-                if self.batmode:
-                    if specnames[lsp_ix] in self.batList:
-                        self.batList.remove(specnames[lsp_ix])
+            if specnames[lsp_ix] != "To Be Deleted":
+                if specnames[lsp_ix].endswith('?'):
+                    specnames[lsp_ix] = specnames[lsp_ix][:-1]
+                # move the label to the top of the list
+                if self.parent.config['ReorderList']:
+                    if self.batmode:
+                        if specnames[lsp_ix] in self.batList:
+                            self.batList.remove(specnames[lsp_ix])
+                        else:
+                            del self.batList[-1]
+                        self.batList.insert(0, specnames[lsp_ix])
                     else:
-                        del self.batList[-1]
-                    self.batList.insert(0, specnames[lsp_ix])
-                else:
-                    if specnames[lsp_ix] in self.shortBirdList:
-                        self.shortBirdList.remove(specnames[lsp_ix])
-                    else:
-                        del self.shortBirdList[-1]
-                    self.shortBirdList.insert(0, specnames[lsp_ix])
+                        if specnames[lsp_ix] in self.shortBirdList:
+                            self.shortBirdList.remove(specnames[lsp_ix])
+                        else:
+                            del self.shortBirdList[-1]
+                        self.shortBirdList.insert(0, specnames[lsp_ix])
 
         # clear selection
         self.birds3.clearSelection()
         self.updateButtonList()
         # Select the right species tickboxes / buttons
         for lsp in specnames:
-            # add ticks to the right checkboxes
-            if self.batmode:
-                ind = self.batList.index(lsp)
-                self.birdbtns[ind].setChecked(True)
-            else:
-                if lsp in self.shortBirdList[:29]:
-                    ind = self.shortBirdList.index(lsp)
+            if lsp != "To Be Deleted":
+                # add ticks to the right checkboxes
+                if self.batmode:
+                    ind = self.batList.index(lsp)
                     self.birdbtns[ind].setChecked(True)
                 else:
-                    self.birdbtns[29].setChecked(True)
-                    self.birds3.setEnabled(True)
-
-                # mark this species in the long list box
-                if lsp not in self.longBirdList:
-                    # try genus>species instead of genus (species)
-                    if '(' in lsp:
-                        ind = lsp.index('(')
-                        lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
-                    # add to long bird list then
+                    if lsp in self.shortBirdList[:29]:
+                        ind = self.shortBirdList.index(lsp)
+                        self.birdbtns[ind].setChecked(True)
+                    else:
+                        self.birdbtns[29].setChecked(True)
+                        self.birds3.setEnabled(True)
+    
+                    # mark this species in the long list box
                     if lsp not in self.longBirdList:
-                        print("Species", lsp, "not found in long bird list, adding")
-                        self.longBirdList.append(lsp)
-                        cc = self.birds3.count()
-                        self.birds3.insertItem(cc-1, lsp)
-                        self.saveConfig = True
-
+                        # try genus>species instead of genus (species)
+                        if '(' in lsp:
+                            ind = lsp.index('(')
+                            lsp = lsp[:ind-1] + ">" + lsp[ind+1:-1]
+                        # add to long bird list then
+                        if lsp not in self.longBirdList:
+                            print("Species", lsp, "not found in long bird list, adding")
+                            self.longBirdList.append(lsp)
+                            cc = self.birds3.count()
+                            self.birds3.insertItem(cc-1, lsp)
+                            self.saveConfig = True
+    
                 # all species by now are in the long bird list
                 if self.longBirdList is not None:
                     ind = self.longBirdList.index(lsp)
@@ -1966,7 +1968,7 @@ class HumanClassify1(QDialog):
         showCt = False
         if len(self.label)>1:
             self.viewSpButton.setToolTip("Cannot review call types when >1 species marked")
-        elif self.label[0]=="Don't Know":
+        elif self.label[0]=="Don't Know" or self.label[0]=="To Be Deleted":
             self.viewSpButton.setToolTip("No call types possible without species marked")
         elif self.label[0] not in spWithCalltypes:
             self.viewSpButton.setToolTip("Cannot review call types as this species has no recogniser")
@@ -2069,7 +2071,7 @@ class HumanClassify1(QDialog):
             return
         if checkedButton.isChecked():
             # if label was empty, just change from DontKnow:
-            if self.label == ["Don't Know"]:
+            if self.label == ["Don't Know"] or self.label == ["To Be Deleted"]:
                 self.label = [checkedButton.text()]
                 if dontknowButton is not None:
                     dontknowButton.setChecked(False)

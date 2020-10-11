@@ -1309,7 +1309,8 @@ class AviaNZ_reviewAll(QMainWindow):
         self.humanClassifyNextImage1()
         # connect listeners
         self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
-        self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
+        self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1New)
+        #self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
         self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyQuestion)
         success = self.humanClassifyDialog1.exec_()     # 1 on clean exit
@@ -1318,6 +1319,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.humanClassifyDialog1.stopPlayback()
             return(0)
 
+        self.finishDeleting()
         return(1)
 
     def loadFile(self, filename, species=None, chunksize=None):
@@ -1441,19 +1443,37 @@ class AviaNZ_reviewAll(QMainWindow):
             self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
             self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
+            self.nsegments = len(self.segments)
+            self.segsAccepted = 0
+            self.segsDeleted = 0
+            self.returned = False
+
         # END of file loading
 
     def humanClassifyNextImage1(self):
         # Get the next image
         if self.box1id < len(self.segments)-1:
             self.box1id += 1
-            # update "done/to go" numbers:
-            self.humanClassifyDialog1.setSegNumbers(self.box1id, len(self.segments))
             # Check if have moved to next segment, and if so load it
             # If there was a section without segments this would be a bit inefficient, actually no, it was wrong!
 
             # Show the next segment
             seg = self.segments[self.box1id]
+            lab = seg[4]
+
+            # update "done/to go" numbers:
+            # TODO: what about multiple labels?
+            if self.returned: 
+                print(len(lab),lab[0])
+                if len(lab)==1 and lab[0]["species"] == "To Be Deleted":
+                    self.segsDeleted -= 1
+                else:
+                    self.segsAccepted -= 1
+            self.returned = False
+
+            print(self.segsAccepted,self.segsDeleted)
+            self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.nsegments)
+            #self.humanClassifyDialog1.setSegNumbers(self.box1id, len(self.segments))
 
             # select the SignalProc with relevant data
             sp = self.sps[self.box1id]
@@ -1490,6 +1510,7 @@ class AviaNZ_reviewAll(QMainWindow):
         Note: won't undo deleted segments."""
         if self.box1id>0:
             self.box1id -= 2
+            self.returned=True
             self.humanClassifyNextImage1()
 
     def humanClassifyQuestion(self):
@@ -1514,6 +1535,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # update the actual segment.
         print("working on ", self.box1id, currSeg)
+        deleting=False
         if label != [lab["species"] for lab in currSeg[4]]:
             # if any species names were changed,
             # Then, just recreate the label with certainty 50 for all currently selected species:
@@ -1522,6 +1544,9 @@ class AviaNZ_reviewAll(QMainWindow):
             for species in label:
                 if species == "Don't Know":
                     newlabel.append({"species": "Don't Know", "certainty": 0})
+                elif species == "To Be Deleted":
+                    newlabel.append({"species": "To Be Deleted", "certainty": 100})
+                    deleting = True
                 else:
                     newlabel.append({"species": species, "certainty": 50})
             # Note: currently only parsing the call type for the first species
@@ -1545,6 +1570,10 @@ class AviaNZ_reviewAll(QMainWindow):
             # no sp or cert change needed
             pass
 
+        if deleting:
+            self.segsDeleted+=1
+        else:
+            self.segsAccepted+=1
         # incorporate selected call type:
         if calltype!="":
             # (this will also check if it changed, and store corrections if needed.
@@ -1575,12 +1604,16 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
 
         # update the actual segment.
+        deleting = False
         if label != [lab["species"] for lab in currSeg[4]]:
             # Create new segment label, assigning certainty 100 for each species:
             newlabel = []
             for species in label:
                 if species == "Don't Know":
                     newlabel.append({"species": "Don't Know", "certainty": 0})
+                elif species == "To Be Deleted":
+                    newlabel.append({"species": "To Be Deleted", "certainty": 100})
+                    deleting=True
                 else:
                     newlabel.append({"species": species, "certainty": 100})
             # Note: currently only parsing the call type for the first species
@@ -1603,6 +1636,10 @@ class AviaNZ_reviewAll(QMainWindow):
             # segment info matches, so don't do anything
             pass
 
+        if deleting:
+            self.segsDeleted+=1
+        else:
+            self.segsAccepted+=1
         # incorporate selected call type:
         if calltype!="":
             # (this will also check if it changed, and store corrections if needed.
@@ -1611,6 +1648,38 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
+        self.humanClassifyNextImage1()
+
+    def humanClassifyDelete1New(self):
+        # Delete a segment
+        # Just mark for delete and then do the actual deletion when the file closes
+        self.humanClassifyDialog1.stopPlayback()
+
+        currSeg = self.segments[self.box1id]
+        #self.nsegments -= 1
+
+        # New segment label -- To Be Deleted
+        print(currSeg)
+        newlabel = [{"species": "To Be Deleted", "certainty": 100}]
+        self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
+        self.segsDeleted+=1
+        print(self.segments[self.box1id])
+        
+        # save the correction file
+        #if self.config['saveCorrections']:
+            #outputError = [[currSeg, []]]
+            #cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
+                                             #reviewer=self.reviewer)
+            #if cleanexit != 1:
+                #print("Warning: could not save correction file!")
+
+        #id = self.box1id
+        #del self.segments[id]
+        #del self.sps[id]
+        # self.indicestoshow then becomes incorrect, but we don't use that in here anyway
+
+        #self.box1id = id-1
+        self.segmentsToSave = True
         self.humanClassifyNextImage1()
 
     def humanClassifyDelete1(self):
@@ -1635,6 +1704,52 @@ class AviaNZ_reviewAll(QMainWindow):
         self.box1id = id-1
         self.segmentsToSave = True
         self.humanClassifyNextImage1()
+
+    def finishDeleting(self):
+        print("Deleting")
+        # TODO: finish!
+        # Does the work of deleting segments
+
+        segsToSave = False
+
+        # Loop over segments
+        print("====")
+        for seg in self.segments:
+            print(seg)
+        print("====")
+
+        for seg in self.segments:
+            print('*',seg)
+            todel = False
+            # Delete if any say to delete (correct? Or just remove if it is in a list with others?)
+            for lab in seg[4]:
+                if lab["species"] == "To Be Deleted":
+                    todel = True
+
+            if todel:
+                print("Deleting this seg")
+                # save the correction file
+                if self.config['saveCorrections']:
+                    outputError = [[seg, []]]
+                    cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1, reviewer=self.reviewer)
+                    if cleanexit != 1:
+                        print("Warning: could not save correction file!")
+
+                # SRM: This line!
+                self.segments.remove(seg)
+                segsToSave = True
+            else:
+                print("Not this one")
+
+        print("!===")
+        for seg in self.segments:
+            print(seg)
+        print("!===")
+
+        if segsToSave:
+            cleanexit = self.segments.saveJSON(self.filename+'.data', self.reviewer)
+            if cleanexit != 1:
+                print("Warning: could not save segments!")
 
     def closeDialog(self, ev):
         # (actually a poorly named listener for the Esc key)
