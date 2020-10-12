@@ -1789,9 +1789,9 @@ class HumanClassify1(QDialog):
         self.birds3.setEnabled(False)
 
     def setSegNumbers(self, accepted, deleted, total):
-        print(accepted,deleted,total)
-        text1 = "calls accepted: " + str(accepted)
-        text2 = str(total - accepted - deleted) + " to go, " + str(deleted) + " deleted"
+        #print(accepted,deleted,total)
+        text1 = "calls accepted: " + str(accepted) + ", deleted: " + str(deleted)
+        text2 = str(total - accepted - deleted) + " to go"
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
         # based on these, update "previous" arrow status
