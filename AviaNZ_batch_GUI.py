@@ -557,10 +557,11 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_dir.setToolTip("The folder being processed")
 
         self.w_speLabel1 = QLabel("Quick review a single species:")
-        allsplabel = QLabel("Or review all species/calltypes:")
+        allsplabel = QLabel("Review one-by-one:")
         self.w_spe1 = QComboBox()
         self.spList = []
         self.w_spe1.addItems(self.spList)
+        self.w_spe1.addItem('All species')
         self.w_spe1.setEnabled(False)
 
         minCertLab = QLabel("Skip if certainty above:")
@@ -636,7 +637,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_detection.addWidget(self.chunksizeManual, row=11, col=1)
         self.d_detection.addWidget(self.chunksizeBox, row=11, col=2)
 
-        self.w_processButton = QPushButton(" Review All")
+        self.w_processButton = QPushButton(" Review One-By-One")
         self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
         self.w_processButton.setFixedHeight(45)
         self.w_processButton.setFixedHeight(45)
@@ -816,6 +817,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # self.spList.insert(0, 'Any sound')
         self.w_spe1.clear()
         self.w_spe1.addItems(self.spList)
+        self.w_spe1.addItem('Any species')
 
         # Also detect samplerates on dir change
         minfs = min(self.listFiles.fsList)
@@ -851,14 +853,18 @@ class AviaNZ_reviewAll(QMainWindow):
         return(0)
 
     def reviewClickedAll(self):
-        self.species = "Any sound"
-        self.review()
+        self.species = self.w_spe1.currentText()
+        self.review(True)
 
     def reviewClickedSingle(self):
         self.species = self.w_spe1.currentText()
-        self.review()
+        if self.species == "Any species":
+            msg = SupportClasses_GUI.MessagePopup("w", "Single species needed", "Can only review a single species with this option")
+            msg.exec_()
+        else: 
+            self.review(False)
 
-    def review(self):
+    def review(self,reviewAll):
         self.reviewer = self.w_reviewer.text()
         print("Reviewer: ", self.reviewer)
         if self.reviewer == '':
@@ -961,7 +967,8 @@ class AviaNZ_reviewAll(QMainWindow):
             # file has >=1 segments to review,
             # so call the right dialog:
             # (they will update self.segments and store corrections)
-            if self.species == 'Any sound':
+            #if self.species == 'Any sound':
+            if reviewAll:
                 _ = self.segments.orderTime()
                 filesuccess = self.review_all(filename, sTime)
             else:
@@ -1006,7 +1013,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # END of review and exporting. Final cleanup
         self.ConfigLoader.configwrite(self.config, self.configfile)
         if filesuccess == 1:
-            msgtext = "All files checked. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
+            msgtext = "All files checked. If you expected to see more calls, is the certainty setting too low?\n Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
             msg = SupportClasses_GUI.MessagePopup("d", "Finished", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             reply = msg.exec_()
@@ -1294,7 +1301,10 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.batList = self.ConfigLoader.batl(self.config['BatList'], self.configdir)
 
-        self.loadFile(filename)
+        if self.species=="Any species":
+            self.loadFile(filename)
+        else:
+            self.loadFile(filename, self.species)
 
         if not hasattr(self, 'dialogPlotAspect'):
             self.dialogPlotAspect = 2
