@@ -1789,12 +1789,15 @@ class HumanClassify1(QDialog):
         self.birds3.setEnabled(False)
 
     def setSegNumbers(self, accepted, deleted, total):
+        print(accepted,deleted,total)
         text1 = "calls accepted: " + str(accepted)
-        text2 = str(total - accepted - deleted) + " to go"
+        text2 = str(total - accepted - deleted) + " to go, " + str(deleted) + " deleted"
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
         # based on these, update "previous" arrow status
         self.buttonPrev.setEnabled((accepted+deleted)>0)
+        self.update()
+        QApplication.processEvents()
 
     def setImage(self, sg, audiodata, sampleRate, incr, labels, unbufStart, unbufStop, time1, time2, guides=None, minFreq=0, maxFreq=0):
         """ labels - simply seg[4] of the current segment.
