@@ -1012,6 +1012,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # END of review and exporting. Final cleanup
         self.ConfigLoader.configwrite(self.config, self.configfile)
+        self.finishDeleting()
         if filesuccess == 1:
             msgtext = "All files checked. If you expected to see more calls, is the certainty setting too low?\n Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
             msg = SupportClasses_GUI.MessagePopup("d", "Finished", msgtext)
@@ -1123,7 +1124,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         _ = self.segments.orderTime()
 
-        self.loadFile(filename, self.species, chunksize)
+        self.loadFile(filename, species=self.species, chunksize=chunksize)
 
         if self.batmode:
             guides = [20000, 36000, 50000, 60000]
@@ -1304,7 +1305,7 @@ class AviaNZ_reviewAll(QMainWindow):
         if self.species=="Any species":
             self.loadFile(filename)
         else:
-            self.loadFile(filename, self.species)
+            self.loadFile(filename, species=self.species)
 
         if not hasattr(self, 'dialogPlotAspect'):
             self.dialogPlotAspect = 2
@@ -1372,11 +1373,13 @@ class AviaNZ_reviewAll(QMainWindow):
                 print("Filtering samples to %d - %d Hz" % (minFreq, maxFreq))
 
                 # For single sp, no need to load all segments, but don't want to edit self.segments
-                if species is not None:
+                if self.species is not None and self.species != "Any species":
                     self.indices2show = self.segments.getSpecies(species)
-                    halfChunk = 1.1/2 * chunksize
                 else:
                     self.indices2show = range(len(self.segments))
+
+                if chunksize is not None:
+                    halfChunk = 1.1/2 * chunksize
 
                 # Load data into a list of SignalProcs (with spectrograms) for each segment
                 for segix in range(len(self.segments)):
@@ -1385,7 +1388,7 @@ class AviaNZ_reviewAll(QMainWindow):
                         # note that sp also stores the range of shown freqs
                         sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
 
-                        if species is not None:
+                        if chunksize is not None:
                             mid = (seg[0]+seg[1])/2
                             # buffered limits in audiodata (sec) = display limits
                             x1 = max(0, mid-halfChunk)
@@ -1472,16 +1475,12 @@ class AviaNZ_reviewAll(QMainWindow):
             lab = seg[4]
 
             # update "done/to go" numbers:
-            # TODO: what about multiple labels?
             if self.returned: 
-                print(len(lab),lab[0])
                 if len(lab)==1 and lab[0]["species"] == "To Be Deleted":
                     self.segsDeleted -= 1
                 else:
                     self.segsAccepted -= 1
-            self.returned = False
 
-            print(self.segsAccepted,self.segsDeleted)
             self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.nsegments)
             #self.humanClassifyDialog1.setSegNumbers(self.box1id, len(self.segments))
 
@@ -1544,7 +1543,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
 
         # update the actual segment.
-        print("working on ", self.box1id, currSeg)
+        #print("working on ", self.box1id, currSeg)
         deleting=False
         if label != [lab["species"] for lab in currSeg[4]]:
             # if any species names were changed,
@@ -1555,7 +1554,7 @@ class AviaNZ_reviewAll(QMainWindow):
                 if species == "Don't Know":
                     newlabel.append({"species": "Don't Know", "certainty": 0})
                 elif species == "To Be Deleted":
-                    newlabel.append({"species": "To Be Deleted", "certainty": 100})
+                    newlabel.append({"species": "To Be Deleted", "certainty": 50})
                     deleting = True
                 else:
                     newlabel.append({"species": species, "certainty": 50})
@@ -1576,9 +1575,16 @@ class AviaNZ_reviewAll(QMainWindow):
             # if there are any "green" labels, but all species remained the same,
             # need to drop certainty on those:
             currSeg.questionLabels()
+            if self.returned: 
+                lab = currSeg[4]
+                if len(lab)==1 and lab[0]["species"] == "To Be Deleted":
+                    deleting=True
         else:
             # no sp or cert change needed
-            pass
+            if self.returned: 
+                lab = currSeg[4]
+                if len(lab)==1 and lab[0]["species"] == "To Be Deleted":
+                    deleting=True
 
         if deleting:
             self.segsDeleted+=1
@@ -1590,6 +1596,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # If the species changed, the calltype is already updated, so this will do nothing)
             self.updateCallType(self.box1id, calltype)
 
+        self.returned = False
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
         self.humanClassifyNextImage1()
@@ -1642,10 +1649,17 @@ class AviaNZ_reviewAll(QMainWindow):
         elif 0 < min([lab["certainty"] for lab in currSeg[4]]) < 100:
             # If all species remained the same, just raise certainty to 100
             currSeg.confirmLabels()
+            if self.returned: 
+                lab = currSeg[4]
+                if len(lab)==1 and lab[0]["species"] == "To Be Deleted":
+                    deleting=True
         else:
             # segment info matches, so don't do anything
-            pass
-
+            if self.returned: 
+                lab = currSeg[4]
+                if len(lab)==1 and lab[0]["species"] == "To Be Deleted":
+                    deleting=True
+            
         if deleting:
             self.segsDeleted+=1
         else:
@@ -1656,6 +1670,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # If the species changed, the calltype is already updated, so this will do nothing)
             self.updateCallType(self.box1id, calltype)
 
+        self.returned = False
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
         self.humanClassifyNextImage1()
@@ -1669,11 +1684,9 @@ class AviaNZ_reviewAll(QMainWindow):
         #self.nsegments -= 1
 
         # New segment label -- To Be Deleted
-        print(currSeg)
         newlabel = [{"species": "To Be Deleted", "certainty": 100}]
         self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
         self.segsDeleted+=1
-        print(self.segments[self.box1id])
         
         # save the correction file
         #if self.config['saveCorrections']:
@@ -1689,6 +1702,7 @@ class AviaNZ_reviewAll(QMainWindow):
         # self.indicestoshow then becomes incorrect, but we don't use that in here anyway
 
         #self.box1id = id-1
+        self.returned = False
         self.segmentsToSave = True
         self.humanClassifyNextImage1()
 
@@ -1723,13 +1737,7 @@ class AviaNZ_reviewAll(QMainWindow):
         segsToSave = False
 
         # Loop over segments
-        print("====")
         for seg in self.segments:
-            print(seg)
-        print("====")
-
-        for seg in self.segments:
-            print('*',seg)
             todel = False
             # Delete if any say to delete (correct? Or just remove if it is in a list with others?)
             for lab in seg[4]:
@@ -1737,7 +1745,6 @@ class AviaNZ_reviewAll(QMainWindow):
                     todel = True
 
             if todel:
-                print("Deleting this seg")
                 # save the correction file
                 if self.config['saveCorrections']:
                     outputError = [[seg, []]]
@@ -1745,16 +1752,8 @@ class AviaNZ_reviewAll(QMainWindow):
                     if cleanexit != 1:
                         print("Warning: could not save correction file!")
 
-                # SRM: This line!
                 self.segments.remove(seg)
                 segsToSave = True
-            else:
-                print("Not this one")
-
-        print("!===")
-        for seg in self.segments:
-            print(seg)
-        print("!===")
 
         if segsToSave:
             cleanexit = self.segments.saveJSON(self.filename+'.data', self.reviewer)
