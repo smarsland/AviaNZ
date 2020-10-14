@@ -2,11 +2,11 @@
 #
 # Cluster segments
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -250,7 +250,7 @@ class Clustering:
 
         return som
 
-    def cluster(self, dirname, species=None, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
+    def cluster(self, dirname, fs, species=None, feature='we', n_mels=24, minlen=0.2, denoise=False, alg='agglomerative'):
         """
         Cluster segments during training to make sub-filters.
         Given wav + annotation files,
@@ -258,6 +258,7 @@ class Clustering:
             2) make them to fixed-length by padding or clipping
             3) use existing clustering algorithems
         :param dir: path to directory with wav & wav.data files
+        :param fs: sample rate
         :param species: string, optional. will train on segments containing this label
         :param feature: 'we' (wavelet energy), 'mfcc', or 'chroma'
         :param n_mels: number of mel coeff when feature='mfcc'
@@ -271,7 +272,7 @@ class Clustering:
         self.alg = alg
 
         # 1. Get the frequency band and sampling frequency from annotations
-        fs, f1, f2 = self.getFrq(dirname, species)
+        f1, f2 = self.getFrqRange(dirname, species, fs)
         print("Clustering using sampling rate", fs)
 
         # 2. Find the lower and upper bounds (relevant to the frq range)
@@ -396,22 +397,22 @@ class Clustering:
             clustered_dataset[i].insert(4, dic[labels[i]])
             # clustered_dataset format: [[file1, seg1, [syl1, syl2], [features1, features2], predict], ...]
 
-        return clustered_dataset, fs, nclasses, duration
+        return clustered_dataset, nclasses, duration
 
-    def getFrq(self, dirname, species):
+    def getFrqRange(self, dirname, species, fs):
         ''' Get the frequency band and sampling frequency from annotations
         '''
         lowlist = []
         highlist = []
-        srlist = []
+        # srlist = []
 
         # Directory mode (from the training dialog)
         if os.path.isdir(dirname):
             for root, dirs, files in os.walk(str(dirname)):
                 for file in files:
                     if file.lower().endswith('.wav') and file + '.data' in files:
-                        wavrate = wavio.readFmt(os.path.join(root, file))[0]
-                        srlist.append(wavrate)
+                        # wavrate = wavio.readFmt(os.path.join(root, file))[0]
+                        # srlist.append(wavrate)
                         # Read the annotation
                         segments = Segment.SegmentList()
                         segments.parseJSON(os.path.join(root, file + '.data'))
@@ -428,8 +429,8 @@ class Clustering:
         # File mode (from the main interface)
         elif os.path.isfile(dirname):
             if dirname.lower().endswith('.wav') and os.path.exists(dirname + '.data'):
-                wavrate = wavio.readFmt(dirname)[0]
-                srlist.append(wavrate)
+                # wavrate = wavio.readFmt(dirname)[0]
+                # srlist.append(wavrate)
                 # Read the annotation
                 segments = Segment.SegmentList()
                 segments.parseJSON(dirname + '.data')
@@ -447,12 +448,13 @@ class Clustering:
                 self.n_clusters = len(thisSpSegs)//2
                 print('Setting number of clusters to ', self.n_clusters)
 
-        # Set sampling frequency based on segments and min samp. frq from the file list
-        arr = [4000, 8000, 16000, 32000, 48000]
-        pos = np.abs(arr - np.median(highlist) * 2).argmin()
-        fs = arr[pos]
-        if fs > np.min(srlist):
-            fs = np.min(srlist)
+        # Sampling rate is coming from the first page in the wavelet training wizard
+        # # Set sampling frequency based on segments and min samp. frq from the file list
+        # arr = [4000, 8000, 16000, 32000, 48000]
+        # pos = np.abs(arr - np.median(highlist) * 2).argmin()
+        # fs = arr[pos]
+        # if fs > np.min(srlist):
+        #     fs = np.min(srlist)
 
         # Find frequency limits
         # TODO: Made fixed in order to have same sized feature matrices, can we vary this to use segment frequency limits?
@@ -469,7 +471,7 @@ class Clustering:
         if f2 < f1:
             f2 = np.mean(highlist)
 
-        return fs, f1, f2
+        return f1, f2
 
     def findSyllables(self, dirname, species, minlen, fs, f1, f2, denoise):
         """ Find the syllables
@@ -497,31 +499,7 @@ class Clustering:
                         # Now find syllables within each segment, median clipping
                         for segix in thisSpSegs:
                             seg = segments[segix]
-                            audiodata = self.loadFile(filename=os.path.join(root, file), duration=seg[1] - seg[0],
-                                                      offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
-                            start = seg[0]
-                            sp = SignalProc.SignalProc()
-                            sp.data = audiodata
-                            sp.sampleRate = fs
-                            _ = sp.spectrogram()
-                            segment = Segment.Segmenter(sp, fs)
-                            syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
-                            if len(syls) == 0:  # Sanity check
-                                # Try again with lower threshold
-                                segment = Segment.Segmenter(sp, fs)
-                                syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
-                            # Merge overlapped segments
-                            syls = segment.checkSegmentOverlap(syls)
-                            syls = segment.deleteShort(syls, minlen)
-                            syls = [[s[0] + start, s[1] + start] for s in syls]
-
-                            # Sanity check, e.g. when user annotates syllables tight, median clipping may not detect it
-                            if len(syls) == 0:
-                                syls = [[start, seg[1]]]
-                            if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen:  # Sanity check
-                                syls = [[start, seg[1]]]
-                            # syls = [[x[0] / fs, x[1] / fs] for x in syls]
-                            # print('\nCurrent:', seg, '--> Median clipping ', syls)
+                            syls = self.findSyllablesSeg(os.path.join(root, file), seg, fs, f1, f2, denoise, minlen)
                             for syl in syls:
                                 dataset.append([os.path.join(root, file), seg, syl])
         elif os.path.isfile(dirname):
@@ -536,35 +514,45 @@ class Clustering:
                 # Now find syllables within each segment, median clipping
                 for segix in thisSpSegs:
                     seg = segments[segix]
-                    audiodata = self.loadFile(filename=dirname, duration=seg[1] - seg[0],
-                                              offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
-                    start = seg[0]
-                    sp = SignalProc.SignalProc()
-                    sp.data = audiodata
-                    sp.sampleRate = fs
-                    _ = sp.spectrogram()
-                    segment = Segment.Segmenter(sp, fs)
-                    syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
-                    if len(syls) == 0:  # Sanity check
-                        segment = Segment.Segmenter(sp, fs)
-                        syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
-                    syls = segment.checkSegmentOverlap(syls)  # merge overlapped segments
-                    # syls = segment.joinGaps(syls, minlen)
-                    syls = segment.deleteShort(syls, minlen)
-                    syls = [[s[0] + start, s[1] + start] for s in syls]
-
-                    # Sanity check, e.g. when user annotates syllables tight, median clipping may not detect it.
-                    if len(syls) == 0:
-                        syls = [[start, seg[1]]]
-                    if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen:  # Sanity check
-                        syls = [[start, seg[1]]]
-                    # syls = [[x[0] / fs, x[1] / fs] for x in syls]
-                    # print('\nCurrent:', seg, '--> Median clipping ', syls)
+                    syls = self.findSyllablesSeg(dirname, seg, fs, f1, f2, denoise, minlen)
                     for syl in syls:
                         dataset.append([dirname, seg, syl])
         return dataset
 
-    def trainModel(self,):
+    def findSyllablesSeg(self, file, seg, fs, f1, f2, denoise, minlen):
+        """ Find syllables in the segment using median clipping - single segment
+        :return: syllables list
+        """
+        # TODO: Use f1 and f2 to restrict spectrogram in median clipping to skip some of the noise
+        audiodata = self.loadFile(filename=file, duration=seg[1] - seg[0], offset=seg[0], fs=fs, denoise=denoise, f1=f1, f2=f2)
+        start = seg[0]
+        sp = SignalProc.SignalProc()
+        sp.data = audiodata
+        sp.sampleRate = fs
+        _ = sp.spectrogram()
+        segment = Segment.Segmenter(sp, fs)
+
+        syls = segment.medianClip(thr=3, medfiltersize=5, minaxislength=9, minSegment=50)
+        if len(syls) == 0:  # Sanity check
+            # Try again with lower threshold
+            segment = Segment.Segmenter(sp, fs)
+            syls = segment.medianClip(thr=2, medfiltersize=5, minaxislength=9, minSegment=50)
+
+        # Merge overlapped segments
+        syls = segment.checkSegmentOverlap(syls)
+        syls = segment.deleteShort(syls, minlen)
+        syls = [[s[0] + start, s[1] + start] for s in syls]
+
+        # Sanity check, e.g. when user annotates syllables tight, median clipping may not detect it
+        if len(syls) == 0:
+            syls = [[start, seg[1]]]
+        if len(syls) == 1 and syls[0][1] - syls[0][0] < minlen:  # Sanity check
+            syls = [[start, seg[1]]]
+
+        return syls
+
+    def trainModel(self):
+        """ Clustering model"""
         if self.alg == 'DBSCAN':
             print('\nDBSCAN--------------------------------------')
             model = self.DBscan(eps=0.3, min_samples=3)

@@ -1,13 +1,12 @@
 
 # SupportClasses.py
-
 # Support classes for the AviaNZ program
 
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -23,7 +22,6 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from openpyxl import load_workbook, Workbook
-from openpyxl.styles import colors
 from openpyxl.styles import Font
 
 QtMM = True
@@ -165,12 +163,11 @@ class ConfigLoader(object):
             config = json.load(f)
             f.close()
             return config
-        except ValueError as e:
+        except ValueError:
             # if JSON looks corrupt, quit:
-            print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             msg.exec_()
-            sys.exit()
+            raise
 
     def filters(self, dir, bats=True):
         """ Returns a dict of filter JSONs,
@@ -357,12 +354,11 @@ class ConfigLoader(object):
             config = json.load(configfile)
             configfile.close()
             return config
-        except ValueError as e:
+        except ValueError:
             # if JSON looks corrupt, quit:
-            print(e)
             msg = SupportClasses_GUI.MessagePopup("w", "Bad config file", "ERROR: file " + file + " corrupt, delete it to restore default")
             msg.exec_()
-            sys.exit()
+            raise
 
     # Dumps the provided JSON array to the corresponding bird file.
     def blwrite(self, content, file, configdir):
@@ -392,9 +388,8 @@ class ConfigLoader(object):
             # will always be an absolute path to the user configdir.
             with open(file, 'w') as f:
                 json.dump(content, f, indent=1)
-
         except Exception as e:
-            print("ERROR while saving config file:")
+            print("Warning: could not save config file:")
             print(e)
 
 
@@ -436,31 +431,57 @@ class ExcelIO():
             if len(speciesSegs)==0:
                 continue
 
+            if startTime is None:
+                # if no startTime was provided, try to figure it out based on the filename
+                DOCRecording = re.search('(\d{6})_(\d{6})', os.path.basename(segsl.filename)[:-8])
+
+                if DOCRecording:
+                    print("time stamp found", DOCRecording)
+                    startTimeFile = DOCRecording.group(2)
+                    startTimeFile = int(startTimeFile[:2]) * 3600 + int(startTimeFile[2:4]) * 60 + int(startTimeFile[4:6])
+                else:
+                    startTimeFile = 0
+            else:
+                startTimeFile = startTime
+
             # Loop over the segments
             for seg in speciesSegs:
                 # Print the filename
                 ws.cell(row=r, column=1, value=segsl.filename)
 
                 # Time limits
-                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTime).toString('hh:mm:ss')))
-                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTime).toString('hh:mm:ss')))
+                ws.cell(row=r, column=2, value=str(QTime(0,0,0).addSecs(seg[0]+startTimeFile).toString('hh:mm:ss')))
+                ws.cell(row=r, column=3, value=str(QTime(0,0,0).addSecs(seg[1]+startTimeFile).toString('hh:mm:ss')))
                 # Freq limits
                 if seg[3]!=0:
                     ws.cell(row=r, column=4, value=int(seg[2]))
                     ws.cell(row=r, column=5, value=int(seg[3]))
                 if currsp=="Any sound":
-                    # print species and certainty
+                    # print species and certainty and call type
                     text = [lab["species"] for lab in seg[4]]
                     ws.cell(row=r, column=6, value=", ".join(text))
                     text = [str(lab["certainty"]) for lab in seg[4]]
                     ws.cell(row=r, column=7, value=", ".join(text))
+                    strct = []
+                    for lab in seg[4]:
+                        if "calltype" in lab:
+                            strct.append(str(lab["calltype"]))
+                        else:
+                            strct.append("-")
+                    ws.cell(row=r, column=8, value=", ".join(strct))
                 else:
-                    # only print certainty
-                    text = []
+                    # only print certainty and call type
+                    strcert = []
+                    strct = []
                     for lab in seg[4]:
                         if lab["species"]==currsp:
-                            text.append(str(lab["certainty"]))
-                    ws.cell(row=r, column=6, value=", ".join(text))
+                            strcert.append(str(lab["certainty"]))
+                            if "calltype" in lab:
+                                strct.append(str(lab["calltype"]))
+                            else:
+                                strct.append("-")
+                    ws.cell(row=r, column=6, value=", ".join(strcert))
+                    ws.cell(row=r, column=7, value=", ".join(strct))
                 r += 1
 
     # This stores pres/abs and max certainty for the species in each file
@@ -496,7 +517,7 @@ class ExcelIO():
 
         # print resolution "header"
         ws.cell(row=r, column=1, value=str(resolution) + ' secs resolution')
-        ft = Font(color=colors.DARKYELLOW)
+        ft = Font(color="808000")
         ws.cell(row=r, column=1).font=ft
 
         # print file name and page number
@@ -538,7 +559,7 @@ class ExcelIO():
             ws.cell(row=r+1, column=c, value=detected[t])
             c += 1
 
-    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=0, resolution=10):
+    def export(self, segments, dirName, action, pagelenarg=None, numpages=1, speciesList=[], startTime=None, resolution=10):
         # will export species present in self, + passed as arg, + "all species" excel
         speciesList = set(speciesList)
         for segl in segments:
@@ -583,8 +604,10 @@ class ExcelIO():
                 if species=="Any sound":
                     ws.cell(row=1, column=6, value="species")
                     ws.cell(row=1, column=7, value="certainty")
+                    ws.cell(row=1, column=8, value="call type")
                 else:
                     ws.cell(row=1, column=6, value="certainty")
+                    ws.cell(row=1, column=7, value="call type")
 
                     # Second sheet
                     wb.create_sheet(title='Presence Absence', index=2)

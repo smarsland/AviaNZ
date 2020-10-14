@@ -1,12 +1,11 @@
 
-# AviaNZ_batch.py
-#
-# This is the proceesing class for the batch AviaNZ interface
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
+
+# This is the processing class for the batch AviaNZ interface
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -43,6 +42,7 @@ class AviaNZ_batchProcess():
     # mode: "GUI/CLI/test". If GUI, must provide the parent
     def __init__(self, parent, mode="GUI", configdir='', sdir='', recogniser=None, wind=False):
         # read config and filters from user location
+        # recogniser - filter file name without ".txt"
         self.configdir = configdir
         self.configfile = os.path.join(configdir, "AviaNZconfig.txt")
         self.ConfigLoader = SupportClasses.ConfigLoader()
@@ -605,6 +605,8 @@ class AviaNZ_batchProcess():
         return 1
 
     def loadFile(self, species, anysound=False):
+        """ species: list of recognizer names, or ["Any sound"].
+            Species names will be wiped based on these. """
         print(self.filename)
         # Create an instance of the Signal Processing class
         if not hasattr(self,'sp'):

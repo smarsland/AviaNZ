@@ -1,12 +1,12 @@
 
-#
 # This is part of the AviaNZ interface
 # Holds most of the code for the various dialog boxes
-# Version 2.0 18/11/19
-# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis
+
+# Version 3.0 14/09/20
+# Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
 #    AviaNZ bioacoustic analysis program
-#    Copyright (C) 2017--2019
+#    Copyright (C) 2017--2020
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -37,7 +37,13 @@ import numpy as np
 import colourMaps
 import SupportClasses_GUI
 import SignalProc
+import SupportClasses
+import openpyxl
+import json
 
+pg.setConfigOption('background','w')
+pg.setConfigOption('foreground','k')
+pg.setConfigOption('antialias',True)
 
 class StartScreen(QDialog):
     def __init__(self, parent=None):
@@ -46,46 +52,49 @@ class StartScreen(QDialog):
         self.setWindowTitle('AviaNZ - Choose Task')
         self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.FramelessWindowHint | Qt.WindowCloseButtonHint)
         self.setAutoFillBackground(False)
-        self.setFixedSize(860, 350)
-        self.setStyleSheet("background-image: url(img/AviaNZ_SW_V2.jpg);")
+        self.setMinimumSize(860, 350)
+        self.setStyleSheet("QDialog {background-image: url(img/AviaNZ_SW_V2.jpg); background-repeat: no-repeat; background-color: #242021; background-position: top center;}")
         self.activateWindow()
 
-        btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
-        # btn_style2='QPushButton {background-color: #A3C1DA; color: grey; font-size:16px}'
+        # #242021 for the bgcolor of that image
+        # btn_style='QPushButton {background-color: #A3C1DA; color: white; font-size:20px; font-weight: bold; font-family: "Arial"}'
+        btn_style=""" QAbstractButton {background-color: #242021;
+                    border-color: #b2c8da; border-width:2px; border-style: outset;
+                    color: white; font-size:21px; font-weight: bold; font-family: "Arial"; padding: 3px;}
+                    QAbstractButton:pressed {border-style: inset;}
+                    """
         b1 = QPushButton("   Manual Processing   ")
         b2 = QPushButton("     Batch Processing     ")
         b3 = QPushButton("  Review Batch Results  ")
-        l1 = QLabel("------")
-        l2 = QLabel("---")
         b1.setStyleSheet(btn_style)
         b2.setStyleSheet(btn_style)
         b3.setStyleSheet(btn_style)
-        #b4.setStyleSheet(btn_style)
-        l1.setStyleSheet('QLabel {color:transparent}')
         bclose = QtGui.QToolButton()
         bclose.setIcon(QtGui.QIcon('img/close.png'))
         bclose.setIconSize(QtCore.QSize(40, 40))
         bclose.setToolTip("Close")
+        bclose.setStyleSheet(btn_style)
         bclose.clicked.connect(self.reject)
-        
+
         hboxclose = QHBoxLayout()
-        hboxclose.addWidget(bclose, alignment=Qt.AlignRight)        
+        hboxclose.addWidget(bclose, alignment=Qt.AlignRight)
 
         hbox = QHBoxLayout()
-        hbox.addWidget(l1)
+        hbox.addStretch(5)
         hbox.addWidget(b1)
-        hbox.addWidget(l1)
+        hbox.addStretch(4)
         hbox.addWidget(b2)
-        hbox.addWidget(l1)
+        hbox.addStretch(4)
         hbox.addWidget(b3)
-        hbox.addWidget(l2)
+        hbox.addStretch(5)
         #hbox.addWidget(b4)
 
         vbox = QVBoxLayout()
         vbox.addLayout(hboxclose)
+        vbox.addSpacing(180)
         vbox.addStretch(1)
         vbox.addLayout(hbox)
-        vbox.addWidget(l1)
+        vbox.addStretch(1)
 
         self.setLayout(vbox)
 
@@ -307,6 +316,14 @@ class Excel2Annotation(QDialog):
         self.btnBrowseExcel.setFixedWidth(220)
         self.btnBrowseExcel.clicked.connect(self.browseExcel)
 
+        lblHeader = QLabel('Choose Columns')
+        lblHeader.setFixedWidth(220)
+        lblHeader.setAlignment(Qt.AlignCenter)
+        self.comboStart = QComboBox()
+        self.comboEnd = QComboBox()
+        self.comboLow = QComboBox()
+        self.comboHigh = QComboBox()
+
         self.txtAudio = QLineEdit()
         self.txtAudio.setMinimumWidth(400)
         self.txtAudio.setText('')
@@ -350,14 +367,34 @@ class Excel2Annotation(QDialog):
         tableWidget.setItem(3, 3, QTableWidgetItem("8000.30"))
         tableWidget.setMinimumWidth(700)
         tableWidget.setStyleSheet("QTableWidget { color : #808080; }")
+        tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         Box = QVBoxLayout()
-        Box.addWidget(QLabel('Required Excel Format:'))
+        Box.addWidget(QLabel('Sample Excel:'))
         Box.addWidget(tableWidget)
         Box.addWidget(QLabel())
         Box1 = QHBoxLayout()
         Box1.addWidget(self.btnBrowseExcel)
         Box1.addWidget(self.txtExcel)
+        Box10 = QHBoxLayout()
+        Box11 = QVBoxLayout()
+        Box11.addWidget(QLabel('Start time'))
+        Box11.addWidget(self.comboStart)
+        Box12 = QVBoxLayout()
+        Box12.addWidget(QLabel('End time'))
+        Box12.addWidget(self.comboEnd)
+        Box13 = QVBoxLayout()
+        Box13.addWidget(QLabel('Lower frequency'))
+        Box13.addWidget(self.comboLow)
+        Box14 = QVBoxLayout()
+        Box14.addWidget(QLabel('Higher frequency'))
+        Box14.addWidget(self.comboHigh)
+        Box10.addWidget(lblHeader)
+        Box10.addLayout(Box11)
+        Box10.addLayout(Box12)
+        Box10.addLayout(Box13)
+        Box10.addLayout(Box14)
+
         Box2 = QHBoxLayout()
         Box2.addWidget(self.btnBrowseAudio)
         Box2.addWidget(self.txtAudio)
@@ -365,6 +402,7 @@ class Excel2Annotation(QDialog):
         Box3.addWidget(lblSpecies)
         Box3.addWidget(self.txtSpecies)
         Box.addLayout(Box1)
+        Box.addLayout(Box10)
         Box.addLayout(Box2)
         Box.addLayout(Box3)
         Box.addWidget(QLabel())
@@ -375,7 +413,7 @@ class Excel2Annotation(QDialog):
 
     def getValues(self):
         if self.txtSpecies.text() and self.txtExcel.text() and self.txtAudio.text():
-            return [self.txtExcel.text(), self.txtAudio.text(), self.txtSpecies.text()]
+            return [self.txtExcel.text(), self.txtAudio.text(), self.txtSpecies.text(), self.headers[self.comboStart.currentIndex()], self.headers[self.comboEnd.currentIndex()], self.headers[self.comboLow.currentIndex()], self.headers[self.comboHigh.currentIndex()]]
         else:
             msg = SupportClasses_GUI.MessagePopup("t", "All fields are Mandatory ", "All fields are Mandatory ")
             msg.exec_()
@@ -390,6 +428,21 @@ class Excel2Annotation(QDialog):
             excelfile, _ = QtGui.QFileDialog.getOpenFileName(self, 'Open file', userDir, "Excel (*.xlsx *.xls)")
             self.txtExcel.setText(excelfile)
             self.txtExcel.setReadOnly(True)
+            # Read the excel to get the headers
+            book = openpyxl.load_workbook(excelfile)
+            sheet = book.active
+            headers = [value for value in sheet.iter_rows(min_row=1, max_row=1)]
+            headers = [h for h in headers[0]]
+            self.headers = [h.column for h in headers]
+            values = [h.value for h in headers]
+            self.comboStart.addItems(values)
+            self.comboStart.setCurrentText(values[0])
+            self.comboEnd.addItems(values)
+            self.comboEnd.setCurrentText(values[1])
+            self.comboLow.addItems(values)
+            self.comboLow.setCurrentText(values[2])
+            self.comboHigh.addItems(values)
+            self.comboHigh.setCurrentText(values[3])
         except Exception as e:
             print("ERROR: failed with error:")
             print(e)
@@ -1515,7 +1568,7 @@ class HumanClassify1(QDialog):
         # button to switch to call type view
         self.viewSpButton = QtGui.QToolButton()
         self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
-        self.viewSpButton.setIconSize(QtCore.QSize(35, 20))
+        self.viewSpButton.setIconSize(QtCore.QSize(42, 25))
         self.viewSpButton.setToolTip("Toggle between species/calltype views")
         self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
@@ -1734,7 +1787,7 @@ class HumanClassify1(QDialog):
         self.birds3.setEnabled(False)
 
     def setSegNumbers(self, done, total):
-        text1 = "calls reviewed: " + str(done)
+        text1 = "calls accepted: " + str(done)
         text2 = str(total - done) + " to go"
         self.numberDone.setText(text1)
         self.numberLeft.setText(text2)
@@ -2798,11 +2851,9 @@ class FilterManager(QDialog):
 
     def readContents(self):
         self.listFiles.clear()
-        filedir = QDir(self.filtdir)
-        # do not show NNs or other trash
-        filedir.setNameFilters(["*.txt"])
-        filelist = filedir.entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
-        for file in filelist:
+        cl = SupportClasses.ConfigLoader()
+        self.FilterDict = cl.filters(self.filtdir, bats=False)
+        for file in self.FilterDict:
             item = QListWidgetItem(self.listFiles)
             item.setText(file)
 
@@ -2824,7 +2875,7 @@ class FilterManager(QDialog):
     def rename(self):
         """ move the filter file. """
         source = self.listFiles.currentItem().text()
-        source = os.path.join(self.filtdir, source)
+        source = os.path.join(self.filtdir, source + '.txt')
         target = self.enterFiltName.text()
         target = os.path.join(self.filtdir, target)
         # figured we should have our own gentle error handling
@@ -2843,41 +2894,74 @@ class FilterManager(QDialog):
             print("ERROR: could not rename:", e)
 
     def delete(self):
-        """ confirm and delete the file. """
-        source = self.listFiles.currentItem().text()
-        source = os.path.join(self.filtdir, source)
-        if not os.path.isfile(source):
-            print("ERROR: unable to delete, bad source", source)
-            return
-        msg = SupportClasses_GUI.MessagePopup("w", "Confirm delete", "Warning: you are about to permanently delete recogniser %s.\nAre you sure?" % source)
+        """ confirm and delete the file/s. """
+        sources = []
+        fn = self.listFiles.currentItem().text()
+        currfilt = self.FilterDict[fn]
+        sources.append(os.path.join(self.filtdir, fn + '.txt'))
+        if "CNN" in currfilt:
+            sources.append(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".h5"))
+            sources.append(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".json"))
+
+        for src in sources:
+            if not os.path.isfile(src):
+                print("ERROR: unable to delete, bad source", src)
+                return
+
+        msg = SupportClasses_GUI.MessagePopup("w", "Confirm delete", "Warning: you are about to permanently delete recogniser %s.\nAre you sure?" % sources[0])
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
         reply = msg.exec_()
         if reply != QMessageBox.Yes:
             return
         try:
-            print("removing", source)
-            os.remove(source)
+            print("removing", sources)
+            for src in sources:
+                os.remove(src)
             self.readContents()
         except Exception as e:
             print("ERROR: could not delete:", e)
 
     def download(self):
+        # Also import corresponding NN files if any
+        sources = []
+        targets = []
         source, _ = QtGui.QFileDialog.getOpenFileName(self, 'Select the downloaded recogniser file', os.path.expanduser("~"), "Text files (*.txt)")
-        target = os.path.join(self.filtdir, os.path.basename(source))
-
-        print("Importing from %s to %s" % (source, target))
-        if not os.path.isfile(source):
-            print("ERROR: unable to import, bad source %s" % source)
-            return
-        if os.path.isfile(target):
-            msg = SupportClasses_GUI.MessagePopup("t", "Confirm overwrite", "Warning: a recogniser named %s already exists in this software.\nDo you want to overwrite it?" % target)
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            reply = msg.exec_()
-            if reply == QMessageBox.No or reply == QMessageBox.Cancel:
-                return
+        sources.append(source)
+        targets.append(os.path.join(self.filtdir, os.path.basename(source)))
         try:
-            shutil.copy2(source, target)
-            msg = SupportClasses_GUI.MessagePopup("d", "Successfully imported", "Import successful. Now you can use the recogniser %s" % os.path.basename(target))
+            ff = open(source)
+            filt = json.load(ff)
+            ff.close()
+
+            # skip this filter if it looks fishy:
+            if not isinstance(filt, dict) or "species" not in filt or "SampleRate" not in filt or "Filters" not in filt or len(filt["Filters"]) < 1:
+                raise ValueError("Filter JSON format wrong, skipping")
+            for subfilt in filt["Filters"]:
+                if not isinstance(subfilt, dict) or "calltype" not in subfilt or "WaveletParams" not in subfilt or "TimeRange" not in subfilt:
+                    raise ValueError("Subfilter JSON format wrong, skipping")
+                if "thr" not in subfilt["WaveletParams"] or "nodes" not in subfilt["WaveletParams"] or len(
+                        subfilt["TimeRange"]) < 4:
+                    raise ValueError("Subfilter JSON format wrong (details), skipping")
+        except Exception as e:
+            print("Could not load filter:", source, e)
+            return
+
+        try:
+            if "CNN" in filt:
+                sources.append(os.path.join(os.path.dirname(source), filt["CNN"]["CNN_name"] + ".h5"))
+                sources.append(os.path.join(os.path.dirname(source), filt["CNN"]["CNN_name"] + ".json"))
+                targets.append(os.path.join(self.filtdir, filt["CNN"]["CNN_name"] + ".h5"))
+                targets.append(os.path.join(self.filtdir, filt["CNN"]["CNN_name"] + ".json"))
+            for i in range(len(sources)):
+                if not os.path.isfile(sources[i]):
+                    print("ERROR: unable to import, bad source %s" % sources[i])
+                    return
+                # Don't risk replacing NN files (i.e. no overwriting)
+                if os.path.isfile(targets[i]):
+                    print("ERROR: target file %s exists" % targets[i])
+                    return
+                shutil.copy2(sources[i], targets[i])
+            msg = SupportClasses_GUI.MessagePopup("d", "Successfully imported","Import successful. Now you can use the recogniser %s" % os.path.basename(targets[0]))
             msg.exec_()
             self.readContents()
         except Exception as e:
@@ -2885,23 +2969,35 @@ class FilterManager(QDialog):
             print(e)
             return
 
+
     def upload(self):
+        # Also export corresponding NN files if any
         fn = self.listFiles.currentItem().text()
-        source = os.path.join(self.filtdir, fn)
+        currfilt = self.FilterDict[fn]
+        sources = []
+        sources.append(fn + '.txt')
+        if "CNN" in currfilt:
+            sources.append(currfilt["CNN"]["CNN_name"] + ".h5")
+            sources.append(currfilt["CNN"]["CNN_name"] + ".json")
+
         target = QtGui.QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
         if target != "":
-            target = os.path.join(target, fn)
+            targets = []
+            for src in sources:
+                targets.append(os.path.join(target, src))
+            sources = [os.path.join(self.filtdir, src) for src in sources]
 
-            print("Exporting from %s to %s" % (source, target))
-            if not os.path.isfile(source):
-                print("ERROR: unable to export, bad source %s" % source)
-                return
-            if os.path.isfile(target):
-                print("ERROR: target file %s exists" % target)
-                return
+            print("Exporting from %s to %s" % (sources, targets))
             try:
-                shutil.copy2(source, target)
-                msg = SupportClasses_GUI.MessagePopup("d", "Successfully exported", "Export successful. Now you can share the file %s" % target)
+                for i in range(len(sources)):
+                    if not os.path.isfile(sources[i]):
+                        print("ERROR: unable to export, bad source %s" % sources[i])
+                        return
+                    if os.path.isfile(targets[i]):
+                        print("ERROR: target file %s exists" % targets[i])
+                        return
+                    shutil.copy2(sources[i], targets[i])
+                msg = SupportClasses_GUI.MessagePopup("d", "Successfully exported", "Export successful. Now you can share the recogniser file/s in %s" % target)
                 msg.exec_()
             except Exception as e:
                 print("ERROR: failed to export")
