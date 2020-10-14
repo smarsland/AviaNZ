@@ -4412,10 +4412,9 @@ class AviaNZ(QMainWindow):
             #syllable-by-syllable snnr
             #use the noise following the sillable instead of that preceeding it if first syllable
             if q==5:
-                startnoise=int(np.floor(max(0, seg[0]-self.startRead)*self.sampleRate))
-                endnoise=int(np.ceil(min(seg[1]-self.startRead, self.datalengthSec)*self.sampleRate))
+                noise=self.sp.getpower(starttime,endtime)
             else:
-                outarray[q]=np.round(self.sp.SylNR(starttime,endtime,startnoise,endnoise),2)
+                outarray[q]=round(10.*np.log10(self.sp.getpower(starttime,endtime)/noise),2)
                 
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)

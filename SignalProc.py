@@ -273,6 +273,11 @@ class SignalProc:
         pN = np.sum(self.data[startNoise:endNoise]**2)/abs(startNoise-endNoise)
         return 10.*np.log10(pS/pN)
 
+    def getpower(self,startSignal,endSignal):
+        # return segment power
+        return np.sum(self.data[startSignal:endSignal]**2)/abs(startSignal-endSignal)
+
+
     def equalLoudness(self,data):
         # TODO: Assumes 16000 sampling rate, fix!
         # Basically, save a few more sets of filter coefficients...
