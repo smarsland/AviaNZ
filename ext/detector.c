@@ -5,16 +5,16 @@
 
 #define LOG2PI 1.8378770664093453
 
-typedef enum {
-    NUIS,
-    SIG
-} chptype;
+// typedef enum {
+//     NUIS,
+//     SIG
+// } chptype;
 
 struct ChpList {
     // size_t prev;
     size_t start;
-    size_t end;
-    chptype type;
+    // size_t end; // equals the time when this chp was stored
+    // chptype type; // can be determined from end-start
 };
 
 // Square cost functions (for use w/ change in mean)
@@ -148,7 +148,7 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
             // just store a pointer to the last list, plus at most one new chp pair
             // using 0 to indicate "not a chp", as the 0-th point is auto-set to background
             chps[t].start = 0;
-            chps[t].end = 0;
+            // chps[t].end = 0;
         } else {
             // update cost
             F[t] = bestsegcost;
@@ -158,7 +158,7 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
             // store a pointer to the last list, plus at most one new chp pair - don't think this is needed
             // attach the new chp pair
             chps[t].start = bestsegstart+1;
-            chps[t].end = t;
+            // chps[t].end = t;
             // printf("! Ch.p. detected at %zu-%zu\n", bestsegstart+1, t);
         }
 
@@ -184,9 +184,10 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
     printf("Detected segments:\n");
     while(i>0){
         if(chps[i].start>0){
-            printf("* %zu-%zu\n", chps[i].start, chps[i].end);
+            // no need to store chp end separately, as i is exactly that
+            printf("* %zu-%zu\n", chps[i].start, i);
             outstarts[outnum] = chps[i].start;
-            outends[outnum] = chps[i].end;
+            outends[outnum] = i;
             outtypes[outnum] = 's';
             outnum++;
             if(chps[i].start - 1 >= i){
@@ -275,7 +276,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
             // chps[t].prev = t-1;
             // using 0 to indicate "not a chp", as the 0-th point is auto-set to background
             chps[t].start = 0;
-            chps[t].end = 0;
+            // chps[t].end = 0;
         } else {
             // update cost
             F[t] = bestsegcost;
@@ -286,7 +287,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
             // chps[t].prev = bestsegstart;
             // attach the new chp pair
             chps[t].start = bestsegstart+1;
-            chps[t].end = t;
+            // chps[t].end = t;
             // printf("! Ch.p. detected at %zu-%zu\n", bestsegstart+1, t);
         }
 
@@ -311,7 +312,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
     printf("Detected segments:\n");
     while(i>0){
         if(chps[i].start>0){
-            printf("* %zu-%zu \n", chps[i].start, chps[i].end);
+            printf("* %zu-%zu \n", chps[i].start, i);
             if(chps[i].start - 1 >= i){
                 printf("ERROR: potential infinite recursion in changepoints\n");
                 return 1;
@@ -326,6 +327,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
 
 
 int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigma0, const double penalty_s, const double penalty_n, int outstarts[], int outends[], char outtypes[]){
+    // xs, nn: centered data (nn points)
     // sigma0: sigma^2_0, given
     // output: segments (list of starts and ends and types)
     struct ChpList chps[nn];
@@ -340,23 +342,30 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
     F[0] = 0;
 
     // arrays of outputs and parameters for each detector
+    // each detector gets a slice of nn elements starting from i*nn
     double *detwts = malloc(nn * nn * sizeof(double));
     double *detFs = malloc(nn * nn * sizeof(double));
     double *detsegcosts = malloc(nn * nn * sizeof(double));
     size_t *detbgsizes = malloc(nn * nn * sizeof(size_t));
     size_t *detpostarts = malloc(nn * nn * sizeof(size_t));
+    if(!detpostarts || !detbgsizes || !detsegcosts || !detFs || !detwts){
+        printf("ERROR: could not allocate memory of size %zu x %zu x %zu bytes\n", nn, nn, sizeof(double));
+        return 1;
+    }
+    struct ChpList *detchps = malloc(nn * nn * sizeof(struct ChpList));
+    if(!detchps){
+        printf("ERROR: could not allocate memory of size %zu x %zu x %zu bytes\n", nn, nn, sizeof(struct ChpList));
+        return 1;
+    }
     for(size_t i=0; i<nn*nn; i++){
         detpostarts[i] = 0;
-        detwts[i] = 999;
-        detFs[i] = -999;
+        detwts[i] = 9999; // cache miss marker. Could remove later
     }
     for(size_t i=0; i<nn; i++){
         detwts[i*nn + i] = x2s[i];
         detFs[i*nn + i] = 1 + log(x2s[i]);
         detbgsizes[i*nn + i] = 1;
     }
-    struct ChpList *detchps = malloc(nn * nn * sizeof(struct ChpList));
-    // each detector gets a slice of nn elements starting from i*nn
 
     // other detector-specific values
     size_t detnumpostarts[nn];
@@ -368,6 +377,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
     double m2;
     double len;
     double cs[nn];
+    double vars[nn];
 
     // acceptable start positions (for S) to keep track of pruning
     size_t possiblestarts[nn];
@@ -376,7 +386,6 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
         possiblestarts[i] = 0;
     }
     size_t numpossiblestarts = 1;
-    // TODO figure out how to use this without cache misses size_t minstart = 0;
 
     // acceptable start positions (for N)
     size_t possiblestarts_n[nn];
@@ -393,7 +402,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
     double bgcost;
     double segcosts[nn];
     for(size_t tt=1; tt<nn; tt++){
-        printf("----Cycle %zu/%zu----\n", tt+1, nn);
+        // printf("----Cycle %zu/%zu----\n", tt+1, nn);
         // precompute costs for all possible segments ending here at t
         m2 = 0;
         // Note: minstart fixed for now. Cannot really prune this,
@@ -403,6 +412,8 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
         for(size_t start=tt; start>minstart; start--){
             m2 += x2s[start];
             len = tt-start+1;
+            // when we want to limit the S+N directions, also need to store seg. variance:
+            vars[start] = m2/len;
             cs[start] = len*(1 + log(m2/len));
         }
 
@@ -424,7 +435,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
         for(size_t i=0; i<numpossiblestarts_n; i++){
             double detbgcost;
             size_t t2 = possiblestarts_n[i];
-            // printf("Working on potential nuisance at %zu : %zu\n", t2+1, tt);
+            // printf("DEBUG Working on potential nuisance at %zu : %zu\n", t2+1, tt);
             // start of the nn-size block alloc'd for this detector
             // (in row-column notation, 0-based indices on the matrices are:
             //  row=first element in the detector
@@ -443,13 +454,22 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
                 size_t detbestsegstart = 0;
                 for(size_t j=0; j<detnumpostarts[t2+1]; j++){
                     size_t t3 = detpostarts[t2det + j];
+                    // printf("- possible start: %zu (%zu total)\n", t3, detnumpostarts[t2+1]);
                     if(t3<minstart){
-                        printf("ERROR: fatal cache miss for precomputed cost at %zu\n", minstart);
+                        printf("ERROR: fatal cache miss for precomputed cost at %zu < %zu, detector %zu\n", t3, minstart, t2);
                         return(1);
                     }
-                    // printf("- possible start: %zu (%zu total)\n", t3, detnumpostarts[t2+1]);
                     // cs: precomputed cost for segs ending at tt
                     detsegcosts[t2det + t3] = detFs[t2det + t3] + cs[t3+1];
+
+                    // If we want to limit effect directions to theta_S > theta_N > theta_0 or vice versa:
+                    // for any segment which had theta_0 < theta_S < theta_N, the cost of segment cannot be minimal
+                    // (b/c it equals C(no segment)+beta). But don't set the cost to inf to avoid pruning it.
+                    if((detwts[t2det+tt-1]>sigma0 && vars[t3+1] <= detwts[t2det+tt-1]) || \
+                            (detwts[t2det+tt-1]<sigma0 && vars[t3+1] >= detwts[t2det+tt-1])){
+                        continue;
+                    }
+
                     // keep track to get min and argmin F_S for that detector
                     if(detsegcosts[t2det + t3] < detbestsegcost){
                         detbestsegcost = detsegcosts[t2det + t3];
@@ -468,7 +488,6 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
                     detwts[t2det + tt] = detwts[t2det+tt-1] - (detwts[t2det+tt-1] - x2s[tt])/detbgsizes[t2det + tt];
                     // using 0 to indicate "not a chp", as the 0-th point is auto-set to background
                     detchps[t2det + tt].start = 0;
-                    detchps[t2det + tt].end = 0;
                 } else {
                     // update cost
                     detFs[t2det + tt] = detbestsegcost;
@@ -477,27 +496,29 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
                     detwts[t2det + tt] = detwts[t2det + detbestsegstart];
                     // attach the new chp pair
                     detchps[t2det + tt].start = detbestsegstart+1;
-                    detchps[t2det + tt].end = tt;
+                    // detchps[t2det + tt].end = tt;
                     // printf("! Ch.p. detected at %zu-%zu\n", detbestsegstart+1, tt);
                 }
             }
 
             // update and prune possible segment starts
-            for(size_t j=0; j<detnumpostarts[t2+1]; j++){
+            // btw note the lit loop syntax
+            for(size_t j=detnumpostarts[t2+1]; j-- > 0; ){
                 if(detFs[t2det + tt] <= detsegcosts[t2det + detpostarts[t2det + j]]){
                     // prune out this start time
-                    // printf("- pruning out %zu, replacing with %zu\n", detpostarts[t2det + j], detpostarts[t2det + detnumpostarts[t2+1]-1]);
+                    // printf("DEBUG - pruning out %zu, replacing with %zu\n", detpostarts[t2det + j], detpostarts[t2det + detnumpostarts[t2+1]-1]);
                     detpostarts[t2det + j] = detpostarts[t2det + --detnumpostarts[t2+1]];
                 } else if(tt+1-detpostarts[t2det + j] > maxlb){
                     // remove one segment start to limit lookback
                     // (not super efficient but can't do better w/o sorting)
+                    // printf("DEBUG - start %zu for detector %zu exceeds maxlb = %zu\n", detpostarts[t2det+j], t2, maxlb);
                     detpostarts[t2det + j] = detpostarts[t2det + --detnumpostarts[t2+1]];
                 }
             }
             detpostarts[t2det + detnumpostarts[t2+1]++] = tt;
             // printf("- Current wt: %f, F(t): %.2f\n", detwts[t2det + tt], detFs[t2det + tt]);
             // printf("- total number of possible det. starts: %zu, last: %zu\n", detnumpostarts[t2+1], detpostarts[t2det + detnumpostarts[t2+1]-1]);
-            if(detwts[t2det+tt]==999){
+            if(detwts[t2det+tt]==9999){
                 printf("ERROR: fatal cache miss\n");
                 return 1;
             }
@@ -523,29 +544,24 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
             F[tt] = bgcost;
             // using 0 to indicate "not a chp", as the 0-th point is auto-set to background
             chps[tt].start = 0;
-            chps[tt].end = 0;
         } else if (bestsegcost<bestnuiscost){
             // update cost
             F[tt] = bestsegcost;
             // attach the new chp pair
             chps[tt].start = bestsegstart+1;
-            chps[tt].end = tt;
-            chps[tt].type = SIG;
             // printf("! Ch.p. detected at %zu-%zu, type SIGNAL\n", bestsegstart+1, tt);
         } else {
             // update cost
             F[tt] = bestnuiscost;
             // attach the new chp pair
             chps[tt].start = bestnuisstart+1;
-            chps[tt].end = tt;
-            chps[tt].type = NUIS;
             // printf("! Ch.p. detected at %zu-%zu, type NUIS\n", bestnuisstart+1, tt);
         }
 
         // update and prune possible segment starts
         // minstart = tt; // useful for reducing the set for cost precomputing
         // minstart = tt>maxlb ? tt-maxlb : 0;
-        for(size_t i=0; i<numpossiblestarts; i++){
+        for(size_t i=numpossiblestarts; i-- > 0;){
             if(F[tt] <= segcosts[possiblestarts[i]]){
                 // prune out this start time
                 possiblestarts[i] = possiblestarts[--numpossiblestarts];
@@ -564,7 +580,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
         possiblestarts[numpossiblestarts++] = tt;
 
         // update and prune possible nuisance starts
-        for(size_t i=0; i<numpossiblestarts_n; i++){
+        for(size_t i=numpossiblestarts_n; i-- >0;){
             size_t t2 = possiblestarts_n[i];
             // nuisances that will be no longer than maxlb in the next cycle
             // are just burnins (not used for F_N), so shouldn't be pruned
@@ -593,11 +609,13 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
     while(i>0){
         if(chps[i].start>0){
             // return this segment
-            printf("* %zu. %zu-%zu %s \n", outnum, chps[i].start, chps[i].end, chps[i].type==SIG?"SIG":"NUIS");
-            printf("* est. theta: %.4f\n", estsigma(x2s, chps[i].start, chps[i].end));
             outstarts[outnum] = (int) chps[i].start;
-            outends[outnum] = (int) chps[i].end;
-            outtypes[outnum] = chps[i].type==SIG?'s':'n';
+            outends[outnum] = (int) i;
+            // no need to store the type since it can be recreated from length
+            char thischptype = i-chps[i].start>=maxlb ? 's' : 'n';
+            outtypes[outnum] = thischptype;
+            printf("* %zu. %zu-%zu %s \n", outnum, chps[i].start, i, thischptype=='s'?"SIG":"NUIS");
+            printf("* est. theta: %.4f\n", estsigma(x2s, chps[i].start, i));
             outnum++;
 
             // just in case
@@ -607,15 +625,15 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
             }
 
             // if this is a nuis, look for overlapping signal segments:
-            if(chps[i].type==NUIS){
+            if(thischptype=='n'){
                 size_t i2 = i;
                 size_t i2det = chps[i].start*nn;
                 while(i2>chps[i].start){
                     if(detchps[i2det + i2].start>0){
-                        printf("* %zu. %zu-%zu %s \n", outnum, detchps[i2det + i2].start, detchps[i2det + i2].end, "SIG on NUIS");
-                        printf("* est. theta: %.4f\n", estsigma(x2s, detchps[i2det + i2].start, detchps[i2det + i2].end));
+                        printf("* %zu. %zu-%zu %s \n", outnum, detchps[i2det + i2].start, i2, "SIG on NUIS");
+                        printf("* est. theta: %.4f\n", estsigma(x2s, detchps[i2det + i2].start, i2));
                         outstarts[outnum] = (int) detchps[i2det + i2].start;
-                        outends[outnum] = (int) detchps[i2det + i2].end;
+                        outends[outnum] = (int) i2;
                         outtypes[outnum] = 'o';
                         outnum++;
 
@@ -630,7 +648,6 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
                     }
                     i2--;
                 }
-                // TODO actually don't need to store det.end as it is always the t at which it was stored
             }
             i = chps[i].start - 1;
         } else {

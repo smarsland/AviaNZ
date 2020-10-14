@@ -60,7 +60,10 @@ def launchDetector(infile, startfrom=None, upto=None):
     cdef np.ndarray[int] outst = np.zeros(n, dtype=np.intc)
     cdef np.ndarray[int] oute = np.zeros(n, dtype=np.intc)
     cdef np.ndarray[np.uint8_t] outt = np.zeros(n, dtype='uint8')
-    alg2_var(<double*> np.PyArray_DATA(xs), n, maxlookback, sigma2, penalty, penalty, <int*> np.PyArray_DATA(outst), <int*> np.PyArray_DATA(oute), <char*> np.PyArray_DATA(outt))
+    succ = alg2_var(<double*> np.PyArray_DATA(xs), n, maxlookback, sigma2, penalty, penalty, <int*> np.PyArray_DATA(outst), <int*> np.PyArray_DATA(oute), <char*> np.PyArray_DATA(outt))
+    if succ>0:
+        print("ERROR: C detector failure")
+        return
     outnum = outt.tolist().index(0)
     res = np.vstack((outst[:outnum], oute[:outnum], [chr(t) for t in outt[:outnum]]))
     return(res.T)
