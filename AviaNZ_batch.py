@@ -260,6 +260,10 @@ class AviaNZ_batchProcess():
             if not self.CLI:
                 self.ui.endproc(total)
 
+        # At the end, if processing bats, export in BatSearch format automatically
+        if self.method=='Click':
+            self.exportToBatSearch(self.dirName)  
+
         print("Processed all %d files" % total)
         return(0)
 
@@ -869,53 +873,131 @@ class AviaNZ_batchProcess():
 
         return label
 
-def exportCSV(dirName):
-    # This produces a csv file that looks like the one from Bat Search. 
+    def exportToBatSearch(self,dirName,savefile='BatData.xml',threshold1=0.85,threshold2=0.7):
+        # Write out a file that can be used for BatSearch import
+        # For now, looks like the xml file used there
+        # Assumes that dirName is a survey folder and the structure beneath is something like Rx/Bat/Date
+        operator = "AviaNZ 3.0"
+        site = "Nowhere"
+        # BatSeach codes
+        namedict = {"Unassigned":0,"Non-bat":1,"Unknown":2,"Long Tail":3,"Short Tail":4,"Possible LT":5,"Possible ST":6,"Both":7}
+        currroot = dirName
+        # File header
+        start = "<?xml version=\"1.0\"?>\n<ArrayOfBatRecording xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
+        output=start
+        if not os.path.isdir(dirName):
+            print("Folder doesn't exist")
+            return 0
+        for root, dirs, files in os.walk(dirName,topdown=True):
+            nfiles = len(files)
+            if nfiles>0:
+                for count in range(nfiles):
+                    filename = files[count]
+                    fname = os.path.join(root,filename)
+                    f = fname.split('/')
+                
+                    if filename.endswith('.data'):
+                        segments = Segment.SegmentList()
+                        segments.parseJSON(os.path.join(root, filename))
+                        if len(segments)>0:
+                            seg = segments[0]
+                            c = [lab["certainty"] for lab in seg[4]]
+                            s = [lab["species"] for lab in seg[4]]
+                            if len(c)>1:
+                                label = 'Both'
+                            else:
+                                if c[0]>threshold1:
+                                    if s[0] == 'Long-tailed bat':
+                                        label = 'Long Tail'
+                                    elif s[0] == 'Short-tailed bat':
+                                        label = 'Short Tail'
+                                elif c[0]>threshold2:
+                                    if s[0] == 'Long-tailed bat':
+                                        label = 'Possible LT'
+                                    elif s[0] == 'Short-tailed bat':
+                                        label = 'Possible ST'
+                                else:
+                                    label = 'Non-bat'
+                        else:
+                            # TODO: which?
+                            label = 'Non-bat'
+                            #label = 'Unassigned'
+                        # This is the text for the file
+                        s1 = "<BatRecording>\n"
+                        s2 = "<AssignedBatCategory>"+str(namedict[label])+"</AssignedBatCategory>\n"
+                        s3 = "<AssignedSite>"+site+"</AssignedSite>\n"
+                        s4 = "<AssignedUser>"+operator+"</AssignedUser>\n"
+                        # DOC format
+                        s5 = "<RecTime>"+filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
+                        s6 = "<RecordingFileName>"+filename[:-5]+"</RecordingFileName>\n"
+                        s7 = "<RecordingFolderName>"+os.path.relpath(currroot,dirName)+"</RecordingFolderName>\n"
+                        s8 = "<MeasureTimeFrom>0</MeasureTimeFrom>\n"
+                        s9 = "</BatRecording>\n"
+                        output+= s1+s2+s3+s4+s5+s6+s7+s8+s9
+                # Now write the file if necessary
+                if output != start:
+                    output += "</ArrayOfBatRecording>\n"
+                    currroot = '/'.join(f[:-1])
+                    file = open(os.path.join(currroot,savefile), 'w')
+                    print("writing to",os.path.join(currroot,savefile))
+                    file.write(output)
+                    file.write("\n")
+                    file.close()
+                    output = start
+    
+        return 1
+    
+    def exportToBatSearchCSV(self,dirName,writefile="BatResults.csv",threshold1=0.85,threshold2=0.7):
+        # This produces a csv file that looks like the one from Bat Search. 
 
-    writefile = "BatResults.csv"
-    f = open(os.path.join(dirName,writefile),'w')
-    f.write('Date,Time,AssignedSite,Category,Foldername,Filename,Observer\n')
-    for root, dirs, files in os.walk(dirName):
-        dirs.sort()
-        files.sort()
-        for filename in files:
-            if filename.endswith('.data'):
-                #print("Appending" ,filename)
-                segments = Segment.SegmentList()
-                segments.parseJSON(os.path.join(root, filename))
-                if len(segments)>0:
-                    seg = segments[0]
-                    c = [lab["certainty"] for lab in seg[4]]
-                    if c[0]==100:
+        f = open(os.path.join(dirName,writefile),'w')
+        f.write('Date,Time,AssignedSite,Category,Foldername,Filename,Observer\n')
+        for root, dirs, files in os.walk(dirName):
+            dirs.sort()
+            files.sort()
+            for filename in files:
+                if filename.endswith('.data'):
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(os.path.join(root, filename))
+                    if len(segments)>0:
+                        seg = segments[0]
+                        c = [lab["certainty"] for lab in seg[4]]
                         s = [lab["species"] for lab in seg[4]]
-                        # TODO: what if both?
-                        if s[0] == 'Long-tailed bat':
-                            s = 'Long tail,'
-                        elif s[0] == 'Short-tailed bat':
-                            s = 'Short tail,'
+                        if len(c)>1:
+                            label = 'Both'
+                        else:
+                            if c[0]>threshold1:
+                                if s[0] == 'Long-tailed bat':
+                                    label = 'Long Tail'
+                                elif s[0] == 'Short-tailed bat':
+                                    label = 'Short Tail'
+                            elif c[0]>threshold2:
+                                if s[0] == 'Long-tailed bat':
+                                    label = 'Possible LT'
+                                elif s[0] == 'Short-tailed bat':
+                                    label = 'Possible ST'
+                            else:
+                                label = '' #Non-bat'
                     else:
-                        s = ''
-                else:
-                    s = ''
-                # Assumes DOC format
-                d = filename[6:8]+'/'+filename[4:6]+'/'+filename[:4]+','
-                if d[0] == '0':
-                    d = d[1:]
-                if int(filename[9:11]) < 13:
-                    if filename[9:11] == '00':
-                        t = str(int(filename[9:11])+12)+':'+filename[11:13]+':'+filename[13:15]+' a.m.,'
+                        label = '' #'Non-bat'
+                    # Assumes DOC format
+                    d = filename[6:8]+'/'+filename[4:6]+'/'+filename[:4]+','
+                    if d[0] == '0':
+                        d = d[1:]
+                    if int(filename[9:11]) < 13:
+                        if filename[9:11] == '00':
+                            t = str(int(filename[9:11])+12)+':'+filename[11:13]+':'+filename[13:15]+' a.m.,'
+                        else:
+                            t = filename[9:11]+':'+filename[11:13]+':'+filename[13:15]+' a.m.,'
                     else:
-                        t = filename[9:11]+':'+filename[11:13]+':'+filename[13:15]+' a.m.,'
-                else:
-                    t = str(int(filename[9:11])-12)+':'+filename[11:13]+':'+filename[13:15]+' p.m.,'
-                if t[0] == '0':
-                    t = t[1:]
-                # Assume that directory structure is recorder - date
-                if s == '':
-                    rec = ',Unassigned'
-                    op = ''
-                else:
-                    rec = root.split('/')[-3]
-                    op = 'Moira Pryde'
-                date = '.\\'+root.split('/')[-1]
-                #dd/mm/yyyy,(h)h:mm:ss a.m.,R?,Long tail,.\20191110,.\file.bmp,Moira Pryde
+                        t = str(int(filename[9:11])-12)+':'+filename[11:13]+':'+filename[13:15]+' p.m.,'
+                    if t[0] == '0':
+                        t = t[1:]
+                    # Assume that directory structure is recorder - date
+                    if label == '':
+                        rec = ',Unassigned'
+                        op = ''
+                    else:
+                        rec = root.split('/')[-3]
+                        op = 'Moira Pryde'
+                    date = '.\\'+root.split('/')[-1]
