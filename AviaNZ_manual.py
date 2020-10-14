@@ -4394,18 +4394,29 @@ class AviaNZ(QMainWindow):
         
         # these are all segments in file
         #print("segs", self.segments)
-        q=5
+        q=0
         qs=0
-        #print("uno",self.segments[1])
-        #print("zero",self.segments[0])
+        noise=0
         for seg in self.segments:
             qs+=1
+
+        for seg in self.segments:
+            for lab in seg[4]:
+                if lab["species"]=="Background":
+                    starttime = int(np.floor(max(0, seg[0]-self.startRead)*self.sampleRate))
+                    endtime = int(np.ceil(min(seg[1]-self.startRead, self.datalengthSec)*self.sampleRate))
+                    noise=self.sp.getpower(starttime,endtime)
+        q=5
+        if noise==0:
+                print("Please select a Background segment and label it as such")
+                return
         outarray = np.array(np.repeat(0.0,qs+5))
         outarray[0]=int(self.filename[-19:-17])
         outarray[1]=int(self.filename[-12:-10])
         outarray[2]=int(self.filename[-9:-7])
         outarray[3]=int(self.filename[-6:-4])
         for seg in self.segments:
+            
             # Important because all manual mode functions should operate on the current page only:
             # skip segments that are not visible in this page
             if seg[1]<=self.startRead or seg[0]>=self.startRead + self.datalengthSec:
@@ -4419,10 +4430,7 @@ class AviaNZ(QMainWindow):
             
             #syllable-by-syllable snnr
             #use the noise following the sillable instead of that preceeding it if first syllable
-            if q==5:
-                noise=self.sp.getpower(starttime,endtime)
-            else:
-                outarray[q]=round(10.*np.log10(self.sp.getpower(starttime,endtime)/noise),2)
+            outarray[q]=round(10.*np.log10(self.sp.getpower(starttime,endtime)/noise),2)
                 
             # piece of audio/waveform corresponding to this segment
             # (note: coordinates in wav samples)
@@ -4441,13 +4449,13 @@ class AviaNZ(QMainWindow):
             #self.sp.calculateMagicStatistic(starttime, endtime)
             
             # do something with this segment now...
-            print("Calculating statistics on syllable #",q-6,": it starts at ",starttime,"and ends at ", endtime)
+            print("Calculating statistics on syllable #",q-4,": it starts at ",starttime,"and ends at ", endtime)
                      
             q+=1
             # fill outarray...
         # save as text file for now:
-        outarray[4]=q-6
-        print("Saving information regarding ",q-6," sillables\n",outarray)
+        outarray[4]=q-4
+        print("Saving information regarding ",qs," sillables\n",outarray)
         csvf=self.filename[:-19]+'frontfirstnr.csv'
         print("csv ",csvf)
         with open(csvf,'a') as csvfile:
