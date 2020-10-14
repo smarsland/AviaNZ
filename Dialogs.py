@@ -28,7 +28,7 @@ import shutil
 
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import QDir, QPointF, QTime, Qt, QCoreApplication, QSize
+from PyQt5.QtCore import QPointF, QTime, Qt, QSize
 
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtGui
@@ -71,7 +71,7 @@ class StartScreen(QDialog):
         b3.setStyleSheet(btn_style)
         bclose = QtGui.QToolButton()
         bclose.setIcon(QtGui.QIcon('img/close.png'))
-        bclose.setIconSize(QtCore.QSize(40, 40))
+        bclose.setIconSize(QSize(40, 40))
         bclose.setToolTip("Close")
         bclose.setStyleSheet(btn_style)
         bclose.clicked.connect(self.reject)
@@ -159,7 +159,7 @@ class Spectrogram(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
         self.setMinimumWidth(300)
 
         self.windowType = QComboBox()
@@ -306,7 +306,7 @@ class Excel2Annotation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Generate annotations from Excel')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
         self.setMinimumWidth(700)
 
         self.txtExcel = QLineEdit()
@@ -469,7 +469,7 @@ class Tag2Annotation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Generate annotations from XML (Freebird)')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
         self.setMinimumWidth(700)
 
         self.txtSession = QLineEdit()
@@ -525,7 +525,7 @@ class BackupAnnotation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Backup annotations')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
         self.setMinimumWidth(700)
 
         self.txtSrc = QLineEdit()
@@ -585,7 +585,7 @@ class OperatorReviewer(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Set Operator/Reviewer')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint))
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint))
         self.setMinimumWidth(320)
 
         self.operatorlabel = QLabel("Operator")
@@ -618,7 +618,7 @@ class addNoiseData(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Noise Information')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint))
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint))
         self.setMinimumWidth(320)
 
         HBox1 = QVBoxLayout()
@@ -724,7 +724,7 @@ class Diagnostic(QDialog):
         self.setWindowTitle('Diagnostic Plot Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
         self.setMinimumWidth(300)
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
 
         # species / filter
         self.filterLabel = QLabel("Select recogniser to use")
@@ -790,7 +790,7 @@ class Segmentation(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Segmentation Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
         self.setMinimumWidth(350)
 
         self.algs = QComboBox()
@@ -1082,7 +1082,7 @@ class Denoise(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Denoising Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
 
         self.setMinimumWidth(300)
         self.setMinimumHeight(250)
@@ -1454,7 +1454,7 @@ class HumanClassify1(QDialog):
 
         # playback line
         self.bar = pg.InfiniteLine(angle=90, movable=False, pen={'color':'c', 'width': 3})
-        self.bar.btn = QtCore.Qt.RightButton
+        self.bar.btn = Qt.RightButton
         self.bar.setValue(0)
         self.pPlot.addItem(self.bar)
 
@@ -1466,12 +1466,12 @@ class HumanClassify1(QDialog):
         # The buttons to move through the overview
         self.numberDone = QLabel()
         self.numberLeft = QLabel()
-        self.numberDone.setAlignment(QtCore.Qt.AlignCenter)
-        self.numberLeft.setAlignment(QtCore.Qt.AlignCenter)
+        self.numberDone.setAlignment(Qt.AlignCenter)
+        self.numberLeft.setAlignment(Qt.AlignCenter)
 
-        iconSize = QtCore.QSize(45, 45)
+        iconSize = QSize(45, 45)
         self.buttonPrev = QtGui.QToolButton()
-        self.buttonPrev.setIcon(QtGui.QIcon('img/left2.png'))
+        self.buttonPrev.setIcon(QtGui.QIcon('img/undo.png'))
         self.buttonPrev.setIconSize(iconSize)
         self.buttonPrev.setStyleSheet("padding: 5px 5px 5px 5px")
 
@@ -1568,7 +1568,7 @@ class HumanClassify1(QDialog):
         # button to switch to call type view
         self.viewSpButton = QtGui.QToolButton()
         self.viewSpButton.setIcon(QIcon('img/splarge-ct.png'))
-        self.viewSpButton.setIconSize(QtCore.QSize(42, 25))
+        self.viewSpButton.setIconSize(QSize(42, 25))
         self.viewSpButton.setToolTip("Toggle between species/calltype views")
         self.viewSpButton.clicked.connect(lambda: self.refreshCtUI(not self.viewingct))
 
@@ -1632,7 +1632,7 @@ class HumanClassify1(QDialog):
 
         self.playButton = QtGui.QToolButton()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.playButton.setIconSize(QtCore.QSize(40, 40))
+        self.playButton.setIconSize(QSize(40, 40))
         self.playButton.clicked.connect(self.playSeg)
 
         self.scroll = QtGui.QScrollArea()
@@ -1646,7 +1646,7 @@ class HumanClassify1(QDialog):
         self.volSlider.setRange(0,100)
         self.volSlider.setValue(50)
         self.volIcon = QLabel()
-        self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
 
         # Brightness and contrast sliders. Need to pass true (config) values of these as args
@@ -1672,8 +1672,8 @@ class HumanClassify1(QDialog):
         self.zoomOutBtn = QtGui.QToolButton()
         self.zoomInBtn.setIcon(QtGui.QIcon('img/zoom-in.png'))
         self.zoomOutBtn.setIcon(QtGui.QIcon('img/search.png'))
-        self.zoomInBtn.setIconSize(QtCore.QSize(24, 24))
-        self.zoomOutBtn.setIconSize(QtCore.QSize(24, 24))
+        self.zoomInBtn.setIconSize(QSize(24, 24))
+        self.zoomOutBtn.setIconSize(QSize(24, 24))
         self.zoomInBtn.clicked.connect(self.zoomIn)
         self.zoomOutBtn.clicked.connect(self.zoomOut)
         self.zoomInBtn.setStyleSheet("padding: 4px 4px 4px 4px")
@@ -1694,12 +1694,12 @@ class HumanClassify1(QDialog):
         vboxSpecContr.addWidget(self.volSlider, row=2, col=2, colspan=2)
         labelBr = QLabel()
         labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
-        labelBr.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        labelBr.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         vboxSpecContr.addWidget(labelBr, row=2, col=4)
         vboxSpecContr.addWidget(self.brightnessSlider, row=2, col=5, colspan=2)
         labelCo = QLabel()
         labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
-        labelCo.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        labelCo.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         vboxSpecContr.addWidget(labelCo, row=2, col=7)
         vboxSpecContr.addWidget(self.contrastSlider, row=2, col=8, colspan=2)
         #spacer = QSpacerItem(1,1)
@@ -1731,13 +1731,13 @@ class HumanClassify1(QDialog):
             self.stopPlayback()
         else:
             self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaStop))
-            self.playButton.setIconSize(QtCore.QSize(40, 40))
+            self.playButton.setIconSize(QSize(40, 40))
             self.media_obj2.loadArray(self.audiodata)
 
     def stopPlayback(self):
         self.media_obj2.pressedStop()
         self.playButton.setIcon(self.style().standardIcon(QtGui.QStyle.SP_MediaPlay))
-        self.playButton.setIconSize(QtCore.QSize(40, 40))
+        self.playButton.setIconSize(QSize(40, 40))
 
     def volSliderMoved(self, value):
         self.media_obj2.applyVolSlider(value)
@@ -1905,7 +1905,7 @@ class HumanClassify1(QDialog):
         # question marks are displayed on the first pass,
         # but any clicking sets certainty to 100 in effect.
         for lsp_ix in range(len(specnames)):
-            if specnames[lsp_ix] != "To Be Deleted":
+            if specnames[lsp_ix] != "-To Be Deleted-":
                 if specnames[lsp_ix].endswith('?'):
                     specnames[lsp_ix] = specnames[lsp_ix][:-1]
                 # move the label to the top of the list
@@ -1928,7 +1928,7 @@ class HumanClassify1(QDialog):
         self.updateButtonList()
         # Select the right species tickboxes / buttons
         for lsp in specnames:
-            if lsp != "To Be Deleted":
+            if lsp != "-To Be Deleted-":
                 # add ticks to the right checkboxes
                 if self.batmode:
                     ind = self.batList.index(lsp)
@@ -1973,7 +1973,7 @@ class HumanClassify1(QDialog):
         showCt = False
         if len(self.label)>1:
             self.viewSpButton.setToolTip("Cannot review call types when >1 species marked")
-        elif self.label[0]=="Don't Know" or self.label[0]=="To Be Deleted":
+        elif self.label[0]=="Don't Know" or self.label[0]=="-To Be Deleted-":
             self.viewSpButton.setToolTip("No call types possible without species marked")
         elif self.label[0] not in spWithCalltypes:
             self.viewSpButton.setToolTip("Cannot review call types as this species has no recogniser")
@@ -2076,7 +2076,7 @@ class HumanClassify1(QDialog):
             return
         if checkedButton.isChecked():
             # if label was empty, just change from DontKnow:
-            if self.label == ["Don't Know"] or self.label == ["To Be Deleted"]:
+            if self.label == ["Don't Know"] or self.label == ["-To Be Deleted-"]:
                 self.label = [checkedButton.text()]
                 if dontknowButton is not None:
                     dontknowButton.setChecked(False)
@@ -2228,73 +2228,6 @@ class HumanClassify1(QDialog):
         return [self.label, self.saveConfig, self.tbox.text(), self.ctLabel.text()]
 
 
-class HumanClassify2a(QDialog):
-    # This is a small popup dialog for selecting species to review in Classify2
-    def __init__(self, birdlist,parent=None):
-        QDialog.__init__(self, parent)
-        self.setWindowTitle('Human review')
-        self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags(self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
-
-        self.birds = QListWidget(self)
-        self.birds.setMaximumWidth(350)
-        #self.birds.addItem('All calls')
-        #self.birds.addItem('Uncertain calls')
-        for item in birdlist:
-            self.birds.addItem(item)
-        #self.birds.setCurrentRow(0)
-        self.birds.itemDoubleClicked.connect(self.dbl)
-
-        self.chunksizeAuto = QRadioButton("Auto-pick view size")
-        self.chunksizeAuto.setChecked(True)
-        self.chunksizeManual = QRadioButton("View segments in chunks of:")
-        self.chunksizeManual.toggled.connect(self.chunkChanged)
-        self.chunksizeBox = QSpinBox()
-        self.chunksizeBox.setRange(1, 60)
-        self.chunksizeBox.setValue(10)
-        self.chunksizeBox.setEnabled(False)
-
-        ok = QPushButton('OK')
-        cancel = QPushButton('Cancel')
-        ok.clicked.connect(self.ok)
-        cancel.clicked.connect(self.cancel)
-
-        layout = QVBoxLayout()
-        layout.addWidget(QLabel('Choose species/call type to review:'))
-        layout.addWidget(self.birds)
-        layout.addWidget(self.chunksizeAuto)
-        chsHBox = QHBoxLayout()
-        chsHBox.addWidget(self.chunksizeManual)
-        chsHBox.addWidget(self.chunksizeBox)
-        chsHBox.addWidget(QLabel("s"))
-        layout.addLayout(chsHBox)
-        layout.addWidget(ok)
-        layout.addWidget(cancel)
-
-        # Now put everything into the frame
-        self.setLayout(layout)
-
-    def chunkChanged(self):
-        self.chunksizeBox.setEnabled(self.chunksizeManual.isChecked())
-
-    def dbl(self,item):
-        self.birds.setCurrentItem(item)
-        self.accept()
-
-    def ok(self):
-        self.accept()
-
-    def cancel(self):
-        self.reject()
-
-    def getValues(self):
-        # chunksize: either manually set, or "-1" for auto-pick
-        if self.chunksizeManual.isChecked():
-            chs = self.chunksizeBox.value()
-        else:
-            chs = -1
-        return self.birds.currentItem().text(), chs
-
 class HumanClassify2(QDialog):
     """ Single Species review main dialog.
         Puts all segments of a certain species together on buttons, and their labels.
@@ -2356,7 +2289,7 @@ class HumanClassify2(QDialog):
         self.volSlider.setRange(0,100)
         self.volSlider.setValue(50)
         self.volIcon = QLabel()
-        self.volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.volIcon.setPixmap(QPixmap('img/volume.png').scaled(18, 18, transformMode=1))
         #self.volIcon.setStyleSheet("padding: 0px 1px 0px 8px")
 
@@ -2389,13 +2322,13 @@ class HumanClassify2(QDialog):
         hboxSpecContr.addWidget(self.volSlider)
         labelBr = QLabel()
         labelBr.setPixmap(QPixmap('img/brightstr24.png').scaled(18, 18, transformMode=1))
-        labelBr.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        labelBr.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         #labelBr.setStyleSheet("padding: 0px 1px 0px 12px")
         hboxSpecContr.addWidget(labelBr)
         hboxSpecContr.addWidget(self.brightnessSlider)
         labelCo = QLabel()
         labelCo.setPixmap(QPixmap('img/contrstr24.png').scaled(18, 18, transformMode=1))
-        labelCo.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        labelCo.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         #labelCo.setStyleSheet("padding: 0px 1px 0px 12px")
         hboxSpecContr.addWidget(labelCo)
         hboxSpecContr.addWidget(self.contrastSlider)
@@ -2425,7 +2358,7 @@ class HumanClassify2(QDialog):
         # Controls at the bottom
         # self.buttonPrev = QtGui.QToolButton()
         # self.buttonPrev.setArrowType(Qt.LeftArrow)
-        # self.buttonPrev.setIconSize(QtCore.QSize(30,30))
+        # self.buttonPrev.setIconSize(QSize(30,30))
         # self.buttonPrev.clicked.connect(self.prevPage)
 
         # TODO: Is this useful?
@@ -2781,7 +2714,7 @@ class FilterManager(QDialog):
         self.setWindowTitle("Manage recognisers")
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
         self.filtdir = filtdir
 
         # filter dir name
@@ -3035,7 +2968,7 @@ class Cluster(QDialog):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Clustered segments')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
 
         if len(segments) == 0:
             print("No segments provided")
@@ -3052,7 +2985,7 @@ class Cluster(QDialog):
         self.volSlider.setRange(0, 100)
         self.volSlider.setValue(50)
         volIcon = QLabel()
-        volIcon.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        volIcon.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         volIcon.setPixmap(self.style().standardIcon(QtGui.QStyle.SP_MediaVolume).pixmap(32))
 
         # Brightness, and contrast sliders
@@ -3134,7 +3067,7 @@ class Cluster(QDialog):
             tbox.setMinimumWidth(80)
             tbox.setMaximumHeight(150)
             tbox.setStyleSheet("border: none;")
-            tbox.setAlignment(QtCore.Qt.AlignCenter)
+            tbox.setAlignment(Qt.AlignCenter)
             self.tboxes.append(tbox)
             self.flowLayout.addWidget(self.tboxes[-1], r, c)
             c += 1
@@ -3189,7 +3122,7 @@ class ExportBats(QDialog):
         QDialog.__init__(self)
         self.setWindowTitle('Export Results?')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
-        self.setWindowFlags((self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint) | QtCore.Qt.WindowCloseButtonHint)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
 
         l1 = QLabel('Do you want to export an entry for the National Bat Database?\n(It will be saved at the top level of the folder with the recordings in as BatDB.xlsx, you will need to email it yourself\nFields with a * are mandatory\n')
         l2 = QLabel('*Data source (e.g., your community group): ')
