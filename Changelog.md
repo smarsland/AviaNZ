@@ -1,5 +1,23 @@
 All notable changes to AviaNZ program will be documented in this file.
 
+## [3.1] - 2020-10-09
+
+### Added
+
+- Visible frequency range in batmode defaults to full
+- Manage Recognisers deals with CNN files as well
+- ROCs during training show more information, wavelet freq. bands
+
+### Changed
+
+- Excel output shows absolute times of detected segments, when files have timestamps
+- Tensorflow version bumped up
+
+### Fixed
+
+- Graphical problems on high resolution displays
+- Safer restarting
+
 ## [3.0] - 2020-09-17
 
 ### Added
