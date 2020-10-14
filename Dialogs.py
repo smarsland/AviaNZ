@@ -37,7 +37,9 @@ import numpy as np
 import colourMaps
 import SupportClasses_GUI
 import SignalProc
+import SupportClasses
 import openpyxl
+import json
 
 pg.setConfigOption('background','w')
 pg.setConfigOption('foreground','k')
@@ -2856,11 +2858,9 @@ class FilterManager(QDialog):
 
     def readContents(self):
         self.listFiles.clear()
-        filedir = QDir(self.filtdir)
-        # do not show NNs or other trash
-        filedir.setNameFilters(["*.txt"])
-        filelist = filedir.entryList(filters=QDir.NoDotAndDotDot | QDir.Files)
-        for file in filelist:
+        cl = SupportClasses.ConfigLoader()
+        self.FilterDict = cl.filters(self.filtdir, bats=True)
+        for file in self.FilterDict:
             item = QListWidgetItem(self.listFiles)
             item.setText(file)
 
@@ -2882,7 +2882,7 @@ class FilterManager(QDialog):
     def rename(self):
         """ move the filter file. """
         source = self.listFiles.currentItem().text()
-        source = os.path.join(self.filtdir, source)
+        source = os.path.join(self.filtdir, source + '.txt')
         target = self.enterFiltName.text()
         target = os.path.join(self.filtdir, target)
         # figured we should have our own gentle error handling
@@ -2901,41 +2901,91 @@ class FilterManager(QDialog):
             print("ERROR: could not rename:", e)
 
     def delete(self):
-        """ confirm and delete the file. """
-        source = self.listFiles.currentItem().text()
-        source = os.path.join(self.filtdir, source)
-        if not os.path.isfile(source):
-            print("ERROR: unable to delete, bad source", source)
-            return
-        msg = SupportClasses_GUI.MessagePopup("w", "Confirm delete", "Warning: you are about to permanently delete recogniser %s.\nAre you sure?" % source)
+        """ confirm and delete the file/s. """
+        sources = []
+        fn = self.listFiles.currentItem().text()
+        currfilt = self.FilterDict[fn]
+        sources.append(os.path.join(self.filtdir, fn + '.txt'))
+        if "CNN" in currfilt:
+            sources.append(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".h5"))
+            # bat filters do not have jsons:
+            if os.path.isfile(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".json")):
+                sources.append(os.path.join(self.filtdir, currfilt["CNN"]["CNN_name"] + ".json"))
+
+        for src in sources:
+            if not os.path.isfile(src):
+                print("ERROR: unable to delete, bad source", src)
+                return
+
+        msg = SupportClasses_GUI.MessagePopup("w", "Confirm delete", "Warning: you are about to permanently delete recogniser %s.\nAre you sure?" % sources[0])
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
         reply = msg.exec_()
         if reply != QMessageBox.Yes:
             return
         try:
-            print("removing", source)
-            os.remove(source)
+            print("removing", sources)
+            for src in sources:
+                os.remove(src)
             self.readContents()
         except Exception as e:
             print("ERROR: could not delete:", e)
 
     def download(self):
+        # Also import corresponding NN files if any
+        sources = []
+        targets = []
         source, _ = QtGui.QFileDialog.getOpenFileName(self, 'Select the downloaded recogniser file', os.path.expanduser("~"), "Text files (*.txt)")
-        target = os.path.join(self.filtdir, os.path.basename(source))
-
-        print("Importing from %s to %s" % (source, target))
-        if not os.path.isfile(source):
-            print("ERROR: unable to import, bad source %s" % source)
-            return
-        if os.path.isfile(target):
-            msg = SupportClasses_GUI.MessagePopup("t", "Confirm overwrite", "Warning: a recogniser named %s already exists in this software.\nDo you want to overwrite it?" % target)
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            reply = msg.exec_()
-            if reply == QMessageBox.No or reply == QMessageBox.Cancel:
-                return
+        sources.append(source)
+        targets.append(os.path.join(self.filtdir, os.path.basename(source)))
         try:
-            shutil.copy2(source, target)
-            msg = SupportClasses_GUI.MessagePopup("d", "Successfully imported", "Import successful. Now you can use the recogniser %s" % os.path.basename(target))
+            ff = open(source)
+            filt = json.load(ff)
+            ff.close()
+
+            # skip this filter if it looks fishy:
+            if not isinstance(filt, dict) or "species" not in filt or "SampleRate" not in filt or "Filters" not in filt or len(filt["Filters"]) < 1:
+                raise ValueError("Filter JSON format wrong, skipping")
+            for subfilt in filt["Filters"]:
+                if not isinstance(subfilt, dict) or "calltype" not in subfilt or "WaveletParams" not in subfilt or "TimeRange" not in subfilt:
+                    raise ValueError("Subfilter JSON format wrong, skipping")
+                if "thr" not in subfilt["WaveletParams"] or "nodes" not in subfilt["WaveletParams"] or len(
+                        subfilt["TimeRange"]) < 4:
+                    raise ValueError("Subfilter JSON format wrong (details), skipping")
+            if  "CNN" in filt:
+                sources.append(os.path.join(os.path.dirname(source), filt["CNN"]["CNN_name"] + ".h5"))
+                targets.append(os.path.join(self.filtdir, filt["CNN"]["CNN_name"] + ".h5"))
+                # bat filters do not have jsons:
+                JSONsource = os.path.join(os.path.dirname(source), filt["CNN"]["CNN_name"] + ".json")
+                if os.path.isfile(JSONsource):
+                    sources.append(JSONsource)
+                    targets.append(os.path.join(self.filtdir, filt["CNN"]["CNN_name"] + ".json"))
+        except Exception as e:
+            print("Could not load filter:", source, e)
+            return
+
+        try:
+
+            for i in range(len(sources)):
+                if not os.path.isfile(sources[i]):
+                    print("ERROR: unable to import, bad source %s" % sources[i])
+                    return
+                # Don't risk replacing NN files (i.e. no overwriting)
+                reply = 0
+                if os.path.isfile(targets[i]):
+                    print("Warning: target file %s exists" % targets[i])
+                    msg = SupportClasses_GUI.MessagePopup("t", "Import error"," A file %s already exists. Overwrite or skip?" % targets[i])
+                    msg.setStandardButtons(QMessageBox.NoButton)
+                    msg.addButton("Overwrite", QMessageBox.YesRole)
+                    msg.addButton("Skip", QMessageBox.RejectRole)
+                    reply = msg.exec_()
+                if reply==0:
+                    # no problems, or chose to overwrite
+                    print("Copying", sources[i], "->", targets[i])
+                    shutil.copy2(sources[i], targets[i])
+                elif reply==4194304:
+                    # cancelled the entire copy
+                    return
+            msg = SupportClasses_GUI.MessagePopup("d", "Successfully imported","Import complete. Now you can use the recogniser %s" % os.path.basename(targets[0]))
             msg.exec_()
             self.readContents()
         except Exception as e:
@@ -2943,23 +2993,37 @@ class FilterManager(QDialog):
             print(e)
             return
 
+
     def upload(self):
+        # Also export corresponding NN files if any
         fn = self.listFiles.currentItem().text()
-        source = os.path.join(self.filtdir, fn)
+        currfilt = self.FilterDict[fn]
+        sources = []
+        sources.append(fn + '.txt')
+        if "CNN" in currfilt:
+            sources.append(currfilt["CNN"]["CNN_name"] + ".h5")
+            # bat filters do not have jsons:
+            if os.path.isfile(currfilt["CNN"]["CNN_name"] + ".json"):
+                sources.append(currfilt["CNN"]["CNN_name"] + ".json")
+
         target = QtGui.QFileDialog.getExistingDirectory(self, 'Choose where to save the recogniser')
         if target != "":
-            target = os.path.join(target, fn)
+            targets = []
+            for src in sources:
+                targets.append(os.path.join(target, src))
+            sources = [os.path.join(self.filtdir, src) for src in sources]
 
-            print("Exporting from %s to %s" % (source, target))
-            if not os.path.isfile(source):
-                print("ERROR: unable to export, bad source %s" % source)
-                return
-            if os.path.isfile(target):
-                print("ERROR: target file %s exists" % target)
-                return
+            print("Exporting from %s to %s" % (sources, targets))
             try:
-                shutil.copy2(source, target)
-                msg = SupportClasses_GUI.MessagePopup("d", "Successfully exported", "Export successful. Now you can share the file %s" % target)
+                for i in range(len(sources)):
+                    if not os.path.isfile(sources[i]):
+                        print("ERROR: unable to export, bad source %s" % sources[i])
+                        return
+                    if os.path.isfile(targets[i]):
+                        print("ERROR: target file %s exists" % targets[i])
+                        return
+                    shutil.copy2(sources[i], targets[i])
+                msg = SupportClasses_GUI.MessagePopup("d", "Successfully exported", "Export successful. Now you can share the recogniser file(s) in %s" % target)
                 msg.exec_()
             except Exception as e:
                 print("ERROR: failed to export")

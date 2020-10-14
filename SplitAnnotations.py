@@ -40,7 +40,7 @@ import SupportClasses_GUI
 class SplitData(QMainWindow):
     def __init__(self):
         super(SplitData, self).__init__()
-        print("Starting...")
+        print("Starting AviaNZ WAV splitter")
         self.setWindowTitle("AviaNZ WAV splitter")
 
         self.dirName = []
@@ -52,7 +52,7 @@ class SplitData(QMainWindow):
         # menu bar
         fileMenu = self.menuBar()#.addMenu("&File")
         fileMenu.addAction("About", lambda: SupportClasses_GUI.MessagePopup("a", "About", ".").exec_())
-        fileMenu.addAction("Quit", lambda: QApplication.quit())
+        fileMenu.addAction("Quit", QApplication.quit)
         # do we need this?
         # if platform.system() == 'Darwin':
         #    helpMenu.addAction("About",self.showAbout,"Ctrl+A")
@@ -165,6 +165,7 @@ class SplitData(QMainWindow):
         area.setMinimumSize(400, 400)
         self.setSizePolicy(QSizePolicy(1,1))
         self.setMinimumSize(200, 400)
+        self.show()
 
     def browse(self):
         if self.dirName:

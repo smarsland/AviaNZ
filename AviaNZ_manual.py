@@ -213,8 +213,6 @@ class AviaNZ(QMainWindow):
         # to avoid accidentally creating little boxes
         self.minboxsize = 0.1
 
-        # a hack to fix default font size (Win 10 suggests 7 pt for QLabels for some reason)
-        QApplication.setFont(QApplication.font("QMenu"))
         self.createMenu()
         self.createFrame()
 
@@ -445,8 +443,8 @@ class AviaNZ(QMainWindow):
 
     def showHelp(self):
         """ Show the user manual (a pdf file), make it offline for easy access"""
-        webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
-        # webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
+        # webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
+        webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
     def showCheatSheet(self):
         """ Show the cheatsheet of sample spectrograms"""
@@ -6325,8 +6323,8 @@ class AviaNZ(QMainWindow):
     def eventFilter(self, obj, event):
         # This is an event filter for the context menu. It allows the user to select
         # multiple birds by stopping the menu being closed on first click
-        if isinstance(obj, QtGui.QMenu):
-            if self.multipleBirds and event.type() in [QtCore.QEvent.MouseButtonRelease]:
+        if isinstance(obj, QtGui.QMenu) and event.type() in [QtCore.QEvent.MouseButtonRelease]:
+            if hasattr(self, 'multipleBirds') and self.multipleBirds:
                 if obj.activeAction():
                     if not obj.activeAction().menu(): 
                         #if the selected action does not have a submenu
