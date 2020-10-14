@@ -972,7 +972,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
             # skip review dialog if there's no segments passing relevant criteria
             # (self.segments will have all species even if only one is being reviewed)
-            if len(self.segments)==0 or self.species!='All sound' and len(self.segments.getSpecies(self.species))==0:
+            if len(self.segments)==0 or self.species!='All species' and len(self.segments.getSpecies(self.species))==0:
                 print("No segments found in file %s" % filename)
                 filesuccess = 1
                 continue
@@ -980,7 +980,6 @@ class AviaNZ_reviewAll(QMainWindow):
             # file has >=1 segments to review,
             # so call the right dialog:
             # (they will update self.segments and store corrections)
-            #if self.species == 'Any sound':
             if reviewAll:
                 _ = self.segments.orderTime()
                 filesuccess = self.review_all(filename, sTime)
@@ -1470,7 +1469,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
             self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
-            self.nsegments = len(self.segments)
+            self.nsegments = len(self.indices2show)
             self.segsAccepted = 0
             self.segsDeleted = 0
             self.returned = False
@@ -1479,7 +1478,6 @@ class AviaNZ_reviewAll(QMainWindow):
 
     def humanClassifyNextImage1(self):
         # Get the next image
-        #if self.box1id < len(self.segments)-1:
         if self.box1id < len(self.indices2show)-1:
             self.box1id += 1
             # Check if have moved to next segment, and if so load it
@@ -1489,15 +1487,14 @@ class AviaNZ_reviewAll(QMainWindow):
             lab = seg[4]
 
             # update "done/to go" numbers:
-            if self.returned: 
-                if len(lab)==1 and lab[0]["species"] == "To Be Deleted":
+            if self.returned:
+                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
                     self.segsDeleted -= 1
                 else:
                     self.segsAccepted -= 1
 
-            print(self.segsAccepted,self.segsDeleted,self.nsegments)
+            # print(self.segsAccepted,self.segsDeleted,self.nsegments)
             self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.nsegments)
-            #self.humanClassifyDialog1.setSegNumbers(self.box1id, len(self.segments))
 
             # select the SignalProc with relevant data
             sp = self.sps[self.indices2show[self.box1id]]
@@ -1568,8 +1565,8 @@ class AviaNZ_reviewAll(QMainWindow):
             for species in label:
                 if species == "Don't Know":
                     newlabel.append({"species": "Don't Know", "certainty": 0})
-                elif species == "To Be Deleted":
-                    newlabel.append({"species": "To Be Deleted", "certainty": 50})
+                elif species == "-To Be Deleted-":
+                    newlabel.append({"species": "-To Be Deleted-", "certainty": 50})
                     deleting = True
                 else:
                     newlabel.append({"species": species, "certainty": 50})
@@ -1591,15 +1588,15 @@ class AviaNZ_reviewAll(QMainWindow):
             # if there are any "green" labels, but all species remained the same,
             # need to drop certainty on those:
             currSeg.questionLabels()
-            if self.returned: 
+            if self.returned:
                 lab = currSeg[4]
-                if len(lab)==1 and lab[0]["species"] == "To Be Deleted":
+                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
                     deleting=True
         else:
             # no sp or cert change needed
-            if self.returned: 
+            if self.returned:
                 lab = currSeg[4]
-                if len(lab)==1 and lab[0]["species"] == "To Be Deleted":
+                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
                     deleting=True
 
         if deleting:
@@ -1645,8 +1642,8 @@ class AviaNZ_reviewAll(QMainWindow):
             for species in label:
                 if species == "Don't Know":
                     newlabel.append({"species": "Don't Know", "certainty": 0})
-                elif species == "To Be Deleted":
-                    newlabel.append({"species": "To Be Deleted", "certainty": 100})
+                elif species == "-To Be Deleted-":
+                    newlabel.append({"species": "-To Be Deleted-", "certainty": 100})
                     deleting=True
                 else:
                     newlabel.append({"species": species, "certainty": 100})
@@ -1667,17 +1664,17 @@ class AviaNZ_reviewAll(QMainWindow):
         elif 0 < min([lab["certainty"] for lab in currSeg[4]]) < 100:
             # If all species remained the same, just raise certainty to 100
             currSeg.confirmLabels()
-            if self.returned: 
+            if self.returned:
                 lab = currSeg[4]
-                if len(lab)==1 and lab[0]["species"] == "To Be Deleted":
+                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
                     deleting=True
         else:
             # segment info matches, so don't do anything
-            if self.returned: 
+            if self.returned:
                 lab = currSeg[4]
-                if len(lab)==1 and lab[0]["species"] == "To Be Deleted":
+                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
                     deleting=True
-            
+
         if deleting:
             self.segsDeleted+=1
         else:
@@ -1698,21 +1695,12 @@ class AviaNZ_reviewAll(QMainWindow):
         # Just mark for delete and then do the actual deletion when the file closes
         self.humanClassifyDialog1.stopPlayback()
 
-        currSeg = self.segments[self.indices2show[self.box1id]]
-        #self.nsegments -= 1
-
         # New segment label -- To Be Deleted
-        newlabel = [{"species": "To Be Deleted", "certainty": 100}]
-        self.segments[self.indices2show[self.box1id]] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
+        newlabel = [{"species": "-To Be Deleted-", "certainty": 100}]
+        self.segments[self.indices2show[self.box1id]][4] = newlabel
         self.segsDeleted+=1
-        
-        # save the correction file
-        #if self.config['saveCorrections']:
-            #outputError = [[currSeg, []]]
-            #cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
-                                             #reviewer=self.reviewer)
-            #if cleanexit != 1:
-                #print("Warning: could not save correction file!")
+
+        # (do not save the correction file yet)
 
         #id = self.box1id
         #del self.segments[id]
@@ -1724,30 +1712,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.segmentsToSave = True
         self.humanClassifyNextImage1()
 
-    """def humanClassifyDelete1(self):
-        # Delete a segment
-        # (no need to update counter then)
-        self.humanClassifyDialog1.stopPlayback()
-
-        # save the correction file
-        currSeg = self.segments[self.box1id]
-        if self.config['saveCorrections']:
-            outputError = [[currSeg, []]]
-            cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
-                                             reviewer=self.reviewer)
-            if cleanexit != 1:
-                print("Warning: could not save correction file!")
-
-        id = self.box1id
-        del self.segments[id]
-        del self.sps[id]
-        # self.indicestoshow then becomes incorrect, but we don't use that in here anyway
-
-        self.box1id = id-1
-        self.segmentsToSave = True
-        self.humanClassifyNextImage1()
-    """
-
     def finishDeleting(self):
         # Does the work of deleting segments
         segsToSave = False
@@ -1757,8 +1721,9 @@ class AviaNZ_reviewAll(QMainWindow):
             todel = False
             # Delete if any say to delete (correct? Or just remove if it is in a list with others?)
             for lab in seg[4]:
-                if lab["species"] == "To Be Deleted":
+                if lab["species"] == "-To Be Deleted-":
                     todel = True
+                    break
 
             if todel:
                 # save the correction file

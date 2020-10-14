@@ -403,8 +403,8 @@ class SignalProc:
             self.sg,_,_ = np.histogram2d(times.flatten(),CIF.flatten(),weights=np.abs(ft).flatten(),bins=np.shape(ft))
 
             self.sg = np.absolute(self.sg[:, :window_width //2]) + 0.1
-            
-            print(np.min(self.sg),np.max(self.sg))
+
+            print("SG range:", np.min(self.sg),np.max(self.sg))
         else:
             if need_even:
                 starts = np.hstack((starts, np.zeros((window_width - len(self.sg) % window_width),dtype=int)))
