@@ -22,7 +22,7 @@
 
 from PyQt5.QtGui import QIcon, QPixmap, QColor
 from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QProgressDialog
-from PyQt5.QtCore import Qt, QDir
+from PyQt5.QtCore import Qt, QDir, QSize
 
 import fnmatch, gc, sys, os, json, re
 
@@ -535,17 +535,17 @@ class AviaNZ_reviewAll(QMainWindow):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
-        self.d_detection = Dock("Review",size=(600, 700))
-        # self.d_detection.hideTitleBar()
+        self.d_detection = Dock("Review",size=(600, 400), autoOrientation=False)
         self.d_files = Dock("File list", size=(300, 700))
+        self.d_settings = Dock("Advanced settings", size=(600, 300))
+        self.d_settings.hideTitleBar()
 
-        self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
+        self.area.addDock(self.d_detection, 'right')
+        self.area.addDock(self.d_settings, 'bottom', self.d_detection)
 
         self.w_revLabel = QLabel("Reviewer")
         self.w_reviewer = QLineEdit()
-        self.d_detection.addWidget(self.w_revLabel, row=0, col=0)
-        self.d_detection.addWidget(self.w_reviewer, row=0, col=1, colspan=2)
         self.w_browse = QPushButton("  &Browse Folder")
         self.w_browse.setToolTip("Can select a folder with sub folders to process")
         self.w_browse.setFixedHeight(50)
@@ -588,44 +588,9 @@ class AviaNZ_reviewAll(QMainWindow):
         self.certBox.setSingleStep(10)
         self.certBox.setValue(90)
 
-        # sliders to select min/max frequencies for ALL SPECIES only
-        self.fLow = QSlider(Qt.Horizontal)
-        self.fLow.setTickPosition(QSlider.TicksBelow)
-        self.fLow.setTickInterval(500)
-        self.fLow.setRange(0, 5000)
-        self.fLow.setSingleStep(100)
-        self.fLowtext = QLabel('Show freq. above (Hz)')
-        self.fLowvalue = QLabel('0')
-        self.fLow.valueChanged.connect(self.fLowChanged)
-        self.fHigh = QSlider(Qt.Horizontal)
-        self.fHigh.setTickPosition(QSlider.TicksBelow)
-        self.fHigh.setTickInterval(1000)
-        self.fHigh.setRange(4000, 32000)
-        self.fHigh.setSingleStep(250)
-        self.fHigh.setValue(8000)
-        self.fHightext = QLabel('Show freq. below (Hz)')
-        self.fHighvalue = QLabel('8000')
-        self.fHigh.valueChanged.connect(self.fHighChanged)
-
-        # FFT parameters
-        self.winwidthBox = QSpinBox()
-        self.incrBox = QSpinBox()
-        self.winwidthBox.setRange(2, 1000000)
-        self.incrBox.setRange(1, 1000000)
-        self.winwidthBox.setValue(self.config['window_width'])
-        self.incrBox.setValue(self.config['incr'])
-
-        # Single Sp review parameters
-        self.chunksizeAuto = QRadioButton("Auto-pick view size")
-        self.chunksizeAuto.setChecked(True)
-        self.chunksizeManual = QRadioButton("View segments in chunks of (s):")
-        self.chunksizeManual.toggled.connect(self.chunkChanged)
-        self.chunksizeBox = QSpinBox()
-        self.chunksizeBox.setRange(1, 60)
-        self.chunksizeBox.setValue(10)
-        self.chunksizeBox.setEnabled(False)
-
         # add controls to dock
+        self.d_detection.addWidget(self.w_revLabel, row=0, col=0)
+        self.d_detection.addWidget(self.w_reviewer, row=0, col=1, colspan=2)
         self.d_detection.addWidget(self.w_dir, row=1,col=1,colspan=2)
         self.d_detection.addWidget(self.w_browse, row=1,col=0)
         self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
@@ -663,30 +628,80 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_excelButton.setEnabled(False)
         self.d_detection.addWidget(self.w_excelButton, row=6, col=2)
 
-        linesep = QFrame()
-        linesep.setFrameShape(QFrame.HLine)
-        linesep.setFrameShadow(QFrame.Sunken)
-        settingsLabel = QLabel("Advanced settings")
-        settingsLabel.setStyleSheet("QLabel {color: #505050; font-weight: 75}")
-        settingsLabel.setAlignment(Qt.AlignCenter)
+        self.toggleSettingsBtn = QPushButton(" Advanced settings ")
+        self.toggleSettingsBtn.setStyleSheet('QPushButton {font-weight: bold; font-size:12px; padding: 2px 2px 2px 4px}')
+        self.toggleSettingsBtn.setFixedHeight(32)
+        self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsmore.png')))
+        self.toggleSettingsBtn.setIconSize(QSize(25, 17))
+        self.toggleSettingsBtn.clicked.connect(self.toggleSettings)
 
-        self.d_detection.addWidget(linesep, row=8, col=0, colspan=3)
+        # linesep = QFrame()
+        # linesep.setFrameShape(QFrame.HLine)
+        # linesep.setFrameShadow(QFrame.Sunken)
 
-        self.d_detection.addWidget(settingsLabel, row=9, col=0, colspan=3)
-        self.d_detection.addWidget(self.fLowtext, row=10, col=0)
-        self.d_detection.addWidget(self.fLow, row=10, col=1)
-        self.d_detection.addWidget(self.fLowvalue, row=10, col=2)
-        self.d_detection.addWidget(self.fHightext, row=11, col=0)
-        self.d_detection.addWidget(self.fHigh, row=11, col=1)
-        self.d_detection.addWidget(self.fHighvalue, row=11, col=2)
-        self.d_detection.addWidget(QLabel("FFT window size"), row=12, col=0)
-        self.d_detection.addWidget(self.winwidthBox, row=12, col=1)
-        self.d_detection.addWidget(QLabel("FFT hop size"), row=13, col=0)
-        self.d_detection.addWidget(self.incrBox, row=13, col=1)
+        # sliders to select min/max frequencies for ALL SPECIES only
+        self.fLow = QSlider(Qt.Horizontal)
+        self.fLow.setTickPosition(QSlider.TicksBelow)
+        self.fLow.setTickInterval(500)
+        self.fLow.setRange(0, 5000)
+        self.fLow.setSingleStep(100)
+        self.fLowcheck = QCheckBox()
+        self.fLowtext = QLabel('Show only freq. above (Hz)')
+        self.fLowvalue = QLabel('0')
+        self.fLow.valueChanged.connect(self.fLowChanged)
+        self.fHigh = QSlider(Qt.Horizontal)
+        self.fHigh.setTickPosition(QSlider.TicksBelow)
+        self.fHigh.setTickInterval(1000)
+        self.fHigh.setRange(4000, 32000)
+        self.fHigh.setSingleStep(250)
+        self.fHigh.setValue(32000)
+        self.fHighcheck = QCheckBox()
+        self.fHightext = QLabel('Show only freq. below (Hz)')
+        self.fHighvalue = QLabel('32000')
+        self.fHigh.valueChanged.connect(self.fHighChanged)
 
-        self.d_detection.addWidget(self.chunksizeAuto, row=14, col=0)
-        self.d_detection.addWidget(self.chunksizeManual, row=14, col=1)
-        self.d_detection.addWidget(self.chunksizeBox, row=14, col=2)
+        # disable freq sliders until they are toggled on:
+        self.fLowcheck.stateChanged.connect(self.toggleFreqLow)
+        self.fHighcheck.stateChanged.connect(self.toggleFreqHigh)
+        for widg in [self.fLow, self.fLowtext, self.fLowvalue, self.fHigh, self.fHightext, self.fHighvalue]:
+            widg.setEnabled(False)
+
+        # FFT parameters
+        self.winwidthBox = QSpinBox()
+        self.incrBox = QSpinBox()
+        self.winwidthBox.setRange(2, 1000000)
+        self.incrBox.setRange(1, 1000000)
+        self.winwidthBox.setValue(self.config['window_width'])
+        self.incrBox.setValue(self.config['incr'])
+
+        # Single Sp review parameters
+        self.chunksizeAuto = QRadioButton("Auto-pick view size")
+        self.chunksizeAuto.setChecked(True)
+        self.chunksizeManual = QRadioButton("View segments in chunks of (s):")
+        self.chunksizeManual.toggled.connect(self.chunkChanged)
+        self.chunksizeBox = QSpinBox()
+        self.chunksizeBox.setRange(1, 60)
+        self.chunksizeBox.setValue(10)
+        self.chunksizeBox.setEnabled(False)
+
+
+        self.d_settings.addWidget(self.toggleSettingsBtn, row=0, col=2, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.fLowcheck, row=1, col=0)
+        self.d_settings.addWidget(self.fLowtext, row=1, col=1)
+        self.d_settings.addWidget(self.fLow, row=1, col=2, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.fLowvalue, row=1, col=4)
+        self.d_settings.addWidget(self.fHighcheck, row=2, col=0)
+        self.d_settings.addWidget(self.fHightext, row=2, col=1)
+        self.d_settings.addWidget(self.fHigh, row=2, col=2, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.fHighvalue, row=2, col=4)
+        self.d_settings.addWidget(QLabel("FFT window size"), row=3, col=1)
+        self.d_settings.addWidget(self.winwidthBox, row=3, col=2)
+        self.d_settings.addWidget(QLabel("FFT hop size"), row=3, col=3)
+        self.d_settings.addWidget(self.incrBox, row=3, col=4)
+
+        self.d_settings.addWidget(self.chunksizeAuto, row=5, col=1)
+        self.d_settings.addWidget(self.chunksizeManual, row=6, col=1)
+        self.d_settings.addWidget(self.chunksizeBox, row=6, col=2)
 
         self.w_browse.clicked.connect(self.browse)
         # print("spList after browse: ", self.spList)
@@ -706,9 +721,47 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.d_detection.layout.setContentsMargins(20, 20, 20, 20)
         self.d_detection.layout.setSpacing(20)
+        self.d_settings.layout.setContentsMargins(20, 20, 20, 20)
+        self.d_settings.layout.setSpacing(20)
         self.d_files.layout.setContentsMargins(10, 10, 10, 10)
         self.d_files.layout.setSpacing(10)
+        for item in self.d_settings.widgets:
+            if item!=self.toggleSettingsBtn:
+                item.hide()
+        self.d_settings.layout.setColumnMinimumWidth(1, 80)
+        self.d_settings.layout.setColumnMinimumWidth(4, 80)
+        self.d_settings.layout.setColumnStretch(2, 5)
+        #self.d_settings.hide()
         self.show()
+
+    def toggleSettings(self):
+        if self.d_settings.widgets[1].isVisible():
+            # self.d_settings.setVisible(False)
+            for item in self.d_settings.widgets:
+                if item!=self.toggleSettingsBtn:
+                    item.hide()
+            self.toggleSettingsBtn.setText(" Advanced settings ")
+            self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsmore.png')))
+        else:
+            for item in self.d_settings.widgets:
+                if item!=self.toggleSettingsBtn:
+                    item.show()
+            # self.d_settings.setVisible(True)
+            self.toggleSettingsBtn.setText(" Hide settings ")
+            self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsless.png')))
+
+    def toggleFreqHigh(self,state):
+        # state=0 for unchecked, state=2 for checked
+        for widg in [self.fHigh, self.fHightext, self.fHighvalue]:
+            widg.setEnabled(state==2)
+        if state==0:
+            self.fHigh.setValue(self.fHigh.maximum())
+
+    def toggleFreqLow(self, state):
+        for widg in [self.fLow, self.fLowtext, self.fLowvalue]:
+            widg.setEnabled(state==2)
+        if state==0:
+            self.fLow.setValue(self.fLow.minimum())
 
     def fHighChanged(self, value):
         self.fHighvalue.setText(str(int(value)))
@@ -836,6 +889,13 @@ class AviaNZ_reviewAll(QMainWindow):
         minfs = min(self.listFiles.fsList)
         self.fHigh.setRange(minfs//32, minfs//2)
         self.fLow.setRange(0, minfs//2)
+        # if the user hasn't selected custom bandpass, reset it to min-max:
+        # (if the user did select one or more of them, setRange will auto-trim
+        # it to the allowed range, but not change it otherwise)
+        if not self.fHighcheck.isChecked():
+            self.fHigh.setValue(self.fHigh.maximum())
+        if not self.fLowcheck.isChecked():
+            self.fLow.setValue(self.fLow.minimum())
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on an item in filelist """
