@@ -612,7 +612,7 @@ int alg2_var(double xs[], const size_t nn, const size_t maxlb, const double sigm
             outstarts[outnum] = (int) chps[i].start;
             outends[outnum] = (int) i;
             // no need to store the type since it can be recreated from length
-            char thischptype = i-chps[i].start>=maxlb ? 's' : 'n';
+            char thischptype = i-chps[i].start<=maxlb ? 's' : 'n';
             outtypes[outnum] = thischptype;
             printf("* %zu. %zu-%zu %s \n", outnum, chps[i].start, i, thischptype=='s'?"SIG":"NUIS");
             printf("* est. theta: %.4f\n", estsigma(x2s, chps[i].start, i));

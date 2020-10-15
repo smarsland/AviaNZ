@@ -25,15 +25,21 @@ def launchDetector1(infile, startfrom=None, upto=None):
     cdef int n = len(xs)
     cdef double penalty = 1.1*3*np.log(n)
     cdef double mu0 = 0
+    if n>10000:
+        print("ERROR: n=%d exceeds max permitted series size" % n)
+        return
 
     # outputs:
     cdef np.ndarray[int] outst = np.zeros(n, dtype=np.intc)
     cdef np.ndarray[int] oute = np.zeros(n, dtype=np.intc)
     cdef np.ndarray[np.uint8_t] outt = np.zeros(n, dtype='uint8')
-    alg1_var(<double*> np.PyArray_DATA(xs), n, mu0, penalty, <int*> np.PyArray_DATA(outst), <int*> np.PyArray_DATA(oute), <char*> np.PyArray_DATA(outt))
-    print(outt)
+    succ = alg1_var(<double*> np.PyArray_DATA(xs), n, mu0, penalty, <int*> np.PyArray_DATA(outst), <int*> np.PyArray_DATA(oute), <char*> np.PyArray_DATA(outt))
+    if succ>0:
+        print("ERROR: C detector failure")
+        return
+    # print(outt)
     outnum = outt.tolist().index(0)
-    print(outnum)
+    # print(outnum)
     res = np.vstack((outst[:outnum], oute[:outnum], [chr(t) for t in outt[:outnum]]))
     return(res.T)
 
@@ -54,7 +60,11 @@ def launchDetector(infile, startfrom=None, upto=None):
     cdef int n = len(xs)
     cdef double penalty = 1.1*3*np.log(n)
     cdef double mu0 = 0
-    cdef int maxlookback = int(0.3*len(xs))
+    cdef int maxlookback = int(0.15*len(xs))
+
+    if n>10000:
+        print("ERROR: n=%d exceeds max permitted series size" % n)
+        return
 
     # outputs:
     cdef np.ndarray[int] outst = np.zeros(n, dtype=np.intc)
@@ -64,6 +74,9 @@ def launchDetector(infile, startfrom=None, upto=None):
     if succ>0:
         print("ERROR: C detector failure")
         return
+    # print(outst)
+    # print(oute)
+    # print(outt)
     outnum = outt.tolist().index(0)
     res = np.vstack((outst[:outnum], oute[:outnum], [chr(t) for t in outt[:outnum]]))
     return(res.T)
