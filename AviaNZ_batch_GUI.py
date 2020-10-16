@@ -1,4 +1,3 @@
-
 # Version 3.0 14/09/20
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
@@ -1084,7 +1083,6 @@ class AviaNZ_reviewAll(QMainWindow):
 
         # END of review and exporting. Final cleanup
         self.ConfigLoader.configwrite(self.config, self.configfile)
-        self.finishDeleting()
         if filesuccess == 1:
             msgtext = "All files checked. If you expected to see more calls, is the certainty setting too low?\n Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
             msg = SupportClasses_GUI.MessagePopup("d", "Finished", msgtext)
@@ -1093,6 +1091,9 @@ class AviaNZ_reviewAll(QMainWindow):
             if reply == QMessageBox.Yes:
                 QApplication.exit(1)
         else:
+            if self.config['saveCorrections']:
+                self.saveCorrections()
+            self.finishDeleting()
             msgtext = "Review stopped at file %s of %s. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?" % (cnt, total)
             msg = SupportClasses_GUI.MessagePopup("w", "Review stopped", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
@@ -1278,8 +1279,9 @@ class AviaNZ_reviewAll(QMainWindow):
                 return
 
         if mode == 1:
-            if outputErrors[0] not in annots:
-                annots.append(outputErrors[0])
+            annots.extend(outputErrors)
+            #if outputErrors[0] not in annots:
+                #annots.append(outputErrors[0])
         elif mode == 2:
             for seg in outputErrors:
                 if seg not in annots:
@@ -1352,6 +1354,8 @@ class AviaNZ_reviewAll(QMainWindow):
         """
         # For equivalence with review_single
         _ = self.segments.orderTime()
+        if self.config['saveCorrections']:
+            self.origSeg = copy.deepcopy(self.segments)
 
         # Load the birdlists:
         # short list is necessary, long list can be None
@@ -1402,6 +1406,8 @@ class AviaNZ_reviewAll(QMainWindow):
             self.humanClassifyDialog1.stopPlayback()
             return(0)
 
+        if self.config['saveCorrections']:
+            self.saveCorrections()
         self.finishDeleting()
         return(1)
 
@@ -1494,7 +1500,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             sp.data = sp.ButterworthBandpass(sp.data, sp.sampleRate, minFreq, maxFreq)
 
                             # Generate the spectrogram
-                            _ = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
+                            _ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True,need_even=False)
 
                             # collect min and max values for final colour scale
                             minsg = min(np.min(sp.sg), minsg)
@@ -1535,6 +1541,27 @@ class AviaNZ_reviewAll(QMainWindow):
             self.returned = False
 
         # END of file loading
+
+    def saveCorrections(self):
+        print("here")
+        for i in reversed(range(len(self.segments))):
+            print(self.segments[i][4],self.origSeg[i][4])
+            if self.segments[i][4] == self.origSeg[i][4]:
+                print("Segment matches")
+                del self.origSeg[i]
+            else:
+                oldlabel = self.origSeg[i][4] 
+                newlabel = self.segments[i][4] 
+                if "-To Be Deleted-" in [lab["species"] for lab in newlabel]:
+                    self.origSeg[i] = [self.origSeg[i], []]
+                else:
+                    if [lab["species"] for lab in oldlabel] != [lab["species"] for lab in newlabel] or [lab["calltype"] for lab in oldlabel] != [lab["calltype"] for lab in newlabel]:
+                        self.origSeg[i] = [self.origSeg[i], newlabel]
+
+        if len(self.origSeg)>0:
+            cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), self.origSeg, mode=1, reviewer=self.reviewer)
+            if cleanexit != 1:
+                print("Warning: could not save correction file!")
 
     def humanClassifyNextImage1(self):
         # Get the next image
@@ -1584,6 +1611,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.config['contrast'] = self.humanClassifyDialog1.contrastSlider.value()
             if not self.config['invertColourMap']:
                 self.config['brightness'] = 100-self.config['brightness']
+
             self.humanClassifyDialog1.done(1)
 
     def humanClassifyPrevImage(self):
@@ -1633,14 +1661,6 @@ class AviaNZ_reviewAll(QMainWindow):
             # Note: currently only parsing the call type for the first species
             if calltype!="":
                 newlabel[0]["calltype"] = calltype
-
-            # save the correction file
-            if self.config['saveCorrections']:
-                outputError = [[currSeg, newlabel]]
-                cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
-                                                 reviewer=self.reviewer)
-                if cleanexit != 1:
-                    print("Warning: could not save correction file!")
 
             self.segments[self.indices2show[self.box1id]] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
             #self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
@@ -1711,13 +1731,6 @@ class AviaNZ_reviewAll(QMainWindow):
             if calltype!="":
                 newlabel[0]["calltype"] = calltype
 
-            if self.config['saveCorrections']:
-                # Save the correction
-                outputError = [[currSeg, newlabel]]
-                cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1, reviewer=self.reviewer)
-                if cleanexit != 1:
-                    print("Warning: could not save correction file!")
-
             self.segments[self.indices2show[self.box1id]] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
             #self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
 
@@ -1760,8 +1773,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.segments[self.indices2show[self.box1id]][4] = newlabel
         self.segsDeleted+=1
 
-        # (do not save the correction file yet)
-
         #id = self.box1id
         #del self.segments[id]
         #del self.sps[id]
@@ -1777,7 +1788,7 @@ class AviaNZ_reviewAll(QMainWindow):
         segsToSave = False
 
         # Loop over segments
-        for seg in self.segments:
+        for seg in reversed(self.segments):
             todel = False
             # Delete if any say to delete (correct? Or just remove if it is in a list with others?)
             for lab in seg[4]:
@@ -1786,13 +1797,7 @@ class AviaNZ_reviewAll(QMainWindow):
                     break
 
             if todel:
-                # save the correction file
-                if self.config['saveCorrections']:
-                    outputError = [[seg, []]]
-                    cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1, reviewer=self.reviewer)
-                    if cleanexit != 1:
-                        print("Warning: could not save correction file!")
-
+                print("Removing",seg)
                 self.segments.remove(seg)
                 segsToSave = True
 
@@ -1831,15 +1836,6 @@ class AviaNZ_reviewAll(QMainWindow):
 
         print("Changing calltype to", calltype)
 
-        # save the correction file (unless it's already been saved when checking other changes)
-        if self.config['saveCorrections']:
-            newlabel = copy.deepcopy(oldlab)
-            newlabel[0]["calltype"] = calltype
-            outputError = [[self.segments[boxid], newlabel]]
-            cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
-                                             reviewer=self.reviewer)
-            if cleanexit != 1:
-                print("Warning: could not save correction file!")
-
         # actually update the segment info
         self.segments[boxid][4][0]["calltype"] = calltype
+
