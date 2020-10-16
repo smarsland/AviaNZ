@@ -155,7 +155,7 @@ class FileDataDialog(QDialog):
 class Spectrogram(QDialog):
     # Class for the spectrogram dialog box
     # TODO: Steal the graph from Raven (View/Configure Brightness)
-    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, window, batmode=False, parent=None):
+    def __init__(self, width, incr, minFreq, maxFreq, minFreqShow, maxFreqShow, window, sgtype='Standard', batmode=False, parent=None):
         QDialog.__init__(self, parent)
         self.setWindowTitle('Spectrogram Options')
         self.setWindowIcon(QIcon('img/Avianz.ico'))
@@ -166,17 +166,15 @@ class Spectrogram(QDialog):
         self.windowType.addItems(['Hann','Parzen','Welch','Hamming','Blackman','BlackmanHarris'])
         self.windowType.setCurrentText(window)
 
+        self.sgType = QComboBox()
+        self.sgType.addItems(['Standard','Multi-tapered','Reassigned'])
+        self.sgType.setCurrentText(sgtype)
+
         self.mean_normalise = QCheckBox()
         self.mean_normalise.setChecked(True)
 
         self.equal_loudness = QCheckBox()
         self.equal_loudness.setChecked(False)
-
-        self.multitaper = QCheckBox()
-        self.multitaper.setChecked(False)
-
-        self.reassigned = QCheckBox()
-        self.reassigned.setChecked(False)
 
         self.low = QSlider(Qt.Horizontal)
         self.low.setTickPosition(QSlider.TicksBelow)
@@ -215,10 +213,11 @@ class Spectrogram(QDialog):
         Box = QVBoxLayout()
         form = QFormLayout()
         form.addRow('Window', self.windowType)
+        form.addRow('Spectrogram type', self.sgType)
         form.addRow('Mean normalise', self.mean_normalise)
         form.addRow('Equal loudness', self.equal_loudness)
-        form.addRow('Multitapering', self.multitaper)
-        form.addRow('Reassignment', self.reassigned)
+        #form.addRow('Multitapering', self.multitaper)
+        #form.addRow('Reassignment', self.reassigned)
         form.addRow('Window width', self.window_width)
         form.addRow('Hop', self.incr)
         form.setVerticalSpacing(15)
@@ -264,7 +263,7 @@ class Spectrogram(QDialog):
             self.window_width.setText('256')
         low = int(self.low.value() // 100 *100)
         high = int(self.high.value() // 100 *100)
-        return [self.windowType.currentText(),self.mean_normalise.checkState(),self.equal_loudness.checkState(),self.multitaper.checkState(),self.reassigned.checkState(),self.window_width.text(),self.incr.text(),low,high]
+        return [self.windowType.currentText(),self.sgType.currentText(),self.mean_normalise.checkState(),self.equal_loudness.checkState(),self.window_width.text(),self.incr.text(),low,high]
 
     def lowChange(self,value):
         # NOTE returned values should also use this rounding
@@ -280,8 +279,8 @@ class Spectrogram(QDialog):
 
         self.mean_normalise.setChecked(True)
         self.equal_loudness.setChecked(False)
-        self.multitaper.setChecked(False)
-        self.reassigned.setChecked(False)
+        #self.multitaper.setChecked(False)
+        #self.reassigned.setChecked(False)
 
         self.setValues(self.low.minimum(), self.low.maximum(), self.low.minimum(), self.high.maximum())
 
@@ -3044,8 +3043,7 @@ class Cluster(QDialog):
         for seg in self.segments:
             sp = SignalProc.SignalProc(512, 256)
             sp.readWav(seg[0], seg[1][1] - seg[1][0], seg[1][0])
-            sgRaw = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,
-                                   multitaper=False, reassigned=False, need_even=False)
+            sgRaw = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True, need_even=False)
             maxsg = np.min(sgRaw)
             self.sg = np.abs(np.where(sgRaw == 0, 0.0, 10.0 * np.log10(sgRaw / maxsg)))
             self.setColourMap()

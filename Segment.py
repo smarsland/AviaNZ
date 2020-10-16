@@ -1591,7 +1591,7 @@ class PostProcess:
             # data = self.denoise_filter(level=8, d=True, f=False, f1=self.fLow, f2=self.fHigh)
             # sp.data = data
             # sp.sampleRate = self.sampleRate
-            _ = sp.spectrogram(mean_normalise=True, onesided=True, multitaper=False)
+            _ = sp.spectrogram(mean_normalise=True, onesided=True) 
 
             segment = Segmenter(sp, fs=sp.sampleRate)
             pitch, y, minfreq, W = segment.yin(minfreq=100)

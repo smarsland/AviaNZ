@@ -122,14 +122,14 @@ class Features:
         sp.data = self.data
         sp.sampleRate = self.sampleRate
         # The next lines are to get a spectrogram that *should* precisely match the Raven one
-        self.sg = sp.spectrogram(multitaper=False,window_width=self.window_width,incr=self.incr,window='Ones')
+        self.sg = sp.spectrogram(sgType='Standard',window_width=self.window_width,incr=self.incr,window='Ones')
         self.sg = self.sg**2
 
     def setNewData(self,data,sampleRate):
         # To be called when a new sound file is loaded
         self.data = data
         self.sampleRate = sampleRate
-        self.sg = sp.spectrogram(data, multitaper=False,window_width=self.window_width,incr=self.incr,window='Ones')
+        self.sg = sp.spectrogram(data, sgType='Standard',window_width=self.window_width,incr=self.incr,window='Ones')
 
     def get_mfcc(self, n_mfcc=48, n_bins=32, delta=True):
         # Use librosa to get the MFCC coefficients.
@@ -567,7 +567,7 @@ def testFeatures():
     # The next lines are to get a spectrogram that *should* precisely match the Raven one
     #sg = sp.spectrogram(data, multitaper=False, window_width=256, incr=128, window='Ones')
     #sg = sg ** 2
-    sg = sp.spectrogram(data, multitaper=False, window_width=256, incr=128, window='Hann')
+    sg = sp.spectrogram(data, sgType='Standard', window_width=256, incr=128, window='Hann')
 
     f = Features(data, fs, 256, 128)
 
