@@ -534,14 +534,17 @@ class AviaNZ_reviewAll(QMainWindow):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
-        self.d_detection = Dock("Review",size=(600, 400), autoOrientation=False)
+        self.d_detection = Dock("Review",size=(600, 250), autoOrientation=False)
         self.d_files = Dock("File list", size=(300, 700))
+        self.d_excel = Dock("Excel", size=(600, 150))
         self.d_settings = Dock("Advanced settings", size=(600, 300))
+        self.d_excel.hideTitleBar()
         self.d_settings.hideTitleBar()
 
         self.area.addDock(self.d_files, 'left')
         self.area.addDock(self.d_detection, 'right')
-        self.area.addDock(self.d_settings, 'bottom', self.d_detection)
+        self.area.addDock(self.d_excel, 'bottom', self.d_detection)
+        self.area.addDock(self.d_settings, 'bottom', self.d_excel)
 
         self.w_revLabel = QLabel("Reviewer")
         self.w_reviewer = QLineEdit()
@@ -556,14 +559,14 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_dir.setToolTip("The folder being processed")
 
         self.w_processButton = QPushButton(" Review One-By-One")
-        self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 3px 3px 3px 8px}')
         self.w_processButton.setFixedHeight(45)
         self.w_processButton.setFixedHeight(45)
         self.w_processButton.setIcon(QIcon(QPixmap('img/review.png')))
         self.w_processButton.clicked.connect(self.reviewClickedAll)
         self.w_processButton.setEnabled(False)
         self.w_processButton1 = QPushButton(" Review Quick")
-        self.w_processButton1.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.w_processButton1.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 3px 3px 3px 8px}')
         self.w_processButton1.setFixedHeight(45)
         self.w_processButton1.setFixedHeight(45)
         self.w_processButton1.setIcon(QIcon(QPixmap('img/tile1.png')))
@@ -571,7 +574,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_processButton1.setEnabled(False)
 
         self.w_speLabel1 = QLabel("Choose a species (or review all):")
-        #allsplabel = QLabel("Review one-by-one:")
         self.w_spe1 = QComboBox()
         self.w_spe1.currentIndexChanged.connect(self.speChanged)
         self.spList = []
@@ -605,7 +607,7 @@ class AviaNZ_reviewAll(QMainWindow):
         linesep2 = QFrame()
         linesep2.setFrameShape(QFrame.HLine)
         linesep2.setFrameShadow(QFrame.Sunken)
-        self.d_detection.addWidget(linesep2, row=5, col=0, colspan=3)
+        #self.d_detection.addWidget(linesep2, row=5, col=0, colspan=3)
         self.w_resLabel = QLabel("Size (s) of presence/absence\nwindows in the output")
         self.w_res = QSpinBox()
         self.w_res.setRange(1,600)
@@ -614,10 +616,10 @@ class AviaNZ_reviewAll(QMainWindow):
         timePrecisionLabel = QLabel("Output timestamp precision")
         self.timePrecisionBox = QComboBox()
         self.timePrecisionBox.addItems(["Down to seconds", "Down to milliseconds"])
-        self.d_detection.addWidget(self.w_resLabel, row=6, col=0)
-        self.d_detection.addWidget(self.w_res, row=6, col=1)
-        self.d_detection.addWidget(timePrecisionLabel, row=7, col=0)
-        self.d_detection.addWidget(self.timePrecisionBox, row=7, col=1)
+        self.d_excel.addWidget(self.w_resLabel, row=6, col=0)
+        self.d_excel.addWidget(self.w_res, row=6, col=1)
+        self.d_excel.addWidget(timePrecisionLabel, row=7, col=0)
+        self.d_excel.addWidget(self.timePrecisionBox, row=7, col=1)
 
         self.w_excelButton = QPushButton(" Generate Excel  ")
         self.w_excelButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
@@ -625,7 +627,7 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_excelButton.setIcon(QIcon(QPixmap('img/excel.png')))
         self.w_excelButton.clicked.connect(self.exportExcel)
         self.w_excelButton.setEnabled(False)
-        self.d_detection.addWidget(self.w_excelButton, row=6, col=2)
+        self.d_excel.addWidget(self.w_excelButton, row=6, col=2)
 
         self.toggleSettingsBtn = QPushButton(" Advanced settings ")
         self.toggleSettingsBtn.setStyleSheet('QPushButton {font-weight: bold; font-size:12px; padding: 2px 2px 2px 4px}')
@@ -698,8 +700,8 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_settings.addWidget(QLabel("FFT hop size"), row=3, col=3)
         self.d_settings.addWidget(self.incrBox, row=3, col=4)
 
-        self.d_settings.addWidget(self.chunksizeAuto, row=5, col=1)
-        self.d_settings.addWidget(self.chunksizeManual, row=6, col=1)
+        self.d_settings.addWidget(self.chunksizeAuto, row=5, col=0, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.chunksizeManual, row=6, col=0, colspan=2, rowspan=1)
         self.d_settings.addWidget(self.chunksizeBox, row=6, col=2)
 
         self.w_browse.clicked.connect(self.browse)
@@ -720,6 +722,8 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.d_detection.layout.setContentsMargins(20, 20, 20, 20)
         self.d_detection.layout.setSpacing(20)
+        self.d_excel.layout.setContentsMargins(20, 20, 20, 20)
+        self.d_excel.layout.setSpacing(20)
         self.d_settings.layout.setContentsMargins(20, 20, 20, 20)
         self.d_settings.layout.setSpacing(20)
         self.d_files.layout.setContentsMargins(10, 10, 10, 10)
@@ -730,7 +734,6 @@ class AviaNZ_reviewAll(QMainWindow):
         self.d_settings.layout.setColumnMinimumWidth(1, 80)
         self.d_settings.layout.setColumnMinimumWidth(4, 80)
         self.d_settings.layout.setColumnStretch(2, 5)
-        #self.d_settings.hide()
         self.show()
 
     def toggleSettings(self):
@@ -748,6 +751,8 @@ class AviaNZ_reviewAll(QMainWindow):
             # self.d_settings.setVisible(True)
             self.toggleSettingsBtn.setText(" Hide settings ")
             self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsless.png')))
+        self.repaint()
+        QApplication.processEvents()
 
     def toggleFreqHigh(self,state):
         # state=0 for unchecked, state=2 for checked

@@ -23,7 +23,6 @@
 
 import sys, os, json, platform, re, shutil
 from shutil import copyfile
-from time import gmtime, strftime
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
 from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit
@@ -255,7 +254,7 @@ class AviaNZ(QMainWindow):
             # Make the window and associated widgets
             self.setWindowTitle('AviaNZ')
             self.setWindowIcon(QIcon('img/AviaNZ.ico'))
-            # Show the window 
+            # Show the window
             if self.config['StartMaximized']:
                 self.showMaximized()
                 # extra toggle because otherwise Windows starts at a non-maximized size
@@ -264,7 +263,8 @@ class AviaNZ(QMainWindow):
             else:
                 self.show()
 
-            keyPressed = QtCore.Signal(int)
+            # some old leftover?
+            # keyPressed = QtCore.Signal(int)
 
             # Save the segments every minute
             self.timer = QTimer()
@@ -3354,7 +3354,6 @@ class AviaNZ(QMainWindow):
         # update the label
         self.listLabels[segID].setText(text,'k')
         self.listLabels[segID].update()
-        self.segmentsToSave = True
         QApplication.processEvents()
 
     def updateColour(self, segID=None):
@@ -4239,7 +4238,7 @@ class AviaNZ(QMainWindow):
     def saveNotestRecogniserCNN(self):
         # actually write out the filter and CNN model
         modelsrc = os.path.join(self.buildCNNWizard.cnntrain.tmpdir2.name, 'model.json')
-        CNN_name = self.buildCNNWizard.cnntrain.species + strftime("_%H-%M-%S", gmtime())
+        CNN_name = self.buildCNNWizard.cnntrain.species + time.strftime("_%H-%M-%S", time.gmtime())
         self.buildCNNWizard.cnntrain.currfilt["CNN"]["CNN_name"] = CNN_name
         modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
         weightsrc = self.buildCNNWizard.cnntrain.bestweight
@@ -4287,7 +4286,7 @@ class AviaNZ(QMainWindow):
     def saveTestRecogniserCNN(self):
         # actually write out the filter and CNN model
         modelsrc = os.path.join(self.buildCNNWizard.cnntrain.tmpdir2.name, 'model.json')
-        CNN_name = self.buildCNNWizard.cnntrain.species + strftime("_%H-%M-%S", gmtime())
+        CNN_name = self.buildCNNWizard.cnntrain.species + time.strftime("_%H-%M-%S", time.gmtime())
         self.buildCNNWizard.cnntrain.currfilt["CNN"]["CNN_name"] = CNN_name
         modelfile = os.path.join(self.filtersDir, CNN_name + '.json')
         weightsrc = self.buildCNNWizard.cnntrain.bestweight
@@ -5579,7 +5578,6 @@ class AviaNZ(QMainWindow):
         #     return retval
 
         if self.segmentsToSave:
-            print("Saving segments to " + self.filename + '.data')
             self.segments.metadata["Operator"] = self.operator
             self.segments.metadata["Reviewer"] = self.reviewer
 
@@ -5588,9 +5586,7 @@ class AviaNZ(QMainWindow):
             # refresh this file's icon in file list dock
             self.refreshFileColor()
             self.segmentsToSave = False
-        else:
-            self.segmentsToSave = True
-            # print("Nothing to save")
+            self.statusLeft.setText("Segments saved at " + time.strftime("%X", time.localtime()))
 
     def closeFile(self):
         """ Calls the appropriate functions when a file is gently closed (on quit or change of file). """
