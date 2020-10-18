@@ -779,6 +779,39 @@ class Diagnostic(QDialog):
     def getValues(self):
         return [self.filter.currentText(), self.aaGroup.checkedId(), self.mark.isChecked()]
 
+class DiagnosticCNN(QDialog):
+    # Class for the diagnostic dialog box - CNN
+    def __init__(self, filters, parent=None):
+        QDialog.__init__(self, parent)
+        self.setWindowTitle('CNN Diagnostic Plot Options')
+        self.setWindowIcon(QIcon('img/Avianz.ico'))
+        self.setMinimumWidth(300)
+        self.setWindowFlags((self.windowFlags() ^ Qt.WindowContextHelpButtonHint) | Qt.WindowCloseButtonHint)
+
+        # species / filter
+        self.filterLabel = QLabel("Select recogniser to use")
+        self.filter = QComboBox()
+        # add filter file names to combobox
+        self.filter.addItems(list(filters.keys()))
+
+        # buttons
+        self.activate = QPushButton("Make plots")
+        self.clear = QPushButton("Clear plots")
+
+        # layout
+        Box = QVBoxLayout()
+        Box.addWidget(self.filterLabel)
+        Box.addWidget(self.filter)
+
+        Box.addWidget(self.activate)
+        Box.addWidget(self.clear)
+
+        # Now put everything into the frame
+        self.setLayout(Box)
+
+    def getValues(self):
+        return [self.filter.currentText()]
+
 #======
 class Segmentation(QDialog):
     # Class for the segmentation dialog box

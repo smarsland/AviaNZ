@@ -339,6 +339,7 @@ class AviaNZ(QMainWindow):
         if not self.DOC:
             specMenu.addSeparator()
             self.showDiagnosticTick = specMenu.addAction("Show training diagnostics",self.showDiagnosticDialog)
+            self.showDiagnosticCNN = specMenu.addAction("Show CNN training diagnostics", self.showDiagnosticDialogCNN)
             self.extraMenu = specMenu.addMenu("Diagnostic plots")
             extraGroup = QActionGroup(self)
             for ename in ["none", "Wavelet scalogram", "Wavelet correlations", "Wind energy", "Rain", "Filtered spectrogram, new + AA", "Filtered spectrogram, new", "Filtered spectrogram, old"]:
@@ -3575,6 +3576,16 @@ class AviaNZ(QMainWindow):
         self.diagnosticDialog.show()
         self.diagnosticDialog.activateWindow()
 
+    def showDiagnosticDialogCNN(self):
+        """ Create the dialog to set diagnostic plot parameters.
+        """
+        if not hasattr(self, 'diagnosticDialogCNN'):
+            self.diagnosticDialogCNN = Dialogs.DiagnosticCNN(self.FilterDicts)
+            self.diagnosticDialogCNN.activate.clicked.connect(self.setDiagnosticCNN)
+            self.diagnosticDialogCNN.clear.clicked.connect(self.clearDiagnosticCNN)
+        self.diagnosticDialogCNN.show()
+        self.diagnosticDialogCNN.activateWindow()
+
     def clearDiagnostic(self):
         """ Cleans up diagnostic plot space. Should be called
             when loading new file/page, or from Diagnostic Dialog.
@@ -3710,6 +3721,76 @@ class AviaNZ(QMainWindow):
             self.plotaxis.setLabel('Power Z-score')
             self.d_plot.show()
         self.diagnosticDialog.activate.setEnabled(True)
+        self.statusLeft.setText("Ready")
+
+    def clearDiagnosticCNN(self):
+        """ Cleans up diagnostic plot space. Should be called
+            when loading new file/page, or from Diagnostic Dialog.
+        """
+        try:
+            self.p_plot.clear()
+            if hasattr(self, "p_legend"):
+                self.p_legend.scene().removeItem(self.p_legend)
+            self.d_plot.hide()
+        except Exception as e:
+            print(e)
+
+    def setDiagnosticCNN(self):
+        """ Takes parameters returned from DiagnosticDialog
+            and draws the training diagnostic plots.
+        """
+        from itertools import chain, repeat
+        with pg.BusyCursor():
+            self.diagnosticDialogCNN.activate.setEnabled(False)
+            self.statusLeft.setText("Making CNN diagnostic plots...")
+
+            # Skip Wavelet filter, and show the raw CNN probabilities for current page, block length depends on CNN input size
+            # load target CNN model if exists
+            [filtername] = self.diagnosticDialogCNN.getValues()
+            speciesData = self.FilterDicts[filtername]
+            CTs = []
+            for f in speciesData['Filters']:
+                CTs.append(f['calltype'])
+            CTs.append('Noise')
+            self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, [filtername])
+
+            segment = [[self.startRead, self.startRead + self.datalengthSec]]   # TODO: start of the page
+            CNNmodel = None
+            probs = 0
+            if filtername in self.CNNDicts.keys():
+                CNNmodel = self.CNNDicts[filtername]
+            post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata,
+                                       sampleRate=self.sampleRate,
+                                       tgtsampleRate=speciesData["SampleRate"], segments=segment,
+                                       subfilter=speciesData['Filters'][0], CNNmodel=CNNmodel, cert=50)
+            if CNNmodel:
+                CNNwindow, probs = post.CNNDiagnostic()
+            if isinstance(probs, int):
+                self.diagnosticDialogCNN.activate.setEnabled(True)
+                return
+
+            # clear plot box and add legend
+            self.clearDiagnostic()
+            self.p_legend = pg.LegendItem()
+            self.p_legend.setParentItem(self.p_plot)
+
+            # xs = np.arange(0, len(probs[:, 0].tolist()), 1)
+            Psep = np.zeros((len(CTs), len(probs[:, 0].tolist())))
+            for i in range(len(CTs)):
+                Psep[i, :] = probs[:, i].tolist()
+
+            # plot
+            for ct in range(len(CTs)):
+                # basic divergent color palette
+                plotcol = (255 * ct // len(CTs), 127 * (ct % 2), 0)
+                y = Psep[ct, :]
+                y = list(chain.from_iterable(repeat(p, int(CNNwindow)) for p in y)) # TODO
+                x = np.arange(0, len(y), 1)
+                self.plotDiag = pg.PlotDataItem(x, y, pen=fn.mkPen(plotcol, width=2))
+                self.p_plot.addItem(self.plotDiag)
+                self.p_legend.addItem(self.plotDiag, CTs[ct])
+            self.d_plot.show()
+        self.diagnosticDialogCNN.activate.setEnabled(True)
         self.statusLeft.setText("Ready")
 
     def showSpectrogramDialog(self):
