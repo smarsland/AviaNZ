@@ -1249,6 +1249,39 @@ class PostProcess:
             featuress.append([np.rot90(sgRaw / maxg).tolist()])
         return featuress
 
+    def generateFeaturesCNN(self, seg, data, fs, overlap=True):
+        '''
+        Prepare a syllable to input to the CNN model
+        Returns the features (currently the spectrogram)
+        '''
+        featuress = []
+        if overlap:
+            n = math.ceil((seg[1] - seg[0] - self.CNNwindow) / self.CNNhop + 1)
+        else:
+            n = (seg[1] - seg[0]) // self.CNNwindow
+            self.CNNhop = self.CNNwindow
+
+        sp = SignalProc.SignalProc(self.CNNwindowInc[0], self.CNNwindowInc[1])
+        sp.data = data
+        sp.sampleRate = fs
+        _ = sp.spectrogram()
+
+        # spectrograms of pre-cut segs are tiny bit shorter
+        # because spectrogram does not use the last bin:
+        # it uses len(data)-window bins
+        # so when extracting pieces of a premade spec, we need to adjust:
+        specFrameSize = len(range(0, int(self.CNNwindow * fs - sp.window_width), sp.incr))
+
+        for i in range(int(n)):
+            sgstart = int(self.CNNhop * i * fs / sp.incr)
+            sgend = sgstart + specFrameSize
+            if sgend > np.shape(sp.sg)[0]:
+                continue
+            sgRaw = sp.sg[sgstart:sgend, :]
+            maxg = np.max(sgRaw)
+            featuress.append([np.rot90(sgRaw / maxg).tolist()])
+        return featuress
+
     def generateFeaturesCNN_frqMasked(self, seg, data, fs):
         '''
         Prepare a syllable to input to the CNN model
@@ -1463,6 +1496,46 @@ class PostProcess:
         for ns in ctnewseg[::-1]:
             self.segments.append(ns)
         print("Segments remaining after CNN: ", len(self.segments))
+
+    def CNNDiagnostic(self):
+        """
+        Return the raw probabilities
+        """
+        if not self.CNNmodel:
+            print("ERROR: no CNN model specified")
+            return
+        if len(self.segments)==0:
+            print("No segments to classify by CNN")
+            return
+
+        self.CNNhop = self.CNNwindow
+        for ix in reversed(range(len(self.segments))):
+            seg = self.segments[ix]
+
+            if self.CNNwindow >= seg[0][1] - seg[0][0]:
+                print('Current page is smaller than CNN input (%f)' % (self.CNNwindow))
+            else:
+                # data = self.audioData[int(seg[0][0]*self.sampleRate):int(seg[0][1]*self.sampleRate)]
+                data = self.audioData
+            # generate features for CNN
+            sp = SignalProc.SignalProc()
+            sp.data = data
+            sp.sampleRate = self.sampleRate
+            if self.sampleRate != self.tgtsampleRate:
+                sp.resample(self.tgtsampleRate)
+            featuress = self.generateFeaturesCNN(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            # featuress = self.generateFeaturesCNN_frqMasked(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            # featuress = self.generateFeaturesCNN2(seg=seg[0], data=sp.data, fs=sp.sampleRate)
+            featuress = np.array(featuress)
+            featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 1)
+            # featuress = featuress.reshape(featuress.shape[0], self.CNNinputdim[0], self.CNNinputdim[1], 3)
+            featuress = featuress.astype('float32')
+            # predict with CNN
+            if np.shape(featuress)[0] > 0:
+                probs = self.CNNmodel.predict(featuress)
+            else:
+                probs = 0
+        return self.CNNwindow, probs
 
     def wind_cal(self, data, sampleRate, fn_peak=0.35):
         """ Calculate wind
