@@ -25,7 +25,7 @@ import sys, os, json, platform, re, shutil
 from shutil import copyfile
 
 from PyQt5.QtGui import QIcon, QStandardItemModel, QStandardItem, QKeySequence, QPixmap
-from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit
+from PyQt5.QtWidgets import QApplication, QInputDialog, QFileDialog, QMainWindow, QActionGroup, QToolButton, QLabel, QSlider, QScrollBar, QDoubleSpinBox, QPushButton, QListWidgetItem, QMenu, QFrame, QMessageBox, QWidgetAction, QComboBox, QTreeView, QShortcut, QGraphicsProxyWidget, QWidget, QVBoxLayout, QGroupBox, QSizePolicy, QHBoxLayout, QSpinBox, QAbstractSpinBox, QLineEdit, QToolBar
 from PyQt5.QtCore import Qt, QDir, QTimer, QPoint, QPointF, QLocale, QModelIndex, QRectF
 from PyQt5.QtMultimedia import QAudio
 
@@ -463,6 +463,18 @@ class AviaNZ(QMainWindow):
         self.resize(1240,600)
         self.move(100,50)
 
+        # Make the colours that are used in the interface
+        # The dark ones are to draw lines instead of boxes
+        self.ColourSelected = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], self.config['ColourSelected'][3])
+        self.ColourNamed = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], self.config['ColourNamed'][3])
+        self.ColourNone = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3])
+        self.ColourPossible = QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], self.config['ColourPossible'][3])
+
+        self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], 255)
+        self.ColourNamedDark = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], 255)
+        self.ColourNoneDark = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], 255)
+        self.ColourPossibleDark = QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], 255)
+
         # Make the docks and lay them out
         self.d_overview = Dock("Overview",size=(1200,150))
         self.d_ampl = Dock("Amplitude",size=(1200,150))
@@ -563,6 +575,14 @@ class AviaNZ(QMainWindow):
         self.placeInFileSelector.editingFinished.connect(self.moveTo5mins)
         self.placeInFileSelector.setMinimumHeight(25)
 
+        # "Find next annotation" buttons
+        self.annotJumpLabel = QLabel("Jump to next mark:")
+        self.annotJumpBtns = QToolBar()
+        self.annotJumpG = self.annotJumpBtns.addAction(QIcon('img/findnext-g.png'), "Any label")
+        self.annotJumpG.triggered.connect(lambda: self.annotJumper(100))
+        self.annotJumpY = self.annotJumpBtns.addAction(QIcon('img/findnext-y.png'), "Uncertain label")
+        self.annotJumpY.triggered.connect(lambda: self.annotJumper(99))
+
         # position everything in the dock
         self.w_overview.layout.addLayout(fileInfo, 0, 0, 1, 3)
         #self.w_overview.addWidget(annotInfo, row=1, col=0, colspan=2)
@@ -576,7 +596,10 @@ class AviaNZ(QMainWindow):
         placeInFileBox.addWidget(self.placeInFileSelector)
         placeInFileBox.addWidget(self.next5mins)
         placeInFileBox.addWidget(self.placeInFileLabel)
-        placeInFileBox.addStretch(10)
+        placeInFileBox.addStretch(4)
+        placeInFileBox.addWidget(self.annotJumpLabel)
+        placeInFileBox.addWidget(self.annotJumpBtns)
+        placeInFileBox.addStretch(4)
         self.w_overview.layout.addLayout(placeInFileBox, 3, 1)
 
         # Corresponding keyboard shortcuts:
@@ -605,18 +628,6 @@ class AviaNZ(QMainWindow):
         self.p_plot = self.w_plot.addViewBox(enableMouse=False,enableMenu=False)
         self.w_plot.addItem(self.p_plot,row=0,col=1)
         self.d_plot.addWidget(self.w_plot)
-
-        # Make the colours that are used in the interface
-        # The dark ones are to draw lines instead of boxes
-        self.ColourSelected = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], self.config['ColourSelected'][3])
-        self.ColourNamed = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], self.config['ColourNamed'][3])
-        self.ColourNone = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], self.config['ColourNone'][3])
-        self.ColourPossible = QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], self.config['ColourPossible'][3])
-
-        self.ColourSelectedDark = QtGui.QColor(self.config['ColourSelected'][0], self.config['ColourSelected'][1], self.config['ColourSelected'][2], 255)
-        self.ColourNamedDark = QtGui.QColor(self.config['ColourNamed'][0], self.config['ColourNamed'][1], self.config['ColourNamed'][2], 255)
-        self.ColourNoneDark = QtGui.QColor(self.config['ColourNone'][0], self.config['ColourNone'][1], self.config['ColourNone'][2], 255)
-        self.ColourPossibleDark = QtGui.QColor(self.config['ColourPossible'][0], self.config['ColourPossible'][1], self.config['ColourPossible'][2], 255)
 
         # The axes
         # Time axis has to go separately in loadFile
@@ -1303,7 +1314,6 @@ class AviaNZ(QMainWindow):
 
         # Keep track of start points and selected buttons
         self.windowStart = 0
-        self.playPosition = self.windowStart
         self.prevBoxCol = self.config['ColourNone']
         self.bar.setValue(0)
 
@@ -2043,9 +2053,8 @@ class AviaNZ(QMainWindow):
         minX, maxX = self.overviewImageRegion.getRegion()
         halfwin = (maxX-minX)/2
         self.overviewImageRegion.setRegion([x-halfwin, x+halfwin])
-        self.playPosition = int(self.convertSpectoAmpl(x)*1000.0)
 
-    def updateOverview(self, preserveLength=True):
+    def updateOverview(self):
         """ Listener for when the overview box is changed. Other functions call it indirectly by setRegion.
         Does the work of keeping all the plots in the right place as the overview moves.
         It sometimes updates a bit slowly. """
@@ -3467,7 +3476,6 @@ class AviaNZ(QMainWindow):
         minX, maxX = self.overviewImageRegion.getRegion()
         newminX = max(0,minX-(maxX-minX)*0.9)
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
-        self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
 
     def moveRight(self):
         """ When the right button is pressed (next to the overview plot), move everything along
@@ -3475,7 +3483,6 @@ class AviaNZ(QMainWindow):
         minX, maxX = self.overviewImageRegion.getRegion()
         newminX = min(np.shape(self.sg)[0]-(maxX-minX),minX+(maxX-minX)*0.9)
         self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
-        self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
 
     def prepare5minMove(self):
         self.saveSegments()
@@ -3508,9 +3515,13 @@ class AviaNZ(QMainWindow):
             self.moveNext5minsKey.setEnabled(False)
         self.prepare5minMove()
 
-    def moveTo5mins(self):
-        """ Jumps to the requested 5 min page. """
-        pagenum = self.placeInFileSelector.value()
+    def moveTo5mins(self, pagenum=None):
+        """ Jumps to the requested 5 min page.
+            pagenum can be specified if this is called manually
+              Otherwise (None) it will be read from the page selector.
+        """
+        if pagenum is None:
+            pagenum = self.placeInFileSelector.value()
         self.placeInFileSelector.findChild(QLineEdit).deselect()
         self.placeInFileSelector.clearFocus()
         if self.currentFileSection==pagenum-1:
@@ -3538,7 +3549,6 @@ class AviaNZ(QMainWindow):
         if not self.updateRequestedByOverview:
             minX, maxX = self.overviewImageRegion.getRegion()
             self.overviewImageRegion.setRegion([newminX, newminX+maxX-minX])
-        self.playPosition = int(self.convertSpectoAmpl(newminX)*1000.0)
 
     def changeWidth(self, value):
         """ Listener for the spinbox that decides the width of the main window.
@@ -3561,6 +3571,40 @@ class AviaNZ(QMainWindow):
             self.timeaxis.setShowMS(False)
         else:
             self.timeaxis.setShowMS(True)
+
+    def annotJumper(self, maxcert):
+        """ Scrolls to next annotation of no more than maxcert certainty. """
+        # Current position:
+        with pg.BusyCursor():
+            minX, maxX = self.overviewImageRegion.getRegion()
+            currx = self.convertSpectoAmpl(minX) + self.startRead
+
+            target = None
+            for seg in self.segments:
+                if seg[0]<=currx:
+                    continue
+                # Note that the segments are not sorted by time,
+                # hence some extra mess to find the next one:
+                if target is not None and seg[0]>=target[0]:
+                    continue
+                for lab in seg[4]:
+                    if lab["certainty"]<=maxcert:
+                        target = seg
+            if target is None:
+                print("No further annotation to jump to found")
+                return
+
+            if target[0]>self.startRead + self.datalengthSec:
+                pagenum, relstart = divmod(target[0], self.config['maxFileShow'])
+                pagenum = int(pagenum+1)
+                if pagenum > self.nFileSections:
+                    print("Warning: annotation outside file bounds")
+                    return
+                self.moveTo5mins(pagenum)
+            newminX = self.convertAmpltoSpec(target[0]-self.startRead)
+            newmaxX = self.convertAmpltoSpec(min(target[1]-self.startRead, self.datalengthSec))
+            # this will trigger update of the other views
+            self.overviewImageRegion.setRegion([newminX, newmaxX])
 
 
 # ===============
