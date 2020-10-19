@@ -3581,6 +3581,7 @@ class AviaNZ(QMainWindow):
         """
         if not hasattr(self, 'diagnosticDialogCNN'):
             self.diagnosticDialogCNN = Dialogs.DiagnosticCNN(self.FilterDicts)
+            self.diagnosticDialogCNN.filter.currentTextChanged.connect(self.setCTDiagnosticsCNN)
             self.diagnosticDialogCNN.activate.clicked.connect(self.setDiagnosticCNN)
             self.diagnosticDialogCNN.clear.clicked.connect(self.clearDiagnosticCNN)
         self.diagnosticDialogCNN.show()
@@ -3723,6 +3724,23 @@ class AviaNZ(QMainWindow):
         self.diagnosticDialog.activate.setEnabled(True)
         self.statusLeft.setText("Ready")
 
+    def setCTDiagnosticsCNN(self):
+        from PyQt5.QtWidgets import QCheckBox
+        filter = self.diagnosticDialogCNN.filter.currentText()
+        speciesData = self.FilterDicts[filter]
+        CTs = []
+        for f in speciesData['Filters']:
+            CTs.append(f['calltype'])
+        CTs.append('Noise')
+        for ch in self.diagnosticDialogCNN.chkboxes:
+            ch.hide()
+        self.diagnosticDialogCNN.chkboxes = []
+        for ct in CTs:
+            self.diagnosticDialogCNN.chkboxes.append(QCheckBox(ct))
+        for cb in self.diagnosticDialogCNN.chkboxes:
+            cb.setChecked(True)
+            self.diagnosticDialogCNN.ctbox.addWidget(cb)
+
     def clearDiagnosticCNN(self):
         """ Cleans up diagnostic plot space. Should be called
             when loading new file/page, or from Diagnostic Dialog.
@@ -3746,7 +3764,8 @@ class AviaNZ(QMainWindow):
 
             # Skip Wavelet filter, and show the raw CNN probabilities for current page, block length depends on CNN input size
             # load target CNN model if exists
-            [filtername] = self.diagnosticDialogCNN.getValues()
+            [filtername, selectedCTs] = self.diagnosticDialogCNN.getValues()
+            print(selectedCTs)
             speciesData = self.FilterDicts[filtername]
             CTs = []
             for f in speciesData['Filters']:
@@ -3754,7 +3773,7 @@ class AviaNZ(QMainWindow):
             CTs.append('Noise')
             self.CNNDicts = self.ConfigLoader.CNNmodels(self.FilterDicts, self.filtersDir, [filtername])
 
-            segment = [[self.startRead, self.startRead + self.datalengthSec]]   # TODO: start of the page
+            segment = [[self.startRead, self.startRead + self.datalengthSec]]
             CNNmodel = None
             probs = 0
             if filtername in self.CNNDicts.keys():
@@ -3774,21 +3793,22 @@ class AviaNZ(QMainWindow):
             self.p_legend = pg.LegendItem()
             self.p_legend.setParentItem(self.p_plot)
 
-            # xs = np.arange(0, len(probs[:, 0].tolist()), 1)
             Psep = np.zeros((len(CTs), len(probs[:, 0].tolist())))
             for i in range(len(CTs)):
                 Psep[i, :] = probs[:, i].tolist()
 
             # plot
             for ct in range(len(CTs)):
-                # basic divergent color palette
-                plotcol = (255 * ct // len(CTs), 127 * (ct % 2), 0)
-                y = Psep[ct, :]
-                y = list(chain.from_iterable(repeat(p, int(CNNwindow)) for p in y)) # TODO
-                x = np.arange(0, len(y), 1)
-                self.plotDiag = pg.PlotDataItem(x, y, pen=fn.mkPen(plotcol, width=2))
-                self.p_plot.addItem(self.plotDiag)
-                self.p_legend.addItem(self.plotDiag, CTs[ct])
+                if not selectedCTs[ct]:
+                    continue
+                else:
+                    # basic divergent color palette
+                    plotcol = (255 * ct // len(CTs), 127 * (ct % 2), 0)
+                    y = Psep[ct, :]
+                    x = np.linspace(0, CNNwindow*len(y), len(y))
+                    self.plotDiag = pg.PlotDataItem(x, y, pen=fn.mkPen(plotcol, width=2))
+                    self.p_plot.addItem(self.plotDiag)
+                    self.p_legend.addItem(self.plotDiag, CTs[ct])
             self.d_plot.show()
         self.diagnosticDialogCNN.activate.setEnabled(True)
         self.statusLeft.setText("Ready")

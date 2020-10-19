@@ -794,6 +794,10 @@ class DiagnosticCNN(QDialog):
         # add filter file names to combobox
         self.filter.addItems(list(filters.keys()))
 
+        # select call types to plot
+        self.ctbox = QHBoxLayout()
+        self.chkboxes = []
+
         # buttons
         self.activate = QPushButton("Make plots")
         self.clear = QPushButton("Clear plots")
@@ -802,6 +806,7 @@ class DiagnosticCNN(QDialog):
         Box = QVBoxLayout()
         Box.addWidget(self.filterLabel)
         Box.addWidget(self.filter)
+        Box.addLayout(self.ctbox)
 
         Box.addWidget(self.activate)
         Box.addWidget(self.clear)
@@ -810,7 +815,7 @@ class DiagnosticCNN(QDialog):
         self.setLayout(Box)
 
     def getValues(self):
-        return [self.filter.currentText()]
+        return [self.filter.currentText(), [cb.isChecked() for cb in self.chkboxes]]
 
 #======
 class Segmentation(QDialog):
