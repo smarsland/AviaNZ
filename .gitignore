@@ -40,3 +40,6 @@ Docs/FilterTraining.pdf
 Docs/FilterTraining.soc
 # default configs - if this is not distributed
 # AviaNZconfig.txt
+eggs.csv
+test.txt
+bash_test.sh.txt

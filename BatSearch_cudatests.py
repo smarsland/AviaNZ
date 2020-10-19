@@ -1,20 +1,22 @@
 """
 Created on 1/10/2020
 
+Updated 19/10/2020
+
 @author: Virginia Listanti
 
 This code generate different trained CNN and test them on the folder Moira2020
 
 Different test configuration:
 - 100/250/500 files for each class each [3 diffent datasets
-- window: 3pxl doubled, 7 pxl, 11 pxl
+- window: 3pxl doubled, 7 pxl, 31 pxl
 - augumentation y/n
 
 
 Pipeline:
 -create train dataset: clicksearch + read annotations
 - 75% training, 25% validation
-- agumentation(y/n)
+- [agumentation(y/n)]
 - Cnn train
 - test on dataset
 - generate annotations
@@ -113,7 +115,7 @@ def ClickSearch(imspec, window, segments, featuress, Train=False):
             click_end=clicks_indices[0][i]
         else:
             if click_end-click_start+1>up_len:
-                clicks[click_start:click_end+1] = False
+                clicks[click_start:click_end+1] = 0
             else:
                 # update annotations
                 count+=1
@@ -126,14 +128,14 @@ def ClickSearch(imspec, window, segments, featuress, Train=False):
 
     # checking last loop with end
     if click_end-click_start+1>up_len:
-        clicks[click_start:click_end+1] = False
+        clicks[click_start:click_end+1] = 0
     else:
         count+=1
         #savedataset
         featuress=updateDataset(imspec, segments, click_start, click_end, featuress, Train)
 
     #Assigning: click label
-    if np.shape(clicks_indices)[1]==0:
+    if count==0:
         label='None'
     else:
         label='Click'
@@ -388,6 +390,10 @@ def exportCSV(dirName, Dataset_dir, writefile):
                 #dd/mm/yyyy,(h)h:mm:ss a.m.,R?,Long tail,.\20191110,.\file.bmp,Moira Pryde
                 f.write(d+t+rec+','+s+date+','+'.\\'+filename[:-5]+','+op+'\n')
 
+                #delete .datafile
+                print ("Deleting ", filename)
+                os.remove(os.path.join(root, filename))
+
     f.close()
 
 
@@ -395,8 +401,8 @@ def exportCSV(dirName, Dataset_dir, writefile):
  
 
 train_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Train_Datasets" #directory with train files
-CNN_test_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Virginia (From Moira 2020)/Raw files" #directory with test files
-test_count=1 #counter for test number
+CNN_test_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Virginia_From_Moira_2020/Raw_files" #directory with test files
+test_count=8 #counter for test number
 test_dir = "/am/state-opera/home1/listanvirg/Documents/Bat_TESTS"
 #test_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Experiments_Results" #directory to store test result
 test_fold= "Test_"+str(test_count) #Test folder where to save all the stats
@@ -410,7 +416,7 @@ thr2=70
 
 #Create train dataset for CNN from the results of clicksearch   
 
-for i in range(3):
+for i in range(2,3):
     if i==0:
         train_fold='TRAIN100'
     elif i==1:
@@ -426,8 +432,10 @@ for i in range(3):
 
     file_number_train=len(file_list_train)
 
-    for j in range(3):
+    for j in range(2,3):
 
+        if test_count==1:
+            j=1
         #inizializations of counters
         train_featuress =[]
         
@@ -472,30 +480,37 @@ for i in range(3):
 
         #check
         print(np.shape(train_featuress))
+        if window==3:
+            first_dim=6
+        else:
+            first_dim=window
 
         #Train CNN
         # with and without agumentation
         
         #for ag in range(2):
-        #    if test_count==1:
-        #        ag=1
+        #    #if test_count==1:
+        #    #    ag=1
         #    data_train=train_featuress
         #    if ag%2==1:
-        #        #### DATA AGUMENTATION ######################
+        #        #### data agumentation ######################
         #        # create image data augmentation generator for in-build
         #        ag_flag=True
-        #        sg_train_0=[]
-        #        sg_train_1=[]
-        #        sg_train_2=[]
+        #        #sg_train_0=[]
+        #        #sg_train_1=[]
+        #        #g_train_2=[]
+        #        sg_train_0=np.ndarray(shape=(np.shape(data_train)[0], first_dim, 512), dtype=float)
+        #        sg_train_1=np.ndarray(shape=(np.shape(data_train)[0], first_dim, 512), dtype=float)
+        #        sg_train_2=np.ndarray(shape=(np.shape(data_train)[0], first_dim, 512), dtype=float)
         #        print('check shape',np.shape(data_train)[0])
         #        for k in range(np.shape(data_train)[0]):
         #            maxg = np.max(data_train[k][0][:])
         #            if data_train[k][-1]==0:
-        #                sg_train_0.append(data_train[k][0][:]/maxg)
+        #                sg_train_0[k][:]=data_train[k][0][:]/maxg
         #            elif data_train[k][-1]==1:
-        #                sg_train_1.append(data_train[k][0][:]/maxg)
+        #                sg_train_1[k][:]=data_train[k][0][:]/maxg
         #            elif data_train[k][-1]==2:
-        #                sg_train_2.append(data_train[k][0][:]/maxg)
+        #                sg_train_2[k][:]=data_train[k][0][:]/maxg
         #        datagen1 = ImageDataGenerator(width_shift_range=0.5, fill_mode='nearest')
         #        batch_size = 32
 
@@ -607,10 +622,7 @@ for i in range(3):
         print("Spectrograms for ST: ", np.shape(np.nonzero(y_validation==1))[1])
         print("Spectrograms for Noise: ", np.shape(np.nonzero(y_validation==2))[1])
 
-        if window==3:
-            first_dim=6
-        else:
-            first_dim=window
+        
         train_images = x_train.reshape(x_train.shape[0],first_dim, 512, 1) #changed image dimensions
         validation_images = x_validation.reshape(x_validation.shape[0],first_dim, 512, 1)
         input_shape = (first_dim, 512, 1)
@@ -710,7 +722,7 @@ for i in range(3):
         if window==3:
             L1=['window used 3x2 \n']
         else:
-            L1=['window used %2d %5d \n' %window]
+            L1=['window used %2d \n' %window]
         L=['Number of spectrograms =  %5d \n' %np.shape(target_train)[0], 
         "Spectrograms used for training = %5d \n" %np.shape(y_train)[0],
         "Spectrograms for LT: %5d \n" %np.shape(np.nonzero(y_train==0))[1],
@@ -730,70 +742,74 @@ for i in range(3):
         print('\n ----------------------------------------------- \n')
         print('Starting test')
         for root, dirs, files in os.walk(CNN_test_dir):
-            for dir in dirs:
-                print('Analising dir ', dir)
-                for file in files:
-                    if file.endswith('.bmp'):
-                        bat_dir=root
-                        bat_file=file
-                        data_test=[]
-                        print('Analising file ', file, ' in dir ', bat_dir)
-                        filepath=bat_dir+'/'+file
-                        try:
-                            #read image
-                            sp.readBmp(filepath, rotate=False)
-                        except OSError:
-                            print('Error loading file ', file) 
-                            print('File classification = Corrupted file')
-                            continue
-                        except:
-                            print('Error loading file ', file)
-                            print('File classification = Corrupted file')
+            #for dir in dirs:
+            #    print('Analising dir ', dir)
+            for file in files:
+                if file.endswith('.bmp'):
+                    bat_dir=root
+                    bat_file=file
+                    data_test=[]
+                    print('Analising file ', file, ' in dir ', bat_dir)
+                    filepath=bat_dir+'/'+file
+                    try:
+                        #read image
+                        sp.readBmp(filepath, rotate=False)
+                    except OSError:
+                        print('Error loading file ', file) 
+                        print('File classification = Corrupted file')
+                        continue
+                    except:
+                        print('Error loading file ', file)
+                        print('File classification = Corrupted file')
                     
                 
-                        #inizialization
-                        segments=[]
-                        thisSpSegs=[]
-                        #CLickSearch
-                        print('Click Search')
-                        click_label, data_test=ClickSearch(sp.sg, window, segments, thisSpSegs, data_test, Train=False)
-                        #initialize annotations
-                        dt=sp.incr/sp.sampleRate  # self.sp.incr is set to 512 for bats dt=temporal increment in samples
-                        duration=dt*np.shape(sp.sg)[1] #duration=dt*num_columns
-                        generated_annotation=[{"Operator": "Auto", "Reviewer": "", "Duration": duration, "noiseLevel": [], "noiseTypes": []}]
-                        if click_label=='Click':
-                            #we enter in the cnn only if we got a click
-                    #            print('check data_test shape ', np.shape(data_test))
-                            sg_test=np.ndarray(shape=(np.shape(data_test)[0],np.shape(data_test[0][0])[0], np.shape(data_test[0][0])[1]), dtype=float)
-                            print('Number of file spectrograms', np.shape(data_test)[0])
-                            for k in range(np.shape(data_test)[0]):
-                                maxg = np.max(data_test[k][0][:])
-                                sg_test[k][:] = data_test[k][0][:]/maxg
+                    #inizialization
+                    segments=[]
+                    #CLickSearch
+                    print('Click Search')
+                    click_label, data_test=ClickSearch(sp.sg, window, segments, data_test, Train=False)
+                    #initialize annotations
+                    dt=sp.incr/sp.sampleRate  # self.sp.incr is set to 512 for bats dt=temporal increment in samples
+                    duration=dt*np.shape(sp.sg)[1] #duration=dt*num_columns
+                    generated_annotation=[{"Operator": "Auto", "Reviewer": "", "Duration": duration, "noiseLevel": [], "noiseTypes": []}]
+                    if click_label=='Click':
+                        print('Click Detected')
+                        #we enter in the cnn only if we got a click
+                        print('check data_test shape ', np.shape(data_test))
+                        sg_test=np.ndarray(shape=(np.shape(data_test)[0],np.shape(data_test[0][0])[0], np.shape(data_test[0][0])[1]), dtype=float)
+                        print('Number of file spectrograms', np.shape(data_test)[0])
+                        for k in range(np.shape(data_test)[0]):
+                            maxg = np.max(data_test[k][0][:])
+                            sg_test[k][:] = data_test[k][0][:]/maxg
             
-                            #CNN classification of clicks
-                            x_test = sg_test
-                            test_images = x_test.reshape(x_test.shape[0],first_dim, 512, 1)
-                            input_shape = (first_dim, 512, 1)
-                            test_images = test_images.astype('float32')
-                            #recovering labels
-                            predictions =model.predict(test_images)
-                            #predictions is an array #imagesX #of classes which entries are the probabilities
-                            #for each classes
-                            label=File_label(predictions)
-                            print('CNN detected: ', label)
-                            if len(label)>0:
-                                #update annotations
-                                generated_annotation.append([0, duration, 0, 0, label])
+                        #CNN classification of clicks
+                        x_test = sg_test
+                        test_images = x_test.reshape(x_test.shape[0],first_dim, 512, 1)
+                        input_shape = (first_dim, 512, 1)
+                        test_images = test_images.astype('float32')
+                        #recovering labels
+                        predictions =model.predict(test_images)
+                        #predictions is an array #imagesX #of classes which entries are the probabilities
+                        #for each classes
+                        label=File_label(predictions, thr1, thr2)
+                        print('CNN detected: ', label)
+                        if len(label)>0:
+                            #update annotations
+                            generated_annotation.append([0, duration, 0, 0, label])
                                      
-                        else:
-                            # do not create any segments
-                            print("Nothing detected")
-                        #save segments in datafile
-                        annotation_file=filepath + '.data'
-                        print('Storing annotation in ', annotation_file)
-                        f = open(annotation_file, 'w')
-                        json.dump(generated_annotation, f)
-                        f.close()
+                    else:
+                        # do not create any segments
+                        print("Nothing detected")
+                    #save segments in datafile
+                    annotation_file=filepath + '.data'
+                    print('Storing annotation in ', annotation_file)
+                    f = open(annotation_file, 'w')
+                    json.dump(generated_annotation, f)
+                    f.close()
+                    print('test: are we storing annotations?')
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(annotation_file)
+                    print(segments)
             
         #savecsvs
         print('\n Saving cvs files with results')

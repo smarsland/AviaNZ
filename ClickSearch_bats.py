@@ -16,6 +16,8 @@ import os
 import math
 import numpy as np
 import json
+import Segment
+
 
 
 
@@ -57,9 +59,9 @@ def ClickSearch(imspec, label):
     # up_len=math.ceil((0.5/11)/dt)
 
     # Frequency band
-    f0=24000
+    f0=24000 #21000
     index_f0=-1+math.floor(f0/df)  # lower bound needs to be rounded down
-    f1=54000
+    f1=54000 #54000
     index_f1=-1+math.ceil(f1/df)  # upper bound needs to be rounded up
 
     # Mean in the frequency band
@@ -121,6 +123,7 @@ Work flow:
 
 root_path='C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\BattyBats'
 
+
 #list of directory
 dirs=os.listdir(root_path)
 
@@ -162,4 +165,52 @@ for dirname in dirs:
             f = open(filepath + '.data', 'w')
             json.dump(detected_clicks, f)
             f.close()
-        
+
+
+#root_path="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Train_Datasets\\New"
+##label="Don't Know"
+#sp=SignalProc.SignalProc(1024,512)
+#for root, dirs, files in os.walk(root_path):
+
+#    for file in files:
+#        if not file.endswith('.bmp'):
+#            print(file, 'is not a .bmp file')
+#            continue
+#        #count=0 #counts number of clicks detected
+#        print('Analizing file ', file)
+#        filepath=root+'\\'+file
+
+#        #read GT annotation
+
+#        GT_path=root+'\\GT'
+#        GT_annotations=os.listdir(GT_path)
+
+#        if file+'.data' in GT_annotations:
+#            GT_annotation_file=GT_path+'\\'+file+'.data'
+#            print('Annotation file found')
+#            GT_segments = Segment.SegmentList()
+#            GT_segments.parseJSON(GT_annotation_file)
+#            print('GT annotations ', GT_segments)
+#        else:
+#            print('Annotation file not found')
+#            GT_segments=[] 
+
+#        if len(GT_segments)==0:
+#            label="Don't know"
+#        else:
+#            label=GT_segments[0][4][0]["species"]
+            
+
+#        #read image
+#        sp.readBmp(filepath, rotate=False)
+#        print('Spectrogram dimensions:', np.shape(sp.sg))
+
+#        #CLickSearch
+#        detected_clicks, count=ClickSearch(sp.sg,label)
+#        print(count, '  clicks detected')
+
+#        #save segments
+#        #save segments in datafile
+#        f = open(filepath + '.data', 'w')
+#        json.dump(detected_clicks, f)
+#        f.close()
