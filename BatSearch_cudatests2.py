@@ -588,7 +588,7 @@ def metrics(confusion_matrix, file_num):
 
 train_dir = "/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Train_Datasets" #directory with train files
 test_dataset_dir="/media/smb-vuwstocoissrin1.vuw.ac.nz-ECS_acoustic_02/Battybats/Test_dataset" #directory where to find test dataset files
-test_count=7 #counter for test number
+test_count=8 #counter for test number
 #test_dir = "C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Results\\20201016_tests"
 
 test_general_results_dir = "/am/state-opera/home1/listanvirg/Documents/Experiments_result" #directory to store test result
@@ -616,8 +616,8 @@ file_number_train=len(file_list_train)
 
 #Create train dataset for CNN from the results of clicksearch   
 
-for i in range(2):
-    if test_count==7:
+for i in range(1,2):
+    if test_count==8:
         i=1
     #setting freq. bands
     if i==0:
@@ -629,8 +629,8 @@ for i in range(2):
 
     for j in range(4):
 
-        if test_count==7:
-            j=2
+        if test_count==8:
+            j=3
         #inizializations of counters
         train_featuress =[]
         
@@ -893,6 +893,18 @@ for i in range(2):
                     if dir[0]==str(2):
                         if test_fold not in os.listdir(dir_path_local+'/'+dir):
                             os.mkdir(dir_path_local+'/'+dir+'/'+test_fold)
+                        #removing .png file
+                        for filelist in os.listdir(dir_path_local+'/'+dir+'/'+test_fold):
+                            if filelist.endswith('png'):
+                                erase_path=dir_path_local+'/'+dir+'/'+test_fold+ '/'+filelist
+                                print('Removing previously stored .png file ', erase_path)
+                                os.remove(erase_path)
+
+                            elif filelist.endswith('data'):
+                                erase_path=dir_path_local+'/'+dir+'/'+test_fold+ '/'+filelist
+                                print('Removing previously stored data file ', erase_path)
+                                os.remove(erase_path)
+                        
                 for file in files:
 
                     if file.endswith('.bmp'):
@@ -903,6 +915,7 @@ for i in range(2):
                         print('Analising file ', file, ' in dir ', bat_dir)
                         filepath=bat_dir+'/'+file
                         bat_dir_local_storage=dir_path_local+'/'+bat_dir[-8:]+'/'+test_fold #local folder where to store generated annotations and png
+                        
                         annotation_path=bat_dir_local_storage+'/'+file+'.data'
                         #read file
                         try:
