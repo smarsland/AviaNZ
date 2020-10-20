@@ -1,4 +1,3 @@
-
 # Version 3.0 14/09/20
 # Authors: Stephen Marsland, Nirosha Priyadarshani, Julius Juodakis, Virginia Listanti
 
@@ -22,7 +21,7 @@
 
 from PyQt5.QtGui import QIcon, QPixmap, QColor
 from PyQt5.QtWidgets import QMessageBox, QMainWindow, QLabel, QPlainTextEdit, QPushButton, QRadioButton, QTimeEdit, QSpinBox, QDesktopWidget, QApplication, QComboBox, QLineEdit, QSlider, QListWidgetItem, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QVBoxLayout, QFrame, QProgressDialog
-from PyQt5.QtCore import Qt, QDir
+from PyQt5.QtCore import Qt, QDir, QSize
 
 import fnmatch, gc, sys, os, json, re
 
@@ -232,8 +231,9 @@ class AviaNZ_batchWindow(QMainWindow):
         helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
         aboutMenu = self.menuBar().addMenu("&About")
         aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
-        aboutMenu = self.menuBar().addMenu("&Quit")
-        aboutMenu.addAction("Quit", self.quitPro,"Ctrl+Q")
+        quitMenu = self.menuBar().addMenu("&Quit")
+        quitMenu.addAction("Restart program", self.restart)
+        quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
 
     def showAbout(self):
         """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
@@ -246,10 +246,9 @@ class AviaNZ_batchWindow(QMainWindow):
         webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
         # webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
 
-    def quitPro(self):
-        """ quit program
-        """
-        QApplication.quit()
+    def restart(self):
+        print("Restarting")
+        QApplication.exit(1)
 
     def detect(self):
         if not self.dirName:
@@ -535,17 +534,20 @@ class AviaNZ_reviewAll(QMainWindow):
         self.setWindowIcon(QIcon('img/Avianz.ico'))
 
         # Make the docks
-        self.d_detection = Dock("Review",size=(600, 700))
-        # self.d_detection.hideTitleBar()
+        self.d_detection = Dock("Review",size=(600, 250), autoOrientation=False)
         self.d_files = Dock("File list", size=(300, 700))
+        self.d_excel = Dock("Excel", size=(600, 150))
+        self.d_settings = Dock("Advanced settings", size=(600, 300))
+        self.d_excel.hideTitleBar()
+        self.d_settings.hideTitleBar()
 
-        self.area.addDock(self.d_detection, 'right')
         self.area.addDock(self.d_files, 'left')
+        self.area.addDock(self.d_detection, 'right')
+        self.area.addDock(self.d_excel, 'bottom', self.d_detection)
+        self.area.addDock(self.d_settings, 'bottom', self.d_excel)
 
         self.w_revLabel = QLabel("Reviewer")
         self.w_reviewer = QLineEdit()
-        self.d_detection.addWidget(self.w_revLabel, row=0, col=0)
-        self.d_detection.addWidget(self.w_reviewer, row=0, col=1, colspan=2)
         self.w_browse = QPushButton("  &Browse Folder")
         self.w_browse.setToolTip("Can select a folder with sub folders to process")
         self.w_browse.setFixedHeight(50)
@@ -556,18 +558,87 @@ class AviaNZ_reviewAll(QMainWindow):
         self.w_dir.setPlainText('')
         self.w_dir.setToolTip("The folder being processed")
 
-        self.w_speLabel1 = QLabel("Quick review a single species:")
-        allsplabel = QLabel("Or review all species/calltypes:")
+        self.w_processButton = QPushButton(" Review One-By-One")
+        self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 3px 3px 3px 8px}')
+        self.w_processButton.setFixedHeight(45)
+        self.w_processButton.setFixedHeight(45)
+        self.w_processButton.setIcon(QIcon(QPixmap('img/review.png')))
+        self.w_processButton.clicked.connect(self.reviewClickedAll)
+        self.w_processButton.setEnabled(False)
+        self.w_processButton1 = QPushButton(" Review Quick")
+        self.w_processButton1.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 3px 3px 3px 8px}')
+        self.w_processButton1.setFixedHeight(45)
+        self.w_processButton1.setFixedHeight(45)
+        self.w_processButton1.setIcon(QIcon(QPixmap('img/tile1.png')))
+        self.w_processButton1.clicked.connect(self.reviewClickedSingle)
+        self.w_processButton1.setEnabled(False)
+
+        self.w_speLabel1 = QLabel("Choose a species (or review all):")
         self.w_spe1 = QComboBox()
+        self.w_spe1.currentIndexChanged.connect(self.speChanged)
         self.spList = []
+        self.w_spe1.addItem('All species')
         self.w_spe1.addItems(self.spList)
         self.w_spe1.setEnabled(False)
 
-        minCertLab = QLabel("Skip if certainty above:")
+        #minCertLab = QLabel("Skip if certainty above:\n")
+        minCertLab = QLabel("Skip if certainty above:\nTo see all annotation set to 100")
+        #minCertExp = QLabel("To see all annotation set to 100")
         self.certBox = QSpinBox()
         self.certBox.setRange(0,100)
         self.certBox.setSingleStep(10)
         self.certBox.setValue(90)
+
+        # add controls to dock
+        self.d_detection.addWidget(self.w_revLabel, row=0, col=0)
+        self.d_detection.addWidget(self.w_reviewer, row=0, col=1, colspan=2)
+        self.d_detection.addWidget(self.w_dir, row=1,col=1,colspan=2)
+        self.d_detection.addWidget(self.w_browse, row=1,col=0)
+        self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
+        self.d_detection.addWidget(self.w_spe1,row=2,col=1)
+        self.d_detection.addWidget(self.w_processButton1, row=2, col=2)
+        #self.d_detection.addWidget(allsplabel, row=3, col=0, colspan=2)
+        self.d_detection.addWidget(self.w_processButton, row=3, col=2)
+        self.d_detection.addWidget(minCertLab, row=3, col=0)
+        self.d_detection.addWidget(self.certBox, row=3, col=1)
+        #self.d_detection.addWidget(minCertExp, row=4, col=0)
+
+        # Excel export section
+        linesep2 = QFrame()
+        linesep2.setFrameShape(QFrame.HLine)
+        linesep2.setFrameShadow(QFrame.Sunken)
+        #self.d_detection.addWidget(linesep2, row=5, col=0, colspan=3)
+        self.w_resLabel = QLabel("Size (s) of presence/absence\nwindows in the output")
+        self.w_res = QSpinBox()
+        self.w_res.setRange(1,600)
+        self.w_res.setSingleStep(5)
+        self.w_res.setValue(60)
+        timePrecisionLabel = QLabel("Output timestamp precision")
+        self.timePrecisionBox = QComboBox()
+        self.timePrecisionBox.addItems(["Down to seconds", "Down to milliseconds"])
+        self.d_excel.addWidget(self.w_resLabel, row=6, col=0)
+        self.d_excel.addWidget(self.w_res, row=6, col=1)
+        self.d_excel.addWidget(timePrecisionLabel, row=7, col=0)
+        self.d_excel.addWidget(self.timePrecisionBox, row=7, col=1)
+
+        self.w_excelButton = QPushButton(" Generate Excel  ")
+        self.w_excelButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
+        self.w_excelButton.setFixedHeight(45)
+        self.w_excelButton.setIcon(QIcon(QPixmap('img/excel.png')))
+        self.w_excelButton.clicked.connect(self.exportExcel)
+        self.w_excelButton.setEnabled(False)
+        self.d_excel.addWidget(self.w_excelButton, row=6, col=2)
+
+        self.toggleSettingsBtn = QPushButton(" Advanced settings ")
+        self.toggleSettingsBtn.setStyleSheet('QPushButton {font-weight: bold; font-size:12px; padding: 2px 2px 2px 4px}')
+        self.toggleSettingsBtn.setFixedHeight(32)
+        self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsmore.png')))
+        self.toggleSettingsBtn.setIconSize(QSize(25, 17))
+        self.toggleSettingsBtn.clicked.connect(self.toggleSettings)
+
+        # linesep = QFrame()
+        # linesep.setFrameShape(QFrame.HLine)
+        # linesep.setFrameShadow(QFrame.Sunken)
 
         # sliders to select min/max frequencies for ALL SPECIES only
         self.fLow = QSlider(Qt.Horizontal)
@@ -575,7 +646,8 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fLow.setTickInterval(500)
         self.fLow.setRange(0, 5000)
         self.fLow.setSingleStep(100)
-        self.fLowtext = QLabel('Show freq. above (Hz)')
+        self.fLowcheck = QCheckBox()
+        self.fLowtext = QLabel('Show only freq. above (Hz)')
         self.fLowvalue = QLabel('0')
         self.fLow.valueChanged.connect(self.fLowChanged)
         self.fHigh = QSlider(Qt.Horizontal)
@@ -583,10 +655,17 @@ class AviaNZ_reviewAll(QMainWindow):
         self.fHigh.setTickInterval(1000)
         self.fHigh.setRange(4000, 32000)
         self.fHigh.setSingleStep(250)
-        self.fHigh.setValue(8000)
-        self.fHightext = QLabel('Show freq. below (Hz)')
-        self.fHighvalue = QLabel('8000')
+        self.fHigh.setValue(32000)
+        self.fHighcheck = QCheckBox()
+        self.fHightext = QLabel('Show only freq. below (Hz)')
+        self.fHighvalue = QLabel('32000')
         self.fHigh.valueChanged.connect(self.fHighChanged)
+
+        # disable freq sliders until they are toggled on:
+        self.fLowcheck.stateChanged.connect(self.toggleFreqLow)
+        self.fHighcheck.stateChanged.connect(self.toggleFreqHigh)
+        for widg in [self.fLow, self.fLowtext, self.fLowvalue, self.fHigh, self.fHightext, self.fHighvalue]:
+            widg.setEnabled(False)
 
         # FFT parameters
         self.winwidthBox = QSpinBox()
@@ -606,77 +685,24 @@ class AviaNZ_reviewAll(QMainWindow):
         self.chunksizeBox.setValue(10)
         self.chunksizeBox.setEnabled(False)
 
-        # add controls to dock
-        self.d_detection.addWidget(self.w_dir, row=1,col=1,colspan=2)
-        self.d_detection.addWidget(self.w_browse, row=1,col=0)
 
-        linesep = QFrame()
-        linesep.setFrameShape(QFrame.HLine)
-        linesep.setFrameShadow(QFrame.Sunken)
-        settingsLabel = QLabel("Advanced settings")
-        settingsLabel.setStyleSheet("QLabel {color: #505050; font-weight: 75}")
-        settingsLabel.setAlignment(Qt.AlignCenter)
+        self.d_settings.addWidget(self.toggleSettingsBtn, row=0, col=2, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.fLowcheck, row=1, col=0)
+        self.d_settings.addWidget(self.fLowtext, row=1, col=1)
+        self.d_settings.addWidget(self.fLow, row=1, col=2, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.fLowvalue, row=1, col=4)
+        self.d_settings.addWidget(self.fHighcheck, row=2, col=0)
+        self.d_settings.addWidget(self.fHightext, row=2, col=1)
+        self.d_settings.addWidget(self.fHigh, row=2, col=2, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.fHighvalue, row=2, col=4)
+        self.d_settings.addWidget(QLabel("FFT window size"), row=3, col=1)
+        self.d_settings.addWidget(self.winwidthBox, row=3, col=2)
+        self.d_settings.addWidget(QLabel("FFT hop size"), row=3, col=3)
+        self.d_settings.addWidget(self.incrBox, row=3, col=4)
 
-        self.d_detection.addWidget(linesep, row=4, col=0, colspan=3)
-        self.d_detection.addWidget(settingsLabel, row=5, col=0, colspan=3)
-        self.d_detection.addWidget(minCertLab, row=6, col=0)
-        self.d_detection.addWidget(self.certBox, row=6, col=1)
-        self.d_detection.addWidget(self.fLowtext, row=7, col=0)
-        self.d_detection.addWidget(self.fLow, row=7, col=1)
-        self.d_detection.addWidget(self.fLowvalue, row=7, col=2)
-        self.d_detection.addWidget(self.fHightext, row=8, col=0)
-        self.d_detection.addWidget(self.fHigh, row=8, col=1)
-        self.d_detection.addWidget(self.fHighvalue, row=8, col=2)
-        self.d_detection.addWidget(QLabel("FFT window size"), row=9, col=0)
-        self.d_detection.addWidget(self.winwidthBox, row=9, col=1)
-        self.d_detection.addWidget(QLabel("FFT hop size"), row=10, col=0)
-        self.d_detection.addWidget(self.incrBox, row=10, col=1)
-
-        self.d_detection.addWidget(self.chunksizeAuto, row=11, col=0)
-        self.d_detection.addWidget(self.chunksizeManual, row=11, col=1)
-        self.d_detection.addWidget(self.chunksizeBox, row=11, col=2)
-
-        self.w_processButton = QPushButton(" Review All")
-        self.w_processButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
-        self.w_processButton.setFixedHeight(45)
-        self.w_processButton.setFixedHeight(45)
-        self.w_processButton.setIcon(QIcon(QPixmap('img/review.png')))
-        self.w_processButton.clicked.connect(self.reviewClickedAll)
-        self.w_processButton.setEnabled(False)
-        self.w_processButton1 = QPushButton(" Review Quick")
-        self.w_processButton1.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
-        self.w_processButton1.setFixedHeight(45)
-        self.w_processButton1.setFixedHeight(45)
-        self.w_processButton1.setIcon(QIcon(QPixmap('img/tile1.png')))
-        self.w_processButton1.clicked.connect(self.reviewClickedSingle)
-        self.w_processButton1.setEnabled(False)
-
-        self.d_detection.addWidget(self.w_speLabel1,row=2,col=0)
-        self.d_detection.addWidget(self.w_spe1,row=2,col=1)
-        self.d_detection.addWidget(self.w_processButton1, row=2, col=2)
-        self.d_detection.addWidget(allsplabel, row=3, col=0, colspan=2)
-        self.d_detection.addWidget(self.w_processButton, row=3, col=2)
-
-        # Excel export section
-        linesep2 = QFrame()
-        linesep2.setFrameShape(QFrame.HLine)
-        linesep2.setFrameShadow(QFrame.Sunken)
-        self.d_detection.addWidget(linesep2, row=12, col=0, colspan=3)
-        self.w_resLabel = QLabel("Size (s) of presence/absence\nwindows in the output")
-        self.d_detection.addWidget(self.w_resLabel, row=13, col=0)
-        self.w_res = QSpinBox()
-        self.w_res.setRange(1,600)
-        self.w_res.setSingleStep(5)
-        self.w_res.setValue(60)
-        self.d_detection.addWidget(self.w_res, row=13, col=1)
-
-        self.w_excelButton = QPushButton(" Generate Excel  ")
-        self.w_excelButton.setStyleSheet('QPushButton {font-weight: bold; font-size:14px; padding: 2px 2px 2px 8px}')
-        self.w_excelButton.setFixedHeight(45)
-        self.w_excelButton.setIcon(QIcon(QPixmap('img/excel.png')))
-        self.w_excelButton.clicked.connect(self.exportExcel)
-        self.w_excelButton.setEnabled(False)
-        self.d_detection.addWidget(self.w_excelButton, row=13, col=2)
+        self.d_settings.addWidget(self.chunksizeAuto, row=5, col=0, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.chunksizeManual, row=6, col=0, colspan=2, rowspan=1)
+        self.d_settings.addWidget(self.chunksizeBox, row=6, col=2)
 
         self.w_browse.clicked.connect(self.browse)
         # print("spList after browse: ", self.spList)
@@ -696,13 +722,60 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.d_detection.layout.setContentsMargins(20, 20, 20, 20)
         self.d_detection.layout.setSpacing(20)
+        self.d_excel.layout.setContentsMargins(20, 20, 20, 20)
+        self.d_excel.layout.setSpacing(20)
+        self.d_settings.layout.setContentsMargins(20, 20, 20, 20)
+        self.d_settings.layout.setSpacing(20)
         self.d_files.layout.setContentsMargins(10, 10, 10, 10)
         self.d_files.layout.setSpacing(10)
+        for item in self.d_settings.widgets:
+            if item!=self.toggleSettingsBtn:
+                item.hide()
+        self.d_settings.layout.setColumnMinimumWidth(1, 80)
+        self.d_settings.layout.setColumnMinimumWidth(4, 80)
+        self.d_settings.layout.setColumnStretch(2, 5)
         self.show()
+
+    def toggleSettings(self):
+        if self.d_settings.widgets[1].isVisible():
+            # self.d_settings.setVisible(False)
+            for item in self.d_settings.widgets:
+                if item!=self.toggleSettingsBtn:
+                    item.hide()
+            self.toggleSettingsBtn.setText(" Advanced settings ")
+            self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsmore.png')))
+        else:
+            for item in self.d_settings.widgets:
+                if item!=self.toggleSettingsBtn:
+                    item.show()
+            # self.d_settings.setVisible(True)
+            self.toggleSettingsBtn.setText(" Hide settings ")
+            self.toggleSettingsBtn.setIcon(QIcon(QPixmap('img/settingsless.png')))
+        self.repaint()
+        QApplication.processEvents()
+
+    def toggleFreqHigh(self,state):
+        # state=0 for unchecked, state=2 for checked
+        for widg in [self.fHigh, self.fHightext, self.fHighvalue]:
+            widg.setEnabled(state==2)
+        if state==0:
+            self.fHigh.setValue(self.fHigh.maximum())
+
+    def toggleFreqLow(self, state):
+        for widg in [self.fLow, self.fLowtext, self.fLowvalue]:
+            widg.setEnabled(state==2)
+        if state==0:
+            self.fLow.setValue(self.fLow.minimum())
 
     def fHighChanged(self, value):
         self.fHighvalue.setText(str(int(value)))
         self.validateInputs()
+
+    def speChanged(self, value):
+        if self.w_spe1.currentText() == "All species":
+            self.w_processButton1.setEnabled(False)
+        else:
+            self.w_processButton1.setEnabled(True)
 
     def fLowChanged(self, value):
         self.fLowvalue.setText(str(int(value)))
@@ -726,7 +799,10 @@ class AviaNZ_reviewAll(QMainWindow):
             self.statusBar().showMessage("Ready to review")
 
         self.w_processButton.setEnabled(ready)
-        self.w_processButton1.setEnabled(ready)
+        if self.w_spe1.currentText() == "All species":
+            self.w_processButton1.setEnabled(False)
+        else:
+            self.w_processButton1.setEnabled(True)
 
     def createMenu(self):
         """ Create the basic menu.
@@ -735,8 +811,13 @@ class AviaNZ_reviewAll(QMainWindow):
         helpMenu.addAction("Help", self.showHelp,"Ctrl+H")
         aboutMenu = self.menuBar().addMenu("&About")
         aboutMenu.addAction("About", self.showAbout,"Ctrl+A")
-        aboutMenu = self.menuBar().addMenu("&Quit")
-        aboutMenu.addAction("Quit", self.quitPro,"Ctrl+Q")
+        quitMenu = self.menuBar().addMenu("&Quit")
+        quitMenu.addAction("Restart program", self.restart)
+        quitMenu.addAction("Quit", QApplication.quit, "Ctrl+Q")
+
+    def restart(self):
+        print("Restarting")
+        QApplication.exit(1)
 
     def showAbout(self):
         """ Create the About Message Box. Text is set in SupportClasses_GUI.MessagePopup"""
@@ -748,11 +829,6 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Show the user manual (a pdf file)"""
         webbrowser.open_new(r'file://' + os.path.realpath('./Docs/AviaNZManual.pdf'))
         # webbrowser.open_new(r'http://avianz.net/docs/AviaNZManual.pdf')
-
-    def quitPro(self):
-        """ quit program
-        """
-        QApplication.quit()
 
     def center(self):
         # geometry of the main window
@@ -810,12 +886,20 @@ class AviaNZ_reviewAll(QMainWindow):
             pass
         # self.spList.insert(0, 'Any sound')
         self.w_spe1.clear()
+        self.w_spe1.addItem('All species')
         self.w_spe1.addItems(self.spList)
 
         # Also detect samplerates on dir change
         minfs = min(self.listFiles.fsList)
         self.fHigh.setRange(minfs//32, minfs//2)
         self.fLow.setRange(0, minfs//2)
+        # if the user hasn't selected custom bandpass, reset it to min-max:
+        # (if the user did select one or more of them, setRange will auto-trim
+        # it to the allowed range, but not change it otherwise)
+        if not self.fHighcheck.isChecked():
+            self.fHigh.setValue(self.fHigh.maximum())
+        if not self.fLowcheck.isChecked():
+            self.fLow.setValue(self.fLow.minimum())
 
     def listLoadFile(self,current):
         """ Listener for when the user clicks on an item in filelist """
@@ -846,14 +930,18 @@ class AviaNZ_reviewAll(QMainWindow):
         return(0)
 
     def reviewClickedAll(self):
-        self.species = "Any sound"
-        self.review()
+        self.species = self.w_spe1.currentText()
+        self.review(True)
 
     def reviewClickedSingle(self):
         self.species = self.w_spe1.currentText()
-        self.review()
+        if self.species == "All species":
+            msg = SupportClasses_GUI.MessagePopup("w", "Single species needed", "Can only review a single species with this option")
+            msg.exec_()
+        else: 
+            self.review(False)
 
-    def review(self):
+    def review(self,reviewAll):
         self.reviewer = self.w_reviewer.text()
         print("Reviewer: ", self.reviewer)
         if self.reviewer == '':
@@ -948,7 +1036,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
             # skip review dialog if there's no segments passing relevant criteria
             # (self.segments will have all species even if only one is being reviewed)
-            if len(self.segments)==0 or self.species!='Any sound' and len(self.segments.getSpecies(self.species))==0:
+            if len(self.segments)==0 or self.species!='All species' and len(self.segments.getSpecies(self.species))==0:
                 print("No segments found in file %s" % filename)
                 filesuccess = 1
                 continue
@@ -956,7 +1044,7 @@ class AviaNZ_reviewAll(QMainWindow):
             # file has >=1 segments to review,
             # so call the right dialog:
             # (they will update self.segments and store corrections)
-            if self.species == 'Any sound':
+            if reviewAll:
                 _ = self.segments.orderTime()
                 filesuccess = self.review_all(filename, sTime)
             else:
@@ -1001,13 +1089,16 @@ class AviaNZ_reviewAll(QMainWindow):
         # END of review and exporting. Final cleanup
         self.ConfigLoader.configwrite(self.config, self.configfile)
         if filesuccess == 1:
-            msgtext = "All files checked. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
+            msgtext = "All files checked. If you expected to see more calls, is the certainty setting too low?\n Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?"
             msg = SupportClasses_GUI.MessagePopup("d", "Finished", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
             reply = msg.exec_()
             if reply == QMessageBox.Yes:
                 QApplication.exit(1)
         else:
+            if self.config['saveCorrections']:
+                self.saveCorrections()
+            self.finishDeleting()
             msgtext = "Review stopped at file %s of %s. Remember to press the 'Generate Excel' button if you want the Excel-format output.\nWould you like to return to the start screen?" % (cnt, total)
             msg = SupportClasses_GUI.MessagePopup("w", "Review stopped", msgtext)
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
@@ -1079,7 +1170,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
             # Export the actual Excel
             excel = SupportClasses.ExcelIO()
-            excsuccess = excel.export(allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList))
+            excsuccess = excel.export(allsegs, self.dirName, "overwrite", resolution=self.w_res.value(), speciesList=list(spList), precisionMS=self.timePrecisionBox.currentIndex()==1)
 
         if excsuccess!=1:
             # if any file wasn't exported well, overwrite the message
@@ -1111,7 +1202,7 @@ class AviaNZ_reviewAll(QMainWindow):
 
         _ = self.segments.orderTime()
 
-        self.loadFile(filename, self.species, chunksize)
+        self.loadFile(filename, species=self.species, chunksize=chunksize)
 
         if self.batmode:
             guides = [20000, 36000, 50000, 60000]
@@ -1193,8 +1284,9 @@ class AviaNZ_reviewAll(QMainWindow):
                 return
 
         if mode == 1:
-            if outputErrors[0] not in annots:
-                annots.append(outputErrors[0])
+            annots.extend(outputErrors)
+            #if outputErrors[0] not in annots:
+                #annots.append(outputErrors[0])
         elif mode == 2:
             for seg in outputErrors:
                 if seg not in annots:
@@ -1267,6 +1359,8 @@ class AviaNZ_reviewAll(QMainWindow):
         """
         # For equivalence with review_single
         _ = self.segments.orderTime()
+        if self.config['saveCorrections']:
+            self.origSeg = copy.deepcopy(self.segments)
 
         # Load the birdlists:
         # short list is necessary, long list can be None
@@ -1289,22 +1383,26 @@ class AviaNZ_reviewAll(QMainWindow):
 
         self.batList = self.ConfigLoader.batl(self.config['BatList'], self.configdir)
 
-        self.loadFile(filename)
+        if self.species=="All species":
+            self.loadFile(filename)
+        else:
+            self.loadFile(filename, species=self.species)
+
+        if not hasattr(self, 'dialogPlotAspect'):
+            self.dialogPlotAspect = 2
         # HumanClassify1 reads audioFormat from parent.sp.audioFormat, so need this:
-        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[0].audioFormat, self)
+        self.humanClassifyDialog1 = Dialogs.HumanClassify1(self.lut,self.colourStart,self.colourEnd,self.config['invertColourMap'], self.config['brightness'], self.config['contrast'], self.shortBirdList, self.longBirdList, self.batList, self.config['MultipleSpecies'], self.sps[self.indices2show[0]].audioFormat, self.dialogPlotAspect, self)
         self.box1id = -1
         # if there was a previous dialog, try to recreate its settings
         if hasattr(self, 'dialogPos'):
             self.humanClassifyDialog1.resize(self.dialogSize)
             self.humanClassifyDialog1.move(self.dialogPos)
-        if hasattr(self, 'dialogPlotAspect'):
-            self.humanClassifyDialog1.plotAspect = self.dialogPlotAspect
-            self.humanClassifyDialog1.pPlot.setAspectLocked(ratio=self.dialogPlotAspect)
         self.humanClassifyDialog1.setWindowTitle("AviaNZ - reviewing " + self.filename)
         self.humanClassifyNextImage1()
         # connect listeners
         self.humanClassifyDialog1.correct.clicked.connect(self.humanClassifyCorrect1)
-        self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
+        self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1New)
+        #self.humanClassifyDialog1.delete.clicked.connect(self.humanClassifyDelete1)
         self.humanClassifyDialog1.buttonPrev.clicked.connect(self.humanClassifyPrevImage)
         self.humanClassifyDialog1.buttonNext.clicked.connect(self.humanClassifyQuestion)
         success = self.humanClassifyDialog1.exec_()     # 1 on clean exit
@@ -1313,6 +1411,9 @@ class AviaNZ_reviewAll(QMainWindow):
             self.humanClassifyDialog1.stopPlayback()
             return(0)
 
+        if self.config['saveCorrections']:
+            self.saveCorrections()
+        self.finishDeleting()
         return(1)
 
     def loadFile(self, filename, species=None, chunksize=None):
@@ -1355,11 +1456,14 @@ class AviaNZ_reviewAll(QMainWindow):
                 print("Filtering samples to %d - %d Hz" % (minFreq, maxFreq))
 
                 # For single sp, no need to load all segments, but don't want to edit self.segments
-                if species is not None:
+                if self.species is not None and self.species != "All species":
                     self.indices2show = self.segments.getSpecies(species)
-                    halfChunk = 1.1/2 * chunksize
                 else:
                     self.indices2show = range(len(self.segments))
+
+                print(self.indices2show)
+                if chunksize is not None:
+                    halfChunk = 1.1/2 * chunksize
 
                 # Load data into a list of SignalProcs (with spectrograms) for each segment
                 for segix in range(len(self.segments)):
@@ -1368,7 +1472,7 @@ class AviaNZ_reviewAll(QMainWindow):
                         # note that sp also stores the range of shown freqs
                         sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'], minFreq, maxFreq)
 
-                        if species is not None:
+                        if chunksize is not None:
                             mid = (seg[0]+seg[1])/2
                             # buffered limits in audiodata (sec) = display limits
                             x1 = max(0, mid-halfChunk)
@@ -1401,7 +1505,7 @@ class AviaNZ_reviewAll(QMainWindow):
                             sp.data = sp.ButterworthBandpass(sp.data, sp.sampleRate, minFreq, maxFreq)
 
                             # Generate the spectrogram
-                            _ = sp.spectrogram(window='Hann', mean_normalise=True, onesided=True,multitaper=False, need_even=False)
+                            _ = sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True,need_even=False)
 
                             # collect min and max values for final colour scale
                             minsg = min(np.min(sp.sg), minsg)
@@ -1436,22 +1540,56 @@ class AviaNZ_reviewAll(QMainWindow):
             self.colourStart = (self.config['brightness'] / 100.0 * self.config['contrast'] / 100.0) * (maxsg - minsg) + minsg
             self.colourEnd = (maxsg - minsg) * (1.0 - self.config['contrast'] / 100.0) + self.colourStart
 
+            self.nsegments = len(self.indices2show)
+            self.segsAccepted = 0
+            self.segsDeleted = 0
+            self.returned = False
+
         # END of file loading
+
+    def saveCorrections(self):
+        print("here")
+        for i in reversed(range(len(self.segments))):
+            print(self.segments[i][4],self.origSeg[i][4])
+            if self.segments[i][4] == self.origSeg[i][4]:
+                print("Segment matches")
+                del self.origSeg[i]
+            else:
+                oldlabel = self.origSeg[i][4] 
+                newlabel = self.segments[i][4] 
+                if "-To Be Deleted-" in [lab["species"] for lab in newlabel]:
+                    self.origSeg[i] = [self.origSeg[i], []]
+                else:
+                    if [lab["species"] for lab in oldlabel] != [lab["species"] for lab in newlabel] or [lab["calltype"] for lab in oldlabel] != [lab["calltype"] for lab in newlabel]:
+                        self.origSeg[i] = [self.origSeg[i], newlabel]
+
+        if len(self.origSeg)>0:
+            cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), self.origSeg, mode=1, reviewer=self.reviewer)
+            if cleanexit != 1:
+                print("Warning: could not save correction file!")
 
     def humanClassifyNextImage1(self):
         # Get the next image
-        if self.box1id < len(self.segments)-1:
+        if self.box1id < len(self.indices2show)-1:
             self.box1id += 1
-            # update "done/to go" numbers:
-            self.humanClassifyDialog1.setSegNumbers(self.box1id, len(self.segments))
             # Check if have moved to next segment, and if so load it
-            # If there was a section without segments this would be a bit inefficient, actually no, it was wrong!
 
             # Show the next segment
-            seg = self.segments[self.box1id]
+            seg = self.segments[self.indices2show[self.box1id]]
+            lab = seg[4]
+
+            # update "done/to go" numbers:
+            if self.returned:
+                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
+                    self.segsDeleted -= 1
+                else:
+                    self.segsAccepted -= 1
+
+            # print(self.segsAccepted,self.segsDeleted,self.nsegments)
+            self.humanClassifyDialog1.setSegNumbers(self.segsAccepted, self.segsDeleted, self.nsegments)
 
             # select the SignalProc with relevant data
-            sp = self.sps[self.box1id]
+            sp = self.sps[self.indices2show[self.box1id]]
 
             # these pass the axis limits set by slider
             minFreq = max(self.fLow.value(), 0)
@@ -1478,6 +1616,7 @@ class AviaNZ_reviewAll(QMainWindow):
             self.config['contrast'] = self.humanClassifyDialog1.contrastSlider.value()
             if not self.config['invertColourMap']:
                 self.config['brightness'] = 100-self.config['brightness']
+
             self.humanClassifyDialog1.done(1)
 
     def humanClassifyPrevImage(self):
@@ -1485,6 +1624,7 @@ class AviaNZ_reviewAll(QMainWindow):
         Note: won't undo deleted segments."""
         if self.box1id>0:
             self.box1id -= 2
+            self.returned=True
             self.humanClassifyNextImage1()
 
     def humanClassifyQuestion(self):
@@ -1492,7 +1632,7 @@ class AviaNZ_reviewAll(QMainWindow):
             (so any changes made to it will be discarded, and cert kept) """
         self.humanClassifyDialog1.stopPlayback()
         self.segmentsToSave = True
-        currSeg = self.segments[self.box1id]
+        currSeg = self.segments[self.indices2show[self.box1id]]
 
         label, self.saveConfig, checkText, calltype = self.humanClassifyDialog1.getValues()
 
@@ -1508,7 +1648,8 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
 
         # update the actual segment.
-        print("working on ", self.box1id, currSeg)
+        #print("working on ", self.box1id, currSeg)
+        deleting=False
         if label != [lab["species"] for lab in currSeg[4]]:
             # if any species names were changed,
             # Then, just recreate the label with certainty 50 for all currently selected species:
@@ -1517,35 +1658,44 @@ class AviaNZ_reviewAll(QMainWindow):
             for species in label:
                 if species == "Don't Know":
                     newlabel.append({"species": "Don't Know", "certainty": 0})
+                elif species == "-To Be Deleted-":
+                    newlabel.append({"species": "-To Be Deleted-", "certainty": 50})
+                    deleting = True
                 else:
                     newlabel.append({"species": species, "certainty": 50})
             # Note: currently only parsing the call type for the first species
             if calltype!="":
                 newlabel[0]["calltype"] = calltype
 
-            # save the correction file
-            if self.config['saveCorrections']:
-                outputError = [[currSeg, newlabel]]
-                cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
-                                                 reviewer=self.reviewer)
-                if cleanexit != 1:
-                    print("Warning: could not save correction file!")
-
-            self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
+            self.segments[self.indices2show[self.box1id]] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
+            #self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
         elif max([lab["certainty"] for lab in currSeg[4]])==100:
             # if there are any "green" labels, but all species remained the same,
             # need to drop certainty on those:
             currSeg.questionLabels()
+            if self.returned:
+                lab = currSeg[4]
+                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
+                    deleting=True
         else:
             # no sp or cert change needed
-            pass
+            if self.returned:
+                lab = currSeg[4]
+                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
+                    deleting=True
 
+        if deleting:
+            self.segsDeleted+=1
+        else:
+            self.segsAccepted+=1
         # incorporate selected call type:
         if calltype!="":
             # (this will also check if it changed, and store corrections if needed.
             # If the species changed, the calltype is already updated, so this will do nothing)
-            self.updateCallType(self.box1id, calltype)
+            self.updateCallType(self.indices2show[self.box1id], calltype)
+            #self.updateCallType(self.box1id, calltype)
 
+        self.returned = False
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
         self.humanClassifyNextImage1()
@@ -1554,7 +1704,7 @@ class AviaNZ_reviewAll(QMainWindow):
         """ Correct segment labels, save the old ones if necessary """
         self.humanClassifyDialog1.stopPlayback()
         self.segmentsToSave = True
-        currSeg = self.segments[self.box1id]
+        currSeg = self.segments[self.indices2show[self.box1id]]
 
         label, self.saveConfig, checkText, calltype = self.humanClassifyDialog1.getValues()
 
@@ -1570,66 +1720,96 @@ class AviaNZ_reviewAll(QMainWindow):
                 self.ConfigLoader.blwrite(self.longBirdList, self.config['BirdListLong'], self.configdir)
 
         # update the actual segment.
+        deleting = False
         if label != [lab["species"] for lab in currSeg[4]]:
             # Create new segment label, assigning certainty 100 for each species:
             newlabel = []
             for species in label:
                 if species == "Don't Know":
                     newlabel.append({"species": "Don't Know", "certainty": 0})
+                elif species == "-To Be Deleted-":
+                    newlabel.append({"species": "-To Be Deleted-", "certainty": 100})
+                    deleting=True
                 else:
                     newlabel.append({"species": species, "certainty": 100})
             # Note: currently only parsing the call type for the first species
             if calltype!="":
                 newlabel[0]["calltype"] = calltype
 
-            if self.config['saveCorrections']:
-                # Save the correction
-                outputError = [[currSeg, newlabel]]
-                cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1, reviewer=self.reviewer)
-                if cleanexit != 1:
-                    print("Warning: could not save correction file!")
-
-            self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
+            self.segments[self.indices2show[self.box1id]] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
+            #self.segments[self.box1id] = Segment.Segment([currSeg[0], currSeg[1], currSeg[2], currSeg[3], newlabel])
 
         elif 0 < min([lab["certainty"] for lab in currSeg[4]]) < 100:
             # If all species remained the same, just raise certainty to 100
             currSeg.confirmLabels()
+            if self.returned:
+                lab = currSeg[4]
+                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
+                    deleting=True
         else:
             # segment info matches, so don't do anything
-            pass
+            if self.returned:
+                lab = currSeg[4]
+                if len(lab)==1 and lab[0]["species"] == "-To Be Deleted-":
+                    deleting=True
 
+        if deleting:
+            self.segsDeleted+=1
+        else:
+            self.segsAccepted+=1
         # incorporate selected call type:
         if calltype!="":
             # (this will also check if it changed, and store corrections if needed.
             # If the species changed, the calltype is already updated, so this will do nothing)
-            self.updateCallType(self.box1id, calltype)
+            self.updateCallType(self.indices2show[self.box1id], calltype)
 
+        self.returned = False
         self.humanClassifyDialog1.tbox.setText('')
         self.humanClassifyDialog1.tbox.setEnabled(False)
         self.humanClassifyNextImage1()
 
-    def humanClassifyDelete1(self):
+    def humanClassifyDelete1New(self):
         # Delete a segment
-        # (no need to update counter then)
+        # Just mark for delete and then do the actual deletion when the file closes
         self.humanClassifyDialog1.stopPlayback()
 
-        # save the correction file
-        currSeg = self.segments[self.box1id]
-        if self.config['saveCorrections']:
-            outputError = [[currSeg, []]]
-            cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
-                                             reviewer=self.reviewer)
-            if cleanexit != 1:
-                print("Warning: could not save correction file!")
+        # New segment label -- To Be Deleted
+        newlabel = [{"species": "-To Be Deleted-", "certainty": 100}]
+        self.segments[self.indices2show[self.box1id]][4] = newlabel
+        self.segsDeleted+=1
 
-        id = self.box1id
-        del self.segments[id]
-        del self.sps[id]
+        #id = self.box1id
+        #del self.segments[id]
+        #del self.sps[id]
         # self.indicestoshow then becomes incorrect, but we don't use that in here anyway
 
-        self.box1id = id-1
+        #self.box1id = id-1
+        self.returned = False
         self.segmentsToSave = True
         self.humanClassifyNextImage1()
+
+    def finishDeleting(self):
+        # Does the work of deleting segments
+        segsToSave = False
+
+        # Loop over segments
+        for seg in reversed(self.segments):
+            todel = False
+            # Delete if any say to delete (correct? Or just remove if it is in a list with others?)
+            for lab in seg[4]:
+                if lab["species"] == "-To Be Deleted-":
+                    todel = True
+                    break
+
+            if todel:
+                print("Removing",seg)
+                self.segments.remove(seg)
+                segsToSave = True
+
+        if segsToSave:
+            cleanexit = self.segments.saveJSON(self.filename+'.data', self.reviewer)
+            if cleanexit != 1:
+                print("Warning: could not save segments!")
 
     def closeDialog(self, ev):
         # (actually a poorly named listener for the Esc key)
@@ -1661,15 +1841,6 @@ class AviaNZ_reviewAll(QMainWindow):
 
         print("Changing calltype to", calltype)
 
-        # save the correction file (unless it's already been saved when checking other changes)
-        if self.config['saveCorrections']:
-            newlabel = copy.deepcopy(oldlab)
-            newlabel[0]["calltype"] = calltype
-            outputError = [[self.segments[boxid], newlabel]]
-            cleanexit = self.saveCorrectJSON(str(self.filename + '.corrections'), outputError, mode=1,
-                                             reviewer=self.reviewer)
-            if cleanexit != 1:
-                print("Warning: could not save correction file!")
-
         # actually update the segment info
         self.segments[boxid][4][0]["calltype"] = calltype
+

@@ -260,6 +260,19 @@ class AviaNZ_batchProcess():
             if not self.CLI:
                 self.ui.endproc(total)
 
+        # At the end, if processing bats, export BatSearch xml automatically and check if want to export DOC database (in CLI mode, do it automatically, with missing data!)
+        if self.method=='Click':
+            self.exportToBatSearch(self.dirName)  
+            if not self.CLI:
+                import Dialogs
+                exportResults = Dialogs.ExportBats(self.config['operator'])
+                exportResults.show()
+                if exportResults.exec_() == 1:
+                    exportResults = exportResults.getValues()
+                    self.exportBatSurvey(self.dirName,exportResults)
+            else:
+                self.exportBatSurvey(self.dirName,None)
+
         print("Processed all %d files" % total)
         return(0)
 
@@ -421,7 +434,7 @@ class AviaNZ_batchProcess():
                     self.sp = SignalProc.SignalProc(self.config['window_width'], self.config['incr'])
                 self.sp.data = self.audiodata[start:end]
                 self.sp.sampleRate = self.sampleRate
-                _ = self.sp.spectrogram(window='Hann', mean_normalise=True, onesided=True, multitaper=False, need_even=False)
+                _ = self.sp.spectrogram(window='Hann', sgType='Standard',mean_normalise=True, onesided=True)
                 self.seg = Segment.Segmenter(self.sp, self.sampleRate)
                 # thisPageSegs = self.seg.bestSegments()
                 thisPageSegs = self.seg.medianClip(thr=3.5)
@@ -869,3 +882,196 @@ class AviaNZ_batchProcess():
 
         return label
 
+    def exportToBatSearch(self,dirName,savefile='BatData.xml',threshold1=0.85,threshold2=0.7):
+        # Write out a file that can be used for BatSearch import
+        # For now, looks like the xml file used there
+        # Assumes that dirName is a survey folder and the structure beneath is something like Rx/Bat/Date
+        # No error checking
+        operator = "AviaNZ 3.0"
+        site = "Nowhere"
+        # BatSeach codes
+        namedict = {"Unassigned":0,"Non-bat":1,"Unknown":2,"Long Tail":3,"Short Tail":4,"Possible LT":5,"Possible ST":6,"Both":7}
+        currroot = dirName
+        # File header
+        start = "<?xml version=\"1.0\"?>\n<ArrayOfBatRecording xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
+        output=start
+        if not os.path.isdir(dirName):
+            print("Folder doesn't exist")
+            return 0
+        for root, dirs, files in os.walk(dirName,topdown=True):
+            nfiles = len(files)
+            if nfiles>0:
+                for count in range(nfiles):
+                    filename = files[count]
+                    fname = os.path.join(root,filename)
+                    f = fname.split('/')
+                
+                    if filename.endswith('.data'):
+                        segments = Segment.SegmentList()
+                        segments.parseJSON(os.path.join(root, filename))
+                        if len(segments)>0:
+                            seg = segments[0]
+                            print(seg)
+                            c = [lab["certainty"] for lab in seg[4]]
+                            s = [lab["species"] for lab in seg[4]]
+                            if len(c)>1:
+                                label = 'Both'
+                            else:
+                                if c[0]>threshold1:
+                                    if s[0] == 'Long-tailed bat':
+                                        label = 'Long Tail'
+                                    elif s[0] == 'Short-tailed bat':
+                                        label = 'Short Tail'
+                                elif c[0]>threshold2:
+                                    if s[0] == 'Long-tailed bat':
+                                        label = 'Possible LT'
+                                    elif s[0] == 'Short-tailed bat':
+                                        label = 'Possible ST'
+                                else:
+                                    label = 'Non-bat'
+                        else:
+                            # TODO: which?
+                            label = 'Non-bat'
+                            #label = 'Unassigned'
+                        # This is the text for the file
+                        s1 = "<BatRecording>\n"
+                        s2 = "<AssignedBatCategory>"+str(namedict[label])+"</AssignedBatCategory>\n"
+                        s3 = "<AssignedSite>"+site+"</AssignedSite>\n"
+                        s4 = "<AssignedUser>"+operator+"</AssignedUser>\n"
+                        # DOC format
+                        s5 = "<RecTime>"+filename[:4]+"-"+filename[4:6]+"-"+filename[6:8]+"T"+filename[9:11]+":"+filename[11:13]+":"+filename[13:15]+"</RecTime>\n"
+                        s6 = "<RecordingFileName>"+filename[:-5]+"</RecordingFileName>\n"
+                        s7 = "<RecordingFolderName>"+os.path.relpath(currroot,dirName)+"</RecordingFolderName>\n"
+                        s8 = "<MeasureTimeFrom>0</MeasureTimeFrom>\n"
+                        s9 = "</BatRecording>\n"
+                        output+= s1+s2+s3+s4+s5+s6+s7+s8+s9
+                # Now write the file if necessary
+                if output != start:
+                    output += "</ArrayOfBatRecording>\n"
+                    currroot = '/'.join(f[:-1])
+                    file = open(os.path.join(currroot,savefile), 'w')
+                    print("writing to",os.path.join(currroot,savefile))
+                    file.write(output)
+                    file.write("\n")
+                    file.close()
+                    output = start
+    
+        return 1
+
+    def exportBatSurvey(self,dirName,responses,threshold1=0.85):
+        import datetime as dt
+        # Export an excel file for the Bat survey database
+        # TODO: turn into full excel?
+        print(responses)
+        if responses is None:
+            responses = ['',self.config['operator'],'','ABM','','','','','']
+
+        dates = []
+        for root, dirs, files in os.walk(dirName):
+            # Read the dates
+            for d in dirs:
+                if d.isdigit():
+                    dates.append(int(d))
+                    
+        if len(dates)==0:
+            print("Error: no suitable folders found")
+            return 0
+
+        dates = np.array(dates)
+        dates = np.unique(dates)
+        dates = np.sort(dates)
+
+        start = dt.date(int(str(dates[0])[:4]),int(str(dates[0])[4:6]),int(str(dates[0])[6:]))
+        end = dt.date(int(str(dates[-1])[:4]),int(str(dates[-1])[4:6]),int(str(dates[-1])[6:]))
+
+        # LT then ST
+        species = np.zeros(2,dtype=int)
+
+        for root, dirs, files in os.walk(dirName,topdown=True):
+            for filename in files:
+                if filename.endswith('.data'):
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(os.path.join(root, filename))
+                    if len(segments)>0:
+                        seg = segments[0]
+                        c = [lab["certainty"] for lab in seg[4]]
+                        s = [lab["species"] for lab in seg[4]]
+                        if len(c)>1:
+                            species[0] += 1
+                            species[1] += 1
+                        else:
+                            # ignoring possibles, since there should be some definites if it is real.
+                            if c[0]>threshold1:
+                                if s[0] == 'Long-tailed bat':
+                                    species[0] += 1
+                                elif s[0] == 'Short-tailed bat':
+                                    species[1] += 1
+
+        f = open(os.path.join(dirName,'out.csv'),'w')
+        
+        f.write('Data Source,Observer,Survey method,Species,Passes,Date,Detector type,Date recorder put out,Date recorder collected,No. of nights out,Effective nights out,Notes,Eastings,Northings,Site name,Region\n')
+
+        if species[0] > 0 and species[1] > 0:
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Both species detected'+','+str(species[0]+species[1])+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+        elif species[0] > 0:
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Chalinolobus tuberculatus'+','+str(species[0])+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+        elif species[1] > 0:
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'Mystacina tuberculata'+','+str(species[1])+','+str(dt.date.today())+','+responses[3]+','+str(e)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+        else:
+            f.write(responses[0]+','+responses[1]+','+responses[2]+','+'No bat species detected'+','+'0'+','+str(dt.date.today())+','+responses[3]+','+str(end)+','+str(start)+','+str((end-start).days)+','+responses[4]+','+responses[5]+','+responses[6]+','+responses[7]+','+responses[8]+'\n')
+        f.close()
+    
+    def exportToBatSearchCSV(self,dirName,writefile="BatResults.csv",threshold1=0.85,threshold2=0.7):
+        # This produces a csv file that looks like the one from Bat Search. 
+
+        f = open(os.path.join(dirName,writefile),'w')
+        f.write('Date,Time,AssignedSite,Category,Foldername,Filename,Observer\n')
+        for root, dirs, files in os.walk(dirName):
+            dirs.sort()
+            files.sort()
+            for filename in files:
+                if filename.endswith('.data'):
+                    segments = Segment.SegmentList()
+                    segments.parseJSON(os.path.join(root, filename))
+                    if len(segments)>0:
+                        seg = segments[0]
+                        c = [lab["certainty"] for lab in seg[4]]
+                        s = [lab["species"] for lab in seg[4]]
+                        if len(c)>1:
+                            label = 'Both'
+                        else:
+                            if c[0]>threshold1:
+                                if s[0] == 'Long-tailed bat':
+                                    label = 'Long Tail'
+                                elif s[0] == 'Short-tailed bat':
+                                    label = 'Short Tail'
+                            elif c[0]>threshold2:
+                                if s[0] == 'Long-tailed bat':
+                                    label = 'Possible LT'
+                                elif s[0] == 'Short-tailed bat':
+                                    label = 'Possible ST'
+                            else:
+                                label = '' #Non-bat'
+                    else:
+                        label = '' #'Non-bat'
+                    # Assumes DOC format
+                    d = filename[6:8]+'/'+filename[4:6]+'/'+filename[:4]+','
+                    if d[0] == '0':
+                        d = d[1:]
+                    if int(filename[9:11]) < 13:
+                        if filename[9:11] == '00':
+                            t = str(int(filename[9:11])+12)+':'+filename[11:13]+':'+filename[13:15]+' a.m.,'
+                        else:
+                            t = filename[9:11]+':'+filename[11:13]+':'+filename[13:15]+' a.m.,'
+                    else:
+                        t = str(int(filename[9:11])-12)+':'+filename[11:13]+':'+filename[13:15]+' p.m.,'
+                    if t[0] == '0':
+                        t = t[1:]
+                    # Assume that directory structure is recorder - date
+                    if label == '':
+                        rec = ',Unassigned'
+                        op = ''
+                    else:
+                        rec = root.split('/')[-3]
+                        op = 'Moira Pryde'
+                    date = '.\\'+root.split('/')[-1]
