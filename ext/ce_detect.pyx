@@ -8,7 +8,10 @@ cdef extern from "detector.h":
 cdef extern from "detector.h":
     int alg2_var(double xs[], size_t nn, size_t maxlb, double sigma0, double penalty_s, double penalty_n, int outstarts[], int outends[], char outtypes[]);
 
-def launchDetector1(infile, startfrom=None, upto=None):
+
+def analyzeFile1(infile, startfrom=None, upto=None):
+    """ For use in simulations: reads x from an external file
+        and passes the selected range of them to launchDetector1. """
     xl = []
     with open(infile) as f:
         for line in f:
@@ -19,11 +22,34 @@ def launchDetector1(infile, startfrom=None, upto=None):
         xs = xs[startfrom:]
     if upto is not None:
         xs = xs[:(upto+1)]
+
+    res = launchDetector1(xs, alpha=3)
+    return(res)
+
+def analyzeFile2(infile, startfrom=None, upto=None):
+    """ For use in simulations: reads x from an external file
+        and passes the selected range of them to launchDetector2. """
+    xl = []
+    with open(infile) as f:
+        for line in f:
+            xl.extend([float(x) for x in line.strip().split(' ')])
+    cdef np.ndarray xs = np.asarray(xl, dtype='float64')
+    print("read %d datapoints" % len(xs))
+    if startfrom is not None:
+        xs = xs[startfrom:]
+    if upto is not None:
+        xs = xs[:(upto+1)]
+
+    res = launchDetector2(xs, alpha=3)
+    return(res)
+
+def launchDetector1(xs, float alpha=3):
+    xs = np.asarray(xs, dtype='float64')
     print("using %d datapoints" % len(xs))
 
     cdef double sd = 1
     cdef int n = len(xs)
-    cdef double penalty = 1.1*3*np.log(n)
+    cdef double penalty = 1.1*alpha*np.log(n)
     cdef double mu0 = 0
     if n>10000:
         print("ERROR: n=%d exceeds max permitted series size" % n)
@@ -40,25 +66,17 @@ def launchDetector1(infile, startfrom=None, upto=None):
     # print(outt)
     outnum = outt.tolist().index(0)
     # print(outnum)
-    res = np.vstack((outst[:outnum], oute[:outnum], [chr(t) for t in outt[:outnum]]))
+    # NOTE: a segment s:e is reported as a list [s,e+1,...]
+    res = np.vstack((outst[:outnum], oute[:outnum]+1, outt[:outnum]))
     return(res.T)
 
-def launchDetector(infile, startfrom=None, upto=None):
-    xl = []
-    with open(infile) as f:
-        for line in f:
-            xl.extend([float(x) for x in line.strip().split(' ')])
-    cdef np.ndarray xs = np.asarray(xl, dtype='float64')
-    print("read %d datapoints" % len(xs))
-    if startfrom is not None:
-        xs = xs[startfrom:]
-    if upto is not None:
-        xs = xs[:(upto+1)]
+def launchDetector2(xs, float alpha=3):
+    xs = np.asarray(xs, dtype='float64')
     print("using %d datapoints" % len(xs))
 
     cdef double sigma2 = 1
     cdef int n = len(xs)
-    cdef double penalty = 1.1*3*np.log(n)
+    cdef double penalty = 1.1*alpha*np.log(n)
     cdef double mu0 = 0
     cdef int maxlookback = int(0.15*len(xs))
 
@@ -78,13 +96,6 @@ def launchDetector(infile, startfrom=None, upto=None):
     # print(oute)
     # print(outt)
     outnum = outt.tolist().index(0)
-    res = np.vstack((outst[:outnum], oute[:outnum], [chr(t) for t in outt[:outnum]]))
+    # NOTE: a segment s:e is reported as a list [s,e+1,...]
+    res = np.vstack((outst[:outnum], oute[:outnum]+1, outt[:outnum]))
     return(res.T)
-
-def compareBoth(infile):
-    r1 = launchDetector1(infile)
-    r2 = launchDetector(infile)
-    print("Alg1:")
-    print(r1)
-    print("Alg2:")
-    print(r2)

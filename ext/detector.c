@@ -115,7 +115,7 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
     size_t bgsizes[n];
     bgsizes[0] = 1;
     for(size_t t=1; t<n; t++){
-        printf("Cycle %zu/%zu\n", t+1, n);
+        // printf("----Cycle %zu/%zu----\n", t+1, n);
         // precompute costs for all possible segments ending here at t
         m2 = 0;
         for(size_t start=t; start>minstart; start--){
@@ -243,7 +243,7 @@ int alg1_mean(double xs[], const size_t n, const double sd, const double penalty
     size_t bgsizes[n];
     bgsizes[0] = 1;
     for(size_t t=1; t<n; t++){
-        // printf("Cycle %zu/%zu\n", t+1, n);
+        // printf("----Cycle %zu/%zu----\n", t+1, n);
         // precompute costs for all possible segments ending here at t
         m = 0;
         m2 = 0;

@@ -5049,13 +5049,14 @@ class AviaNZ(QMainWindow):
         self.prevSegments = copy.deepcopy(self.segments)
 
         self.segmentsToSave = True
-        [alg, medThr, medSize, HarmaThr1,HarmaThr2,PowerThr,minfreq,minperiods,Yinthr,window,FIRThr1,CCThr1, filtname, species_cc, wind, rain, maxgap, minlen] = self.segmentDialog.getValues()
+        # settings is a dict with parameters for various possible methods
+        alg, settings = self.segmentDialog.getValues()
         with pg.BusyCursor():
-            filtname = str(filtname)
+            filtname = str(settings["filtname"])
             self.statusLeft.setText('Segmenting...')
             # Delete old segments:
             # only this species, if using species-specific methods:
-            if alg == 'Wavelets':
+            if alg == 'Wavelets' or alg == 'WV Changepoint':
                 if filtname == 'Choose species...':
                     msg = SupportClasses_GUI.MessagePopup("w", "Species Error", 'Please select your species!')
                     msg.exec_()
@@ -5080,45 +5081,52 @@ class AviaNZ(QMainWindow):
                 self.removeSegments()
 
             # NON-SPECIFIC methods here (produce "Don't Know"):
-            if str(alg) == 'Default':
+            if alg == 'Default':
                 newSegments = self.seg.bestSegments()
-            elif str(alg) == 'Median Clipping':
-                newSegments = self.seg.medianClip(float(str(medThr)), minSegment=self.config['minSegment'])
+            elif alg == 'Median Clipping':
+                newSegments = self.seg.medianClip(float(str(settings["medThr"])), minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
                 # will also remove too short segments (medSize is set in ms because sliders limited to int)
                 # print("before length", newSegments)
                 # newSegments = self.seg.deleteShort(newSegments, minlength=medSize/1000)
-            elif str(alg) == 'Harma':
-                newSegments = self.seg.Harma(float(str(HarmaThr1)),float(str(HarmaThr2)),minSegment=self.config['minSegment'])
+            elif alg == 'Harma':
+                newSegments = self.seg.Harma(float(str(settings["HarmaThr1"])),float(str(settings["HarmaThr2"])),minSegment=self.config['minSegment'])
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
-            elif str(alg) == 'Power':
-                newSegments = self.seg.segmentByPower(float(str(PowerThr)))
+            elif alg == 'Power':
+                newSegments = self.seg.segmentByPower(float(str(settings["PowerThr"])))
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
-            elif str(alg) == 'Onsets':
+            elif alg == 'Onsets':
                 newSegments = self.seg.onsets()
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
-            elif str(alg) == 'Fundamental Frequency':
-                newSegments, pitch, times = self.seg.yin(int(str(minfreq)), int(str(minperiods)), float(str(Yinthr)),
-                                                         int(str(window)), returnSegs=True)
+            elif alg == 'Fundamental Frequency':
+                newSegments, pitch, times = self.seg.yin(int(str(settings["FFminfreq"])), int(str(settings["FFminperiods"])), float(str(settings["Yinthr"])),
+                                                         int(str(settings["FFwindow"])), returnSegs=True)
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
-            elif str(alg) == 'FIR':
-                newSegments = self.seg.segmentByFIR(float(str(FIRThr1)))
+            elif alg == 'FIR':
+                newSegments = self.seg.segmentByFIR(float(str(settings["FIRThr1"])))
                 newSegments = self.seg.checkSegmentOverlap(newSegments)
             # SPECIES-SPECIFIC methods from here:
-            elif str(alg) == 'Wavelets':
+            elif alg == 'Wavelets':
                 speciesData = self.FilterDicts[filtname]
                 # this will produce a list of lists (over subfilters)
                 ws = WaveletSegment.WaveletSegment(speciesData)
                 ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
                 newSegments = ws.waveletSegment(0, wpmode="new")
+            elif alg == 'WV Changepoint':
+                print("Changepoint detection, alg1 requested")
+                speciesData = self.FilterDicts[filtname]
+                # this will produce a list of lists (over subfilters)
+                ws = WaveletSegment.WaveletSegment(speciesData)
+                ws.readBatch(self.audiodata, self.sampleRate, d=False, spInfo=[speciesData], wpmode="new")
+                newSegments = ws.waveletSegmentChp(0, settings["chpalpha"], settings["chpwindow"])
 
             # TODO: make sure cross corr outputs lists of lists
-            elif str(alg) == 'Cross-Correlation':
-                if species_cc != 'Choose species...':
+            elif alg == 'Cross-Correlation':
+                if settings["species_cc"] != 'Choose species...':
                     # need to load template/s
-                    newSegments = self.findMatches(float(str(CCThr1)), species_cc)
+                    newSegments = self.findMatches(float(str(settings["CCThr1"])), settings["species_cc"])
                 else:
-                    newSegments = self.findMatches(float(str(CCThr1)))
+                    newSegments = self.findMatches(float(str(settings["CCThr1"])))
 
             # Post-process
             # 1. Delete windy segments
@@ -5126,21 +5134,7 @@ class AviaNZ(QMainWindow):
             # 3. Check fundamental frq
             # 4. Merge neighbours
             # 5. Delete short segmentsost process to remove short segments, wind, rain, and use F0 check.
-            if str(alg) != 'Wavelets':
-                print('Segments detected: ', len(newSegments))
-                print('Post-processing...')
-                post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
-                                           segments=newSegments, subfilter={})
-                if wind:
-                    post.wind()
-                    print('After wind segments: ', len(post.segments))
-                if rain:
-                    post.rainClick()
-                    print('After rain segments: ', len(post.segments))
-                post.joinGaps(maxgap=maxgap)
-                post.deleteShort(minlength=minlen)
-                newSegments = post.segments
-            else:
+            if alg == 'Wavelets' or alg == 'WV Changepoint':
                 print('Segments detected: ', sum(isinstance(seg, list) for subf in newSegments for seg in subf))
                 print('Post-processing...')
                 # load target CNN model if exists
@@ -5154,14 +5148,14 @@ class AviaNZ(QMainWindow):
                     post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
                                                tgtsampleRate=speciesData["SampleRate"], segments=newSegments[filtix],
                                                subfilter=speciesData['Filters'][filtix], CNNmodel=CNNmodel, cert=50)
-                    if wind and self.useWindF(speciesData['Filters'][filtix]['FreqRange'][0], speciesData['Filters'][filtix]['FreqRange'][1]):
+                    if settings["wind"] and self.useWindF(speciesData['Filters'][filtix]['FreqRange'][0], speciesData['Filters'][filtix]['FreqRange'][1]):
                         post.wind()
                         print('After wind: segments: ', len(post.segments))
                     if CNNmodel:
                         print('Post-processing with CNN')
                         post.CNN()
                         print('After CNN: segments: ', len(post.segments))
-                    if rain:
+                    if settings["rain"]:
                         post.rainClick()
                         print('After rain segments: ', len(post.segments))
                     if 'F0' in speciesData['Filters'][filtix] and 'F0Range' in speciesData['Filters'][filtix]:
@@ -5169,13 +5163,28 @@ class AviaNZ(QMainWindow):
                             print("Checking for fundamental frequency...")
                             post.fundamentalFrq()
                             print("After FF segments:", len(post.segments))
-                    post.joinGaps(maxgap=speciesData['Filters'][filtix]['TimeRange'][3])
-                    post.deleteShort(minlength=speciesData['Filters'][filtix]['TimeRange'][0])
+                    if alg=='Wavelets':
+                        post.joinGaps(maxgap=speciesData['Filters'][filtix]['TimeRange'][3])
+                        post.deleteShort(minlength=speciesData['Filters'][filtix]['TimeRange'][0])
                     newSegments[filtix] = post.segments
+            else:
+                print('Segments detected: ', len(newSegments))
+                print('Post-processing...')
+                post = Segment.PostProcess(configdir=self.configdir, audioData=self.audiodata, sampleRate=self.sampleRate,
+                                           segments=newSegments, subfilter={})
+                if settings["wind"]:
+                    post.wind()
+                    print('After wind segments: ', len(post.segments))
+                if settings["rain"]:
+                    post.rainClick()
+                    print('After rain segments: ', len(post.segments))
+                post.joinGaps(maxgap=settings["maxgap"])
+                post.deleteShort(minlength=settings["minlen"])
+                newSegments = post.segments
             print("After post processing: ", newSegments)
 
             # Generate Segment-type output.
-            if str(alg)=='Wavelets':
+            if alg=='Wavelets' or alg=='WV Changepoint':
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
@@ -5184,14 +5193,14 @@ class AviaNZ(QMainWindow):
                         self.addSegment(float(seg[0][0]), float(seg[0][1]), y1, y2,
                                 [{"species": filtspecies, "certainty": seg[1], "filter": filtname, "calltype": speciesSubf["calltype"]}], index=-1)
                         self.segmentsToSave = True
-            elif str(alg)=='Cross-Correlation' and species_cc != 'Choose species...':
+            elif alg=='Cross-Correlation' and settings["species_cc"] != 'Choose species...':
                 for filtix in range(len(speciesData['Filters'])):
                     speciesSubf = speciesData['Filters'][filtix]
                     y1 = speciesSubf['FreqRange'][0]
                     y2 = min(self.sampleRate//2, speciesSubf['FreqRange'][1])
                     for seg in newSegments[filtix]:
                         self.addSegment(float(seg[0]), float(seg[1]), y1, y2,
-                                [{"species": species_cc.title(), "certainty": seg[1]}], index=-1)
+                                [{"species": settings["species_cc"].title(), "certainty": seg[1]}], index=-1)
                         self.segmentsToSave = True
             else:
                 for seg in newSegments:

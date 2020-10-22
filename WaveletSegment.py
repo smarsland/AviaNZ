@@ -28,6 +28,7 @@ import time, os, math, csv, gc
 import SignalProc
 import Segment
 from ext import ce_denoise as ce
+from ext import ce_detect
 
 
 class WaveletSegment:
@@ -150,6 +151,31 @@ class WaveletSegment:
             detected = segmenter.joinGaps(detected, maxgap=0)
             detected_allsubf.append(detected)
         print("Wavelet segmenting completed in", time.time() - opst)
+        return detected_allsubf
+
+    def waveletSegmentChp(self, filtnum, alpha, window):
+        """ Main analysis wrapper, similar to waveletSegment,
+            but uses changepoint detection for postprocessing.
+            Args:
+            1. filtnum: index of the current filter in self.spInfo (which is a list of filters...)
+            2. alpha: penalty strength for the detector
+            3. window: wavelets will be merged in groups of this size (s) before analysis
+            Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
+        """
+        opst = time.time()
+
+        # No resampling here. Will read nodes from self.spInfo, which may already be adjusted
+
+        ### find segments with each subfilter separately
+        detected_allsubf = []
+        for subfilter in self.spInfo[filtnum]["Filters"]:
+            print("Identifying calls using subfilter", subfilter["calltype"])
+            goodnodes = subfilter['WaveletParams']["nodes"]
+
+            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window)
+
+            detected_allsubf.append(detected)
+        print("WV changepoint segmenting completed in", time.time() - opst)
         return detected_allsubf
 
     def waveletSegment_train(self, dirName, thrList, MList, d=False, rf=True, learnMode='recaa', window=1,
@@ -707,6 +733,116 @@ class WaveletSegment:
         del E
         gc.collect()
         return detected
+
+    def detectCallsChp(self, wf, nodelist, subfilter, alpha, window=1):
+        """
+        For wavelet TESTING and general SEGMENTATION using changepoint detection
+        (non-reconstructing)
+        Args:
+        1. wf - WaveletFunctions with a homebrew wavelet tree (list of ndarray nodes)
+        2. nodelist - will reconstruct signal and run detections on each of these nodes separately
+        3. subfilter - used to pass thr, M, and other parameters
+        4. alpha - penalty strength for the detector
+        5. window - energy will be calculated over these windows, in s
+
+        Return: ndarray of 1/0 annotations for each of T windows
+        """
+
+        datalengthSec = len(wf.tree[0]) / wf.treefs
+        # NOTE: this number of windows is approximate and may be changed for deep nodes,
+        # if it doesn't correspond to an integer number of wps
+        nwindows = math.floor(datalengthSec / window)
+        if nwindows==0:
+            print("ERROR: data length %d shorter than window size %d" %(datalengthSec, window))
+            return
+
+        # To convert window / increment / resolution to samples,
+        # we use the actual sampling rate of the tree
+        # i.e. "wf.treefs" samples of wf.tree[0] will always correspond to 1 s
+        # (lower nodes will be downsampled, which is accounted for in the loop)
+        WCperWindowFull = math.ceil(window * wf.treefs)
+        print("Using %d windows x %d samples" % (nwindows, WCperWindowFull))
+
+        # thr = subfilter['WaveletParams']['thr']
+
+        # Compute the number of samples in a window -- species specific
+        detected = np.empty((0,3))
+        for node in nodelist:
+
+            # ratio of current WC size to data ("how many samples went into one WC")
+            dsratio = 2**math.floor(math.log2(node+1))
+            WCperWindow = math.ceil(WCperWindowFull / dsratio)
+            # realized window size in s - may differ from the requested one if it is not a multiple of 2^j samples
+            realwindow = WCperWindow * dsratio / wf.treefs
+            nwindows = math.floor(datalengthSec / realwindow)
+            maxnumwcs = nwindows * WCperWindow
+            print("Node %d: %d WCs per window" %(node, WCperWindow))
+
+            # WC from test node(s), trimmed to non-padded size
+            # NOTE: could take the center part w/2:l-w/2 instead of 0:l-w/2 to avoid any
+            #  datapoints that were added during padding
+            C = wf.tree[node][0:maxnumwcs*2:2]
+            # Sanity check for all zero case
+            if not any(C):
+                continue    # return np.zeros(nw)
+
+            # convert into a matrix (seconds x wcs in sec), and get the energy of each row (second)
+            E = (C**2).reshape((nwindows, WCperWindow)).sum(axis=1) / WCperWindow
+            print("Global mean = %f, var = %f" % ( np.mean(C), np.mean(E)))
+            print("Global range of E: %f-%f" % (np.min(E), np.max(E)))
+
+            # sqrt because the detector squares the data itself (sign not important)
+            E = np.sqrt(E)
+
+            # C = np.log(C) #?
+
+            # analyze by our algorithms.
+            # returns a matrix of n x [s, e, type]
+            # type is an int corresponding to 'n'=NUIS, 's'=SEG, 'o'=SEGonNUIS
+            segm1 = ce_detect.launchDetector1(E, alpha=alpha).astype('float')
+            print(segm1)
+
+            # convert from the window scale into actual seconds
+            segm1[:,:2] = segm1[:,:2] * realwindow
+
+            detected = np.vstack((detected, np.asarray(segm1)))
+
+        # now, need to go over the segments and find any overlapping ones (i.e. combine across nodes).
+        if np.shape(detected)[0]>0:
+            # keep only S and their positions:
+            detected = detected[np.logical_or(detected[:,2]==ord('s'), detected[:,2]==ord('o')), 0:2]
+
+        # combine overlapping:
+        numdets = np.shape(detected)[0]
+        outsegs = []
+        if numdets>0:
+            # sort:
+            sortix = detected[:,0].argsort()
+            detected = detected[sortix]
+
+            currstart = detected[0,0]
+            currend = detected[0,1]
+            # if there is more than 1 detection, merge loop starts:
+            for i in range(1, np.shape(detected)[0]):
+                if(currend > detected[i, 0]):
+                    # there is overlap, so merge:
+                    currend = max(currend, detected[i, 1])
+                else:
+                    # no overlap, so store the current:
+                    outsegs.append([currstart, currend])
+                    # and start a new one:
+                    currstart = detected[i,0]
+                    currend = detected[i,1]
+            outsegs.append([currstart, currend])
+
+        print("After merge:", outsegs)
+
+        C = None
+        E = None
+        del C
+        del E
+        gc.collect()
+        return outsegs
 
     def gridSearch(self, E, thrList, MList, rf=True, learnMode=None, window=1, inc=None):
         """ Take list of energy peaks of dimensions:

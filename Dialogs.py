@@ -739,7 +739,7 @@ class Segmentation(QDialog):
         if DOC:
             self.algs.addItems(["Wavelets", "FIR", "Median Clipping"])
         else:
-            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation"])
+            self.algs.addItems(["Default","Median Clipping","Fundamental Frequency","FIR","Wavelets","Harma","Power","Cross-Correlation","WV Changepoint"])
         self.algs.currentIndexChanged[str].connect(self.changeBoxes)
         self.undo = QPushButton("Undo")
         self.activate = QPushButton("Segment")
@@ -896,6 +896,15 @@ class Segmentation(QDialog):
         self.medSize.setValue(1000)
         self.medSize.valueChanged.connect(self.medSizeChange)
 
+        # Alpha selector for changepoint methods
+        self.chpalpha = QDoubleSpinBox()
+        self.chpalpha.setRange(0.1, 20)
+        self.chpalpha.setValue(3)
+
+        self.chpwin = QDoubleSpinBox()
+        self.chpwin.setRange(0.1, 3)
+        self.chpwin.setValue(0.5)
+
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
         self.minlen.setTickPosition(QSlider.TicksBelow)
@@ -915,6 +924,10 @@ class Segmentation(QDialog):
         self.maxgap.valueChanged.connect(self.maxGapChange)
         self.maxgaplbl = QLabel("Maximum gap between syllables: 1 sec")
 
+        self.chpLayout = QFormLayout()
+        self.chpLayout.addRow("Alpha:", self.chpalpha)
+        self.chpLayout.addRow("Window size:", self.chpwin)
+
         self.wind = QCheckBox("Remove wind")
         self.rain = QCheckBox("Remove rain")
         Box.addWidget(self.wind)
@@ -923,6 +936,7 @@ class Segmentation(QDialog):
         Box.addWidget(self.maxgap)
         Box.addWidget(self.minlenlbl)
         Box.addWidget(self.minlen)
+        Box.addLayout(self.chpLayout)
         Box.addWidget(self.undo)
         self.undo.setEnabled(False)
         Box.addWidget(self.activate)
@@ -931,7 +945,13 @@ class Segmentation(QDialog):
         # Now put everything into the frame,
         # hide and reopen the default
         for w in range(Box.count()):
-            Box.itemAt(w).widget().hide()
+            item = Box.itemAt(w)
+            if item.widget() is not None:
+                item.widget().hide()
+            else:
+                # it is a layout, so loop again:
+                for ww in range(item.layout().count()):
+                    item.layout().itemAt(ww).widget().hide()
         self.setLayout(Box)
         self.algs.show()
         self.undo.show()
@@ -945,7 +965,13 @@ class Segmentation(QDialog):
         # This does the hiding and showing of the options as the algorithm changes
         # hide and reopen the default
         for w in range(self.layout().count()):
-            self.layout().itemAt(w).widget().hide()
+            item = self.layout().itemAt(w)
+            if item.widget() is not None:
+                item.widget().hide()
+            else:
+                # it is a layout, so loop again:
+                for ww in range(item.layout().count()):
+                    item.layout().itemAt(ww).widget().hide()
         self.algs.show()
         self.wind.show()
         # self.rain.show()
@@ -996,9 +1022,13 @@ class Segmentation(QDialog):
             self.specieslabel_cc.show()
             self.species_cc.show()
         else:
-            #"Wavelets"
+            #"Wavelets" or "WV Changepoint"
             self.specieslabel.show()
             self.species.show()
+            if alg == "WV Changepoint":
+                for ww in range(self.chpLayout.count()):
+                    self.chpLayout.itemAt(ww).widget().show()
+                self.wind.hide()
             self.maxgaplbl.hide()
             self.maxgap.hide()
             self.minlenlbl.hide()
@@ -1015,7 +1045,11 @@ class Segmentation(QDialog):
 
     def getValues(self):
         # TODO: check: self.medSize.value() is not used, should we keep it?
-        return [self.algs.currentText(), self.medThr.text(), self.medSize.value(), self.HarmaThr1.text(),self.HarmaThr2.text(),self.PowerThr.text(),self.Fundminfreq.text(),self.Fundminperiods.text(),self.Fundthr.text(),self.Fundwindow.text(),self.FIRThr1.text(),self.CCThr1.text(),self.species.currentText(), self.species_cc.currentText(), self.wind.isChecked(), self.rain.isChecked(), int(self.maxgap.value())/1000, int(self.minlen.value())/1000]
+        settings = {"medThr": self.medThr.text(), "medSize": self.medSize.value(), "HarmaThr1": self.HarmaThr1.text(), "HarmaThr2": self.HarmaThr2.text(), "PowerThr": self.PowerThr.text(),
+                    "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
+                    "CCThr1": self.CCThr1.text(), "filtname": self.species.currentText(), "species_cc": self.species_cc.currentText(), "wind": self.wind.isChecked(), "rain": self.rain.isChecked(),
+                    "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value()}
+        return(str(self.algs.currentText()), settings)
 
 #======
 class Denoise(QDialog):
