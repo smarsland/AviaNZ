@@ -896,7 +896,7 @@ class Segmentation(QDialog):
         self.medSize.setValue(1000)
         self.medSize.valueChanged.connect(self.medSizeChange)
 
-        # Alpha selector for changepoint methods
+        # Parameter selectors for changepoint methods
         self.chpalpha = QDoubleSpinBox()
         self.chpalpha.setRange(0.1, 20)
         self.chpalpha.setValue(3)
@@ -904,6 +904,10 @@ class Segmentation(QDialog):
         self.chpwin = QDoubleSpinBox()
         self.chpwin.setRange(0.1, 3)
         self.chpwin.setValue(0.5)
+
+        self.maxlen = QDoubleSpinBox()
+        self.maxlen.setRange(0.1, 100)
+        self.maxlen.setValue(10)
 
         # Sliders for minlen and maxgap are in ms scale
         self.minlen = QSlider(Qt.Horizontal)
@@ -926,7 +930,8 @@ class Segmentation(QDialog):
 
         self.chpLayout = QFormLayout()
         self.chpLayout.addRow("Alpha:", self.chpalpha)
-        self.chpLayout.addRow("Window size:", self.chpwin)
+        self.chpLayout.addRow("Window size (s):", self.chpwin)
+        self.chpLayout.addRow("Max length (s):", self.maxlen)
 
         self.wind = QCheckBox("Remove wind")
         self.rain = QCheckBox("Remove rain")
@@ -1048,7 +1053,7 @@ class Segmentation(QDialog):
         settings = {"medThr": self.medThr.text(), "medSize": self.medSize.value(), "HarmaThr1": self.HarmaThr1.text(), "HarmaThr2": self.HarmaThr2.text(), "PowerThr": self.PowerThr.text(),
                     "FFminfreq": self.Fundminfreq.text(), "FFminperiods": self.Fundminperiods.text(), "Yinthr": self.Fundthr.text(), "FFwindow": self.Fundwindow.text(), "FIRThr1": self.FIRThr1.text(),
                     "CCThr1": self.CCThr1.text(), "filtname": self.species.currentText(), "species_cc": self.species_cc.currentText(), "wind": self.wind.isChecked(), "rain": self.rain.isChecked(),
-                    "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value()}
+                    "maxgap": int(self.maxgap.value())/1000, "minlen": int(self.minlen.value())/1000, "chpalpha": self.chpalpha.value(), "chpwindow": self.chpwin.value(), "maxlen": self.maxlen.value()}
         return(str(self.algs.currentText()), settings)
 
 #======

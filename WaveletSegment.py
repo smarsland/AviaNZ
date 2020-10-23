@@ -153,13 +153,14 @@ class WaveletSegment:
         print("Wavelet segmenting completed in", time.time() - opst)
         return detected_allsubf
 
-    def waveletSegmentChp(self, filtnum, alpha, window):
+    def waveletSegmentChp(self, filtnum, alpha, window, maxlen):
         """ Main analysis wrapper, similar to waveletSegment,
             but uses changepoint detection for postprocessing.
             Args:
             1. filtnum: index of the current filter in self.spInfo (which is a list of filters...)
             2. alpha: penalty strength for the detector
             3. window: wavelets will be merged in groups of this size (s) before analysis
+            4. maxlen: maximum allowed length (s) of signal segments
             Returns: list of lists of segments found (over each subfilter)-->[[sub-filter1 segments], [sub-filter2 segments]]
         """
         opst = time.time()
@@ -172,7 +173,7 @@ class WaveletSegment:
             print("Identifying calls using subfilter", subfilter["calltype"])
             goodnodes = subfilter['WaveletParams']["nodes"]
 
-            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window)
+            detected = self.detectCallsChp(self.WF, nodelist=goodnodes, subfilter=subfilter, alpha=alpha, window=window, maxlen=maxlen)
 
             detected_allsubf.append(detected)
         print("WV changepoint segmenting completed in", time.time() - opst)
@@ -734,16 +735,17 @@ class WaveletSegment:
         gc.collect()
         return detected
 
-    def detectCallsChp(self, wf, nodelist, subfilter, alpha, window=1):
+    def detectCallsChp(self, wf, nodelist, subfilter, alpha, maxlen, window=1):
         """
         For wavelet TESTING and general SEGMENTATION using changepoint detection
         (non-reconstructing)
         Args:
-        1. wf - WaveletFunctions with a homebrew wavelet tree (list of ndarray nodes)
-        2. nodelist - will reconstruct signal and run detections on each of these nodes separately
-        3. subfilter - used to pass thr, M, and other parameters
-        4. alpha - penalty strength for the detector
-        5. window - energy will be calculated over these windows, in s
+        wf - WaveletFunctions with a homebrew wavelet tree (list of ndarray nodes)
+        nodelist - will reconstruct signal and run detections on each of these nodes separately
+        subfilter - used to pass thr, M, and other parameters
+        alpha - penalty strength for the detector
+        maxlen - maximum allowed signal segment length, in s
+        window - energy will be calculated over these windows, in s
 
         Return: ndarray of 1/0 annotations for each of T windows
         """
@@ -778,6 +780,10 @@ class WaveletSegment:
             maxnumwcs = nwindows * WCperWindow
             print("Node %d: %d WCs per window" %(node, WCperWindow))
 
+            # Convert max segment length from s to realized windows
+            # (segments exceeding this length will be marked as 'n')
+            realmaxlen = math.ceil(maxlen / realwindow)
+
             # WC from test node(s), trimmed to non-padded size
             # NOTE: could take the center part w/2:l-w/2 instead of 0:l-w/2 to avoid any
             #  datapoints that were added during padding
@@ -799,7 +805,7 @@ class WaveletSegment:
             # analyze by our algorithms.
             # returns a matrix of n x [s, e, type]
             # type is an int corresponding to 'n'=NUIS, 's'=SEG, 'o'=SEGonNUIS
-            segm1 = ce_detect.launchDetector1(E, alpha=alpha).astype('float')
+            segm1 = ce_detect.launchDetector1(E, realmaxlen, alpha=alpha).astype('float')
             print(segm1)
 
             # convert from the window scale into actual seconds

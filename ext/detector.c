@@ -75,7 +75,7 @@ void findmincost(const double cs[], const double Fs[], const size_t starts[], co
 
 
 // main loop over data - for change in VARIANCE
-int alg1_var(double xs[], const size_t n, const double mu0, const double penalty, int outstarts[], int outends[], char outtypes[]){
+int alg1_var(double xs[], const size_t n, const size_t maxlb, const double mu0, const double penalty, int outstarts[], int outends[], char outtypes[]){
     // center and square x
     double x2s[n];
     for(size_t i=0; i<n; i++){
@@ -188,7 +188,9 @@ int alg1_var(double xs[], const size_t n, const double mu0, const double penalty
             printf("* %zu-%zu\n", chps[i].start, i);
             outstarts[outnum] = chps[i].start;
             outends[outnum] = i;
-            outtypes[outnum] = 's';
+            // no need to store the type since it can be recreated from length
+            char thischptype = i-chps[i].start<=maxlb ? 's' : 'n';
+            outtypes[outnum] = thischptype;
             outnum++;
             if(chps[i].start - 1 >= i){
                 printf("ERROR: potential infinite recursion in changepoints\n");
