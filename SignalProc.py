@@ -297,7 +297,7 @@ class SignalProc:
     # from memory_profiler import profile
     # fp = open('memory_profiler_sp.log', 'w+')
     # @profile(stream=fp)
-    def spectrogram(self, window_width=None,incr=None,window='Hann',equal_loudness=False,mean_normalise=True,onesided=True,multitaper=False,reassigned=False,need_even=False):
+    def spectrogram(self,window_width=None,incr=None,window='Hann',sgType=None,equal_loudness=False,mean_normalise=True,onesided=True,need_even=False):
         """ Compute the spectrogram from amplitude data
         Returns the power spectrum, not the density -- compute 10.*log10(sg) 10.*log10(sg) before plotting.
         Uses absolute value of the FT, not FT*conj(FT), 'cos it seems to give better discrimination
@@ -313,6 +313,8 @@ class SignalProc:
         #log_S = librosa.amplitude_to_db(S, ref=np.max)
         #self.sg = librosa.pcen(S * (2**31))
         #return self.sg.T
+        if sgType is None:
+            sgType = 'Standard'
 
         if window_width is None:
             window_width = self.window_width
@@ -370,7 +372,7 @@ class SignalProc:
             self.sg -= self.sg.mean()
 
         starts = range(0, len(self.sg) - window_width, incr)
-        if multitaper:
+        if sgType=='Multi-tapered':
             if specExtra:
                 [tapers, eigen] = dpss(window_width, 2.5, 4)
                 counter = 0
@@ -384,7 +386,7 @@ class SignalProc:
                 self.sg = np.fliplr(out)
             else:
                 print("Option not available")
-        elif reassigned:
+        elif sgType=='Reassigned':
             ft = np.zeros((len(starts), window_width),dtype='complex')
             ft2 = np.zeros((len(starts), window_width),dtype='complex')
             for i in starts:
@@ -403,8 +405,8 @@ class SignalProc:
             self.sg,_,_ = np.histogram2d(times.flatten(),CIF.flatten(),weights=np.abs(ft).flatten(),bins=np.shape(ft))
 
             self.sg = np.absolute(self.sg[:, :window_width //2]) + 0.1
-            
-            print(np.min(self.sg),np.max(self.sg))
+
+            print("SG range:", np.min(self.sg),np.max(self.sg))
         else:
             if need_even:
                 starts = np.hstack((starts, np.zeros((window_width - len(self.sg) % window_width),dtype=int)))
@@ -443,6 +445,29 @@ class SignalProc:
             gc.collect()
             #sg = (ft*np.conj(ft))[:,window_width // 2:].T
         return self.sg
+
+    def scalogram(self,wavelet='morl'):
+        # Compute the wavelet scalogram
+        import pywt
+        scalogram, freqs = pywt.cwt(self.audiodata, widths, wavelet)
+
+    def Stockwell(self):
+        # Stockwell transform (Brown et al. version)
+        # Need to get the starts etc. sorted
+
+        width = len(self.audiodata) // 2
+
+        # Gaussian window for frequencies
+        f_half = np.arange(0, width + 1) / (2 * width)
+        f = np.concatenate((f_half, np.flipud(-f_half[1:-1])))
+        p = 2 * np.pi * np.outer(f, 1 / f_half[1:])
+        window = np.exp(-p ** 2 / 2).T
+
+        f_tran = fft.fft(self.audiodata, 2*width, overwrite_x=True)
+        diag_con = np.linalg.toeplitz(np.conj(f_tran[:width + 1]), f_tran)
+        # Remove zero freq line
+        diag_con = diag_con[1:width + 1, :]  
+        return np.flipud(fft.ifft(diag_con * window, axis=1))
 
     def bandpassFilter(self,data=None,sampleRate=None,start=0,end=None):
         """ FIR bandpass filter
@@ -1087,7 +1112,7 @@ class SignalProc:
         sp = SignalProc(window, window)     # No overlap
         sp.data = self.data
         sp.sampleRate = self.sampleRate
-        sg = sp.spectrogram(multitaper=False)
+        sg = sp.spectrogram()
 
         # For each frq band get sections where energy exceeds some (90%) percentile, engp
         # and generate a binary spectrogram

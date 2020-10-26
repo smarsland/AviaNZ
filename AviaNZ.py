@@ -161,47 +161,59 @@ def mainlauncher(cli, cheatsheet, zooniverse, infile, imagefile, batchmode, trai
                 print("ERROR: valid input file (-f) is needed")
                 raise
     else:
+        task = None
         print("Starting AviaNZ in GUI mode")
-        # This screen asks what you want to do, then processes the response
-        import Dialogs
         from PyQt5.QtWidgets import QApplication
         app = QApplication(sys.argv)
-        first = Dialogs.StartScreen()
-        first.show()
-        app.exec_()
+        # a hack to fix default font size (Win 10 suggests 7 pt for QLabels for some reason)
+        QApplication.setFont(QApplication.font("QMenu"))
 
-        task = first.getValues()
+        while True:
+            # splash screen?
+            if task is None:
+                # This screen asks what you want to do, then processes the response
+                import Dialogs
+                first = Dialogs.StartScreen()
+                first.show()
+                app.exec_()
+                task = first.getValues()
 
-        avianz = None
-        if task == 1:
-            import AviaNZ_manual
-            avianz = AviaNZ_manual.AviaNZ(configdir=configdir)
-        elif task==2:
-            import AviaNZ_batch_GUI
-            avianz = AviaNZ_batch_GUI.AviaNZ_batchWindow(configdir=configdir)
-        elif task==3:
-            import AviaNZ_batch_GUI
-            avianz = AviaNZ_batch_GUI.AviaNZ_reviewAll(configdir=configdir)
+            avianz = None
+            if task == 1:
+                import AviaNZ_manual
+                avianz = AviaNZ_manual.AviaNZ(configdir=configdir)
+            elif task==2:
+                import AviaNZ_batch_GUI
+                avianz = AviaNZ_batch_GUI.AviaNZ_batchWindow(configdir=configdir)
+            elif task==3:
+                import AviaNZ_batch_GUI
+                avianz = AviaNZ_batch_GUI.AviaNZ_reviewAll(configdir=configdir)
+            elif task==4:
+                import SplitAnnotations
+                avianz = SplitAnnotations.SplitData()
 
-        if avianz:
-            avianz.activateWindow()
-        else:
-            return
-        out = app.exec_()
-        QApplication.closeAllWindows()
+            # catch bad initialiation
+            if avianz:
+                avianz.activateWindow()
+            else:
+                return
 
-        # restart requested:
-        if out == 1:
-            mainlauncher()
-        elif out == 2:
-            import SplitAnnotations
-            avianz = SplitAnnotations.SplitData()
-            avianz.show()
-            app.exec_()
-            print("Processing complete, returning to AviaNZ")
+            out = app.exec_()
             QApplication.closeAllWindows()
-            # Uncomment this if you want to return to main mode after splitting
-            # mainlauncher()
+            QApplication.processEvents()
+
+            # catch exit code to see if restart requested:
+            # (note: do not use this for more complicated cleanup,
+            #  no guarantees that it is returned before program closes)
+            if out == 0:
+                # default quit
+                break
+            elif out == 1:
+                # restart to splash screen
+                task = None
+            elif out == 2:
+                # request switch to Splitter
+                task = 4
 
 
 try:

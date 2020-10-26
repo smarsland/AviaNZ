@@ -1,5 +1,40 @@
 All notable changes to AviaNZ program will be documented in this file.
 
+## Unreleased
+
+### Added
+- Ability to undo previously deleted segments in review
+- "One-by-one" review plot size expands to dialog size
+- BatSearch-compatible output for batmode
+- Segment saving feedback now shown in status bar
+
+### Changed
+
+- "One-by-one" review (previously All Species) can now be run on single species
+- Batch Review settings separated into Advanced and Simple
+- Better spectrogram type selection UI
+
+### Fixed
+- Greatly reduced CPU load for mouseover detection in spectrogram items
+
+## [3.1] - 2020-10-09
+
+### Added
+
+- Visible frequency range in batmode defaults to full
+- Manage Recognisers deals with CNN files as well
+- ROCs during training show more information, wavelet freq. bands
+
+### Changed
+
+- Excel output shows absolute times of detected segments, when files have timestamps
+- Tensorflow version bumped up
+
+### Fixed
+
+- Graphical problems on high resolution displays
+- Safer restarting
+
 ## [3.0] - 2020-09-17
 
 ### Added
