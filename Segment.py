@@ -1389,7 +1389,7 @@ class PostProcess:
         segmenter = Segmenter()
         if len(binaryout) == 1:
             binaryout = np.append(binaryout, 0)
-        subsegs = segmenter.convert01(binaryout)
+        subsegs = segmenter.convert01(binaryout)    # TODO: segmenter.convert01(binaryout, hop)?
         for i in range(len(subsegs)):
             subsegs[i] = [[subsegs[i][0]*incr+seg[0][0], (subsegs[i][1]-1)*incr+imglength+seg[0][0]], seg[1]]
         subsegs = segmenter.checkSegmentOverlap3(subsegs)
@@ -1469,6 +1469,11 @@ class PostProcess:
                 # there is no at least one img generated from this segment, very unlikely to be a true seg.
                 certainty = 0
             else:
+                # if np.max(probs[:, ctkey]) >= self.CNNthrs[ctkey][-1] and self.activelength(probs[:, ctkey], seg, ctkey) > self.subfilter['TimeRange'][0]:
+                #     certainty = 90
+                # elif np.max(probs[:, ctkey]) >= self.CNNthrs[ctkey][0] and self.activelength(probs[:, ctkey], seg, ctkey) > self.subfilter['TimeRange'][0]:
+                #     certainty = 50
+
                 # # mean of best n
                 # ind = [np.argsort(probs[:, i]).tolist() for i in range(np.shape(probs)[1])]
                 # meanprob = [np.mean(probs[ind[i][-n:], i]) for i in range(np.shape(probs)[1])]
@@ -1496,6 +1501,25 @@ class PostProcess:
         for ns in ctnewseg[::-1]:
             self.segments.append(ns)
         print("Segments remaining after CNN: ", len(self.segments))
+
+    def activelength(self, probs, seg, ctkey):
+        """
+        Returns the max length (secs) given the probabilities of the images (overlapped)
+        """
+        binaryout = np.zeros((np.shape(probs)[0]))
+        for i in range(len(binaryout)):
+            if probs[i] >= self.CNNthrs[ctkey][0]: # TODO
+                binaryout[i] = 1
+        segmenter = Segmenter()
+        if len(binaryout) == 1:
+            binaryout = np.append(binaryout, 0)
+        subsegs = segmenter.convert01(binaryout, self.CNNhop)
+        for i in range(len(subsegs)):
+            subsegs[i] = [[subsegs[i][0] * self.CNNhop + seg[0][0], (subsegs[i][1] - 1) * self.CNNhop + self.CNNwindow + seg[0][0]],
+                          seg[1]]
+        subsegs = segmenter.checkSegmentOverlap3(subsegs)
+        lengths = [seg[0][1]-seg[0][0] for seg in subsegs]
+        return max(lengths)
 
     def CNNDiagnostic(self):
         """
