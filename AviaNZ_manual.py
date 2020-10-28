@@ -3782,7 +3782,8 @@ class AviaNZ(QMainWindow):
         for ct in CTs:
             self.diagnosticDialogCNN.chkboxes.append(QCheckBox(ct))
         for cb in self.diagnosticDialogCNN.chkboxes:
-            cb.setChecked(True)
+            if cb.text() != 'Noise':
+                cb.setChecked(True)
             self.diagnosticDialogCNN.ctbox.addWidget(cb)
 
     def clearDiagnosticCNN(self):
@@ -3849,7 +3850,8 @@ class AviaNZ(QMainWindow):
                     # basic divergent color palette
                     plotcol = (255 * ct // len(CTs), 127 * (ct % 2), 0)
                     y = Psep[ct, :]
-                    x = np.linspace(0, CNNwindow*len(y), len(y))
+                    # x = np.linspace(0, CNNwindow*len(y), len(y))
+                    x = np.linspace(CNNwindow/2, CNNwindow*len(y)-CNNwindow/2, len(y))
                     self.plotDiag = pg.PlotDataItem(x, y, pen=fn.mkPen(plotcol, width=2))
                     self.p_plot.addItem(self.plotDiag)
                     self.p_legend.addItem(self.plotDiag, CTs[ct])
