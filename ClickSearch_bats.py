@@ -119,10 +119,11 @@ Work flow:
 - navigate tree
 - ClickSearch
 - save .data file
+- evaluate Recall and Precision
 """
 
-root_path='C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\BattyBats'
-
+#root_path='C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\BattyBats'
+root_path="C:\\Users\\Virginia\\Documents\\Work\\Data\\Bats\\Moira 2020\\Raw files\\Bat_tests\\Validation_data"
 
 #list of directory
 dirs=os.listdir(root_path)

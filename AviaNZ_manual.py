@@ -1634,12 +1634,12 @@ class AviaNZ(QMainWindow):
                 self.segments.metadata = {"Operator": self.operator, "Reviewer": self.reviewer, "Duration": self.sp.fileLength / self.sp.sampleRate}
 
             # Bat mode: initialize with an empty segment for the entire file
-            if self.batmode and len(self.segments)==0:
-                species = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
-                newSegment = Segment.Segment([0, self.sp.fileLength / self.sampleRate, 0, 0, species])
-                self.segments.append(newSegment)
-                self.segmentsToSave = True
-                self.refreshFileColor()
+            #if self.batmode and len(self.segments)==0:
+            #    species = [{"species": "Don't Know", "certainty": 0, "filter": "M"}]
+            #    newSegment = Segment.Segment([0, self.sp.fileLength / self.sampleRate, 0, 0, species])
+            #    self.segments.append(newSegment)
+            #    self.segmentsToSave = True
+            #    self.refreshFileColor()
 
             self.drawProtocolMarks()
 
